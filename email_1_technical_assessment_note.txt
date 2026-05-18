@@ -1,0 +1,38 @@
+TO: DCDT Compliance Assessment Team
+CC: 
+FROM: Jean Yves Bibi, Director IPDU / Acting Secretary, OPSC
+SUBJECT: Technical Assessment Note – Certificate of Compliance Submission for SCDMS (Digital Transformation Act No. 42 of 2025)
+
+Dear DCDT,
+
+Pursuant to Section 3(f) of the Digital Transformation Act No. 42 of 2025, the Office of the Public Service Commission (OPSC) formally submits the attached Technical Design Document (TDD) for the Submission & Commission Decision Management System (SCDMS) and requests the issuance of a Certificate of Compliance.
+
+The SCDMS is an in-house digital platform developed by the Innovation Policy and Development Unit (IPDU) to replace the manual, paper-based PSC submission process. The system has undergone substantial development and now encompasses:
+
+- A 22-stage workflow covering the full submission lifecycle from ministry draft creation through to implementation reporting
+- A 12-role RBAC model enforced server-side on every API endpoint
+- Dual audit trail (AuditLog + WorkflowEvent), both append-only
+- JWT-based authentication with 2FA (TOTP) fully implemented and ready for activation
+- Security incident management, automated vulnerability scanning (SAST + CVE), and phishing awareness module
+- Real-time dashboard, analytics, and CSV export
+- Commission operations: meeting/agenda management, decision recording, and post-decision task tracking
+- Celery + django-celery-beat for scheduled database backups
+- System security audit endpoint with 8 live configuration health checks
+
+All hosting will be on DCDT-provisioned infrastructure (a separate email will be sent for that matter). The system uses a 100% open-source technology stack with no proprietary vendor dependency (Backend: Django, Frontend: ReactJS, DB: PostgreSQL).
+
+Please find the following documents attached:
+1. Technical Design Document (TDD) – corrected and final version
+
+The OPSC confirms that production deployment has been voluntarily paused pending receipt of the Certificate of Compliance, in acknowledgment of the Director's powers under Section 6(2)(b) of the Act.
+
+The IPDU is available to provide any additional documentation, arrange a technical briefing, or attend a compliance review meeting at the DCDT's convenience.
+
+Yours sincerely,
+
+Jean Yves Bibi
+Director IPDU / Acting Secretary
+Office of the Public Service Commission
+
+Attachments:
+- Technical Design Document.docx

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<categories>
+  <category>
+    <code>OEM</code>
+    <name>Organizational Establishment and Management</name>
+    <display_order>1</display_order>
+    <psc_forms_summary>2-1, 2-2</psc_forms_summary>
+  </category>
+  <category>
+    <code>REC</code>
+    <name>Recruitment</name>
+    <display_order>2</display_order>
+    <psc_forms_summary>3-1, 3-2, 3-3, 3-4, 3-5, 3-6, 3-7, 3-8, 3-9</psc_forms_summary>
+  </category>
+  <category>
+    <code>TCE</code>
+    <name>Terms and Conditions of Employment</name>
+    <display_order>3</display_order>
+    <psc_forms_summary>4-1, 4-2, 4-3, 4-4, 4-5, 4-6, 4-7, 4-8, 4-9, 4-10</psc_forms_summary>
+  </category>
+  <category>
+    <code>MET</code>
+    <name>Management of Education and Training</name>
+    <display_order>4</display_order>
+    <psc_forms_summary>5-1, 5-2</psc_forms_summary>
+  </category>
+  <category>
+    <code>MSD</code>
+    <name>Managing Staff Discipline</name>
+    <display_order>5</display_order>
+    <psc_forms_summary>6-1, 6-2, 6-3, 6-4, 6-5, 6-6, 6-7, 6-8</psc_forms_summary>
+  </category>
+  <category>
+    <code>MGRH</code>
+    <name>Managing Government Residential Housing</name>
+    <display_order>6</display_order>
+    <psc_forms_summary>8-1, 8-2, 8-3, 8-4</psc_forms_summary>
+  </category>
+  <category>
+    <code>MGF</code>
+    <name>Managing Government Fleet</name>
+    <display_order>7</display_order>
+    <psc_forms_summary>9-1, 9-2, 9-3, 9-4, 9-5</psc_forms_summary>
+  </category>
+  <category>
+    <code>PM</code>
+    <name>Performance Management</name>
+    <display_order>8</display_order>
+    <psc_forms_summary>10-1, 10-2, 10-2(a), 10-2(b), 10-2(c), 10-3, 10-4(a), 10-4(b), 10-5, 10-6</psc_forms_summary>
+  </category>
+</categories>

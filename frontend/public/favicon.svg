@@ -1,0 +1,32 @@
+<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Navy background tile -->
+  <rect width="32" height="32" rx="7" fill="#0c2451"/>
+
+  <!-- Ghost back-page (submission stack) -->
+  <rect x="7" y="4" width="14" height="17" rx="1.2" fill="white" opacity="0.22"/>
+
+  <!-- Main document — white card with dog-eared top-right -->
+  <path d="M3.5,3 H15.5 L20,7.5 V26 H3.5 Z" fill="white" opacity="0.92"/>
+
+  <!-- Dog-ear fold -->
+  <path d="M15.5,3 L15.5,7.5 L20,7.5" fill="#c8d0dc" opacity="0.7"/>
+
+  <!-- Text lines cut from document (navy) -->
+  <rect x="5.5" y="11"  width="11" height="1.8" rx="0.9" fill="#0c2451" opacity="0.35"/>
+  <rect x="5.5" y="14"  width="8.5" height="1.8" rx="0.9" fill="#0c2451" opacity="0.35"/>
+  <rect x="5.5" y="17"  width="9.5" height="1.8" rx="0.9" fill="#0c2451" opacity="0.28"/>
+
+  <!-- Amber decision seal -->
+  <circle cx="23" cy="23" r="7.5" fill="#0c2451"/>
+  <circle cx="23" cy="23" r="6.8" fill="#f59e0b"/>
+  <circle cx="23" cy="23" r="5.6" fill="#d97706"/>
+
+  <!-- Checkmark white -->
+  <polyline
+    points="19.8,23 22,25.5 26.4,19.5"
+    stroke="white"
+    stroke-width="1.7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"/>
+</svg>

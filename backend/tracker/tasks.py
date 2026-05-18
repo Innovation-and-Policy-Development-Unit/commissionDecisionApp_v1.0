@@ -1,0 +1,505 @@
+import json
+import logging
+import os
+
+from celery import shared_task
+from django.conf import settings
+from django.core.management import call_command
+
+log = logging.getLogger("scdms.security")
+app_log = logging.getLogger("scdms.app")
+
+
+@shared_task
+def run_backup():
+    """Execute the backup_db management command via Celery."""
+    log.info("BACKUP_SCHEDULED | starting scheduled backup")
+    try:
+        call_command("backup_db")
+        log.info("BACKUP_SCHEDULED | completed successfully")
+    except Exception as exc:
+        log.error("BACKUP_SCHEDULED | failed: %s", exc)
+
+
+SYSTEM_INSTRUCTION = """You are a highly efficient "Executive Secretary" and "Triage Officer" for a high-level Commission Board in Vanuatu. You are an expert in both Bislama and English.
+
+Analyze the provided User Feedback. The feedback may be in Bislama, English, French, or a mix.
+
+Translate: Convert any Bislama or French parts into professional English.
+
+Summarize: Create a concise 1-sentence summary of the core issue.
+
+Prioritize: Assign a severity (Low, Medium, High, Critical) based on the content (e.g., system crashes or legal disputes are Critical; UI suggestions are Low).
+
+Categorize: Classify the feedback into one of: "Bug", "Feature Request", "Legal/Compliance", or "General Inquiry".
+
+Bislama users often use 'mifala i no save...' to indicate a total system failure; treat this as Critical.
+
+Your response must be in valid JSON format. Do not include any conversational text or Markdown formatting.
+
+Output Schema:
+{
+"summary": "string",
+"severity": "Low | Medium | High | Critical",
+"category": "Bug | Feature Request | Legal/Compliance | General Inquiry",
+"translated_text": "string"}"""
+
+
+def _get_gemini_client():
+    """Return a lazy-initialised Gemini client, or None if the key is missing."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        log.warning("GEMINI_API_KEY not set — AI feedback analysis is disabled.")
+        return None
+    try:
+        from google import genai
+
+        return genai.Client(api_key=api_key)
+    except ImportError:
+        log.error(
+            "google-generativeai package not installed — "
+            "run: pip install google-generativeai"
+        )
+        return None
+
+
+@shared_task
+def process_feedback_with_ai(feedback_id: int):
+    """Analyse a single FeedbackComment and persist the AI results."""
+    from .models import FeedbackComment
+
+    try:
+        feedback = FeedbackComment.objects.get(id=feedback_id)
+    except FeedbackComment.DoesNotExist:
+        log.warning("AI_SKIP | FeedbackComment %s no longer exists", feedback_id)
+        return
+
+    if feedback.ai_processed:
+        log.debug("AI_SKIP | FeedbackComment %s already processed", feedback_id)
+        return
+
+    client = _get_gemini_client()
+    if client is None:
+        return
+
+    user_input = f"User Feedback Description: {feedback.body}"
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            config={
+                "system_instruction": SYSTEM_INSTRUCTION,
+                "response_mime_type": "application/json",
+            },
+            contents=user_input,
+        )
+
+        ai_data = response.parsed
+
+        feedback.ai_summary = ai_data.get("summary", "")
+        feedback.ai_severity = ai_data.get("severity", "")
+        feedback.ai_category = ai_data.get("category", "")
+        feedback.ai_translated_text = ai_data.get("translated_text", "")
+        feedback.ai_processed = True
+        feedback.save(update_fields=[
+            "ai_summary", "ai_severity", "ai_category",
+            "ai_translated_text", "ai_processed",
+        ])
+
+        log.info(
+            "AI_COMPLETE | FeedbackComment %s | severity=%s category=%s",
+            feedback_id, feedback.ai_severity, feedback.ai_category,
+        )
+
+    except Exception as exc:
+        log.error("AI_FAIL | FeedbackComment %s | %s", feedback_id, exc)
+
+
+# ── Meeting transcription ────────────────────────────────────────────────────
+
+
+TRANSCRIBE_PROMPT = """You are a Commission Secretary in Vanuatu. Transcribe this meeting recording accurately.
+Identify different speakers where possible (e.g. "Chairperson:", "Commissioner X:", "Secretary:").
+The meeting may contain English, Bislama, or French — keep the original language in the transcript.
+Output the full verbatim transcript as plain text with speaker labels.
+
+After the transcript, add a structured JSON block at the end with this schema:
+{
+  "speakers": ["list of identified speakers"],
+  "language": "en|bi|fr|mixed",
+  "duration_minutes": <estimated duration>,
+  "topics_discussed": ["topic1", "topic2"],
+  "key_decisions": [{"decision": "...", "submission_ref": "..."}],
+  "action_items": [{"action": "...", "responsible": "...", "deadline": "..."}]
+}
+
+Separate the transcript and JSON with "---STRUCTURED---" on its own line."""
+
+
+@shared_task
+def transcribe_meeting_recording(meeting_id: int, audio_path: str):
+    """Transcribe a meeting recording using Gemini and save the transcript."""
+    from django.utils import timezone
+
+    from .models import Meeting, MeetingTranscript
+
+    try:
+        meeting = Meeting.objects.get(id=meeting_id)
+    except Meeting.DoesNotExist:
+        app_log.warning("TRANSCRIBE_SKIP | Meeting %s not found", meeting_id)
+        return
+
+    client = _get_gemini_client()
+    if client is None:
+        return
+
+    try:
+        audio_file = client.files.upload(path=audio_path)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[TRANSCRIBE_PROMPT, audio_file],
+        )
+
+        full_text = response.text
+        transcript, _, structured_part = full_text.partition("---STRUCTURED---")
+
+        structured_data = {}
+        if structured_part.strip():
+            try:
+                structured_data = json.loads(structured_part.strip())
+            except json.JSONDecodeError:
+                app_log.warning("TRANSCRIBE | Could not parse structured JSON for meeting %s", meeting_id)
+
+        transcript_obj, created = MeetingTranscript.objects.get_or_create(
+            meeting=meeting,
+            defaults={
+                "raw_text": transcript.strip(),
+                "structured_data": structured_data,
+                "audio_file": os.path.basename(audio_path),
+                "ai_processed": True,
+                "processed_at": timezone.now(),
+            },
+        )
+        if not created:
+            transcript_obj.raw_text = transcript.strip()
+            transcript_obj.structured_data = structured_data
+            transcript_obj.audio_file = os.path.basename(audio_path)
+            transcript_obj.ai_processed = True
+            transcript_obj.processed_at = timezone.now()
+            transcript_obj.save()
+
+        app_log.info(
+            "TRANSCRIBE_COMPLETE | Meeting %s | audio=%s | length=%d chars",
+            meeting_id, os.path.basename(audio_path), len(transcript),
+        )
+
+    except Exception as exc:
+        app_log.error("TRANSCRIBE_FAIL | Meeting %s | %s", meeting_id, exc)
+
+
+# ── Minutes drafting from transcript ─────────────────────────────────────────
+
+
+MINUTES_DRAFT_PROMPT = """You are a Commission Secretary in Vanuatu. Draft formal Commission minutes from the meeting transcript and agenda items below.
+
+Meeting information:
+{meeting_info}
+
+Agenda items:
+{agenda_items}
+
+Transcript:
+{transcript}
+
+Draft structured minutes in valid JSON with this exact schema:
+{{
+  "opening": "string - meeting opened at time, prayer, welcome remarks",
+  "confirmation_previous_minutes": "string - confirmation status of previous meeting minutes",
+  "agenda_items": [
+    {{
+      "sequence": 1,
+      "submission_ref": "string",
+      "title": "string",
+      "discussion": "string - 2-3 sentence summary of discussion in English, with key Bislama phrases preserved in quotes where notable",
+      "decision": "string - formal resolution wording (APPROVED/REJECTED/DEFERRED/RETURNED/TABLED)",
+      "decision_type": "approved|rejected|deferred|returned|tabled",
+      "action_items": [
+        {{"action": "string", "responsible": "string", "deadline": "string or null"}}
+      ]
+    }}
+  ],
+  "any_other_business": "string",
+  "closing": "string - closing remarks, next meeting reference",
+  "next_meeting_date": "string or null"
+}}
+
+If a Bislama phrase captures the discussion better than English, include both (e.g. "The Commission considered the matter (Komisin i lukluk gud long toktok ia)...").
+Output ONLY valid JSON. No conversational text, no markdown formatting."""
+
+
+@shared_task
+def draft_minutes_from_transcript(meeting_id: int, user_id: int = None):
+    """Draft structured minutes from meeting transcript using Gemini."""
+    from django.contrib.auth.models import User
+
+    from .models import AgendaItem, Meeting, MeetingTranscript, Minutes, MinutesStatus
+
+    try:
+        meeting = Meeting.objects.get(id=meeting_id)
+    except Meeting.DoesNotExist:
+        app_log.warning("MINUTES_SKIP | Meeting %s not found", meeting_id)
+        return
+
+    try:
+        transcript = meeting.transcript
+    except MeetingTranscript.DoesNotExist:
+        app_log.warning("MINUTES_SKIP | No transcript for meeting %s", meeting_id)
+        return
+
+    if not transcript.ai_processed or not transcript.raw_text:
+        app_log.warning("MINUTES_SKIP | Transcript not yet processed for meeting %s", meeting_id)
+        return
+
+    client = _get_gemini_client()
+    if client is None:
+        return
+
+    agenda_qs = AgendaItem.objects.filter(meeting=meeting).select_related("submission")
+    agenda_lines = []
+    for item in agenda_qs:
+        agenda_lines.append(
+            f"Item {item.sequence}: {item.submission.reference_number} — {item.submission.title}"
+        )
+
+    meeting_info = (
+        f"Reference: {meeting.reference_number}\n"
+        f"Title: {meeting.title}\n"
+        f"Date: {meeting.date}\n"
+        f"Venue: {meeting.venue}\n"
+        f"Type: {meeting.type}"
+    )
+
+    prompt = MINUTES_DRAFT_PROMPT.format(
+        meeting_info=meeting_info,
+        agenda_items="\n".join(agenda_lines) if agenda_lines else "No agenda items recorded.",
+        transcript=transcript.raw_text[:50000],
+    )
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            config={
+                "response_mime_type": "application/json",
+            },
+            contents=prompt,
+        )
+
+        minutes_data = response.parsed
+
+        creator = None
+        if user_id:
+            try:
+                creator = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                pass
+
+        minutes_obj, created = Minutes.objects.get_or_create(
+            meeting=meeting,
+            defaults={
+                "status": MinutesStatus.DRAFT,
+                "content": minutes_data,
+                "created_by": creator or User.objects.filter(is_superuser=True).first(),
+            },
+        )
+        if not created:
+            minutes_obj.content = minutes_data
+            minutes_obj.save(update_fields=["content"])
+
+        app_log.info(
+            "MINUTES_DRAFT_%s | Meeting %s | items=%d",
+            "CREATED" if created else "UPDATED",
+            meeting_id, len(minutes_data.get("agenda_items", [])),
+        )
+
+    except Exception as exc:
+        app_log.error("MINUTES_FAIL | Meeting %s | %s", meeting_id, exc)
+
+
+# ── Decision extraction from minutes ─────────────────────────────────────────
+
+
+DECISION_EXTRACT_PROMPT = """You are a Commission Secretary in Vanuatu. Extract formal decisions from these minutes.
+For each agenda item that has a decision, output the structured decision data.
+
+Minutes content:
+{minutes_content}
+
+Output valid JSON array:
+[
+  {{
+    "submission_ref": "string - reference number",
+    "submission_title": "string",
+    "outcome": "APPROVED|REJECTED|DEFERRED|RETURNED|TABLED",
+    "remarks": "string - any conditions or remarks from the commission",
+    "next_stage": "string - the workflow stage slug this submission should advance to",
+    "action_items": [
+      {{"action": "string", "responsible": "string", "deadline": "string or null"}}
+    ]
+  }}
+]
+
+Map outcomes to workflow stages:
+- APPROVED -> "approved"
+- REJECTED -> "rejected"
+- DEFERRED -> "deferred_back_to_hr"
+- RETURNED -> "returned"
+- TABLED -> "tabled"
+
+Output ONLY valid JSON. No conversational text, no markdown formatting."""
+
+
+@shared_task
+def extract_decisions_from_minutes(meeting_id: int):
+    """Extract formal decisions from minutes content using Gemini."""
+    from .models import Meeting
+
+    try:
+        meeting = Meeting.objects.get(id=meeting_id)
+    except Meeting.DoesNotExist:
+        app_log.warning("DECISION_SKIP | Meeting %s not found", meeting_id)
+        return
+
+    try:
+        minutes = meeting.minutes
+    except Exception:
+        app_log.warning("DECISION_SKIP | No minutes for meeting %s", meeting_id)
+        return
+
+    if not minutes.content:
+        app_log.warning("DECISION_SKIP | Minutes empty for meeting %s", meeting_id)
+        return
+
+    client = _get_gemini_client()
+    if client is None:
+        return
+
+    prompt = DECISION_EXTRACT_PROMPT.format(
+        minutes_content=json.dumps(minutes.content, indent=2),
+    )
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            config={
+                "response_mime_type": "application/json",
+            },
+            contents=prompt,
+        )
+
+        decisions = response.parsed
+
+        minutes.content["extracted_decisions"] = decisions
+        minutes.save(update_fields=["content"])
+
+        app_log.info(
+            "DECISION_EXTRACT | Meeting %s | decisions=%d",
+            meeting_id, len(decisions),
+        )
+
+    except Exception as exc:
+        app_log.error("DECISION_EXTRACT_FAIL | Meeting %s | %s", meeting_id, exc)
+
+
+# ── Due-date notifications ────────────────────────────────────────────────────
+
+
+NOTIFY_DAYS_BEFORE = 3
+
+
+@shared_task
+def notify_approaching_due_dates():
+    """Send in-app notifications for tasks/subtasks with due dates within NOTIFY_DAYS_BEFORE days."""
+    from datetime import date, timedelta
+    from .models import Notification, CommissionTask, CommissionSubTask, Meeting
+
+    today = date.today()
+    alert_from = today
+    alert_to = today + timedelta(days=NOTIFY_DAYS_BEFORE)
+
+    tasks_qs = CommissionTask.objects.filter(
+        due_date__gte=alert_from,
+        due_date__lte=alert_to,
+        due_date_notified=False,
+        status__in=["open", "in_progress"],
+    ).select_related("assigned_manager").prefetch_related("assigned_staff_m2m")
+
+    notified_task_ids = []
+    for task in tasks_qs:
+        recipients = {task.assigned_manager}
+        for staff in task.assigned_staff_m2m.all():
+            recipients.add(staff)
+        if task.assigned_staff:
+            recipients.add(task.assigned_staff)
+
+        for user in recipients:
+            if not user or not user.is_active:
+                continue
+            Notification.objects.create(
+                recipient=user,
+                channel=Notification.Channel.IN_APP,
+                title=f"Task due soon: {task.title}",
+                body=(
+                    f"Task '{task.title}' (ref: {task.submission.reference_number}) "
+                    f"is due on {task.due_date}. "
+                    f"Only {NOTIFY_DAYS_BEFORE} days remaining."
+                ),
+                submission_id=task.submission_id,
+            )
+
+        task.due_date_notified = True
+        task.save(update_fields=["due_date_notified"])
+        notified_task_ids.append(task.id)
+
+    if notified_task_ids:
+        app_log.info(
+            "DUE_DATE_NOTIFY | Tasks notified: %s",
+            ", ".join(str(i) for i in notified_task_ids),
+        )
+
+    # Subtasks
+    subtask_qs = CommissionSubTask.objects.filter(
+        due_date__gte=alert_from,
+        due_date__lte=alert_to,
+        due_date_notified=False,
+        status__in=["open", "in_progress"],
+    ).prefetch_related("assigned_staff")
+
+    notified_subtask_ids = []
+    for sub in subtask_qs:
+        recipients = set(sub.assigned_staff.all())
+        for user in recipients:
+            if not user or not user.is_active:
+                continue
+            Notification.objects.create(
+                recipient=user,
+                channel=Notification.Channel.IN_APP,
+                title=f"Subtask due soon: {sub.title}",
+                body=(
+                    f"Subtask '{sub.title}' (task: {sub.task.title}) "
+                    f"is due on {sub.due_date}. "
+                    f"Only {NOTIFY_DAYS_BEFORE} days remaining."
+                ),
+            )
+        sub.due_date_notified = True
+        sub.save(update_fields=["due_date_notified"])
+        notified_subtask_ids.append(sub.id)
+
+    if notified_subtask_ids:
+        app_log.info(
+            "DUE_DATE_NOTIFY | Subtasks notified: %s",
+            ", ".join(str(i) for i in notified_subtask_ids),
+        )
+
+    total = len(notified_task_ids) + len(notified_subtask_ids)
+    app_log.info("DUE_DATE_NOTIFY | Complete: %d items notified", total)
+    return total

@@ -1,0 +1,56 @@
+# ── Python / Django ─────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+backend/.venv/
+backend/venv/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+
+# ── Node / Frontend ──────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+.pnp
+.pnp.js
+
+# ── Environment / Secrets ────────────────────────────────────────────────────
+.env
+# Keep the example file:
+!.env.example
+
+# ── Claude Code ──────────────────────────────────────────────────────────────
+.claude/
+
+# ── OS / Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+*.iml
+
+# ── Git history files ────────────────────────────────────────────────────────
+.history
+
+# ── Docker volumes / local data ──────────────────────────────────────────────
+*.pid
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+*.bak
+*.orig

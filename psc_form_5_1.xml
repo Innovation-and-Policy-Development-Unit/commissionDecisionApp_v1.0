@@ -1,0 +1,515 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<form>
+
+  <!-- ═══ EMPLOYEE INFORMATION ═══ -->
+  <field>
+    <label>Employee Information</label>
+    <field_key>section_employee_info</field_key>
+    <field_type>section_header</field_type>
+    <display_order>10</display_order>
+  </field>
+  <field>
+    <label>Full Name</label>
+    <field_key>employee_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter full name</placeholder>
+    <is_required>true</is_required>
+    <display_order>20</display_order>
+  </field>
+  <field>
+    <label>Employee National ID Number</label>
+    <field_key>national_id</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter National ID number</placeholder>
+    <is_required>true</is_required>
+    <display_order>30</display_order>
+  </field>
+  <field>
+    <label>Date of Birth</label>
+    <field_key>date_of_birth</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>40</display_order>
+  </field>
+  <field>
+    <label>Island</label>
+    <field_key>island</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Efate</placeholder>
+    <is_required>false</is_required>
+    <display_order>50</display_order>
+  </field>
+  <field>
+    <label>Province</label>
+    <field_key>province</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Shefa</placeholder>
+    <is_required>false</is_required>
+    <display_order>60</display_order>
+  </field>
+
+  <!-- ═══ EMPLOYMENT INFORMATION ═══ -->
+  <field>
+    <label>Employment Information</label>
+    <field_key>section_employment_info</field_key>
+    <field_type>section_header</field_type>
+    <display_order>70</display_order>
+  </field>
+  <field>
+    <label>Employee ID (VNPF)</label>
+    <field_key>vnpf_employee_id</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter VNPF employee ID</placeholder>
+    <is_required>true</is_required>
+    <display_order>80</display_order>
+  </field>
+  <field>
+    <label>PSC Start Date</label>
+    <field_key>psc_start_date</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>90</display_order>
+  </field>
+  <field>
+    <label>Job Title</label>
+    <field_key>job_title</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter current job title</placeholder>
+    <is_required>true</is_required>
+    <display_order>100</display_order>
+  </field>
+  <field>
+    <label>Post Number</label>
+    <field_key>post_number</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter post number</placeholder>
+    <is_required>false</is_required>
+    <display_order>110</display_order>
+  </field>
+  <field>
+    <label>Department</label>
+    <field_key>department</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter department</placeholder>
+    <is_required>true</is_required>
+    <display_order>120</display_order>
+  </field>
+  <field>
+    <label>Ministry</label>
+    <field_key>ministry</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter ministry</placeholder>
+    <is_required>true</is_required>
+    <display_order>130</display_order>
+  </field>
+  <field>
+    <label>Email Address</label>
+    <field_key>email_address</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. name@gov.vu</placeholder>
+    <is_required>false</is_required>
+    <display_order>140</display_order>
+  </field>
+  <field>
+    <label>VOIP Number</label>
+    <field_key>voip_number</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter VOIP number</placeholder>
+    <is_required>false</is_required>
+    <display_order>150</display_order>
+  </field>
+  <field>
+    <label>Landline Number</label>
+    <field_key>landline_number</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter landline number</placeholder>
+    <is_required>false</is_required>
+    <display_order>160</display_order>
+  </field>
+  <field>
+    <label>Mobile Number</label>
+    <field_key>mobile_number</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter mobile number</placeholder>
+    <is_required>false</is_required>
+    <display_order>170</display_order>
+  </field>
+  <field>
+    <label>Employment Type</label>
+    <field_key>employment_type</field_key>
+    <field_type>radio</field_type>
+    <choices>Permanent
+Standard Contract
+Internship
+Other</choices>
+    <is_required>true</is_required>
+    <display_order>180</display_order>
+  </field>
+  <field>
+    <label>Employment Type — Other (please specify)</label>
+    <field_key>employment_type_other</field_key>
+    <field_type>text</field_type>
+    <placeholder>Specify if Other selected above</placeholder>
+    <is_required>false</is_required>
+    <display_order>190</display_order>
+  </field>
+  <field>
+    <label>Current Status</label>
+    <field_key>current_status</field_key>
+    <field_type>radio</field_type>
+    <choices>Current Job Title
+Acting on Another Job Title
+Transferred
+Other</choices>
+    <is_required>true</is_required>
+    <display_order>200</display_order>
+  </field>
+  <field>
+    <label>Current Status — Other (please specify)</label>
+    <field_key>current_status_other</field_key>
+    <field_type>text</field_type>
+    <placeholder>Specify if Other selected above</placeholder>
+    <is_required>false</is_required>
+    <display_order>210</display_order>
+  </field>
+
+  <!-- ═══ EDUCATION AND TRAINING HISTORY ═══ -->
+  <field>
+    <label>Education and Training History Relevant to Current Role</label>
+    <field_key>section_education</field_key>
+    <field_type>section_header</field_type>
+    <display_order>220</display_order>
+  </field>
+
+  <!-- Postgraduate -->
+  <field>
+    <label>Postgraduate Qualification (Masters / PhD)</label>
+    <field_key>postgrad_qualification</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Master of Public Administration</placeholder>
+    <is_required>false</is_required>
+    <display_order>230</display_order>
+  </field>
+  <field>
+    <label>Postgraduate Year Completed</label>
+    <field_key>postgrad_year</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. 2018</placeholder>
+    <is_required>false</is_required>
+    <display_order>240</display_order>
+  </field>
+  <field>
+    <label>Postgraduate Training Provider</label>
+    <field_key>postgrad_provider</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of university or institution</placeholder>
+    <is_required>false</is_required>
+    <display_order>250</display_order>
+  </field>
+  <field>
+    <label>Postgraduate Field of Study</label>
+    <field_key>postgrad_field</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Public Policy</placeholder>
+    <is_required>false</is_required>
+    <display_order>260</display_order>
+  </field>
+
+  <!-- Undergraduate -->
+  <field>
+    <label>Undergraduate Qualification (Diploma / Bachelor)</label>
+    <field_key>undergrad_qualification</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Bachelor of Commerce</placeholder>
+    <is_required>false</is_required>
+    <display_order>270</display_order>
+  </field>
+  <field>
+    <label>Undergraduate Year Completed</label>
+    <field_key>undergrad_year</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. 2014</placeholder>
+    <is_required>false</is_required>
+    <display_order>280</display_order>
+  </field>
+  <field>
+    <label>Undergraduate Training Provider</label>
+    <field_key>undergrad_provider</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of university or institution</placeholder>
+    <is_required>false</is_required>
+    <display_order>290</display_order>
+  </field>
+  <field>
+    <label>Undergraduate Field of Study</label>
+    <field_key>undergrad_field</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Accounting</placeholder>
+    <is_required>false</is_required>
+    <display_order>300</display_order>
+  </field>
+
+  <!-- High School / TVET -->
+  <field>
+    <label>High School / TVET Qualification</label>
+    <field_key>highschool_qualification</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. VSCE, Certificate III</placeholder>
+    <is_required>false</is_required>
+    <display_order>310</display_order>
+  </field>
+  <field>
+    <label>High School / TVET Year Completed</label>
+    <field_key>highschool_year</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. 2010</placeholder>
+    <is_required>false</is_required>
+    <display_order>320</display_order>
+  </field>
+  <field>
+    <label>High School / TVET Training Provider</label>
+    <field_key>highschool_provider</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of school or institution</placeholder>
+    <is_required>false</is_required>
+    <display_order>330</display_order>
+  </field>
+  <field>
+    <label>High School / TVET Field of Study</label>
+    <field_key>highschool_field</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Commerce</placeholder>
+    <is_required>false</is_required>
+    <display_order>340</display_order>
+  </field>
+
+  <!-- ═══ PROFESSIONAL TRAINING & SHORT COURSES ═══ -->
+  <field>
+    <label>Professional Training and Short Courses</label>
+    <field_key>section_professional_training</field_key>
+    <field_type>section_header</field_type>
+    <display_order>350</display_order>
+  </field>
+  <field>
+    <label>Preferred Course Title</label>
+    <field_key>course_title</field_key>
+    <field_type>text</field_type>
+    <placeholder>Enter preferred course or training title</placeholder>
+    <is_required>false</is_required>
+    <display_order>360</display_order>
+  </field>
+  <field>
+    <label>Training Provider</label>
+    <field_key>short_course_provider</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of training provider</placeholder>
+    <is_required>false</is_required>
+    <display_order>370</display_order>
+  </field>
+  <field>
+    <label>Training Duration</label>
+    <field_key>short_course_duration</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. 3 days, 2 weeks</placeholder>
+    <is_required>false</is_required>
+    <display_order>380</display_order>
+  </field>
+  <field>
+    <label>Date Completed</label>
+    <field_key>short_course_date_completed</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>390</display_order>
+  </field>
+  <field>
+    <label>Mode of Delivery</label>
+    <field_key>mode_of_delivery</field_key>
+    <field_type>select</field_type>
+    <choices>Face-to-Face
+Online / Virtual
+Blended
+On-the-Job</choices>
+    <is_required>false</is_required>
+    <display_order>400</display_order>
+  </field>
+  <field>
+    <label>Certification Received</label>
+    <field_key>certification_received</field_key>
+    <field_type>radio</field_type>
+    <choices>Yes
+No</choices>
+    <is_required>false</is_required>
+    <display_order>410</display_order>
+  </field>
+  <field>
+    <label>Relevance to Current Role</label>
+    <field_key>relevance_to_role</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Describe how this training is relevant to your current role</placeholder>
+    <is_required>false</is_required>
+    <display_order>420</display_order>
+  </field>
+
+  <!-- ═══ TRAINING INTEREST ═══ -->
+  <field>
+    <label>Training Interest</label>
+    <field_key>section_training_interest</field_key>
+    <field_type>section_header</field_type>
+    <display_order>430</display_order>
+  </field>
+  <field>
+    <label>Preferred Training</label>
+    <field_key>preferred_training</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Describe your preferred training area or course</placeholder>
+    <is_required>false</is_required>
+    <display_order>440</display_order>
+  </field>
+  <field>
+    <label>Training Format</label>
+    <field_key>training_format</field_key>
+    <field_type>select</field_type>
+    <choices>Full-Time
+Part-Time
+Blended
+Online / Virtual</choices>
+    <is_required>false</is_required>
+    <display_order>450</display_order>
+  </field>
+  <field>
+    <label>Preferred Training Duration</label>
+    <field_key>preferred_training_duration</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. 1 week, 6 months</placeholder>
+    <is_required>false</is_required>
+    <display_order>460</display_order>
+  </field>
+
+  <!-- ═══ PRE-ASSESSMENT AGAINST PRIORITIES ═══ -->
+  <field>
+    <label>Pre-Assessment Against Priorities</label>
+    <field_key>section_pre_assessment</field_key>
+    <field_type>section_header</field_type>
+    <display_order>470</display_order>
+  </field>
+  <field>
+    <label>Gap Area</label>
+    <field_key>gap_area</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Describe the identified skill or knowledge gap</placeholder>
+    <is_required>false</is_required>
+    <display_order>480</display_order>
+  </field>
+  <field>
+    <label>Priority Level</label>
+    <field_key>priority_level</field_key>
+    <field_type>radio</field_type>
+    <choices>High
+Medium
+Low</choices>
+    <is_required>false</is_required>
+    <display_order>490</display_order>
+  </field>
+  <field>
+    <label>Recommended Actions</label>
+    <field_key>recommended_actions</field_key>
+    <field_type>radio</field_type>
+    <choices>Training
+Education</choices>
+    <is_required>false</is_required>
+    <display_order>500</display_order>
+  </field>
+  <field>
+    <label>Training Institution</label>
+    <field_key>training_institution</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of recommended institution</placeholder>
+    <is_required>false</is_required>
+    <display_order>510</display_order>
+  </field>
+  <field>
+    <label>Expected Duration</label>
+    <field_key>expected_duration</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. 3 months</placeholder>
+    <is_required>false</is_required>
+    <display_order>520</display_order>
+  </field>
+
+  <!-- ═══ TRAINING NOMINATION REVIEW AND AUTHORIZATION ═══ -->
+  <field>
+    <label>Training Nomination Review and Authorization</label>
+    <field_key>section_authorization</field_key>
+    <field_type>section_header</field_type>
+    <display_order>530</display_order>
+  </field>
+
+  <!-- Verification 1 — HR Manager -->
+  <field>
+    <label>Verification 1 — HR Manager Name</label>
+    <field_key>hr_manager_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>HR Manager full name</placeholder>
+    <is_required>false</is_required>
+    <display_order>540</display_order>
+  </field>
+  <field>
+    <label>Verification 1 — HR Manager Date</label>
+    <field_key>hr_manager_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>550</display_order>
+  </field>
+
+  <!-- Verification 2 — M&E Officer -->
+  <field>
+    <label>Verification 2 — M&amp;E Officer Name</label>
+    <field_key>me_officer_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>M&amp;E Officer full name</placeholder>
+    <is_required>false</is_required>
+    <display_order>560</display_order>
+  </field>
+  <field>
+    <label>Verification 2 — M&amp;E Officer Date</label>
+    <field_key>me_officer_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>570</display_order>
+  </field>
+
+  <!-- Recommendation — Director General -->
+  <field>
+    <label>Recommendation — Director General / Director Name</label>
+    <field_key>director_general_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Director General or Director full name</placeholder>
+    <is_required>false</is_required>
+    <display_order>580</display_order>
+  </field>
+  <field>
+    <label>Recommendation — Director General / Director Date</label>
+    <field_key>director_general_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>590</display_order>
+  </field>
+
+  <!-- Endorsement — Manager VIPAM -->
+  <field>
+    <label>Endorsement — Manager VIPAM Name</label>
+    <field_key>vipam_manager_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Manager VIPAM full name</placeholder>
+    <is_required>false</is_required>
+    <display_order>600</display_order>
+  </field>
+  <field>
+    <label>Endorsement — Manager VIPAM Date</label>
+    <field_key>vipam_manager_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>610</display_order>
+  </field>
+
+</form>

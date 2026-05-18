@@ -1,0 +1,28 @@
+TO: Karae, DCDT Infrastructure
+CC: DCDT Compliance Assessment Team
+FROM: Herman Tevilili, Principal Innovation and Digital, IPDU / OPSC
+SUBJECT: Server Provisioning Request – Submission & Commission Decision Management System (SCDMS)
+
+Dear Karae,
+
+As part of the Certificate of Compliance submission for the Submission & Commission Decision Management System (SCDMS), we respectfully request the provisioning of a virtual server at the DCDT data centre in Port Vila. This VM will host multiple systems (including upcoming systems), so the following specifications are requested:
+CPU : 8 cores
+RAM : 32 GB
+Storage : 500 GB
+OS : Ubuntu 24.04 LTS
+
+Additional requests for this server:
+- TLS certificate provisioning for the hostname once assigned
+- Government SMTP relay access for OTP/password-reset/notification emails
+- Outbound network access to pypi.org and osv.dev for automated CVE vulnerability scanning
+
+We will request the domain later once the system name is confirmed.
+
+Please advise on the expected provisioning timeline so that we can plan deployment accordingly.
+
+Thank you,
+
+Herman Tevilili
+Principal Innovation and Digital
+Innovation Policy and Development Unit
+Office of the Public Service Commission

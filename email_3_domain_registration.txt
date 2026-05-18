@@ -1,0 +1,26 @@
+TO: DCDT Domain Administration
+CC: DCDT Infrastructure Team
+FROM: Herman Tevilili, Principal Innovation and Digital, IPDU / OPSC
+SUBJECT: Domain / Subdomain Registration Request – scdms.psc.gov.vu
+
+Dear DCDT,
+
+We request the registration of the following government subdomain for the Submission & Commission Decision Management System (SCDMS):
+
+  scdms.psc.gov.vu
+
+This subdomain will serve as the production hostname for the SCDMS web application, accessible to authorised government users across Line Ministries. The corresponding TLS certificate will be required for HTTPS enforcement (TLS 1.2 minimum, 1.3 preferred).
+
+Please confirm:
+1. Availability of the requested subdomain
+2. Process and timeline for DNS record creation
+3. Whether DCDT issues TLS certificates internally or requires a CSR from the OPSC
+
+This request is submitted in parallel with the Certificate of Compliance application under the Digital Transformation Act No. 42 of 2025.
+
+Thank you,
+
+Herman Tevilili
+Principal Innovation and Digital
+Innovation Policy and Development Unit
+Office of the Public Service Commission

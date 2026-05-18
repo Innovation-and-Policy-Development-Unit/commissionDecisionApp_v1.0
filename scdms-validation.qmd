@@ -1,0 +1,155 @@
+---
+title: "SCDMS Workflow & Role Validation Workshop"
+subtitle: "Commission Decision Management System (v1.0)"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    theme: cosmo
+    code-fold: true
+    self-contained: true
+---
+
+## 1. Executive Summary
+
+This document outlines the current workflow implementation within the **Commission Decision Management System (SCDMS)**. It serves as a validation reference for the upcoming workshop to ensure the digital implementation aligns with the Public Service Commission (PSC) Standard Operating Procedures (SOPs).
+
+## 2. System Workflow Overview
+
+The SCDMS digitises the lifecycle of a submission from initial drafting by a Ministry through to Commission deliberation and final implementation tracking.
+
+### 2.1 Full Lifecycle Workflow (Mermaid)
+
+```{mermaid}
+flowchart TB
+    subgraph PreSubmission["Pre‑Submission & Intake"]
+        DRAFT["Draft"] --> SUB["Submitted to PSC"]
+        SUB --> REC["Received by PSC"]
+        REC --> REG["Registered & Routed"]
+    end
+    subgraph Assessment["Assessment Pipeline"]
+        REG --> MCR["Manager Checklist Review"]
+        MCR --> UA["Under Assessment (21‑day)"]
+        UA -->|"Clarification needed"| RFC["Returned for Clarification"]
+        RFC --> SUB
+        UA -->|"Legal advice"| ALA["Awaiting Legal Advice"]
+        ALA --> UA
+    end
+    subgraph Commission["Commission Deliberation"]
+        UA --> FTC["Forwarded to Commission"]
+        FTC --> CS["Commission Sitting"]
+        CS -->|"Defer to later meeting"| TAB["Tabled"]
+        TAB -->|"Next meeting"| CS
+    end
+    subgraph Outcomes["Outcomes & Post‑Decision"]
+        CS --> APP["Approved"]
+        CS --> REJ["Rejected"]
+        CS -->|"New: shortcut"| MA["Matters Arising"]
+        CS --> DHR["Deferred Back to HR"]
+        DHR -->|"Full pipeline"| SUB
+        DHR -->|"New: shortcut"| MA
+        MA --> CS
+        APP --> MDS["Minutes Drafted & Signed"]
+        REJ --> MDS
+        MDS --> DEA["Decision Entered & Assigned"]
+        DEA --> UI["Under Implementation"]
+        UI --> IR["Implementation Report"]
+    end
+    DRAFT:::pregray
+    SUB:::preblue
+    REC:::preblue
+    REG:::preindigo
+    MCR:::preindigo
+    UA:::previolet
+    RFC:::preorange
+    ALA:::preamber
+    FTC:::prepurple
+    CS:::prepurple
+    TAB:::preamber
+    APP:::preemerald
+    REJ:::prered
+    MA:::prepurple
+    DHR:::preorange
+    MDS:::preteal
+    DEA:::preteal
+    UI:::pregreen
+    IR:::pregreen
+    classDef pregray fill:#e2e8f0,stroke:#94a3b8,color:#475569
+    classDef preblue fill:#dbeafe,stroke:#60a5fa,color:#1e40af
+    classDef preindigo fill:#e0e7ff,stroke:#818cf8,color:#3730a3
+    classDef previolet fill:#ede9fe,stroke:#a78bfa,color:#4c1d95
+    classDef preorange fill:#ffedd5,stroke:#fb923c,color:#9a3412
+    classDef preamber fill:#fef3c7,stroke:#fbbf24,color:#92400e
+    classDef prepurple fill:#f3e8ff,stroke:#c084fc,color:#581c87
+    classDef preemerald fill:#d1fae5,stroke:#34d399,color:#065f46
+    classDef prered fill:#fee2e2,stroke:#f87171,color:#991b1b
+    classDef preteal fill:#ccfbf1,stroke:#2dd4bf,color:#115e59
+    classDef pregreen fill:#dcfce7,stroke:#4ade80,color:#166534
+```
+
+## 3. Roles and Responsibilities (RBAC)
+
+The system implements a strict Role-Based Access Control (RBAC) model as defined in `rbac.py` and `transitions.py`.
+
+### 3.1 Role Privileges and Constraints
+
+| Role Group | Role Name | Primary Responsibility | Critical System Constraint |
+|------------|-----------|------------------------|---------------------------|
+| **Ministry** | Ministry HR Officer | Drafts and submits cases. | Cannot transition items out of Intake/Assessment. |
+| | Head of Agency (DG) | Review and Endorsement. | **SOP Sec 6**: DG sign-off mandatory for submission. |
+| **Intake** | PSC Secretary | Meeting & Agenda Management. | Cannot record Approved/Rejected decisions. |
+| | Senior Admin Officer| Registration & Logistics. | Handles initial routing and queue management. |
+| **Review** | OPSC Unit Manager | Checklist Review. | **Restricted**: Can only act at Checklist Review stage. |
+| **Assessment**| PSC Officer | Technical Assessment. | **Forbidden**: Cannot access Commission decision stages. |
+| **Commission**| PSC Commissioner | Deliberation & Decision. | Can only act at Sitting or Hold states. |
+| | Chairperson | Sign-off & Chairing. | Signs Minutes using Electronic PIN/Signature. |
+| **Execution** | OPSC Manager | Task Allocation. | Restricted to post-decision execution stages. |
+| | Principal/Senior Off.| Task Execution. | Can only update Implementation status/reports. |
+
+## 4. SOP & Transition Guardrails
+
+The system enforces SOP alignment through its **Transition Engine**. Every movement between stages is validated against the user's role and the current state of the submission.
+
+### 4.1 Automated Validation Rules
+- **Assessment Timer**: Auto-starts the 21-day countdown upon entering `UNDER_ASSESSMENT`.
+- **Intake Blocking**: Submissions cannot be registered until Received by PSC.
+- **Decision Locking**: Approved/Rejected decisions can ONLY be recorded by the Chairperson or a Commissioner while a meeting is in session.
+- **Sign-off Enforcement**: Tasks for OPSC staff cannot be created until the Chairperson has electronically signed the official Minutes.
+
+## 5. Post-Decision Action Tracking
+
+The system transitions from "Submission Tracking" to "Task Tracking" once a decision is finalised.
+
+### 5.1 The Task Hierarchy
+1. **Parent Task**: Allocated by the OPSC Manager to a unit (e.g., "Implement Recruitment of Director").
+2. **Sub-Tasks**: Granular steps (e.g., "Draft Gazette Notice", "Notify Candidate") with individual due dates.
+3. **Audit Trail**: Every update from staff is logged, providing a real-time implementation report for the next Commission sitting.
+
+## 6. Reports & Data Extraction
+
+SCDMS provides several audit-ready extraction points:
+- **KPI Dashboards**: Visualising turnaround times vs. the 21-day SLA.
+- **Audit Logs**: Tamper-evident record of every login, stage transition, and data change.
+- **Minutes PDF**: Formally formatted minutes with embedded digital signatures.
+
+## 7. Interactive Tools for Workshop
+
+Two interactive resources are available for today's session:
+
+1. **Workflow Explorer (`workflow-explorer.html`)**: A drill-down SVG diagram to explore every possible path and role responsibility.
+2. **Demo Scenario (`demo-scenario.qmd`)**: A live walkthrough of a "Restructure Proposal" from start to finish.
+
+## 8. Practical Demo Scenario
+
+This scenario follows a "Restructure Proposal" through the entire lifecycle, demonstrating:
+- **Simulated Microsoft Authenticator Push**: A modern 2FA experience for the Commission.
+- **Head of Agency endorsement**: Demonstrating cross-ministry workflow.
+- **Automated deadline calculation**: Real-time SLA tracking.
+- **Chairperson's electronic signature**: Secure decision finalization.
+- **Task allocation blocking**: Process integrity enforcement.
+
+---
+**Prepared for:** SCDMS Validation Workshop  
+**System Version:** 1.0.0-rc  
+**Date:** 13 May 2026

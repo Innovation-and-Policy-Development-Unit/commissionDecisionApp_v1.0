@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCDMS Interactive Workflow Explorer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --p-500: #004276;
+            --p-600: #003666;
+            --slate-50: #f8fafc;
+            --slate-200: #e2e8f0;
+            --slate-600: #475569;
+            --slate-800: #1e293b;
+            --indigo-500: #6366f1;
+            --emerald-500: #10b981;
+            --amber-500: #f59e0b;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--slate-50);
+            color: var(--slate-800);
+            overflow: hidden;
+        }
+
+        #header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            max-width: 400px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--p-500);
+        }
+
+        p {
+            margin: 5px 0 0;
+            font-size: 0.9rem;
+            color: var(--slate-600);
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: white;
+            border: 1px solid var(--slate-200);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            border-color: var(--p-500);
+            color: var(--p-500);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        #viz {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .node circle {
+            cursor: pointer;
+            stroke-width: 2px;
+            transition: r 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .node text {
+            font-size: 11px;
+            pointer-events: none;
+            user-select: none;
+            font-weight: 500;
+        }
+
+        .link {
+            fill: none;
+            stroke: var(--slate-200);
+            stroke-width: 2px;
+            transition: stroke 0.3s;
+        }
+
+        .node--leaf text {
+            fill: var(--slate-600);
+        }
+
+        .tooltip {
+            position: absolute;
+            padding: 12px;
+            background: rgba(30, 41, 59, 0.95);
+            color: white;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 20;
+            max-width: 280px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            line-height: 1.4;
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            font-weight: 800;
+            margin-top: 6px;
+            letter-spacing: 0.05em;
+        }
+
+        .subgraph-label {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            fill: var(--slate-400);
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>SCDMS Workflow Explorer</h1>
+        <p>Interactive lifecycle based on the PSC Validation Model. Click nodes to expand, drag to pan, scroll to zoom.</p>
+    </div>
+
+    <div id="controls">
+        <button onclick="resetView()">Reset View</button>
+        <button onclick="expandAll()">Expand All</button>
+        <button onclick="collapseAll()">Collapse All</button>
+    </div>
+
+    <div id="viz"></div>
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        let i = 0;
+        const data = {
+            name: "Draft",
+            role: "Ministry HR",
+            category: "Pre-Submission & Intake",
+            description: "HR Officer creates the submission draft in the system.",
+            color: "#94a3b8",
+            children: [
+                {
+                    name: "Submitted to PSC",
+                    role: "Ministry HR",
+                    category: "Pre-Submission & Intake",
+                    description: "Formal dispatch to OPSC. Cutoff times apply for meeting inclusion.",
+                    color: "#3b82f6",
+                    children: [
+                        {
+                            name: "Received by PSC",
+                            role: "PSC Secretary",
+                            category: "Pre-Submission & Intake",
+                            description: "Formal intake of physical/digital records at OPSC Secretariat.",
+                            color: "#3b82f6",
+                            children: [
+                                {
+                                    name: "Registered & Routed",
+                                    role: "PSC Secretary",
+                                    category: "Pre-Submission & Intake",
+                                    description: "Reference number allocated. Routed to HR, ODU, VIPAM, or Compliance.",
+                                    color: "#818cf8",
+                                    children: [
+                                        {
+                                            name: "Manager Checklist Review",
+                                            role: "Unit Manager",
+                                            category: "Assessment Pipeline",
+                                            description: "Compliance check. Items missing docs are returned to Ministry.",
+                                            color: "#818cf8",
+                                            children: [
+                                                {
+                                                    name: "Returned for Clarification",
+                                                    role: "Unit Manager",
+                                                    category: "Assessment Pipeline",
+                                                    description: "Sent back to HR for missing information. Resubmission returns to 'Submitted' stage.",
+                                                    color: "#fb923c"
+                                                },
+                                                {
+                                                    name: "Under Assessment (21-day)",
+                                                    role: "PSC Officer",
+                                                    category: "Assessment Pipeline",
+                                                    description: "Technical evaluation of the submission. SLA timer active.",
+                                                    color: "#a78bfa",
+                                                    children: [
+                                                        {
+                                                            name: "Awaiting Legal Advice",
+                                                            role: "PSC Officer",
+                                                            category: "Assessment Pipeline",
+                                                            description: "Referred to State Law Office. Returns to Assessment once opinion received.",
+                                                            color: "#fbbf24"
+                                                        },
+                                                        {
+                                                            name: "Forwarded to Commission",
+                                                            role: "PSC Secretary",
+                                                            category: "Commission Deliberation",
+                                                            description: "Assessment complete. Item placed on draft agenda.",
+                                                            color: "#c084fc",
+                                                            children: [
+                                                                {
+                                                                    name: "Commission Sitting",
+                                                                    role: "Commission",
+                                                                    category: "Commission Deliberation",
+                                                                    description: "Deliberation by Commissioners and Chairperson.",
+                                                                    color: "#c084fc",
+                                                                    children: [
+                                                                        {
+                                                                            name: "Approved",
+                                                                            role: "Commission",
+                                                                            category: "Outcomes & Post-Decision",
+                                                                            description: "Positive resolution reached.",
+                                                                            color: "#34d399",
+                                                                            children: [
+                                                                                {
+                                                                                    name: "Minutes Drafted & Signed",
+                                                                                    role: "Chairperson",
+                                                                                    category: "Outcomes & Post-Decision",
+                                                                                    description: "Chairperson signs minutes with Session PIN.",
+                                                                                    color: "#2dd4bf",
+                                                                                    children: [
+                                                                                        {
+                                                                                            name: "Decision Entered & Assigned",
+                                                                                            role: "OPSC Manager",
+                                                                                            category: "Outcomes & Post-Decision",
+                                                                                            description: "Tasks allocated to staff for implementation.",
+                                                                                            color: "#2dd4bf",
+                                                                                            children: [
+                                                                                                {
+                                                                                                    name: "Under Implementation",
+                                                                                                    role: "PSC Staff",
+                                                                                                    category: "Outcomes & Post-Decision",
+                                                                                                    description: "Official notification issued. Ministry executing decision.",
+                                                                                                    color: "#4ade80",
+                                                                                                    children: [
+                                                                                                        {
+                                                                                                            name: "Implementation Report",
+                                                                                                            role: "PSC Staff",
+                                                                                                            category: "Outcomes & Post-Decision",
+                                                                                                            description: "Final report to Commission. Workflow complete.",
+                                                                                                            color: "#4ade80"
+                                                                                                        }
+                                                                                                    ]
+                                                                                                }
+                                                                                            ]
+                                                                                        }
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            name: "Rejected",
+                                                                            role: "Commission",
+                                                                            category: "Outcomes & Post-Decision",
+                                                                            description: "Resolution: Not Approved.",
+                                                                            color: "#f87171"
+                                                                        },
+                                                                        {
+                                                                            name: "Matters Arising",
+                                                                            role: "Commission",
+                                                                            category: "Commission Deliberation",
+                                                                            description: "Shortcut: Returns to next sitting agenda without re-assessment.",
+                                                                            color: "#c084fc"
+                                                                        },
+                                                                        {
+                                                                            name: "Tabled",
+                                                                            role: "Commission",
+                                                                            category: "Commission Deliberation",
+                                                                            description: "Deferred to a later specific meeting.",
+                                                                            color: "#fbbf24"
+                                                                        },
+                                                                        {
+                                                                            name: "Deferred Back to HR",
+                                                                            role: "Commission",
+                                                                            category: "Outcomes & Post-Decision",
+                                                                            description: "Resolution: Needs ministerial revision. Can return via Matters Arising shortcut.",
+                                                                            color: "#fb923c"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        let root;
+
+        const svg = d3.select("#viz")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .call(d3.zoom().on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            }))
+            .append("g");
+
+        const g = svg.append("g")
+            .attr("transform", "translate(120, " + height/2 + ")");
+
+        const tree = d3.tree().nodeSize([60, 240]);
+        const tooltip = d3.select("#tooltip");
+
+        root = d3.hierarchy(data, d => d.children);
+        root.x0 = height / 2;
+        root.y0 = 0;
+
+        // Initial expand to level 4 (registered)
+        root.descendants().forEach((d, index) => {
+            if (d.depth >= 4) {
+                if (d.children) {
+                    d._children = d.children;
+                    d.children = null;
+                }
+            }
+        });
+
+        update(root);
+
+        function update(source) {
+            const nodes = tree(root).descendants();
+            const links = nodes.slice(1);
+
+            nodes.forEach(d => d.y = d.depth * 220);
+
+            // --- Nodes ---
+            const node = g.selectAll("g.node")
+                .data(nodes, d => d.id || (d.id = ++i));
+
+            const nodeEnter = node.enter().append("g")
+                .attr("class", d => "node" + (d.children ? " node--internal" : " node--leaf"))
+                .attr("transform", d => "translate(" + source.y0 + "," + source.x0 + ")")
+                .on("click", (event, d) => {
+                    if (d.children) {
+                        d._children = d.children;
+                        d.children = null;
+                    } else {
+                        d.children = d._children;
+                        d._children = null;
+                    }
+                    update(d);
+                })
+                .on("mouseover", (event, d) => {
+                    tooltip.transition().duration(200).style("opacity", 1);
+                    tooltip.html(`
+                        <div style="font-size: 10px; color: ${d.data.color}; font-weight: 800; text-transform: uppercase; margin-bottom: 4px;">${d.data.category || ''}</div>
+                        <strong>${d.data.name}</strong><br/>
+                        <div style="margin-top: 6px;">${d.data.description || ''}</div>
+                        ${d.data.role ? `<span class="role-badge" style="background:${d.data.color}22; color:${d.data.color}; border: 1px solid ${d.data.color}">${d.data.role}</span>` : ''}
+                    `)
+                    .style("left", (event.pageX + 15) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => {
+                    tooltip.transition().duration(500).style("opacity", 0);
+                });
+
+            nodeEnter.append("circle")
+                .attr("r", 1e-6)
+                .style("fill", d => d._children ? d.data.color : "#fff")
+                .style("stroke", d => d.data.color);
+
+            nodeEnter.append("text")
+                .attr("dy", ".35em")
+                .attr("x", d => d.children || d._children ? -15 : 15)
+                .attr("text-anchor", d => d.children || d._children ? "end" : "start")
+                .text(d => d.data.name)
+                .style("fill-opacity", 1e-6);
+
+            const nodeUpdate = nodeEnter.merge(node);
+
+            nodeUpdate.transition()
+                .duration(750)
+                .attr("transform", d => "translate(" + d.y + "," + d.x + ")");
+
+            nodeUpdate.select("circle")
+                .attr("r", 8)
+                .style("fill", d => d._children ? d.data.color : "#fff")
+                .style("stroke", d => d.data.color)
+                .attr("cursor", "pointer");
+
+            nodeUpdate.select("text")
+                .style("fill-opacity", 1);
+
+            const nodeExit = node.exit().transition()
+                .duration(750)
+                .attr("transform", d => "translate(" + source.y + "," + source.x + ")")
+                .remove();
+
+            nodeExit.select("circle").attr("r", 1e-6);
+            nodeExit.select("text").style("fill-opacity", 1e-6);
+
+            // --- Links ---
+            const link = g.selectAll("path.link")
+                .data(links, d => d.id);
+
+            const linkEnter = link.enter().insert("path", "g")
+                .attr("class", "link")
+                .attr("d", d => {
+                    const o = {x: source.x0, y: source.y0};
+                    return diagonal(o, o);
+                });
+
+            const linkUpdate = linkEnter.merge(link);
+
+            linkUpdate.transition()
+                .duration(750)
+                .attr("d", d => diagonal(d, d.parent));
+
+            const linkExit = link.exit().transition()
+                .duration(750)
+                .attr("d", d => {
+                    const o = {x: source.x, y: source.y};
+                    return diagonal(o, o);
+                })
+                .remove();
+
+            nodes.forEach(d => {
+                d.x0 = d.x;
+                d.y0 = d.y;
+            });
+
+            function diagonal(s, d) {
+                return `M ${s.y} ${s.x}
+                        C ${(s.y + d.y) / 2} ${s.x},
+                          ${(s.y + d.y) / 2} ${d.x},
+                          ${d.y} ${d.x}`;
+            }
+        }
+
+        function resetView() {
+            d3.select("svg").transition().duration(750).call(
+                d3.zoom().transform,
+                d3.zoomIdentity.translate(120, height/2).scale(1)
+            );
+        }
+
+        function expandAll() {
+            root.descendants().forEach(d => {
+                if (d._children) {
+                    d.children = d._children;
+                    d._children = null;
+                }
+            });
+            update(root);
+        }
+
+        function collapseAll() {
+            root.descendants().forEach((d, index) => {
+                if (index > 0 && d.children) {
+                    d._children = d.children;
+                    d.children = null;
+                }
+            });
+            update(root);
+        }
+
+        window.addEventListener('resize', () => {
+            const newWidth = window.innerWidth;
+            const newHeight = window.innerHeight;
+            d3.select("svg")
+                .attr("width", newWidth)
+                .attr("height", newHeight);
+        });
+
+    </script>
+</body>
+</html>

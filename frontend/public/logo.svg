@@ -1,0 +1,43 @@
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    SCDMS – Submissions & Commission Decision Management System
+    Monochrome icon used via CSS mask in Logo.jsx.
+    SVG-internal masks carve transparent "slots" so the background shows
+    through, creating visible lines & checkmark on the same-colour shapes.
+  -->
+  <defs>
+    <!-- Cut three horizontal text-lines out of the document body -->
+    <mask id="dm">
+      <rect width="100" height="100" fill="white"/>
+      <rect x="18" y="38" width="44" height="8"  rx="4" fill="black"/>
+      <rect x="18" y="52" width="32" height="8"  rx="4" fill="black"/>
+      <rect x="18" y="66" width="38" height="8"  rx="4" fill="black"/>
+    </mask>
+
+    <!-- Cut a bold checkmark out of the decision-badge circle -->
+    <mask id="bm">
+      <rect width="100" height="100" fill="white"/>
+      <polyline
+        points="63,78 69,86 84,66"
+        stroke="black"
+        stroke-width="9"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"/>
+    </mask>
+  </defs>
+
+  <!-- Ghost back-page (stack of submissions) -->
+  <rect x="22" y="10" width="54" height="70" rx="4" fill="black" opacity="0.28"/>
+
+  <!-- Main document with dog-eared top-right corner -->
+  <path d="M9,6 H58 L80,28 V94 H9 Z" fill="black" mask="url(#dm)"/>
+
+  <!-- Dog-ear fold crease -->
+  <path d="M58,6 L58,28 L80,28"
+        stroke="black" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Decision-seal badge (overlaps bottom-right of the document) -->
+  <circle cx="73" cy="77" r="21" fill="black" mask="url(#bm)"/>
+</svg>
