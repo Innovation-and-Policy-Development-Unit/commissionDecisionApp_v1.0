@@ -6,7 +6,6 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import PSCForm37Fields from './PSCForm37Fields'
 
-// Fallback used only while form types are loading from the API
 const FALLBACK_FORM_TYPES = []
 
 const EMPTY_FORM37 = {
@@ -38,6 +37,11 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
   const [departments, setDepartments] = useState([])
   const [categories, setCategories] = useState([])
   const [formTypes, setFormTypes] = useState(FALLBACK_FORM_TYPES)
+  // PSC 2-2 attachment search
+  const [parentSearch, setParentSearch] = useState('')
+  const [parentResults, setParentResults] = useState([])
+  const [parentSearching, setParentSearching] = useState(false)
+
   const [form, setForm] = useState({
     title: '',
     form_category: '',
@@ -46,15 +50,20 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
     ministry: '',
     department: '',
     notes: '',
+    // PSC 2-2 specific
+    psc22Mode: '',           // 'attachment' | 'standalone' | ''
+    parent_submission: '',   // id of parent submission when attachment
   })
   const [form37, setForm37] = useState(EMPTY_FORM37)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const isPSC37 = form.form_type_code === 'PSC 3-7'
+  const isPSC22 = form.form_type_code === 'PSC 2-2'
+  const isAttachment = isPSC22 && form.psc22Mode === 'attachment'
+  const isStandalone = isPSC22 && form.psc22Mode === 'standalone'
   const isMinistryUser = user && ['ministry_hr', 'dept_admin'].includes(user.role)
 
-  // Filter PSC forms to only those belonging to the selected category
   const filteredFormTypes = form.form_category
     ? formTypes.filter(ft => String(ft.form_category) === String(form.form_category))
     : formTypes
@@ -84,14 +93,24 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
 
   useEffect(() => {
     const mid = form.ministry
-    if (!mid) {
-      setDepartments([])
+    if (!mid) { setDepartments([]); return }
+    api.get('/departments/', { params: { ministry: mid } }).then(res => setDepartments(res.data))
+  }, [form.ministry])
+
+  // Live parent submission search (PSC 2-1 submissions only)
+  useEffect(() => {
+    if (!isAttachment || parentSearch.trim().length < 2) {
+      setParentResults([])
       return
     }
-    api.get('/departments/', { params: { ministry: mid } }).then(res => {
-      setDepartments(res.data)
-    })
-  }, [form.ministry])
+    setParentSearching(true)
+    const t = setTimeout(() => {
+      api.get('/submissions/', { params: { search: parentSearch, form_type_code: 'PSC 2-1', page_size: 10 } })
+        .then(res => setParentResults(res.data.results || res.data))
+        .finally(() => setParentSearching(false))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [parentSearch, isAttachment])
 
   if (!user) {
     return modal
@@ -116,6 +135,14 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
     e.preventDefault()
     setBusy(true)
     setError('')
+
+    // Validate PSC 2-2 attachment requirement
+    if (isAttachment && !form.parent_submission) {
+      setError('Please select the parent PSC Form 2-1 submission this JD is attached to.')
+      setBusy(false)
+      return
+    }
+
     try {
       const effectiveCode = form.form_type_code === 'other'
         ? form.form_type_other
@@ -132,13 +159,15 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
         notes: form.notes,
       }
       if (form.department) payload.department = Number(form.department)
+      if (isAttachment) {
+        payload.is_attachment = true
+        payload.parent_submission = Number(form.parent_submission)
+      }
 
       const { data: submission } = await api.post('/submissions/', payload)
 
-      // If PSC 3-7, save the structured form data
       if (isPSC37) {
         const form37Payload = { ...form37 }
-        // Convert empty date strings to null for the API
         ;['period_from', 'period_to', 'director_date', 'dg_date'].forEach(k => {
           if (!form37Payload[k]) form37Payload[k] = null
         })
@@ -175,7 +204,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
 
       <form onSubmit={submit} className={modal ? 'space-y-4' : 'card p-6 space-y-4 max-w-3xl'}>
 
-        {/* ── Form type (drives conditional rendering) ──────────────── */}
+        {/* ── Form category + PSC Form ──────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Form category</label>
@@ -183,7 +212,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
               className="input"
               required
               value={form.form_category}
-              onChange={e => setForm({ ...form, form_category: e.target.value, form_type_code: '', form_type_other: '' })}
+              onChange={e => setForm({ ...form, form_category: e.target.value, form_type_code: '', form_type_other: '', psc22Mode: '', parent_submission: '' })}
             >
               <option value="">— Select category —</option>
               {categories.map(c => (
@@ -196,7 +225,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
             <select
               className="input"
               value={form.form_type_code}
-              onChange={e => setForm({ ...form, form_type_code: e.target.value, form_type_other: '' })}
+              onChange={e => setForm({ ...form, form_type_code: e.target.value, form_type_other: '', psc22Mode: '', parent_submission: '' })}
             >
               <option value="">— Select PSC form —</option>
               {filteredFormTypes.length === 0 && form.form_category && (
@@ -222,7 +251,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
                 No digitized form is available for <strong>{form.form_type_code}</strong> yet. You can still log the submission and attach the scanned document.
               </p>
             )}
-            {form.form_type_code && selectedFormType?.is_digitized && (
+            {form.form_type_code && selectedFormType?.is_digitized && !isPSC22 && (
               <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
                 A digitized form is available — you will be able to fill it in after logging the submission.
               </p>
@@ -230,111 +259,211 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
           </div>
         </div>
 
-        {/* ── Title — hidden for PSC 3-7 on full page (auto-generated from employee name); always shown in modal */}
-        {(!isPSC37 || modal) && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title / subject</label>
-            <input
-              className="input"
-              required
-              value={form.title}
-              onChange={e => setForm({ ...form, title: e.target.value })}
-            />
+        {/* ── PSC Form 2-2: Attachment or Standalone choice ───────── */}
+        {isPSC22 && (
+          <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 space-y-3">
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+              How is this Job Description (Form 2-2) being submitted?
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, psc22Mode: 'attachment', parent_submission: '' }))}
+                className={`flex-1 rounded-lg border-2 px-4 py-3 text-left transition-colors ${
+                  form.psc22Mode === 'attachment'
+                    ? 'border-blue-500 bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-300'
+                }`}
+              >
+                <span className="block font-semibold text-sm">As attachment to a Form 2-1</span>
+                <span className="block text-xs mt-0.5 opacity-75">
+                  This JD supports an Organisation Restructure submission already in the system. Reviewed alongside that submission — no separate routing or checklist.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, psc22Mode: 'standalone', parent_submission: '' }))}
+                className={`flex-1 rounded-lg border-2 px-4 py-3 text-left transition-colors ${
+                  form.psc22Mode === 'standalone'
+                    ? 'border-blue-500 bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-300'
+                }`}
+              >
+                <span className="block font-semibold text-sm">Standalone submission</span>
+                <span className="block text-xs mt-0.5 opacity-75">
+                  For regrading, position name changes, or other JD updates. Requires a signed letter from the Director-General.
+                </span>
+              </button>
+            </div>
+
+            {/* Standalone notice */}
+            {isStandalone && (
+              <div className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                A <strong>signed letter from the Director-General</strong> supporting this submission will be required. You can upload it as a document after logging.
+              </div>
+            )}
+
+            {/* Attachment: parent search */}
+            {isAttachment && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Search for the parent PSC Form 2-1 submission
+                </label>
+                <input
+                  className="input"
+                  placeholder="Type reference number or title…"
+                  value={parentSearch}
+                  onChange={e => { setParentSearch(e.target.value); setForm(f => ({ ...f, parent_submission: '' })) }}
+                />
+                {parentSearching && (
+                  <p className="text-xs text-slate-500">Searching…</p>
+                )}
+                {parentResults.length > 0 && !form.parent_submission && (
+                  <ul className="rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 bg-white dark:bg-slate-800 max-h-48 overflow-y-auto">
+                    {parentResults.map(s => (
+                      <li key={s.id}>
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                          onClick={() => {
+                            setForm(f => ({ ...f, parent_submission: String(s.id) }))
+                            setParentSearch(`${s.reference_number} — ${s.title}`)
+                            setParentResults([])
+                          }}
+                        >
+                          <span className="font-mono text-xs text-slate-500 mr-2">{s.reference_number}</span>
+                          {s.title}
+                          <span className="ml-2 text-xs text-slate-400">{s.ministry_name}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {form.parent_submission && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <span>✓ Parent submission selected.</span>
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => { setForm(f => ({ ...f, parent_submission: '' })); setParentSearch('') }}
+                    >
+                      Change
+                    </button>
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── Ministry / Department ─────────────────────────────────── */}
-        {isMinistryUser ? (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department</label>
-            <select
-              className="input"
-              value={form.department}
-              onChange={e => setForm({ ...form, department: e.target.value })}
-            >
-              <option value="">— Select department —</option>
-              {departments.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ministry</label>
-              <select
-                className="input disabled:bg-slate-50 disabled:text-slate-500"
-                required
-                disabled={ministries.length === 1}
-                value={form.ministry}
-                onChange={e => setForm({ ...form, ministry: e.target.value, department: '' })}
-              >
-                {ministries.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
-              {ministries.length === 1 && (
-                <p className="mt-1 text-xs text-slate-500">Your account is restricted to {ministries[0].name}.</p>
+        {/* ── Only show rest of form once PSC 2-2 mode is chosen (or not PSC 2-2) ── */}
+        {(!isPSC22 || form.psc22Mode) && (
+          <>
+            {/* ── Title ────────────────────────────────────────────── */}
+            {(!isPSC37 || modal) && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title / subject</label>
+                <input
+                  className="input"
+                  required
+                  value={form.title}
+                  onChange={e => setForm({ ...form, title: e.target.value })}
+                />
+              </div>
+            )}
+
+            {/* ── Ministry / Department ─────────────────────────────── */}
+            {isMinistryUser ? (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department</label>
+                <select
+                  className="input"
+                  value={form.department}
+                  onChange={e => setForm({ ...form, department: e.target.value })}
+                >
+                  <option value="">— Select department —</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ministry</label>
+                  <select
+                    className="input disabled:bg-slate-50 disabled:text-slate-500"
+                    required
+                    disabled={ministries.length === 1}
+                    value={form.ministry}
+                    onChange={e => setForm({ ...form, ministry: e.target.value, department: '' })}
+                  >
+                    {ministries.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                  {ministries.length === 1 && (
+                    <p className="mt-1 text-xs text-slate-500">Your account is restricted to {ministries[0].name}.</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department (optional)</label>
+                  <select
+                    className="input"
+                    value={form.department}
+                    onChange={e => setForm({ ...form, department: e.target.value })}
+                  >
+                    <option value="">—</option>
+                    {departments.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {(!isPSC37 || modal) && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes</label>
+                <textarea className="input min-h-[100px]" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+              </div>
+            )}
+
+            {/* ── PSC Form 3-7 digitized fields ────────────────────── */}
+            {isPSC37 && !modal && (
+              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <div className="mb-4">
+                  <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                    PSC Form 3-7 — Request Details
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Complete all sections below. Required supporting documents should be uploaded after submission.
+                  </p>
+                </div>
+                <PSCForm37Fields form37={form37} setForm37={setForm37} />
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Additional notes (optional)</label>
+                  <textarea className="input min-h-[80px]" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+                </div>
+                <div className="mt-4 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-2.5 text-xs text-blue-700 dark:text-blue-300">
+                  After submitting, you will be taken to the submission page where you can upload required attachments:
+                  PSC Form 3-2 (Job Application), approved job description, financial visa (if applicable), and Agreement of Service (for contract employees).
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button type="submit" className="btn-primary px-6 py-2.5" disabled={busy}>
+                {busy ? 'Saving…' : modal ? 'Log Submission' : isPSC37 ? 'Submit Form 3-7' : 'Create Submission'}
+              </button>
+              {modal && (
+                <button type="button" className="btn-secondary px-6 py-2.5" onClick={onClose}>
+                  Cancel
+                </button>
               )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department (optional)</label>
-              <select
-                className="input"
-                value={form.department}
-                onChange={e => setForm({ ...form, department: e.target.value })}
-              >
-                <option value="">—</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+          </>
         )}
-
-        {(!isPSC37 || modal) && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes</label>
-            <textarea className="input min-h-[100px]" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-          </div>
-        )}
-
-        {/* ── PSC Form 3-7 digitized fields — full page only, not the popover ── */}
-        {isPSC37 && !modal && (
-          <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-            <div className="mb-4">
-              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                PSC Form 3-7 — Request Details
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Complete all sections below. Required supporting documents should be uploaded after submission.
-              </p>
-            </div>
-            <PSCForm37Fields form37={form37} setForm37={setForm37} />
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Additional notes (optional)</label>
-              <textarea className="input min-h-[80px]" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-            </div>
-
-            <div className="mt-4 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-2.5 text-xs text-blue-700 dark:text-blue-300">
-              After submitting, you will be taken to the submission page where you can upload required attachments:
-              PSC Form 3-2 (Job Application), approved job description, financial visa (if applicable), and Agreement of Service (for contract employees).
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center gap-3 pt-2">
-          <button type="submit" className="btn-primary px-6 py-2.5" disabled={busy}>
-            {busy ? 'Saving…' : modal ? 'Log Submission' : isPSC37 ? 'Submit Form 3-7' : 'Create Submission'}
-          </button>
-          {modal && (
-            <button type="button" className="btn-secondary px-6 py-2.5" onClick={onClose}>
-              Cancel
-            </button>
-          )}
-        </div>
       </form>
     </div>
   )

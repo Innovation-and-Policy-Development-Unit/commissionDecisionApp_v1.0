@@ -1,0 +1,500 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PSC Form 2-1 — Organisation Restructure and/or Establishment Variation Submission
+  Import into Form Builder via the Import (.xml) button.
+-->
+<fields>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 1 — SUBMISSION DETAILS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Submission Details</label>
+    <field_key>section_submission_details</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+
+  <field>
+    <label>Ministry / Department Name</label>
+    <field_key>ministry_department_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Ministry of Finance and Economic Management</placeholder>
+    <help_text>The Ministry or Department submitting this proposal.</help_text>
+    <is_required>true</is_required>
+    <display_order>20</display_order>
+  </field>
+
+  <field>
+    <label>Subject / Title of Proposal</label>
+    <field_key>proposal_title</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Proposal to Revise the Organisation Structure for the Ministry of …</placeholder>
+    <help_text>A concise title that describes what is being proposed.</help_text>
+    <is_required>true</is_required>
+    <display_order>30</display_order>
+  </field>
+
+  <field>
+    <label>Date of Submission</label>
+    <field_key>submission_date</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>40</display_order>
+  </field>
+
+  <field>
+    <label>Type of Proposal</label>
+    <field_key>proposal_type</field_key>
+    <field_type>radio</field_type>
+    <choices>Organisation Restructure
+Establishment Variation (New Post)
+Establishment Variation (Regrading)
+Establishment Variation (Deletion)
+Both Restructure and Establishment Variation</choices>
+    <is_required>true</is_required>
+    <display_order>50</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 2 — SECTION 1: BACKGROUND
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>1. Background</label>
+    <field_key>section_background</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>60</display_order>
+  </field>
+
+  <field>
+    <label>Background — Reasons for Seeking Restructure / Establishment Variation</label>
+    <field_key>background_reasons</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Insert details of the reasons for seeking the restructure or establishment variation. Include references to relevant government priorities, corporate plans, or operational needs.</placeholder>
+    <help_text>Describe the context and justification. Reference national plans (e.g. NSDP), ministry corporate plans, or operational imperatives that make this proposal necessary.</help_text>
+    <is_required>true</is_required>
+    <display_order>70</display_order>
+  </field>
+
+  <field>
+    <label>Policy or Legislative Basis (if applicable)</label>
+    <field_key>policy_legislative_basis</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Cite any Acts, regulations, government decisions, or policy directives that support this proposal.</placeholder>
+    <is_required>false</is_required>
+    <display_order>80</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 3 — SECTION 2: PROPOSAL
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>2. Proposal</label>
+    <field_key>section_proposal</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>90</display_order>
+  </field>
+
+  <field>
+    <label>Positions to be Deleted or Re-graded</label>
+    <field_key>positions_deleted_regraded</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List each position to be deleted or re-graded. Include: Post Number, Title, Current Level/Grade, and reason.</placeholder>
+    <help_text>If no deletions or re-gradings are proposed, state "None".</help_text>
+    <is_required>true</is_required>
+    <display_order>100</display_order>
+  </field>
+
+  <field>
+    <label>New Positions Being Sought</label>
+    <field_key>new_positions_sought</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List each new position: Title, Proposed Level/Grade, key roles and responsibilities.</placeholder>
+    <help_text>Attach a completed Job Description (PSC Form 2-2) for each new position as an attachment.</help_text>
+    <is_required>true</is_required>
+    <display_order>110</display_order>
+  </field>
+
+  <field>
+    <label>Proposed Grading of Each Position</label>
+    <field_key>proposed_grading</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>For each new or re-graded position, state the proposed salary band / grade and justification for the grading.</placeholder>
+    <is_required>true</is_required>
+    <display_order>120</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 4 — SECTION 3: COSTING
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>3. Costing</label>
+    <field_key>section_costing</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>130</display_order>
+  </field>
+
+  <field>
+    <label>Savings from Positions to be Deleted (VUV per annum)</label>
+    <field_key>savings_deleted_positions</field_key>
+    <field_type>number</field_type>
+    <placeholder>0</placeholder>
+    <help_text>Total annual salary savings from positions being deleted. Enter 0 if not applicable.</help_text>
+    <is_required>true</is_required>
+    <display_order>140</display_order>
+  </field>
+
+  <field>
+    <label>Cost of New / Upgraded Positions (VUV per annum)</label>
+    <field_key>cost_new_positions</field_key>
+    <field_type>number</field_type>
+    <placeholder>0</placeholder>
+    <help_text>Total annual salary cost of all new or upgraded positions, inclusive of VNPF and allowances.</help_text>
+    <is_required>true</is_required>
+    <display_order>150</display_order>
+  </field>
+
+  <field>
+    <label>Net Salary Difference (VUV per annum)</label>
+    <field_key>net_salary_difference</field_key>
+    <field_type>number</field_type>
+    <placeholder>0</placeholder>
+    <help_text>Net cost impact = Cost of new positions minus savings from deleted positions. Use a negative number if there is a net saving.</help_text>
+    <is_required>true</is_required>
+    <display_order>160</display_order>
+  </field>
+
+  <field>
+    <label>Proposed Positions — Detailed Cost Breakdown</label>
+    <field_key>cost_breakdown_detail</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Provide a row-by-row comparison table:
+Current Post No. | Title/Occupant | Level | Annual Salary | → | Proposed Post No. | Title | Level | Annual Salary | Salary Difference (%)
+…
+Attach the OPSC Excel Spreadsheet for full establishment cost calculations including VNPF and allowances.</placeholder>
+    <help_text>Use the OPSC-formatted Excel spreadsheet for detailed calculations. Paste a summary here and attach the spreadsheet.</help_text>
+    <is_required>true</is_required>
+    <display_order>170</display_order>
+  </field>
+
+  <field>
+    <label>Current Financial Year Funding Statement</label>
+    <field_key>current_year_funding_statement</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>e.g. If the new position is to be filled in July, only 6/12 of the full-year funding figure (VUV X) will be required in the current financial year. Sufficient funds are / are not available in the current budget.</placeholder>
+    <help_text>Required where a position is vacant or new. State whether budget is available to fill the position in the current financial year.</help_text>
+    <is_required>true</is_required>
+    <display_order>180</display_order>
+  </field>
+
+  <field>
+    <label>Funds Allocated for Current Financial Year?</label>
+    <field_key>funds_allocated_current_year</field_key>
+    <field_type>radio</field_type>
+    <choices>Yes — sufficient funds are available
+No — additional appropriation will be required
+Not applicable (position is currently funded)</choices>
+    <is_required>true</is_required>
+    <display_order>190</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 5 — SECTION 4: IMPLEMENTATION PLAN
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>4. Implementation Plan</label>
+    <field_key>section_implementation</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>200</display_order>
+  </field>
+
+  <field>
+    <label>How the Proposal Will Be Implemented</label>
+    <field_key>implementation_details</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Describe the implementation stages: who is responsible, timeframes, and key milestones for the restructure or new establishment.</placeholder>
+    <help_text>Include both immediate steps (upon PSC approval) and longer-term phases.</help_text>
+    <is_required>true</is_required>
+    <display_order>210</display_order>
+  </field>
+
+  <field>
+    <label>How Will New Positions Be Filled?</label>
+    <field_key>how_positions_filled</field_key>
+    <field_type>radio</field_type>
+    <choices>Open Advertisement
+Internal Transfer at Same Grade
+Acting Arrangement (pending advertisement)
+Temporary Appointment
+Contract Appointment
+Other (describe below)</choices>
+    <is_required>true</is_required>
+    <display_order>220</display_order>
+  </field>
+
+  <field>
+    <label>Additional Details on Filling Positions</label>
+    <field_key>filling_positions_additional</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Provide further details, especially if "Other" was selected above or if multiple positions will be filled differently.</placeholder>
+    <is_required>false</is_required>
+    <display_order>230</display_order>
+  </field>
+
+  <field>
+    <label>Implementation Stages / Timeline</label>
+    <field_key>implementation_timeline</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Stage 1: [Description] — Target date: [Month/Year]
+Stage 2: [Description] — Target date: [Month/Year]
+…</placeholder>
+    <help_text>Provide a clear comparison of the current approved structure and the proposed structure with staged implementation dates.</help_text>
+    <is_required>true</is_required>
+    <display_order>240</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 6 — SECTION 5: RECOMMENDATION & SIGN-OFF
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>5. Recommendation &amp; Sign-Off</label>
+    <field_key>section_recommendation</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>250</display_order>
+  </field>
+
+  <field>
+    <label>Recommendation — What the PSC is Asked to Approve</label>
+    <field_key>recommendation_text</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>It is therefore recommended that the PSC approve: [Insert specific approval sought — e.g. creation of X posts at Grade Y, deletion of Z posts, re-grading of post …]</placeholder>
+    <is_required>true</is_required>
+    <display_order>260</display_order>
+  </field>
+
+  <!-- ── Attachments ─────────────────────────────────────────
+       Required documents vary by proposal type:
+         R  = Organisation Restructure
+         NP = Establishment Variation – New Post
+         RG = Establishment Variation – Regrading
+         DL = Establishment Variation – Deletion
+       ──────────────────────────────────────────────────────── -->
+  <field>
+    <label>Supporting Documents</label>
+    <field_key>section_attachments</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>270</display_order>
+  </field>
+
+  <!-- ── Document 1: Current Organisation Structure ── -->
+  <field>
+    <label>Document 1 — Current Organisation Structure (OPSC-stamped)</label>
+    <field_key>attachment_current_structure</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — Current Organisation Structure (with OPSC stamp) is uploaded</placeholder>
+    <help_text>REQUIRED for: Organisation Restructure · Establishment Variation (New Post) · Both. The current structure must carry the OPSC approval stamp. Upload via the Documents panel of this submission.</help_text>
+    <is_required>false</is_required>
+    <display_order>280</display_order>
+  </field>
+
+  <field>
+    <label>Current Structure — File Reference or Description</label>
+    <field_key>attachment_current_structure_ref</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. "Org Chart — Ministry of Finance — OPSC approved Jan 2024"</placeholder>
+    <help_text>Briefly describe the document uploaded so reviewers can identify it easily.</help_text>
+    <is_required>false</is_required>
+    <display_order>290</display_order>
+  </field>
+
+  <!-- ── Document 2: Proposed Organisation Structure ── -->
+  <field>
+    <label>Document 2 — Proposed Organisation Structure</label>
+    <field_key>attachment_proposed_structure</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — Proposed Organisation Structure chart is uploaded</placeholder>
+    <help_text>REQUIRED for: Organisation Restructure · Both. RECOMMENDED for: Establishment Variation (New Post) to show where the new post fits. Upload via the Documents panel of this submission.</help_text>
+    <is_required>false</is_required>
+    <display_order>300</display_order>
+  </field>
+
+  <field>
+    <label>Proposed Structure — File Reference or Description</label>
+    <field_key>attachment_proposed_structure_ref</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. "Proposed Org Chart — Ministry of Finance — Draft v2 May 2025"</placeholder>
+    <is_required>false</is_required>
+    <display_order>310</display_order>
+  </field>
+
+  <!-- ── Document 3: Job Descriptions (PSC Form 2-2) ── -->
+  <field>
+    <label>Document 3 — Job Descriptions for New Positions (PSC Form 2-2)</label>
+    <field_key>attachment_job_descriptions</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — Completed PSC Form 2-2 for each new position is uploaded</placeholder>
+    <help_text>REQUIRED for: Establishment Variation (New Post) · Organisation Restructure (where new posts are created) · Both. A separate PSC Form 2-2 must be completed for EACH new position. Not required for regrading or deletion-only proposals.</help_text>
+    <is_required>false</is_required>
+    <display_order>320</display_order>
+  </field>
+
+  <field>
+    <label>Job Descriptions — Number of Positions Covered</label>
+    <field_key>attachment_jd_positions_count</field_key>
+    <field_type>number</field_type>
+    <placeholder>0</placeholder>
+    <help_text>State how many PSC Form 2-2 job descriptions are attached. Enter 0 if not applicable.</help_text>
+    <is_required>false</is_required>
+    <display_order>330</display_order>
+  </field>
+
+  <field>
+    <label>Job Descriptions — File Reference or Description</label>
+    <field_key>attachment_jd_ref</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List each job description attached, e.g.:
+1. PSC Form 2-2 — Senior Finance Officer (Grade 7)
+2. PSC Form 2-2 — Data Entry Clerk (Grade 3)</placeholder>
+    <is_required>false</is_required>
+    <display_order>340</display_order>
+  </field>
+
+  <!-- ── Document 4: OPSC Excel Establishment Cost Spreadsheet ── -->
+  <field>
+    <label>Document 4 — OPSC Excel Establishment Cost Spreadsheet</label>
+    <field_key>attachment_cost_spreadsheet</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — OPSC-formatted Excel cost spreadsheet is uploaded</placeholder>
+    <help_text>REQUIRED for: Establishment Variation (New Post) · Establishment Variation (Regrading) · Organisation Restructure (where posts are created or upgraded) · Both. The spreadsheet must include full establishment costs including VNPF and allowances. Obtain the formatted template from OPSC if not already held. Not required for deletion-only proposals.</help_text>
+    <is_required>false</is_required>
+    <display_order>350</display_order>
+  </field>
+
+  <field>
+    <label>Cost Spreadsheet — File Reference or Description</label>
+    <field_key>attachment_cost_spreadsheet_ref</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. "OPSC Establishment Cost — Ministry of Finance — Senior Finance Officer — May 2025"</placeholder>
+    <is_required>false</is_required>
+    <display_order>360</display_order>
+  </field>
+
+  <!-- ── Document 5: Other Supporting Documents ── -->
+  <field>
+    <label>Document 5 — Other Supporting Documents</label>
+    <field_key>attachment_other_included</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Yes — additional supporting documents are uploaded</placeholder>
+    <help_text>Examples: Cabinet decisions, legal advice, previous PSC correspondence, corporate plan extracts, or any other document that supports this proposal. Upload via the Documents panel of this submission.</help_text>
+    <is_required>false</is_required>
+    <display_order>370</display_order>
+  </field>
+
+  <field>
+    <label>Other Supporting Documents — Description</label>
+    <field_key>attachment_other_description</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List and briefly describe each additional document uploaded, e.g.:
+1. Cabinet Decision No. 45 of 2025 — Approval to restructure Ministry
+2. Legal Opinion — AG Office — dated 10 March 2025
+3. Corporate Plan 2024–2028 — relevant extract (pages 12–14)</placeholder>
+    <help_text>Provide enough detail for PSC officers to locate and identify each document in the submission.</help_text>
+    <is_required>false</is_required>
+    <display_order>380</display_order>
+  </field>
+
+  <!-- ── Attachment summary ── -->
+  <field>
+    <label>Attachment Completeness — Self-Check</label>
+    <field_key>attachment_self_check</field_key>
+    <field_type>radio</field_type>
+    <choices>All required documents for my proposal type are uploaded
+Some documents are not yet available — I will submit them separately
+Not applicable — this is a deletion-only proposal</choices>
+    <help_text>Please confirm the status of your supporting documents before submitting. Incomplete submissions may be returned for clarification.</help_text>
+    <is_required>true</is_required>
+    <display_order>390</display_order>
+  </field>
+
+  <field>
+    <label>Director Sign-Off</label>
+    <field_key>section_director_signoff</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>400</display_order>
+  </field>
+
+  <field>
+    <label>Director's Name</label>
+    <field_key>director_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Full name of the Director submitting this proposal</placeholder>
+    <is_required>true</is_required>
+    <display_order>410</display_order>
+  </field>
+
+  <field>
+    <label>Director's Title / Position</label>
+    <field_key>director_title</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Director of Corporate Services</placeholder>
+    <is_required>true</is_required>
+    <display_order>420</display_order>
+  </field>
+
+  <field>
+    <label>Director's Date</label>
+    <field_key>director_date</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>430</display_order>
+  </field>
+
+  <field>
+    <label>Director-General / Secretary-General Endorsement</label>
+    <field_key>section_dg_endorsement</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>440</display_order>
+  </field>
+
+  <field>
+    <label>I support/endorse the above proposal from the Director</label>
+    <field_key>dg_endorsement_confirmed</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Yes — I confirm endorsement of this proposal</placeholder>
+    <is_required>true</is_required>
+    <display_order>450</display_order>
+  </field>
+
+  <field>
+    <label>Director-General / Secretary-General Name</label>
+    <field_key>dg_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Full name of the Director-General or Secretary-General</placeholder>
+    <is_required>true</is_required>
+    <display_order>460</display_order>
+  </field>
+
+  <field>
+    <label>Director-General / Secretary-General Date</label>
+    <field_key>dg_date</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>470</display_order>
+  </field>
+
+</fields>

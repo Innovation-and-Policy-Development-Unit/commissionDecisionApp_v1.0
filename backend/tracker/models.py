@@ -754,6 +754,16 @@ class Submission(models.Model):
     )
     implementation_due_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    # ── Parent/child (attachment) relationship ──────────────────────────────
+    parent_submission = models.ForeignKey(
+        'self', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='attached_submissions',
+        help_text="Set when this submission is attached to a parent (e.g. Form 2-2 attached to Form 2-1).",
+    )
+    is_attachment = models.BooleanField(
+        default=False,
+        help_text="True when this submission is a lightweight attachment reviewed alongside a parent submission.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="submissions_logged"
     )
@@ -969,11 +979,22 @@ class DocumentAnnotation(models.Model):
 
 
 class RequiredDocument(models.Model):
-    """A document that must be present before a submission can pass checklist review."""
+    """A document that must be present before a submission can pass checklist review.
+
+    Scoping rules (evaluated in order — most specific wins):
+      form_type set   → applies only to submissions of that exact form type
+      form_category set (form_type null) → applies to all submissions in that category
+      both null       → applies to every submission
+    """
     form_category = models.ForeignKey(
         FormCategory, null=True, blank=True,
         on_delete=models.CASCADE, related_name='required_documents',
         help_text="Leave blank to apply to all form categories.",
+    )
+    form_type = models.ForeignKey(
+        'PSCFormType', null=True, blank=True,
+        on_delete=models.CASCADE, related_name='required_documents',
+        help_text="When set, applies only to submissions of this specific form type (overrides form_category).",
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -981,11 +1002,13 @@ class RequiredDocument(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        ordering = ['form_category', 'order', 'name']
+        ordering = ['form_category', 'form_type', 'order', 'name']
         verbose_name = "Required Document"
         verbose_name_plural = "Required Documents"
 
     def __str__(self):
+        if self.form_type_id:
+            return f"[{self.form_type.code}] {self.name}"
         cat = self.form_category.name if self.form_category_id else "All categories"
         return f"[{cat}] {self.name}"
 

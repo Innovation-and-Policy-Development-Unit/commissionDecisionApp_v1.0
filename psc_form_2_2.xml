@@ -1,0 +1,520 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PSC Form 2-2 — Job Description Form
+  Import into Form Builder via the Import (.xml) button.
+-->
+<fields>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 1 — POST IDENTIFICATION (Fields 1–6)
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Post Identification</label>
+    <field_key>section_post_identification</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+
+  <field>
+    <label>1. Job Title and Location</label>
+    <field_key>job_title_location</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Senior Finance Officer — Port Vila</placeholder>
+    <help_text>State the full job title and the physical location of the post.</help_text>
+    <is_required>true</is_required>
+    <display_order>20</display_order>
+  </field>
+
+  <field>
+    <label>2. Level / Grade</label>
+    <field_key>level_grade</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Grade 7 (suggested by Ministry — to be determined by PSC)</placeholder>
+    <help_text>The level suggested by the Ministry. Final grading is determined by the PSC through the job evaluation process.</help_text>
+    <is_required>true</is_required>
+    <display_order>30</display_order>
+  </field>
+
+  <field>
+    <label>3. Post Number</label>
+    <field_key>post_number</field_key>
+    <field_type>text</field_type>
+    <placeholder>Allocate the next available number</placeholder>
+    <help_text>This number must be used in all subsequent correspondence relating to this post.</help_text>
+    <is_required>true</is_required>
+    <display_order>40</display_order>
+  </field>
+
+  <field>
+    <label>4. Ministry</label>
+    <field_key>ministry</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Ministry of Finance and Economic Management</placeholder>
+    <is_required>true</is_required>
+    <display_order>50</display_order>
+  </field>
+
+  <field>
+    <label>5. Department</label>
+    <field_key>department</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Department of Finance</placeholder>
+    <is_required>true</is_required>
+    <display_order>60</display_order>
+  </field>
+
+  <field>
+    <label>6. Purpose — Why This Post Exists</label>
+    <field_key>post_purpose</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>A concise one or two sentence statement of why this post exists — adapted from the Corporate Plan or Business Plan for higher-level posts.</placeholder>
+    <help_text>For higher-level posts this should be adapted from the Corporate Plan or Business Plan. For junior posts a brief operational statement is sufficient.</help_text>
+    <is_required>true</is_required>
+    <display_order>70</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 2 — DUTIES AND RESPONSIBILITIES (Field 7)
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>7. Duties and Responsibilities</label>
+    <field_key>section_duties</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>80</display_order>
+  </field>
+
+  <field>
+    <label>7.1 Duty / Responsibility</label>
+    <field_key>duty_7_1</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Start with an action word. State the most important duty first.</placeholder>
+    <help_text>Simple statements starting with an action word. Cover main areas of work — not procedural details. Areas: policy/research/advice, reports, external communication, administrative, legislative, financial delegation.</help_text>
+    <is_required>true</is_required>
+    <display_order>90</display_order>
+  </field>
+
+  <field>
+    <label>7.2 Duty / Responsibility</label>
+    <field_key>duty_7_2</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Start with an action word.</placeholder>
+    <is_required>false</is_required>
+    <display_order>100</display_order>
+  </field>
+
+  <field>
+    <label>7.3 Duty / Responsibility</label>
+    <field_key>duty_7_3</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Start with an action word.</placeholder>
+    <is_required>false</is_required>
+    <display_order>110</display_order>
+  </field>
+
+  <field>
+    <label>7.4 Duty / Responsibility</label>
+    <field_key>duty_7_4</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Start with an action word.</placeholder>
+    <is_required>false</is_required>
+    <display_order>120</display_order>
+  </field>
+
+  <field>
+    <label>7.5 Duty / Responsibility</label>
+    <field_key>duty_7_5</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Start with an action word.</placeholder>
+    <is_required>false</is_required>
+    <display_order>130</display_order>
+  </field>
+
+  <field>
+    <label>7.6 Duty / Responsibility</label>
+    <field_key>duty_7_6</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Start with an action word.</placeholder>
+    <is_required>false</is_required>
+    <display_order>140</display_order>
+  </field>
+
+  <field>
+    <label>7.7 Duty / Responsibility</label>
+    <field_key>duty_7_7</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Start with an action word.</placeholder>
+    <is_required>false</is_required>
+    <display_order>150</display_order>
+  </field>
+
+  <field>
+    <label>7.8 Duty / Responsibility</label>
+    <field_key>duty_7_8</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Start with an action word.</placeholder>
+    <is_required>false</is_required>
+    <display_order>160</display_order>
+  </field>
+
+  <field>
+    <label>7.9 Duty / Responsibility</label>
+    <field_key>duty_7_9</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Start with an action word.</placeholder>
+    <is_required>false</is_required>
+    <display_order>170</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 3 — REPORTING, SUPERVISION AND CONTACTS (Fields 8–13)
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Reporting, Supervision and Contacts</label>
+    <field_key>section_contacts</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>180</display_order>
+  </field>
+
+  <field>
+    <label>8. Reports Directly To</label>
+    <field_key>reports_directly_to</field_key>
+    <field_type>text</field_type>
+    <placeholder>Title of Post and Level only — e.g. Director of Corporate Services (Grade 10)</placeholder>
+    <help_text>State the title and level of the post this position reports to. Do not use a person's name.</help_text>
+    <is_required>true</is_required>
+    <display_order>190</display_order>
+  </field>
+
+  <field>
+    <label>9. Directly Supervises</label>
+    <field_key>directly_supervises</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Title of Posts and Level supervised, if any — e.g. Finance Officer Grade 5 (×2), Data Entry Clerk Grade 3 (×1). State "None" if not applicable.</placeholder>
+    <help_text>List the titles and levels of all posts directly supervised. State "None" if this is not a supervisory post.</help_text>
+    <is_required>true</is_required>
+    <display_order>200</display_order>
+  </field>
+
+  <field>
+    <label>10. Frequent Internal Personal Contacts With …</label>
+    <field_key>frequent_internal_contacts</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List positions within the Ministry that this post contacts regularly (weekly/monthly). e.g. Director-General, Budget Officer, Payroll Unit.</placeholder>
+    <help_text>"Internal" means within the Ministry or Department.</help_text>
+    <is_required>false</is_required>
+    <display_order>210</display_order>
+  </field>
+
+  <field>
+    <label>11. Occasional Internal Personal Contacts With …</label>
+    <field_key>occasional_internal_contacts</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List positions within the Ministry that this post contacts less frequently (quarterly or as needed).</placeholder>
+    <is_required>false</is_required>
+    <display_order>220</display_order>
+  </field>
+
+  <field>
+    <label>12. Frequent External Personal Contacts With …</label>
+    <field_key>frequent_external_contacts</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List organisations, agencies or community groups this post contacts regularly. e.g. OPSC, Ministry of Finance, Audit Office, development partners.</placeholder>
+    <help_text>"External" means other Ministries, government agencies, and the broader community.</help_text>
+    <is_required>false</is_required>
+    <display_order>230</display_order>
+  </field>
+
+  <field>
+    <label>13. Occasional External Personal Contacts With …</label>
+    <field_key>occasional_external_contacts</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List organisations or individuals this post contacts occasionally or as needed.</placeholder>
+    <is_required>false</is_required>
+    <display_order>240</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 4 — IMPACT, CONDITIONS AND APPROVAL REASON (Fields 14–16)
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Impact, Conditions and Reason for Approval</label>
+    <field_key>section_impact</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>250</display_order>
+  </field>
+
+  <field>
+    <label>14a. Impact of Decisions — Key Decisions Made Independently</label>
+    <field_key>impact_decisions_regular</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Name the more important decisions this post makes without assistance on a regular basis (weekly or monthly) to greatly reduce the risk of serious things happening. e.g. Authorises procurement requests up to VUV 500,000; approves leave for direct reports.</placeholder>
+    <help_text>Focus on decisions made independently that would have significant consequences if made incorrectly.</help_text>
+    <is_required>true</is_required>
+    <display_order>260</display_order>
+  </field>
+
+  <field>
+    <label>14b. Financial Delegation (if applicable)</label>
+    <field_key>financial_delegation</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. VUV 500,000 per transaction. State "None" if not applicable.</placeholder>
+    <help_text>If this post has a significant financial delegation to commit funds, state the maximum amount.</help_text>
+    <is_required>false</is_required>
+    <display_order>270</display_order>
+  </field>
+
+  <field>
+    <label>15. Special Conditions</label>
+    <field_key>special_conditions</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>e.g. Required to travel to outer islands; on-call after hours; operates specialised equipment; works in a remote location. State "None" if not applicable.</placeholder>
+    <help_text>Include any unusual work hours, travel requirements, physical conditions, or equipment operation requirements.</help_text>
+    <is_required>false</is_required>
+    <display_order>280</display_order>
+  </field>
+
+  <field>
+    <label>16. Reason for Seeking Approval</label>
+    <field_key>reason_for_approval</field_key>
+    <field_type>radio</field_type>
+    <choices>Routine Revision of Existing Job Description
+New Post
+Regrading (Upgrade)
+Regrading (Downgrade)
+Other</choices>
+    <is_required>true</is_required>
+    <display_order>290</display_order>
+  </field>
+
+  <field>
+    <label>16. Additional Details (overlap, duplication, or new duties)</label>
+    <field_key>approval_reason_detail</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>State if there is any overlap or duplication with existing Job Descriptions, or describe any new duties and responsibilities being added. Required if "Other" selected above.</placeholder>
+    <is_required>false</is_required>
+    <display_order>300</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 5 — MINIMUM QUALIFICATIONS (Field 17)
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>17. Minimum Qualifications to be Selected for This Post</label>
+    <field_key>section_qualifications</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>310</display_order>
+  </field>
+
+  <field>
+    <label>17.1 Experience</label>
+    <field_key>qualification_experience</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>e.g. Minimum 3 years experience in financial management; or demonstrated achievement in leading teams; or experience in filing and keyboard work. Allow for some on-the-job training for external candidates.</placeholder>
+    <help_text>State years or level of experience. For junior posts: filing, keyboard, driving. For senior posts: leadership, communication, managing resources, advising, writing reports. Allow for on-the-job training — do not unnecessarily restrict the pool.</help_text>
+    <is_required>true</is_required>
+    <display_order>320</display_order>
+  </field>
+
+  <field>
+    <label>17.2 Special Skills</label>
+    <field_key>qualification_special_skills</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>e.g. Valid driver's licence; clean driving record; proficiency in MYOB / Excel; experience with GIS software. State "None" if not applicable.</placeholder>
+    <help_text>Include licences, certifications, or technical skills directly required for the role.</help_text>
+    <is_required>false</is_required>
+    <display_order>330</display_order>
+  </field>
+
+  <field>
+    <label>17.3 Education</label>
+    <field_key>qualification_education</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>e.g. Degree in Accounting or related field — an advantage; Certificate in Office Administration — desirable. Remember: education is only one indicator of capability.</placeholder>
+    <help_text>Education is mostly "an advantage" or "highly desirable" — do not unnecessarily bias the post toward certain academic pathways. Capability to do the job is the primary measure.</help_text>
+    <is_required>false</is_required>
+    <display_order>340</display_order>
+  </field>
+
+  <field>
+    <label>17.4 Language</label>
+    <field_key>qualification_language</field_key>
+    <field_type>text</field_type>
+    <placeholder>English or French and Bislama</placeholder>
+    <help_text>"English or French and Bislama" is the standard requirement for most posts in Vanuatu Public Service.</help_text>
+    <is_required>true</is_required>
+    <display_order>350</display_order>
+  </field>
+
+  <field>
+    <label>17.5 Good Character</label>
+    <field_key>qualification_good_character</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — Good Character applies to this post (as it applies to all posts)</placeholder>
+    <is_required>true</is_required>
+    <display_order>360</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE 6 — ENDORSEMENT (Field 18)
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>18. Endorsement</label>
+    <field_key>section_endorsement</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>370</display_order>
+  </field>
+
+  <field>
+    <label>Ministry Preparation</label>
+    <field_key>section_ministry_prep</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>380</display_order>
+  </field>
+
+  <field>
+    <label>18.1 Prepared in the Ministry by — Name</label>
+    <field_key>prepared_by_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Full name of the person who prepared this Job Description</placeholder>
+    <is_required>true</is_required>
+    <display_order>390</display_order>
+  </field>
+
+  <field>
+    <label>18.1 Prepared by — Date</label>
+    <field_key>prepared_by_date</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>400</display_order>
+  </field>
+
+  <field>
+    <label>Director-General Certification</label>
+    <field_key>section_dg_certification</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>410</display_order>
+  </field>
+
+  <field>
+    <label>18.2 Certified by or for the Director-General — Name</label>
+    <field_key>certified_dg_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Full name of the Director-General or authorised certifier</placeholder>
+    <help_text>Certifies that the post fits with any Corporate Plan and is operationally required.</help_text>
+    <is_required>true</is_required>
+    <display_order>420</display_order>
+  </field>
+
+  <field>
+    <label>18.2 Certified by DG — Date</label>
+    <field_key>certified_dg_date</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>430</display_order>
+  </field>
+
+  <field>
+    <label>PSC Review</label>
+    <field_key>section_psc_review</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>440</display_order>
+  </field>
+
+  <field>
+    <label>18.3 Checked by PSC — Name</label>
+    <field_key>psc_checked_by_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of PSC officer who checked completeness, consistency, structure, level and post number</placeholder>
+    <help_text>PSC checks for completeness and consistency; confirms Level and Post Number through the job evaluation process.</help_text>
+    <is_required>false</is_required>
+    <display_order>450</display_order>
+  </field>
+
+  <field>
+    <label>18.3 Checked by PSC — Date</label>
+    <field_key>psc_checked_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>460</display_order>
+  </field>
+
+  <field>
+    <label>PSC Decision</label>
+    <field_key>section_psc_decision</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>470</display_order>
+  </field>
+
+  <field>
+    <label>18.4 Decision of the Public Service Commission</label>
+    <field_key>psc_decision</field_key>
+    <field_type>radio</field_type>
+    <choices>Approved
+Deferred
+Amended</choices>
+    <help_text>To be completed by the PSC after deliberation.</help_text>
+    <is_required>false</is_required>
+    <display_order>480</display_order>
+  </field>
+
+  <field>
+    <label>18.4 Date of PSC Decision</label>
+    <field_key>psc_decision_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>490</display_order>
+  </field>
+
+  <field>
+    <label>18.4 PSC Decision — Name of Commissioner / Officer</label>
+    <field_key>psc_decision_officer_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of PSC Commissioner or Officer recording the decision</placeholder>
+    <is_required>false</is_required>
+    <display_order>500</display_order>
+  </field>
+
+  <field>
+    <label>Ministry Advised and Records Updated</label>
+    <field_key>ministry_advised_confirmed</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — Ministry has been advised of the PSC decision and all records have been updated</placeholder>
+    <help_text>To be ticked by the PSC Action Officer once the Ministry has been formally notified.</help_text>
+    <is_required>false</is_required>
+    <display_order>510</display_order>
+  </field>
+
+  <field>
+    <label>PSC Action Officer — Name</label>
+    <field_key>psc_action_officer_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of PSC Action Officer who advised the Ministry and updated records</placeholder>
+    <is_required>false</is_required>
+    <display_order>520</display_order>
+  </field>
+
+  <field>
+    <label>PSC Action Officer — Date</label>
+    <field_key>psc_action_officer_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>530</display_order>
+  </field>
+
+</fields>

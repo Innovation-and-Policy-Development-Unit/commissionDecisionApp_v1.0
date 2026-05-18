@@ -104,6 +104,7 @@ from .serializers import (
     FlyingMinuteSignatureSerializer,
     TaskReportSerializer,
     ChecklistItemSerializer,
+    RequiredDocumentSerializer,
     SubmissionDocumentSerializer,
     DocumentAnnotationSerializer,
     DocumentSignatureSerializer,
@@ -156,7 +157,8 @@ def _submission_queryset_for(user):
         "department",
         "form_category",
         "created_by",
-    ).prefetch_related("events__actor")
+        "parent_submission",
+    ).prefetch_related("events__actor", "attached_submissions")
     if user.is_superuser or user.is_staff:
         return qs
     profile = _profile(user)
@@ -395,7 +397,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def get_queryset(self):
-        return _submission_queryset_for(self.request.user)
+        qs = _submission_queryset_for(self.request.user)
+        # Attached submissions are shown nested inside their parent, not as top-level rows
+        if self.action == 'list':
+            qs = qs.filter(is_attachment=False)
+        return qs
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -543,6 +549,27 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 remarks=remarks,
             )
 
+            # ── Cascade final decisions to attached child submissions ──────────
+            _CASCADE_STAGES = {
+                WorkflowStage.APPROVED,
+                WorkflowStage.REJECTED,
+                WorkflowStage.RETURNED,
+                WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            }
+            if target in _CASCADE_STAGES:
+                children = Submission.objects.filter(parent_submission=submission, is_attachment=True)
+                for child in children:
+                    child_prev = child.current_stage
+                    child.current_stage = target
+                    child.save(update_fields=['current_stage', 'updated_at'])
+                    WorkflowEvent.objects.create(
+                        submission=child,
+                        actor=request.user,
+                        previous_stage=child_prev,
+                        new_stage=target,
+                        remarks=f"Auto-cascaded from parent submission {submission.reference_number}",
+                    )
+
         # ── Fire notifications after commit ──
         transaction.on_commit(
             lambda: _dispatch_transition_notifications(submission, prev, target, request.user)
@@ -663,13 +690,48 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def checklist(self, request, pk=None):
-        """Return checklist items for a submission, auto-creating from RequiredDocuments."""
+        """Return checklist items for a submission, auto-creating from RequiredDocuments.
+
+        Matching priority (most specific first):
+          1. form_type-specific docs (form_type matches submission.form_type_code)
+          2. form_category-scoped docs (form_category matches, form_type is null)
+          3. Global docs (both form_category and form_type are null)
+        """
         submission = self.get_object()
-        required_docs = RequiredDocument.objects.filter(
-            is_active=True
-        ).filter(
-            models.Q(form_category=submission.form_category) | models.Q(form_category__isnull=True)
-        )
+
+        # Attached submissions have no independent checklist — reviewed alongside parent
+        if submission.is_attachment:
+            return Response([])
+
+        # Resolve the PSCFormType instance for this submission (may be None)
+        form_type_obj = None
+        if submission.form_type_code:
+            from tracker.models import PSCFormType
+            form_type_obj = PSCFormType.objects.filter(code=submission.form_type_code).first()
+
+        if form_type_obj:
+            # If there are form-type-specific docs, show those INSTEAD of category docs
+            type_specific = RequiredDocument.objects.filter(
+                is_active=True, form_type=form_type_obj
+            )
+            if type_specific.exists():
+                required_docs = type_specific
+            else:
+                # Fall back to category-level + global docs
+                required_docs = RequiredDocument.objects.filter(
+                    is_active=True, form_type__isnull=True
+                ).filter(
+                    models.Q(form_category=submission.form_category) |
+                    models.Q(form_category__isnull=True)
+                )
+        else:
+            required_docs = RequiredDocument.objects.filter(
+                is_active=True, form_type__isnull=True
+            ).filter(
+                models.Q(form_category=submission.form_category) |
+                models.Q(form_category__isnull=True)
+            )
+
         for doc in required_docs:
             SubmissionChecklistItem.objects.get_or_create(submission=submission, document=doc)
         items = SubmissionChecklistItem.objects.filter(
@@ -1064,6 +1126,49 @@ class PSCFormFieldViewSet(viewsets.ModelViewSet):
         except PSCFormType.DoesNotExist:
             raise PermissionDenied("Form type not found.")
         serializer.save(form_type=form_type)
+
+    def perform_update(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_admin()
+        return super().destroy(request, *args, **kwargs)
+
+
+class RequiredDocumentViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for RequiredDocument entries.
+    Read: any authenticated user with a profile.
+    Write: PSC Admins only.
+    Supports ?form_type=<id> and ?form_category=<id> query filters.
+    """
+    permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
+    serializer_class = RequiredDocumentSerializer
+
+    def get_queryset(self):
+        qs = RequiredDocument.objects.select_related('form_type', 'form_category').all()
+        form_type = self.request.query_params.get('form_type')
+        if form_type:
+            qs = qs.filter(form_type_id=form_type)
+        form_category = self.request.query_params.get('form_category')
+        if form_category:
+            qs = qs.filter(form_category_id=form_category)
+        return qs
+
+    def _require_admin(self):
+        if self.request.user.is_superuser or self.request.user.is_staff:
+            return
+        try:
+            profile = self.request.user.psc_profile
+        except Exception:
+            raise PermissionDenied("Admin access required.")
+        if profile.role != Role.PSC_ADMIN:
+            raise PermissionDenied("Only PSC Administrators can manage required documents.")
+
+    def perform_create(self, serializer):
+        self._require_admin()
+        serializer.save()
 
     def perform_update(self, serializer):
         self._require_admin()

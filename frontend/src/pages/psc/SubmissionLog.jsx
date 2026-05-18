@@ -269,92 +269,125 @@ export default function SubmissionLog() {
                 </tr>
               )}
               {!loading && paged.map(r => (
-                <tr key={r.id} className={selected.has(r.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}>
-                  {isAdmin && (
+                <>
+                  {/* ── Parent row ── */}
+                  <tr key={r.id} className={selected.has(r.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}>
+                    {isAdmin && (
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded"
+                          checked={selected.has(r.id)}
+                          onChange={() => toggleOne(r.id)}
+                        />
+                      </td>
+                    )}
                     <td>
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 rounded"
-                        checked={selected.has(r.id)}
-                        onChange={() => toggleOne(r.id)}
-                      />
+                      <Link
+                        to={`/submissions/${r.id}`}
+                        className="font-mono text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline whitespace-nowrap"
+                      >
+                        {r.reference_number}
+                      </Link>
                     </td>
-                  )}
-                  <td>
-                    <Link
-                      to={`/submissions/${r.id}`}
-                      className="font-mono text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline whitespace-nowrap"
-                    >
-                      {r.reference_number}
-                    </Link>
-                  </td>
-                  <td className="max-w-xs">
-                    <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{r.title}</p>
-                    {r.category_name && (
-                      <p className="text-xs text-slate-400 truncate">{r.category_name}</p>
-                    )}
-                  </td>
-                  <td>
-                    <span className="text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">{r.ministry_name}</span>
-                  </td>
-                  <td className="min-w-[90px]">
-                    {r.current_stage !== 'draft' && (
-                      <SubmissionProgressBar currentStage={r.current_stage} compact />
-                    )}
-                  </td>
-                  <td>
-                    <Badge variant={STAGE_VARIANT[r.current_stage] ?? 'secondary'} dot className="whitespace-nowrap">
-                      {stageLabel(r.current_stage, t)}
-                      {r.is_assessment_overdue && <span className="ml-1 text-red-500 font-bold">!</span>}
-                    </Badge>
-                  </td>
-                  <td>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                      {r.received_at ? new Date(r.received_at).toLocaleDateString(localeForDates) : '—'}
-                    </span>
-                  </td>
-                  <td>
-                    {r.is_assessment_overdue ? (
-                      <Badge variant="danger" className="whitespace-nowrap">{t('submission.overdue')}</Badge>
-                    ) : (
-                      <span className="text-xs text-slate-500 whitespace-nowrap">
-                        {r.assessment_deadline_at
-                          ? new Date(r.assessment_deadline_at).toLocaleDateString(localeForDates)
-                          : '—'}
+                    <td className="max-w-xs">
+                      <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{r.title}</p>
+                      {r.category_name && (
+                        <p className="text-xs text-slate-400 truncate">{r.category_name}</p>
+                      )}
+                    </td>
+                    <td>
+                      <span className="text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">{r.ministry_name}</span>
+                    </td>
+                    <td className="min-w-[90px]">
+                      {r.current_stage !== 'draft' && (
+                        <SubmissionProgressBar currentStage={r.current_stage} compact />
+                      )}
+                    </td>
+                    <td>
+                      <Badge variant={STAGE_VARIANT[r.current_stage] ?? 'secondary'} dot className="whitespace-nowrap">
+                        {stageLabel(r.current_stage, t)}
+                        {r.is_assessment_overdue && <span className="ml-1 text-red-500 font-bold">!</span>}
+                      </Badge>
+                    </td>
+                    <td>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        {r.received_at ? new Date(r.received_at).toLocaleDateString(localeForDates) : '—'}
                       </span>
-                    )}
-                  </td>
-                  {isAdmin && (
-                    <td>
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          type="button"
-                          title="View"
-                          onClick={() => navigate(`/submissions/${r.id}`)}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
-                        >
-                          <Eye size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          title="Edit"
-                          onClick={() => navigate(`/submissions/${r.id}`)}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-colors"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          title="Delete"
-                          onClick={() => handleDelete(r)}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
                     </td>
-                  )}
-                </tr>
+                    <td>
+                      {r.is_assessment_overdue ? (
+                        <Badge variant="danger" className="whitespace-nowrap">{t('submission.overdue')}</Badge>
+                      ) : (
+                        <span className="text-xs text-slate-500 whitespace-nowrap">
+                          {r.assessment_deadline_at
+                            ? new Date(r.assessment_deadline_at).toLocaleDateString(localeForDates)
+                            : '—'}
+                        </span>
+                      )}
+                    </td>
+                    {isAdmin && (
+                      <td>
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            title="View"
+                            onClick={() => navigate(`/submissions/${r.id}`)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                          >
+                            <Eye size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Edit"
+                            onClick={() => navigate(`/submissions/${r.id}`)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-colors"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete"
+                            onClick={() => handleDelete(r)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                  {/* ── Attached child submissions (indented) ── */}
+                  {r.attached_submissions?.map(child => (
+                    <tr key={`child-${child.id}`} className="bg-slate-50/60 dark:bg-slate-800/40">
+                      {isAdmin && <td />}
+                      <td>
+                        <div className="flex items-center gap-1.5 pl-4">
+                          <span className="text-slate-300 dark:text-slate-600 select-none">└</span>
+                          <Link
+                            to={`/submissions/${child.id}`}
+                            className="font-mono text-xs font-semibold text-primary-500 dark:text-primary-400 hover:underline whitespace-nowrap"
+                          >
+                            {child.reference_number}
+                          </Link>
+                        </div>
+                      </td>
+                      <td className="max-w-xs" colSpan={2}>
+                        <p className="truncate text-xs text-slate-600 dark:text-slate-400 pl-1">
+                          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 mr-1.5">JD attached</span>
+                          {child.title}
+                        </p>
+                      </td>
+                      <td />
+                      <td>
+                        <Badge variant={STAGE_VARIANT[child.current_stage] ?? 'secondary'} dot className="whitespace-nowrap text-xs">
+                          {stageLabel(child.current_stage, t)}
+                        </Badge>
+                      </td>
+                      <td colSpan={isAdmin ? 3 : 2} />
+                    </tr>
+                  ))}
+                </>
               ))}
             </tbody>
           </table>

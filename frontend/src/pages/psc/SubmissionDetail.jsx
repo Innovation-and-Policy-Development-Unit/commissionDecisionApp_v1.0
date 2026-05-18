@@ -10,13 +10,18 @@ import {
   stageLabel, stageBadgeClass, stageDotClass, stageMeta,
   needsHrAction, isTerminal, phaseForKey,
 } from '../../constants/stages'
-import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil } from 'lucide-react'
+import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff } from 'lucide-react'
 import DocumentAnnotatorModal from '../../components/shared/DocumentAnnotatorModal'
 import DocumentSignatureModal from '../../components/shared/DocumentSignatureModal'
 import PSCForm37Fields from './PSCForm37Fields'
 import PSCForm37View from './PSCForm37View'
 import DynamicFormRenderer from '../../components/shared/DynamicFormRenderer'
 import MultiPageFormRenderer from '../../components/shared/MultiPageFormRenderer'
+import PSCForm22Preview from '../../components/shared/PSCForm22Preview'
+import PSCForm21Fields from './PSCForm21Fields'
+import PSCForm21View from './PSCForm21View'
+import PSCForm22Fields from './PSCForm22Fields'
+import PSCForm22View from './PSCForm22View'
 
 // All roles that may trigger a transition
 const TRANSITION_ROLES = [
@@ -137,6 +142,7 @@ export default function SubmissionDetail() {
   const [dynamicForm, setDynamicForm] = useState(null)   // values object
   const [dynamicFormFields, setDynamicFormFields] = useState([])
   const [dynamicFormBusy, setDynamicFormBusy] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
 
   const isAdmin        = user?.role === 'psc_admin'
   const canTransition  = user && TRANSITION_ROLES.includes(user.role)
@@ -155,6 +161,8 @@ export default function SubmissionDetail() {
                                    'psc_admin', 'psc_officer', 'psc_secretary'].includes(user.role)
   const canEditForm37  = user && ['ministry_hr', 'dept_admin', 'psc_admin',
                                    'psc_officer', 'psc_secretary'].includes(user.role)
+
+  const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
 
   const fetchSubmission = useCallback(async () => {
     try {
@@ -276,6 +284,17 @@ export default function SubmissionDetail() {
     const ft = submission?.form_type_detail
     if (!ft?.is_digitized || ft?.digitized_form_key === 'psc_3_7' || !ft?.id) return
 
+    if (isDedicatedForm) {
+      // Dedicated forms have hardcoded fields — only load saved values
+      api.get(`/submissions/${id}/dynamic-form/`)
+        .then(valuesRes => {
+          const data = valuesRes.data?.data ?? valuesRes.data ?? {}
+          setDynamicForm(typeof data === 'object' && data !== null ? data : {})
+        })
+        .catch(() => setDynamicForm({}))
+      return
+    }
+
     Promise.all([
       api.get(`/form-fields/?form_type=${ft.id}`),
       api.get(`/submissions/${id}/dynamic-form/`),
@@ -288,7 +307,7 @@ export default function SubmissionDetail() {
       setDynamicFormFields([])
       setDynamicForm({})
     })
-  }, [id, submission?.form_type_detail?.id])
+  }, [id, submission?.form_type_detail?.id, isDedicatedForm])
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0]
@@ -489,6 +508,24 @@ const stageDescriptions = {
         </div>
       )}
 
+      {/* ── Attachment banner: shown when this submission is a child ── */}
+      {submission.is_attachment && submission.parent_submission && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-900/20 px-4 py-3 text-sm text-violet-800 dark:text-violet-200">
+          <Paperclip size={15} className="shrink-0" />
+          <span>
+            This Job Description is submitted as an attachment to{' '}
+            <Link
+              to={`/submissions/${submission.parent_submission}`}
+              className="font-semibold underline hover:text-violet-600 dark:hover:text-violet-300"
+            >
+              {submission.parent_reference || `#${submission.parent_submission}`}
+            </Link>
+            {submission.parent_title && <> — {submission.parent_title}</>}.
+            It is reviewed alongside that submission.
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* ── Left: details + timeline ── */}
@@ -651,7 +688,7 @@ const stageDescriptions = {
           )}
 
           {/* ── Dynamic Form (Form Builder) ── */}
-          {dynamicForm !== null && dynamicFormFields.length > 0 && (
+          {dynamicForm !== null && (dynamicFormFields.length > 0 || isDedicatedForm) && (
             <div className="space-y-3">
               {/* Header */}
               <div className="flex items-center gap-2 px-1">
@@ -659,44 +696,125 @@ const stageDescriptions = {
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                   {submission?.form_type_detail?.name ?? submission?.form_type_code ?? 'Digitized Form'}
                 </h3>
-                <span className="ml-auto text-[11px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                <span className="text-[11px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
                   Digitized
                 </span>
+                {/* Preview toggle — only for forms that have a known preview template */}
+                {submission?.form_type_code === 'PSC 2-2' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(p => !p)}
+                    className={`ml-auto inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                      showPreview
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary-400'
+                    }`}
+                  >
+                    {showPreview ? <EyeOff size={13} /> : <Eye size={13} />}
+                    {showPreview ? 'Hide Preview' : 'Preview Form'}
+                  </button>
+                )}
               </div>
 
-              {canEditForm37 ? (
-                /* Edit mode — multi-page stepper */
-                <MultiPageFormRenderer
-                  fields={dynamicFormFields}
-                  values={dynamicForm}
-                  onChange={setDynamicForm}
-                  readOnly={false}
-                  saving={dynamicFormBusy}
-                  onSave={async () => {
-                    setDynamicFormBusy(true)
-                    try {
-                      await api.post(`/submissions/${id}/dynamic-form/`, {
-                        form_type: submission?.form_type_detail?.id,
-                        data: dynamicForm,
-                      })
-                      toast.success('Form saved.')
-                    } catch {
-                      toast.error('Failed to save form.')
-                    } finally {
-                      setDynamicFormBusy(false)
-                    }
-                  }}
-                />
-              ) : (
-                /* Read-only — single-page for easy review */
-                <div className="card p-5">
-                  <DynamicFormRenderer
-                    fields={dynamicFormFields}
-                    values={dynamicForm}
-                    readOnly
-                  />
+              {/* Split layout when preview is active */}
+              <div className={showPreview && submission?.form_type_code === 'PSC 2-2'
+                ? 'grid grid-cols-1 xl:grid-cols-2 gap-4 items-start'
+                : ''
+              }>
+                {/* Form editor / read-only view */}
+                <div>
+                  {canEditForm37 ? (
+                    isDedicatedForm ? (
+                      <>
+                        {submission.form_type_code === 'PSC 2-1' && (
+                          <PSCForm21Fields
+                            form={dynamicForm}
+                            setForm={setDynamicForm}
+                            submission={submission}
+                          />
+                        )}
+                        {submission.form_type_code === 'PSC 2-2' && (
+                          <PSCForm22Fields
+                            form={dynamicForm}
+                            setForm={setDynamicForm}
+                            submission={submission}
+                          />
+                        )}
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setDynamicFormBusy(true)
+                              try {
+                                await api.post(`/submissions/${id}/dynamic-form/`, {
+                                  form_type: submission?.form_type_detail?.id,
+                                  data: dynamicForm,
+                                })
+                                toast.success('Form saved.')
+                              } catch {
+                                toast.error('Failed to save form.')
+                              } finally {
+                                setDynamicFormBusy(false)
+                              }
+                            }}
+                            disabled={dynamicFormBusy}
+                            className="btn-primary px-6 py-2.5"
+                          >
+                            {dynamicFormBusy ? 'Saving…' : 'Save Form'}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <MultiPageFormRenderer
+                        fields={dynamicFormFields}
+                        values={dynamicForm}
+                        onChange={setDynamicForm}
+                        readOnly={false}
+                        saving={dynamicFormBusy}
+                        onSave={async () => {
+                          setDynamicFormBusy(true)
+                          try {
+                            await api.post(`/submissions/${id}/dynamic-form/`, {
+                              form_type: submission?.form_type_detail?.id,
+                              data: dynamicForm,
+                            })
+                            toast.success('Form saved.')
+                          } catch {
+                            toast.error('Failed to save form.')
+                          } finally {
+                            setDynamicFormBusy(false)
+                          }
+                        }}
+                      />
+                    )
+                  ) : (
+                    isDedicatedForm ? (
+                      <div className="card p-5">
+                        {submission.form_type_code === 'PSC 2-1' && <PSCForm21View data={dynamicForm} />}
+                        {submission.form_type_code === 'PSC 2-2' && <PSCForm22View data={dynamicForm} />}
+                      </div>
+                    ) : (
+                      <div className="card p-5">
+                        <DynamicFormRenderer
+                          fields={dynamicFormFields}
+                          values={dynamicForm}
+                          readOnly
+                        />
+                      </div>
+                    )
+                  )}
                 </div>
-              )}
+
+                {/* Live preview panel (PSC Form 2-2 only) */}
+                {showPreview && submission?.form_type_code === 'PSC 2-2' && (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden sticky top-4" style={{ maxHeight: '80vh' }}>
+                    <PSCForm22Preview
+                      values={dynamicForm}
+                      submissionRef={submission.reference_number}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1011,6 +1129,35 @@ const stageDescriptions = {
           {!canTransition && (
             <div className="card p-5 text-sm text-slate-600 dark:text-slate-300">
               You have read-only access to this submission.
+            </div>
+          )}
+
+          {/* Linked Job Descriptions panel — shown on Form 2-1 when children exist */}
+          {submission.form_type_code === 'PSC 2-1' && submission.attached_submissions?.length > 0 && (
+            <div className="card p-5 space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-700">
+                <Paperclip size={14} className="text-violet-500" />
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Linked Job Descriptions
+                </h3>
+                <span className="ml-auto text-xs text-slate-400">{submission.attached_submissions.length}</span>
+              </div>
+              <ul className="space-y-2">
+                {submission.attached_submissions.map(child => (
+                  <li key={child.id} className="flex items-start gap-2 text-xs">
+                    <Link
+                      to={`/submissions/${child.id}`}
+                      className="font-mono text-primary-600 dark:text-primary-400 hover:underline whitespace-nowrap"
+                    >
+                      {child.reference_number}
+                    </Link>
+                    <span className="text-slate-600 dark:text-slate-300 min-w-0 truncate">{child.title}</span>
+                    <span className={`shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold ${stageBadgeClass(child.current_stage)}`}>
+                      {stageLabel(child.current_stage)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

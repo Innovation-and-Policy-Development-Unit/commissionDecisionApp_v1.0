@@ -15,6 +15,7 @@ from .views import (
     FormCategoryViewSet,
     PSCFormFieldViewSet,
     PSCFormTypeViewSet,
+    RequiredDocumentViewSet,
     MeetingViewSet,
     AgendaItemViewSet,
     MinistryViewSet,
@@ -59,7 +60,8 @@ router.register(r"ministries", MinistryViewSet, basename="ministry")
 router.register(r"departments", DepartmentViewSet, basename="department")
 router.register(r"form-categories", FormCategoryViewSet, basename="formcategory")
 router.register(r"form-types",      PSCFormTypeViewSet,  basename="formtype")
-router.register(r"form-fields",     PSCFormFieldViewSet, basename="formfield")
+router.register(r"form-fields",         PSCFormFieldViewSet,      basename="formfield")
+router.register(r"required-documents",  RequiredDocumentViewSet,  basename="requireddocument")
 router.register(r"meetings",       MeetingViewSet,      basename="meeting")
 router.register(r"agenda-items",   AgendaItemViewSet,   basename="agendaitem")
 router.register(r"commission-tasks", CommissionTaskViewSet, basename="commission-task")

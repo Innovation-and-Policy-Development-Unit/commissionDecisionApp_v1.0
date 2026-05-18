@@ -357,6 +357,13 @@ class WorkflowEventSerializer(serializers.ModelSerializer):
         fields = ("id", "actor_username", "previous_stage", "new_stage", "remarks", "created_at")
 
 
+class AttachedSubmissionSerializer(serializers.ModelSerializer):
+    """Lightweight nested serializer for child submissions shown inside a parent."""
+    class Meta:
+        model = Submission
+        fields = ("id", "reference_number", "title", "form_type_code", "current_stage")
+
+
 class SubmissionListSerializer(serializers.ModelSerializer):
     ministry_name = serializers.CharField(source="ministry.name", read_only=True)
     category_name = serializers.CharField(source="form_category.name", read_only=True)
@@ -364,6 +371,10 @@ class SubmissionListSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
     is_assessment_overdue = serializers.SerializerMethodField()
     estimated_meeting_date = serializers.SerializerMethodField()
+    parent_reference = serializers.CharField(
+        source="parent_submission.reference_number", read_only=True, default=None
+    )
+    attached_submissions = AttachedSubmissionSerializer(many=True, read_only=True)
 
     def get_is_assessment_overdue(self, obj):
         return obj.is_assessment_overdue
@@ -393,6 +404,10 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "assigned_to",
             "assigned_to_name",
             "assigned_at",
+            "is_attachment",
+            "parent_submission",
+            "parent_reference",
+            "attached_submissions",
         )
 
 
@@ -407,6 +422,13 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     estimated_meeting_date = serializers.SerializerMethodField()
     dg_endorsed_by_name = serializers.SerializerMethodField()
     form_type_detail = serializers.SerializerMethodField()
+    parent_reference = serializers.CharField(
+        source="parent_submission.reference_number", read_only=True, default=None
+    )
+    parent_title = serializers.CharField(
+        source="parent_submission.title", read_only=True, default=None
+    )
+    attached_submissions = AttachedSubmissionSerializer(many=True, read_only=True)
 
     def get_is_assessment_overdue(self, obj):
         return obj.is_assessment_overdue
@@ -470,6 +492,11 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "events",
             "is_assessment_overdue",
             "estimated_meeting_date",
+            "is_attachment",
+            "parent_submission",
+            "parent_reference",
+            "parent_title",
+            "attached_submissions",
         )
 
 
@@ -554,6 +581,19 @@ class DocumentAnnotationSerializer(serializers.ModelSerializer):
         return rep
 
 
+class RequiredDocumentSerializer(serializers.ModelSerializer):
+    form_type_code = serializers.CharField(source='form_type.code', read_only=True, default=None)
+    form_category_name = serializers.CharField(source='form_category.name', read_only=True, default=None)
+
+    class Meta:
+        model = RequiredDocument
+        fields = (
+            'id', 'form_type', 'form_type_code',
+            'form_category', 'form_category_name',
+            'name', 'description', 'order', 'is_active',
+        )
+
+
 class ChecklistItemSerializer(serializers.ModelSerializer):
     document_name = serializers.CharField(source='document.name', read_only=True)
     document_description = serializers.CharField(source='document.description', read_only=True)
@@ -583,6 +623,8 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             "closing_deadline_at",
             "scheduled_meeting",
             "notes",
+            "parent_submission",
+            "is_attachment",
         )
         read_only_fields = ("id",)
 

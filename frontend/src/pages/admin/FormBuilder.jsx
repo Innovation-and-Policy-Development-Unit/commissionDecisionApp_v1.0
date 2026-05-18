@@ -8,7 +8,8 @@ import { useConfirm } from '../../context/ConfirmContext'
 import DynamicFormRenderer from '../../components/shared/DynamicFormRenderer'
 import {
   ArrowLeft, PlusCircle, Pencil, Trash2, GripVertical,
-  ChevronUp, ChevronDown, Save, X, Eye, Upload, AlertCircle, CheckCircle2, Square, CheckSquare
+  ChevronUp, ChevronDown, Save, X, Eye, Upload, AlertCircle, CheckCircle2, Square, CheckSquare,
+  ClipboardList, ToggleLeft, ToggleRight
 } from 'lucide-react'
 
 const FIELD_TYPES = [
@@ -159,6 +160,103 @@ function ImportModal({ parsedFields, onClose, onConfirm, importing }) {
             </button>
             <button onClick={onClose} className="btn-secondary px-5 py-2">Cancel</button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Required Document modal ───────────────────────────────────────────────────
+
+const EMPTY_DOC = { name: '', description: '', order: 10, is_active: true }
+
+function RequiredDocModal({ doc, onClose, onSave }) {
+  const [form, setForm] = useState(doc)
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSave = () => {
+    if (!form.name.trim()) { setError('Document name is required.'); return }
+    onSave(form)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-lg bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            {doc.id ? 'Edit Required Document' : 'Add Required Document'}
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+              Document Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              className="input"
+              value={form.name}
+              placeholder="e.g. Current Organisation Structure (OPSC-stamped)"
+              onChange={e => set('name', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+              Description / Instructions
+            </label>
+            <textarea
+              className="input min-h-[80px]"
+              value={form.description}
+              placeholder="Describe what this document is, why it is required, and any formatting or content requirements."
+              onChange={e => set('description', e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                Display Order
+              </label>
+              <input
+                type="number"
+                className="input"
+                value={form.order}
+                min={0}
+                onChange={e => set('order', Number(e.target.value))}
+              />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded"
+                  checked={form.is_active}
+                  onChange={e => set('is_active', e.target.checked)}
+                />
+                Active
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex gap-3">
+          <button onClick={handleSave} className="btn-primary px-5 py-2">
+            {doc.id ? 'Save Changes' : 'Add Document'}
+          </button>
+          <button onClick={onClose} className="btn-secondary px-5 py-2">Cancel</button>
         </div>
       </div>
     </div>
@@ -413,6 +511,8 @@ export default function FormBuilder() {
   const [importedFields, setImportedFields] = useState(null)  // parsed fields awaiting confirmation
   const [importing, setImporting] = useState(false)
   const [selected, setSelected] = useState(new Set())
+  const [requiredDocs, setRequiredDocs] = useState([])
+  const [docModal, setDocModal] = useState(null)  // null | EMPTY_DOC | existing doc
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -423,13 +523,16 @@ export default function FormBuilder() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [ft, ff] = await Promise.all([
+      const [ft, ff, rd] = await Promise.all([
         api.get(`/form-types/${formTypeId}/`),
         api.get(`/form-fields/?form_type=${formTypeId}`),
+        api.get(`/required-documents/?form_type=${formTypeId}`),
       ])
       setFormType(ft.data)
       const raw = Array.isArray(ff.data) ? ff.data : (ff.data?.results ?? [])
       setFields(raw.sort((a, b) => a.display_order - b.display_order || a.id - b.id))
+      const docs = Array.isArray(rd.data) ? rd.data : (rd.data?.results ?? [])
+      setRequiredDocs(docs.sort((a, b) => a.order - b.order || a.id - b.id))
     } catch {
       toast.error('Failed to load form type.')
       navigate('/admin/form-types')
@@ -514,6 +617,49 @@ export default function FormBuilder() {
       toast.success(`${count} field${count !== 1 ? 's' : ''} deleted.`)
     } catch {
       toast.error('Failed to delete some fields.')
+    }
+  }
+
+  const handleDocSave = async (docData) => {
+    try {
+      if (docData.id) {
+        const { data } = await api.patch(`/required-documents/${docData.id}/`, docData)
+        setRequiredDocs(prev => prev.map(d => d.id === data.id ? data : d).sort((a, b) => a.order - b.order || a.id - b.id))
+        toast.success('Required document updated.')
+      } else {
+        const { data } = await api.post('/required-documents/', { ...docData, form_type: Number(formTypeId) })
+        setRequiredDocs(prev => [...prev, data].sort((a, b) => a.order - b.order || a.id - b.id))
+        toast.success('Required document added.')
+      }
+      setDocModal(null)
+    } catch (err) {
+      const detail = err.response?.data
+      toast.error(typeof detail === 'object' ? JSON.stringify(detail) : 'Save failed.')
+    }
+  }
+
+  const handleDocDelete = async (doc) => {
+    const ok = await confirm({
+      title: 'Remove Required Document',
+      message: `Remove "${doc.name}" from the required documents for this form? Existing checklist items on submissions will not be removed.`,
+      confirmLabel: 'Remove',
+    })
+    if (!ok) return
+    try {
+      await api.delete(`/required-documents/${doc.id}/`)
+      setRequiredDocs(prev => prev.filter(d => d.id !== doc.id))
+      toast.success('Required document removed.')
+    } catch {
+      toast.error('Failed to remove required document.')
+    }
+  }
+
+  const handleDocToggleActive = async (doc) => {
+    try {
+      const { data } = await api.patch(`/required-documents/${doc.id}/`, { is_active: !doc.is_active })
+      setRequiredDocs(prev => prev.map(d => d.id === data.id ? data : d))
+    } catch {
+      toast.error('Failed to update required document.')
     }
   }
 
@@ -796,6 +942,97 @@ export default function FormBuilder() {
         </div>
       )}
 
+      {/* ── Required Documents panel ── */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <ClipboardList size={15} className="text-slate-400" />
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Required Documents</h3>
+            <span className="text-xs text-slate-400">
+              — listed in the Documents panel of every submission using this form
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDocModal({ ...EMPTY_DOC, order: requiredDocs.length > 0 ? Math.max(...requiredDocs.map(d => d.order)) + 10 : 10 })}
+            className="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <PlusCircle size={13} />
+            Add Document
+          </button>
+        </div>
+
+        {requiredDocs.length === 0 ? (
+          <div className="card px-5 py-6 text-center">
+            <p className="text-sm text-slate-400 dark:text-slate-500 mb-3">
+              No required documents defined for this form type.
+            </p>
+            <button
+              type="button"
+              onClick={() => setDocModal({ ...EMPTY_DOC })}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700"
+            >
+              <PlusCircle size={13} />
+              Add the first required document
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {requiredDocs.map((doc) => (
+              <div
+                key={doc.id}
+                className={`card px-4 py-3 flex items-start gap-3 ${!doc.is_active ? 'opacity-50' : ''}`}
+              >
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center text-[11px] font-semibold mt-0.5">
+                  {doc.order}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{doc.name}</span>
+                    {!doc.is_active && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
+                  {doc.description && (
+                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{doc.description}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleDocToggleActive(doc)}
+                    className={`p-1.5 rounded transition-colors ${doc.is_active ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                    title={doc.is_active ? 'Deactivate' : 'Activate'}
+                  >
+                    {doc.is_active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocModal({ ...doc })}
+                    className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600"
+                    title="Edit"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDocDelete(doc)}
+                    className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-600"
+                    title="Remove"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {modal && (
         <FieldModal
           field={modal}
@@ -818,6 +1055,14 @@ export default function FormBuilder() {
           importing={importing}
           onClose={() => setImportedFields(null)}
           onConfirm={handleImportConfirm}
+        />
+      )}
+
+      {docModal && (
+        <RequiredDocModal
+          doc={docModal}
+          onClose={() => setDocModal(null)}
+          onSave={handleDocSave}
         />
       )}
     </div>
