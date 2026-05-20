@@ -1,14 +1,18 @@
 /**
  * PSC FORM 2-1 — Organisation Restructure / Establishment Variation
  *
- * Editable tabbed form. 6 tabs matching the 6 pages of the official form.
+ * Editable wizard form. 6 pages matching the 6 sections of the official form.
  * Props:
  *   form       – values object (keys match XML field_key values)
  *   setForm    – state updater
  *   submission – submission object (for auto-populating ministry name)
  *   readOnly   – render as read-only display when true
+ *   onSave     – async function called when user clicks Save Form on the last page
+ *   isSaving   – boolean, disables Save button while saving
  */
 import { useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
 
 const TABS = [
   { id: 1, label: 'Submission Details' },
@@ -74,14 +78,20 @@ function SectionHeader({ number, title }) {
   )
 }
 
-function Field({ label, children, hint, required }) {
+function Field({ label, children, hint, required, hasError }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+      <label className={`block text-sm font-medium mb-1 ${hasError ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
-      {children}
-      {hint && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
+      <div className={hasError ? 'rounded-lg ring-2 ring-red-400 dark:ring-red-500' : ''}>
+        {children}
+      </div>
+      {hasError
+        ? <p className="mt-1 text-xs text-red-500 dark:text-red-400">This field is required.</p>
+        : hint
+          ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+          : null}
     </div>
   )
 }
@@ -144,11 +154,19 @@ function AttachmentRow({ docNum, label, hint, checkKey, refKey, form, set, extra
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export default function PSCForm21Fields({ form, setForm, submission, readOnly = false }) {
+export default function PSCForm21Fields({ form, setForm, submission, readOnly = false, onSave, isSaving = false }) {
+  const toast = useToast()
   const [activeTab, setActiveTab] = useState(1)
   const [tabErrors, setTabErrors] = useState({})
+  const [fieldErrors, setFieldErrors] = useState({})   // { fieldKey: true } for red outlines
 
-  const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
+  const TOTAL_TABS = TABS.length
+
+  // Clear a field's error as soon as the user starts filling it in
+  const set = (field, value) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+    if (fieldErrors[field]) setFieldErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+  }
 
   // Auto-populate ministry name on mount
   useEffect(() => {
@@ -168,16 +186,40 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
     }
   }, [form.savings_deleted_positions, form.cost_new_positions]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Validate tab on switch
+  // Validate current tab — marks tab dot AND highlights individual fields
   const validateTab = (tabId) => {
     const required = TAB_REQUIRED_FIELDS[tabId] || []
-    const hasEmpty = required.some(k => !form[k])
-    setTabErrors(prev => ({ ...prev, [tabId]: hasEmpty }))
+    const errs = {}
+    required.forEach(k => { if (!form[k]) errs[k] = true })
+    const hasErrors = Object.keys(errs).length > 0
+    setTabErrors(prev => ({ ...prev, [tabId]: hasErrors }))
+    setFieldErrors(errs)
+    if (hasErrors) toast.warning('Please fill in all required fields before continuing.')
+    return !hasErrors
   }
 
   const handleTabChange = (newTab) => {
     validateTab(activeTab)
+    setFieldErrors({})   // clear inline highlights when jumping tabs manually
     setActiveTab(newTab)
+  }
+
+  const goNext = () => {
+    const valid = validateTab(activeTab)
+    if (!valid) return
+    setFieldErrors({})
+    setActiveTab(t => Math.min(t + 1, TOTAL_TABS))
+  }
+
+  const goBack = () => {
+    setActiveTab(t => Math.max(t - 1, 1))
+  }
+
+  // Validate the last tab before saving
+  const handleSave = () => {
+    const valid = validateTab(activeTab)
+    if (!valid) return
+    onSave?.()
   }
 
   const reqs = proposalRequirements(form.proposal_type)
@@ -274,51 +316,79 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
     )
   }
 
-  // ── Editable mode — tabbed ────────────────────────────────────────────────────
+  // ── Editable mode — wizard ───────────────────────────────────────────────────
 
   return (
-    <div className="space-y-0">
-      {/* Tab navigation */}
-      <div className="overflow-x-auto">
-        <div className="flex min-w-max border-b border-slate-200 dark:border-slate-700">
-          {TABS.map(tab => {
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+
+      {/* ── Stepper header ── */}
+      <div className="px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-700">
+        {/* Step circles + connectors */}
+        <div className="flex items-center">
+          {TABS.map((tab, i) => {
+            const isDone = tab.id < activeTab
             const isActive = tab.id === activeTab
             const hasError = tabErrors[tab.id]
             return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => handleTabChange(tab.id)}
-                className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 -mb-px ${
-                  isActive
-                    ? 'border-primary-600 text-primary-700 dark:text-primary-400 dark:border-primary-400'
-                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}
-              >
-                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold ${
-                  isActive
-                    ? 'bg-primary-600 text-white dark:bg-primary-400 dark:text-slate-900'
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                }`}>
-                  {tab.id}
-                </span>
-                {tab.label}
-                {hasError && (
-                  <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-red-500" title="Required fields missing" />
+              <div key={tab.id} className="flex items-center flex-1 last:flex-none">
+                <button
+                  type="button"
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`relative flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
+                    isDone
+                      ? 'bg-primary-500 text-white cursor-pointer hover:bg-primary-600'
+                      : isActive
+                        ? 'bg-primary-600 text-white ring-4 ring-primary-100 dark:ring-primary-900/40'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-default'
+                  }`}
+                  title={tab.label}
+                  disabled={!isDone && !isActive}
+                >
+                  {isDone ? <Check size={13} /> : tab.id}
+                  {hasError && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 border-2 border-white dark:border-slate-800" />
+                  )}
+                </button>
+                {i < TABS.length - 1 && (
+                  <div className={`flex-1 h-0.5 mx-1 transition-colors ${tab.id < activeTab ? 'bg-primary-500' : 'bg-slate-200 dark:bg-slate-700'}`} />
                 )}
-              </button>
+              </div>
             )
           })}
         </div>
+        {/* Step labels */}
+        <div className="flex mt-2">
+          {TABS.map(tab => (
+            <div key={tab.id} className="flex-1 last:flex-none pr-1">
+              <p className={`text-[11px] text-center leading-tight line-clamp-1 ${
+                tab.id === activeTab
+                  ? 'text-primary-600 dark:text-primary-400 font-semibold'
+                  : tab.id < activeTab
+                    ? 'text-slate-500 dark:text-slate-400'
+                    : 'text-slate-300 dark:text-slate-600'
+              }`}>
+                {tab.label}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Tab content */}
-      <div className="p-1 pt-5 space-y-4">
+      {/* ── Step counter + section title ── */}
+      <div className="px-6 pt-5 pb-2">
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Step {activeTab} of {TOTAL_TABS}</p>
+        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+          {TABS.find(t => t.id === activeTab)?.label}
+        </h3>
+      </div>
+
+      {/* ── Tab content ── */}
+      <div className="px-6 pb-6 pt-4 space-y-4">
 
         {/* Tab 1 — Submission Details */}
         {activeTab === 1 && (
           <div className="space-y-4">
-            <Field label="Ministry / Department Name" required>
+            <Field label="Ministry / Department Name" required hasError={!!fieldErrors['ministry_department_name']}>
               <input
                 className="input"
                 value={form.ministry_department_name || ''}
@@ -326,7 +396,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
                 placeholder="Enter ministry or department name"
               />
             </Field>
-            <Field label="Proposal Title" required>
+            <Field label="Proposal Title" required hasError={!!fieldErrors['proposal_title']}>
               <input
                 className="input"
                 value={form.proposal_title || ''}
@@ -335,7 +405,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
               />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Submission Date" required>
+              <Field label="Submission Date" required hasError={!!fieldErrors['submission_date']}>
                 <input
                   type="date"
                   className="input"
@@ -344,8 +414,8 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
                 />
               </Field>
             </div>
-            <Field label="Proposal Type" required>
-              <div className="space-y-2">
+            <Field label="Proposal Type" required hasError={!!fieldErrors['proposal_type']}>
+              <div className="space-y-2 p-1">
                 {PROPOSAL_TYPES.map(pt => (
                   <label
                     key={pt}
@@ -374,7 +444,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
         {/* Tab 2 — Background */}
         {activeTab === 2 && (
           <div className="space-y-4">
-            <Field label="Background / Reasons for Proposal" required hint="Explain the context and need for this organisational change.">
+            <Field label="Background / Reasons for Proposal" required hint="Explain the context and need for this organisational change." hasError={!!fieldErrors['background_reasons']}>
               <textarea
                 className="input min-h-[140px]"
                 value={form.background_reasons || ''}
@@ -539,7 +609,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
         {/* Tab 5 — Implementation */}
         {activeTab === 5 && (
           <div className="space-y-4">
-            <Field label="Implementation Details" required hint="Describe how the restructure / variation will be implemented.">
+            <Field label="Implementation Details" required hint="Describe how the restructure / variation will be implemented." hasError={!!fieldErrors['implementation_details']}>
               <textarea
                 className="input min-h-[120px]"
                 value={form.implementation_details || ''}
@@ -583,7 +653,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
             {/* Recommendation */}
             <div>
               <SectionHeader title="Recommendation" />
-              <Field label="Recommendation Text" required hint="Director's formal recommendation to the PSC.">
+              <Field label="Recommendation Text" required hint="Director's formal recommendation to the PSC." hasError={!!fieldErrors['recommendation_text']}>
                 <textarea
                   className="input min-h-[120px]"
                   value={form.recommendation_text || ''}
@@ -698,7 +768,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
             <div>
               <SectionHeader title="Director Sign-off" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Director Name" required>
+                <Field label="Director Name" required hasError={!!fieldErrors['director_name']}>
                   <input
                     className="input"
                     value={form.director_name || ''}
@@ -713,7 +783,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
                     placeholder="e.g. Director of Human Resources"
                   />
                 </Field>
-                <Field label="Date" required>
+                <Field label="Date" required hasError={!!fieldErrors['director_date']}>
                   <input
                     type="date"
                     className="input"
@@ -759,6 +829,59 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* ── Wizard navigation footer ── */}
+      <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between gap-4">
+        {/* Back */}
+        <button
+          type="button"
+          onClick={goBack}
+          disabled={activeTab === 1}
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronLeft size={15} />
+          Back
+        </button>
+
+        {/* Dot indicators */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {TABS.map(tab => (
+            <div
+              key={tab.id}
+              className={`rounded-full transition-all duration-200 ${
+                tab.id === activeTab
+                  ? 'w-5 h-2 bg-primary-500'
+                  : tab.id < activeTab
+                    ? 'w-2 h-2 bg-primary-300 dark:bg-primary-700'
+                    : 'w-2 h-2 bg-slate-200 dark:bg-slate-700'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Next / Save */}
+        {activeTab < TOTAL_TABS ? (
+          <button
+            type="button"
+            onClick={goNext}
+            className="inline-flex items-center gap-1 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Next
+            <ChevronRight size={15} />
+          </button>
+        ) : onSave ? (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="inline-flex items-center gap-1 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isSaving ? 'Saving…' : 'Save Form'}
+          </button>
+        ) : (
+          <div className="w-20" />
         )}
       </div>
     </div>

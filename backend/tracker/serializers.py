@@ -42,6 +42,8 @@ from .models import (
     DocumentAnnotation,
     DocumentSignature,
     UserSignature,
+    ODURestructureChecklist,
+    RestructureSubmissionData,
 )
 from .rbac import (
     rbac_can_access_admin_panel,
@@ -191,19 +193,41 @@ _TASK_LINK_STAGES = frozenset(
 
 
 class CommissionTaskSerializer(serializers.ModelSerializer):
-    submission_reference_number = serializers.CharField(source="submission.reference_number", read_only=True)
-    submission_title = serializers.CharField(source="submission.title", read_only=True)
-    assigned_manager_username = serializers.CharField(source="assigned_manager.username", read_only=True)
-    assigned_staff_username = serializers.CharField(source="assigned_staff.username", read_only=True)
+    submission_reference_number = serializers.CharField(
+        source="submission.reference_number", read_only=True, default=None,
+    )
+    submission_title = serializers.CharField(
+        source="submission.title", read_only=True, default=None,
+    )
+    assigned_manager_username = serializers.CharField(
+        source="assigned_manager.username", read_only=True,
+    )
+    assigned_staff_username = serializers.CharField(
+        source="assigned_staff.username", read_only=True,
+    )
+    meeting_title = serializers.CharField(
+        source="meeting.title", read_only=True, default=None,
+    )
     subtasks = serializers.SerializerMethodField()
 
     class Meta:
         model = CommissionTask
         fields = (
             "id",
+            # ── Decision Register fields ──────────────────────────────────
+            "decision_number",
+            "meeting",
+            "meeting_title",
+            "decision_detail",
+            "decision_outcome",
+            "action_unit",
+            "implementation_status",
+            "way_forward",
+            # ── Submission link ───────────────────────────────────────────
             "submission",
             "submission_reference_number",
             "submission_title",
+            # ── Task fields ───────────────────────────────────────────────
             "title",
             "description",
             "meeting_reference",
@@ -228,6 +252,7 @@ class CommissionTaskSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "submission_reference_number",
             "submission_title",
+            "meeting_title",
             "assigned_manager_username",
             "assigned_staff_username",
             "due_date_notified",
@@ -375,6 +400,8 @@ class SubmissionListSerializer(serializers.ModelSerializer):
         source="parent_submission.reference_number", read_only=True, default=None
     )
     attached_submissions = AttachedSubmissionSerializer(many=True, read_only=True)
+    # Agenda auto-categorisation: resolved agenda section for this form type
+    form_agenda_category = serializers.SerializerMethodField()
 
     def get_is_assessment_overdue(self, obj):
         return obj.is_assessment_overdue
@@ -385,6 +412,16 @@ class SubmissionListSerializer(serializers.ModelSerializer):
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.get_full_name() or obj.assigned_to.username if obj.assigned_to else None
 
+    def get_form_agenda_category(self, obj):
+        """Return the agenda_category from the linked PSCFormType, or 'other'.
+        Uses a per-request cache to avoid N+1 queries."""
+        cache = self.context.get("_ft_agenda_cache")
+        if cache is None:
+            cache = dict(PSCFormType.objects.values_list("code", "agenda_category"))
+            # Store back — context is a shared dict for this serializer instance
+            self.context["_ft_agenda_cache"] = cache
+        return cache.get(obj.form_type_code) or "other"
+
     class Meta:
         model = Submission
         fields = (
@@ -392,6 +429,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "reference_number",
             "title",
             "form_type_code",
+            "form_agenda_category",
             "ministry_name",
             "category_name",
             "logged_by",
@@ -405,6 +443,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "assigned_to_name",
             "assigned_at",
             "is_attachment",
+            "is_internal",
             "parent_submission",
             "parent_reference",
             "attached_submissions",
@@ -453,6 +492,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
                 'name': ft.name,
                 'is_digitized': ft.is_digitized,
                 'digitized_form_key': ft.digitized_form_key,
+                'agenda_category': ft.agenda_category,
             }
         except PSCFormType.DoesNotExist:
             return None
@@ -493,6 +533,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "is_assessment_overdue",
             "estimated_meeting_date",
             "is_attachment",
+            "is_internal",
             "parent_submission",
             "parent_reference",
             "parent_title",
@@ -607,6 +648,14 @@ class ChecklistItemSerializer(serializers.ModelSerializer):
 
 
 class SubmissionWriteSerializer(serializers.ModelSerializer):
+    # Ministry is required for external submissions but auto-resolved for internal
+    # (CSU/ODU) submissions on the backend, so we make it optional here.
+    ministry = serializers.PrimaryKeyRelatedField(
+        queryset=Ministry.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = Submission
         fields = (
@@ -625,8 +674,9 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             "notes",
             "parent_submission",
             "is_attachment",
+            "is_internal",
         )
-        read_only_fields = ("id",)
+        read_only_fields = ("id", "is_internal")
 
     def create(self, validated_data):
         request = self.context["request"]
@@ -657,7 +707,7 @@ class PSCFormTypeSerializer(serializers.ModelSerializer):
         model = PSCFormType
         fields = ('id', 'code', 'name', 'description', 'form_category',
                   'form_category_name', 'is_digitized', 'digitized_form_key',
-                  'is_active', 'display_order')
+                  'is_active', 'display_order', 'agenda_category')
 
 
 class TransitionSerializer(serializers.Serializer):
@@ -820,11 +870,20 @@ class UserAdminUpdateSerializer(serializers.Serializer):
 
 class AgendaItemSerializer(serializers.ModelSerializer):
     submission_reference = serializers.CharField(source="submission.reference_number", read_only=True)
-    submission_title = serializers.CharField(source="submission.title", read_only=True)
+    submission_title     = serializers.CharField(source="submission.title", read_only=True)
+    submission_ministry  = serializers.SerializerMethodField()
+    category_display     = serializers.CharField(source="get_category_display", read_only=True)
+
+    def get_submission_ministry(self, obj):
+        return obj.submission.ministry.name if obj.submission.ministry else ""
 
     class Meta:
         model = AgendaItem
-        fields = ("id", "meeting", "submission", "submission_reference", "submission_title", "sequence")
+        fields = (
+            "id", "meeting", "submission", "submission_reference", "submission_title",
+            "submission_ministry", "sequence", "category", "category_display",
+            "matters_arising_meeting_ref", "matters_arising_agenda_no",
+        )
 
 
 class MeetingSerializer(serializers.ModelSerializer):
@@ -833,6 +892,8 @@ class MeetingSerializer(serializers.ModelSerializer):
     decisions_count = serializers.SerializerMethodField()
     agenda_approved_by_name = serializers.SerializerMethodField()
     flying_minute_signatures = serializers.SerializerMethodField()
+    # Effective submission deadline: manual cutoff if set, else auto 3-day rule
+    effective_cutoff = serializers.DateTimeField(read_only=True)
 
     def get_agenda_approved_by_name(self, obj):
         return obj.agenda_approved_by.username if obj.agenda_approved_by else None
@@ -856,6 +917,8 @@ class MeetingSerializer(serializers.ModelSerializer):
             "status",
             "notes",
             "submission_cutoff",
+            "effective_cutoff",
+            "max_items",
             "agenda_status",
             "agenda_approved_by",
             "agenda_approved_by_name",
@@ -1310,3 +1373,115 @@ class PSCForm37DataSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+# ── ODU Restructure Checklist ─────────────────────────────────────────────────
+
+class ODUChecklistSerializer(serializers.ModelSerializer):
+    """Full read/write serializer for the ODU Restructure Checklist."""
+
+    items_answered = serializers.IntegerField(read_only=True)
+    items_yes      = serializers.IntegerField(read_only=True)
+    status_display         = serializers.CharField(source="get_status_display", read_only=True)
+    submission_type_display = serializers.CharField(source="get_submission_type_display", read_only=True)
+    recommendation_display  = serializers.CharField(source="get_recommendation_display", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+
+    def get_created_by_name(self, obj):
+        u = obj.created_by
+        full = f"{u.first_name} {u.last_name}".strip()
+        return full or u.username
+
+    class Meta:
+        model  = ODURestructureChecklist
+        fields = [
+            "id", "submission",
+            "status", "status_display",
+            # Section A
+            "ministry_department", "division_unit", "submission_type",
+            "submission_type_display", "odu_officer_assigned", "manager_odu",
+            # Section B
+            "b1_cover_letter", "b2_org_chart", "b3_positions_list",
+            "b4_jds_attached", "b5_rationale_stated",
+            "b6_mandate_alignment", "b7_reporting_lines",
+            "b8_no_duplication", "b9_span_of_control",
+            "b10_job_purpose_linked", "b11_kra_kta_kpi",
+            "b12_competencies", "b13_qual_experience",
+            "b14_cost_analysis", "b15_grt_mapping", "b16_consultation",
+            "b17_odu_analysis", "b18_feedback_provided",
+            "b19_final_docs_ready", "b20_manager_final_check",
+            # Progress
+            "items_answered", "items_yes",
+            # Section C
+            "recommendation", "recommendation_display", "officer_comments",
+            # Section D
+            "verifying_officer_name", "verifying_officer_date",
+            "manager_verifier_name", "manager_verifier_date",
+            # Meta
+            "created_by", "created_by_name", "submitted_at",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "created_by", "created_by_name",
+            "items_answered", "items_yes",
+            "status_display", "submission_type_display", "recommendation_display",
+            "submitted_at", "created_at", "updated_at",
+        ]
+
+
+# ── Organisation Restructure Submission Data ──────────────────────────────────
+
+class RestructureSubmissionDataSerializer(serializers.ModelSerializer):
+    """Serializer for the Section 3.1 Organisation Restructure template data."""
+
+    class Meta:
+        model  = RestructureSubmissionData
+        fields = [
+            "id",
+            # Cover
+            "subject_title",
+            # Section 1
+            "background",
+            # Section 2
+            "proposal",
+            # Section 3
+            "costing_rows",
+            "costing_notes",
+            # Section 4
+            "implementation_plan",
+            # Section 5
+            "recommendation",
+            # Director
+            "director_name",
+            "director_date",
+            # Attachments
+            "attach_current_org_chart",
+            "attach_proposed_org_chart",
+            "attach_job_descriptions",
+            "attach_other",
+            "attach_other_description",
+            # DG endorsement
+            "dg_endorses",
+            "dg_name",
+            "dg_date",
+            # Meta
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_costing_rows(self, value):
+        """Ensure each row has the expected keys; fill missing ones with ''."""
+        EXPECTED = [
+            "current_post_no", "current_title", "current_level", "current_salary",
+            "proposed_post_no", "proposed_title", "proposed_level",
+            "proposed_salary", "salary_difference",
+        ]
+        if not isinstance(value, list):
+            raise serializers.ValidationError("costing_rows must be a list.")
+        cleaned = []
+        for row in value:
+            if not isinstance(row, dict):
+                raise serializers.ValidationError("Each costing row must be an object.")
+            cleaned.append({k: row.get(k, "") for k in EXPECTED})
+        return cleaned

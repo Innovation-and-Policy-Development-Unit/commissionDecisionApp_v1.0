@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "mcp_dev_server": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "fastmcp",
+        "fastmcp",
+        "run",
+        "C:\\Users\\USER\\Documents\\Commission Decision App\\commissionDecisionApp_v1.0\\mcp_dev_server.py"
+      ]
+    }
+  }
+}

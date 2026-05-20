@@ -402,8 +402,8 @@
     "status_completed": "I Finis",
     "status_cancelled": "I Kansel",
     "agenda_draft": "Draf",
-    "agenda_with_chairman": "Wetem Jeapeson",
-    "agenda_chairman_approved": "Jeapeson I Apruv",
+    "agenda_with_chairman": "Wetem Sekretari",
+    "agenda_chairman_approved": "Sekretari I Apruv",
     "agenda_circulated": "I Sanem Aot"
   },
   "task": {

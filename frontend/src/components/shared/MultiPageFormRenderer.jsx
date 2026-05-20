@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
 
 // ── Page splitter ─────────────────────────────────────────────────────────────
 // A new page starts at any section_header that has start_new_page === true.
@@ -42,6 +43,7 @@ export default function MultiPageFormRenderer({
   onSave,
   saving = false,
 }) {
+  const toast = useToast()
   const pages = useMemo(() => splitIntoPages(fields), [fields])
   const [step, setStep] = useState(0)
   const [errors, setErrors] = useState({})
@@ -60,6 +62,7 @@ export default function MultiPageFormRenderer({
       }
     }
     setErrors(errs)
+    if (Object.keys(errs).length > 0) toast.warning('Please fill in all required fields before continuing.')
     return Object.keys(errs).length === 0
   }
 
@@ -175,10 +178,6 @@ export default function MultiPageFormRenderer({
           ))
         )}
 
-        {/* Required field hint */}
-        {!readOnly && Object.keys(errors).length > 0 && (
-          <p className="text-xs text-red-500">Please fill in all required fields before continuing.</p>
-        )}
       </div>
 
       {/* ── Navigation footer ── */}

@@ -9,7 +9,7 @@ Usage:
     python manage.py seed_tracker --force-submissions # add another full dummy submission set (dev only)
 """
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
@@ -17,33 +17,44 @@ from django.db import transaction
 from django.utils import timezone
 
 from tracker.models import (
-    Department, FormCategory, Ministry, Profile,
-    Role, RoleDefinition, Submission, SystemPermission, WorkflowEvent, WorkflowStage,
+    AgendaItem, CommissionTask, Department, FormCategory, Meeting,
+    Ministry, Profile, Role, RoleDefinition, Submission,
+    SystemPermission, WorkflowEvent, WorkflowStage,
 )
 
 # ── Reference data ────────────────────────────────────────────────────────────
 
 # (code, name, psc_forms_summary, display_order)
 # display_order determines default agenda sequence (lower = earlier)
+# NOTE: Preliminaries and Matters Arising are NOT submission categories,
+# they are structural agenda sections managed in AgendaCategory enum.
 CATEGORIES = [
-    ("discipline",             "Discipline",
-     "PSC 6.2, 6.3, 6.4",                                                  10),
-    ("recruitment",            "Recruitment",
-     "PSC 3.1, 3.5, 3.6/7, 3.8",                                          20),
-    ("training_development",   "Training & Development",
-     "PSC 5.1–5.6",                                                        30),
-    ("organisation_structure", "Organisation & Structure",
-     "PSC 2.1 (Org Restructure / Establishment Variation), PSC 2.2 (Job Description)", 40),
-    ("leave_travel",           "Leave & Travel",
-     "PSC 4.4, 4.5, 4.6, 4.8, 4.9",                                      50),
-    ("allowances_claims",      "Allowances & Claims",
-     "PSC 4.1, 4.2, 4.3, 4.7, 4.10, 4.11",                               60),
-    ("housing_vehicles",       "Housing & Vehicles",
-     "PSC 8.1, 8.2, 9.1, 9.3",                                            70),
-    ("performance",            "Performance",
-     "PSC 10.2, 10.4a",                                                    80),
-    ("other",                  "Other",
-     "Local Purchase Orders (LPO), Miscellaneous",                         999),
+    ("discipline_compliance", "3. Discipline / Compliance",
+     "Disciplinary cases and preliminary assessment reports",              30),
+    ("health_commission",     "4. Health Commission",
+     "Vanuatu Health Services Commission (VHSC) matters",                  40),
+    ("appointment",           "5. Appointment / Acting Appointment",
+     "Regular appointments and acting roles",                              50),
+    ("direct_appointment",    "6. Direct Appointment / Confirmation of Appointment",
+     "Direct appointments and confirmations",                              60),
+    ("extra_responsibility",  "7. Extra Responsibility / Overtime Allowance / Special Skills Allowance",
+     "Extra responsibility, OT, and special skills allowances",            70),
+    ("contract",              "8. Contract / Temporary Salaried Appointment",
+     "New contracts and renewals",                                         80),
+    ("temporary_salaried",    "9. Temporary Salaried Appointment",
+     "Temporary salaried employees (TSE)",                                 90),
+    ("salary_adjustment",     "10. Salary Adjustment",
+     "Adjustments to base salary",                                        100),
+    ("training",              "11. Long Term Training / Scholarship / Internship / Cadetship / Extension / Direct Appointment",
+     "Training, scholarships, and internships",                           110),
+    ("medical_claim",         "12. Medical Claim",
+     "Medical claims and refunds",                                                120),
+    ("partial_severance",     "13. Partial Severance",
+     "Partial severance requests",                                                130),
+    ("resignation",           "14. Resignation / Retirement / Death",
+     "Resignations, retirements and death benefit payouts",                       140),
+    ("other",                 "15. Other Matters",
+     "Miscellaneous matters not covered by other categories",                     999),
 ]
 
 MINISTRIES = [
@@ -270,185 +281,185 @@ STAGE_PATHS = {
 SUBMISSIONS = [
     # ── IMPLEMENTATION REPORT (completed cycle) ────────────────────────────
     ("Appointment of Director of Finance — Ministry of Finance & Economic Management",
-     "MFEM", "TREASURY", "recruitment", "PSC 3.6", "odu", "implementation_report", 125),
+     "MFEM", "TREASURY", "appointment", "PSC 3.6", "odu", "implementation_report", 125),
     ("Transfer of Chief Nursing Officer to Northern Provincial Hospital, MOH",
-     "MOH", "NURSING", "leave_travel", "PSC 4.5", "hr", "implementation_report", 118),
+     "MOH", "NURSING", "other", "PSC 4.5", "hr", "implementation_report", 118),
     ("Reclassification of ICT Officers — OGCIO Grades 3–5",
-     "OPM", "OGCIO", "organisation_structure", "PSC 2.1", "hr", "implementation_report", 112),
+     "OPM", "OGCIO", "other", "PSC 2.1", "hr", "implementation_report", 112),
     ("Secondment of Agricultural Officer to SPC Regional Office, Suva",
-     "MALFFB", "AGR", "leave_travel", "PSC 4.8", "hr", "implementation_report", 105),
+     "MALFFB", "AGR", "other", "PSC 4.8", "hr", "implementation_report", 105),
 
     # ── UNDER IMPLEMENTATION ───────────────────────────────────────────────
     ("Appointment of Deputy Director — Customs & Inland Revenue",
-     "MFEM", "CIR", "recruitment", "PSC 3.6", "odu", "under_implementation", 96),
+     "MFEM", "CIR", "appointment", "PSC 3.6", "odu", "under_implementation", 96),
     ("Promotion of Senior Education Officers to Principal Grade (Batch of 6)",
-     "MET", "PRIM_ED", "recruitment", "PSC 3.5", "hr", "under_implementation", 90),
+     "MET", "PRIM_ED", "appointment", "PSC 3.5", "hr", "under_implementation", 90),
     ("Secondment of Legal Officer to Ministry of Foreign Affairs",
-     "MJCS", "STATE_LAW", "leave_travel", "PSC 4.8", "hr", "under_implementation", 86),
+     "MJCS", "STATE_LAW", "other", "PSC 4.8", "hr", "under_implementation", 86),
     ("Termination of Employment — Finance Officer, Ministry of Infrastructure",
-     "MIPU", "PWD", "discipline", "PSC 6.4", "compliance", "under_implementation", 82),
+     "MIPU", "PWD", "discipline_compliance", "PSC 6.4", "compliance", "under_implementation", 82),
     ("Appointment of Director of Agriculture",
-     "MALFFB", "AGR", "recruitment", "PSC 3.6", "odu", "under_implementation", 79),
+     "MALFFB", "AGR", "appointment", "PSC 3.6", "odu", "under_implementation", 79),
     ("Reclassification of Tourism Officer Posts — Ministry of Tourism",
-     "MTCI", None, "organisation_structure", "PSC 2.1", "hr", "under_implementation", 75),
+     "MTCI", None, "other", "PSC 2.1", "hr", "under_implementation", 75),
 
     # ── DECISION ENTERED & ASSIGNED ────────────────────────────────────────
     ("Appointment of Principal Statistician — National Statistics Office",
-     "MFEM", "NSO", "recruitment", "PSC 3.6", "odu", "decision_entered_assigned", 72),
+     "MFEM", "NSO", "appointment", "PSC 3.6", "odu", "decision_entered_assigned", 72),
     ("Promotion of Senior Health Inspector to Principal Grade",
-     "MOH", "PUBLIC_HEALTH", "recruitment", "PSC 3.5", "hr", "decision_entered_assigned", 68),
+     "MOH", "PUBLIC_HEALTH", "appointment", "PSC 3.5", "hr", "decision_entered_assigned", 68),
     ("Acting Appointment — Director of Public Works",
-     "MIPU", "PWD", "recruitment", "PSC 3.8", "odu", "decision_entered_assigned", 64),
+     "MIPU", "PWD", "appointment", "PSC 3.8", "odu", "decision_entered_assigned", 64),
     ("Transfer of Education Officer to Tafea Province",
-     "MET", "PRIM_ED", "leave_travel", "PSC 4.5", "hr", "decision_entered_assigned", 60),
+     "MET", "PRIM_ED", "other", "PSC 4.5", "hr", "decision_entered_assigned", 60),
     ("Appointment of Deputy Commissioner of Police",
-     "MIA", "POLICE", "recruitment", "PSC 3.6", "odu", "decision_entered_assigned", 57),
+     "MIA", "POLICE", "appointment", "PSC 3.6", "odu", "decision_entered_assigned", 57),
 
     # ── MINUTES DRAFTED & SIGNED ───────────────────────────────────────────
     ("Appointment of Chief Surveyor — Department of Surveys",
-     "MLGM", "SURVEYS", "recruitment", "PSC 3.6", "odu", "minutes_drafted_signed", 54),
+     "MLGM", "SURVEYS", "appointment", "PSC 3.6", "odu", "minutes_drafted_signed", 54),
     ("Promotion — Senior Accountant to Principal Accountant, Treasury",
-     "MFEM", "TREASURY", "recruitment", "PSC 3.5", "odu", "minutes_drafted_signed", 51),
+     "MFEM", "TREASURY", "appointment", "PSC 3.5", "odu", "minutes_drafted_signed", 51),
     ("Secondment of Nurse to WHO Regional Office, Manila",
-     "MOH", "NURSING", "leave_travel", "PSC 4.8", "hr", "minutes_drafted_signed", 47),
+     "MOH", "NURSING", "other", "PSC 4.8", "hr", "minutes_drafted_signed", 47),
     ("Acting Appointment of Director — Department of Forestry",
-     "MALFFB", "FORESTRY", "recruitment", "PSC 3.8", "odu", "minutes_drafted_signed", 44),
+     "MALFFB", "FORESTRY", "appointment", "PSC 3.8", "odu", "minutes_drafted_signed", 44),
 
     # ── APPROVED ───────────────────────────────────────────────────────────
     ("Appointment of Director of Education Policy",
-     "MET", "HIGHER", "recruitment", "PSC 3.6", "odu", "approved", 52),
+     "MET", "HIGHER", "appointment", "PSC 3.6", "odu", "approved", 52),
     ("Promotion — Senior Lands Officer to Principal Grade",
-     "MLGM", "LANDS", "recruitment", "PSC 3.5", "hr", "approved", 48),
+     "MLGM", "LANDS", "appointment", "PSC 3.5", "hr", "approved", 48),
     ("Transfer of Pharmacist — Vila Central Hospital",
-     "MOH", "PHARMACY", "leave_travel", "PSC 4.5", "hr", "approved", 44),
+     "MOH", "PHARMACY", "other", "PSC 4.5", "hr", "approved", 44),
     ("Secondment of Policy Analyst to Asian Development Bank",
-     "OPM", "DEPT_STATE", "leave_travel", "PSC 4.8", "hr", "approved", 42),
+     "OPM", "DEPT_STATE", "other", "PSC 4.8", "hr", "approved", 42),
     ("Appointment of Chief Fisheries Officer",
-     "MALFFB", "FISHERIES", "recruitment", "PSC 3.6", "odu", "approved", 40),
+     "MALFFB", "FISHERIES", "appointment", "PSC 3.6", "odu", "approved", 40),
     ("Promotion — Senior Immigration Officer to Principal Grade",
-     "MIA", "IMMIGRATION", "recruitment", "PSC 3.5", "odu", "approved", 38),
+     "MIA", "IMMIGRATION", "appointment", "PSC 3.5", "odu", "approved", 38),
     ("Establishment Variation — Ministry of Tourism (3 New Posts)",
-     "MTCI", None, "organisation_structure", "PSC 2.2", "hr", "approved", 36),
+     "MTCI", None, "other", "PSC 2.2", "hr", "approved", 36),
     ("Appointment of State Counsel — Department of State Law",
-     "MJCS", "STATE_LAW", "recruitment", "PSC 3.6", "odu", "approved", 34),
+     "MJCS", "STATE_LAW", "appointment", "PSC 3.6", "odu", "approved", 34),
 
     # ── REJECTED ───────────────────────────────────────────────────────────
     ("Termination — Senior Finance Officer, Ministry of Finance",
-     "MFEM", "BUDGET", "discipline", "PSC 6.4", "compliance", "rejected", 50),
+     "MFEM", "BUDGET", "discipline_compliance", "PSC 6.4", "compliance", "rejected", 50),
     ("Reclassification — IT Officer Posts, Ministry of Justice",
-     "MJCS", None, "organisation_structure", "PSC 2.1", "hr", "rejected", 46),
+     "MJCS", None, "other", "PSC 2.1", "hr", "rejected", 46),
 
     # ── RETURNED ───────────────────────────────────────────────────────────
     ("Secondment of Lands Officer to Pacific Islands Development Forum",
-     "MLGM", "LANDS", "leave_travel", "PSC 4.8", "hr", "returned", 42),
+     "MLGM", "LANDS", "other", "PSC 4.8", "hr", "returned", 42),
     ("Establishment Variation — Ministry of Infrastructure (Grade Reclassification)",
-     "MIPU", "PWD", "organisation_structure", "PSC 2.1", "hr", "returned", 38),
+     "MIPU", "PWD", "other", "PSC 2.1", "hr", "returned", 38),
 
     # ── COMMISSION SITTING ─────────────────────────────────────────────────
     ("Appointment of Director General — Office of the Prime Minister",
-     "OPM", "DEPT_STATE", "recruitment", "PSC 3.6", "odu", "commission_sitting", 14),
+     "OPM", "DEPT_STATE", "appointment", "PSC 3.6", "odu", "commission_sitting", 14),
     ("Promotion Batch — Ministry of Health Nursing Officers (Grade 4 to 5)",
-     "MOH", "NURSING", "recruitment", "PSC 3.5", "hr", "commission_sitting", 12),
+     "MOH", "NURSING", "appointment", "PSC 3.5", "hr", "commission_sitting", 12),
     ("Termination — Department of Agriculture Officer",
-     "MALFFB", "AGR", "discipline", "PSC 6.4", "compliance", "commission_sitting", 10),
+     "MALFFB", "AGR", "discipline_compliance", "PSC 6.4", "compliance", "commission_sitting", 10),
     ("Reclassification — Finance Officers, Treasury Department (Grade 7 to 8)",
-     "MFEM", "TREASURY", "organisation_structure", "PSC 2.1", "odu", "commission_sitting", 7),
+     "MFEM", "TREASURY", "other", "PSC 2.1", "odu", "commission_sitting", 7),
 
     # ── FORWARDED TO COMMISSION ────────────────────────────────────────────
     ("Appointment of Principal Lands Officer — Ministry of Lands",
-     "MLGM", "LANDS", "recruitment", "PSC 3.6", "odu", "forwarded_to_commission", 23),
+     "MLGM", "LANDS", "appointment", "PSC 3.6", "odu", "forwarded_to_commission", 23),
     ("Promotion — Senior Engineer to Principal Engineer, Public Works",
-     "MIPU", "PWD", "recruitment", "PSC 3.5", "hr", "forwarded_to_commission", 20),
+     "MIPU", "PWD", "appointment", "PSC 3.5", "hr", "forwarded_to_commission", 20),
     ("Secondment of Education Officer to Pacific Community, Noumea",
-     "MET", "SEC_ED", "leave_travel", "PSC 4.8", "hr", "forwarded_to_commission", 18),
+     "MET", "SEC_ED", "other", "PSC 4.8", "hr", "forwarded_to_commission", 18),
     ("Acting Appointment — Director of Internal Revenue",
-     "MFEM", "CIR", "recruitment", "PSC 3.8", "odu", "forwarded_to_commission", 15),
+     "MFEM", "CIR", "appointment", "PSC 3.8", "odu", "forwarded_to_commission", 15),
     ("Appointment of Chief of Police — Vanuatu Police Force",
-     "MIA", "POLICE", "recruitment", "PSC 3.6", "odu", "forwarded_to_commission", 12),
+     "MIA", "POLICE", "appointment", "PSC 3.6", "odu", "forwarded_to_commission", 12),
 
     # ── DEFERRED ───────────────────────────────────────────────────────────
     ("Appointment of Divisional Finance Officer — Ministry of Finance",
-     "MFEM", "BUDGET", "recruitment", "PSC 3.6", "odu", "deferred", 38),
+     "MFEM", "BUDGET", "appointment", "PSC 3.6", "odu", "deferred", 38),
     ("Termination of Employment — Ports & Harbour Staff Member",
-     "MIPU", "PORTS", "discipline", "PSC 6.3", "compliance", "deferred", 30),
+     "MIPU", "PORTS", "discipline_compliance", "PSC 6.3", "compliance", "deferred", 30),
     ("Reclassification — Health Inspector Posts, Ministry of Health",
-     "MOH", "PUBLIC_HEALTH", "organisation_structure", "PSC 2.1", "hr", "deferred", 25),
+     "MOH", "PUBLIC_HEALTH", "other", "PSC 2.1", "hr", "deferred", 25),
     ("Secondment of Survey Officer to UN-HABITAT Regional Office",
-     "MLGM", "SURVEYS", "leave_travel", "PSC 4.8", "hr", "deferred", 22),
+     "MLGM", "SURVEYS", "other", "PSC 4.8", "hr", "deferred", 22),
 
     # ── RESUBMITTED ────────────────────────────────────────────────────────
     ("Appointment of Chief Education Officer — Curriculum (Resubmission)",
-     "MET", "HIGHER", "recruitment", "PSC 3.6", "odu", "resubmitted", 18),
+     "MET", "HIGHER", "appointment", "PSC 3.6", "odu", "resubmitted", 18),
     ("Promotion — Senior Correctional Officer to Principal Grade (Resubmission)",
-     "MJCS", "CORRECTIONAL", "recruitment", "PSC 3.5", "hr", "resubmitted", 12),
+     "MJCS", "CORRECTIONAL", "appointment", "PSC 3.5", "hr", "resubmitted", 12),
 
     # ── UNDER ASSESSMENT (some overdue) ───────────────────────────────────
     ("Appointment of Director of Forestry — MALFFB",
-     "MALFFB", "FORESTRY", "recruitment", "PSC 3.6", "odu", "under_assessment", 38),   # OVERDUE
+     "MALFFB", "FORESTRY", "appointment", "PSC 3.6", "odu", "under_assessment", 38),   # OVERDUE
     ("Termination — Senior Accountant, Ministry of Finance",
-     "MFEM", "TREASURY", "discipline", "PSC 6.4", "compliance", "under_assessment", 34),  # OVERDUE
+     "MFEM", "TREASURY", "discipline_compliance", "PSC 6.4", "compliance", "under_assessment", 34),  # OVERDUE
     ("Promotion — Senior Police Officer to Inspector Grade",
-     "MIA", "POLICE", "recruitment", "PSC 3.5", "odu", "under_assessment", 22),
+     "MIA", "POLICE", "appointment", "PSC 3.5", "odu", "under_assessment", 22),
     ("Secondment of Livestock Officer to FAO Rome",
-     "MALFFB", "LIVESTOCK", "leave_travel", "PSC 4.8", "hr", "under_assessment", 18),
+     "MALFFB", "LIVESTOCK", "other", "PSC 4.8", "hr", "under_assessment", 18),
     ("Reclassification — Transport Officers, Ministry of Infrastructure",
-     "MIPU", "PWD", "organisation_structure", "PSC 2.1", "hr", "under_assessment", 15),
+     "MIPU", "PWD", "other", "PSC 2.1", "hr", "under_assessment", 15),
     ("Appointment of Deputy Secretary — Ministry of Health",
-     "MOH", "CURATIVE", "recruitment", "PSC 3.6", "odu", "under_assessment", 13),
+     "MOH", "CURATIVE", "appointment", "PSC 3.6", "odu", "under_assessment", 13),
     ("Acting Appointment — Deputy Director Education (Curriculum)",
-     "MET", "SEC_ED", "recruitment", "PSC 3.8", "hr", "under_assessment", 10),
+     "MET", "SEC_ED", "appointment", "PSC 3.8", "hr", "under_assessment", 10),
     ("Establishment Variation — Ministry of Agriculture (Additional Posts)",
-     "MALFFB", None, "organisation_structure", "PSC 2.2", "hr", "under_assessment", 8),
+     "MALFFB", None, "other", "PSC 2.2", "hr", "under_assessment", 8),
 
     # ── MANAGER CHECKLIST REVIEW ───────────────────────────────────────────
     ("Appointment of Chief Immigration Officer",
-     "MIA", "IMMIGRATION", "recruitment", "PSC 3.6", "odu", "manager_checklist_review", 14),
+     "MIA", "IMMIGRATION", "appointment", "PSC 3.6", "odu", "manager_checklist_review", 14),
     ("Promotion — Senior Tourism Officers (Batch of 4)",
-     "MTCI", None, "recruitment", "PSC 3.5", "hr", "manager_checklist_review", 12),
+     "MTCI", None, "appointment", "PSC 3.5", "hr", "manager_checklist_review", 12),
     ("Transfer of Education Officer to Santo Province",
-     "MET", "PRIM_ED", "leave_travel", "PSC 4.5", "hr", "manager_checklist_review", 10),
+     "MET", "PRIM_ED", "other", "PSC 4.5", "hr", "manager_checklist_review", 10),
     ("Reclassification — Finance Officers, Budget Department",
-     "MFEM", "BUDGET", "organisation_structure", "PSC 2.1", "odu", "manager_checklist_review", 8),
+     "MFEM", "BUDGET", "other", "PSC 2.1", "odu", "manager_checklist_review", 8),
     ("Termination — Staff Member, Ministry of Rural Development",
-     "MRDLGCD", None, "discipline", "PSC 6.3", "compliance", "manager_checklist_review", 6),
+     "MRDLGCD", None, "discipline_compliance", "PSC 6.3", "compliance", "manager_checklist_review", 6),
     ("Secondment of Lands Officer to SPREP, Apia",
-     "MLGM", "LANDS", "leave_travel", "PSC 4.8", "hr", "manager_checklist_review", 5),
+     "MLGM", "LANDS", "other", "PSC 4.8", "hr", "manager_checklist_review", 5),
 
     # ── REGISTERED & ROUTED ───────────────────────────────────────────────
     ("Appointment of Director of Budget & Economic Planning",
-     "MFEM", "BUDGET", "recruitment", "PSC 3.6", "odu", "registered_routed", 7),
+     "MFEM", "BUDGET", "appointment", "PSC 3.6", "odu", "registered_routed", 7),
     ("Promotion — Senior Nurse to Nursing Officer Grade 5",
-     "MOH", "NURSING", "recruitment", "PSC 3.5", "hr", "registered_routed", 6),
+     "MOH", "NURSING", "appointment", "PSC 3.5", "hr", "registered_routed", 6),
     ("Secondment of Police Officer to Pacific Islands Chiefs of Police Working Group",
-     "MIA", "POLICE", "leave_travel", "PSC 4.8", "odu", "registered_routed", 5),
+     "MIA", "POLICE", "other", "PSC 4.8", "odu", "registered_routed", 5),
     ("Reclassification — Health Worker Posts (Grade 2 to Grade 3)",
-     "MOH", "PUBLIC_HEALTH", "organisation_structure", "PSC 2.1", "hr", "registered_routed", 4),
+     "MOH", "PUBLIC_HEALTH", "other", "PSC 2.1", "hr", "registered_routed", 4),
     ("Transfer of Fisheries Officer to Luganville Field Office",
-     "MALFFB", "FISHERIES", "leave_travel", "PSC 4.5", "hr", "registered_routed", 4),
+     "MALFFB", "FISHERIES", "other", "PSC 4.5", "hr", "registered_routed", 4),
     ("Appointment of Principal Education Officer — Curriculum Development",
-     "MET", "HIGHER", "recruitment", "PSC 3.6", "odu", "registered_routed", 3),
+     "MET", "HIGHER", "appointment", "PSC 3.6", "odu", "registered_routed", 3),
     ("Establishment Variation — Ministry of Health (New Nursing Posts, Santo)",
-     "MOH", None, "organisation_structure", "PSC 2.2", "hr", "registered_routed", 3),
+     "MOH", None, "other", "PSC 2.2", "hr", "registered_routed", 3),
 
     # ── RECEIVED BY PSC (just arrived) ────────────────────────────────────
     ("Appointment of Director of Civil Aviation",
-     "MIPU", "CIVIL_AVIATION", "recruitment", "PSC 3.6", "odu", "received_by_psc", 2),
+     "MIPU", "CIVIL_AVIATION", "appointment", "PSC 3.6", "odu", "received_by_psc", 2),
     ("Promotion — Senior Agricultural Officer to Principal Grade",
-     "MALFFB", "AGR", "recruitment", "PSC 3.5", "hr", "received_by_psc", 2),
+     "MALFFB", "AGR", "appointment", "PSC 3.5", "hr", "received_by_psc", 2),
     ("Transfer of Legal Officer to Ministry of Justice Head Office",
-     "MJCS", "STATE_LAW", "leave_travel", "PSC 4.5", "hr", "received_by_psc", 1),
+     "MJCS", "STATE_LAW", "other", "PSC 4.5", "hr", "received_by_psc", 1),
     ("Reclassification of Customs Officers — Grade Alignment Review",
-     "MFEM", "CIR", "organisation_structure", "PSC 2.1", "odu", "received_by_psc", 1),
+     "MFEM", "CIR", "other", "PSC 2.1", "odu", "received_by_psc", 1),
     ("Appointment of Chief Information Officer — OGCIO",
-     "OPM", "OGCIO", "recruitment", "PSC 3.6", "odu", "received_by_psc", 0),
+     "OPM", "OGCIO", "appointment", "PSC 3.6", "odu", "received_by_psc", 0),
 
     # ── NEW STAGES FOR VALIDATION (added for demo) ───────────────────────
     ("Recruitment Review — Department of Lands (Missing JD)",
-     "MLGM", "LANDS", "recruitment", "PSC 3.1", "hr", "returned_for_clarification", 5),
+     "MLGM", "LANDS", "appointment", "PSC 3.1", "hr", "returned_for_clarification", 5),
     ("Termination Case — Ministry of Internal Affairs (Legal Review)",
-     "MIA", "POLICE", "discipline", "PSC 6.4", "compliance", "awaiting_legal_advice", 20),
+     "MIA", "POLICE", "discipline_compliance", "PSC 6.4", "compliance", "awaiting_legal_advice", 20),
     ("Establishment Restructure — Ministry of Finance (Matters Arising)",
-     "MFEM", "BUDGET", "organisation_structure", "PSC 2.1", "odu", "matters_arising", 30),
+     "MFEM", "BUDGET", "other", "PSC 2.1", "odu", "matters_arising", 30),
 ]
 
 # Stages where assessment was active (to set assessment_started_at)
@@ -507,6 +518,8 @@ class Command(BaseCommand):
 
         if not no_submissions:
             self._seed_submissions(force=bool(options["force_submissions"]))
+            self._seed_agenda_items()
+            self._seed_commission_tasks()
 
         self.stdout.write(self.style.SUCCESS("\n[OK] Database seeded successfully."))
         if not submissions_only:
@@ -837,3 +850,266 @@ class Command(BaseCommand):
             created_count += 1
 
         self.stdout.write(f"  [OK] {created_count} submissions seeded across all workflow stages")
+
+    # ── Agenda items ──────────────────────────────────────────────────────────
+
+    def _seed_agenda_items(self):
+        """Seed ≥15 agenda items on MTG-2026-012 (the upcoming May 2026 sitting)."""
+        try:
+            meeting = Meeting.objects.get(reference_number="MTG-2026-012")
+        except Meeting.DoesNotExist:
+            self.stdout.write(self.style.WARNING(
+                "  [SKIP] Meeting MTG-2026-012 not found — create it in the Meetings page first."
+            ))
+            return
+
+        # (submission title, agenda category)
+        # First: submissions currently at commission_sitting or forwarded_to_commission
+        # Then: 6 more from approved/minutes_drafted_signed to reach 15
+        AGENDA_ITEMS = [
+            # commission_sitting (4)
+            ("Appointment of Director General — Office of the Prime Minister",         "appointment"),
+            ("Promotion Batch — Ministry of Health Nursing Officers (Grade 4 to 5)",   "appointment"),
+            ("Termination — Department of Agriculture Officer",                        "discipline_compliance"),
+            ("Reclassification — Finance Officers, Treasury Department (Grade 7 to 8)","other"),
+            # forwarded_to_commission (5)
+            ("Appointment of Principal Lands Officer — Ministry of Lands",             "appointment"),
+            ("Promotion — Senior Engineer to Principal Engineer, Public Works",        "appointment"),
+            ("Secondment of Education Officer to Pacific Community, Noumea",           "other"),
+            ("Acting Appointment — Director of Internal Revenue",                      "appointment"),
+            ("Appointment of Chief of Police — Vanuatu Police Force",                  "appointment"),
+            # approved / minutes_drafted_signed — appear for completeness (6)
+            ("Appointment of Director of Education Policy",                            "appointment"),
+            ("Promotion — Senior Lands Officer to Principal Grade",                    "appointment"),
+            ("Transfer of Pharmacist — Vila Central Hospital",                         "other"),
+            ("Secondment of Policy Analyst to Asian Development Bank",                 "other"),
+            ("Appointment of Chief Fisheries Officer",                                 "appointment"),
+            ("Appointment of Chief Surveyor — Department of Surveys",                  "appointment"),
+        ]
+
+        created = 0
+        seq_by_cat: dict[str, int] = {}
+        for title, category in AGENDA_ITEMS:
+            try:
+                sub = Submission.objects.get(title=title)
+            except Submission.DoesNotExist:
+                self.stdout.write(self.style.WARNING(f"    [SKIP] Submission not found: {title[:60]}"))
+                continue
+            seq_by_cat[category] = seq_by_cat.get(category, 0) + 1
+            _, c = AgendaItem.objects.get_or_create(
+                meeting=meeting,
+                submission=sub,
+                defaults={
+                    "sequence": seq_by_cat[category],
+                    "category": category,
+                },
+            )
+            if c:
+                created += 1
+
+        self.stdout.write(f"  [OK] {created} agenda items seeded on {meeting.reference_number}")
+
+    # ── Commission tasks (Decision Register) ──────────────────────────────────
+
+    def _seed_commission_tasks(self):
+        """Seed ≥15 commission tasks drawn from post-decision submissions."""
+        try:
+            manager = User.objects.get(username="m.opsc")
+        except User.DoesNotExist:
+            self.stdout.write(self.style.WARNING(
+                "  [SKIP] User m.opsc not found — run user seed first."
+            ))
+            return
+
+        try:
+            secretary = User.objects.get(username="j.iati")
+        except User.DoesNotExist:
+            secretary = manager
+
+        mtg_010 = Meeting.objects.filter(reference_number="MTG-2026-010").first()
+        mtg_011 = Meeting.objects.filter(reference_number="MTG-2026-011").first()
+
+        today = date.today()
+
+        # fmt: (title, decision_number, meeting_obj, decision_outcome,
+        #        action_unit, implementation_status, decision_detail,
+        #        way_forward, task_status, due_date_offset_days)
+        TASKS = [
+            # ── IMPLEMENTATION REPORT (completed) ────────────────────────────
+            (
+                "Appointment of Director of Finance — Ministry of Finance & Economic Management",
+                "01-10-2026", mtg_010, "approved", "ODU", "actioned",
+                "The Commission approved the appointment of the Director of Finance for the "
+                "Ministry of Finance & Economic Management, effective 1 April 2026.",
+                "Letter of appointment issued. Ministry confirmed officer commenced duty.",
+                "completed", -30,
+            ),
+            (
+                "Transfer of Chief Nursing Officer to Northern Provincial Hospital, MOH",
+                "02-10-2026", mtg_010, "approved", "HRMU", "actioned",
+                "The Commission approved the transfer of the Chief Nursing Officer to the "
+                "Northern Provincial Hospital, effective 14 April 2026.",
+                "Transfer letter issued. Officer reported to new post on schedule.",
+                "completed", -25,
+            ),
+            (
+                "Reclassification of ICT Officers — OGCIO Grades 3–5",
+                "03-10-2026", mtg_010, "approved", "HRMU", "now_irrelevant",
+                "The Commission approved the reclassification of ICT Officer posts at OGCIO "
+                "from Grades 3–5, subject to budget confirmation.",
+                "Budget not confirmed for current fiscal year. Matter now irrelevant — "
+                "to be revisited in the next budget cycle.",
+                "completed", -20,
+            ),
+            (
+                "Secondment of Agricultural Officer to SPC Regional Office, Suva",
+                "04-10-2026", mtg_010, "approved", "VIPAM_HRDU", "actioned",
+                "The Commission approved the secondment of the Agricultural Officer to the "
+                "SPC Regional Office in Suva for a period of 2 years.",
+                "Secondment agreement signed. Officer departed 15 April 2026.",
+                "completed", -18,
+            ),
+            # ── UNDER IMPLEMENTATION ──────────────────────────────────────────
+            (
+                "Appointment of Deputy Director — Customs & Inland Revenue",
+                "01-11-2026", mtg_011, "approved", "ODU", "with_unit",
+                "The Commission approved the appointment of the Deputy Director for "
+                "Customs & Inland Revenue.",
+                "Letter of appointment being prepared. Awaiting signature from OPSC Secretary.",
+                "in_progress", 15,
+            ),
+            (
+                "Promotion of Senior Education Officers to Principal Grade (Batch of 6)",
+                "02-11-2026", mtg_011, "approved", "HRMU", "with_unit",
+                "The Commission approved the promotion of 6 Senior Education Officers "
+                "to Principal Grade.",
+                "Individual promotion letters being prepared for each of the 6 officers.",
+                "in_progress", 18,
+            ),
+            (
+                "Secondment of Legal Officer to Ministry of Foreign Affairs",
+                "03-11-2026", mtg_011, "approved", "VIPAM_HRDU", "with_unit",
+                "The Commission approved the secondment of the Legal Officer to the "
+                "Ministry of Foreign Affairs.",
+                "Secondment agreement under preparation. MFAICET to confirm posting date.",
+                "in_progress", 20,
+            ),
+            (
+                "Termination of Employment — Finance Officer, Ministry of Infrastructure",
+                "04-11-2026", mtg_011, "approved", "HRMU", "matters_arising",
+                "The Commission approved the termination of employment of the Finance Officer, "
+                "Ministry of Infrastructure.",
+                "Legal review of termination notice required before issuance. "
+                "Referred to State Law Office for opinion.",
+                "in_progress", 12,
+            ),
+            (
+                "Appointment of Director of Agriculture",
+                "05-11-2026", mtg_011, "approved", "ODU", "with_unit",
+                "The Commission approved the appointment of the Director of Agriculture.",
+                "Appointment letter being finalised. Ministry of Agriculture notified.",
+                "in_progress", 22,
+            ),
+            (
+                "Reclassification of Tourism Officer Posts — Ministry of Tourism",
+                "06-11-2026", mtg_011, "approved", "HRMU", "with_unit",
+                "The Commission approved the reclassification of Tourism Officer posts at "
+                "the Ministry of Tourism, Commerce & Industry.",
+                "Establishment variation forms to be completed and signed by PS. In progress.",
+                "open", 25,
+            ),
+            # ── DECISION ENTERED & ASSIGNED ───────────────────────────────────
+            (
+                "Appointment of Principal Statistician — National Statistics Office",
+                "07-11-2026", mtg_011, "approved", "ODU", "with_unit",
+                "The Commission approved the appointment of the Principal Statistician at "
+                "the National Statistics Office.",
+                "Awaiting confirmation of position vacancy clearance from the Budget Department.",
+                "open", 30,
+            ),
+            (
+                "Promotion of Senior Health Inspector to Principal Grade",
+                "08-11-2026", mtg_011, "approved", "HRMU", "with_unit",
+                "The Commission approved the promotion of the Senior Health Inspector "
+                "to Principal Grade.",
+                "Promotion letter to be issued. MOH HR unit contacted for staff particulars.",
+                "open", 28,
+            ),
+            (
+                "Acting Appointment — Director of Public Works",
+                "09-11-2026", mtg_011, "approved", "ODU", "with_unit",
+                "The Commission approved the acting appointment of the Director of "
+                "Public Works for a 3-month period.",
+                "Acting appointment letter to be issued. MIPU notified of Commission decision.",
+                "open", 21,
+            ),
+            (
+                "Transfer of Education Officer to Tafea Province",
+                "10-11-2026", mtg_011, "approved", "HRMU", "with_unit",
+                "The Commission approved the transfer of the Education Officer to Tafea Province.",
+                "Transfer letter to be prepared. Ministry of Education to confirm transport "
+                "arrangements with provincial office.",
+                "open", 20,
+            ),
+            (
+                "Appointment of Deputy Commissioner of Police",
+                "11-11-2026", mtg_011, "approved", "ODU", "with_unit",
+                "The Commission approved the appointment of the Deputy Commissioner of Police.",
+                "Security clearance verification in progress. Appointment letter pending "
+                "clearance confirmation.",
+                "open", 35,
+            ),
+        ]
+
+        created = 0
+        for row in TASKS:
+            (title, dec_num, meeting_obj, outcome, action_unit, impl_status,
+             dec_detail, way_fwd, task_status, due_offset) = row
+
+            try:
+                sub = Submission.objects.get(title=title)
+            except Submission.DoesNotExist:
+                self.stdout.write(self.style.WARNING(
+                    f"    [SKIP] Submission not found: {title[:60]}"
+                ))
+                continue
+
+            due = today + timedelta(days=due_offset)
+
+            # Infer decision_type from title keywords
+            title_lower = title.lower()
+            if any(k in title_lower for k in ("terminat",)):
+                dtype = "termination"
+            elif any(k in title_lower for k in ("promot",)):
+                dtype = "promotion"
+            elif any(k in title_lower for k in ("transfer", "secondment")):
+                dtype = "other"
+            elif any(k in title_lower for k in ("reclassif", "establishment")):
+                dtype = "policy_change"
+            else:
+                dtype = "appointment"
+
+            _, c = CommissionTask.objects.get_or_create(
+                submission=sub,
+                title=title,
+                defaults={
+                    "decision_number":       dec_num,
+                    "meeting":               meeting_obj,
+                    "meeting_reference":     meeting_obj.reference_number if meeting_obj else "",
+                    "meeting_date":          meeting_obj.date if meeting_obj else None,
+                    "decision_outcome":      outcome,
+                    "action_unit":           action_unit,
+                    "implementation_status": impl_status,
+                    "decision_detail":       dec_detail,
+                    "way_forward":           way_fwd,
+                    "status":                task_status,
+                    "decision_type":         dtype,
+                    "assigned_manager":      manager,
+                    "created_by":            secretary,
+                    "due_date":              due,
+                },
+            )
+            if c:
+                created += 1
+
+        self.stdout.write(f"  [OK] {created} commission tasks seeded")

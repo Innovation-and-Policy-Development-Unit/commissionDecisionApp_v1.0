@@ -1,0 +1,93 @@
+TO: Manager, Innovation Policy and Development Unit (IPDU)
+FROM: Herman Tevilili, Principal Innovation and Digital, IPDU / OPSC
+SUBJECT: SCDMS Development Progress Update — PSC Submission & Commission Decision Management System
+
+Dear Manager,
+
+I would like to provide you with a progress update on the Submission & Commission Decision Management System (SCDMS) as of May 2026.
+
+─────────────────────────────────────────────
+OVERALL PROGRESS: APPROXIMATELY 80% COMPLETE
+─────────────────────────────────────────────
+
+─────────────────────────────────────────────
+COMPLETED
+─────────────────────────────────────────────
+
+CORE SYSTEM
+  ✔ Full submission lifecycle — 22-stage workflow from Ministry draft through to Implementation Report
+  ✔ Role-based access control (RBAC) — 12 roles enforced on every API endpoint
+  ✔ Dual audit trail — AuditLog and WorkflowEvent (both append-only, tamper-evident)
+  ✔ JWT authentication with Two-Factor Authentication (TOTP) — implemented and ready for activation
+  ✔ Real-time dashboard, analytics module, and CSV data export
+  ✔ Automated database backup scheduling (Celery + django-celery-beat)
+  ✔ System security audit endpoint with 8 live configuration health checks
+  ✔ Automated vulnerability scanning (SAST + CVE via osv.dev)
+
+SUBMISSION MANAGEMENT
+  ✔ Submission log with full search, filter, and sort
+  ✔ Document upload, annotation, and digital signature on uploaded PDFs
+  ✔ Required documents checklist per submission type
+  ✔ Workflow timeline — full history of all stage transitions with actor and remarks
+  ✔ Parent/child submission relationship — PSC Form 2-2 (Job Description) can be submitted as an attachment to a PSC Form 2-1 (Restructure), or independently as a standalone submission
+  ✔ Auto-cascade of Commission decisions — when a Form 2-1 is Approved/Rejected, all attached Form 2-2s automatically receive the same decision
+
+DIGITIZED PSC FORMS
+  ✔ PSC Form 3-7 — Request to Employ
+  ✔ PSC Form 2-1 — Organisation Restructure (fully digitized with tabbed form editor)
+  ✔ PSC Form 2-2 — Job Description (fully digitized, multi-step wizard with live preview and print/PDF export)
+
+COMMISSION OPERATIONS
+  ✔ Commission meeting and agenda management
+  ✔ Decision recording and assignment
+  ✔ Post-decision task tracking and implementation reporting
+
+INFRASTRUCTURE & COMPLIANCE
+  ✔ Technical Design Document (TDD) — completed and submitted to DCDT for Certificate of Compliance
+  ✔ Server provisioning request submitted to DCDT Infrastructure
+  ✔ Domain registration request submitted (scdms.psc.gov.vu)
+
+─────────────────────────────────────────────
+PENDING / STILL IN PROGRESS
+─────────────────────────────────────────────
+
+WORKFLOW CONFIRMATION — OTHER PSC UNITS (PRIORITY)
+  ☐ ODU (Organisational Development Unit) — workflow diagram prepared and sent for review; awaiting sign-off from Manager ODU (pending return from travel)
+  ☐ CIU (Conduct & Investigation Unit) — workflow for Discipline, Grievance, and Suspension submissions not yet confirmed; meeting with Manager CIU required
+  ☐ VIPAM — routing workflow for relevant submission types not yet confirmed
+  ☐ HRM (Human Resource Management Unit) — routing workflow not yet confirmed
+  ☐ Once all unit workflows are confirmed, the system routing logic will be finalised and configured
+
+REMAINING DIGITIZED FORMS
+  ☐ Remaining PSC forms not yet digitized — full list to be confirmed with PSC management
+  ☐ Priority order for digitization to be agreed with Manager IPDU
+
+SYSTEM ACTIVATION
+  ☐ Certificate of Compliance from DCDT — pending (application submitted)
+  ☐ Server provisioning by DCDT — pending
+  ☐ Domain (scdms.psc.gov.vu) activation — pending
+  ☐ Two-Factor Authentication (2FA) — implemented, to be activated upon production deployment
+  ☐ Production deployment — on hold pending Certificate of Compliance
+
+USER READINESS
+  ☐ Ministry HR Manager user accounts — to be created for all line ministries prior to go-live
+  ☐ User training sessions — to be scheduled for Ministry HR Managers and PSC staff
+  ☐ User Acceptance Testing (UAT) — to be conducted with selected ministries before full rollout
+
+─────────────────────────────────────────────
+IMMEDIATE NEXT STEPS
+─────────────────────────────────────────────
+
+1. Schedule meetings with Manager CIU, Manager VIPAM, and Manager HRM to confirm and validate unit-specific workflows — this is the main blocker for finalising system routing configuration.
+2. Follow up with DCDT on the Certificate of Compliance timeline.
+3. Confirm with PSC management the priority order for remaining form digitization.
+4. Await Manager ODU's return to finalise ODU workflow sign-off.
+
+Please advise if you would like a more detailed breakdown of any component or if there are additional items to be prioritised.
+
+Thank you.
+
+Herman Tevilili
+Principal Innovation and Digital
+Innovation Policy and Development Unit
+Office of the Public Service Commission

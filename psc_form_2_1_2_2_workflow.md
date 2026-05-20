@@ -1,3 +1,8 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
 # PSC Form 2.1 & 2.2 — Submission Workflow
 *For review by the Organisational Development Unit (ODU)*
 
@@ -7,7 +12,7 @@
 
 ```mermaid
 flowchart TD
-    A([Ministry logs into SCDMS]) --> B[Selects PSC Form 2.2\nJob Description]
+    A([Ministry HR Manager\nlogs into SCDMS]) --> B[Selects PSC Form 2.2\nJob Description]
     B --> C{How is this JD\nbeing submitted?}
 
     C -->|Attached to a\nForm 2.1 submission| D[Search and link\nparent Form 2.1]
@@ -23,64 +28,87 @@ flowchart TD
 
 ---
 
-## Diagram 2 — Full Workflow: PSC Form 2.1 with Attached Form 2.2
+## Diagram 2 — Full PSC Internal Workflow
 
 ```mermaid
 flowchart TD
-    subgraph MINISTRY ["MINISTRY SIDE"]
-        M1[Ministry creates\nPSC Form 2.1\nOrganisation Restructure] 
-        M1 --> M2[Fills digitized form:\nSubmission Details\nBackground & Reasons\nProposal & Positions\nCosting & Budget\nImplementation Plan\nRecommendation]
-        M2 --> M3{New positions\nbeing created?}
-        M3 -->|Yes| M4[Create PSC Form 2.2\nfor each new position\nlinked as attachment\nto this Form 2.1]
-        M3 -->|No| M5
-        M4 --> M5[Ministry submits\nStatus: Submitted to PSC]
+    subgraph MINISTRY ["MINISTRY"]
+        M1([Ministry HR Manager\nSubmits via SCDMS])
     end
 
-    subgraph PSC_INTAKE ["PSC INTAKE"]
-        P1[PSC receives submission\nStatus: Received by PSC]
-        P2{Complete?}
-        P3[Returned for Clarification\nMinistry corrects and resubmits]
-        P4[Registered and Routed\nto ODU\nStatus: Registered & Routed]
+    subgraph PSC_INTAKE ["PSC — INTAKE & AUTOMATED ROUTING"]
+        R0{Submission\nType?}
+        R1[Restructure /\nAnomalies]
+        R2[Annual Report /\nBusiness Plan]
+        R3[Discipline /\nGrievance /\nSuspension]
+        R4[Other Submissions\ne.g. Regrading /\nName Change]
     end
 
-    subgraph ODU ["ODU REVIEW"]
-        O1[ODU Manager reviews\nchecklist of required documents:\n• Current Org Structure OPSC-stamped\n• Proposed Org Structure\n• PSC Form 2.2 for each new post\n• OPSC Excel Cost Spreadsheet\n• Other supporting documents\nStatus: Manager Checklist Review]
-        O2[ODU Manager assigns\nto ODU Principal\nfor detailed assessment]
-        O3[ODU Principal conducts\nassessment and prepares\nrecommendation report\nStatus: Under Assessment]
+    subgraph ODU ["ODU — ORGANISATIONAL DEVELOPMENT UNIT"]
+        O1[Principal\nJob Analyst]
+        O2[Principal\nOrganisation\nDevelopment]
+        O3[Manager ODU\nChecklist &\nAssessment]
+        O4[Manager ODU\nOversees process]
+        O5{Return for\nClarification?}
     end
 
-    subgraph COMMISSION ["PSC COMMISSION"]
-        C1[Submission forwarded\nto Commission\nStatus: Forwarded to Commission]
-        C2[Commission Sitting\nStatus: Commission Sitting]
-        C3{Commission\nDecision}
-        C4[APPROVED\nAll attached Form 2.2s\nautomatically cascade\nto Approved status]
-        C5[REJECTED\nAll attached Form 2.2s\nautomatically cascade\nto Rejected status]
-        C6[RETURNED / DEFERRED\nBack to Ministry or\nheld for further review]
+    subgraph OTHER_UNITS ["OTHER PSC UNITS"]
+        U1[Manager CIU\nConduct &\nInvestigation]
+        U2[Manager VIPAM]
+        U3[Manager HRM\nHuman Resource\nManagement]
+    end
+
+    subgraph SECRETARIAT ["PSC SECRETARIAT"]
+        S1[Secretary\nSign-off]
+        S2[Secretary of Secretary\nFinal Approval]
+    end
+
+    subgraph COMMISSION ["PSC COMMISSION SITTING"]
+        C1[Commission\nSitting]
+        C2{Commission\nDecision}
+        C3[APPROVED\nAll attached Form 2.2s\nauto-cascade to Approved]
+        C4[REJECTED\nAll attached Form 2.2s\nauto-cascade to Rejected]
+        C5[RETURNED /\nDEFERRED]
     end
 
     subgraph POST ["POST-DECISION"]
-        D1[Minutes Drafted and Signed]
-        D2[Decision Entered and Assigned]
-        D3[Under Implementation]
-        D4[Implementation Report]
+        D1[Minutes Drafted\nand Signed]
+        D2[Decision Entered\nand Assigned]
+        D3[Under\nImplementation]
+        D4[Implementation\nReport]
     end
 
-    M5 --> P1
-    P1 --> P2
-    P2 -->|Incomplete| P3
-    P3 -->|Resubmitted| P1
-    P2 -->|Complete| P4
-    P4 --> O1
-    O1 --> O2
+    M1 --> R0
+
+    R0 -->|Restructure /\nAnomalies| R1
+    R0 -->|Annual Report /\nBusiness Plan| R2
+    R0 -->|Discipline /\nGrievance /\nSuspension| R3
+    R0 -->|Other| R4
+
+    R1 --> O1
+    R2 --> O2
+    O1 --> O3
     O2 --> O3
-    O3 --> C1
+
+    R3 --> U1
+    R4 --> U2
+    R4 --> U3
+
+    O3 --> O4
+    O4 --> O5
+    O5 -->|No issues| S1
+    O5 -->|Needs correction| M1
+
+    S1 --> S2
+    S2 --> C1
+
     C1 --> C2
-    C2 --> C3
-    C3 -->|Approved| C4
-    C3 -->|Rejected| C5
-    C3 -->|Returned/Deferred| C6
-    C6 -->|Ministry responds| P1
-    C4 --> D1
+    C2 -->|Approved| C3
+    C2 -->|Rejected| C4
+    C2 -->|Returned /\nDeferred| C5
+    C5 -->|Ministry responds| M1
+
+    C3 --> D1
     D1 --> D2
     D2 --> D3
     D3 --> D4
@@ -88,49 +116,40 @@ flowchart TD
 
 ---
 
-## Diagram 3 — Standalone PSC Form 2.2 Workflow
-*(e.g. Regrading, Position Name Change — submitted without a Form 2.1)*
+## Diagram 3 — Detailed ODU Internal Routing
 
 ```mermaid
 flowchart TD
-    subgraph MINISTRY ["MINISTRY SIDE"]
-        S1[Ministry creates\nPSC Form 2.2\nStandalone submission]
-        S1 --> S2[Fills in Job Description form\nUploads DG signed letter\nsupporting the request\ne.g. regrading or name change]
-        S2 --> S3[Ministry submits\nStatus: Submitted to PSC]
+    subgraph INTAKE ["FROM PSC INTAKE"]
+        I1([Restructure /\nAnomalies submission\nreceived by ODU])
+        I2([Annual Report /\nBusiness Plan submission\nreceived by ODU])
     end
 
-    subgraph PSC_INTAKE ["PSC INTAKE"]
-        S4[PSC receives submission\nStatus: Received by PSC]
-        S5{Complete?\nDG letter present?}
-        S6[Returned for Clarification]
-        S7[Registered and Routed\nto ODU]
+    subgraph ODU_PROCESSING ["ODU PROCESSING"]
+        P1[Principal Job Analyst\nReviews Form 2.1\nand all attached Form 2.2s\nStatus: Under Assessment]
+        P2[Principal Organisation Development\nReviews Annual Report /\nBusiness Plan submission\nStatus: Under Assessment]
+        P3[Manager ODU\nChecklist Review:\n• Current Org Structure OPSC-stamped\n• Proposed Org Structure\n• PSC Form 2.2 for each new post\n• OPSC Excel Cost Spreadsheet\n• Other supporting documents\nStatus: Manager Checklist Review]
+        P4[Manager ODU\nOversees assessment process\nStatus: Under Oversight]
+        P5{Clarification\nNeeded?}
+        P6[Return to Ministry\nfor Clarification\nStatus: Returned for Clarification]
     end
 
-    subgraph ODU ["ODU REVIEW"]
-        S8[ODU Manager reviews checklist:\n• DG Signed Letter\n• Completed PSC Form 2.2\nStatus: Manager Checklist Review]
-        S9[ODU Principal assesses\nregrading or JD change\nStatus: Under Assessment]
+    subgraph SECRETARIAT ["PSC SECRETARIAT"]
+        S1[Secretary\nPrepares agenda /\nfinal sign-off\nStatus: With Secretary]
+        S2[Secretary of Secretary\nFinal authorisation\nbefore Commission\nStatus: With Secretary of Secretary]
     end
 
-    subgraph COMMISSION ["PSC COMMISSION"]
-        S10[Forwarded to Commission]
-        S11[Commission Sitting]
-        S12{Decision}
-        S13[APPROVED]
-        S14[REJECTED / RETURNED]
-    end
-
-    S3 --> S4
-    S4 --> S5
-    S5 -->|Incomplete| S6
-    S6 -->|Resubmitted| S4
-    S5 -->|Complete| S7
-    S7 --> S8
-    S8 --> S9
-    S9 --> S10
-    S10 --> S11
-    S11 --> S12
-    S12 -->|Approved| S13
-    S12 -->|Rejected/Returned| S14
+    I1 --> P1
+    I2 --> P2
+    P1 --> P3
+    P2 --> P3
+    P3 --> P4
+    P4 --> P5
+    P5 -->|No| S1
+    P5 -->|Yes| P6
+    P6 -->|Ministry resubmits| P3
+    S1 --> S2
+    S2 -->|Forwarded to Commission| C([Commission Sitting])
 ```
 
 ---
@@ -155,14 +174,26 @@ flowchart LR
 
 ## Summary Table — ODU Involvement by Submission Type
 
-| | PSC Form 2.1 | Form 2.2 Attached to 2.1 | Form 2.2 Standalone |
+| | PSC Form 2.1 (Restructure) | Form 2.2 Attached to 2.1 | Form 2.2 Standalone |
 |---|---|---|---|
-| **Separate routing to ODU** | Yes | No — reviewed with parent 2.1 | Yes |
-| **Separate checklist review** | Yes | No | Yes |
+| **Automated routing to** | Principal Job Analyst → Manager ODU | No — reviewed with parent 2.1 | Manager ODU directly |
+| **Separate checklist review** | Yes — Manager ODU | No | Yes — Manager ODU |
 | **DG letter required** | No | No | Yes |
-| **ODU assessment report** | Yes | Covered by 2.1 report | Yes |
+| **ODU assessment report** | Yes — Principal Job Analyst | Covered by 2.1 report | Yes |
 | **Commission decision** | Yes | Auto-cascades from 2.1 | Yes |
 | **Appears in log as top-level** | Yes | No — indented under 2.1 | Yes |
+| **Return for clarification** | Manager ODU → Ministry HR Manager | Via parent 2.1 | Manager ODU → Ministry HR Manager |
+
+---
+
+## Routing Decision Table — By Submission Type
+
+| Submission Type | Routed To |
+|---|---|
+| Restructure / Anomalies | Principal Job Analyst → Manager ODU |
+| Annual Report / Business Plan | Principal Organisation Development → Manager ODU |
+| Discipline / Grievance / Suspension | Manager CIU |
+| Regrading / Name Change / Other | Manager VIPAM / Manager HRM |
 
 ---
 

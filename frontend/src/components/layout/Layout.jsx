@@ -91,17 +91,22 @@ export default function Layout() {
         <FeedbackPanel open={feedbackPanelOpen} onClose={closeFeedbackPanel} />
       )}
 
-      {/* Floating Action Button (FAB) */}
+      {/* Floating Feedback Tab */}
       {feedbackEnabled && !feedbackPanelOpen && (
         <button
           type="button"
           onClick={toggleFeedbackPanel}
           aria-label={t('feedback.open_panel')}
           title={t('feedback.open')}
-          className="fixed bottom-8 right-8 w-14 h-14 bg-primary-600 hover:bg-primary-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-50 group overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2"
+          className="fixed right-0 top-1/2 -translate-y-1/2 w-10 h-32 bg-primary-600 hover:bg-primary-700 text-white rounded-l-xl shadow-2xl flex flex-col items-center justify-center transition-all hover:w-12 z-50 group overflow-hidden focus:outline-none"
         >
-          <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" aria-hidden="true" />
-          <MessageSquare size={24} className="relative z-10" aria-hidden="true" />
+          <div className="absolute inset-0 bg-white/10 translate-x-full group-hover:translate-x-0 transition-transform duration-300" aria-hidden="true" />
+          <div className="relative z-10 flex flex-col items-center gap-3">
+            <MessageSquare size={20} aria-hidden="true" />
+            <span className="text-[10px] font-bold uppercase tracking-widest [writing-mode:vertical-lr] rotate-180">
+              Feedback
+            </span>
+          </div>
         </button>
       )}
 

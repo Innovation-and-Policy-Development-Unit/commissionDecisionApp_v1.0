@@ -35,8 +35,87 @@ const DECISION_TYPE_OPTIONS = [
   { value: 'other', label: 'Other' },
 ]
 
+const DECISION_OUTCOME_OPTIONS = [
+  { value: '', label: '— Select outcome —' },
+  { value: 'approved',      label: 'Approved',                       cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  { value: 'deferred_next', label: 'Deferred To Next Meeting',        cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' },
+  { value: 'deferred_info', label: 'Deferred — Need more info',       cls: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
+  { value: 'rejected',      label: 'Rejected',                        cls: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
+]
+
+const ACTION_UNIT_OPTIONS = [
+  { value: '', label: '— Select unit —' },
+  { value: 'CIU',            label: 'CIU' },
+  { value: 'CSU',            label: 'CSU' },
+  { value: 'FHU',            label: 'FHU' },
+  { value: 'HRMU',           label: 'HRMU' },
+  { value: 'ODU',            label: 'ODU' },
+  { value: 'OPSC_Secretary', label: 'OPSC Secretary' },
+  { value: 'VIPAM_HRDU',     label: 'VIPAM/HRDU' },
+]
+
+const IMPL_STATUS_OPTIONS = [
+  { value: 'with_unit',       label: 'With Unit Responsible', cls: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300' },
+  { value: 'matters_arising', label: 'Matters Arising',       cls: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300' },
+  { value: 'actioned',        label: 'Actioned',              cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  { value: 'now_irrelevant',  label: 'Now Irrelevant',        cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
+]
+
 function decisionTypeLabel(value) {
   return DECISION_TYPE_OPTIONS.find(o => o.value === value)?.label ?? value
+}
+
+function DecisionOutcomeBadge({ value }) {
+  const opt = DECISION_OUTCOME_OPTIONS.find(o => o.value === value)
+  if (!opt || !opt.cls) return null
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${opt.cls}`}>{opt.label}</span>
+}
+
+function ImplStatusBadge({ value }) {
+  const opt = IMPL_STATUS_OPTIONS.find(o => o.value === value)
+  if (!opt) return <span className="text-xs text-slate-400">—</span>
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${opt.cls}`}>{opt.label}</span>
+}
+
+function DecisionRegisterFields({ decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }) {
+  return (
+    <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-700">
+      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Decision Register</p>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Decision number</label>
+          <input className="input text-sm w-full" value={decisionNumber} onChange={e => setDecisionNumber(e.target.value)} placeholder="e.g. 02-28-2025" />
+          <p className="text-[11px] text-slate-400 mt-1">Format: decision#-meeting#-year</p>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Decision outcome</label>
+          <select className="input text-sm w-full" value={decisionOutcome} onChange={e => setDecisionOutcome(e.target.value)}>
+            {DECISION_OUTCOME_OPTIONS.map(o => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Action unit</label>
+          <select className="input text-sm w-full" value={actionUnit} onChange={e => setActionUnit(e.target.value)}>
+            {ACTION_UNIT_OPTIONS.map(o => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Implementation status</label>
+          <select className="input text-sm w-full" value={implementationStatus} onChange={e => setImplementationStatus(e.target.value)}>
+            {IMPL_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Decision detail</label>
+          <textarea className="input text-sm w-full min-h-[72px]" value={decisionDetail} onChange={e => setDecisionDetail(e.target.value)} placeholder="Full text of what the Commission decided…" />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Way forward / next steps</label>
+          <textarea className="input text-sm w-full min-h-[56px]" value={wayForward} onChange={e => setWayForward(e.target.value)} placeholder="Notes on next steps or follow-up actions…" />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function TaskMetadataFields({ meetingReference, setMeetingReference, meetingDate, setMeetingDate, minuteReference, setMinuteReference, decisionType, setDecisionType, successCriteria, setSuccessCriteria, legalReference, setLegalReference }) {
@@ -371,35 +450,57 @@ function ReportView() {
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
       {rows.length > 0 && (
-        <div className="table-wrapper">
-          <table className="table">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
             <thead>
-              <tr>
-                <th>Task</th>
-                <th>Submission</th>
-                <th>Manager</th>
-                <th>Staff</th>
-                <th>Status</th>
-                <th>Due</th>
-                <th>Overdue</th>
-                <th>Subtasks</th>
-                <th>Meeting</th>
+              <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Dec. No.</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Agenda Item</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Meeting No.</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Decision</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Action Unit</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Manager Responsible</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current Status</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Way Forward</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Task Status</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Due</th>
+                <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Overdue</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {rows.map(r => (
-                <tr key={r.task_id}>
-                  <td className="text-xs font-medium text-slate-800 dark:text-slate-200">{r.title}</td>
-                  <td className="text-xs">
-                    <Link to={`/submissions/${r.submission_ref}`} className="text-primary-600 dark:text-primary-400 hover:underline font-mono">{r.submission_ref}</Link>
+                <tr key={r.task_id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 align-top">
+                  <td className="px-3 py-2.5 font-mono text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.decision_number || '—'}</td>
+                  <td className="px-3 py-2.5">
+                    <p className="text-xs font-medium text-slate-800 dark:text-slate-200">{r.title}</p>
+                    {r.submission_ref && (
+                      <Link to={`/submissions/${r.submission_ref}`} className="text-[10px] font-mono text-primary-600 dark:text-primary-400 hover:underline">{r.submission_ref}</Link>
+                    )}
                   </td>
-                  <td className="text-xs text-slate-500">{r.manager}</td>
-                  <td className="text-xs text-slate-500">{r.staff?.join(', ') || '-'}</td>
-                  <td><StatusBadge status={r.status} /></td>
-                  <td className="text-xs text-slate-500">{r.due_date ? new Date(r.due_date).toLocaleDateString() : '-'}</td>
-                  <td className="text-xs">{r.days_overdue > 0 ? <span className="text-red-600 font-semibold">{r.days_overdue}d</span> : <span className="text-slate-400">-</span>}</td>
-                  <td className="text-xs text-slate-500">{r.subtask_completed}/{r.subtask_count}</td>
-                  <td className="text-xs text-slate-500">{r.meeting_ref || '-'}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{r.meeting_ref || '—'}</td>
+                  <td className="px-3 py-2.5">
+                    {r.decision_outcome
+                      ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">{r.decision_outcome}</span>
+                      : <span className="text-slate-300 text-xs">—</span>}
+                    {r.decision_detail && <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{r.decision_detail}</p>}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {r.action_unit ? (
+                      <span className="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{r.action_unit}</span>
+                    ) : <span className="text-slate-400 text-xs">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">{r.manager}</td>
+                  <td className="px-3 py-2.5">
+                    {r.implementation_status
+                      ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300">{r.implementation_status}</span>
+                      : <span className="text-slate-300 text-xs">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500 max-w-[160px]">
+                    <p className="line-clamp-2">{r.way_forward || '—'}</p>
+                  </td>
+                  <td className="px-3 py-2.5"><StatusBadge status={r.status} /></td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{r.due_date ? new Date(r.due_date).toLocaleDateString() : '—'}</td>
+                  <td className="px-3 py-2.5 text-xs">{r.days_overdue > 0 ? <span className="text-red-600 font-semibold">{r.days_overdue}d</span> : <span className="text-slate-400">—</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -488,8 +589,8 @@ export default function TaskManagement() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <PageHeader
-        title="Task management"
-        subtitle="Commission actions allocated to OPSC Managers; managers may assign Principal or Senior Officers."
+        title="Commission Decision Register"
+        subtitle="PS Commission Implementation Tracker — decision outcomes, action units, and implementation progress."
         action={
           canAllocate ? (
             <button type="button" onClick={() => setCreateOpen(true)} className="btn-gradient py-2 px-4 text-sm inline-flex items-center gap-2">
@@ -535,59 +636,126 @@ export default function TaskManagement() {
 
           <div className="card overflow-hidden">
             {loading ? (
-              <div className="flex items-center justify-center gap-2 py-16 text-slate-500 text-sm"><Loader size={18} className="animate-spin" /> Loading tasks...</div>
+              <div className="flex items-center justify-center gap-2 py-16 text-slate-500 text-sm"><Loader size={18} className="animate-spin" /> Loading...</div>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-16 text-slate-500 text-sm"><ClipboardList size={28} className="mx-auto mb-2 opacity-40" />No tasks match your filters.</div>
+              <div className="text-center py-16 text-slate-500 text-sm"><ClipboardList size={28} className="mx-auto mb-2 opacity-40" />No records match your filters.</div>
             ) : (
-              <div className="table-wrapper">
-                <table className="table">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
                   <thead>
-                    <tr>
-                      <th>Task</th>
-                      <th>Submission</th>
-                      <th>Manager</th>
-                      <th>Staff</th>
-                      <th>Due</th>
-                      <th>Subtasks</th>
-                      <th>Status</th>
-                      <th className="sr-only">Actions</th>
+                    <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap w-24">Dec. No.</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[180px]">Agenda Item</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap w-32">Meeting No.</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[200px]">Decision Detail</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-36">Decision</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-28">Action Unit</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-28">Manager Responsible</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-36">Current Status</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[160px]">Way Forward</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-20">Task Status</th>
+                      <th className="px-3 py-2.5 w-16 sr-only">Edit</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
                     {filtered.map(t => (
-                      <tr key={t.id}>
-                        <td>
-                          <p className="font-medium text-slate-800 dark:text-slate-200">{t.title}</p>
-                          {(t.meeting_reference || t.minute_reference || t.decision_type) && (
-                            <p className="text-[11px] text-slate-500 mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-                              {t.meeting_reference && <span>Sitting: {t.meeting_reference}</span>}
-                              {t.meeting_date && <span>Date: {new Date(t.meeting_date).toLocaleDateString()}</span>}
-                              {t.minute_reference && <span>Minutes: {t.minute_reference}</span>}
-                              {t.decision_type && <span className="inline-flex rounded bg-violet-100 dark:bg-violet-900/30 text-violet-800 dark:text-violet-300 px-1.5 py-0">{decisionTypeLabel(t.decision_type)}</span>}
+                      <tr key={t.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors align-top">
+
+                        {/* Dec. No. */}
+                        <td className="px-3 py-3">
+                          <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            {t.decision_number || <span className="text-slate-300 dark:text-slate-600">—</span>}
+                          </span>
+                        </td>
+
+                        {/* Agenda Item */}
+                        <td className="px-3 py-3">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-snug">{t.title}</p>
+                          {t.submission ? (
+                            <Link to={`/submissions/${t.submission}`} className="text-[10px] font-mono text-primary-600 dark:text-primary-400 hover:underline mt-0.5 block">
+                              {t.submission_reference_number}
+                            </Link>
+                          ) : null}
+                        </td>
+
+                        {/* Meeting No. */}
+                        <td className="px-3 py-3">
+                          <span className="text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                            {t.meeting_reference || t.meeting_title || <span className="text-slate-300 dark:text-slate-600">—</span>}
+                          </span>
+                          {t.meeting_date && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 whitespace-nowrap">
+                              {new Date(t.meeting_date).toLocaleDateString()}
                             </p>
                           )}
-                          {t.description && <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{t.description}</p>}
                         </td>
-                        <td>
-                          <Link to={`/submissions/${t.submission}`} className="text-primary-600 dark:text-primary-400 hover:underline font-mono text-xs">{t.submission_reference_number}</Link>
-                          <p className="text-xs text-slate-500 truncate max-w-[200px]">{t.submission_title}</p>
+
+                        {/* Decision Detail */}
+                        <td className="px-3 py-3">
+                          {t.decision_detail ? (
+                            <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                              {t.decision_detail}
+                            </p>
+                          ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
                         </td>
-                        <td className="text-xs">
-                          <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400"><User size={12} /> {t.assigned_manager_username}</span>
+
+                        {/* Decision (outcome) */}
+                        <td className="px-3 py-3">
+                          <DecisionOutcomeBadge value={t.decision_outcome} />
+                          {!t.decision_outcome && <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
                         </td>
-                        <td className="text-xs">
-                          {t.assigned_staff_m2m?.length > 0 ? (
-                            <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400"><Users size={12} /> {t.assigned_staff_m2m.length}</span>
-                          ) : t.assigned_staff_username ? (
-                            <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400"><User size={12} /> {t.assigned_staff_username}</span>
-                          ) : <span className="text-slate-400">-</span>}
+
+                        {/* Action Unit */}
+                        <td className="px-3 py-3">
+                          {t.action_unit ? (
+                            <span className="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 tracking-wide">
+                              {t.action_unit}
+                            </span>
+                          ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
                         </td>
-                        <td className="text-xs text-slate-500">{t.due_date ? new Date(t.due_date).toLocaleDateString() : '-'}</td>
-                        <td className="text-xs text-slate-500">{t.subtasks?.filter(s => s.status === 'completed').length || 0}/{t.subtasks?.length || 0}</td>
-                        <td><StatusBadge status={t.status} /></td>
-                        <td>
+
+                        {/* Manager Responsible */}
+                        <td className="px-3 py-3">
+                          <span className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
+                            <User size={11} className="shrink-0" />
+                            {t.assigned_manager_username}
+                          </span>
+                          {t.assigned_staff_m2m?.length > 0 && (
+                            <span className="block text-[10px] text-slate-400 mt-0.5">
+                              <Users size={10} className="inline mr-0.5" />{t.assigned_staff_m2m.length} staff
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Current Status (implementation_status) */}
+                        <td className="px-3 py-3">
+                          <ImplStatusBadge value={t.implementation_status} />
+                        </td>
+
+                        {/* Way Forward */}
+                        <td className="px-3 py-3">
+                          {t.way_forward ? (
+                            <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                              {t.way_forward}
+                            </p>
+                          ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
+                        </td>
+
+                        {/* Task Status */}
+                        <td className="px-3 py-3">
+                          <StatusBadge status={t.status} />
+                        </td>
+
+                        {/* Edit */}
+                        <td className="px-3 py-3 text-right">
                           {canEditTask(t) && (
-                            <button type="button" onClick={() => setEditTask(t)} className="text-primary-600 dark:text-primary-400 text-xs font-medium hover:underline">Update</button>
+                            <button
+                              type="button"
+                              onClick={() => setEditTask(t)}
+                              className="text-primary-600 dark:text-primary-400 text-xs font-semibold hover:underline whitespace-nowrap"
+                            >
+                              Edit
+                            </button>
                           )}
                         </td>
                       </tr>
@@ -622,47 +790,109 @@ export default function TaskManagement() {
 
 function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
   const toast = useToast()
-  const [submissionId, setSubmissionId] = useState(''); const [managerId, setManagerId] = useState('')
-  const [meetingReference, setMeetingReference] = useState(''); const [meetingDate, setMeetingDate] = useState('')
-  const [minuteReference, setMinuteReference] = useState(''); const [decisionType, setDecisionType] = useState('')
-  const [successCriteria, setSuccessCriteria] = useState(''); const [legalReference, setLegalReference] = useState('')
-  const [title, setTitle] = useState(''); const [description, setDescription] = useState(''); const [dueDate, setDueDate] = useState('')
-  const [saving, setSaving] = useState(false); const [err, setErr] = useState('')
+  const [submissionId, setSubmissionId] = useState('')
+  const [managerId, setManagerId] = useState('')
+  // Decision Register fields
+  const [decisionNumber, setDecisionNumber] = useState('')
+  const [decisionOutcome, setDecisionOutcome] = useState('')
+  const [actionUnit, setActionUnit] = useState('')
+  const [implementationStatus, setImplementationStatus] = useState('with_unit')
+  const [wayForward, setWayForward] = useState('')
+  const [decisionDetail, setDecisionDetail] = useState('')
+  // Task fields
+  const [meetingReference, setMeetingReference] = useState('')
+  const [meetingDate, setMeetingDate] = useState('')
+  const [minuteReference, setMinuteReference] = useState('')
+  const [decisionType, setDecisionType] = useState('')
+  const [successCriteria, setSuccessCriteria] = useState('')
+  const [legalReference, setLegalReference] = useState('')
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
 
-  const submit = async e => { e.preventDefault(); setErr(''); if (!submissionId || !managerId || !title.trim()) { setErr('Submission, manager, and title are required.'); return }; setSaving(true); try { await api.post('/commission-tasks/', { submission: Number(submissionId), assigned_manager: Number(managerId), title: title.trim(), description, meeting_reference: meetingReference.trim(), meeting_date: meetingDate || null, minute_reference: minuteReference.trim(), decision_type: decisionType || '', success_criteria: successCriteria.trim(), legal_reference: legalReference.trim(), due_date: dueDate || null, status: 'open' }); toast.success('Task created.'); onSaved() } catch (ex) { const d = ex.response?.data; setErr(typeof d?.detail === 'string' ? d.detail : d ? JSON.stringify(d) : 'Could not create task.') } finally { setSaving(false) } }
+  const submit = async e => {
+    e.preventDefault(); setErr('')
+    if (!managerId || !title.trim()) { setErr('Manager and title are required.'); return }
+    setSaving(true)
+    try {
+      await api.post('/commission-tasks/', {
+        submission: submissionId ? Number(submissionId) : null,
+        assigned_manager: Number(managerId),
+        title: title.trim(),
+        description,
+        // Decision Register
+        decision_number: decisionNumber.trim(),
+        decision_outcome: decisionOutcome || '',
+        action_unit: actionUnit || '',
+        implementation_status: implementationStatus || 'with_unit',
+        way_forward: wayForward.trim(),
+        decision_detail: decisionDetail.trim(),
+        // Context
+        meeting_reference: meetingReference.trim(),
+        meeting_date: meetingDate || null,
+        minute_reference: minuteReference.trim(),
+        decision_type: decisionType || '',
+        success_criteria: successCriteria.trim(),
+        legal_reference: legalReference.trim(),
+        due_date: dueDate || null,
+        status: 'open',
+      })
+      toast.success('Task created.')
+      onSaved()
+    } catch (ex) {
+      const d = ex.response?.data
+      setErr(typeof d?.detail === 'string' ? d.detail : d ? JSON.stringify(d) : 'Could not create task.')
+    } finally { setSaving(false) }
+  }
 
   return (
-    <Modal title="Allocate commission task" subtitle="Link an action to a post-decision submission and assign an OPSC Manager." onClose={onClose} wide>
-      <form onSubmit={submit} className="space-y-4">
+    <Modal title="Allocate commission task" subtitle="Record a decision and assign an OPSC Manager to action it." onClose={onClose} wide>
+      <form onSubmit={submit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
         {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Submission</label>
-          <select className="input text-sm w-full" value={submissionId} onChange={e => setSubmissionId(e.target.value)} required>
-            <option value="">Select submission...</option>
-            {submissionChoices.map(s => <option key={s.id} value={s.id}>{s.reference_number} — {s.title.slice(0, 60)}</option>)}
-          </select>
-          <p className="text-[11px] text-slate-400 mt-1">Only items in post-decision / implementation stages are listed.</p>
+
+        <DecisionRegisterFields {...{ decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }} />
+
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-700">
+          <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-3">Assignment</p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">OPSC Manager <span className="text-red-500">*</span></label>
+              <select className="input text-sm w-full" value={managerId} onChange={e => setManagerId(e.target.value)} required>
+                <option value="">Select manager...</option>
+                {managers.map(m => <option key={m.id} value={m.id}>{m.username}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Submission (optional)</label>
+              <select className="input text-sm w-full" value={submissionId} onChange={e => setSubmissionId(e.target.value)}>
+                <option value="">— No linked submission —</option>
+                {submissionChoices.map(s => <option key={s.id} value={s.id}>{s.reference_number} — {s.title.slice(0, 60)}</option>)}
+              </select>
+              <p className="text-[11px] text-slate-400 mt-1">Only post-decision / implementation stage items listed.</p>
+            </div>
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">OPSC Manager</label>
-          <select className="input text-sm w-full" value={managerId} onChange={e => setManagerId(e.target.value)} required>
-            <option value="">Select manager...</option>
-            {managers.map(m => <option key={m.id} value={m.id}>{m.username}</option>)}
-          </select>
-        </div>
+
         <TaskMetadataFields {...{ meetingReference, setMeetingReference, meetingDate, setMeetingDate, minuteReference, setMinuteReference, decisionType, setDecisionType, successCriteria, setSuccessCriteria, legalReference, setLegalReference }} />
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Task title</label>
-          <input className="input text-sm w-full" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Draft implementation memo" />
+
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-700 space-y-3">
+          <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Task</p>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Task title <span className="text-red-500">*</span></label>
+            <input className="input text-sm w-full" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Draft implementation memo" required />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Description</label>
+            <textarea className="input text-sm w-full min-h-[64px]" value={description} onChange={e => setDescription(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Due date (optional)</label>
+            <input type="date" className="input text-sm w-full" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Description</label>
-          <textarea className="input text-sm w-full min-h-[88px]" value={description} onChange={e => setDescription(e.target.value)} />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Due date (optional)</label>
-          <input type="date" className="input text-sm w-full" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-        </div>
+
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="btn-outline py-2 px-4 text-sm">Cancel</button>
           <button type="submit" disabled={saving} className="btn-gradient py-2 px-4 text-sm disabled:opacity-60">{saving ? 'Saving...' : 'Create task'}</button>
@@ -676,14 +906,29 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
 
 function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
   const toast = useToast()
-  const [title, setTitle] = useState(task.title); const [description, setDescription] = useState(task.description || '')
-  const [meetingReference, setMeetingReference] = useState(task.meeting_reference || ''); const [meetingDate, setMeetingDate] = useState(task.meeting_date || '')
-  const [minuteReference, setMinuteReference] = useState(task.minute_reference || ''); const [decisionType, setDecisionType] = useState(task.decision_type || '')
-  const [successCriteria, setSuccessCriteria] = useState(task.success_criteria || ''); const [legalReference, setLegalReference] = useState(task.legal_reference || '')
-  const [dueDate, setDueDate] = useState(task.due_date || ''); const [status, setStatus] = useState(task.status)
+  const [title, setTitle] = useState(task.title)
+  const [description, setDescription] = useState(task.description || '')
+  // Decision Register fields
+  const [decisionNumber, setDecisionNumber] = useState(task.decision_number || '')
+  const [decisionOutcome, setDecisionOutcome] = useState(task.decision_outcome || '')
+  const [actionUnit, setActionUnit] = useState(task.action_unit || '')
+  const [implementationStatus, setImplementationStatus] = useState(task.implementation_status || 'with_unit')
+  const [wayForward, setWayForward] = useState(task.way_forward || '')
+  const [decisionDetail, setDecisionDetail] = useState(task.decision_detail || '')
+  // Context fields
+  const [meetingReference, setMeetingReference] = useState(task.meeting_reference || '')
+  const [meetingDate, setMeetingDate] = useState(task.meeting_date || '')
+  const [minuteReference, setMinuteReference] = useState(task.minute_reference || '')
+  const [decisionType, setDecisionType] = useState(task.decision_type || '')
+  const [successCriteria, setSuccessCriteria] = useState(task.success_criteria || '')
+  const [legalReference, setLegalReference] = useState(task.legal_reference || '')
+  const [dueDate, setDueDate] = useState(task.due_date || '')
+  const [status, setStatus] = useState(task.status)
   const [selectedStaff, setSelectedStaff] = useState(task.assigned_staff_m2m || (task.assigned_staff ? [task.assigned_staff] : []))
   const [managerId, setManagerId] = useState(String(task.assigned_manager))
-  const [saving, setSaving] = useState(false); const [err, setErr] = useState(''); const [managers, setManagers] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+  const [managers, setManagers] = useState([])
   const [subtasks, setSubtasks] = useState(task.subtasks || [])
   const [showReassign, setShowReassign] = useState(false)
 
@@ -705,6 +950,15 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
     finally { setSaving(false) }
   }
 
+  const decisionRegisterPayload = () => ({
+    decision_number: decisionNumber.trim(),
+    decision_outcome: decisionOutcome || '',
+    action_unit: actionUnit || '',
+    implementation_status: implementationStatus || 'with_unit',
+    way_forward: wayForward.trim(),
+    decision_detail: decisionDetail.trim(),
+  })
+
   const submit = async e => {
     e.preventDefault(); setErr(''); setSaving(true)
     try {
@@ -712,29 +966,59 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
       if (mode === 'staff') {
         payload.status = status
       } else if (mode === 'manager') {
-        Object.assign(payload, { title: title.trim(), description, meeting_reference: meetingReference.trim(), meeting_date: meetingDate || null, minute_reference: minuteReference.trim(), decision_type: decisionType || '', success_criteria: successCriteria.trim(), legal_reference: legalReference.trim(), due_date: dueDate || null, status, assigned_staff_m2m: selectedStaff, assigned_staff: selectedStaff[0] || null })
+        Object.assign(payload, {
+          ...decisionRegisterPayload(),
+          title: title.trim(), description,
+          meeting_reference: meetingReference.trim(), meeting_date: meetingDate || null,
+          minute_reference: minuteReference.trim(), decision_type: decisionType || '',
+          success_criteria: successCriteria.trim(), legal_reference: legalReference.trim(),
+          due_date: dueDate || null, status,
+          assigned_staff_m2m: selectedStaff, assigned_staff: selectedStaff[0] || null,
+        })
       } else {
-        Object.assign(payload, { title: title.trim(), description, meeting_reference: meetingReference.trim(), meeting_date: meetingDate || null, minute_reference: minuteReference.trim(), decision_type: decisionType || '', success_criteria: successCriteria.trim(), legal_reference: legalReference.trim(), due_date: dueDate || null, status, assigned_manager: Number(managerId), assigned_staff_m2m: selectedStaff, assigned_staff: selectedStaff[0] || null })
+        Object.assign(payload, {
+          ...decisionRegisterPayload(),
+          title: title.trim(), description,
+          meeting_reference: meetingReference.trim(), meeting_date: meetingDate || null,
+          minute_reference: minuteReference.trim(), decision_type: decisionType || '',
+          success_criteria: successCriteria.trim(), legal_reference: legalReference.trim(),
+          due_date: dueDate || null, status,
+          assigned_manager: Number(managerId),
+          assigned_staff_m2m: selectedStaff, assigned_staff: selectedStaff[0] || null,
+        })
       }
       await api.patch(`/commission-tasks/${task.id}/`, payload)
       toast.success('Task updated.')
       onSaved()
-    } catch (ex) { const d = ex.response?.data; setErr(typeof d?.detail === 'string' ? d.detail : d ? JSON.stringify(d) : 'Update failed.') }
-    finally { setSaving(false) }
+    } catch (ex) {
+      const d = ex.response?.data
+      setErr(typeof d?.detail === 'string' ? d.detail : d ? JSON.stringify(d) : 'Update failed.')
+    } finally { setSaving(false) }
   }
 
   return (
-    <Modal title="Update task" subtitle={task.submission_reference_number} onClose={onClose} wide>
-      <form onSubmit={submit} className="space-y-4">
+    <Modal title="Update task" subtitle={task.decision_number || task.submission_reference_number || 'Commission Task'} onClose={onClose} wide>
+      <form onSubmit={submit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
         {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
 
         {mode === 'staff' ? (
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
-            <select className="input text-sm w-full" value={status} onChange={e => setStatus(e.target.value)}>
-              <option value="open">Open</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
-            </select>
-            <p className="text-[11px] text-slate-400 mt-2">You can update status on tasks assigned to you.</p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Implementation status</label>
+              <select className="input text-sm w-full" value={implementationStatus} onChange={e => setImplementationStatus(e.target.value)}>
+                {IMPL_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Way forward / next steps</label>
+              <textarea className="input text-sm w-full min-h-[56px]" value={wayForward} onChange={e => setWayForward(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Task status</label>
+              <select className="input text-sm w-full" value={status} onChange={e => setStatus(e.target.value)}>
+                <option value="open">Open</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
+              </select>
+            </div>
           </div>
         ) : (
           <>
@@ -747,6 +1031,8 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
                 </select>
               </div>
             )}
+
+            <DecisionRegisterFields {...{ decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }} />
 
             <TaskMetadataFields {...{ meetingReference, setMeetingReference, meetingDate, setMeetingDate, minuteReference, setMinuteReference, decisionType, setDecisionType, successCriteria, setSuccessCriteria, legalReference, setLegalReference }} />
 

@@ -44,6 +44,7 @@ from .models import (
     WorkflowEvent,
     WorkflowStage,
     RequiredDocument,
+    RoutedUnit,
     SubmissionChecklistItem,
     SubmissionDocument,
     DocumentAnnotation,
@@ -109,6 +110,8 @@ from .serializers import (
     DocumentAnnotationSerializer,
     DocumentSignatureSerializer,
     UserSignatureSerializer,
+    ODUChecklistSerializer,
+    RestructureSubmissionDataSerializer,
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
@@ -141,6 +144,9 @@ from .models import (
     FeedbackReport,
     FeedbackComment,
     FeedbackStatus,
+    ODURestructureChecklist,
+    ODUChecklistStatus,
+    RestructureSubmissionData,
 )
 
 
@@ -149,6 +155,27 @@ def _profile(user):
         return user.psc_profile
     except Profile.DoesNotExist as exc:
         raise PermissionDenied("User profile is not configured for Commission Decision App.") from exc
+
+
+def _resolve_opsc_ministry(profile):
+    """Return the Ministry PK for an OPSC internal submitter.
+
+    Uses the user's own profile ministry if set, otherwise looks for the OPSC
+    ministry by name (contains 'Public Service Commission').
+    Raises PermissionDenied if no ministry can be resolved.
+    """
+    if profile.ministry_id:
+        return profile.ministry_id
+    opsc = Ministry.objects.filter(
+        models.Q(name__icontains='Public Service Commission') |
+        models.Q(name__icontains='OPSC')
+    ).first()
+    if opsc:
+        return opsc.pk
+    raise PermissionDenied(
+        "Could not resolve an OPSC ministry for this internal submission. "
+        "Please ensure your profile has a Ministry set or that an OPSC ministry record exists."
+    )
 
 
 def _submission_queryset_for(user):
@@ -180,6 +207,9 @@ def _submission_queryset_for(user):
     if role in _UNIT_PRINCIPAL_ROLES:
         # Principals see only submissions explicitly assigned to them
         return qs.filter(assigned_to=user)
+    # CSU Manager sees only internal submissions
+    if role == Role.CSU_MANAGER:
+        return qs.filter(is_internal=True)
     if role in {
         Role.PSC_OFFICER,
         Role.PSC_SECRETARY,
@@ -413,19 +443,45 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
+        from .transitions import INTERNAL_SUBMITTER_ROLES
         profile = _profile(self.request.user)
+
         if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
-            kwargs = {"current_stage": WorkflowStage.DRAFT}
+            # External ministry submission — standard workflow
+            kwargs = {"current_stage": WorkflowStage.DRAFT, "is_internal": False}
             if profile.ministry_id:
                 kwargs["ministry_id"] = profile.ministry_id
             if profile.department_id:
                 kwargs["department_id"] = profile.department_id
             submission = serializer.save(**kwargs)
+
+        elif profile.role == Role.CSU_MANAGER:
+            # OPSC CSU internal submission — routes directly to Secretary
+            ministry_id = _resolve_opsc_ministry(profile)
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": True,
+                "routed_unit": RoutedUnit.CSU,
+                "ministry_id": ministry_id,
+            }
+            submission = serializer.save(**kwargs)
+
+        elif profile.role == Role.ODU_MANAGER:
+            # OPSC ODU internal submission — only the manager creates, routes to Secretary
+            ministry_id = _resolve_opsc_ministry(profile)
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": True,
+                "routed_unit": RoutedUnit.ODU,
+                "ministry_id": ministry_id,
+            }
+            submission = serializer.save(**kwargs)
+
         elif profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY}:
             submission = serializer.save()
         else:
             raise PermissionDenied(
-                "Only PSC Officers, Admins, Secretaries, or Ministry staff can create submissions."
+                "Only PSC Officers, Admins, Secretaries, Ministry staff, or OPSC unit staff can create submissions."
             )
         _log(self.request, _AL.Action.CREATE,
              resource_type="Submission", resource_id=submission.id,
@@ -478,7 +534,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         remarks = ser.validated_data.get("remarks", "")
         prev = submission.current_stage
 
-        assert_transition_allowed(role=profile.role, current_stage=prev, target_stage=target)
+        assert_transition_allowed(
+            role=profile.role,
+            current_stage=prev,
+            target_stage=target,
+            is_internal=submission.is_internal,
+        )
 
         # ── Unit managers can only transition submissions routed to their unit ──
         _unit_role_to_routed = {
@@ -486,6 +547,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.VIPAM_MANAGER: "vipam",
             Role.HR_UNIT_MANAGER: "hr",
             Role.COMPLIANCE_MANAGER: "compliance",
+            Role.CSU_MANAGER: "csu",
         }
         if profile.role in _unit_role_to_routed:
             expected = _unit_role_to_routed[profile.role]
@@ -685,7 +747,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         submission = self.get_object()
         profile = _profile(request.user)
         return Response(
-            {"allowed": iter_allowed_targets(profile.role, submission.current_stage)}
+            {"allowed": iter_allowed_targets(profile.role, submission.current_stage, is_internal=submission.is_internal)}
         )
 
     @action(detail=True, methods=["get"])
@@ -701,6 +763,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         # Attached submissions have no independent checklist — reviewed alongside parent
         if submission.is_attachment:
+            return Response([])
+
+        # Internal OPSC submissions have no required-document checklist
+        if submission.is_internal:
             return Response([])
 
         # Resolve the PSCFormType instance for this submission (may be None)
@@ -766,25 +832,51 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             return Response(SubmissionDocumentSerializer(docs, many=True).data)
 
         # POST — upload
-        if profile.role not in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY,
-                                 Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY}:
-            raise PermissionDenied("Only ministry HR or PSC staff may upload documents.")
+        _upload_allowed_roles = {
+            Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY,
+            Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY,
+            # OPSC unit managers upload supporting documents for their internal submissions
+            Role.CSU_MANAGER, Role.ODU_MANAGER,
+        }
+        if profile.role not in _upload_allowed_roles:
+            raise PermissionDenied("Only ministry HR, PSC staff, or OPSC unit staff may upload documents.")
 
-        uploaded = request.FILES.get("file")
-        if not uploaded:
+        # Support multiple files in one request (for internal submissions free-form upload)
+        files = request.FILES.getlist("files") or (
+            [request.FILES["file"]] if "file" in request.FILES else []
+        )
+        if not files:
             return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if uploaded.size > 20 * 1024 * 1024:
-            return Response({"detail": "File too large. Maximum size is 20 MB."}, status=status.HTTP_400_BAD_REQUEST)
+        created_docs = []
+        for idx, uploaded in enumerate(files):
+            if uploaded.size > 20 * 1024 * 1024:
+                return Response(
+                    {"detail": f"File '{uploaded.name}' exceeds the 20 MB limit."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # For internal submissions, the user may supply a human-readable name per file.
+            # Accept document_name (single upload) or document_names[idx] (multi-upload).
+            document_names = request.data.getlist("document_names")
+            document_name = (
+                document_names[idx]
+                if document_names and idx < len(document_names)
+                else request.data.get("document_name", "")
+            )
+            description = document_name or request.data.get("description", "")
 
-        doc = SubmissionDocument.objects.create(
-            submission=submission,
-            file=uploaded,
-            original_name=uploaded.name,
-            description=request.data.get("description", ""),
-            uploaded_by=request.user,
-        )
-        return Response(SubmissionDocumentSerializer(doc).data, status=status.HTTP_201_CREATED)
+            doc = SubmissionDocument.objects.create(
+                submission=submission,
+                file=uploaded,
+                original_name=document_name if document_name else uploaded.name,
+                description=description,
+                uploaded_by=request.user,
+            )
+            created_docs.append(doc)
+
+        if len(created_docs) == 1:
+            return Response(SubmissionDocumentSerializer(created_docs[0]).data, status=status.HTTP_201_CREATED)
+        return Response(SubmissionDocumentSerializer(created_docs, many=True).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get", "delete"], url_path="documents/(?P<doc_id>[0-9]+)")
     def document_detail(self, request, pk=None, doc_id=None):
@@ -848,6 +940,43 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         partial = (request.method == "PUT")
         ser = PSCForm37DataSerializer(
+            instance=instance,
+            data=request.data,
+            partial=partial,
+        )
+        ser.is_valid(raise_exception=True)
+        ser.save(submission=submission)
+        code = status.HTTP_200_OK if instance else status.HTTP_201_CREATED
+        return Response(ser.data, status=code)
+
+    @action(detail=True, methods=["get", "post", "put"], url_path="restructure-data")
+    def restructure_data(self, request, pk=None):
+        """Get or create/update Organisation Restructure submission data (Section 3.1 template)."""
+        submission = self.get_object()
+        profile = _profile(request.user)
+
+        if request.method == "GET":
+            try:
+                data = submission.restructure_data
+                return Response(RestructureSubmissionDataSerializer(data).data)
+            except RestructureSubmissionData.DoesNotExist:
+                return Response({}, status=status.HTTP_200_OK)
+
+        # Write access: ministry HR, dept admin, head of agency, PSC staff
+        allowed_write_roles = {
+            Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY,
+            Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY,
+        }
+        if profile.role not in allowed_write_roles:
+            raise PermissionDenied("You do not have permission to update restructure submission data.")
+
+        try:
+            instance = submission.restructure_data
+        except RestructureSubmissionData.DoesNotExist:
+            instance = None
+
+        partial = (request.method == "PUT")
+        ser = RestructureSubmissionDataSerializer(
             instance=instance,
             data=request.data,
             partial=partial,
@@ -1195,20 +1324,20 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         if not rbac_user_has_permission(self.request.user, "allocate_decision"):
             raise PermissionDenied("You do not have permission to allocate commission tasks.")
-        sub = serializer.validated_data["submission"]
-        if not _submission_queryset_for(self.request.user).filter(pk=sub.pk).exists():
-            raise PermissionDenied("You cannot attach a task to this submission.")
-        meeting = sub.scheduled_meeting
-        if not meeting:
-            raise PermissionDenied(
-                "Cannot allocate task: submission has not been scheduled for a Commission meeting."
-            )
-        minutes = getattr(meeting, "minutes", None)
-        if not minutes or minutes.status != "signed":
-            raise PermissionDenied(
-                "Cannot allocate task: Commission minutes have not been signed yet. "
-                "Task allocation is only permitted after the Chairperson has signed the minutes."
-            )
+        sub = serializer.validated_data.get("submission")
+        if sub is not None:
+            # When a submission is provided, verify the user can access it.
+            if not _submission_queryset_for(self.request.user).filter(pk=sub.pk).exists():
+                raise PermissionDenied("You cannot attach a task to this submission.")
+            # Minutes-signed gate only applies when a linked submission has a meeting.
+            meeting = getattr(sub, "scheduled_meeting", None)
+            if meeting:
+                minutes = getattr(meeting, "minutes", None)
+                if not minutes or minutes.status != "signed":
+                    raise PermissionDenied(
+                        "Cannot allocate task: Commission minutes have not been signed yet. "
+                        "Task allocation is only permitted after the Chairperson has signed the minutes."
+                    )
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
@@ -1369,14 +1498,20 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
 
             rows.append({
                 "task_id": t.id,
+                "decision_number": t.decision_number,
                 "title": t.title,
-                "submission_ref": t.submission.reference_number,
-                "submission_title": t.submission.title,
+                "submission_ref": t.submission.reference_number if t.submission_id else "",
+                "submission_title": t.submission.title if t.submission_id else "",
+                "meeting_ref": t.meeting_reference or (t.meeting.title if t.meeting_id else ""),
+                "decision_detail": t.decision_detail,
+                "decision_outcome": t.get_decision_outcome_display() if t.decision_outcome else "",
+                "action_unit": t.action_unit,
+                "implementation_status": t.get_implementation_status_display() if t.implementation_status else "",
+                "way_forward": t.way_forward,
                 "manager": t.assigned_manager.username,
                 "staff": staff_names,
                 "status": t.status,
                 "due_date": t.due_date.isoformat() if t.due_date else None,
-                "meeting_ref": t.meeting_reference,
                 "decision_type": t.decision_type,
                 "subtask_count": subtask_total,
                 "subtask_completed": subtask_done,
@@ -1390,9 +1525,10 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             response = CSVResponse(content_type="text/csv")
             response["Content-Disposition"] = "attachment; filename=commission_task_report.csv"
             writer = csv.DictWriter(response, fieldnames=[
-                "task_id", "title", "submission_ref", "submission_title",
-                "manager", "staff", "status", "due_date", "meeting_ref",
-                "decision_type", "subtask_count", "subtask_completed", "days_overdue",
+                "task_id", "decision_number", "title", "submission_ref", "submission_title",
+                "meeting_ref", "decision_detail", "decision_outcome", "action_unit",
+                "implementation_status", "way_forward", "manager", "staff", "status",
+                "due_date", "decision_type", "subtask_count", "subtask_completed", "days_overdue",
             ])
             writer.writeheader()
             for r in rows:
@@ -2622,6 +2758,17 @@ class MeetingViewSet(viewsets.ModelViewSet):
     queryset = Meeting.objects.prefetch_related("agenda_items__submission").all()
     serializer_class = MeetingSerializer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+        ordering = self.request.query_params.get("ordering")
+        if ordering:
+            # Support simple field ordering via query param (e.g. 'date' or '-date')
+            qs = qs.order_by(ordering)
+        return qs
+
     def perform_create(self, serializer):
         profile = _profile(self.request.user)
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
@@ -2762,7 +2909,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
 
 class AgendaItemViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
-    queryset = AgendaItem.objects.select_related("meeting", "submission", "submission__form_category").all()
+    queryset = AgendaItem.objects.select_related(
+        "meeting", "submission", "submission__form_category", "submission__ministry",
+    ).all()
     serializer_class = AgendaItemSerializer
 
     def get_queryset(self):
@@ -2777,12 +2926,24 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can manage agenda items.")
 
-        meeting = serializer.validated_data["meeting"]
+        meeting    = serializer.validated_data["meeting"]
         submission = serializer.validated_data["submission"]
+        category   = serializer.validated_data.get("category", "other")
 
-        # Enforce submission_cutoff
-        if meeting.submission_cutoff and submission.received_at:
-            if submission.received_at > meeting.submission_cutoff:
+        # Auto-derive agenda category from the submission's form type when the
+        # caller did not provide an explicit non-'other' value.
+        if category == "other" and submission.form_type_code:
+            try:
+                ft = PSCFormType.objects.get(code=submission.form_type_code)
+                if ft.agenda_category and ft.agenda_category != "other":
+                    category = ft.agenda_category
+            except PSCFormType.DoesNotExist:
+                pass
+
+        # Enforce effective cutoff (manual submission_cutoff or auto 3-day rule)
+        if submission.received_at:
+            effective_cutoff = meeting.effective_cutoff
+            if submission.received_at > effective_cutoff:
                 next_meeting = Meeting.objects.filter(
                     date__gt=meeting.date, status=MeetingStatus.SCHEDULED
                 ).order_by("date").first()
@@ -2791,36 +2952,71 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
                     if next_meeting else ""
                 )
                 raise PermissionDenied(
-                    f"Submission received after the cutoff ({meeting.submission_cutoff.strftime('%d %b %Y %H:%M')})."
+                    f"Submission received after the cutoff ({effective_cutoff.strftime('%d %b %Y %H:%M')})."
                     f" It cannot be added to {meeting.reference_number}.{hint}"
                 )
 
-        # Auto-calculate sequence by category display_order, then FIFO
-        cat_order = submission.form_category.display_order if submission.form_category else 999
-        last_same_cat = AgendaItem.objects.filter(
-            meeting=meeting,
-            submission__form_category=submission.form_category,
-        ).order_by("-sequence").first()
-        if last_same_cat:
-            next_seq = last_same_cat.sequence + 1
-        else:
-            # Insert before the next category group
-            items_after = AgendaItem.objects.filter(
-                meeting=meeting,
-                submission__form_category__display_order__gt=cat_order,
-            ).order_by("sequence").first()
-            if items_after:
-                next_seq = items_after.sequence
-                # Shift existing items to make room
-                AgendaItem.objects.filter(
-                    meeting=meeting, sequence__gte=next_seq
-                ).update(sequence=models.F("sequence") + 1)
-            else:
-                next_seq = (AgendaItem.objects.filter(meeting=meeting)
-                            .order_by("-sequence").first())
-                next_seq = (next_seq.sequence + 1) if next_seq else 1
+        # Sequence = last sequence within the same category + 1 (append to end of category group)
+        last_in_cat = (
+            AgendaItem.objects.filter(meeting=meeting, category=category)
+            .order_by("-sequence")
+            .first()
+        )
+        next_seq = (last_in_cat.sequence + 1) if last_in_cat else 1
 
-        serializer.save(sequence=next_seq)
+        serializer.save(category=category, sequence=next_seq)
+
+    @action(detail=True, methods=["post"], url_path="push-to-next")
+    def push_to_next_meeting(self, request, pk=None):
+        """Move this agenda item to the next scheduled meeting."""
+        item = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can defer agenda items.")
+
+        current_meeting = item.meeting
+        next_meeting = Meeting.objects.filter(
+            date__gt=current_meeting.date,
+            status=MeetingStatus.SCHEDULED,
+        ).order_by("date").first()
+
+        if not next_meeting:
+            return Response(
+                {"detail": "No next scheduled meeting found. Create the next meeting first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Guard: same submission already on the next meeting
+        if AgendaItem.objects.filter(meeting=next_meeting, submission=item.submission).exists():
+            return Response(
+                {"detail": f"This submission is already on {next_meeting.reference_number}'s agenda."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Append to the end of the same category in the next meeting
+        last_in_cat = (
+            AgendaItem.objects.filter(meeting=next_meeting, category=item.category)
+            .order_by("-sequence")
+            .first()
+        )
+        new_seq = (last_in_cat.sequence + 1) if last_in_cat else 1
+
+        item.meeting  = next_meeting
+        item.sequence = new_seq
+        item.save(update_fields=["meeting", "sequence"])
+
+        return Response({
+            "detail": (
+                f"Item deferred to {next_meeting.reference_number} "
+                f"({next_meeting.date.strftime('%d %b %Y')})."
+            ),
+            "next_meeting": {
+                "id":               next_meeting.id,
+                "reference_number": next_meeting.reference_number,
+                "date":             str(next_meeting.date),
+                "title":            next_meeting.title,
+            },
+        })
 
     @action(detail=False, methods=["post"], url_path="reorder")
     def reorder_agenda(self, request):
@@ -3970,3 +4166,98 @@ class VerifyPinView(APIView):
         if not pin or not check_password(pin, profile.session_pin):
             return Response({'detail': 'Incorrect PIN. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'ok': True})
+
+
+# ── ODU Restructure Checklist ─────────────────────────────────────────────────
+
+class ODUChecklistViewSet(viewsets.ModelViewSet):
+    """
+    CRUD + submit for the ODU Restructure Checklist.
+
+    Accessible by ODU_PRINCIPAL (create / edit draft) and ODU_MANAGER (approve).
+    Also readable by PSC secretariat / admin roles.
+
+    Filtering:  GET /odu-checklists/?submission=<id>
+    """
+
+    serializer_class   = ODUChecklistSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    ODU_ROLES = {
+        Role.ODU_PRINCIPAL,
+        Role.ODU_MANAGER,
+        Role.PSC_SECRETARY,
+        Role.PSC_ADMIN,
+        Role.PSC_MANAGER,
+    }
+
+    def get_queryset(self):
+        qs = ODURestructureChecklist.objects.select_related(
+            "submission", "created_by",
+        ).all()
+        sub_id = self.request.query_params.get("submission")
+        if sub_id:
+            qs = qs.filter(submission_id=sub_id)
+        return qs
+
+    def perform_create(self, serializer):
+        profile = _profile(self.request.user)
+        if profile.role not in self.ODU_ROLES:
+            raise PermissionDenied("Only ODU officers can create checklists.")
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        profile = _profile(self.request.user)
+        if profile.role not in self.ODU_ROLES:
+            raise PermissionDenied("Only ODU officers can edit checklists.")
+        serializer.save()
+
+    @action(detail=True, methods=["post"], url_path="submit")
+    def submit(self, request, pk=None):
+        """
+        Transition checklist from Draft → Submitted.
+        Must be ODU_PRINCIPAL or above. All 20 items must be answered.
+        """
+        checklist = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in self.ODU_ROLES:
+            raise PermissionDenied("Only ODU officers can submit checklists.")
+        if checklist.status != ODUChecklistStatus.DRAFT:
+            return Response(
+                {"detail": "Only Draft checklists can be submitted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if checklist.items_answered < 20:
+            return Response(
+                {"detail": f"All 20 checklist items must be answered before submitting. ({checklist.items_answered}/20 answered)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        checklist.status = ODUChecklistStatus.SUBMITTED
+        checklist.submitted_at = timezone.now()
+        checklist.save(update_fields=["status", "submitted_at"])
+        return Response(ODUChecklistSerializer(checklist).data)
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        """
+        Transition checklist from Submitted → Approved.
+        Restricted to ODU_MANAGER.
+        """
+        checklist = self.get_object()
+        profile = _profile(request.user)
+        if profile.role != Role.ODU_MANAGER:
+            raise PermissionDenied("Only the ODU Manager can approve checklists.")
+        if checklist.status != ODUChecklistStatus.SUBMITTED:
+            return Response(
+                {"detail": "Only Submitted checklists can be approved."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        checklist.status = ODUChecklistStatus.APPROVED
+        # Auto-fill manager verifier name if not already set
+        if not checklist.manager_verifier_name:
+            u = request.user
+            checklist.manager_verifier_name = f"{u.first_name} {u.last_name}".strip() or u.username
+        if not checklist.manager_verifier_date:
+            checklist.manager_verifier_date = timezone.now().date()
+        checklist.save(update_fields=["status", "manager_verifier_name", "manager_verifier_date"])
+        return Response(ODUChecklistSerializer(checklist).data)

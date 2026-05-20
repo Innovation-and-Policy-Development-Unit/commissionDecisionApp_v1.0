@@ -22,6 +22,8 @@ import PSCForm21Fields from './PSCForm21Fields'
 import PSCForm21View from './PSCForm21View'
 import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
+import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
+import RestructureSubmissionForm from './RestructureSubmissionForm'
 
 // All roles that may trigger a transition
 const TRANSITION_ROLES = [
@@ -161,6 +163,19 @@ export default function SubmissionDetail() {
                                    'psc_admin', 'psc_officer', 'psc_secretary'].includes(user.role)
   const canEditForm37  = user && ['ministry_hr', 'dept_admin', 'psc_admin',
                                    'psc_officer', 'psc_secretary'].includes(user.role)
+
+  const isOduRole      = user && ['odu_principal', 'odu_manager'].includes(user.role)
+  const canViewOduChecklist = user && [
+    'odu_principal', 'odu_manager',
+    'psc_secretary', 'psc_admin', 'psc_manager',
+  ].includes(user.role)
+
+  // Restructure Submission Form (ORG-3.1 template)
+  const isRestructureSubmission = submission?.form_type_code === 'ORG-3.1'
+  const canEditRestructure = user && [
+    'ministry_hr', 'dept_admin', 'head_of_agency',
+    'psc_officer', 'psc_admin', 'psc_secretary',
+  ].includes(user.role)
 
   const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
 
@@ -405,11 +420,6 @@ export default function SubmissionDetail() {
 
 const hrAction = needsHrAction(submission?.current_stage)
 const terminal = isTerminal(submission?.current_stage)
-const checklistComplete = checklist.length === 0 || checklist.every(i => i.is_present)
-const checklistBlocking = submission?.current_stage === 'manager_checklist_review'
-  && targetStage === 'under_assessment'
-  && checklist.length > 0
-  && !checklistComplete
 
 const stageDescriptions = {
   commission_sitting: 'Matters at this stage may be deferred to a later meeting (tabled) or referred for legal advice as needed.',
@@ -557,9 +567,14 @@ const stageDescriptions = {
                 </span>
               </div>
               <SubmissionProgressBar currentStage={submission.current_stage} />
-              {hrAction && (
+              {submission.current_stage === 'returned_for_clarification' && (
                 <p className="mt-3 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 rounded-lg px-3 py-2">
-                  This submission has been returned to your ministry. Please review the remarks, make the required changes, and resubmit.
+                  This submission requires clarification. Please review the remarks, make the required changes, and resubmit for processing.
+                </p>
+              )}
+              {submission.current_stage === 'deferred_back_to_hr' && (
+                <p className="mt-3 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 rounded-lg px-3 py-2">
+                  The Commission has deferred this matter and returned it for review. Once you have addressed the feedback, resubmit it as a <strong>Matter Arising</strong> for the next sitting.
                 </p>
               )}
               {submission.current_stage === 'matters_arising' && (
@@ -731,19 +746,7 @@ const stageDescriptions = {
                             form={dynamicForm}
                             setForm={setDynamicForm}
                             submission={submission}
-                          />
-                        )}
-                        {submission.form_type_code === 'PSC 2-2' && (
-                          <PSCForm22Fields
-                            form={dynamicForm}
-                            setForm={setDynamicForm}
-                            submission={submission}
-                          />
-                        )}
-                        <div className="mt-4 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={async () => {
+                            onSave={async () => {
                               setDynamicFormBusy(true)
                               try {
                                 await api.post(`/submissions/${id}/dynamic-form/`, {
@@ -757,12 +760,31 @@ const stageDescriptions = {
                                 setDynamicFormBusy(false)
                               }
                             }}
-                            disabled={dynamicFormBusy}
-                            className="btn-primary px-6 py-2.5"
-                          >
-                            {dynamicFormBusy ? 'Saving…' : 'Save Form'}
-                          </button>
-                        </div>
+                            isSaving={dynamicFormBusy}
+                          />
+                        )}
+                        {submission.form_type_code === 'PSC 2-2' && (
+                          <PSCForm22Fields
+                            form={dynamicForm}
+                            setForm={setDynamicForm}
+                            submission={submission}
+                            onSave={async () => {
+                              setDynamicFormBusy(true)
+                              try {
+                                await api.post(`/submissions/${id}/dynamic-form/`, {
+                                  form_type: submission?.form_type_detail?.id,
+                                  data: dynamicForm,
+                                })
+                                toast.success('Form saved.')
+                              } catch {
+                                toast.error('Failed to save form.')
+                              } finally {
+                                setDynamicFormBusy(false)
+                              }
+                            }}
+                            isSaving={dynamicFormBusy}
+                          />
+                        )}
                       </>
                     ) : (
                       <MultiPageFormRenderer
@@ -818,12 +840,8 @@ const stageDescriptions = {
             </div>
           )}
 
-          {/* ── Merged Documents panel ── */}
+          {/* ── Documents panel ── */}
           {(() => {
-            // Documents matched to a required checklist item (by description)
-            const linkedDocNames = new Set(checklist.map(i => i.document_name))
-            const additionalDocs = documents.filter(d => !linkedDocNames.has(d.description))
-
             const DocActions = ({ doc }) => (
               <div className="flex items-center gap-1 shrink-0 flex-wrap">
                 <button
@@ -874,7 +892,7 @@ const stageDescriptions = {
             )
 
             return (
-              <div className={`card p-5 border-l-4 ${checklist.length > 0 && !checklistComplete ? 'border-l-amber-400' : checklist.length > 0 ? 'border-l-emerald-400' : 'border-l-transparent'}`}>
+              <div className="card p-5">
                 {/* Panel header */}
                 <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700">
                   <Paperclip size={14} className="text-slate-400" />
@@ -882,180 +900,82 @@ const stageDescriptions = {
                   {documents.length > 0 && (
                     <span className="text-xs text-slate-400 ml-1">{documents.length} attached</span>
                   )}
-                  {checklist.length > 0 && (
-                    <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
-                      checklistComplete
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                    }`}>
-                      {checklist.filter(i => i.is_present).length}/{checklist.length} required docs
-                    </span>
-                  )}
                 </div>
 
-                {/* ── Required Documents ── */}
-                {checklist.length > 0 && (
-                  <div className="mb-5">
-                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                      <ClipboardList size={12} /> Required Documents
-                    </p>
-                    <ul className="space-y-2">
-                      {checklist.map(item => {
-                        const linkedDoc = documents.find(d => d.description === item.document_name)
-                        return (
-                          <li
-                            key={item.id}
-                            className={`rounded-xl border transition-colors ${
-                              item.is_present
-                                ? 'bg-emerald-50/60 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800/60'
-                                : 'bg-slate-50 border-slate-200 dark:bg-slate-800/30 dark:border-slate-700'
-                            }`}
-                          >
-                            {/* Item header row */}
-                            <div className="flex items-start gap-3 px-3 py-2.5">
-                              <button
-                                type="button"
-                                disabled={!isUnitManager || checklistBusy}
-                                onClick={() => toggleChecklistItem(item)}
-                                className={isUnitManager ? 'cursor-pointer mt-0.5 shrink-0' : 'cursor-default mt-0.5 shrink-0'}
-                                title={isUnitManager ? 'Toggle presence' : undefined}
-                              >
-                                {item.is_present
-                                  ? <CheckSquare size={15} className="text-emerald-500" />
-                                  : <Square size={15} className="text-slate-400" />
-                                }
-                              </button>
-                              <div className="min-w-0 flex-1">
-                                <p className={`text-sm font-medium ${item.is_present ? 'text-emerald-800 dark:text-emerald-200' : 'text-slate-700 dark:text-slate-300'}`}>
-                                  {item.document_name}
-                                </p>
-                                {item.document_description && (
-                                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{item.document_description}</p>
-                                )}
-                                {item.is_present && item.checked_by_username && !linkedDoc && (
-                                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">
-                                    Confirmed by {item.checked_by_username}
-                                  </p>
-                                )}
-
-                                {/* Linked uploaded document */}
-                                {linkedDoc ? (
-                                  <div className="mt-2 flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-2">
-                                    <File size={13} className="text-slate-400 shrink-0" />
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{linkedDoc.original_name}</p>
-                                      <p className="text-[11px] text-slate-400 mt-0.5">
-                                        {formatBytes(linkedDoc.file_size)}{linkedDoc.file_size ? ' · ' : ''}{linkedDoc.uploaded_by_username}
-                                      </p>
-                                    </div>
-                                    <DocActions doc={linkedDoc} />
-                                  </div>
-                                ) : (
-                                  <div className="mt-2 flex items-center gap-2">
-                                    <span className="text-xs text-slate-400 italic">Not yet uploaded</span>
-                                    {canUploadDocs && (
-                                      <label className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
-                                        uploadBusy
-                                          ? 'bg-slate-100 text-slate-400 dark:bg-slate-700 cursor-not-allowed'
-                                          : 'bg-primary-50 text-primary-600 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-400 dark:hover:bg-primary-900/50'
-                                      }`}>
-                                        <Upload size={11} />
-                                        Upload
-                                        <input
-                                          type="file"
-                                          className="sr-only"
-                                          disabled={uploadBusy}
-                                          onChange={e => handleUploadForItem(e, item)}
-                                          accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
-                                        />
-                                      </label>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ul>
-
-                    {!checklistComplete && (
-                      <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                        <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-                        {canUploadDocs
-                          ? 'Please upload all required documents before the submission can proceed.'
-                          : 'All required documents must be confirmed before passing to Under Assessment.'}
-                      </div>
-                    )}
-                  </div>
+                {/* ── Document list ── */}
+                {documents.length === 0 ? (
+                  <p className="text-sm text-slate-400 dark:text-slate-500 py-2 mb-4">No documents attached yet.</p>
+                ) : (
+                  <ul className="space-y-2 mb-4">
+                    {documents.map(doc => (
+                      <li key={doc.id} className="flex items-start gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5">
+                        <File size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{doc.original_name}</p>
+                          {doc.description && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{doc.description}</p>
+                          )}
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                            {formatBytes(doc.file_size)}{doc.file_size ? ' · ' : ''}{doc.uploaded_by_username} · {new Date(doc.uploaded_at).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </p>
+                        </div>
+                        <DocActions doc={doc} />
+                      </li>
+                    ))}
+                  </ul>
                 )}
 
-                {/* ── Additional Documents ── */}
-                <div>
-                  {checklist.length > 0 && (
-                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                      <Paperclip size={12} /> Additional Documents
-                    </p>
-                  )}
-
-                  {additionalDocs.length === 0 && checklist.length > 0 ? (
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-4 italic">No additional documents.</p>
-                  ) : additionalDocs.length === 0 ? (
-                    <p className="text-sm text-slate-400 dark:text-slate-500 py-2 mb-4">No documents attached to this submission yet.</p>
-                  ) : (
-                    <ul className="space-y-2 mb-4">
-                      {additionalDocs.map(doc => (
-                        <li key={doc.id} className="flex items-start gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5">
-                          <File size={16} className="text-slate-400 shrink-0 mt-0.5" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{doc.original_name}</p>
-                            {doc.description && (
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{doc.description}</p>
-                            )}
-                            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                              {formatBytes(doc.file_size)}{doc.file_size ? ' · ' : ''}{doc.uploaded_by_username} · {new Date(doc.uploaded_at).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </p>
-                          </div>
-                          <DocActions doc={doc} />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {/* General upload area */}
-                  {canUploadDocs && (
-                    <div className="border-t border-slate-100 dark:border-slate-700 pt-4 space-y-2">
-                      <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Attach an additional document</p>
+                {/* ── Upload area ── */}
+                {canUploadDocs && (
+                  <div className={`${documents.length > 0 ? 'border-t border-slate-100 dark:border-slate-700 pt-4' : ''} space-y-2`}>
+                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Attach a document</p>
+                    <input
+                      type="text"
+                      className="input text-sm"
+                      placeholder="Description (optional)"
+                      value={uploadDesc}
+                      onChange={e => setUploadDesc(e.target.value)}
+                      disabled={uploadBusy}
+                    />
+                    <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
+                      uploadBusy
+                        ? 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500 cursor-not-allowed'
+                        : 'bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600'
+                    }`}>
+                      <Upload size={14} />
+                      {uploadBusy ? 'Uploading…' : 'Choose file & upload'}
                       <input
-                        type="text"
-                        className="input text-sm"
-                        placeholder="Description (optional)"
-                        value={uploadDesc}
-                        onChange={e => setUploadDesc(e.target.value)}
+                        type="file"
+                        className="sr-only"
                         disabled={uploadBusy}
+                        onChange={handleUpload}
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                       />
-                      <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
-                        uploadBusy
-                          ? 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500 cursor-not-allowed'
-                          : 'bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600'
-                      }`}>
-                        <Upload size={14} />
-                        {uploadBusy ? 'Uploading…' : 'Choose file & upload'}
-                        <input
-                          type="file"
-                          className="sr-only"
-                          disabled={uploadBusy}
-                          onChange={handleUpload}
-                          accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
-                        />
-                      </label>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500">PDF, Word, Excel, or images — max 20 MB</p>
-                    </div>
-                  )}
-                </div>
+                    </label>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">PDF, Word, Excel, or images — max 20 MB</p>
+                  </div>
+                )}
               </div>
             )
           })()}
+
+          {/* ── Restructure Submission Form (ORG-3.1 template) ── */}
+          {isRestructureSubmission && (
+            <RestructureSubmissionForm
+              submissionId={Number(id)}
+              submission={submission}
+              canEdit={!!canEditRestructure}
+            />
+          )}
+
+          {/* ── ODU Restructure Checklist ── */}
+          {canViewOduChecklist && (
+            <ODURestructureChecklistForm
+              submissionId={Number(id)}
+              submission={submission}
+              readOnly={!isOduRole}
+            />
+          )}
 
           {/* Workflow timeline */}
           <div className="card p-5">
@@ -1102,16 +1022,10 @@ const stageDescriptions = {
                   onChange={e => setRemarks(e.target.value)}
                 />
               </div>
-              {checklistBlocking && (
-                <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                  <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-                  Complete the required documents checklist before passing to Under Assessment.
-                </div>
-              )}
               <button
                 type="submit"
                 className="btn-gradient w-full justify-center py-2.5 gap-2"
-                disabled={busy || checklistBlocking}
+                disabled={busy}
               >
                 {busy ? 'Saving…' : <><ArrowRight size={14} /> Apply Transition</>}
               </button>

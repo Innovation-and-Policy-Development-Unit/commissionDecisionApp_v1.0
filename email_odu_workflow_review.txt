@@ -1,0 +1,62 @@
+TO: Manager, Organisational Development Unit (ODU)
+CC: Director, Innovation Policy and Development Unit (IPDU)
+FROM: Herman Tevilili, Principal Innovation and Digital, IPDU / OPSC
+SUBJECT: Request for Workflow Review – PSC Form 2.1 & 2.2 Digitisation (SCDMS)
+
+Dear Manager ODU,
+
+I hope this email finds you well.
+
+As you may be aware, the Innovation Policy and Development Unit (IPDU) has been developing the Submission & Commission Decision Management System (SCDMS) — a digital platform to replace the current paper-based PSC submission process.
+
+Following recent internal discussions led by the Director of IPDU, a decision was made to digitise all PSC forms within the system. This includes PSC Form 2.1 (Organisation Restructure) and PSC Form 2.2 (Job Description), which are now being configured as part of that full digitisation effort.
+
+As the ODU is the primary unit responsible for reviewing and processing these submissions, we would like to share the proposed system workflow for your review and feedback before we proceed to final configuration.
+
+─────────────────────────────────────────────
+PROPOSED WORKFLOW — KEY POINTS FOR YOUR REVIEW
+─────────────────────────────────────────────
+
+Please see the workflow diagram below and note the following:
+
+1. SUBMISSION ROUTING TO ODU
+   Ministries submit Form 2.1 and Form 2.2 via the system. Once received by PSC, submissions relevant to ODU are automatically routed based on type:
+   - Restructure / Anomalies → Principal Job Analyst → Manager ODU (oversight)
+   - Annual Report / Business Plan → Principal Organisation Development → Manager ODU (oversight)
+
+2. FORM 2.2 AS AN ATTACHMENT TO FORM 2.1
+   When a Ministry submits a Form 2.1 (Restructure) that involves new positions, the Form 2.2 (Job Description) for each new position is submitted as an attachment to the parent Form 2.1 — not as a separate standalone submission. This means:
+   - The Form 2.2 is reviewed alongside the Form 2.1 (no separate routing or checklist)
+   - Once the Commission makes a decision on the Form 2.1, the attached Form 2.2s automatically receive the same status (Approved / Rejected / Returned)
+
+3. STANDALONE FORM 2.2
+   A Form 2.2 submitted independently (e.g. for regrading or a position name change) follows its own full workflow, including a Director-General signed letter requirement.
+
+4. ODU MANAGER ROLE IN THE SYSTEM
+   The Manager ODU is represented in the workflow in an oversight capacity — overseeing the checklist and assessment process carried out by the Principal Job Analyst and Principal Organisation Development officers — before the submission is forwarded to the Secretariat.
+
+5. RETURN FOR CLARIFICATION
+   If any submission is incomplete or requires correction, the system allows the ODU to return it to the Ministry HR Manager for clarification and resubmission.
+
+─────────────────────────────────────────────
+WORKFLOW DIAGRAM
+─────────────────────────────────────────────
+
+[SCREENSHOT OF WORKFLOW DIAGRAM — TO BE INSERTED HERE]
+
+─────────────────────────────────────────────
+
+We kindly request that you review the above workflow and confirm whether it accurately reflects your unit's current process, or advise of any adjustments needed.
+
+Your feedback is important to ensure the system is configured correctly before we proceed with the ODU module setup. We are happy to arrange a brief meeting or walkthrough at a time convenient to you.
+
+Please do not hesitate to contact me should you require any clarification.
+
+Thank you for your time and cooperation.
+
+Yours sincerely,
+
+Herman Tevilili
+Principal Innovation and Digital
+Innovation Policy and Development Unit
+Office of the Public Service Commission

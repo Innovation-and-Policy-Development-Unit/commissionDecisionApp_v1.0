@@ -128,7 +128,7 @@
     "name": "Name",
     "description": "Description",
     "type": "Type",
-    "category": "Category",
+    "category": "Submission Category",
     "today": "Today",
     "yesterday": "Yesterday",
     "tomorrow": "Tomorrow"
@@ -342,8 +342,8 @@
     "progress": "Progress",
     "ministry": "Ministry",
     "department": "Department",
-    "form_category": "Form Category",
-    "form_type": "Form Type",
+    "form_category": "Submission Category",
+    "form_type": "Form Document",
     "classification": "Classification",
     "routed_unit": "Routed Unit",
     "created_by": "Created By",
@@ -437,8 +437,8 @@
     "status_completed": "Completed",
     "status_cancelled": "Cancelled",
     "agenda_draft": "Draft",
-    "agenda_with_chairman": "With Chairperson",
-    "agenda_chairman_approved": "Chairperson Approved",
+    "agenda_with_chairman": "With Secretary",
+    "agenda_chairman_approved": "Secretary Approved",
     "agenda_circulated": "Circulated"
   },
   "task": {
@@ -486,7 +486,7 @@
     "open_panel": "Open feedback panel",
     "subject": "Subject",
     "message": "Message",
-    "category": "Category",
+    "category": "Submission Category",
     "screenshot": "Screenshot",
     "submit": "Send",
     "submitted": "Thanks — your feedback has been received."

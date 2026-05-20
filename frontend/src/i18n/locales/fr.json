@@ -402,8 +402,8 @@
     "status_completed": "Terminée",
     "status_cancelled": "Annulée",
     "agenda_draft": "Brouillon",
-    "agenda_with_chairman": "Avec le Président",
-    "agenda_chairman_approved": "Approuvé par le Président",
+    "agenda_with_chairman": "Avec le Secrétaire",
+    "agenda_chairman_approved": "Approuvé par le Secrétaire",
     "agenda_circulated": "Diffusé"
   },
   "task": {

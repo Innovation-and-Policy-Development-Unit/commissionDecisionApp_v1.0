@@ -1,16 +1,20 @@
 /**
  * PSC FORM 2-2 — Job Description
  *
- * Editable tabbed form. 7 tabs matching the sections of the official form.
+ * Multi-step wizard. 7 steps matching the sections of the official form.
  * Props:
  *   form       – values object (keys match XML field_key values)
  *   setForm    – state updater
  *   submission – submission object (for auto-populating ministry/department)
  *   readOnly   – render as read-only display when true
+ *   onSave     – called when Save is clicked on the last step
+ *   isSaving   – shows loading state on the Save button
  */
 import { useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
 
-const TABS = [
+const STEPS = [
   { id: 1, label: 'Post ID' },
   { id: 2, label: 'Duties' },
   { id: 3, label: 'Reporting' },
@@ -19,6 +23,8 @@ const TABS = [
   { id: 6, label: 'Qualifications' },
   { id: 7, label: 'Endorsement' },
 ]
+
+const TOTAL_STEPS = STEPS.length
 
 const DUTY_KEYS = Array.from({ length: 9 }, (_, i) => `duty_7_${i + 1}`)
 
@@ -32,6 +38,13 @@ const APPROVAL_REASONS = [
 
 const PSC_DECISIONS = ['Approved', 'Deferred', 'Amended']
 
+// Required fields per step — must be non-empty to proceed
+const STEP_REQUIRED = {
+  1: [{ key: 'job_title_location', label: 'Job Title & Location' }, { key: 'level_grade', label: 'Level / Grade' }],
+  2: [], // validated specially (at least 1 duty)
+  5: [{ key: 'reason_for_approval', label: 'Reason for Approval' }],
+}
+
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 function SectionHeader({ title }) {
@@ -44,14 +57,20 @@ function SectionHeader({ title }) {
   )
 }
 
-function Field({ label, children, hint, required }) {
+function Field({ label, children, hint, required, hasError }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+      <label className={`block text-sm font-medium mb-1 ${hasError ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
-      {children}
-      {hint && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
+      <div className={hasError ? 'rounded-lg ring-2 ring-red-400 dark:ring-red-500' : ''}>
+        {children}
+      </div>
+      {hasError
+        ? <p className="mt-1 text-xs text-red-500 dark:text-red-400">This field is required.</p>
+        : hint
+          ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+          : null}
     </div>
   )
 }
@@ -72,12 +91,10 @@ function fmt(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// Count how many duty keys have values
 function activeDutyCount(form) {
   return DUTY_KEYS.filter(k => form[k] && form[k].trim()).length
 }
 
-// Get the index (1-based) of the next empty duty slot
 function nextEmptyDutyIndex(form) {
   for (let i = 0; i < DUTY_KEYS.length; i++) {
     if (!form[DUTY_KEYS[i]] || !form[DUTY_KEYS[i]].trim()) return i + 1
@@ -87,26 +104,24 @@ function nextEmptyDutyIndex(form) {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export default function PSCForm22Fields({ form, setForm, submission, readOnly = false }) {
-  const [activeTab, setActiveTab] = useState(1)
-  // Number of visible duty rows (at least 1, at most 9)
+export default function PSCForm22Fields({ form, setForm, submission, readOnly = false, onSave, isSaving }) {
+  const toast = useToast()
+  const [step, setStep] = useState(1)
+  const [fieldErrors, setFieldErrors] = useState({})
   const [visibleDuties, setVisibleDuties] = useState(1)
 
-  const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
+  const set = (field, value) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+    if (fieldErrors[field]) setFieldErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+  }
 
   // Auto-populate fields on mount
   useEffect(() => {
     setForm(prev => {
       const updates = {}
-      if (!prev.ministry && submission?.ministry_name) {
-        updates.ministry = submission.ministry_name
-      }
-      if (!prev.department && submission?.department?.name) {
-        updates.department = submission.department.name
-      }
-      if (!prev.qualification_language) {
-        updates.qualification_language = 'English or French and Bislama'
-      }
+      if (!prev.ministry && submission?.ministry_name) updates.ministry = submission.ministry_name
+      if (!prev.department && submission?.department?.name) updates.department = submission.department.name
+      if (!prev.qualification_language) updates.qualification_language = 'English or French and Bislama'
       if (prev.qualification_good_character === undefined || prev.qualification_good_character === null) {
         updates.qualification_good_character = true
       }
@@ -143,10 +158,8 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
             ? <p className="text-sm text-slate-400 italic">No duties recorded.</p>
             : (
               <ol className="list-decimal list-inside space-y-2">
-                {duties.map((k, idx) => (
-                  <li key={k} className="text-sm text-slate-700 dark:text-slate-300">
-                    {form[k]}
-                  </li>
+                {duties.map((k) => (
+                  <li key={k} className="text-sm text-slate-700 dark:text-slate-300">{form[k]}</li>
                 ))}
               </ol>
             )
@@ -224,17 +237,49 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
     )
   }
 
-  // ── Editable mode — tabbed ────────────────────────────────────────────────────
+  // ── Validation ───────────────────────────────────────────────────────────────
+
+  const validateStep = (s) => {
+    const errs = {}
+    if (STEP_REQUIRED[s]) {
+      for (const { key } of STEP_REQUIRED[s]) {
+        if (!form[key] || !String(form[key]).trim()) errs[key] = true
+      }
+    }
+    if (s === 2 && activeDutyCount(form) === 0) {
+      errs['duty_7_1'] = true
+    }
+    setFieldErrors(errs)
+    if (Object.keys(errs).length > 0) toast.warning('Please fill in all required fields before continuing.')
+    return Object.keys(errs).length === 0
+  }
+
+  const handleNext = () => {
+    if (!validateStep(step)) return
+    setFieldErrors({})
+    setStep(s => Math.min(s + 1, TOTAL_STEPS))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleBack = () => {
+    setFieldErrors({})
+    setStep(s => Math.max(s - 1, 1))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleSave = () => {
+    if (!validateStep(step)) return
+    onSave?.()
+  }
+
+  // ── Duty helpers ─────────────────────────────────────────────────────────────
 
   const handleAddDuty = () => {
     const next = nextEmptyDutyIndex(form)
-    if (next && next <= 9) {
-      setVisibleDuties(prev => Math.min(prev + 1, 9))
-    }
+    if (next && next <= 9) setVisibleDuties(prev => Math.min(prev + 1, 9))
   }
 
   const handleRemoveDuty = (keyIndex) => {
-    // Shift all duties down by one from keyIndex onwards
     setForm(prev => {
       const updated = { ...prev }
       for (let i = keyIndex; i < DUTY_KEYS.length - 1; i++) {
@@ -248,45 +293,74 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
 
   const shownDutyKeys = DUTY_KEYS.slice(0, Math.min(visibleDuties, 9))
 
+  // ── Render ───────────────────────────────────────────────────────────────────
+
   return (
-    <div className="space-y-0">
-      {/* Tab navigation */}
-      <div className="overflow-x-auto">
-        <div className="flex min-w-max border-b border-slate-200 dark:border-slate-700">
-          {TABS.map(tab => {
-            const isActive = tab.id === activeTab
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+
+      {/* ── Stepper header ── */}
+      <div className="px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-700">
+        <div className="flex items-center">
+          {STEPS.map((s, i) => {
+            const isDone   = s.id < step
+            const isActive = s.id === step
             return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap border-b-2 -mb-px ${
-                  isActive
-                    ? 'border-primary-600 text-primary-700 dark:text-primary-400 dark:border-primary-400'
-                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}
-              >
-                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold ${
-                  isActive
-                    ? 'bg-primary-600 text-white dark:bg-primary-400 dark:text-slate-900'
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                }`}>
-                  {tab.id}
-                </span>
-                {tab.label}
-              </button>
+              <div key={s.id} className="flex items-center flex-1 last:flex-none">
+                <button
+                  type="button"
+                  onClick={() => { if (isDone) { setFieldErrors({}); setStep(s.id) } }}
+                  className={`relative flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
+                    isDone
+                      ? 'bg-primary-500 text-white cursor-pointer hover:bg-primary-600'
+                      : isActive
+                        ? 'bg-primary-600 text-white ring-4 ring-primary-100 dark:ring-primary-900/40'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-default'
+                  }`}
+                  title={s.label}
+                  disabled={!isDone && !isActive}
+                >
+                  {isDone ? <Check size={13} /> : s.id}
+                </button>
+                {i < STEPS.length - 1 && (
+                  <div className={`flex-1 h-0.5 mx-1 transition-colors ${s.id < step ? 'bg-primary-500' : 'bg-slate-200 dark:bg-slate-700'}`} />
+                )}
+              </div>
             )
           })}
         </div>
+        {/* Step labels */}
+        <div className="flex mt-2">
+          {STEPS.map(s => (
+            <div key={s.id} className="flex-1 last:flex-none pr-1">
+              <p className={`text-[11px] text-center leading-tight line-clamp-1 ${
+                s.id === step
+                  ? 'text-primary-600 dark:text-primary-400 font-semibold'
+                  : s.id < step
+                    ? 'text-slate-500 dark:text-slate-400'
+                    : 'text-slate-300 dark:text-slate-600'
+              }`}>
+                {s.label}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Tab content */}
-      <div className="p-1 pt-5 space-y-4">
+      {/* ── Step counter + section title ── */}
+      <div className="px-6 pt-5 pb-2">
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Step {step} of {TOTAL_STEPS}</p>
+        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+          {STEPS.find(s => s.id === step)?.label}
+        </h3>
+      </div>
 
-        {/* Tab 1 — Post Identification */}
-        {activeTab === 1 && (
+      {/* ── Step content ── */}
+      <div className="px-6 pb-6 pt-4 space-y-4">
+
+        {/* Step 1 — Post Identification */}
+        {step === 1 && (
           <div className="space-y-4">
-            <Field label="Job Title & Location" required>
+            <Field label="Job Title & Location" required hint="e.g. Senior HR Officer — Port Vila" hasError={!!fieldErrors.job_title_location}>
               <input
                 className="input"
                 value={form.job_title_location || ''}
@@ -295,7 +369,7 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
               />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Level / Grade" required>
+              <Field label="Level / Grade" required hasError={!!fieldErrors.level_grade}>
                 <input
                   className="input"
                   value={form.level_grade || ''}
@@ -337,12 +411,15 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
           </div>
         )}
 
-        {/* Tab 2 — Duties */}
-        {activeTab === 2 && (
+        {/* Step 2 — Duties */}
+        {step === 2 && (
           <div className="space-y-3">
             <p className="text-xs text-slate-500 dark:text-slate-400">
               List the key duties and responsibilities of this position. Up to 9 duties may be entered.
             </p>
+            {fieldErrors.duty_7_1 && (
+              <p className="text-xs text-red-500 dark:text-red-400">At least one duty is required.</p>
+            )}
             {shownDutyKeys.map((key, idx) => (
               <div key={key} className="flex items-start gap-2">
                 <span className="inline-flex items-center justify-center w-6 h-6 mt-2 rounded-full bg-slate-100 dark:bg-slate-700 text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">
@@ -378,8 +455,8 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
           </div>
         )}
 
-        {/* Tab 3 — Reporting */}
-        {activeTab === 3 && (
+        {/* Step 3 — Reporting */}
+        {step === 3 && (
           <div className="space-y-4">
             <Field label="Reports Directly To" hint="The position or title of the immediate supervisor.">
               <input
@@ -400,8 +477,8 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
           </div>
         )}
 
-        {/* Tab 4 — Contacts */}
-        {activeTab === 4 && (
+        {/* Step 4 — Contacts */}
+        {step === 4 && (
           <div className="space-y-4">
             <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-4 py-2 text-xs text-slate-600 dark:text-slate-400">
               "Frequent" = regular, ongoing contact as part of normal duties. "Occasional" = periodic or as-needed contact.
@@ -443,8 +520,8 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
           </div>
         )}
 
-        {/* Tab 5 — Impact */}
-        {activeTab === 5 && (
+        {/* Step 5 — Impact */}
+        {step === 5 && (
           <div className="space-y-4">
             <Field label="Regular Decisions / Impact" hint="Describe the types of decisions made regularly and their impact.">
               <textarea
@@ -471,8 +548,8 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
               />
             </Field>
 
-            <Field label="Reason for Approval of this Job Description" required>
-              <div className="space-y-2">
+            <Field label="Reason for Approval of this Job Description" required hasError={!!fieldErrors.reason_for_approval}>
+              <div className="space-y-2 p-1">
                 {APPROVAL_REASONS.map(reason => (
                   <label
                     key={reason}
@@ -509,8 +586,8 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
           </div>
         )}
 
-        {/* Tab 6 — Qualifications */}
-        {activeTab === 6 && (
+        {/* Step 6 — Qualifications */}
+        {step === 6 && (
           <div className="space-y-4">
             <Field label="Experience" hint="Minimum relevant work experience required.">
               <textarea
@@ -561,10 +638,9 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
           </div>
         )}
 
-        {/* Tab 7 — Endorsement */}
-        {activeTab === 7 && (
+        {/* Step 7 — Endorsement */}
+        {step === 7 && (
           <div className="space-y-5">
-            {/* Prepared by */}
             <div>
               <SectionHeader title="Prepared by Ministry / Department" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -576,17 +652,11 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
                   />
                 </Field>
                 <Field label="Date">
-                  <input
-                    type="date"
-                    className="input"
-                    value={form.prepared_by_date || ''}
-                    onChange={e => set('prepared_by_date', e.target.value)}
-                  />
+                  <input type="date" className="input" value={form.prepared_by_date || ''} onChange={e => set('prepared_by_date', e.target.value)} />
                 </Field>
               </div>
             </div>
 
-            {/* DG certification */}
             <div>
               <SectionHeader title="Certified by Director-General" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -598,17 +668,11 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
                   />
                 </Field>
                 <Field label="Date">
-                  <input
-                    type="date"
-                    className="input"
-                    value={form.certified_dg_date || ''}
-                    onChange={e => set('certified_dg_date', e.target.value)}
-                  />
+                  <input type="date" className="input" value={form.certified_dg_date || ''} onChange={e => set('certified_dg_date', e.target.value)} />
                 </Field>
               </div>
             </div>
 
-            {/* PSC office use only */}
             <div>
               <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 p-4 space-y-4">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
@@ -616,48 +680,81 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Checked by (PSC Officer)">
-                    <input
-                      className="input"
-                      value={form.psc_checked_by_name || ''}
-                      onChange={e => set('psc_checked_by_name', e.target.value)}
-                    />
+                    <input className="input" value={form.psc_checked_by_name || ''} onChange={e => set('psc_checked_by_name', e.target.value)} />
                   </Field>
                   <Field label="Date Checked">
-                    <input
-                      type="date"
-                      className="input"
-                      value={form.psc_checked_date || ''}
-                      onChange={e => set('psc_checked_date', e.target.value)}
-                    />
+                    <input type="date" className="input" value={form.psc_checked_date || ''} onChange={e => set('psc_checked_date', e.target.value)} />
                   </Field>
                 </div>
                 <Field label="PSC Decision">
                   <div className="flex gap-4">
                     {PSC_DECISIONS.map(dec => (
                       <label key={dec} className="flex items-center gap-2 cursor-pointer text-sm">
-                        <input
-                          type="radio"
-                          name="psc_decision"
-                          value={dec}
-                          checked={form.psc_decision === dec}
-                          onChange={() => set('psc_decision', dec)}
-                        />
+                        <input type="radio" name="psc_decision" value={dec} checked={form.psc_decision === dec} onChange={() => set('psc_decision', dec)} />
                         {dec}
                       </label>
                     ))}
                   </div>
                 </Field>
                 <Field label="Decision Date">
-                  <input
-                    type="date"
-                    className="input"
-                    value={form.psc_decision_date || ''}
-                    onChange={e => set('psc_decision_date', e.target.value)}
-                  />
+                  <input type="date" className="input" value={form.psc_decision_date || ''} onChange={e => set('psc_decision_date', e.target.value)} />
                 </Field>
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* ── Navigation footer ── */}
+      <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between gap-4">
+        {/* Back */}
+        <button
+          type="button"
+          onClick={handleBack}
+          disabled={step === 1}
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronLeft size={15} />
+          Back
+        </button>
+
+        {/* Dot indicators */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {STEPS.map(s => (
+            <div
+              key={s.id}
+              className={`rounded-full transition-all duration-200 ${
+                s.id === step
+                  ? 'w-5 h-2 bg-primary-500'
+                  : s.id < step
+                    ? 'w-2 h-2 bg-primary-300 dark:bg-primary-700'
+                    : 'w-2 h-2 bg-slate-200 dark:bg-slate-700'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Next / Save */}
+        {step < TOTAL_STEPS ? (
+          <button
+            type="button"
+            onClick={handleNext}
+            className="inline-flex items-center gap-1 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Next
+            <ChevronRight size={15} />
+          </button>
+        ) : onSave ? (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="inline-flex items-center gap-1 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isSaving ? 'Saving…' : 'Save Form'}
+          </button>
+        ) : (
+          <div className="w-20" />
         )}
       </div>
     </div>

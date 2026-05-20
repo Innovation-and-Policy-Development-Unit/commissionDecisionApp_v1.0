@@ -6,6 +6,7 @@ from .views import (
     AuditLogViewSet,
     BackupViewSet,
     CommissionTaskViewSet,
+    ODUChecklistViewSet,
     SecurityNoticeViewSet,
     DepartmentViewSet,
     DocumentAnnotationViewSet,
@@ -82,6 +83,7 @@ router.register(r"minutes",          MinutesViewSet,          basename="minutes"
 router.register(r"transcripts",      TranscriptViewSet,       basename="transcript")
 router.register(r"doc-annotations",  DocumentAnnotationViewSet, basename="doc-annotation")
 router.register(r"doc-signatures",   DocumentSignatureViewSet,  basename="doc-signature")
+router.register(r"odu-checklists",   ODUChecklistViewSet,       basename="odu-checklist")
 
 urlpatterns = [
     path("", include(router.urls)),

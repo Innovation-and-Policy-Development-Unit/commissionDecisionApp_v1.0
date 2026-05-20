@@ -28,6 +28,7 @@ class Role(models.TextChoices):
     HR_UNIT_MANAGER     = "hr_unit_manager",     "HR Unit Manager"
     ODU_MANAGER         = "odu_manager",         "ODU Manager"
     COMPLIANCE_MANAGER  = "compliance_manager",  "Compliance Manager"
+    CSU_MANAGER         = "csu_manager",         "CSU Manager"
     # ── OPSC Unit Principal roles (assigned checklist/assessment work) ──────
     VIPAM_PRINCIPAL       = "vipam_principal",       "VIPAM Principal"
     HR_UNIT_PRINCIPAL     = "hr_unit_principal",     "HR Unit Principal"
@@ -60,6 +61,8 @@ class WorkflowStage(models.TextChoices):
     REJECTED                   = "rejected",                   "Rejected"
     RETURNED                   = "returned",                   "Returned"
     DEFERRED_BACK_TO_HR        = "deferred_back_to_hr",        "Deferred Back to HR"
+    # ── Internal submission (OPSC-only, Secretary review) ─────────────────
+    SECRETARY_REVIEW           = "secretary_review",           "Secretary Review"
     # ── Post-decision ──────────────────────────────────────────────────────
     MINUTES_DRAFTED_SIGNED     = "minutes_drafted_signed",     "Minutes Drafted and Signed"
     DECISION_ENTERED_ASSIGNED  = "decision_entered_assigned",  "Decision Entered and Assigned"
@@ -87,11 +90,30 @@ class MeetingType(models.TextChoices):
     EMERGENCY = "emergency", "Emergency Sitting"
 
 
+class AgendaCategory(models.TextChoices):
+    PRELIMINARIES         = "preliminaries",         "1. Preliminaries & Endorsements"
+    MATTERS_ARISING       = "matters_arising",       "2. Matters Arising"
+    DISCIPLINE_COMPLIANCE = "discipline_compliance", "3. Discipline / Compliance"
+    HEALTH_COMMISSION     = "health_commission",     "4. Health Commission"
+    APPOINTMENT           = "appointment",           "5. Appointment / Acting Appointment"
+    DIRECT_APPOINTMENT    = "direct_appointment",    "6. Direct Appointment / Confirmation of Appointment"
+    EXTRA_RESPONSIBILITY  = "extra_responsibility",  "7. Extra Responsibility / Overtime Allowance / Special Skills Allowance"
+    CONTRACT              = "contract",              "8. Contract / Temporary Salaried Appointment"
+    TEMPORARY_SALARIED    = "temporary_salaried",    "9. Temporary Salaried Appointment"
+    SALARY_ADJUSTMENT     = "salary_adjustment",     "10. Salary Adjustment"
+    TRAINING              = "training",              "11. Long Term Training / Scholarship / Internship / Cadetship / Extension / Direct Appointment"
+    MEDICAL_CLAIM         = "medical_claim",         "12. Medical Claim"
+    PARTIAL_SEVERANCE     = "partial_severance",     "13. Partial Severance"
+    RESIGNATION           = "resignation",           "14. Resignation / Retirement / Death"
+    OTHER                 = "other",                 "15. Other Matters"
+
+
 class RoutedUnit(models.TextChoices):
     ODU = "odu", "ODU"
     HR = "hr", "Manager HR"
     VIPAM = "vipam", "VIPAM"
     COMPLIANCE = "compliance", "Compliance"
+    CSU = "csu", "Corporate Services Unit"
 
 
 class Classification(models.TextChoices):
@@ -177,6 +199,16 @@ class PSCFormType(models.Model):
     is_active = models.BooleanField(default=True,
         help_text="Only active forms appear in the submission dropdown.")
     display_order = models.IntegerField(default=0)
+    agenda_category = models.CharField(
+        max_length=32,
+        choices=AgendaCategory.choices,
+        default=AgendaCategory.OTHER,
+        blank=True,
+        help_text=(
+            "Which PSC agenda section this form type belongs to. "
+            "Used to auto-categorize agenda items when a submission is added to a meeting."
+        ),
+    )
 
     class Meta:
         ordering = ["display_order", "code"]
@@ -258,6 +290,13 @@ class Meeting(models.Model):
         null=True, blank=True,
         help_text="Submissions after this datetime are queued for the next meeting.",
     )
+    max_items = models.PositiveIntegerField(
+        default=30,
+        help_text=(
+            "Maximum number of agenda items this meeting can accommodate. "
+            "Items beyond this limit should be deferred to the next meeting."
+        ),
+    )
     # ── Agenda approval gate (SOP Stage 3, steps 2-3) ─────────────────────
     agenda_status = models.CharField(
         max_length=24, choices=AgendaStatus.choices, default=AgendaStatus.DRAFT,
@@ -278,6 +317,26 @@ class Meeting(models.Model):
     def __str__(self):
         return f"{self.reference_number} — {self.title}"
 
+    # Number of days before the meeting date that submissions close automatically.
+    CUTOFF_DAYS_BEFORE = 3
+
+    @property
+    def effective_cutoff(self):
+        """
+        Returns the submission deadline as an aware datetime.
+        Uses the manually-set submission_cutoff if provided, otherwise
+        defaults to 23:59:59 on the day that is CUTOFF_DAYS_BEFORE before
+        the meeting date (i.e. the last moment of the 3rd day before the meeting).
+        """
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+
+        if self.submission_cutoff:
+            return self.submission_cutoff
+        cutoff_date = self.date - timedelta(days=self.CUTOFF_DAYS_BEFORE)
+        naive = datetime.combine(cutoff_date, datetime.max.time().replace(microsecond=0))
+        return timezone.make_aware(naive)
+
     def save(self, *args, **kwargs):
         if not self.reference_number:
             self.reference_number = allocate_meeting_reference()
@@ -285,17 +344,30 @@ class Meeting(models.Model):
 
 
 class AgendaItem(models.Model):
-    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name="agenda_items")
+    meeting    = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name="agenda_items")
     submission = models.ForeignKey("Submission", on_delete=models.CASCADE, related_name="agenda_placements")
-    sequence = models.PositiveIntegerField(default=0)
+    sequence   = models.PositiveIntegerField(default=0, help_text="Order within the category group.")
+    category   = models.CharField(
+        max_length=32, choices=AgendaCategory.choices, default=AgendaCategory.OTHER,
+        help_text="Agenda section this item belongs to.",
+    )
+    # Matters Arising only — reference back to a previous meeting/agenda item
+    matters_arising_meeting_ref = models.CharField(
+        max_length=128, blank=True,
+        help_text="e.g. 'PSC Meeting No. 10 of Monday 30th June 2025'",
+    )
+    matters_arising_agenda_no = models.CharField(
+        max_length=32, blank=True,
+        help_text="e.g. 'Agenda 20'",
+    )
     added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["sequence", "added_at"]
+        ordering = ["category", "sequence", "added_at"]
         unique_together = ("meeting", "submission")
 
     def __str__(self):
-        return f"{self.meeting.reference_number} Item {self.sequence}: {self.submission.reference_number}"
+        return f"{self.meeting.reference_number} [{self.get_category_display()}] #{self.sequence}: {self.submission.reference_number}"
 
 
 class Profile(models.Model):
@@ -764,6 +836,10 @@ class Submission(models.Model):
         default=False,
         help_text="True when this submission is a lightweight attachment reviewed alongside a parent submission.",
     )
+    is_internal = models.BooleanField(
+        default=False,
+        help_text="True when submitted by OPSC staff (CSU/ODU). Routes directly to Secretary, no checklist.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="submissions_logged"
     )
@@ -1052,13 +1128,78 @@ class CommissionTaskDecisionType(models.TextChoices):
     OTHER = "other", "Other"
 
 
+class CommissionDecisionOutcome(models.TextChoices):
+    APPROVED       = "approved",       "Approved"
+    DEFERRED_NEXT  = "deferred_next",  "Deferred To Next Meeting"
+    DEFERRED_INFO  = "deferred_info",  "Deferred — Need more information"
+    REJECTED       = "rejected",       "Rejected"
+
+
+class CommissionActionUnit(models.TextChoices):
+    CIU            = "CIU",            "CIU"
+    CSU            = "CSU",            "CSU"
+    FHU            = "FHU",            "FHU"
+    HRMU           = "HRMU",           "HRMU"
+    ODU            = "ODU",            "ODU"
+    OPSC_SECRETARY = "OPSC_Secretary", "OPSC Secretary"
+    VIPAM_HRDU     = "VIPAM_HRDU",     "VIPAM/HRDU"
+
+
+class CommissionImplementationStatus(models.TextChoices):
+    WITH_UNIT       = "with_unit",       "With Unit Responsible"
+    MATTERS_ARISING = "matters_arising", "Matters Arising"
+    ACTIONED        = "actioned",        "Actioned"
+    NOW_IRRELEVANT  = "now_irrelevant",  "Now Irrelevant"
+
+
 class CommissionTask(models.Model):
     """
     Post-decision action item: secretariat allocates to an OPSC Manager;
     the manager may assign work to Principal / Senior Officers.
+
+    Also serves as the Decision Register — tracks the outcome of each
+    commission decision and its implementation status (mirrors the
+    PS Commission Implementation Tracker spreadsheet).
     """
 
-    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name="commission_tasks")
+    # ── Decision Register fields (from spreadsheet) ──────────────────────────
+    decision_number = models.CharField(
+        max_length=64, blank=True,
+        help_text="e.g. '02-28-2025' (decision#-meeting#-year).",
+    )
+    meeting = models.ForeignKey(
+        "Meeting", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="commission_tasks",
+        help_text="Commission sitting that produced this decision.",
+    )
+    decision_detail = models.TextField(
+        blank=True,
+        help_text="Full text of what the Commission decided.",
+    )
+    decision_outcome = models.CharField(
+        max_length=32, blank=True,
+        choices=CommissionDecisionOutcome.choices,
+    )
+    action_unit = models.CharField(
+        max_length=32, blank=True,
+        choices=CommissionActionUnit.choices,
+        help_text="OPSC unit responsible for actioning this decision.",
+    )
+    implementation_status = models.CharField(
+        max_length=32, blank=True,
+        choices=CommissionImplementationStatus.choices,
+        default=CommissionImplementationStatus.WITH_UNIT,
+    )
+    way_forward = models.TextField(
+        blank=True,
+        help_text="Notes on next steps or way forward.",
+    )
+
+    # ── Submission link (optional) ────────────────────────────────────────────
+    submission = models.ForeignKey(
+        Submission, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="commission_tasks",
+    )
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     meeting_reference = models.CharField(
@@ -1123,7 +1264,8 @@ class CommissionTask(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.submission.reference_number}: {self.title}"
+        ref = self.submission.reference_number if self.submission_id else (self.decision_number or "—")
+        return f"{ref}: {self.title}"
 
 
 class CommissionTaskUpdate(models.Model):
@@ -1548,3 +1690,228 @@ class MeetingTranscript(models.Model):
 
     def __str__(self):
         return f"Transcript — {self.meeting.reference_number}"
+
+
+# ── Organisation Restructure Submission (Section 3.1 template) ───────────────
+
+class RestructureSubmissionData(models.Model):
+    """
+    Structured data for an Organisation Restructure / Establishment Variation
+    submission (PSC Section 3.1 standard template).
+
+    Filled by the Ministry/Department HR officer. One record per Submission.
+    The costing table rows are stored as a JSON array so that the number of
+    position rows can vary per submission.
+
+    costing_rows schema (list of dicts):
+    {
+      "current_post_no":    str,
+      "current_title":      str,     # Title / Occupant
+      "current_level":      str,     # Level / Grade
+      "current_salary":     str,     # VT amount as string
+      "proposed_post_no":   str,
+      "proposed_title":     str,
+      "proposed_level":     str,
+      "proposed_salary":    str,
+      "salary_difference":  str,     # +/- VT amount
+    }
+    """
+
+    submission = models.OneToOneField(
+        Submission, on_delete=models.CASCADE,
+        related_name="restructure_data",
+    )
+
+    # ── Cover ─────────────────────────────────────────────────────────────────
+    subject_title = models.CharField(
+        max_length=512, blank=True,
+        help_text="Full subject/title of the proposal, e.g. 'Proposal to Revise the Organisation Structure …'",
+    )
+
+    # ── Section 1 — Background ────────────────────────────────────────────────
+    background = models.TextField(blank=True)
+
+    # ── Section 2 — Proposal ─────────────────────────────────────────────────
+    proposal = models.TextField(blank=True)
+
+    # ── Section 3 — Costing ───────────────────────────────────────────────────
+    costing_rows = models.JSONField(
+        default=list, blank=True,
+        help_text="Array of position rows for the costing table (see model docstring).",
+    )
+    costing_notes = models.TextField(
+        blank=True,
+        help_text="Notes below the table (vacancy funding, part-year calculations, etc.).",
+    )
+
+    # ── Section 4 — Implementation Plan ──────────────────────────────────────
+    implementation_plan = models.TextField(blank=True)
+
+    # ── Section 5 — Recommendation ───────────────────────────────────────────
+    recommendation = models.TextField(blank=True)
+
+    # ── Director sign-off ────────────────────────────────────────────────────
+    director_name = models.CharField(max_length=255, blank=True)
+    director_date = models.DateField(null=True, blank=True)
+
+    # ── Attachments checklist ─────────────────────────────────────────────────
+    attach_current_org_chart  = models.BooleanField(default=False)
+    attach_proposed_org_chart = models.BooleanField(default=False)
+    attach_job_descriptions   = models.BooleanField(default=False)
+    attach_other              = models.BooleanField(default=False)
+    attach_other_description  = models.CharField(max_length=512, blank=True)
+
+    # ── Director-General endorsement ──────────────────────────────────────────
+    dg_endorses = models.BooleanField(
+        null=True, blank=True,
+        help_text="True = I support / endorse; False = I do not support.",
+    )
+    dg_name = models.CharField(max_length=255, blank=True)
+    dg_date = models.DateField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = "Restructure Submission Data"
+        verbose_name_plural = "Restructure Submission Data"
+
+    def __str__(self):
+        return f"Restructure — {self.submission.reference_number}"
+
+
+# ── ODU Restructure Submission Checklist ──────────────────────────────────────
+
+class ODUChecklistStatus(models.TextChoices):
+    DRAFT     = "draft",     "Draft"
+    SUBMITTED = "submitted", "Submitted"
+    APPROVED  = "approved",  "Approved"
+
+
+class ODURestructureChecklist(models.Model):
+    """
+    Digital version of the OPSC ODU Checklist for Restructure Submissions.
+    One per submission; completed by the ODU Principal Job Analyst and
+    finalised by the Manager ODU before forwarding to the Commission.
+    """
+
+    submission = models.OneToOneField(
+        Submission, on_delete=models.CASCADE,
+        related_name="odu_checklist",
+        help_text="The restructure submission this checklist belongs to.",
+    )
+    status = models.CharField(
+        max_length=12, choices=ODUChecklistStatus.choices,
+        default=ODUChecklistStatus.DRAFT, db_index=True,
+    )
+
+    # ── Section A — Submission Information ───────────────────────────────────
+    ministry_department = models.CharField(max_length=255, blank=True)
+    division_unit       = models.CharField(max_length=255, blank=True)
+
+    class SubmissionType(models.TextChoices):
+        FULL_RESTRUCTURE = "full_restructure", "Full Restructure"
+        PARTIAL_REVIEW   = "partial_review",   "Partial Review"
+        NEW_JD           = "new_jd",           "New Job Description"
+        AMENDMENT        = "amendment",        "Amendment"
+
+    submission_type = models.CharField(
+        max_length=20, choices=SubmissionType.choices, blank=True,
+    )
+    odu_officer_assigned = models.CharField(max_length=255, blank=True)
+    manager_odu          = models.CharField(max_length=255, blank=True)
+
+    # ── Section B — Verification Checklist (20 yes/no items) ─────────────────
+    # Each item: True = Yes, False = No, None = Not yet answered
+    # Group 1: Submission Completeness
+    b1_cover_letter         = models.BooleanField(null=True, blank=True)
+    b2_org_chart            = models.BooleanField(null=True, blank=True)
+    b3_positions_list       = models.BooleanField(null=True, blank=True)
+    b4_jds_attached         = models.BooleanField(null=True, blank=True)
+    b5_rationale_stated     = models.BooleanField(null=True, blank=True)
+    # Group 2: Structure Compliance
+    b6_mandate_alignment    = models.BooleanField(null=True, blank=True)
+    b7_reporting_lines      = models.BooleanField(null=True, blank=True)
+    b8_no_duplication       = models.BooleanField(null=True, blank=True)
+    b9_span_of_control      = models.BooleanField(null=True, blank=True)
+    # Group 3: Job Description Verification
+    b10_job_purpose_linked  = models.BooleanField(null=True, blank=True)
+    b11_kra_kta_kpi         = models.BooleanField(null=True, blank=True)
+    b12_competencies        = models.BooleanField(null=True, blank=True)
+    b13_qual_experience     = models.BooleanField(null=True, blank=True)
+    # Group 4: Financial Implications
+    b14_cost_analysis       = models.BooleanField(null=True, blank=True)
+    b15_grt_mapping         = models.BooleanField(null=True, blank=True)
+    b16_consultation        = models.BooleanField(null=True, blank=True)
+    # Group 6: ODU Review & Feedback (no Group 5 in source doc)
+    b17_odu_analysis        = models.BooleanField(null=True, blank=True)
+    b18_feedback_provided   = models.BooleanField(null=True, blank=True)
+    # Group 7: Documentation for Commission
+    b19_final_docs_ready    = models.BooleanField(null=True, blank=True)
+    b20_manager_final_check = models.BooleanField(null=True, blank=True)
+
+    # ── Section C — ODU Officer Recommendation ───────────────────────────────
+    class Recommendation(models.TextChoices):
+        VERIFIED      = "verified",      "Submission verified and ready for Commission submission"
+        NEEDS_REVISION = "needs_revision", "Submission requires revision before further processing"
+        INCOMPLETE    = "incomplete",    "Submission incomplete — return to Ministry for clarification"
+
+    recommendation = models.CharField(
+        max_length=20, choices=Recommendation.choices, blank=True,
+    )
+    officer_comments = models.TextField(blank=True)
+
+    # ── Section D — Authorization ─────────────────────────────────────────────
+    verifying_officer_name  = models.CharField(max_length=255, blank=True)
+    verifying_officer_date  = models.DateField(null=True, blank=True)
+    manager_verifier_name   = models.CharField(max_length=255, blank=True)
+    manager_verifier_date   = models.DateField(null=True, blank=True)
+
+    # ── Meta ──────────────────────────────────────────────────────────────────
+    created_by  = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="odu_checklists_created",
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+    updated_at   = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name        = "ODU Restructure Checklist"
+        verbose_name_plural = "ODU Restructure Checklists"
+
+    def __str__(self):
+        return f"ODU Checklist — {self.submission.reference_number} ({self.get_status_display()})"
+
+    @property
+    def items_answered(self):
+        """Count of the 20 Section B items that have been answered (not None)."""
+        fields = [
+            self.b1_cover_letter, self.b2_org_chart, self.b3_positions_list,
+            self.b4_jds_attached, self.b5_rationale_stated,
+            self.b6_mandate_alignment, self.b7_reporting_lines,
+            self.b8_no_duplication, self.b9_span_of_control,
+            self.b10_job_purpose_linked, self.b11_kra_kta_kpi,
+            self.b12_competencies, self.b13_qual_experience,
+            self.b14_cost_analysis, self.b15_grt_mapping, self.b16_consultation,
+            self.b17_odu_analysis, self.b18_feedback_provided,
+            self.b19_final_docs_ready, self.b20_manager_final_check,
+        ]
+        return sum(1 for f in fields if f is not None)
+
+    @property
+    def items_yes(self):
+        """Count of items answered Yes."""
+        fields = [
+            self.b1_cover_letter, self.b2_org_chart, self.b3_positions_list,
+            self.b4_jds_attached, self.b5_rationale_stated,
+            self.b6_mandate_alignment, self.b7_reporting_lines,
+            self.b8_no_duplication, self.b9_span_of_control,
+            self.b10_job_purpose_linked, self.b11_kra_kta_kpi,
+            self.b12_competencies, self.b13_qual_experience,
+            self.b14_cost_analysis, self.b15_grt_mapping, self.b16_consultation,
+            self.b17_odu_analysis, self.b18_feedback_provided,
+            self.b19_final_docs_ready, self.b20_manager_final_check,
+        ]
+        return sum(1 for f in fields if f is True)

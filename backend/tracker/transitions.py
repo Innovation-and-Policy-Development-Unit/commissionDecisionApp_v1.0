@@ -5,6 +5,35 @@ from django.core.exceptions import PermissionDenied
 from .models import Role, WorkflowStage, MeetingType
 
 # ---------------------------------------------------------------------------
+# Internal submission roles — only unit managers (not principals) create submissions
+# ---------------------------------------------------------------------------
+INTERNAL_SUBMITTER_ROLES = {
+    Role.CSU_MANAGER,
+    Role.ODU_MANAGER,
+}
+
+# ---------------------------------------------------------------------------
+# Internal stage graph — short 4-stage workflow for OPSC internal submissions
+# DRAFT → SUBMITTED → SECRETARY_REVIEW → APPROVED / REJECTED
+# ---------------------------------------------------------------------------
+_INTERNAL_STAGE_GRAPH = {
+    WorkflowStage.DRAFT: [
+        WorkflowStage.SUBMITTED,
+    ],
+    WorkflowStage.SUBMITTED: [
+        WorkflowStage.SECRETARY_REVIEW,
+    ],
+    WorkflowStage.SECRETARY_REVIEW: [
+        WorkflowStage.APPROVED,
+        WorkflowStage.REJECTED,
+    ],
+    # Allow Secretary to push back for correction
+    WorkflowStage.REJECTED: [
+        WorkflowStage.DRAFT,
+    ],
+}
+
+# ---------------------------------------------------------------------------
 # Stage graph — maps every stage to its legal successor stages
 # ---------------------------------------------------------------------------
 _STAGE_GRAPH = {
@@ -106,9 +135,8 @@ _MINISTRY_ALLOWED = {
     (WorkflowStage.DRAFT,                WorkflowStage.SUBMITTED),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
-    (WorkflowStage.DEFERRED_BACK_TO_HR,  WorkflowStage.SUBMITTED),
-    (WorkflowStage.DEFERRED_BACK_TO_HR,  WorkflowStage.DRAFT),
     (WorkflowStage.DEFERRED_BACK_TO_HR,  WorkflowStage.MATTERS_ARISING),
+    (WorkflowStage.DEFERRED_BACK_TO_HR,  WorkflowStage.DRAFT),
 }
 
 # OPSC Unit Managers handle the checklist review stage only
@@ -182,8 +210,39 @@ _STAFF_STAGES = {
 # Public API
 # ---------------------------------------------------------------------------
 
-def assert_transition_allowed(*, role: str, current_stage: str, target_stage: str) -> None:
-    """Raise PermissionDenied if the role cannot move current_stage → target_stage."""
+def assert_transition_allowed(*, role: str, current_stage: str, target_stage: str, is_internal: bool = False) -> None:
+    """Raise PermissionDenied if the role cannot move current_stage → target_stage.
+
+    Pass is_internal=True for OPSC-internal submissions (CSU/ODU → Secretary workflow).
+    """
+
+    # ── Internal submission workflow ─────────────────────────────────────────
+    if is_internal:
+        graph = _INTERNAL_STAGE_GRAPH
+        allowed_targets = graph.get(current_stage, [])
+        if target_stage not in allowed_targets and role != Role.PSC_ADMIN:
+            raise PermissionDenied("That transition is not allowed in the internal submission workflow.")
+
+        # Internal submitters (CSU/ODU) can only submit their own draft
+        if role in INTERNAL_SUBMITTER_ROLES:
+            if (current_stage, target_stage) != (WorkflowStage.DRAFT, WorkflowStage.SUBMITTED):
+                raise PermissionDenied("CSU/ODU users can only submit their draft.")
+            return
+
+        # Secretary and Admin handle review/decision
+        if role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
+            if current_stage == WorkflowStage.SUBMITTED and target_stage == WorkflowStage.SECRETARY_REVIEW:
+                return
+            if current_stage == WorkflowStage.SECRETARY_REVIEW and target_stage in {
+                WorkflowStage.APPROVED, WorkflowStage.REJECTED
+            }:
+                return
+            raise PermissionDenied("Secretary can move internal submissions: Submitted→Secretary Review, or Secretary Review→Approved/Rejected.")
+
+        if role == Role.PSC_ADMIN:
+            return
+
+        raise PermissionDenied("Only the submitter or Secretary may act on internal submissions.")
 
     # ── Ministry roles ───────────────────────────────────────────────────────
     if role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
@@ -281,8 +340,19 @@ def assert_transition_allowed(*, role: str, current_stage: str, target_stage: st
         return
 
 
-def iter_allowed_targets(role: str, current_stage: str) -> list:
+def iter_allowed_targets(role: str, current_stage: str, is_internal: bool = False) -> list:
     """Return all stage values the role may transition to from current_stage."""
+    if is_internal:
+        if role == Role.PSC_ADMIN:
+            return list(_INTERNAL_STAGE_GRAPH.get(current_stage, []))
+        if role in INTERNAL_SUBMITTER_ROLES:
+            if current_stage == WorkflowStage.DRAFT:
+                return [WorkflowStage.SUBMITTED]
+            return []
+        if role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
+            return list(_INTERNAL_STAGE_GRAPH.get(current_stage, []))
+        return []
+
     if role == Role.PSC_ADMIN:
         return [m.value for m in WorkflowStage]
     if role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
