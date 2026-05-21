@@ -12,8 +12,11 @@ def seed_forward(apps, schema_editor):
     RoleDefinition.objects.get_or_create(
         role="compliance_senior",
         defaults={
-            "label": "Compliance Senior Officer",
-            "description": "Compliance unit senior officer — may create compliance submissions except PSA amendments.",
+            "description": (
+                "Compliance unit senior officer — may create compliance submissions "
+                "except PSA amendments."
+            ),
+            "is_builtin": True,
         },
     )
 
