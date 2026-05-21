@@ -28,6 +28,7 @@ class Role(models.TextChoices):
     HR_UNIT_MANAGER     = "hr_unit_manager",     "HR Unit Manager"
     ODU_MANAGER         = "odu_manager",         "ODU Manager"
     COMPLIANCE_MANAGER  = "compliance_manager",  "Compliance Manager"
+    COMPLIANCE_SENIOR   = "compliance_senior",   "Compliance Senior Officer"
     CSU_MANAGER         = "csu_manager",         "CSU Manager"
     # ── OPSC Unit Principal roles (assigned checklist/assessment work) ──────
     VIPAM_PRINCIPAL       = "vipam_principal",       "VIPAM Principal"

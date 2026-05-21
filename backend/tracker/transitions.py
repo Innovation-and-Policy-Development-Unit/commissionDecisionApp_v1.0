@@ -12,6 +12,18 @@ INTERNAL_SUBMITTER_ROLES = {
     Role.ODU_MANAGER,
 }
 
+_COMPLIANCE_SUBMITTER_ROLES = {
+    Role.COMPLIANCE_SENIOR,
+    Role.COMPLIANCE_PRINCIPAL,
+    Role.COMPLIANCE_MANAGER,
+}
+
+_COMPLIANCE_CREATOR_ALLOWED = {
+    (WorkflowStage.DRAFT, WorkflowStage.SUBMITTED),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
+}
+
 # ---------------------------------------------------------------------------
 # Internal stage graph — short 4-stage workflow for OPSC internal submissions
 # DRAFT → SUBMITTED → SECRETARY_REVIEW → APPROVED / REJECTED
@@ -259,6 +271,14 @@ def assert_transition_allowed(*, role: str, current_stage: str, target_stage: st
             raise PermissionDenied(
                 "Ministry users can only submit a draft, respond to clarification requests, "
                 "or respond to a commission deferral."
+            )
+        return
+
+    # ── Compliance unit creators ───────────────────────────────────────────
+    if role in _COMPLIANCE_SUBMITTER_ROLES:
+        if (current_stage, target_stage) not in _COMPLIANCE_CREATOR_ALLOWED:
+            raise PermissionDenied(
+                "Compliance staff can submit a draft or respond to a clarification request."
             )
         return
 

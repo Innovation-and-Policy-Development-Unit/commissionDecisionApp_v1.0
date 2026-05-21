@@ -678,6 +678,25 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "is_internal")
 
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if not request or not getattr(request, "user", None):
+            return attrs
+        try:
+            profile = request.user.psc_profile
+            role = profile.role
+        except Exception:
+            return attrs
+        from .compliance_forms import COMPLIANCE_SUBMITTER_ROLES, assert_compliance_may_use_form_type
+
+        form_type_code = attrs.get("form_type_code") or ""
+        if role in COMPLIANCE_SUBMITTER_ROLES:
+            assert_compliance_may_use_form_type(role, form_type_code)
+        elif form_type_code.startswith("COMP-"):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Only Compliance unit staff may create compliance submission types.")
+        return attrs
+
     def create(self, validated_data):
         request = self.context["request"]
         user = request.user

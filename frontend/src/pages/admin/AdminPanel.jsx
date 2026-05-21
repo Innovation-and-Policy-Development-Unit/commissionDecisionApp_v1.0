@@ -63,6 +63,9 @@ const ROLE_CHOICES = [
   { value: 'senior_officer', label: 'Senior Officer' },
   { value: 'ministry_hr', label: 'Ministry HR Officer' },
   { value: 'dept_admin', label: 'Department Admin Officer' },
+  { value: 'compliance_manager', label: 'Compliance Manager' },
+  { value: 'compliance_senior', label: 'Compliance Senior Officer' },
+  { value: 'compliance_principal', label: 'Compliance Principal' },
 ]
 
 const PERM_CATEGORIES = [
@@ -84,6 +87,9 @@ const ROLE_COLORS = {
   senior_officer: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
   ministry_hr: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
   dept_admin: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
+  compliance_manager: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+  compliance_senior: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-300',
+  compliance_principal: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
 }
 
 const CAT_COLORS = {

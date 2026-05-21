@@ -125,6 +125,8 @@ USERS = [
     ("m.hrunit",       "m.hrunit@psc.gov.vu",        "Manager123!",       "hr_unit_manager",        None),
     ("m.odu",          "m.odu@psc.gov.vu",           "Manager123!",       "odu_manager",            None),
     ("m.compliance",   "m.compliance@psc.gov.vu",    "Manager123!",       "compliance_manager",     None),
+    ("s.compliance",   "s.compliance@psc.gov.vu",    "Officer123!",       "compliance_senior",      None),
+    ("p.compliance",   "p.compliance@psc.gov.vu",    "Officer123!",       "compliance_principal",   None),
     # OPSC Manager — allocates decisions to staff after Chairperson signs minutes
     ("m.opsc",         "m.opsc@psc.gov.vu",          "Manager123!",       "psc_manager",            None),
     # Ministry HR
@@ -695,8 +697,22 @@ class Command(BaseCommand):
             "view_reports", "view_audit_trail",
         ]),
         ("compliance_manager", (
-            "Compliance Manager — reviews checklist for compliance-related submissions "
-            "and approves or returns them for clarification."
+            "Compliance Manager — reviews checklist for compliance-related submissions, "
+            "creates digitized compliance submissions (including PSA amendments)."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "view_reports", "view_audit_trail",
+        ]),
+        ("compliance_senior", (
+            "Compliance Senior Officer — creates and maintains digitized compliance submissions "
+            "(except PSA amendments)."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "view_reports", "view_audit_trail",
+        ]),
+        ("compliance_principal", (
+            "Compliance Principal — assigned compliance assessment work; may create all "
+            "compliance submission types including PSA amendments."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
             "view_reports", "view_audit_trail",

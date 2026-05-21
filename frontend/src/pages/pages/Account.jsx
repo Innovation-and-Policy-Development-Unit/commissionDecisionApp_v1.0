@@ -67,6 +67,9 @@ const ROLE_LABELS = {
   senior_officer:   'Senior Officer',
   ministry_hr:      'Ministry HR Officer',
   dept_admin:       'Department Admin Officer',
+  compliance_manager:  'Compliance Manager',
+  compliance_senior:   'Compliance Senior Officer',
+  compliance_principal:'Compliance Principal',
 }
 
 const ROLE_COLORS = {
@@ -79,6 +82,9 @@ const ROLE_COLORS = {
   senior_officer:   'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
   ministry_hr:      'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
   dept_admin:       'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
+  compliance_manager:  'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+  compliance_senior:   'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-300',
+  compliance_principal:'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
 }
 
 function SuccessAlert({ msg, onClear }) {

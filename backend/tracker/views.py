@@ -204,6 +204,12 @@ def _submission_queryset_for(user):
         Role.VIPAM_PRINCIPAL,
         Role.COMPLIANCE_PRINCIPAL,
     }
+    if role in {Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_MANAGER}:
+        return qs.filter(form_category__code="COMPLIANCE")
+    if role == Role.COMPLIANCE_PRINCIPAL:
+        return qs.filter(form_category__code="COMPLIANCE").filter(
+            models.Q(assigned_to=user) | models.Q(created_by=user)
+        )
     if role in _UNIT_PRINCIPAL_ROLES:
         # Principals see only submissions explicitly assigned to them
         return qs.filter(assigned_to=user)
@@ -477,11 +483,30 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             }
             submission = serializer.save(**kwargs)
 
+        elif profile.role in {
+            Role.COMPLIANCE_SENIOR,
+            Role.COMPLIANCE_PRINCIPAL,
+            Role.COMPLIANCE_MANAGER,
+        }:
+            from .compliance_forms import assert_compliance_may_use_form_type
+
+            form_type_code = serializer.validated_data.get("form_type_code") or ""
+            assert_compliance_may_use_form_type(profile.role, form_type_code)
+            ministry_id = _resolve_opsc_ministry(profile)
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": False,
+                "routed_unit": RoutedUnit.COMPLIANCE,
+                "ministry_id": ministry_id,
+            }
+            submission = serializer.save(**kwargs)
+
         elif profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY}:
             submission = serializer.save()
         else:
             raise PermissionDenied(
-                "Only PSC Officers, Admins, Secretaries, Ministry staff, or OPSC unit staff can create submissions."
+                "Only PSC Officers, Admins, Secretaries, Ministry staff, OPSC unit staff, "
+                "or Compliance unit staff can create submissions."
             )
         _log(self.request, _AL.Action.CREATE,
              resource_type="Submission", resource_id=submission.id,
@@ -1201,6 +1226,18 @@ class PSCFormTypeViewSet(viewsets.ModelViewSet):
         cat = self.request.query_params.get('form_category')
         if cat:
             qs = qs.filter(form_category_id=cat)
+        audience = self.request.query_params.get('audience')
+        if audience == 'compliance':
+            from .compliance_forms import compliance_form_codes_for_role
+
+            try:
+                profile = self.request.user.psc_profile
+            except Exception:
+                return qs.none()
+            codes = compliance_form_codes_for_role(profile.role)
+            if not codes:
+                return qs.none()
+            qs = qs.filter(code__in=codes)
         return qs
 
     def _require_admin(self):

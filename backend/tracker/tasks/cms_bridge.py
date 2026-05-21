@@ -21,6 +21,12 @@ _FORM_TYPE_TO_CASE_FAMILY = {
     "PSC 7.1": "senior_serious_misconduct",
     "PSC 8":  "senior_poor_performance",
     "PSC 8.1": "senior_poor_performance",
+    "COMP-SMDR": "employee_disciplinary",
+    "COMP-PAR": "employee_disciplinary",
+    "COMP-PSDB": "employee_disciplinary",
+    "COMP-14D": "employee_disciplinary",
+    "COMP-OMB": "employee_disciplinary",
+    "COMP-PSA": "policy_review",
 }
 
 _DEFAULT_CASE_FAMILY = "employee_disciplinary"

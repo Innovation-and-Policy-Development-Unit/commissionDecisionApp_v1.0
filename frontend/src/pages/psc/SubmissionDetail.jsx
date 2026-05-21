@@ -24,6 +24,7 @@ import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
 import RestructureSubmissionForm from './RestructureSubmissionForm'
+import { isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
 
 // All roles that may trigger a transition
 const TRANSITION_ROLES = [
@@ -163,6 +164,10 @@ export default function SubmissionDetail() {
                                    'psc_admin', 'psc_officer', 'psc_secretary'].includes(user.role)
   const canEditForm37  = user && ['ministry_hr', 'dept_admin', 'psc_admin',
                                    'psc_officer', 'psc_secretary'].includes(user.role)
+  const canEditComplianceForm = user && isComplianceRole(user.role)
+    && isComplianceFormCode(submission?.form_type_code)
+    && ['draft', 'returned_for_clarification'].includes(submission?.current_stage)
+  const canEditDigitizedForm = canEditForm37 || canEditComplianceForm
 
   const isOduRole      = user && ['odu_principal', 'odu_manager'].includes(user.role)
   const canViewOduChecklist = user && [
@@ -738,7 +743,7 @@ const stageDescriptions = {
               }>
                 {/* Form editor / read-only view */}
                 <div>
-                  {canEditForm37 ? (
+                  {canEditDigitizedForm ? (
                     isDedicatedForm ? (
                       <>
                         {submission.form_type_code === 'PSC 2-1' && (
