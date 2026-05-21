@@ -44,5 +44,13 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # 0042 recorded start_new_page in migration state only; add DB column if missing.
+        migrations.RunSQL(
+            sql=(
+                "ALTER TABLE tracker_pscformfield "
+                "ADD COLUMN IF NOT EXISTS start_new_page boolean NOT NULL DEFAULT false;"
+            ),
+            reverse_sql=migrations.RunSQL.noop,
+        ),
         migrations.RunPython(seed_forward, seed_reverse),
     ]
