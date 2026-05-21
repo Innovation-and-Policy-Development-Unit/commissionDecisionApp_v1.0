@@ -376,6 +376,9 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+# ── AI / Claude API ───────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+
 # ── CMS integration (Case Management System) ──────────────────────────────────
 # URL of the CMS backend API, e.g. https://cms.internal or http://localhost:8001
 CMS_API_URL = os.getenv('CMS_API_URL', 'http://localhost:8001')

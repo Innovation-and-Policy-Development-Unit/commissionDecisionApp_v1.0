@@ -1,0 +1,387 @@
+AI FEATURES — COMMISSION DECISION PORTAL & CASE MANAGEMENT SYSTEM
+===================================================================
+Generated: 2026-05-21
+System: Commission Decision Portal (CDP) + Case Management System (CMS)
+AI Provider: Anthropic Claude API (Haiku 4.5 / Sonnet 4.6)
+===================================================================
+
+
+CATEGORY A — SUBMISSION INTELLIGENCE (CDP)
+-------------------------------------------
+
+A1. AUTO-FILL COMPLIANCE CHECKLIST
+   What it does:
+     When an HR Manager uploads a submission (e.g. a Notice of Disciplinary Action)
+     along with supporting documents, Claude reads the submission text and any
+     attached PDFs, then automatically pre-fills the compliance checklist fields
+     (e.g. "Was the employee given 48-hour notice?", "Is the allegation specific?",
+     "Has the employee's supervisor signed?"). The officer reviews and confirms or
+     adjusts the AI-filled answers rather than reading every document from scratch.
+   Why it matters:
+     Checklist completion is the most time-consuming manual step. Pre-filling it
+     reduces officer workload by an estimated 60–70% per submission.
+   Model recommended: Claude Haiku 4.5 (fast, cheap for routine extraction)
+   Effort: Medium | Impact: High
+
+A2. DOCUMENT CLASSIFICATION
+   What it does:
+     When a document is uploaded (PDF, image, Word), Claude identifies what type
+     of document it is — e.g. "Appointment Letter", "Notice of Allegation",
+     "Medical Certificate", "Employment Contract", "PSC Form 7" — and tags it
+     automatically in the system. Officers no longer need to manually label each file.
+   Why it matters:
+     Submissions often arrive with 5–15 attachments. Mis-categorised documents
+     cause delays when compliance officers search for specific records later.
+   Model recommended: Claude Haiku 4.5
+   Effort: Low | Impact: Medium
+
+A3. MISSING INFORMATION DETECTOR
+   What it does:
+     Before an HR Manager can submit, Claude scans the draft submission for
+     required fields and documents. It produces a plain-English list of what is
+     missing or incomplete — e.g. "Employee's response to the allegation is not
+     attached", "Date of incident is not specified", "Supervisor signature is absent".
+     The system blocks submission until critical gaps are resolved.
+   Why it matters:
+     A large proportion of submissions are returned to ministries due to missing
+     information, adding weeks to the process. This feature stops incomplete
+     submissions at source.
+   Model recommended: Claude Haiku 4.5
+   Effort: Low | Impact: High
+
+A4. DUPLICATE / SIMILAR SUBMISSION DETECTOR
+   What it does:
+     When a new submission is received, Claude compares it against existing cases
+     in the system (same subject name, ministry, allegation type, date range) and
+     flags if a highly similar or duplicate case already exists. Officers are shown
+     a warning with a link to the existing case.
+   Why it matters:
+     Prevents duplicate case creation when a ministry accidentally submits twice
+     or when a case is re-submitted under a slightly different subject name.
+   Model recommended: Claude Sonnet 4.6 (needs more reasoning for similarity matching)
+   Effort: Medium | Impact: Medium
+
+A5. SUBMISSION QUALITY SCORE
+   What it does:
+     After submission, Claude assigns a quality score (e.g. 78/100) based on
+     completeness, clarity of the allegation, quality of supporting evidence, and
+     adherence to PSC formatting requirements. The score and a brief explanation
+     are shown to the compliance officer as context when they open the case.
+   Why it matters:
+     Gives officers an immediate signal of how much work a submission needs
+     before it is ready for the Commission to consider.
+   Model recommended: Claude Haiku 4.5
+   Effort: Low | Impact: Medium
+
+
+CATEGORY B — CASE MANAGEMENT INTELLIGENCE (CMS)
+-------------------------------------------------
+
+B1. CASE SUMMARY GENERATOR
+   What it does:
+     At any point during a case, a compliance officer can click "Generate Summary"
+     and Claude reads the full case file — submission text, uploaded documents,
+     case notes, stage history, employee responses — and produces a structured
+     1–2 page summary in plain English. The summary includes: background,
+     allegation, timeline, employee response, key evidence, current stage, and
+     outstanding actions.
+   Why it matters:
+     When a case transfers between officers, or when the Commission Secretary
+     needs to brief a new reviewer, reading the full file can take hours. A
+     one-click summary saves significant time.
+   Model recommended: Claude Sonnet 4.6 (needs to synthesise complex information)
+   Effort: Low | Impact: High
+
+B2. RISK ASSESSMENT
+   What it does:
+     Claude analyses case attributes — seniority of the subject, nature of the
+     allegation, prior cases involving the same person, ministry history, and SLA
+     status — and produces a risk rating (Low / Medium / High / Critical) with a
+     short explanation. High-risk cases are visually flagged on the case dashboard.
+   Why it matters:
+     Ensures that senior executive misconduct cases and politically sensitive
+     matters are not buried in a queue and receive appropriate priority.
+   Model recommended: Claude Sonnet 4.6
+   Effort: Medium | Impact: High
+
+B3. RECOMMENDED OUTCOME
+   What it does:
+     Based on the case facts, allegation type, evidence, and employee response,
+     Claude suggests a recommended outcome (e.g. "Formal Warning", "Termination",
+     "No Further Action") and provides a short rationale citing comparable case
+     types. The officer retains full decision-making authority — this is advisory only.
+   Why it matters:
+     New or junior compliance officers benefit from a reference point, especially
+     for case types they have not handled before. Reduces inconsistent outcomes
+     across similar cases.
+   Model recommended: Claude Sonnet 4.6 (requires careful reasoning)
+   Effort: High | Impact: High
+   Note: Must include a clear disclaimer that this is AI-generated guidance only.
+
+B4. SLA BREACH PREDICTOR
+   What it does:
+     Claude monitors case progress and stage durations. When it predicts that a
+     stage is likely to breach its statutory deadline — based on current pace,
+     officer workload, and historical patterns — it sends an early warning
+     notification to the assigned officer and their supervisor. Earlier than the
+     standard "3 days to due date" system alert.
+   Why it matters:
+     Many SLA breaches are avoidable. Predictive warnings give officers time to
+     act rather than just flagging a breach after it happens.
+   Model recommended: Claude Haiku 4.5
+   Effort: Medium | Impact: High
+
+B5. AUTO-DRAFT NOTICE OF ALLEGATION
+   What it does:
+     From the case facts (subject details, allegation description, date of incident,
+     regulatory reference), Claude drafts a formal Notice of Allegation letter in
+     the standard PSC format. The officer reviews, edits, and approves before it
+     is sent. The draft includes: addressee, formal allegation statement,
+     response deadline, and the relevant PSC regulation citation.
+   Why it matters:
+     Drafting these letters from scratch takes 30–60 minutes per case. A good
+     AI draft reduces this to a 5-minute review.
+   Model recommended: Claude Sonnet 4.6 (formal government writing quality)
+   Effort: Medium | Impact: High
+
+
+CATEGORY C — REPORTING & ANALYTICS
+-------------------------------------
+
+C1. NATURAL LANGUAGE REPORT GENERATION
+   What it does:
+     A manager or the Commission Secretary types a plain-English question such as:
+     "How many disciplinary cases were opened in the Ministry of Finance this year?"
+     or "Show me all overdue cases involving senior executives" — and the system
+     generates the report, a data table, and an optional chart. No SQL or manual
+     filtering required.
+   Why it matters:
+     Current reporting requires technical staff or pre-built report templates.
+     Natural language queries allow non-technical users to get answers instantly
+     without waiting for IT.
+   Model recommended: Claude Sonnet 4.6 (translates natural language to query logic)
+   Effort: Medium | Impact: High
+
+C2. AI-GENERATED EXECUTIVE SUMMARY FOR COMMISSION MEETINGS
+   What it does:
+     Before each Commission sitting, Claude compiles a structured executive
+     briefing document: cases ready for decision, outstanding matters from the
+     previous sitting, SLA performance summary, cases at risk, and any flagged
+     high-priority matters. Produced automatically from live system data.
+   Why it matters:
+     Preparing Commission briefing packs is currently a manual half-day task.
+     Automating the first draft significantly reduces administrative burden on
+     the Secretary's office.
+   Model recommended: Claude Sonnet 4.6
+   Effort: Medium | Impact: High
+
+C3. TREND ANALYSIS
+   What it does:
+     Claude analyses patterns across all cases over time and surfaces insights
+     such as: which ministries have the highest misconduct rates, which case types
+     are increasing, seasonal patterns in submissions, and whether outcome
+     consistency has changed over quarters. Presented as a dashboard report.
+   Why it matters:
+     The Commission can use this data to make systemic recommendations to
+     Government and target capacity-building support at high-risk ministries.
+   Model recommended: Claude Sonnet 4.6
+   Effort: Medium | Impact: Medium
+
+C4. MEETING MINUTES → ACTION ITEMS EXTRACTOR
+   What it does:
+     An officer uploads or pastes meeting minutes text. Claude extracts:
+     decisions made, action items (with owner and deadline if mentioned),
+     matters deferred, and follow-up questions. The output is formatted as a
+     structured action register that can be saved directly to the case or
+     system record.
+   Why it matters:
+     Action items from Commission meetings often get buried in long minutes
+     documents. Structured extraction ensures nothing is missed.
+   Model recommended: Claude Haiku 4.5
+   Effort: Low | Impact: Medium
+
+
+CATEGORY D — CHATBOT / CONVERSATIONAL INTERFACE
+-------------------------------------------------
+
+D1. STAFF CHATBOT — PSC REGULATIONS & PROCEDURES
+   What it does:
+     A chat interface available to all system users where staff can ask questions
+     about PSC Act provisions, public service regulations, and internal procedures
+     in plain English. For example: "What is the maximum period of temporary
+     suspension without pay?", "What are the steps for a grievance process?",
+     "Which form do I use for a serious misconduct referral?". Claude answers from
+     the PSC Act, regulations, and procedure manuals loaded as its knowledge base.
+   Why it matters:
+     HR officers in ministries frequently delay submissions because they are
+     unsure of the correct procedure. A reliable, instant Q&A tool reduces
+     procedural errors and speeds up the compliance process.
+   Model recommended: Claude Sonnet 4.6 with RAG (document retrieval)
+   Effort: Medium | Impact: High
+
+D2. SUBMISSION STATUS CHATBOT
+   What it does:
+     An employee or HR manager can type "What is the status of case PSC-2026-00042?"
+     or "Has my submission been reviewed yet?" and receive a plain-English status
+     update without having to navigate the portal or call the PSC office.
+   Why it matters:
+     Status enquiries are one of the highest-volume administrative tasks for
+     the PSC Secretary's office. A self-service chatbot frees up staff time.
+   Model recommended: Claude Haiku 4.5
+   Effort: Medium | Impact: High
+
+D3. COMPLIANCE OFFICER CASE ASSISTANT
+   What it does:
+     A case-specific chatbot available to the assigned compliance officer. The
+     officer can ask questions about their open case: "What does PSC Reg 28 say
+     about this type of allegation?", "Draft a response to the employee's latest
+     submission", "Summarise what happened in Stage 2". Claude has access to the
+     full case file as context.
+   Why it matters:
+     Reduces the need for officers to search regulations manually or consult
+     seniors for every procedural question during case management.
+   Model recommended: Claude Sonnet 4.6 (needs deep case context)
+   Effort: High | Impact: High
+
+
+CATEGORY E — DOCUMENT PROCESSING
+-----------------------------------
+
+E1. OCR + KEY FACTS EXTRACTION FROM SCANNED DOCUMENTS
+   What it does:
+     When a scanned image or non-searchable PDF is uploaded (e.g. a handwritten
+     letter, a scanned appointment letter), Claude extracts and structures the
+     key facts: names, dates, positions, references, and relevant statements.
+     The extracted text is stored as searchable metadata alongside the file.
+   Why it matters:
+     Many supporting documents in PSC cases are scanned paper records. Without
+     extraction, these are unsearchable and must be read manually every time.
+   Model recommended: Claude Sonnet 4.6 (vision capability for image inputs)
+   Effort: Medium | Impact: Medium
+
+E2. MEETING MINUTES → STRUCTURED RECORD
+   What it does:
+     Upload or paste meeting minutes (Commission sitting, compliance review meeting,
+     disciplinary hearing transcript) and Claude produces a structured record with:
+     date, location, attendees, agenda items, decisions per item, action items
+     with owners and deadlines, and matters deferred to next sitting.
+   Why it matters:
+     Meeting records are currently typed manually in full. Structured extraction
+     from raw minutes saves hours per meeting and ensures consistent formatting.
+   Model recommended: Claude Haiku 4.5
+   Effort: Low | Impact: High
+
+E3. AUTO-REDACT SENSITIVE DATA
+   What it does:
+     Before a document is shared externally (e.g. sent to a subject's ministry,
+     exported for an audit), Claude identifies and redacts sensitive personal
+     information — names of witnesses, personal addresses, medical details,
+     third-party identifiers — that should not be disclosed. A redacted PDF is
+     generated alongside the original.
+   Why it matters:
+     Manual redaction is error-prone and time-consuming. Accidental disclosure
+     of sensitive information creates legal and reputational risk for the PSC.
+   Model recommended: Claude Sonnet 4.6
+   Effort: Medium | Impact: Medium
+
+
+CATEGORY F — WORKFLOW AUTOMATION
+-----------------------------------
+
+F1. SMART CASE ROUTING
+   What it does:
+     When a new case is created and assigned to the compliance unit, Claude
+     suggests which officer to assign based on: current workload (number of open
+     cases), case type expertise, seniority of the subject (senior executive
+     cases go to senior officers), and geographic/ministry familiarity.
+   Why it matters:
+     Manual assignment by a supervisor can be slow and inconsistent. Smart routing
+     ensures balanced workloads and appropriate expertise matches.
+   Model recommended: Claude Haiku 4.5
+   Effort: Low | Impact: Medium
+
+F2. DEADLINE NOTIFICATION DRAFTING
+   What it does:
+     When a case stage is nearing its deadline, the system auto-drafts a
+     personalised reminder email to the responsible officer or ministry contact.
+     The draft includes the case reference, what is outstanding, the exact
+     deadline, and the consequence of non-compliance. Officers review and send.
+   Why it matters:
+     Generic automated reminders are often ignored. A specific, well-written
+     reminder drafted with full case context is more likely to prompt action.
+   Model recommended: Claude Haiku 4.5
+   Effort: Low | Impact: Medium
+
+F3. COMPLIANCE OUTCOME LETTER GENERATOR
+   What it does:
+     After the Commission reaches a decision, Claude drafts the formal outcome
+     letter to the subject employee and their ministry. The letter is in official
+     PSC format and references the applicable regulations, the decision, and any
+     required follow-up actions (e.g. reinstatement date, warning conditions).
+   Why it matters:
+     Outcome letters must be precise and legally worded. Drafting from scratch is
+     slow and inconsistency in wording creates disputes. AI drafts ensure
+     consistency and reduce drafting time significantly.
+   Model recommended: Claude Sonnet 4.6 (formal legal/government writing)
+   Effort: Medium | Impact: High
+
+F4. POLICY Q&A FROM PSC ACT / REGULATIONS TEXT
+   What it does:
+     The full text of the PSC Act, Public Service Regulations, and relevant
+     government circulars are loaded into the system as a document knowledge base.
+     Any user — officer, HR manager, or administrator — can ask a question and
+     receive a direct answer with the exact regulation section cited as a reference.
+     For example: "What is the statutory period for a disciplinary suspension?"
+     → "Under PSC Regulation 31(2), the maximum period is 3 months..."
+   Why it matters:
+     Regulation lookups currently require staff to manually search through PDF
+     documents. Instant, cited answers reduce procedural errors and save time
+     across every ministry using the system.
+   Model recommended: Claude Sonnet 4.6 with RAG
+   Effort: Medium | Impact: High
+
+
+===================================================================
+SUMMARY TABLE
+===================================================================
+
+Code  Feature                                     Effort   Impact
+----  ------------------------------------------  -------  ------
+A1    Auto-fill compliance checklist              Medium   High
+A2    Document classification                     Low      Medium
+A3    Missing information detector                Low      High
+A4    Duplicate submission detector               Medium   Medium
+A5    Submission quality score                    Low      Medium
+B1    Case summary generator                      Low      High
+B2    Risk assessment                             Medium   High
+B3    Recommended outcome (advisory)              High     High
+B4    SLA breach predictor                        Medium   High
+B5    Auto-draft Notice of Allegation             Medium   High
+C1    Natural language report generation          Medium   High
+C2    Executive summary for Commission meetings   Medium   High
+C3    Trend analysis                              Medium   Medium
+C4    Meeting minutes → action items              Low      Medium
+D1    Staff chatbot (PSC regulations)             Medium   High
+D2    Submission status chatbot                   Medium   High
+D3    Compliance officer case assistant           High     High
+E1    OCR + key facts extraction                  Medium   Medium
+E2    Meeting minutes → structured record         Low      High
+E3    Auto-redact sensitive data                  Medium   Medium
+F1    Smart case routing                          Low      Medium
+F2    Deadline notification drafting              Low      Medium
+F3    Compliance outcome letter generator         Medium   High
+F4    Policy Q&A from PSC Act / Regulations       Medium   High
+
+===================================================================
+RECOMMENDED STARTING SET (High impact, lower effort)
+===================================================================
+  A1  Auto-fill compliance checklist
+  A3  Missing information detector
+  B1  Case summary generator
+  B5  Auto-draft Notice of Allegation
+  C1  Natural language report generation
+  E2  Meeting minutes → structured record
+  D1  Staff chatbot (PSC regulations)
+  F4  Policy Q&A from PSC Act / Regulations
+
+===================================================================

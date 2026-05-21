@@ -1,0 +1,401 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{longtable,booktabs,array}
+\newcounter{none} % for unnumbered tables
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{\vspace{-2.5em}}
+
+\begin{document}
+
+\section{QUOTATION --- AI API SERVICE}\label{quotation-ai-api-service}
+
+\subsection{Public Service Commission of
+Vanuatu}\label{public-service-commission-of-vanuatu}
+
+\subsubsection{Submission \& Commission Decision Management System
+(SCDMS)}\label{submission-commission-decision-management-system-scdms}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\textbf{Document Reference:} SCDMS/AI/2026/001 \textbf{Date:} 21 May
+2026 \textbf{Prepared by:} Information and Technology Planning Division
+(IPDU) \textbf{Submitted to:} Director, IPDU
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{1. Purpose}\label{purpose}
+
+This document provides a cost quotation and justification for the
+procurement of Artificial Intelligence (AI) API services to power three
+planned AI features within the Public Service Commission's Submission
+and Commission Decision Management System (SCDMS).
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{2. Background}\label{background}
+
+The SCDMS is a full-stack web application developed for the Public
+Service Commission (PSC) of Vanuatu that manages the complete lifecycle
+of personnel decisions --- from ministry submission through PSC
+assessment, commission sittings, formal minutes, and post-decision
+implementation tracking.
+
+As part of Phase 2 development, three AI-powered features have been
+designed and are ready for implementation. These features require access
+to an AI language model API provided by \textbf{Anthropic PBC}, a
+leading AI safety company headquartered in San Francisco, USA.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{3. Proposed AI Features}\label{proposed-ai-features}
+
+\subsubsection{Feature 1 --- Automated Feedback
+Triage}\label{feature-1-automated-feedback-triage}
+
+\textbf{What it does:} When system users submit feedback reports (bugs,
+workflow issues, suggestions), the AI automatically: - Generates a
+one-sentence summary - Assigns a severity level (Low / Medium / High /
+Critical) - Categorises the report (Bug / Feature Request /
+Legal-Compliance / General Inquiry) - Translates non-English text to
+English for the development team
+
+\textbf{Benefit:} Reduces manual effort in reviewing and prioritising
+feedback. Ensures no critical issues are missed.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Feature 2 --- Meeting Minutes AI
+Drafting}\label{feature-2-meeting-minutes-ai-drafting}
+
+\textbf{What it does:} After a Commission sitting, the secretary uploads
+the audio recording. The system: 1. Transcribes the audio to text (via a
+speech-to-text service) 2. Sends the transcript to the AI, which
+extracts speakers, agenda items discussed, decisions made, and action
+items 3. Auto-populates a structured draft of the official Minutes
+document
+
+\textbf{Benefit:} Significantly reduces the time the PSC Secretary
+spends drafting minutes from recordings. The secretary reviews, edits,
+and signs off on the AI-generated draft --- full human oversight is
+maintained.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Feature 3 --- Natural Language Chatbot
+Assistant}\label{feature-3-natural-language-chatbot-assistant}
+
+\textbf{What it does:} A conversational assistant embedded in the SCDMS
+portal that allows authorised staff to ask plain-English questions about
+the system's data. Examples: - \emph{``Which submissions from the
+Ministry of Finance are still under assessment?''} - \emph{``What
+decisions were made in the last commission sitting?''} - \emph{``Which
+implementation tasks are overdue this month?''} - \emph{``Show me all
+compliance submissions received this year.''}
+
+\textbf{Benefit:} Eliminates the need for staff to navigate multiple
+screens to find information. Improves efficiency and reduces training
+burden for new users.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{4. Vendor Information}\label{vendor-information}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.5000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.5000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Field
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Detail
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\textbf{Vendor Name} & Anthropic PBC \\
+\textbf{Country} & United States of America \\
+\textbf{Website} & console.anthropic.com \\
+\textbf{Service Type} & AI Language Model API (Claude) \\
+\textbf{Billing Model} & Pay-per-use (no subscription, no minimum
+commitment) \\
+\textbf{Contract Type} & No contract required --- cancel at any time \\
+\textbf{Invoicing} & Monthly invoice or prepaid credit top-up
+available \\
+\textbf{Spending Control} & Hard monthly spending cap configurable by
+the organisation \\
+\end{longtable}
+}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{5. Cost Estimate}\label{cost-estimate}
+
+\subsubsection{Assumptions (conservative, based on expected PSC
+usage)}\label{assumptions-conservative-based-on-expected-psc-usage}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Usage Factor & Monthly Estimate \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Feedback comments submitted per month & 50 \\
+Commission sittings per month & 4 \\
+AI chatbot queries per month & 200 \\
+\end{longtable}
+}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Monthly Cost Breakdown
+(USD)}\label{monthly-cost-breakdown-usd}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2500}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Feature
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+AI Model Used
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Estimated Token Usage
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Monthly Cost (USD)
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Feedback Triage & Claude Haiku 4.5 & 50 comments × 300 tokens &
+\textbf{\textasciitilde\$0.10} \\
+Meeting Minutes Drafting & Claude Sonnet 4.6 & 4 meetings × 20,000
+tokens & \textbf{\textasciitilde\$2.40} \\
+Minutes Audio Transcription & OpenAI Whisper API & 4 meetings × 90 min
+avg & \textbf{\textasciitilde\$2.16} \\
+Chatbot Assistant & Claude Sonnet 4.6 & 200 queries × 2,000 tokens &
+\textbf{\textasciitilde\$6.00} \\
+\textbf{TOTAL --- Standard Usage} & & & \textbf{\textasciitilde\$10.66 /
+month} \\
+\textbf{TOTAL --- High Usage (2× volume)} & & &
+\textbf{\textasciitilde\$21.32 / month} \\
+\end{longtable}
+}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Annual Cost Estimate}\label{annual-cost-estimate}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Scenario & Annual Cost (USD) & Annual Cost (approx. VT) \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Standard usage & \textbf{\textasciitilde\$128 USD} &
+\textbf{\textasciitilde VT 15,200} \\
+High usage & \textbf{\textasciitilde\$256 USD} &
+\textbf{\textasciitilde VT 30,400} \\
+\end{longtable}
+}
+
+\emph{VT conversion based on approximate exchange rate of 1 USD = 119
+VT. Actual VT amount will vary with exchange rate at time of payment.}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsubsection{Recommended Approved Monthly
+Budget}\label{recommended-approved-monthly-budget}
+
+\textbf{USD \$25.00 per month} (inclusive of a 2× buffer above standard
+usage estimate).
+
+This limit can be enforced as a hard cap within the Anthropic console,
+ensuring charges can never exceed the approved amount without manual
+intervention.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{6. Payment Method}\label{payment-method}
+
+Anthropic supports the following payment options suitable for government
+procurement:
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.5000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.5000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Option
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Description
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\textbf{Credit / Debit Card} & Monthly charge to a designated government
+card \\
+\textbf{Prepaid Credit} & Top-up a fixed amount (e.g.~USD \$100) ---
+charges draw down from this balance \\
+\textbf{Invoiced Billing} & Contact Anthropic at
+\href{mailto:sales@anthropic.com}{\nolinkurl{sales@anthropic.com}} to
+arrange a formal purchase order and invoice --- no card required \\
+\end{longtable}
+}
+
+\textbf{Recommended for PSC:} Prepaid credit top-up of \textbf{USD \$50
+per quarter} (sufficient for standard usage with buffer). Invoiced
+billing via purchase order is also available if required by the Ministry
+of Finance procurement rules.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{7. Data \& Privacy
+Considerations}\label{data-privacy-considerations}
+
+\begin{itemize}
+\tightlist
+\item
+  All data sent to the Anthropic API is processed in-transit (HTTPS
+  encrypted)
+\item
+  Anthropic does not use API inputs to train their models (per their API
+  usage policy)
+\item
+  No personally identifiable information (PII) beyond what is necessary
+  will be sent --- prompts will be structured to pass anonymised or
+  role-level context only
+\item
+  Data residency: Anthropic processes data in the United States
+\end{itemize}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{8. Summary \& Recommendation}\label{summary-recommendation}
+
+The three AI features proposed for the SCDMS will materially improve the
+efficiency of PSC secretariat operations, reduce administrative burden
+on staff, and enhance the usability of the system for all ministry
+users.
+
+The cost is minimal --- estimated at \textbf{USD \$10--20 per month}
+(approximately \textbf{VT 1,200--2,400 per month}) --- and the service
+carries no contract, no lock-in, and is capped at an approved spending
+limit to eliminate financial risk.
+
+\textbf{It is recommended that the Director, IPDU, approve a monthly AI
+API budget of USD \$25.00 (approximately VT 3,000) to be reviewed at the
+end of the 2026 financial year.}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{9. Approval}\label{approval}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\textbf{Prepared by:} &
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ \\
+\textbf{Name / Title:} & IPDU Developer \\
+\textbf{Date:} & 21 May 2026 \\
+& \\
+\textbf{Approved by:} &
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ \\
+\textbf{Name / Title:} & Director, IPDU \\
+\textbf{Date:} & \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ \\
+\end{longtable}
+}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\emph{This quotation is based on estimated usage figures and publicly
+available Anthropic API pricing as of May 2026. Actual costs may vary. A
+monthly spending cap will be enforced to ensure costs do not exceed the
+approved budget.}
+
+\end{document}
