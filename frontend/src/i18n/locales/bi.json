@@ -440,6 +440,7 @@
     "confirm_password": "Konfemem Paswod",
     "loading_session": "I stap lodem sesen…",
     "inactivity_logout": "Sistem i lokaut yu from yu no muvum eni samting. Plis sain in bakegen.",
+    "inactivity_locked_hint": "Skrin i lok from yu no muv. Raetem PIN blong sesen blong kontiniu.",
     "invalid_credentials": "Nem blong yusa no paswod i rong",
     "approve_push": "Apruv pus notifikesen long telefon blong yu",
     "push_pending": "I wet blong yu apruv…",
@@ -456,9 +457,21 @@
     "submit": "Sanem",
     "submitted": "Tank yu — mifala i risivim fidbak blong yu."
   },
+  "account": {
+    "inactivity_lock_title": "Lokem skrin automatik",
+    "inactivity_lock_desc": "Taem yu no muv mouse o kiibod, skrin i lok. Raetem PIN — yu stap insaed long sistem.",
+    "inactivity_lock_label": "Lokem skrin afta",
+    "inactivity_lock_minutes": "{{count}} minit",
+    "inactivity_lock_never": "Neva (lokem manual nomo)",
+    "inactivity_lock_saved_off": "Lokem automatik i off.",
+    "inactivity_lock_saved": "Skrin bae i lok afta {{count}} minit blong no aktiviti.",
+    "inactivity_lock_pin_required": "Setem PIN blong sesen fast — sapos nogat, yu no save openem skrin."
+  },
   "lock": {
     "title": "Sesen i lok",
     "subtitle": "Raetem PIN blong yu blong stat bakegen.",
+    "subtitle_inactivity": "Sesen i lok. Raetem PIN blong kontiniu wok.",
+    "subtitle_no_pin": "Sesen i lok. Setem PIN long Account, o sain aot mo sain in bakegen.",
     "pin": "PIN",
     "unlock": "Openem",
     "sign_out_instead": "Sain aot nomo"

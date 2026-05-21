@@ -9,6 +9,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Clock,
   Lock,
   Mail,
   MapPin,
@@ -27,6 +28,11 @@ import { useConfirm } from '../../context/ConfirmContext'
 import LockPopover from '../../components/shared/LockPopover'
 import SignaturePad from '../../components/shared/SignaturePad'
 import api from '../../api/client'
+import {
+  getInactivityLockMinutes,
+  setInactivityLockMinutes,
+  DEFAULT_INACTIVITY_LOCK_MINUTES,
+} from '../../utils/inactivityLock'
 
 const DEFAULT_POLICY = { min_length: 8, require_uppercase: false, require_lowercase: false, require_digits: false, require_special: false, history_count: 5 }
 
@@ -171,6 +177,23 @@ export default function Account() {
   const [pinLoading,     setPinLoading]     = useState(false)
   const [pinError,       setPinError]       = useState('')
   const [pinSuccess,     setPinSuccess]     = useState('')
+
+  const [inactivityMinutes, setInactivityMinutes] = useState(DEFAULT_INACTIVITY_LOCK_MINUTES)
+
+  useEffect(() => {
+    if (user?.username) {
+      setInactivityMinutes(getInactivityLockMinutes(user.username))
+    }
+  }, [user?.username])
+
+  const handleInactivityMinutesChange = (value) => {
+    const minutes = parseInt(value, 10)
+    setInactivityMinutes(minutes)
+    if (user?.username) {
+      setInactivityLockMinutes(user.username, minutes)
+      toast.success(minutes === 0 ? 'Automatic screen lock disabled.' : `Screen will lock after ${minutes} minutes of inactivity.`)
+    }
+  }
 
   const resetPinForm = () => {
     setPinInput(''); setPinConfirm(''); setPinCurrentPw(''); setPinError('')
@@ -749,7 +772,7 @@ export default function Account() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Session PIN</h3>
-                  <p className="text-xs text-slate-400">Quick re-authentication after session timeout (valid until 5pm or 8h after full login)</p>
+                  <p className="text-xs text-slate-400">Unlock the screen after inactivity or manual lock (valid until 5pm or 8h after full login)</p>
                 </div>
               </div>
 
@@ -831,6 +854,48 @@ export default function Account() {
               )}
               {pinSuccess && (
                 <p className="mt-2 text-xs text-emerald-600">{pinSuccess}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Automatic screen lock — own card so it is easy to find */}
+          <div id="automatic-screen-lock" className="card p-6 scroll-mt-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-xl bg-sky-50 dark:bg-sky-900/30 flex items-center justify-center text-sky-600 dark:text-sky-400 flex-shrink-0">
+                <Clock size={18} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900 dark:text-slate-100">Automatic screen lock</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  After inactivity, the screen locks. Enter your session PIN to continue — you stay signed in.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label htmlFor="inactivity-lock-minutes" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                Lock screen after
+              </label>
+              <select
+                id="inactivity-lock-minutes"
+                className="input text-sm max-w-xs"
+                value={inactivityMinutes}
+                onChange={e => handleInactivityMinutesChange(e.target.value)}
+              >
+                <option value={5}>5 minutes</option>
+                <option value={10}>10 minutes</option>
+                <option value={15}>15 minutes (default)</option>
+                <option value={30}>30 minutes</option>
+                <option value={45}>45 minutes</option>
+                <option value={60}>60 minutes</option>
+                <option value={0}>Never (manual lock only)</option>
+              </select>
+
+              {inactivityMinutes > 0 && !user?.session_pin_set && (
+                <p className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 px-3 py-2">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  Set a session PIN in the card above first; otherwise automatic lock cannot unlock.
+                </p>
               )}
             </div>
           </div>

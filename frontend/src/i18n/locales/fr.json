@@ -440,6 +440,7 @@
     "confirm_password": "Confirmer le mot de passe",
     "loading_session": "Chargement de la session…",
     "inactivity_logout": "Vous avez été déconnecté pour inactivité. Veuillez vous reconnecter.",
+    "inactivity_locked_hint": "L'écran a été verrouillé pour inactivité. Saisissez votre code PIN de session pour continuer.",
     "invalid_credentials": "Nom d'utilisateur ou mot de passe incorrect",
     "approve_push": "Approuvez la notification sur votre téléphone",
     "push_pending": "En attente d'approbation…",
@@ -456,9 +457,21 @@
     "submit": "Envoyer",
     "submitted": "Merci — votre retour a été reçu."
   },
+  "account": {
+    "inactivity_lock_title": "Verrouillage automatique de l'écran",
+    "inactivity_lock_desc": "Après cette période sans activité, l'écran se verrouille. Saisissez votre code PIN — vous restez connecté.",
+    "inactivity_lock_label": "Verrouiller l'écran après",
+    "inactivity_lock_minutes": "{{count}} minutes",
+    "inactivity_lock_never": "Jamais (verrouillage manuel uniquement)",
+    "inactivity_lock_saved_off": "Verrouillage automatique désactivé.",
+    "inactivity_lock_saved": "L'écran se verrouillera après {{count}} minutes d'inactivité.",
+    "inactivity_lock_pin_required": "Configurez d'abord un code PIN de session ci-dessus."
+  },
   "lock": {
     "title": "Session verrouillée",
     "subtitle": "Saisissez votre code PIN pour reprendre.",
+    "subtitle_inactivity": "Session verrouillée. Saisissez votre code PIN pour continuer.",
+    "subtitle_no_pin": "Session verrouillée. Configurez un code PIN dans les paramètres du compte, ou déconnectez-vous.",
     "pin": "Code PIN",
     "unlock": "Déverrouiller",
     "sign_out_instead": "Se déconnecter à la place"

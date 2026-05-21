@@ -60,7 +60,9 @@ export default function LockOverlay() {
 
           <div className="p-6">
             <p className="text-sm text-slate-500 mb-1">
-              Enter your session PIN to unlock.
+              {user?.session_pin_set
+                ? 'Your session was locked. Enter your session PIN to continue working.'
+                : 'Your session was locked. Set a session PIN in Account Settings, or sign out and sign in again.'}
             </p>
             {user && (
               <p className="text-xs text-slate-400 mb-4">
@@ -104,7 +106,7 @@ export default function LockOverlay() {
                   borderRadius: 10,
                   boxShadow: '0 4px 14px rgba(12,36,81,0.3)',
                 }}
-                disabled={loading || pin.length < 4}
+                disabled={loading || pin.length < 4 || !user?.session_pin_set}
               >
                 {loading ? (
                   <>

@@ -1,10 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api/client'
+import { getInactivityLockMs, INACTIVITY_LOCK_SETTINGS_EVENT } from '../utils/inactivityLock'
 
 const AuthContext = createContext(null)
 
-/** Inactivity timeout before auto-logout (ms). NCSS 2030 session management. */
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000   // 15 minutes
 const ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'click']
 
 export function AuthProvider({ children }) {
@@ -38,10 +37,6 @@ export function AuthProvider({ children }) {
     setUser(null)
     setAuthReady(true)
 
-    if (reason === 'inactivity') {
-      sessionStorage.setItem('psc-inactivity-logout', '1')
-      window.dispatchEvent(new CustomEvent('psc-auth:inactivity-logout'))
-    }
     setIsLocked(false)
     setPin('')
     sessionStorage.removeItem('psc-lock-username')
@@ -84,28 +79,41 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  // ── Inactivity timer ──────────────────────────────────────────────────────
+  // ── Inactivity timer → screen lock (PIN), not logout ─────────────────────
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
+    if (!user || isLocked) return
+
+    const ms = getInactivityLockMs(user.username)
+    if (!ms) return
+
     inactivityTimer.current = setTimeout(() => {
-      logout('inactivity')
-    }, INACTIVITY_TIMEOUT_MS)
-  }, [logout])
+      if (user.session_pin_set) {
+        lock()
+      }
+    }, ms)
+  }, [user, isLocked, lock])
 
   // Attach/remove activity listeners when the user is logged in
   useEffect(() => {
-    if (!user) {
+    if (!user || isLocked) {
       if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
       return
     }
     ACTIVITY_EVENTS.forEach(e => window.addEventListener(e, resetInactivityTimer, { passive: true }))
-    resetInactivityTimer()   // start the clock
+    resetInactivityTimer()
 
     return () => {
       ACTIVITY_EVENTS.forEach(e => window.removeEventListener(e, resetInactivityTimer))
       if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
     }
-  }, [user, resetInactivityTimer])
+  }, [user, isLocked, resetInactivityTimer])
+
+  useEffect(() => {
+    const onSettingsChanged = () => resetInactivityTimer()
+    window.addEventListener(INACTIVITY_LOCK_SETTINGS_EVENT, onSettingsChanged)
+    return () => window.removeEventListener(INACTIVITY_LOCK_SETTINGS_EVENT, onSettingsChanged)
+  }, [resetInactivityTimer])
 
   // ── /me/ refresh ──────────────────────────────────────────────────────────
   const refreshMe = useCallback(async () => {
@@ -143,10 +151,8 @@ export function AuthProvider({ children }) {
       setPin('')
     }
     window.addEventListener('psc-auth:cleared', onCleared)
-    window.addEventListener('psc-auth:inactivity-logout', onCleared)
     return () => {
       window.removeEventListener('psc-auth:cleared', onCleared)
-      window.removeEventListener('psc-auth:inactivity-logout', onCleared)
     }
   }, [])
 

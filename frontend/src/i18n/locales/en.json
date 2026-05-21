@@ -475,6 +475,7 @@
     "confirm_password": "Confirm Password",
     "loading_session": "Loading session…",
     "inactivity_logout": "You were signed out for inactivity. Please sign in again.",
+    "inactivity_locked_hint": "Your screen was locked due to inactivity. Enter your session PIN to continue.",
     "invalid_credentials": "Invalid username or password",
     "approve_push": "Approve push notification on your phone",
     "push_pending": "Waiting for approval…",
@@ -491,9 +492,21 @@
     "submit": "Send",
     "submitted": "Thanks — your feedback has been received."
   },
+  "account": {
+    "inactivity_lock_title": "Automatic screen lock",
+    "inactivity_lock_desc": "After this period without activity, the screen locks. Enter your session PIN to continue — you stay signed in.",
+    "inactivity_lock_label": "Lock screen after",
+    "inactivity_lock_minutes": "{{count}} minutes",
+    "inactivity_lock_never": "Never (manual lock only)",
+    "inactivity_lock_saved_off": "Automatic screen lock disabled.",
+    "inactivity_lock_saved": "Screen will lock after {{count}} minutes of inactivity.",
+    "inactivity_lock_pin_required": "Set a session PIN above first; otherwise you cannot unlock after automatic lock."
+  },
   "lock": {
     "title": "Session locked",
     "subtitle": "Enter your session PIN to resume.",
+    "subtitle_inactivity": "Your session was locked. Enter your session PIN to continue working.",
+    "subtitle_no_pin": "Your session was locked. Set a session PIN in Account Settings, or sign out and sign in again.",
     "pin": "PIN",
     "unlock": "Unlock",
     "sign_out_instead": "Sign out instead"
