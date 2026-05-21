@@ -52,6 +52,14 @@ _STAGE_GRAPH = {
     WorkflowStage.MANAGER_CHECKLIST_REVIEW: [
         WorkflowStage.UNDER_ASSESSMENT,
         WorkflowStage.RETURNED_FOR_CLARIFICATION,
+        WorkflowStage.COMPLIANCE_UNDER_REVIEW,
+    ],
+    # ── CMS compliance routing ─────────────────────────────────────────────
+    # Outbound: Compliance Manager dispatches to CMS (auto-fires API call).
+    # Inbound (SECRETARY_REVIEW): set programmatically by the CMS callback webhook,
+    # not by a user transition, so it does not need a graph entry here.
+    WorkflowStage.COMPLIANCE_UNDER_REVIEW: [
+        WorkflowStage.SECRETARY_REVIEW,
     ],
     # ── Assessment ─────────────────────────────────────────────────────────
     WorkflowStage.UNDER_ASSESSMENT: [
@@ -192,6 +200,7 @@ _OFFICER_FORBIDDEN = {
     WorkflowStage.IMPLEMENTATION_REPORT,
     WorkflowStage.TABLED,
     WorkflowStage.DEFERRED_BACK_TO_HR,
+    WorkflowStage.COMPLIANCE_UNDER_REVIEW,
 }
 
 _MANAGER_STAGES = {

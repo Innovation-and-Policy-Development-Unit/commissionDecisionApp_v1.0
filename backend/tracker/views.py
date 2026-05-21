@@ -637,6 +637,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             lambda: _dispatch_transition_notifications(submission, prev, target, request.user)
         )
 
+        # ── Dispatch compliance submissions to CMS after commit ──
+        if target == WorkflowStage.COMPLIANCE_UNDER_REVIEW:
+            from .tasks.cms_bridge import dispatch_submission_to_cms
+            transaction.on_commit(lambda: dispatch_submission_to_cms.delay(submission.pk))
+
         _log(request, _AL.Action.UPDATE,
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,

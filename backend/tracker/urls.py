@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from .views_webhooks import cms_signoff_callback
 from .views import (
     AuditLogViewSet,
     BackupViewSet,
@@ -113,4 +114,6 @@ urlpatterns = [
     path("auth/verify-pin/",      VerifyPinView.as_view(),      name="verify-pin"),
     path("my-signature/",         MySignatureView.as_view(),    name="my-signature"),
     path("search/", global_search_view),
+    # ── Inbound webhooks from external systems ───────────────────────────────
+    path("webhooks/cms-signoff/", cms_signoff_callback, name="cms-signoff-callback"),
 ]

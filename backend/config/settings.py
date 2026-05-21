@@ -375,3 +375,13 @@ CELERY_TIMEZONE = 'Pacific/Efate'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# ── CMS integration (Case Management System) ──────────────────────────────────
+# URL of the CMS backend API, e.g. https://cms.internal or http://localhost:8001
+CMS_API_URL = os.getenv('CMS_API_URL', 'http://localhost:8001')
+# JWT or API token the CDP uses when POSTing cases to the CMS
+CMS_API_KEY = os.getenv('CMS_API_KEY', '')
+# Shared secret the CMS sends back in X-CMS-Callback-Key on sign-off callbacks
+CMS_CALLBACK_SECRET = os.getenv('CMS_CALLBACK_SECRET', '')
+# Public base URL of this CDP server (used to build the cdp_callback_url sent to the CMS)
+CDP_BASE_URL = os.getenv('CDP_BASE_URL', 'http://localhost:8000')
