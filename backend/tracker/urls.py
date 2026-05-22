@@ -2,7 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .views_webhooks import cms_signoff_callback
+from .views_webhooks import cms_register_submission, cms_signoff_callback
 from .views import (
     AuditLogViewSet,
     BackupViewSet,
@@ -116,4 +116,5 @@ urlpatterns = [
     path("search/", global_search_view),
     # ── Inbound webhooks from external systems ───────────────────────────────
     path("webhooks/cms-signoff/", cms_signoff_callback, name="cms-signoff-callback"),
+    path("webhooks/cms-register/", cms_register_submission, name="cms-register-submission"),
 ]

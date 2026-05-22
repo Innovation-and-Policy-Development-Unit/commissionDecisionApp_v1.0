@@ -7,7 +7,8 @@ import { useToast } from '../../context/ToastContext'
 import { isComplianceRole } from '../../constants/compliance'
 
 /**
- * New submission flow for Compliance Senior, Principal, and Manager.
+ * New OPSC-internal submission flow for Compliance Senior, Principal, and Manager.
+ * All COMP-* types are Compliance-unit initiated (not ministry HR).
  * Form types are filtered server-side (PSA restricted to Principal & Manager).
  */
 export default function ComplianceSubmissionForm({ modal = false, onClose, onSuccess }) {
@@ -77,8 +78,8 @@ export default function ComplianceSubmissionForm({ modal = false, onClose, onSuc
         payload.form_category = selected.form_category
       }
       const { data } = await api.post('/submissions/', payload)
-      toast.success('Compliance submission created. Complete the digitized form on the detail page.')
-      if (onSuccess) onSuccess(data)
+      toast.success('Internal compliance submission created. Complete the digitized form on the detail page.')
+      if (onSuccess) onSuccess(data.id)
       else navigate(`/submissions/${data.id}`)
       if (modal && onClose) onClose()
     } catch (err) {
@@ -157,12 +158,14 @@ export default function ComplianceSubmissionForm({ modal = false, onClose, onSuc
           className="input w-full min-h-[80px]"
           value={form.notes}
           onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-          placeholder="Internal notes for PSC / Compliance unit"
+          placeholder="Internal notes for OPSC Compliance unit"
         />
       </div>
 
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        After creating, open the submission to complete the digitized form fields and attach supporting documents.
+      <p className="text-xs text-slate-500 dark:text-slate-400 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2">
+        This is an <strong>OPSC internal</strong> submission initiated by the Compliance unit. It routes
+        directly to the Secretary for review (no ministry checklist). After creating, complete the
+        digitized form and attach supporting documents on the detail page.
       </p>
 
       <div className="flex flex-wrap gap-3 pt-2">
@@ -183,8 +186,8 @@ export default function ComplianceSubmissionForm({ modal = false, onClose, onSuc
   return (
     <div>
       <PageHeader
-        title="New compliance submission"
-        subtitle="Compliance unit — digitized disciplinary, PSDB, Ombudsman, and related submissions"
+        title="New internal compliance submission"
+        subtitle="OPSC Compliance unit — internal disciplinary, PSDB, Ombudsman, and related submissions"
       />
       <div className="card p-6 max-w-2xl">{inner}</div>
     </div>

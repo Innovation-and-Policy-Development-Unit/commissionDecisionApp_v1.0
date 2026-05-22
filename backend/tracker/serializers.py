@@ -534,6 +534,12 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "estimated_meeting_date",
             "is_attachment",
             "is_internal",
+            "cms_case_id",
+            "cms_case_closed_at",
+            "cms_case_reference",
+            "cms_dispatched_at",
+            "cms_signoff_at",
+            "cms_signoff_outcome",
             "parent_submission",
             "parent_reference",
             "parent_title",
@@ -687,11 +693,12 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             role = profile.role
         except Exception:
             return attrs
-        from .compliance_forms import COMPLIANCE_SUBMITTER_ROLES, assert_compliance_may_use_form_type
+        from .cms_register import CMS_ORIGIN_MESSAGE
+        from .compliance_forms import COMPLIANCE_SUBMITTER_ROLES
 
         form_type_code = attrs.get("form_type_code") or ""
         if role in COMPLIANCE_SUBMITTER_ROLES:
-            assert_compliance_may_use_form_type(role, form_type_code)
+            raise PermissionDenied(CMS_ORIGIN_MESSAGE)
         elif form_type_code.startswith("COMP-"):
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("Only Compliance unit staff may create compliance submission types.")

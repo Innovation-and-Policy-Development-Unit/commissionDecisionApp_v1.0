@@ -1,36 +1,72 @@
-import { LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, ScrollText, Bell, ListTodo, Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList } from 'lucide-react'
+import {
+  LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, ScrollText, Bell, ListTodo,
+  Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
+  FolderOpen, ExternalLink,
+} from 'lucide-react'
+import { CMS_PORTAL_URL } from '../constants/compliance'
 import {
   userCanAccessAdminPanel,
   userCanManageRoles,
   userCanViewAuditLog,
   userCanManageFeedback,
 } from '../utils/adminAccess'
+import { menuItemVisibleForUser } from '../utils/complianceAccess'
 
 /**
  * Each group and item carries:
  *   - `label`     : English fallback (used when no translator is supplied)
  *   - `labelKey`  : i18next translation key (preferred when rendering with t())
+ *   - `audience`  : all | compliance | secretariat | exclude_compliance
  */
 const menuItems = [
+  {
+    group: 'Compliance',
+    groupKey: 'nav.group_compliance',
+    groupIcon: FolderOpen,
+    audience: 'compliance',
+    items: [
+      {
+        label: 'Case Management (CMS)',
+        labelKey: 'nav.cms_cases',
+        icon: ExternalLink,
+        href: CMS_PORTAL_URL,
+        external: true,
+      },
+      {
+        label: 'Registered with Commission',
+        labelKey: 'nav.registered_submissions',
+        icon: FileText,
+        path: '/submissions',
+      },
+      { label: 'Dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard, path: '/' },
+    ],
+  },
   {
     group: 'Submissions',
     groupKey: 'nav.group_submissions',
     groupIcon: FileText,
+    audience: 'exclude_compliance',
     items: [
       { label: 'Dashboard',   labelKey: 'nav.dashboard',   icon: LayoutDashboard, path: '/' },
       { label: 'Submissions', labelKey: 'nav.submissions', icon: FileText,        path: '/submissions' },
-      { label: 'Reports',     labelKey: 'nav.reports',     icon: BarChart3,       path: '/reports' },
+      { label: 'Reports',     labelKey: 'nav.reports',     icon: BarChart3,       path: '/reports', audience: 'exclude_compliance' },
     ],
   },
   {
     group: 'Commission Decision',
     groupKey: 'nav.group_commission',
     groupIcon: Gavel,
+    audience: 'secretariat',
     items: [
       { label: 'Meetings',        labelKey: 'nav.meetings',      icon: CalendarDays, path: '/secretariat/meetings' },
       { label: 'Agenda',          labelKey: 'nav.agenda',        icon: ScrollText,   path: '/secretariat/agenda' },
       { label: 'Decisions',       labelKey: 'nav.decisions',     icon: Gavel,        path: '/secretariat/decisions' },
-      { label: 'Task management', labelKey: 'nav.tasks',         icon: ListTodo,     path: '/secretariat/tasks' },
+      {
+        label: 'Minutes decision tasks',
+        labelKey: 'nav.minutes_tasks',
+        icon: ListTodo,
+        path: '/secretariat/tasks',
+      },
       { label: 'Notifications',   labelKey: 'nav.notifications', icon: Bell,         path: '/secretariat/notifications' },
     ],
   },
@@ -39,6 +75,7 @@ const menuItems = [
     groupKey: 'nav.group_admin',
     groupIcon: Shield,
     adminAccess: true,
+    audience: 'exclude_compliance',
     items: [
       { label: 'Roles & Permissions',      labelKey: 'nav.roles_permissions',      icon: Shield,        path: '/admin/roles-permissions',      visibility: 'admin' },
       { label: 'Ministries & Departments', labelKey: 'nav.ministries_departments', icon: Building2,     path: '/admin/ministries-departments', visibility: 'admin' },
@@ -52,17 +89,12 @@ const menuItems = [
   },
 ]
 
-/**
- * Resolve an item/group's displayed label. Accepts an optional i18next `t`.
- * If `t` is not provided, the English fallback (`label`/`group`) is used.
- */
 export function translateLabel(entry, t) {
   if (!entry) return ''
   const key = entry.labelKey || entry.groupKey
   const fallback = entry.label ?? entry.group ?? ''
   if (!t || !key) return fallback
   const translated = t(key)
-  // i18next returns the key when missing; in that case fall back gracefully.
   return translated === key ? fallback : translated
 }
 
@@ -88,29 +120,35 @@ export function flattenItems(items) {
   return flat
 }
 
-/**
- * Administration links respect per-item visibility:
- * admin → userCanAccessAdminPanel | roles → userCanManageRoles | audit → userCanViewAuditLog
- */
 export function getVisibleMenuForUser(user, feedbackEnabled = true) {
   return menuItems
     .map((group) => {
-      if (!group.adminAccess) return group
-      if (!user) return null
-      const showGroup =
-        userCanAccessAdminPanel(user) || userCanViewAuditLog(user)
-      if (!showGroup) return null
-      const items = group.items.filter((item) => {
-        const vis = item.visibility ?? 'admin'
-        if (vis === 'admin') return userCanAccessAdminPanel(user)
-        if (vis === 'roles') return userCanManageRoles(user)
-        if (vis === 'audit') return userCanViewAuditLog(user)
-        if (vis === 'feedback') {
-          if (!feedbackEnabled) return false
-          return userCanManageFeedback(user)
-        }
-        return true
-      })
+      if (!menuItemVisibleForUser({ audience: group.audience ?? 'all' }, user)) {
+        return null
+      }
+
+      if (group.adminAccess) {
+        if (!user) return null
+        const showGroup =
+          userCanAccessAdminPanel(user) || userCanViewAuditLog(user)
+        if (!showGroup) return null
+        const items = group.items.filter((item) => {
+          if (!menuItemVisibleForUser(item, user)) return false
+          const vis = item.visibility ?? 'admin'
+          if (vis === 'admin') return userCanAccessAdminPanel(user)
+          if (vis === 'roles') return userCanManageRoles(user)
+          if (vis === 'audit') return userCanViewAuditLog(user)
+          if (vis === 'feedback') {
+            if (!feedbackEnabled) return false
+            return userCanManageFeedback(user)
+          }
+          return true
+        })
+        if (items.length === 0) return null
+        return { ...group, items }
+      }
+
+      const items = group.items.filter((item) => menuItemVisibleForUser(item, user))
       if (items.length === 0) return null
       return { ...group, items }
     })

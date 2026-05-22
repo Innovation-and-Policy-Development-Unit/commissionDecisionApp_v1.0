@@ -24,7 +24,7 @@ import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
 import RestructureSubmissionForm from './RestructureSubmissionForm'
-import { isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
+import { CMS_PORTAL_URL, isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
 
 // All roles that may trigger a transition
 const TRANSITION_ROLES = [
@@ -164,10 +164,10 @@ export default function SubmissionDetail() {
                                    'psc_admin', 'psc_officer', 'psc_secretary'].includes(user.role)
   const canEditForm37  = user && ['ministry_hr', 'dept_admin', 'psc_admin',
                                    'psc_officer', 'psc_secretary'].includes(user.role)
-  const canEditComplianceForm = user && isComplianceRole(user.role)
-    && isComplianceFormCode(submission?.form_type_code)
-    && ['draft', 'returned_for_clarification'].includes(submission?.current_stage)
+  // Compliance forms are completed in CMS; portal record is read-only for compliance roles
+  const canEditComplianceForm = false
   const canEditDigitizedForm = canEditForm37 || canEditComplianceForm
+  const isCmsLinkedCompliance = isComplianceFormCode(submission?.form_type_code)
 
   const isOduRole      = user && ['odu_principal', 'odu_manager'].includes(user.role)
   const canViewOduChecklist = user && [
@@ -520,6 +520,38 @@ const stageDescriptions = {
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />{error}
+        </div>
+      )}
+
+      {isCmsLinkedCompliance && (
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-900/40 dark:bg-rose-900/20 px-4 py-3 text-sm text-rose-900 dark:text-rose-100">
+          <div>
+            <p className="font-semibold">Linked Case Management System case</p>
+            <p className="mt-1 text-rose-800/90 dark:text-rose-200/90">
+              Intake and approval are in CMS
+              {submission.cms_case_reference
+                ? <> (case <span className="font-mono font-medium">{submission.cms_case_reference}</span>)</>
+                : null}
+              . Secretary and Commission stages run here; post-decision tasks stay in SCDMS.
+              {submission.cms_case_closed_at
+                ? ' The linked CMS case has been closed.'
+                : ' The CMS case closes automatically when this matter is fully complete in the portal.'}
+            </p>
+            {submission.cms_signoff_at && (
+              <p className="mt-1 text-xs text-rose-700/80 dark:text-rose-300/80">
+                CMS sign-off: {submission.cms_signoff_outcome || 'Recorded'}
+              </p>
+            )}
+          </div>
+          <a
+            href={CMS_PORTAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-outline shrink-0 inline-flex items-center gap-1.5 text-sm"
+          >
+            Open CMS
+            <ExternalLink size={14} />
+          </a>
         </div>
       )}
 

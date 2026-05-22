@@ -244,7 +244,15 @@ def assert_transition_allowed(*, role: str, current_stage: str, target_stage: st
         if target_stage not in allowed_targets and role != Role.PSC_ADMIN:
             raise PermissionDenied("That transition is not allowed in the internal submission workflow.")
 
-        # Internal submitters (CSU/ODU) can only submit their own draft
+        # Compliance unit creators (internal OPSC submissions)
+        if role in _COMPLIANCE_SUBMITTER_ROLES:
+            if (current_stage, target_stage) in _COMPLIANCE_CREATOR_ALLOWED:
+                return
+            raise PermissionDenied(
+                "Compliance staff can submit a draft or respond to a clarification request."
+            )
+
+        # Internal submitters (CSU/ODU managers) can only submit their own draft
         if role in INTERNAL_SUBMITTER_ROLES:
             if (current_stage, target_stage) != (WorkflowStage.DRAFT, WorkflowStage.SUBMITTED):
                 raise PermissionDenied("CSU/ODU users can only submit their draft.")
@@ -271,14 +279,6 @@ def assert_transition_allowed(*, role: str, current_stage: str, target_stage: st
             raise PermissionDenied(
                 "Ministry users can only submit a draft, respond to clarification requests, "
                 "or respond to a commission deferral."
-            )
-        return
-
-    # ── Compliance unit creators ───────────────────────────────────────────
-    if role in _COMPLIANCE_SUBMITTER_ROLES:
-        if (current_stage, target_stage) not in _COMPLIANCE_CREATOR_ALLOWED:
-            raise PermissionDenied(
-                "Compliance staff can submit a draft or respond to a clarification request."
             )
         return
 
@@ -374,6 +374,10 @@ def iter_allowed_targets(role: str, current_stage: str, is_internal: bool = Fals
     if is_internal:
         if role == Role.PSC_ADMIN:
             return list(_INTERNAL_STAGE_GRAPH.get(current_stage, []))
+        if role in _COMPLIANCE_SUBMITTER_ROLES:
+            return [
+                t.value for (s, t) in _COMPLIANCE_CREATOR_ALLOWED if s == current_stage
+            ]
         if role in INTERNAL_SUBMITTER_ROLES:
             if current_stage == WorkflowStage.DRAFT:
                 return [WorkflowStage.SUBMITTED]

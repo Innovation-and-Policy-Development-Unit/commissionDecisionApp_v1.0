@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .audit import log_action
+from .cms_register import register_submission_from_cms
 from .models import AuditLog, Submission, WorkflowEvent, WorkflowStage
 
 logger = logging.getLogger(__name__)
@@ -60,9 +61,24 @@ def cms_signoff_callback(request):
         logger.warning("cms_signoff_callback: unknown submission reference %s", cdp_ref)
         return Response({"detail": f"Submission {cdp_ref!r} not found."}, status=404)
 
-    if sub.current_stage != WorkflowStage.COMPLIANCE_UNDER_REVIEW:
+    # CMS-first flow: register → Secretary review. Sign-off only advances legacy portal cases.
+    if sub.current_stage == WorkflowStage.SECRETARY_REVIEW:
         logger.info(
-            "cms_signoff_callback: %s is at stage %s, not COMPLIANCE_UNDER_REVIEW — ignoring",
+            "cms_signoff_callback: %s already at Secretary Review (CMS register path)",
+            cdp_ref,
+        )
+        return Response({
+            "status": "accepted",
+            "new_stage": WorkflowStage.SECRETARY_REVIEW,
+            "detail": "Submission is already at Secretary Review.",
+        })
+
+    signoff_stages = {WorkflowStage.COMPLIANCE_UNDER_REVIEW}
+    if sub.is_internal:
+        signoff_stages.add(WorkflowStage.SUBMITTED)
+    if sub.current_stage not in signoff_stages:
+        logger.info(
+            "cms_signoff_callback: %s is at stage %s — not awaiting CMS sign-off",
             cdp_ref,
             sub.current_stage,
         )
@@ -99,3 +115,36 @@ def cms_signoff_callback(request):
         outcome,
     )
     return Response({"status": "accepted", "new_stage": WorkflowStage.SECRETARY_REVIEW})
+
+
+@csrf_exempt
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def cms_register_submission(request):
+    """
+    Called by CMS when a case is registered with the Commission Portal.
+
+    Authentication: X-CMS-Callback-Key (same secret as sign-off callback).
+    """
+    if not _verify_cms_callback_key(request):
+        return Response({"detail": "Forbidden."}, status=403)
+
+    try:
+        sub = register_submission_from_cms(request.data)
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=400)
+
+    from django.conf import settings
+    cdp_base = getattr(settings, "CDP_BASE_URL", "").rstrip("/")
+    callback_url = f"{cdp_base}/api/webhooks/cms-signoff/" if cdp_base else ""
+
+    return Response(
+        {
+            "cdp_submission_id": sub.reference_number,
+            "cdp_submission_pk": sub.pk,
+            "cdp_callback_url": callback_url,
+            "current_stage": sub.current_stage,
+            "cms_case_id": sub.cms_case_id,
+        },
+        status=201,
+    )

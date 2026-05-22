@@ -10,6 +10,7 @@ import { PlusCircle, RefreshCw, X, Pencil, Trash2, Search, ChevronLeft, ChevronR
 import SubmissionForm from './SubmissionForm'
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
+import { isComplianceRole } from '../../constants/compliance'
 
 const PER_PAGE = 15
 
@@ -51,6 +52,8 @@ export default function SubmissionLog() {
   const [selected, setSelected]   = useState(new Set())
 
   const isAdmin = user?.role === 'psc_admin'
+  const isComplianceUser = user && isComplianceRole(user.role)
+  const canCreateSubmission = user && !isComplianceUser
 
   const localeForDates = useMemo(() => {
     const map = { en: 'en-GB', fr: 'fr-FR', bi: 'en-GB' }
@@ -155,12 +158,22 @@ export default function SubmissionLog() {
         title={t('submission.list_title')}
         subtitle={t('submission.list_subtitle')}
         action={
-          <button onClick={() => setModalOpen(true)} className="btn-primary flex items-center gap-2">
-            <PlusCircle size={16} />
-            {t('submission.new_submission')}
-          </button>
+          canCreateSubmission ? (
+            <button onClick={() => setModalOpen(true)} className="btn-primary flex items-center gap-2">
+              <PlusCircle size={16} />
+              {t('submission.new_submission')}
+            </button>
+          ) : null
         }
       />
+
+      {isComplianceUser && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-100">
+          Create and approve cases in <strong>CMS</strong> (COMP-* types). After sync, linked records appear here
+          for Secretary / Commission tracking. Post-decision tasks stay in <strong>SCDMS</strong>; the CMS case
+          closes automatically when the portal matter is fully complete.
+        </div>
+      )}
 
       {loadError && (
         <div role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">

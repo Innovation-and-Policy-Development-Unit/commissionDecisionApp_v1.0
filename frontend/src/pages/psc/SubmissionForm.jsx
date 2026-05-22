@@ -5,7 +5,7 @@ import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import PSCForm37Fields from './PSCForm37Fields'
-import ComplianceSubmissionForm from './ComplianceSubmissionForm'
+import ComplianceCmsGuidance from './ComplianceCmsGuidance'
 import { isComplianceRole } from '../../constants/compliance'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -456,14 +456,10 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
       )
   }
 
-  // ── Compliance unit submissions ─────────────────────────────────────────
+  // ── Compliance: cases are created in CMS, not in this portal ───────────
   if (isComplianceUser) {
     return (
-      <ComplianceSubmissionForm
-        modal={modal}
-        onClose={onClose}
-        onSuccess={onSuccess}
-      />
+      <ComplianceCmsGuidance modal={modal} />
     )
   }
 

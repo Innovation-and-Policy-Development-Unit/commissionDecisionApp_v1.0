@@ -166,10 +166,13 @@ def _resolve_opsc_ministry(profile):
     """
     if profile.ministry_id:
         return profile.ministry_id
-    opsc = Ministry.objects.filter(
-        models.Q(name__icontains='Public Service Commission') |
-        models.Q(name__icontains='OPSC')
-    ).first()
+    opsc = (
+        Ministry.objects.filter(code__iexact="OPSC").first()
+        or Ministry.objects.filter(
+            models.Q(name__icontains="Public Service Commission")
+            | models.Q(name__icontains="OPSC")
+        ).first()
+    )
     if opsc:
         return opsc.pk
     raise PermissionDenied(
@@ -204,12 +207,11 @@ def _submission_queryset_for(user):
         Role.VIPAM_PRINCIPAL,
         Role.COMPLIANCE_PRINCIPAL,
     }
-    if role in {Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_MANAGER}:
-        return qs.filter(form_category__code="COMPLIANCE")
-    if role == Role.COMPLIANCE_PRINCIPAL:
-        return qs.filter(form_category__code="COMPLIANCE").filter(
-            models.Q(assigned_to=user) | models.Q(created_by=user)
-        )
+    if role in {Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL}:
+        return qs.filter(
+            form_category__code="COMPLIANCE",
+            is_internal=True,
+        ).exclude(cms_case_id="").filter(cms_case_id__isnull=False)
     if role in _UNIT_PRINCIPAL_ROLES:
         # Principals see only submissions explicitly assigned to them
         return qs.filter(assigned_to=user)
@@ -488,18 +490,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.COMPLIANCE_PRINCIPAL,
             Role.COMPLIANCE_MANAGER,
         }:
-            from .compliance_forms import assert_compliance_may_use_form_type
-
-            form_type_code = serializer.validated_data.get("form_type_code") or ""
-            assert_compliance_may_use_form_type(profile.role, form_type_code)
-            ministry_id = _resolve_opsc_ministry(profile)
-            kwargs = {
-                "current_stage": WorkflowStage.DRAFT,
-                "is_internal": False,
-                "routed_unit": RoutedUnit.COMPLIANCE,
-                "ministry_id": ministry_id,
-            }
-            submission = serializer.save(**kwargs)
+            from .cms_register import CMS_ORIGIN_MESSAGE
+            raise PermissionDenied(CMS_ORIGIN_MESSAGE)
 
         elif profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY}:
             submission = serializer.save()
@@ -662,10 +654,22 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             lambda: _dispatch_transition_notifications(submission, prev, target, request.user)
         )
 
-        # ── Dispatch compliance submissions to CMS after commit ──
-        if target == WorkflowStage.COMPLIANCE_UNDER_REVIEW:
+        # ── Legacy: dispatch to CMS only when portal created submission without CMS link ──
+        if target == WorkflowStage.COMPLIANCE_UNDER_REVIEW and not submission.cms_case_id:
             from .tasks.cms_bridge import dispatch_submission_to_cms
             transaction.on_commit(lambda: dispatch_submission_to_cms.delay(submission.pk))
+
+        # ── CMS-first: close linked CMS case when SCDMS matter is complete ──
+        if submission.cms_case_id:
+            from .cms_close import maybe_close_cms_case
+            sid = submission.pk
+            transaction.on_commit(
+                lambda: maybe_close_cms_case(
+                    Submission.objects.prefetch_related(
+                        "commission_tasks__subtasks"
+                    ).get(pk=sid)
+                )
+            )
 
         _log(request, _AL.Action.UPDATE,
              resource_type="Submission", resource_id=submission.id,
@@ -1387,6 +1391,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_superuser or user.is_staff:
             serializer.save()
+            self._maybe_close_cms_for_task(task)
             return
 
         vd = serializer.validated_data
@@ -1396,6 +1401,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             if "submission" in vd:
                 raise PermissionDenied("Cannot move a task to another submission.")
             serializer.save()
+            self._maybe_close_cms_for_task(task)
             return
 
         is_manager = task.assigned_manager_id == user.id and rbac_user_has_permission(user, "assign_task")
@@ -1408,15 +1414,29 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             if "submission" in keys or "assigned_manager" in keys:
                 raise PermissionDenied("You cannot reassign the submission or manager for this task.")
             serializer.save()
+            self._maybe_close_cms_for_task(task)
             return
 
         if is_staff:
             if keys - {"status"}:
                 raise PermissionDenied("You may only update the task status.")
             serializer.save()
+            self._maybe_close_cms_for_task(task)
             return
 
         raise PermissionDenied("You cannot update this task.")
+
+    def _maybe_close_cms_for_task(self, task):
+        sub = task.submission
+        if not sub or not (sub.cms_case_id or "").strip():
+            return
+        from .cms_close import maybe_close_cms_case
+        sub_id = sub.pk
+        transaction.on_commit(
+            lambda: maybe_close_cms_case(
+                Submission.objects.prefetch_related("commission_tasks__subtasks").get(pk=sub_id)
+            )
+        )
 
     @action(detail=True, methods=["get", "post", "patch", "delete"], url_path="subtasks")
     def subtasks(self, request, pk=None):
@@ -1454,6 +1474,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             ser = CommissionSubTaskSerializer(subtask, data=request.data, partial=True)
             ser.is_valid(raise_exception=True)
             ser.save()
+            self._maybe_close_cms_for_task(task)
             return Response(CommissionSubTaskSerializer(subtask).data)
 
         if request.method == "DELETE":

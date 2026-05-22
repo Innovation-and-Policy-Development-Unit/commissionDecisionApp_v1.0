@@ -854,6 +854,10 @@ class Submission(models.Model):
         help_text="When the CMS compliance manager signed off and returned the submission.")
     cms_signoff_outcome = models.CharField(max_length=255, blank=True, default="",
         help_text="Outcome note from the CMS sign-off callback.")
+    cms_case_closed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When SCDMS notified CMS to close the linked case after portal completion.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="submissions_logged"
     )

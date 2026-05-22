@@ -1,5 +1,9 @@
 """
 Compliance unit submission types, role rules, and digitized form field definitions.
+
+All COMP-* submissions are OPSC-internal: initiated by the Compliance unit (not
+ministry HR), routed_unit=compliance, is_internal=True, and use the internal
+Secretary workflow (no ministry checklist).
 """
 
 from __future__ import annotations
@@ -37,10 +41,27 @@ COMPLIANCE_PSA_SUBMITTER_ROLES = frozenset({
     Role.COMPLIANCE_MANAGER,
 })
 
+# Map CMS case_family → portal form_type_code when registering with the Commission Portal
+CMS_CASE_FAMILY_TO_FORM_TYPE = {
+    "employee_disciplinary": COMP_SMDR,
+    "serious_misconduct_employee": COMP_SMDR,
+    "temporary_suspension": COMP_SMDR,
+    "grievance": COMP_OMB,
+    "senior_serious_misconduct": COMP_SMDR,
+    "senior_poor_performance": COMP_PAR,
+    "policy_review": COMP_PSA,
+}
+
+
+def form_type_for_cms_case(case_family: str, form_type_code: str | None = None) -> str:
+    if form_type_code and form_type_code in COMPLIANCE_FORM_CODES:
+        return form_type_code
+    return CMS_CASE_FAMILY_TO_FORM_TYPE.get((case_family or "").strip(), COMP_SMDR)
+
 FORM_META = {
     COMP_SMDR: {
         "name": "Staff Member Disciplinary Report (SMDR)",
-        "description": "Digitized SMDR for compliance unit intake and commission routing.",
+        "description": "OPSC internal — Compliance unit SMDR intake and commission routing.",
         "digitized_form_key": "comp_smdr",
         "display_order": 10,
         "psa_restricted": False,
@@ -269,8 +290,11 @@ def seed_compliance_form_types(apps):
     category, _ = FormCategory.objects.update_or_create(
         code=COMPLIANCE_CATEGORY_CODE,
         defaults={
-            "name": "Compliance Submissions",
-            "psc_forms_summary": "Compliance unit submissions (disciplinary, PSDB, Ombudsman, PSA amendments).",
+            "name": "Compliance Submissions (OPSC Internal)",
+            "psc_forms_summary": (
+                "OPSC-internal submissions initiated by the Compliance unit "
+                "(disciplinary, PSDB, Ombudsman, PSA amendments). Not ministry submissions."
+            ),
             "display_order": 25,
         },
     )
