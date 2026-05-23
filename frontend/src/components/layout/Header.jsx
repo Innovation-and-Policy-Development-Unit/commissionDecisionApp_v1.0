@@ -12,57 +12,8 @@ import {
 } from 'lucide-react'
 import BrandLogo from '../shared/BrandLogo'
 import LanguageSwitcher from '../shared/LanguageSwitcher'
-
-/**
- * Demo notifications shown until the real notification feed is wired in.
- * Each row carries translation keys that the renderer resolves with t().
- */
-const INITIAL_HEADER_NOTIFICATIONS = [
-  {
-    id: 1,
-    type: 'success',
-    titleKey: 'header.demo_notifications.task_assigned.title',
-    messageKey: 'header.demo_notifications.task_assigned.message',
-    titleFallback: 'Commission task assigned',
-    messageFallback: 'PSC action item linked to a submission — review allocation and due date on Task management.',
-    time: '12 min ago',
-    read: false,
-    path: '/secretariat/tasks',
-  },
-  {
-    id: 2,
-    type: 'info',
-    titleKey: 'header.demo_notifications.status_logged.title',
-    messageKey: 'header.demo_notifications.status_logged.message',
-    titleFallback: 'Status update logged',
-    messageFallback: 'A manager posted a progress comment on a commission task for ministerial reporting.',
-    time: '48 min ago',
-    read: false,
-    path: '/secretariat/tasks',
-  },
-  {
-    id: 3,
-    type: 'warning',
-    titleKey: 'header.demo_notifications.assessment_overdue.title',
-    messageKey: 'header.demo_notifications.assessment_overdue.message',
-    titleFallback: 'Assessment clock overdue',
-    messageFallback: 'At least one submission has passed its assessment working-day limit — record outcome or extension.',
-    time: '3 hr ago',
-    read: true,
-    path: '/submissions',
-  },
-  {
-    id: 4,
-    type: 'error',
-    titleKey: 'header.demo_notifications.discipline.title',
-    messageKey: 'header.demo_notifications.discipline.message',
-    titleFallback: 'Discipline file — restricted handling',
-    messageFallback: 'Commission sitting discipline matter: circulate only per PSC 6.3 confidentiality expectations.',
-    time: 'Yesterday',
-    read: true,
-    path: '/submissions',
-  },
-]
+import DesktopNotificationSettings from '../notifications/DesktopNotificationSettings'
+import { useNotifications } from '../../hooks/useNotifications'
 
 /**
  * Breadcrumbs are translation-keyed so they react to language switching.
@@ -75,6 +26,8 @@ const BREADCRUMB_MAP = {
   '/submissions/new':               ['nav.group_submissions', 'breadcrumb.submissions_new'],
   '/reports':                       ['nav.group_submissions', 'breadcrumb.reports'],
   '/meetings/capture':              ['nav.group_commission',  'breadcrumb.meeting_capture'],
+  '/secretariat/meeting-room':      ['nav.group_commission',  'breadcrumb.meeting_room'],
+  '/secretariat/meeting-room/minutes-pipeline': ['nav.group_commission', 'breadcrumb.minutes_pipeline'],
   '/secretariat/meetings':          ['nav.group_commission',  'breadcrumb.meetings'],
   '/secretariat/agenda':            ['nav.group_commission',  'breadcrumb.agenda'],
   '/secretariat/decisions':         ['nav.group_commission',  'breadcrumb.decisions'],
@@ -84,6 +37,7 @@ const BREADCRUMB_MAP = {
   '/admin/ministries-departments':  ['nav.group_admin',       'breadcrumb.ministries_departments'],
   '/admin/api-keys':                ['nav.group_admin',       'breadcrumb.api_keys'],
   '/admin/system-config':           ['nav.group_admin',       'breadcrumb.system_config'],
+  '/admin/email-templates':         ['nav.group_admin',       'breadcrumb.email_templates'],
   '/admin/security':                ['nav.group_admin',       'breadcrumb.security'],
   '/admin/feedback':                ['nav.group_admin',       'breadcrumb.feedback'],
   '/admin/backup-restore':          ['nav.group_admin',       'breadcrumb.backup_restore'],
@@ -114,18 +68,19 @@ const UserMenuItem = memo(function UserMenuItem({ Icon, label, item, onClick }) 
   )
 })
 
-/** Helper: resolve a translation key with an English fallback. */
-function tk(t, key, fallback) {
-  if (!key) return fallback
-  const value = t(key)
-  return value === key ? fallback : value
-}
-
 export default function Header({ onMenuClick }) {
   const { t } = useTranslation()
   const { user, logout, lock } = useAuth()
   const { theme, isDark, cycleTheme, openSettingsPanel, sidebarCollapsed, isHorizontal } = useTheme()
-  const [notifications, setNotifications] = useState(() => [...INITIAL_HEADER_NOTIFICATIONS])
+  const {
+    notifications,
+    unreadCount,
+    loading: notifLoading,
+    error: notifError,
+    markRead,
+    markAllRead,
+    refresh: refreshNotifications,
+  } = useNotifications({ enabled: !!user })
   const [notifOpen, setNotifOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -154,16 +109,21 @@ export default function Header({ onMenuClick }) {
     return [t('app.title')]
   }, [location.pathname, t])
 
-  const unreadCount = notifications.filter(n => !n.read).length
-
   const handleNotificationNavigate = useCallback(
     (id, path) => {
-      setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)))
+      markRead(id)
       setNotifOpen(false)
       if (path) navigate(path)
     },
-    [navigate],
+    [markRead, navigate],
   )
+
+  const handleNotifOpen = useCallback(() => {
+    setNotifOpen((o) => {
+      if (!o) refreshNotifications()
+      return !o
+    })
+  }, [refreshNotifications])
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -215,7 +175,7 @@ export default function Header({ onMenuClick }) {
     setSearchOpen(false); setSearchQuery(''); setSearchResults([])
   }, [])
   const handleSearchOpen = useCallback(() => setSearchOpen(true), [])
-  const handleNotifToggle = useCallback(() => setNotifOpen(o => !o), [])
+  const handleNotifToggle = handleNotifOpen
   const handleUserToggle = useCallback(() => setUserOpen(o => !o), [])
   const handleSignOut = useCallback(() => {
     logout()
@@ -456,40 +416,57 @@ export default function Header({ onMenuClick }) {
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
               <h3 className="font-semibold text-slate-800 dark:text-slate-200">{t('header.notifications')}</h3>
-              <span className="badge badge-primary">{t('header.notifications_new', { count: unreadCount })}</span>
+              {unreadCount > 0 && (
+                <span className="badge badge-primary">{t('header.notifications_new', { count: unreadCount })}</span>
+              )}
             </div>
+            <DesktopNotificationSettings compact />
             <div className="max-h-72 overflow-y-auto custom-scrollbar">
-              {notifications.map(notif => {
-                const notifTitle = tk(t, notif.titleKey, notif.titleFallback)
-                const notifMessage = tk(t, notif.messageKey, notif.messageFallback)
-                return (
-                  <button
-                    key={notif.id}
-                    type="button"
-                    onClick={() => handleNotificationNavigate(notif.id, notif.path)}
-                    className={clsx(
-                      'flex w-full items-start gap-3 px-4 py-3 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors text-start focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-700/30',
-                      !notif.read && 'bg-primary-50/30 dark:bg-primary-900/10'
-                    )}
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      <NotificationIcon type={notif.type} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={clsx('text-sm font-medium', !notif.read ? 'text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400')}>
-                        {notifTitle}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{notifMessage}</p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{notif.time}</p>
-                    </div>
-                    {!notif.read && (
-                      <span className="w-2 h-2 bg-primary-500 rounded-full mt-1 shrink-0" aria-hidden="true" />
-                    )}
-                  </button>
-                )
-              })}
+              {notifLoading && notifications.length === 0 && (
+                <p className="px-4 py-6 text-sm text-slate-400 text-center">{t('notifications.loading')}</p>
+              )}
+              {notifError && notifications.length === 0 && (
+                <p className="px-4 py-6 text-sm text-red-500 text-center">{t('notifications.load_error')}</p>
+              )}
+              {!notifLoading && !notifError && notifications.length === 0 && (
+                <p className="px-4 py-6 text-sm text-slate-400 text-center">{t('notifications.empty')}</p>
+              )}
+              {notifications.map(notif => (
+                <button
+                  key={notif.id}
+                  type="button"
+                  onClick={() => handleNotificationNavigate(notif.id, notif.path)}
+                  className={clsx(
+                    'flex w-full items-start gap-3 px-4 py-3 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors text-start focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-700/30',
+                    !notif.read && 'bg-primary-50/30 dark:bg-primary-900/10'
+                  )}
+                >
+                  <div className="mt-0.5 shrink-0">
+                    <NotificationIcon type={notif.type} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={clsx('text-sm font-medium', !notif.read ? 'text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400')}>
+                      {notif.title}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{notif.message}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{notif.time}</p>
+                  </div>
+                  {!notif.read && (
+                    <span className="w-2 h-2 bg-primary-500 rounded-full mt-1 shrink-0" aria-hidden="true" />
+                  )}
+                </button>
+              ))}
             </div>
-            <div className="p-3 border-t border-slate-100 dark:border-slate-700">
+            <div className="p-3 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-2">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { markAllRead() }}
+                  className="w-full text-center text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 py-1"
+                >
+                  {t('notifications.mark_all_read')}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => { setNotifOpen(false); navigate('/secretariat/tasks') }}

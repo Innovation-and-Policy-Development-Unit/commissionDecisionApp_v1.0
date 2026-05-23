@@ -5,7 +5,7 @@ import { X, Calendar, Clock, MapPin, ListChecks, FileText, CheckSquare, Users, T
 import { SITTING_STATUSES } from '../constants'
 import clsx from 'clsx'
 
-export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapacity }) {
+export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapacity, onOpenLogitechGuide }) {
   const navigate = useNavigate()
   if (!sitting) return null
 
@@ -160,16 +160,28 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                             <h3 className="font-bold text-slate-900 dark:text-slate-100 uppercase text-xs tracking-wider">Meeting Recording</h3>
                           </div>
                         </div>
-                        <button
-                          onClick={() => {
-                            onClose()
-                            navigate(`/meetings/capture?meetingId=${sitting.id}`)
-                          }}
-                          className="w-full flex items-center justify-center gap-2 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 border border-dashed border-primary-300 dark:border-primary-700 rounded-xl p-4 text-primary-700 dark:text-primary-300 font-semibold text-sm transition-colors"
-                        >
-                          <Mic size={18} />
-                          Record this meeting
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => {
+                              onClose()
+                              navigate(`/meetings/capture?meetingId=${sitting.id}`)
+                            }}
+                            className="w-full flex items-center justify-center gap-2 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 border border-dashed border-primary-300 dark:border-primary-700 rounded-xl p-4 text-primary-700 dark:text-primary-300 font-semibold text-sm transition-colors"
+                          >
+                            <Mic size={18} />
+                            Upload / record
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose()
+                              onOpenLogitechGuide?.()
+                            }}
+                            className="w-full text-xs font-bold text-primary-600 hover:underline"
+                          >
+                            Logitech GROUP setup guide
+                          </button>
+                        </div>
                       </section>
 
                       {/* Minutes Section */}

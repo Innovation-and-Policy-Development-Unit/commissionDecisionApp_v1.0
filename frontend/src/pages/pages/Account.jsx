@@ -27,6 +27,7 @@ import { useConfirm } from '../../context/ConfirmContext'
 import LockPopover from '../../components/shared/LockPopover'
 import SignaturePad from '../../components/shared/SignaturePad'
 import api from '../../api/client'
+import DesktopNotificationSettings from '../../components/notifications/DesktopNotificationSettings'
 
 const DEFAULT_POLICY = { min_length: 8, require_uppercase: false, require_lowercase: false, require_digits: false, require_special: false, history_count: 5 }
 
@@ -603,6 +604,10 @@ export default function Account() {
               <ReadonlyField icon={Building2} label="Ministry"       value={user?.ministry?.name} />
               <ReadonlyField icon={MapPin}    label="Department"     value={user?.department?.name} span />
             </div>
+          </div>
+
+          <div className="card p-6">
+            <DesktopNotificationSettings />
           </div>
 
           {/* Change Password */}

@@ -483,12 +483,15 @@ SESSION_TRUST_HOURS=8
 AXES_FAILURE_LIMIT=5
 AXES_COOLOFF_HOURS=1
 
-# ── Email (SMTP) ──────────────────────────────────────────────────────────────
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=no-reply@example.com
-SMTP_PASSWORD=change-me
-SMTP_TLS=true
+# ── Email (SMTP) — development uses Mailpit (see Local SMTP below) ───────────
+EMAIL_BACKEND=tracker.email_backend.DynamicEmailBackend
+DEFAULT_FROM_EMAIL=PSC Tracker Dev <dev@localhost>
+SMTP_HOST=mailpit
+SMTP_PORT=1025
+SMTP_TLS=false
+SMTP_SSL=false
+SMTP_USER=
+SMTP_PASSWORD=
 
 # ── Celery / Redis ────────────────────────────────────────────────────────────
 CELERY_BROKER_URL=redis://redis:6379/0
@@ -519,9 +522,43 @@ WEB_PORT=8080
 docker compose up -d
 ```
 
-This starts six services: `db`, `redis`, `backend`, `celery_worker`, `celery_beat`, `web`.
+This starts seven services: `db`, `redis`, `mailpit`, `backend`, `celery_worker`, `celery_beat`, `web`.
 
 The application is available at **http://localhost:8080** (or the port set by `WEB_PORT`).
+
+### Local SMTP (development)
+
+[Mailpit](https://github.com/axllent/mailpit) captures all outgoing mail so nothing is sent to real addresses.
+
+| Service | URL |
+|---------|-----|
+| Web inbox (read captured emails) | **http://localhost:8025** |
+| SMTP (from your machine) | `localhost:1025` |
+| SMTP (from Docker backend) | `mailpit:1025` (set in `.env` as `SMTP_HOST=mailpit`) |
+
+Add these to your `.env` (see `.env.example`):
+
+```env
+SMTP_HOST=mailpit
+SMTP_PORT=1025
+SMTP_TLS=false
+SMTP_SSL=false
+DEFAULT_FROM_EMAIL=PSC Tracker Dev <dev@localhost>
+```
+
+Test: use **Forgot password** on the login page with a seeded user email, then open http://localhost:8025.
+
+Environment variables take priority over SMTP settings stored in the database (`SystemSetting`), so local `.env` always wins during development.
+
+**Backend on the host (no Docker):** run only Mailpit in Docker:
+
+```bash
+docker compose up -d mailpit
+```
+
+Then set `SMTP_HOST=localhost` and `SMTP_PORT=1025` in `.env` before `python manage.py runserver`.
+
+**Console-only (no SMTP):** set `EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend` in `.env` — emails print in the terminal instead.
 
 ### First run — apply migrations and seed data
 
@@ -591,10 +628,16 @@ pip install -r requirements.txt
 # You still need a running PostgreSQL and Redis instance.
 # Point POSTGRES_HOST and CELERY_BROKER_URL in your .env to them.
 
+# Optional: capture email locally
+docker compose up -d mailpit
+# In .env: SMTP_HOST=localhost  SMTP_PORT=1025  SMTP_TLS=false
+
 python manage.py migrate
 python manage.py seed_tracker
 python manage.py runserver
 ```
+
+Captured mail: **http://localhost:8025**
 
 ### Frontend (local)
 

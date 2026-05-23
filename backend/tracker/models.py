@@ -277,6 +277,19 @@ class ReferenceCounter(models.Model):
     last_seq = models.PositiveIntegerField(default=0)
 
 
+class RecordingAudioSource(models.TextChoices):
+    LOGITECH_GROUP = "logitech_group", "Logitech GROUP"
+    ZOOM_EXPORT = "zoom_export", "Zoom/Teams export"
+    BROWSER_EXCEPTION = "browser_exception", "Browser (remote/exception)"
+    OTHER = "other", "Other"
+
+
+class TranscriptSource(models.TextChoices):
+    ZOOM_ASR = "zoom_asr", "Zoom/Teams ASR"
+    AI_WHISPER = "ai_whisper", "AI transcription (Gemini)"
+    MANUAL_PASTE = "manual_paste", "Manual paste"
+
+
 class Meeting(models.Model):
     reference_number = models.CharField(max_length=32, unique=True, editable=False)
     title = models.CharField(max_length=512)
@@ -286,6 +299,12 @@ class Meeting(models.Model):
     type = models.CharField(max_length=16, choices=MeetingType.choices, default=MeetingType.ORDINARY)
     status = models.CharField(max_length=16, choices=MeetingStatus.choices, default=MeetingStatus.SCHEDULED)
     notes = models.TextField(blank=True)
+    recording_audio_source = models.CharField(
+        max_length=32,
+        choices=RecordingAudioSource.choices,
+        blank=True,
+        help_text="How the boardroom recording was captured (Logitech GROUP policy).",
+    )
     submission_cutoff = models.DateTimeField(
         null=True, blank=True,
         help_text="Submissions after this datetime are queued for the next meeting.",
@@ -576,6 +595,45 @@ class SystemSetting(models.Model):
             return default
 
 
+class EmailTemplate(models.Model):
+    """Configurable subject/body for transactional emails."""
+
+    class Category(models.TextChoices):
+        AUTHENTICATION = "authentication", "Authentication"
+        SUBMISSION_WORKFLOW = "submission_workflow", "Submission workflow"
+        TASKS = "tasks", "Tasks & deadlines"
+        SYSTEM = "system", "System"
+
+    slug = models.SlugField(max_length=64, unique=True)
+    name = models.CharField(max_length=128)
+    category = models.CharField(
+        max_length=32,
+        choices=Category.choices,
+        default=Category.SYSTEM,
+    )
+    description = models.TextField(blank=True)
+    placeholders = models.TextField(
+        blank=True,
+        help_text="Comma-separated placeholder names available in subject/body.",
+    )
+    subject_template = models.CharField(max_length=255)
+    body_text_template = models.TextField()
+    body_html_template = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    is_system = models.BooleanField(
+        default=False,
+        help_text="System templates can be reset to defaults but not deleted.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["category", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.slug})"
+
+
 class PasswordHistory(models.Model):
     """Hashed record of a user's previous passwords to prevent reuse."""
     user = models.ForeignKey(
@@ -826,6 +884,16 @@ class Submission(models.Model):
     )
     implementation_due_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    # ── AI executive brief for Secretariat review ───────────────────────────
+    ai_brief_summary = models.TextField(
+        blank=True,
+        help_text="AI-generated executive brief for PSC Secretary review.",
+    )
+    ai_brief_processed = models.BooleanField(
+        default=False,
+        help_text="True once the latest brief generation completed.",
+    )
+    ai_brief_generated_at = models.DateTimeField(null=True, blank=True)
     # ── Parent/child (attachment) relationship ──────────────────────────────
     parent_submission = models.ForeignKey(
         'self', null=True, blank=True,
@@ -1671,6 +1739,12 @@ class MeetingTranscript(models.Model):
     """AI-generated transcript and structured analysis of a meeting recording."""
 
     meeting = models.OneToOneField(Meeting, on_delete=models.CASCADE, related_name="transcript")
+    source = models.CharField(
+        max_length=16,
+        choices=TranscriptSource.choices,
+        default=TranscriptSource.ZOOM_ASR,
+        help_text="Origin of raw_text (Zoom ASR paste, AI transcribe, etc.).",
+    )
     raw_text = models.TextField(
         blank=True, help_text="Full verbatim transcript from AI transcription.",
     )

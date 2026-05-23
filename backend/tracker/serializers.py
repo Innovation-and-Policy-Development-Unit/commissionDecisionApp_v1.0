@@ -14,6 +14,8 @@ from .models import (
     Meeting,
     MeetingTranscript,
     MeetingType,
+    RecordingAudioSource,
+    TranscriptSource,
     Minutes,
     AgendaItem,
     Ministry,
@@ -447,6 +449,9 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "parent_submission",
             "parent_reference",
             "attached_submissions",
+            "ai_brief_summary",
+            "ai_brief_processed",
+            "ai_brief_generated_at",
         )
 
 
@@ -538,6 +543,14 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "parent_reference",
             "parent_title",
             "attached_submissions",
+            "ai_brief_summary",
+            "ai_brief_processed",
+            "ai_brief_generated_at",
+        )
+        read_only_fields = (
+            "ai_brief_summary",
+            "ai_brief_processed",
+            "ai_brief_generated_at",
         )
 
 
@@ -916,6 +929,7 @@ class MeetingSerializer(serializers.ModelSerializer):
             "type",
             "status",
             "notes",
+            "recording_audio_source",
             "submission_cutoff",
             "effective_cutoff",
             "max_items",
@@ -1110,6 +1124,38 @@ class SystemSettingSerializer(serializers.ModelSerializer):
         read_only_fields = ("updated_at",)
 
 
+class EmailTemplateSerializer(serializers.ModelSerializer):
+    category_label = serializers.CharField(source="get_category_display", read_only=True)
+    placeholder_list = serializers.SerializerMethodField()
+
+    class Meta:
+        from .models import EmailTemplate
+
+        model = EmailTemplate
+        fields = (
+            "slug",
+            "name",
+            "category",
+            "category_label",
+            "description",
+            "placeholders",
+            "placeholder_list",
+            "subject_template",
+            "body_text_template",
+            "body_html_template",
+            "is_active",
+            "is_system",
+            "updated_at",
+            "created_at",
+        )
+        read_only_fields = ("slug", "is_system", "created_at", "updated_at")
+
+    def get_placeholder_list(self, obj):
+        if not obj.placeholders:
+            return []
+        return [p.strip() for p in obj.placeholders.split(",") if p.strip()]
+
+
 # ── Security feature serializers (NCSS 2030 / ISO 27001) ─────────────────────
 
 class AuditLogSerializer(serializers.ModelSerializer):
@@ -1270,10 +1316,20 @@ class MeetingTranscriptSerializer(serializers.ModelSerializer):
     class Meta:
         model = MeetingTranscript
         fields = (
-            "id", "meeting", "raw_text", "structured_data",
+            "id", "meeting", "source", "raw_text", "structured_data",
             "audio_file", "ai_processed", "processed_at", "created_at",
         )
         read_only_fields = ("id", "created_at", "processed_at", "ai_processed")
+
+
+class MeetingTranscriptPatchSerializer(serializers.Serializer):
+    """Manual Zoom/Teams transcript paste before AI minutes drafting."""
+    raw_text = serializers.CharField(required=True, allow_blank=False)
+    source = serializers.ChoiceField(
+        choices=TranscriptSource.choices,
+        default=TranscriptSource.MANUAL_PASTE,
+        required=False,
+    )
 
 
 class MinutesGenerateSerializer(serializers.Serializer):

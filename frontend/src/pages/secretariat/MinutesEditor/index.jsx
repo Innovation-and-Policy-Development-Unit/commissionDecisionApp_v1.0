@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  FileText, Save, CheckCircle2, AlertCircle, Clock, ArrowLeft,
+  FileText, Save, CheckCircle2, AlertCircle, ArrowLeft,
   Sparkles, Mic, Brain, Download, ChevronDown, ChevronRight,
-  Plus, Trash2, Loader2, PenSquare,
+  Plus, Trash2, Loader2, PenSquare, Copy, Upload, AlertTriangle, ExternalLink,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import PageHeader from '../../../components/shared/PageHeader'
 import api from '../../../api/client'
 import { useAuth } from '../../../context/AuthContext'
@@ -126,6 +128,7 @@ function AgendaItemEditor({ item, index, onChange }) {
 }
 
 export default function MinutesEditor() {
+  const { t } = useTranslation()
   const { meetingId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -138,6 +141,9 @@ export default function MinutesEditor() {
   const [aiBusy, setAiBusy] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [pasteText, setPasteText] = useState('')
+  const [savingTranscript, setSavingTranscript] = useState(false)
+  const [copiedPrompt, setCopiedPrompt] = useState(false)
 
   const [content, setContent] = useState({
     opening: '',
@@ -164,7 +170,9 @@ export default function MinutesEditor() {
         if (m.content && typeof m.content === 'object') setContent(m.content)
       }
       if (tRes.status === 'fulfilled' && tRes.value.data.length > 0) {
-        setTranscript(tRes.value.data[0])
+        const tr = tRes.value.data[0]
+        setTranscript(tr)
+        setPasteText(tr.raw_text || '')
       }
     } catch (err) {
       setError('Failed to load meeting data.')
@@ -260,6 +268,37 @@ export default function MinutesEditor() {
     await changeStatus('sign', pinInput)
   }
 
+  const saveTranscriptPaste = async () => {
+    setSavingTranscript(true)
+    setError('')
+    setSuccess('')
+    try {
+      const res = await api.patch(`/meetings/${meetingId}/transcript/`, {
+        raw_text: pasteText,
+        source: 'manual_paste',
+      })
+      setTranscript(res.data)
+      setSuccess(t('meeting_room.minutes_transcript_saved'))
+    } catch (err) {
+      setError(err.response?.data?.detail || t('meeting_room.minutes_transcript_save_failed'))
+    } finally {
+      setSavingTranscript(false)
+    }
+  }
+
+  const copyClaudePrompt = async () => {
+    setError('')
+    try {
+      const res = await api.get(`/meetings/${meetingId}/claude-prompt/`)
+      await navigator.clipboard.writeText(res.data.prompt || '')
+      setCopiedPrompt(true)
+      setSuccess(t('meeting_room.copied'))
+      setTimeout(() => setCopiedPrompt(false), 2500)
+    } catch (err) {
+      setError(err.response?.data?.detail || t('meeting_room.minutes_copy_failed'))
+    }
+  }
+
   const downloadPdf = async () => {
     setError('')
     setSuccess('')
@@ -323,47 +362,101 @@ export default function MinutesEditor() {
         </div>
       )}
 
-      {/* AI Actions Row */}
-      <div className="mb-6 flex flex-wrap gap-3">
-        <button
-          onClick={() => runAiAction('transcribe', '/minutes/transcribe/', { meeting_id: parseInt(meetingId) })}
-          disabled={aiBusy !== null}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 rounded-xl text-indigo-700 dark:text-indigo-300 font-bold text-xs transition-colors disabled:opacity-50"
-        >
-          {aiBusy === 'transcribe' ? <Loader2 size={14} className="animate-spin" /> : <Mic size={14} />}
-          Transcribe Recording
-        </button>
-        <button
-          onClick={() => runAiAction('draft', '/minutes/generate-from-transcript/', { meeting_id: parseInt(meetingId) })}
-          disabled={aiBusy !== null}
-          className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 rounded-xl text-purple-700 dark:text-purple-300 font-bold text-xs transition-colors disabled:opacity-50"
-        >
-          {aiBusy === 'draft' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-          AI Draft Minutes
-        </button>
-        <button
-          onClick={() => runAiAction('extract', '/minutes/extract-decisions/', { meeting_id: parseInt(meetingId) })}
-          disabled={aiBusy !== null}
-          className="flex items-center gap-2 px-4 py-2.5 bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 border border-cyan-200 dark:border-cyan-800 rounded-xl text-cyan-700 dark:text-cyan-300 font-bold text-xs transition-colors disabled:opacity-50"
-        >
-          {aiBusy === 'extract' ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
-          Extract Decisions
-        </button>
-      </div>
+      {/* Transcript workflow */}
+      <div className="card p-6 mb-6">
+        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
+          {t('meeting_room.minutes_workflow_title')}
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+          {t('meeting_room.minutes_workflow_desc')}
+        </p>
 
-      {/* Transcript Preview */}
-      {transcript?.ai_processed && (
-        <details className="mb-6 group">
-          <summary className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 mb-2">
-            <FileText size={14} />
-            Transcript Available ({transcript.raw_text?.length || 0} chars)
-            <ChevronRight size={14} className="group-open:rotate-90 transition-transform" />
-          </summary>
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs text-slate-600 dark:text-slate-400 max-h-64 overflow-y-auto whitespace-pre-wrap font-mono">
-            {transcript.raw_text}
+        <ol className="list-decimal list-inside text-sm text-slate-600 dark:text-slate-400 space-y-1 mb-4">
+          <li>
+            <Link to={`/meetings/capture?meetingId=${meetingId}`} className="text-primary-600 font-semibold hover:underline inline-flex items-center gap-1">
+              {t('meeting_room.minutes_step_upload')} <ExternalLink size={12} />
+            </Link>
+          </li>
+          <li>{t('meeting_room.minutes_step_paste')}</li>
+          <li>{t('meeting_room.minutes_step_claude')}</li>
+          <li>{t('meeting_room.minutes_step_ai')}</li>
+        </ol>
+
+        {(transcript?.raw_text || pasteText) && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200 flex items-start gap-2">
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            {t('meeting_room.minutes_bislama_warning')}
           </div>
-        </details>
-      )}
+        )}
+
+        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+          {t('meeting_room.minutes_transcript_label')}
+        </label>
+        <textarea
+          className="input min-h-[120px] resize-y font-mono text-xs mb-3"
+          value={pasteText}
+          onChange={e => setPasteText(e.target.value)}
+          placeholder={t('meeting_room.minutes_transcript_placeholder')}
+        />
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            type="button"
+            onClick={saveTranscriptPaste}
+            disabled={savingTranscript || !pasteText.trim()}
+            className="btn-secondary btn-sm disabled:opacity-50"
+          >
+            {savingTranscript ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            {t('meeting_room.minutes_save_transcript')}
+          </button>
+          <button type="button" onClick={copyClaudePrompt} className="btn-secondary btn-sm">
+            {copiedPrompt ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+            {t('meeting_room.copy_prompt')}
+          </button>
+          <Link
+            to={`/secretariat/meeting-room/minutes-pipeline?meetingId=${meetingId}`}
+            className="btn-outline btn-sm inline-flex items-center gap-1"
+          >
+            {t('meeting_room.pipeline_title')}
+          </Link>
+        </div>
+
+        <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={() => runAiAction('transcribe', '/minutes/transcribe/', { meeting_id: parseInt(meetingId) })}
+            disabled={aiBusy !== null}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 rounded-xl text-indigo-700 dark:text-indigo-300 font-bold text-xs disabled:opacity-50"
+          >
+            {aiBusy === 'transcribe' ? <Loader2 size={14} className="animate-spin" /> : <Mic size={14} />}
+            {t('meeting_room.minutes_run_transcribe')}
+          </button>
+          <button
+            type="button"
+            onClick={() => runAiAction('draft', '/minutes/generate-from-transcript/', { meeting_id: parseInt(meetingId) })}
+            disabled={aiBusy !== null}
+            className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 border border-purple-200 dark:border-purple-800 rounded-xl text-purple-700 dark:text-purple-300 font-bold text-xs disabled:opacity-50"
+          >
+            {aiBusy === 'draft' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {t('meeting_room.minutes_generate')}
+          </button>
+          <button
+            type="button"
+            onClick={() => runAiAction('extract', '/minutes/extract-decisions/', { meeting_id: parseInt(meetingId) })}
+            disabled={aiBusy !== null}
+            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-100 border border-cyan-200 dark:border-cyan-800 rounded-xl text-cyan-700 dark:text-cyan-300 font-bold text-xs disabled:opacity-50"
+          >
+            {aiBusy === 'extract' ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
+            {t('meeting_room.minutes_extract')}
+          </button>
+        </div>
+
+        {transcript?.source && (
+          <p className="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">
+            {t('meeting_room.minutes_source')}: {transcript.source}
+            {transcript.ai_processed && ` · ${t('meeting_room.minutes_ai_processed')}`}
+          </p>
+        )}
+      </div>
 
       {/* Minutes Editor */}
       <div className="space-y-4">

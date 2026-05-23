@@ -6,6 +6,7 @@ import OperationalSidebar from './components/OperationalSidebar'
 import CalendarView from './components/CalendarView'
 import ListView from './components/ListView'
 import SittingDetailDrawer from './components/SittingDetailDrawer'
+import LogitechGroupGuideDialog from '../../../components/meeting/LogitechGroupGuideDialog'
 import { useSittingOperations } from './hooks/useSittingOperations'
 import { VENUES, SITTING_TYPES } from './constants'
 import api from '../../../api/client'
@@ -24,6 +25,7 @@ export default function CommissionSittings() {
   const [selectedSitting, setSelectedSitting] = useState(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [logitechGuideOpen, setLogitechGuideOpen] = useState(false)
   
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -147,7 +149,10 @@ export default function CommissionSittings() {
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         getCapacity={getCapacity}
+        onOpenLogitechGuide={() => setLogitechGuideOpen(true)}
       />
+
+      <LogitechGroupGuideDialog open={logitechGuideOpen} onClose={() => setLogitechGuideOpen(false)} />
 
       {/* Schedule Modal */}
       {isModalOpen && (

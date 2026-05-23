@@ -1205,6 +1205,7 @@ export function APIKeysTab({ apiKeys, users, onRefresh }) {
 export function SettingsTab({ settings, onRefresh }) {
   const toast = useToast()
   const confirm = useConfirm()
+  const { user } = useAuth()
   const { refreshFeedbackStatus } = useTheme()
   const [form, setForm] = useState({})
   const [loading, setLoading] = useState(false)
@@ -1213,6 +1214,8 @@ export function SettingsTab({ settings, onRefresh }) {
   const [lockoutStats, setLockoutStats] = useState({ failure_limit: 5, cooloff_hours: 1, locked_accounts: 0 })
   const [lockoutLoading, setLockoutLoading] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
+  const [testEmailTo, setTestEmailTo] = useState('')
+  const [testEmailLoading, setTestEmailLoading] = useState(false)
 
   const fetchLockoutStats = useCallback(async () => {
     try {
@@ -1226,6 +1229,10 @@ export function SettingsTab({ settings, onRefresh }) {
   useEffect(() => {
     fetchLockoutStats()
   }, [fetchLockoutStats])
+
+  useEffect(() => {
+    if (user?.email && !testEmailTo) setTestEmailTo(user.email)
+  }, [user?.email, testEmailTo])
 
   useEffect(() => {
     const s = {}
@@ -1310,6 +1317,37 @@ export function SettingsTab({ settings, onRefresh }) {
   }
 
   const toggle = key => setForm(f => ({ ...f, [key]: f[key] === 'true' ? 'false' : 'true' }))
+
+  const SMTP_SETTING_KEYS = [
+    'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD',
+    'SMTP_TLS', 'SMTP_SSL', 'DEFAULT_FROM_EMAIL',
+  ]
+
+  const sendTestEmail = async () => {
+    const to = testEmailTo.trim()
+    if (!to) {
+      toast.error('Enter a recipient email address.')
+      return
+    }
+    setTestEmailLoading(true)
+    setSuccess('')
+    setError('')
+    try {
+      const smtpPayload = {}
+      SMTP_SETTING_KEYS.forEach(k => { smtpPayload[k] = form[k] ?? '' })
+      await api.post('/settings/batch-update/', smtpPayload)
+      const res = await api.post('/settings/test-email/', { to })
+      const msg = res.data.detail ?? `Test email sent to ${to}.`
+      setSuccess(msg)
+      toast.success(msg)
+    } catch (err) {
+      const msg = err.response?.data?.detail ?? 'Failed to send test email.'
+      setError(msg)
+      toast.error(msg)
+    } finally {
+      setTestEmailLoading(false)
+    }
+  }
 
   return (
     <div className="max-w-3xl">
@@ -1461,6 +1499,32 @@ export function SettingsTab({ settings, onRefresh }) {
           <div className="flex gap-6">
              <div className="flex items-center gap-2"><button type="button" onClick={() => toggle('SMTP_TLS')}>{form.SMTP_TLS === 'true' ? <ToggleRight size={24} className="text-emerald-500" /> : <ToggleLeft size={24} className="text-slate-300" />}</button><span className="text-xs">Use TLS</span></div>
              <div className="flex items-center gap-2"><button type="button" onClick={() => toggle('SMTP_SSL')}>{form.SMTP_SSL === 'true' ? <ToggleRight size={24} className="text-emerald-500" /> : <ToggleLeft size={24} className="text-slate-300" />}</button><span className="text-xs">Use SSL</span></div>
+          </div>
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 space-y-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Saves SMTP fields above, then sends a test message. If <code className="text-[11px]">SMTP_HOST</code> is set in <code className="text-[11px]">.env</code>, that server is used instead (e.g. Mailpit on port 1025).
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <div className="flex-1 space-y-1">
+                <label className="text-xs font-medium text-slate-500">Test recipient</label>
+                <input
+                  type="email"
+                  className="input text-sm"
+                  placeholder="you@example.com"
+                  value={testEmailTo}
+                  onChange={e => setTestEmailTo(e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={sendTestEmail}
+                disabled={testEmailLoading}
+                className="inline-flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium border border-primary-500 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 disabled:opacity-60 transition-colors sm:flex-shrink-0"
+              >
+                {testEmailLoading ? <RefreshCw size={14} className="animate-spin" /> : <Mail size={14} />}
+                {testEmailLoading ? 'Sending…' : 'Send test email'}
+              </button>
+            </div>
           </div>
         </section>
         {/* ── Password Policy ── */}

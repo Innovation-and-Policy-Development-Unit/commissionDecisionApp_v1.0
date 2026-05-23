@@ -115,6 +115,209 @@ def process_feedback_with_ai(feedback_id: int):
         log.error("AI_FAIL | FeedbackComment %s | %s", feedback_id, exc)
 
 
+# ── Submission executive brief (Secretariat) ──────────────────────────────────
+
+SUBMISSION_BRIEF_STAGES = frozenset({
+    "submitted",
+    "secretary_review",
+    "manager_checklist_review",
+    "under_assessment",
+    "forwarded_to_commission",
+    "commission_sitting",
+    "returned_for_clarification",
+    "deferred_back_to_hr",
+    "matters_arising",
+})
+
+SUBMISSION_BRIEF_INSTRUCTION = """You are the Executive Secretary to the Public Service Commission of Vanuatu.
+A PSC Secretary must approve or route submissions without reading every attachment in full.
+
+Read the submission context (metadata, form fields, checklist, documents list, workflow history).
+Write a concise executive brief in professional English. If Bislama appears in source fields, explain meaning in English.
+
+Output valid JSON only (no markdown fences):
+{
+  "executive_summary": "2-4 sentences: what is being asked and why it matters now",
+  "key_ask": "One sentence stating the decision or action requested",
+  "background": "2-3 sentences of relevant context",
+  "documents": ["bullet — each key document on file"],
+  "flags": ["bullet — risks, missing items, deadline or compliance concerns; empty array if none"],
+  "secretariat_actions": ["bullet — what the Secretary should verify before approving/routing"]
+}"""
+
+
+def submission_brief_needs_refresh(submission) -> bool:
+    if not submission.ai_brief_processed:
+        return True
+    if submission.ai_brief_generated_at and submission.updated_at > submission.ai_brief_generated_at:
+        return True
+    return False
+
+
+def build_submission_brief_context(submission) -> str:
+    """Assemble structured text context for the AI brief."""
+    from .models import (
+        PSCForm37Data,
+        PSCFormResponse,
+        RestructureSubmissionData,
+        SubmissionChecklistItem,
+        SubmissionDocument,
+        WorkflowEvent,
+    )
+
+    lines = [
+        f"Reference: {submission.reference_number}",
+        f"Title: {submission.title}",
+        f"Form type: {submission.form_type_code or '—'}",
+        f"Ministry: {submission.ministry.name if submission.ministry_id else '—'}",
+        f"Department: {submission.department.name if submission.department_id else '—'}",
+        f"Current stage: {submission.get_current_stage_display()} ({submission.current_stage})",
+        f"Classification: {submission.get_classification_display()}",
+        f"Internal (OPSC) submission: {submission.is_internal}",
+        f"Routed unit: {submission.routed_unit or '—'}",
+        f"Received: {submission.received_at}",
+        f"Assessment deadline: {submission.assessment_deadline_at or '—'}",
+        f"Overdue assessment: {submission.is_assessment_overdue}",
+        f"DG endorsed by: {submission.dg_endorsed_by.username if submission.dg_endorsed_by_id else '—'}",
+        f"Assigned principal: {submission.assigned_to.username if submission.assigned_to_id else '—'}",
+        f"Submission notes: {submission.notes or '—'}",
+    ]
+
+    if submission.parent_submission_id:
+        p = submission.parent_submission
+        lines.append(f"Parent submission: {p.reference_number} — {p.title}")
+
+    for doc in SubmissionDocument.objects.filter(submission=submission).order_by("uploaded_at"):
+        desc = f" — {doc.description}" if doc.description else ""
+        lines.append(f"Document: {doc.original_name}{desc}")
+
+    checklist = SubmissionChecklistItem.objects.filter(submission=submission).select_related("document")
+    for item in checklist:
+        label = item.document.name if item.document_id else "Item"
+        status = "present" if item.is_present else "MISSING"
+        lines.append(f"Checklist: {label} — {status}")
+
+    for ev in WorkflowEvent.objects.filter(submission=submission).order_by("-created_at")[:8]:
+        lines.append(
+            f"Workflow: {ev.previous_stage} → {ev.new_stage} by {ev.actor.username}"
+            + (f" | {ev.remarks}" if ev.remarks else "")
+        )
+
+    try:
+        f37 = submission.form37_data
+        lines.append("PSC Form 3-7 data:")
+        for field in f37._meta.fields:
+            if field.name in ("id", "submission", "created_at", "updated_at"):
+                continue
+            val = getattr(f37, field.name)
+            if val not in (None, "", []):
+                lines.append(f"  {field.name}: {val}")
+    except PSCForm37Data.DoesNotExist:
+        pass
+
+    try:
+        rd = submission.restructure_data
+        lines.append(f"Restructure subject: {rd.subject_title or '—'}")
+        if rd.background:
+            lines.append(f"  background: {rd.background[:2000]}")
+        if rd.proposal:
+            lines.append(f"  proposal: {rd.proposal[:2000]}")
+        if rd.recommendation:
+            lines.append(f"  recommendation: {rd.recommendation[:1500]}")
+        if rd.costing_rows:
+            lines.append(f"  costing_rows: {json.dumps(rd.costing_rows)[:4000]}")
+    except RestructureSubmissionData.DoesNotExist:
+        pass
+
+    try:
+        resp = submission.dynamic_form_response
+        data = resp.data or {}
+        snippet = json.dumps(data, ensure_ascii=False, default=str)
+        if len(snippet) > 6000:
+            snippet = snippet[:6000] + "…"
+        lines.append(f"Dynamic form ({resp.form_type.code}): {snippet}")
+    except PSCFormResponse.DoesNotExist:
+        pass
+
+    return "\n".join(lines)
+
+
+def _format_submission_brief(data: dict) -> str:
+    """Turn JSON brief into readable plain text for the UI."""
+    parts = []
+    if data.get("executive_summary"):
+        parts.append(data["executive_summary"].strip())
+    if data.get("key_ask"):
+        parts.append(f"\nKey ask\n{data['key_ask'].strip()}")
+    if data.get("background"):
+        parts.append(f"\nBackground\n{data['background'].strip()}")
+
+    def _bullets(title, items):
+        if not items:
+            return
+        lines = [f"\n{title}"]
+        for item in items:
+            if item:
+                lines.append(f"• {item}")
+        parts.append("\n".join(lines))
+
+    _bullets("Documents on file", data.get("documents") or [])
+    _bullets("Flags for Secretariat", data.get("flags") or [])
+    _bullets("Suggested actions", data.get("secretariat_actions") or [])
+    return "\n".join(parts).strip()
+
+
+@shared_task
+def generate_submission_brief(submission_id: int, force: bool = False):
+    """Generate an AI executive brief for PSC Secretary review."""
+    from django.utils import timezone
+
+    from .models import Submission
+
+    try:
+        submission = Submission.objects.select_related(
+            "ministry", "department", "parent_submission", "assigned_to", "dg_endorsed_by",
+        ).get(id=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("BRIEF_SKIP | Submission %s not found", submission_id)
+        return
+
+    if not force and not submission_brief_needs_refresh(submission):
+        return
+
+    client = _get_gemini_client()
+    if client is None:
+        return
+
+    context = build_submission_brief_context(submission)
+    user_input = f"Submission context:\n\n{context}"
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            config={
+                "system_instruction": SUBMISSION_BRIEF_INSTRUCTION,
+                "response_mime_type": "application/json",
+            },
+            contents=user_input,
+        )
+        raw = response.text or ""
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            data = {"executive_summary": raw.strip()}
+
+        submission.ai_brief_summary = _format_submission_brief(data)
+        submission.ai_brief_processed = True
+        submission.ai_brief_generated_at = timezone.now()
+        submission.save(update_fields=[
+            "ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at",
+        ])
+        app_log.info("BRIEF_COMPLETE | Submission %s", submission_id)
+    except Exception as exc:
+        app_log.error("BRIEF_FAIL | Submission %s | %s", submission_id, exc)
+
+
 # ── Meeting transcription ────────────────────────────────────────────────────
 
 
@@ -138,10 +341,14 @@ Separate the transcript and JSON with "---STRUCTURED---" on its own line."""
 
 @shared_task
 def transcribe_meeting_recording(meeting_id: int, audio_path: str):
-    """Transcribe a meeting recording using Gemini and save the transcript."""
+    """Transcribe a meeting recording using Gemini and save the transcript.
+
+    Output is English-biased ASR; Bislama-heavy sittings need secretariat review
+    and a Claude text-repair pass before chair approval (see claude-prompt endpoint).
+    """
     from django.utils import timezone
 
-    from .models import Meeting, MeetingTranscript
+    from .models import Meeting, MeetingTranscript, TranscriptSource
 
     try:
         meeting = Meeting.objects.get(id=meeting_id)
@@ -176,6 +383,7 @@ def transcribe_meeting_recording(meeting_id: int, audio_path: str):
                 "raw_text": transcript.strip(),
                 "structured_data": structured_data,
                 "audio_file": os.path.basename(audio_path),
+                "source": TranscriptSource.AI_WHISPER,
                 "ai_processed": True,
                 "processed_at": timezone.now(),
             },
@@ -184,6 +392,7 @@ def transcribe_meeting_recording(meeting_id: int, audio_path: str):
             transcript_obj.raw_text = transcript.strip()
             transcript_obj.structured_data = structured_data
             transcript_obj.audio_file = os.path.basename(audio_path)
+            transcript_obj.source = TranscriptSource.AI_WHISPER
             transcript_obj.ai_processed = True
             transcript_obj.processed_at = timezone.now()
             transcript_obj.save()
@@ -441,6 +650,8 @@ def notify_approaching_due_dates():
         if task.assigned_staff:
             recipients.add(task.assigned_staff)
 
+        from .email_notify import notify_task_due_soon
+
         for user in recipients:
             if not user or not user.is_active:
                 continue
@@ -455,6 +666,7 @@ def notify_approaching_due_dates():
                 ),
                 submission_id=task.submission_id,
             )
+            notify_task_due_soon(task, user, days_remaining=NOTIFY_DAYS_BEFORE)
 
         task.due_date_notified = True
         task.save(update_fields=["due_date_notified"])
@@ -477,6 +689,8 @@ def notify_approaching_due_dates():
     notified_subtask_ids = []
     for sub in subtask_qs:
         recipients = set(sub.assigned_staff.all())
+        from .email_notify import notify_subtask_due_soon
+
         for user in recipients:
             if not user or not user.is_active:
                 continue
@@ -490,6 +704,7 @@ def notify_approaching_due_dates():
                     f"Only {NOTIFY_DAYS_BEFORE} days remaining."
                 ),
             )
+            notify_subtask_due_soon(sub, user, days_remaining=NOTIFY_DAYS_BEFORE)
         sub.due_date_notified = True
         sub.save(update_fields=["due_date_notified"])
         notified_subtask_ids.append(sub.id)

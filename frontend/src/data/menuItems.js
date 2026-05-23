@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, ScrollText, Bell, ListTodo, Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList } from 'lucide-react'
+import { LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, ScrollText, Bell, ListTodo, Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList, Headphones, Mail } from 'lucide-react'
 import {
   userCanAccessAdminPanel,
   userCanManageRoles,
@@ -27,6 +27,7 @@ const menuItems = [
     groupKey: 'nav.group_commission',
     groupIcon: Gavel,
     items: [
+      { label: 'Meeting room',    labelKey: 'nav.meeting_room',  icon: Headphones,   path: '/secretariat/meeting-room' },
       { label: 'Meetings',        labelKey: 'nav.meetings',      icon: CalendarDays, path: '/secretariat/meetings' },
       { label: 'Agenda',          labelKey: 'nav.agenda',        icon: ScrollText,   path: '/secretariat/agenda' },
       { label: 'Decisions',       labelKey: 'nav.decisions',     icon: Gavel,        path: '/secretariat/decisions' },
@@ -45,6 +46,7 @@ const menuItems = [
       { label: 'PSC Form Types',           labelKey: 'nav.form_types',             icon: ClipboardList, path: '/admin/form-types',             visibility: 'admin' },
       { label: 'API Keys',                 labelKey: 'nav.api_keys',               icon: Lock,         path: '/admin/api-keys',               visibility: 'roles' },
       { label: 'System Config',            labelKey: 'nav.system_config',          icon: Settings,     path: '/admin/system-config',          visibility: 'roles' },
+      { label: 'Email templates',          labelKey: 'nav.email_templates',        icon: Mail,         path: '/admin/email-templates',        visibility: 'roles' },
       { label: 'Security',                 labelKey: 'nav.security',               icon: ShieldAlert,  path: '/admin/security',               visibility: 'audit' },
       { label: 'User Feedback',            labelKey: 'nav.feedback',               icon: MessageSquare, path: '/admin/feedback',              visibility: 'feedback' },
       { label: 'Backup & Restore',         labelKey: 'nav.backup_restore',         icon: HardDrive,    path: '/admin/backup-restore',         visibility: 'roles' },

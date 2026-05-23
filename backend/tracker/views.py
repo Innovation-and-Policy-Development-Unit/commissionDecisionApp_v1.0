@@ -41,6 +41,7 @@ from .models import (
     Submission,
     SystemPermission,
     SystemSetting,
+    EmailTemplate,
     WorkflowEvent,
     WorkflowStage,
     RequiredDocument,
@@ -90,6 +91,7 @@ from .serializers import (
     UserProfileSerializer,
     APIKeySerializer,
     SystemSettingSerializer,
+    EmailTemplateSerializer,
     FeedbackReportSerializer,
     FeedbackReportDetailSerializer,
     FeedbackCommentSerializer,
@@ -407,13 +409,24 @@ def _dispatch_transition_notifications(submission, prev, target, actor):
         title = f"Submission {label}: {submission.reference_number}"
         body = f"'{submission.title}' has been {label} by the Commission."
 
-    for user in recipients:
+    recipient_list = list(recipients)
+    for user in recipient_list:
         NotificationModel.objects.create(
             recipient=user,
             submission=submission,
             channel=NotificationModel.Channel.BOTH,
             title=title,
             body=body,
+        )
+
+    if recipient_list and title:
+        from .email_notify import send_transition_emails
+
+        label = ""
+        if target in (WorkflowStage.APPROVED, WorkflowStage.REJECTED):
+            label = "approved" if target == WorkflowStage.APPROVED else "rejected"
+        send_transition_emails(
+            submission, prev, target, recipient_list, decision_label=label
         )
 
 
@@ -515,7 +528,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
+        from .tasks import generate_submission_brief, submission_brief_needs_refresh
+
         submission = self.get_object()
+        profile = _profile(request.user)
+        if profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            if submission_brief_needs_refresh(submission):
+                generate_submission_brief.delay(submission.id)
+
         _log(request, _AL.Action.READ,
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,
@@ -637,11 +657,33 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             lambda: _dispatch_transition_notifications(submission, prev, target, request.user)
         )
 
+        from .tasks import SUBMISSION_BRIEF_STAGES, generate_submission_brief
+        if target in SUBMISSION_BRIEF_STAGES:
+            transaction.on_commit(lambda: generate_submission_brief.delay(submission.id, force=True))
+
         _log(request, _AL.Action.UPDATE,
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,
              description=f"Stage transition: {prev} → {target}" + (f" | {remarks}" if remarks else ""))
         return Response(SubmissionDetailSerializer(submission).data)
+
+    @action(detail=True, methods=["post"], url_path="generate-brief")
+    def generate_brief(self, request, pk=None):
+        """Queue AI executive brief generation for Secretariat review."""
+        from .tasks import generate_submission_brief
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admin can request a brief.")
+
+        submission.ai_brief_processed = False
+        submission.save(update_fields=["ai_brief_processed", "updated_at"])
+        generate_submission_brief.delay(submission.id, force=True)
+        return Response({
+            "detail": "Executive brief generation started. Refresh shortly.",
+            "ai_brief_processed": False,
+        })
 
     @action(detail=True, methods=["post"], url_path="assign")
     def assign(self, request, pk=None):
@@ -1338,13 +1380,37 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                         "Cannot allocate task: Commission minutes have not been signed yet. "
                         "Task allocation is only permitted after the Chairperson has signed the minutes."
                     )
-        serializer.save(created_by=self.request.user)
+        task = serializer.save(created_by=self.request.user)
+        from .email_notify import notify_task_assigned, task_assignees
+
+        notify_task_assigned(task, task_assignees(task))
 
     def perform_update(self, serializer):
         task = serializer.instance
         user = self.request.user
+        old_manager_id = task.assigned_manager_id
+        old_staff_id = task.assigned_staff_id
+        old_m2m_ids = set(task.assigned_staff_m2m.values_list("id", flat=True))
+
+        def _notify_new_assignees(updated_task):
+            from .email_notify import notify_task_assigned
+
+            new_users = []
+            if updated_task.assigned_manager_id and updated_task.assigned_manager_id != old_manager_id:
+                new_users.append(updated_task.assigned_manager)
+            if updated_task.assigned_staff_id and updated_task.assigned_staff_id != old_staff_id:
+                new_users.append(updated_task.assigned_staff)
+            new_m2m = set(updated_task.assigned_staff_m2m.values_list("id", flat=True))
+            for uid in new_m2m - old_m2m_ids:
+                u = User.objects.filter(pk=uid, is_active=True).first()
+                if u:
+                    new_users.append(u)
+            if new_users:
+                notify_task_assigned(updated_task, new_users)
+
         if user.is_superuser or user.is_staff:
-            serializer.save()
+            updated = serializer.save()
+            _notify_new_assignees(updated)
             return
 
         vd = serializer.validated_data
@@ -1353,7 +1419,8 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         if rbac_user_has_permission(user, "allocate_decision"):
             if "submission" in vd:
                 raise PermissionDenied("Cannot move a task to another submission.")
-            serializer.save()
+            updated = serializer.save()
+            _notify_new_assignees(updated)
             return
 
         is_manager = task.assigned_manager_id == user.id and rbac_user_has_permission(user, "assign_task")
@@ -1365,7 +1432,8 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         if is_manager:
             if "submission" in keys or "assigned_manager" in keys:
                 raise PermissionDenied("You cannot reassign the submission or manager for this task.")
-            serializer.save()
+            updated = serializer.save()
+            _notify_new_assignees(updated)
             return
 
         if is_staff:
@@ -2712,25 +2780,39 @@ class PasswordResetRequestView(APIView):
             origin = request.headers.get("Origin") or f"{request.scheme}://{request.get_host()}"
             reset_url = f"{origin}/auth/reset-password/confirm?token={token.token}"
             
-            from django.core.mail import send_mail
             from django.conf import settings
-            
-            subject = "Reset Your Password - Commission Decision App"
-            message = (
-                f"Hello {user.username},\n\n"
-                "You requested a password reset for your Commission Decision App account.\n"
-                "Please click the link below to set a new password:\n\n"
-                f"{reset_url}\n\n"
-                "This link will expire in 1 hour.\n\n"
-                "If you did not request a password reset, you can safely ignore this email."
+            from django.core.mail import send_mail
+
+            from .email_notify import merge_recipient_context
+            from .email_templates import send_templated_email
+
+            ctx = merge_recipient_context(
+                user,
+                reset_url=reset_url,
+                expiry_hours="1",
             )
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
+            if not send_templated_email(
+                slug="password_reset",
+                to=[email],
+                context=ctx,
                 fail_silently=True,
-            )
+            ):
+                subject = "Reset Your Password - Commission Decision App"
+                message = (
+                    f"Hello {user.username},\n\n"
+                    "You requested a password reset for your Commission Decision App account.\n"
+                    "Please click the link below to set a new password:\n\n"
+                    f"{reset_url}\n\n"
+                    "This link will expire in 1 hour.\n\n"
+                    "If you did not request a password reset, you can safely ignore this email."
+                )
+                send_mail(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [email],
+                    fail_silently=True,
+                )
 
             import logging
             logging.getLogger("django").info(
@@ -2751,6 +2833,56 @@ class PasswordResetConfirmView(APIView):
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response({"detail": "Password updated successfully. You may now sign in."})
+
+
+def _build_claude_minutes_prompt(meeting):
+    """Build a staff-facing Claude prompt from meeting metadata and transcript."""
+    agenda_lines = []
+    for item in meeting.agenda_items.select_related("submission").order_by("sequence"):
+        sub = item.submission
+        ref = getattr(sub, "reference_number", "") if sub else ""
+        title = getattr(sub, "title", "") if sub else ""
+        agenda_lines.append(f"- {item.sequence}. [{item.get_category_display()}] {ref} — {title}")
+    agenda_block = "\n".join(agenda_lines) if agenda_lines else "(No agenda items on record)"
+
+    raw_transcript = ""
+    transcript_source = ""
+    if hasattr(meeting, "transcript"):
+        raw_transcript = meeting.transcript.raw_text or ""
+        transcript_source = meeting.transcript.get_source_display()
+
+    meeting_info = (
+        f"Reference: {meeting.reference_number}\n"
+        f"Title: {meeting.title}\n"
+        f"Date: {meeting.date} at {meeting.time}\n"
+        f"Venue: {meeting.venue}\n"
+        f"Type: {meeting.get_type_display()}\n"
+    )
+
+    return f"""You are assisting the Public Service Commission Secretariat in Vanuatu.
+
+The Commission often deliberates in Bislama. Zoom/Teams automatic speech recognition (ASR) produces garbled English-like text. Your task is to:
+
+1. Infer the intended meaning from the ASR transcript below (do not treat garbled words literally).
+2. Draft formal English Commission minutes suitable for chair approval.
+3. Preserve decisions, action items, and submission references accurately.
+4. Flag any passage where meaning is uncertain with [VERIFY].
+
+Meeting information:
+{meeting_info}
+
+Agenda items:
+{agenda_block}
+
+Transcript source: {transcript_source or "Not recorded"}
+
+ASR / pasted transcript (review for Bislama mangling):
+---
+{raw_transcript or "(No transcript pasted yet — paste Zoom output or run AI transcribe first.)"}
+---
+
+Output structured minutes in clear formal English with sections: Opening, Confirmation of Previous Minutes, Agenda Items (per item: discussion, decision, action items), Any Other Business, Closing.
+"""
 
 
 class MeetingViewSet(viewsets.ModelViewSet):
@@ -2792,6 +2924,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
             )
 
         meeting_id = request.data.get("meeting_id")
+        audio_source = (request.data.get("audio_source") or "").strip()
+        meeting = None
         meeting_ref = ""
         if meeting_id:
             try:
@@ -2803,16 +2937,36 @@ class MeetingViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
+        from .models import MeetingTranscript, RecordingAudioSource
+
+        valid_sources = {c.value for c in RecordingAudioSource}
+        if audio_source and audio_source in valid_sources:
+            resolved_source = audio_source
+        elif meeting:
+            resolved_source = RecordingAudioSource.ZOOM_EXPORT
+        else:
+            resolved_source = RecordingAudioSource.OTHER
+
         recordings_dir = os.path.join(settings.MEDIA_ROOT, 'recordings')
         os.makedirs(recordings_dir, exist_ok=True)
 
         timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
-        safe_name = f"recording_{timestamp}{ext}"
+        if meeting_id:
+            safe_name = f"recording_{meeting_id}_{timestamp}{ext}"
+        else:
+            safe_name = f"recording_{timestamp}{ext}"
         filepath = os.path.join(recordings_dir, safe_name)
 
         with open(filepath, 'wb+') as dest:
             for chunk in file.chunks():
                 dest.write(chunk)
+
+        if meeting:
+            meeting.recording_audio_source = resolved_source
+            meeting.save(update_fields=["recording_audio_source", "updated_at"])
+            transcript_obj, _ = MeetingTranscript.objects.get_or_create(meeting=meeting)
+            transcript_obj.audio_file = safe_name
+            transcript_obj.save(update_fields=["audio_file"])
 
         from .audit import log_action as _log
         from .models import AuditLog as _AL
@@ -2828,7 +2982,31 @@ class MeetingViewSet(viewsets.ModelViewSet):
             "url": f"{settings.MEDIA_URL}recordings/{safe_name}",
             "size": file.size,
             "meeting_id": int(meeting_id) if meeting_id else None,
+            "recording_audio_source": resolved_source,
         })
+
+    @action(detail=True, methods=["patch"], url_path="transcript")
+    def update_transcript(self, request, pk=None):
+        """Save a manually pasted Zoom/Teams transcript for secretariat review."""
+        from .models import MeetingTranscript, TranscriptSource
+        from .serializers import MeetingTranscriptPatchSerializer
+
+        meeting = self.get_object()
+        ser = MeetingTranscriptPatchSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        source = ser.validated_data.get("source") or TranscriptSource.MANUAL_PASTE
+        transcript_obj, _ = MeetingTranscript.objects.get_or_create(meeting=meeting)
+        transcript_obj.raw_text = ser.validated_data["raw_text"]
+        transcript_obj.source = source
+        transcript_obj.save(update_fields=["raw_text", "source"])
+        return Response(MeetingTranscriptSerializer(transcript_obj).data)
+
+    @action(detail=True, methods=["get"], url_path="claude-prompt")
+    def claude_prompt(self, request, pk=None):
+        """Return a Claude-ready prompt for repairing ASR text into formal minutes."""
+        meeting = self.get_object()
+        prompt = _build_claude_minutes_prompt(meeting)
+        return Response({"prompt": prompt})
 
     @action(detail=True, methods=["post"], url_path="submit-agenda")
     def submit_agenda_to_chairman(self, request, pk=None):
@@ -3082,6 +3260,163 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
              description=f"Settings updated: {', '.join(settings_dict.keys())}",
              extra_data={"keys": list(settings_dict.keys())})
         return Response(updated)
+
+    @action(detail=False, methods=["post"], url_path="test-email")
+    def test_email(self, request):
+        """Send a test message using the configured SMTP backend (env or SystemSetting)."""
+        from django.conf import settings as django_settings
+        from django.core.exceptions import ValidationError
+        from django.core.mail import send_mail
+        from django.core.validators import validate_email
+
+        from .email_backend import _smtp_config_from_env
+
+        to = (request.data.get("to") or "").strip()
+        if not to:
+            return Response({"detail": "Recipient email is required."}, status=400)
+        try:
+            validate_email(to)
+        except ValidationError:
+            return Response({"detail": "Invalid email address."}, status=400)
+
+        env_cfg = _smtp_config_from_env()
+        if env_cfg:
+            smtp_label = f"{env_cfg['host']}:{env_cfg['port']} (environment)"
+        else:
+            host = SystemSetting.get_val("SMTP_HOST") or getattr(django_settings, "EMAIL_HOST", "localhost")
+            port = SystemSetting.get_val("SMTP_PORT") or getattr(django_settings, "EMAIL_PORT", 25)
+            smtp_label = f"{host}:{port} (system settings)"
+
+        from_email = (
+            os.getenv("DEFAULT_FROM_EMAIL")
+            or SystemSetting.get_val("DEFAULT_FROM_EMAIL")
+            or django_settings.DEFAULT_FROM_EMAIL
+        )
+
+        subject = "Commission Decision App — SMTP test"
+        message = (
+            "This is a test email from the Commission Decision App.\n\n"
+            f"SMTP: {smtp_label}\n"
+            f"From: {from_email}\n"
+        )
+        try:
+            send_mail(subject, message, from_email, [to], fail_silently=False)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Failed to send test email: {exc}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        _log(
+            request,
+            _AL.Action.SETTINGS,
+            resource_type="SystemSetting",
+            description=f"SMTP test email sent to {to}",
+            extra_data={"to": to, "smtp": smtp_label},
+        )
+        return Response({"detail": f"Test email sent to {to}.", "smtp": smtp_label})
+
+
+class EmailTemplateViewSet(viewsets.ModelViewSet):
+    """Manage transactional email templates — PSC Admin / manage_roles."""
+
+    permission_classes = [permissions.IsAuthenticated, HasManageRoles]
+    queryset = EmailTemplate.objects.all()
+    serializer_class = EmailTemplateSerializer
+    lookup_field = "slug"
+    http_method_names = ["get", "patch", "post", "head", "options"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        category = self.request.query_params.get("category")
+        if category:
+            qs = qs.filter(category=category)
+        active = self.request.query_params.get("active")
+        if active is not None:
+            qs = qs.filter(is_active=active.lower() in ("true", "1", "yes"))
+        return qs
+
+    @action(detail=False, methods=["post"], url_path="seed-defaults")
+    def seed_defaults(self, request):
+        from .email_templates import seed_default_email_templates
+
+        created = seed_default_email_templates()
+        return Response(
+            {"detail": "Default templates synced.", "created": created},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="preview")
+    def preview(self, request, slug=None):
+        from .email_notify import sample_context_for_slug
+        from .email_templates import render_template_record
+
+        tpl = self.get_object()
+        extra = request.data.get("context") if isinstance(request.data.get("context"), dict) else {}
+        ctx = {**sample_context_for_slug(tpl.slug), **extra}
+        subject, text_body, html_body = render_template_record(tpl, ctx)
+        return Response({
+            "subject": subject,
+            "body_text": text_body,
+            "body_html": html_body or "",
+            "context": ctx,
+        })
+
+    @action(detail=True, methods=["post"], url_path="send-test")
+    def send_test(self, request, slug=None):
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError
+
+        from django.core.mail import send_mail
+
+        from .email_notify import sample_context_for_slug
+        from .email_templates import get_from_email, render_template_record
+
+        tpl = self.get_object()
+        to = (request.data.get("to") or "").strip()
+        if not to:
+            return Response({"detail": "Recipient email is required."}, status=400)
+        try:
+            validate_email(to)
+        except ValidationError:
+            return Response({"detail": "Invalid email address."}, status=400)
+
+        extra = request.data.get("context") if isinstance(request.data.get("context"), dict) else {}
+        ctx = {**sample_context_for_slug(tpl.slug), **extra}
+        subject, text_body, html_body = render_template_record(tpl, ctx)
+        try:
+            send_mail(
+                subject,
+                text_body,
+                get_from_email(),
+                [to],
+                fail_silently=False,
+                html_message=html_body,
+            )
+        except Exception as exc:
+            return Response(
+                {"detail": f"Failed to send test email: {exc}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response({"detail": f"Test email sent to {to} using template “{tpl.name}”."})
+
+    @action(detail=True, methods=["post"], url_path="reset")
+    def reset_to_default(self, request, slug=None):
+        from .email_templates import reset_email_template_to_default
+
+        tpl = self.get_object()
+        if not tpl.is_system:
+            return Response(
+                {"detail": "Only system templates can be reset to defaults."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not reset_email_template_to_default(tpl.slug):
+            return Response({"detail": "No default found for this template."}, status=404)
+        tpl.refresh_from_db()
+        return Response(EmailTemplateSerializer(tpl).data)
 
 
 # ── Backup & Restore ──────────────────────────────────────────────────────────
@@ -3667,6 +4002,7 @@ class NotificationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
                            viewsets.GenericViewSet):
     """List / read notifications for the currently authenticated user."""
 
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
@@ -3855,14 +4191,21 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
         import glob as _glob
         recordings_dir = os.path.join(settings.MEDIA_ROOT, "recordings")
-        pattern = os.path.join(recordings_dir, f"*{meeting_id}*")
-        matches = _glob.glob(pattern)
-        if not matches:
+        audio_path = None
+        if hasattr(meeting, "transcript") and meeting.transcript.audio_file:
+            candidate = os.path.join(recordings_dir, meeting.transcript.audio_file)
+            if os.path.isfile(candidate):
+                audio_path = candidate
+        if not audio_path:
+            pattern = os.path.join(recordings_dir, f"*{meeting_id}*")
+            matches = _glob.glob(pattern)
+            if matches:
+                audio_path = matches[0]
+        if not audio_path:
             return Response(
                 {"detail": "No recording file found for this meeting. Upload one first via POST /meetings/upload/."},
                 status=400,
             )
-        audio_path = matches[0]
         transcribe_meeting_recording.delay(meeting_id, audio_path)
         return Response({"detail": "Transcription started. Check back shortly."})
 

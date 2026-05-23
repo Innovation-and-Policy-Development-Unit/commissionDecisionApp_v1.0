@@ -11,6 +11,7 @@ import {
   needsHrAction, isTerminal, phaseForKey,
 } from '../../constants/stages'
 import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff } from 'lucide-react'
+import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import DocumentAnnotatorModal from '../../components/shared/DocumentAnnotatorModal'
 import DocumentSignatureModal from '../../components/shared/DocumentSignatureModal'
 import PSCForm37Fields from './PSCForm37Fields'
@@ -33,6 +34,7 @@ const TRANSITION_ROLES = [
 ]
 
 const UNIT_MANAGER_ROLES = ['vipam_manager', 'hr_unit_manager', 'odu_manager', 'compliance_manager']
+const SECRETARIAT_BRIEF_ROLES = ['psc_secretary', 'senior_admin_officer', 'psc_admin']
 
 // ─── Visual timeline ──────────────────────────────────────────────────────────
 
@@ -178,6 +180,7 @@ export default function SubmissionDetail() {
   ].includes(user.role)
 
   const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
+  const showSecretariatBrief = user && SECRETARIAT_BRIEF_ROLES.includes(user.role)
 
   const fetchSubmission = useCallback(async () => {
     try {
@@ -516,6 +519,14 @@ const stageDescriptions = {
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />{error}
         </div>
+      )}
+
+      {showSecretariatBrief && (
+        <SecretariatBriefCard
+          submission={submission}
+          submissionId={id}
+          onUpdated={setSubmission}
+        />
       )}
 
       {/* ── Attachment banner: shown when this submission is a child ── */}

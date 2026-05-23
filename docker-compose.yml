@@ -22,6 +22,14 @@ services:
       - "6379"
     restart: unless-stopped
 
+  # Local SMTP + web inbox for development (Mailpit). UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -37,6 +45,11 @@ services:
       TWO_FACTOR_REQUIRED: ${TWO_FACTOR_REQUIRED:-false}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
       MEDIA_ROOT: /var/scdms/media
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_TLS: ${SMTP_TLS:-false}
+      SMTP_SSL: ${SMTP_SSL:-false}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-PSC Tracker Dev <dev@localhost>}
     volumes:
       - scdms_logs:/var/log/scdms
       - scdms_backups:/var/backups/scdms
@@ -44,6 +57,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
       interval: 10s
@@ -65,12 +80,18 @@ services:
       POSTGRES_HOST: db
       CELERY_BROKER_URL: redis://redis:6379/0
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_TLS: ${SMTP_TLS:-false}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-PSC Tracker Dev <dev@localhost>}
     volumes:
       - scdms_backups:/var/backups/scdms
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_started
+      mailpit:
         condition: service_started
     restart: unless-stopped
 
@@ -85,6 +106,8 @@ services:
       POSTGRES_HOST: db
       CELERY_BROKER_URL: redis://redis:6379/0
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
     volumes:
       - scdms_backups:/var/backups/scdms
     depends_on:

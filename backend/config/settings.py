@@ -362,6 +362,14 @@ CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'tracker.email_backend.DynamicEmailBackend')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'PSC Tracker <noreply@psc.gov.vu>')
 
+# SMTP defaults (overridden by .env; DynamicEmailBackend also reads SMTP_* env first)
+EMAIL_HOST = os.getenv('EMAIL_HOST', os.getenv('SMTP_HOST', 'localhost'))
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', os.getenv('SMTP_PORT', '1025')))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', os.getenv('SMTP_USER', ''))
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', os.getenv('SMTP_PASSWORD', ''))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', os.getenv('SMTP_TLS', 'false')).lower() in ('1', 'true', 'yes')
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', os.getenv('SMTP_SSL', 'false')).lower() in ('1', 'true', 'yes')
+
 # When True, the login flow requires a second factor (OTP)
 TWO_FACTOR_REQUIRED = os.getenv('TWO_FACTOR_REQUIRED', 'false').lower() in ('1', 'true', 'yes')
 
