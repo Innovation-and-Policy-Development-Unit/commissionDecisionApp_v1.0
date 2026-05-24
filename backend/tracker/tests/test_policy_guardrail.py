@@ -43,4 +43,4 @@ class PolicyGuardrailTests(SimpleTestCase):
         obs = _rule_based_observations(sub)
         self.assertTrue(any(o["category"] == "salary_ceiling" for o in obs))
         ceiling = PSC_GRADE_SALARY_CEILINGS_VT["5"]
-        self.assertIn(str(ceiling), obs[0]["evidence"])
+        self.assertIn(f"{ceiling:,}", obs[0]["evidence"])

@@ -9,7 +9,7 @@ import {
 import { 
   InfoRegular, 
   DismissRegular, 
-  MessageRegular 
+  ChatRegular 
 } from '@fluentui/react-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
@@ -86,7 +86,7 @@ export default function BetaTestBanner() {
         <Button 
           size="small" 
           appearance="outline" 
-          icon={<MessageRegular />}
+          icon={<ChatRegular />}
           className={styles.actionButton}
           onClick={toggleFeedbackPanel}
         >
