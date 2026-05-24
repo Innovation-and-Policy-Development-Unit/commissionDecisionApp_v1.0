@@ -57,6 +57,7 @@ export default function SubmissionLog() {
   const [nlBusy, setNlBusy]       = useState(false)
   const [nlMeta, setNlMeta]       = useState(null)
   const [nlIdSet, setNlIdSet]     = useState(null)
+  const [viewMode, setViewMode]   = useState('list')
 
   const isAdmin = user?.role === 'psc_admin'
   const isComplianceUser = user && isComplianceRole(user.role)
@@ -226,6 +227,32 @@ export default function SubmissionLog() {
       <div className="card overflow-hidden">
         {/* ── Toolbar ── */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-3">
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800 w-fit">
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'list'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <LayoutList size={15} />
+            {t('submission.view_list')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('kanban')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'kanban'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <Columns3 size={15} />
+            {t('submission.view_kanban')}
+          </button>
+        </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -543,6 +570,8 @@ export default function SubmissionLog() {
               </div>
             )}
           </div>
+        )}
+        </>
         )}
       </div>
 
