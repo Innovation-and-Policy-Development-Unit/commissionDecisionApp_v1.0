@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom'
-import { Eye, EyeOff, ArrowRight, ShieldCheck, Lock, KeyRound, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Lock, KeyRound, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/client'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
+import BasePasswordInput from '../../components/shared/BasePasswordInput'
+import BaseMessageBar from '../../components/shared/BaseMessageBar'
 
 const ANIM_STYLES = `
   @keyframes slide-up {
@@ -32,7 +36,6 @@ export default function Login() {
   const location  = useLocation()
   const { login, accessToken, user, authReady, refreshMe, setTokens } = useAuth()
 
-  const [showPassword,     setShowPassword]     = useState(false)
   const [username,         setUsername]         = useState('')
   const [password,         setPassword]         = useState('')
   const [error,            setError]            = useState('')
@@ -184,31 +187,27 @@ export default function Login() {
                 </div>
 
                 {error && (
-                  <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <BaseMessageBar intent="error" className="mb-2">
                     {error}
-                  </div>
+                  </BaseMessageBar>
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-5">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
-                      Username
-                    </label>
-                    <input
-                      type="text"
-                      className="input"
-                      style={{ borderRadius: 10 }}
-                      value={username}
-                      onChange={e => setUsername(e.target.value)}
-                      placeholder="Enter your username"
-                      required
-                      autoFocus
-                    />
-                  </div>
+                  <BaseInput
+                    label="Username"
+                    type="text"
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
+                    placeholder="Enter your username"
+                    required
+                    autoFocus
+                  />
 
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Password</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                        Password
+                      </span>
                       <Link
                         to="/auth/reset-password"
                         className="text-xs text-primary-600 hover:text-primary-700 hover:underline font-medium"
@@ -216,48 +215,25 @@ export default function Login() {
                         Forgot password?
                       </Link>
                     </div>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        className="input pe-10"
-                        style={{ borderRadius: 10 }}
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        placeholder="Enter your password"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(p => !p)}
-                        className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
+                    <BasePasswordInput
+                      hideLabel
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      required
+                    />
                   </div>
 
-                  <button
+                  <BaseButton
                     type="submit"
-                    className="w-full py-3 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{
-                      background: loading ? '#0c2451' : 'linear-gradient(135deg, #0c2451 0%, #1a4080 100%)',
-                      borderRadius: 10,
-                      boxShadow: loading ? 'none' : '0 4px 14px rgba(12,36,81,0.3)',
-                    }}
-                    disabled={loading}
+                    variant="primary"
+                    className="w-full !py-3"
+                    loading={loading}
+                    loadingLabel="Signing in"
+                    icon={!loading ? <ArrowRight size={16} /> : undefined}
                   >
-                    {loading ? (
-                      <>
-                        <svg className="animate-spin" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                          <circle cx="12" cy="12" r="10" strokeOpacity={0.25} />
-                          <path d="M12 2a10 10 0 0 1 10 10" />
-                        </svg>
-                        Signing in…
-                      </>
-                    ) : (
-                      <>Sign In <ArrowRight size={16} /></>
-                    )}
-                  </button>
+                    Sign In
+                  </BaseButton>
                 </form>
 
                 <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-center gap-1.5">

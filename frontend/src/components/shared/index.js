@@ -1,5 +1,16 @@
-/** Shared UI primitives — import from '@/components/shared' or relative paths. */
+/** Shared UI primitives — Fluent-backed where noted. */
 export { default as BaseButton } from './BaseButton'
 export { default as BaseInput } from './BaseInput'
+export { default as BasePasswordInput } from './BasePasswordInput'
+export { default as BaseTextarea } from './BaseTextarea'
+export { default as BaseSelect } from './BaseSelect'
+export { default as BaseCheckbox } from './BaseCheckbox'
+export { default as BaseSwitch } from './BaseSwitch'
+export { default as BaseBadge } from './BaseBadge'
+export { default as BaseMessageBar } from './BaseMessageBar'
+export { default as BaseSpinner } from './BaseSpinner'
+export { default as BaseCard } from './BaseCard'
+export { default as Modal } from './Modal'
+export { default as LiveRegion } from './LiveRegion'
 export { default as AiProcessingIndicator } from './AiProcessingIndicator'
 export { default as LanguageSwitcher } from './LanguageSwitcher'

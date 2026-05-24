@@ -63,6 +63,7 @@ const menuItems = [
       { label: 'Meeting room',    labelKey: 'nav.meeting_room',  icon: Headphones,   path: '/secretariat/meeting-room' },
       { label: 'Meetings',        labelKey: 'nav.meetings',      icon: CalendarDays, path: '/secretariat/meetings' },
       { label: 'Agenda',          labelKey: 'nav.agenda',        icon: ScrollText,   path: '/secretariat/agenda' },
+      { label: 'Minutes',         labelKey: 'nav.minutes',       icon: FileText,     path: '/secretariat/minutes' },
       { label: 'Decisions',       labelKey: 'nav.decisions',     icon: Gavel,        path: '/secretariat/decisions' },
       {
         label: 'Minutes decision tasks',

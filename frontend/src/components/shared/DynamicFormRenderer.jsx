@@ -1,8 +1,13 @@
 /**
  * Renders a dynamic PSC form based on PSCFormField definitions.
- * Used in SubmissionDetail for any form type designed via the Form Builder.
+ * Uses Fluent-backed Base* inputs where applicable.
  */
 import { useId } from 'react'
+import { Radio, RadioGroup } from '@fluentui/react-components'
+import BaseInput from './BaseInput'
+import BaseTextarea from './BaseTextarea'
+import BaseSelect from './BaseSelect'
+import BaseCheckbox from './BaseCheckbox'
 
 export default function DynamicFormRenderer({ fields = [], values = {}, onChange, readOnly = false }) {
   const handle = (key, value) => {
@@ -25,8 +30,7 @@ export default function DynamicFormRenderer({ fields = [], values = {}, onChange
 }
 
 function FieldRow({ field, value, onChange, readOnly }) {
-  const inputId = useId()
-  const helpId = useId()
+  const groupId = useId()
 
   if (field.field_type === 'section_header') {
     return (
@@ -42,227 +46,143 @@ function FieldRow({ field, value, onChange, readOnly }) {
     ? field.choices.split('\n').map(s => s.trim()).filter(Boolean)
     : []
 
-  const isRadio = field.field_type === 'radio'
-  const isCheckbox = field.field_type === 'checkbox'
-  const describedBy = field.help_text ? helpId : undefined
-
-  if (isRadio) {
-    return (
-      <fieldset>
-        <legend className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-          {field.label}
-          {field.is_required && !readOnly && <span className="text-red-500 ml-0.5">*</span>}
-        </legend>
-        {readOnly ? (
-          <ReadValue field={field} value={value} choices={choices} />
-        ) : (
-          <EditValue
-            field={field}
-            value={value}
-            onChange={onChange}
-            choices={choices}
-            groupName={`${field.field_key}-${inputId}`}
-            describedBy={describedBy}
-          />
-        )}
-        {field.help_text && (
-          <p id={helpId} className="mt-1 text-xs text-slate-400">
-            {field.help_text}
-          </p>
-        )}
-      </fieldset>
-    )
-  }
-
-  if (isCheckbox) {
+  if (readOnly) {
     return (
       <div>
-        {field.label && field.label !== (field.placeholder || 'Yes') && (
-          <p className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-            {field.label}
-            {field.is_required && !readOnly && <span className="text-red-500 ml-0.5">*</span>}
-          </p>
-        )}
-        {readOnly ? (
-          <ReadValue field={field} value={value} choices={choices} />
-        ) : (
-          <EditValue
-            field={field}
-            value={value}
-            onChange={onChange}
-            choices={choices}
-            inputId={inputId}
-            describedBy={describedBy}
-          />
-        )}
+        <p className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+          {field.label}
+        </p>
+        <ReadValue field={field} value={value} />
         {field.help_text && (
-          <p id={helpId} className="mt-1 text-xs text-slate-400">
-            {field.help_text}
-          </p>
+          <p className="mt-1 text-xs text-slate-400">{field.help_text}</p>
         )}
       </div>
     )
   }
 
-  return (
-    <div>
-      <label htmlFor={readOnly ? undefined : inputId} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-        {field.label}
-        {field.is_required && !readOnly && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-
-      {readOnly ? (
-        <ReadValue field={field} value={value} choices={choices} />
-      ) : (
-        <EditValue
-          field={field}
-          value={value}
-          onChange={onChange}
-          choices={choices}
-          inputId={inputId}
-          describedBy={describedBy}
-        />
-      )}
-
-      {field.help_text && (
-        <p id={helpId} className="mt-1 text-xs text-slate-400">
-          {field.help_text}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function EditValue({ field, value, onChange, choices, inputId, groupName, describedBy }) {
-  const base = 'input'
-  const aria = describedBy ? { 'aria-describedby': describedBy } : {}
-
   switch (field.field_type) {
     case 'textarea':
       return (
-        <textarea
-          id={inputId}
-          className={`${base} min-h-[80px]`}
+        <BaseTextarea
+          label={field.label}
+          hint={field.help_text}
+          required={field.is_required}
           value={value ?? ''}
           placeholder={field.placeholder}
           onChange={e => onChange(e.target.value)}
-          required={field.is_required}
-          {...aria}
         />
       )
 
     case 'number':
       return (
-        <input
-          id={inputId}
+        <BaseInput
           type="number"
-          className={base}
+          label={field.label}
+          hint={field.help_text}
+          required={field.is_required}
           value={value ?? ''}
           placeholder={field.placeholder}
           onChange={e => onChange(e.target.value)}
-          required={field.is_required}
-          {...aria}
         />
       )
 
     case 'date':
       return (
-        <input
-          id={inputId}
+        <BaseInput
           type="date"
-          className={base}
+          label={field.label}
+          hint={field.help_text}
+          required={field.is_required}
           value={value ?? ''}
           onChange={e => onChange(e.target.value)}
-          required={field.is_required}
-          {...aria}
         />
       )
 
     case 'datetime':
       return (
-        <input
-          id={inputId}
+        <BaseInput
           type="datetime-local"
-          className={base}
+          label={field.label}
+          hint={field.help_text}
+          required={field.is_required}
           value={value ?? ''}
           onChange={e => onChange(e.target.value)}
-          required={field.is_required}
-          {...aria}
         />
       )
 
     case 'select':
       return (
-        <select
-          id={inputId}
-          className={base}
-          value={value ?? ''}
-          onChange={e => onChange(e.target.value)}
+        <BaseSelect
+          label={field.label}
+          hint={field.help_text}
           required={field.is_required}
-          {...aria}
-        >
-          <option value="">— Select —</option>
-          {choices.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+          placeholder="— Select —"
+          options={choices}
+          value={value ?? ''}
+          onChange={(_e, v) => onChange(v)}
+        />
       )
 
     case 'radio':
       return (
-        <div className="space-y-1.5 mt-1" role="radiogroup" aria-required={field.is_required || undefined}>
-          {choices.map(c => {
-            const optionId = `${groupName}-${c.replace(/\s+/g, '-')}`
-            return (
-              <label key={c} htmlFor={optionId} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-                <input
-                  id={optionId}
-                  type="radio"
-                  name={groupName}
-                  value={c}
-                  checked={value === c}
-                  onChange={() => onChange(c)}
-                  className="w-4 h-4"
-                  required={field.is_required}
-                />
-                {c}
-              </label>
-            )
-          })}
-        </div>
+        <fieldset>
+          <legend className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+            {field.label}
+            {field.is_required && <span className="text-red-500 ml-0.5">*</span>}
+          </legend>
+          <RadioGroup
+            id={groupId}
+            value={value ?? ''}
+            onChange={(_e, data) => onChange(data.value)}
+            layout="vertical"
+            required={field.is_required}
+          >
+            {choices.map(c => (
+              <Radio key={c} value={c} label={c} />
+            ))}
+          </RadioGroup>
+          {field.help_text && (
+            <p className="mt-1 text-xs text-slate-400">{field.help_text}</p>
+          )}
+        </fieldset>
       )
 
     case 'checkbox':
       return (
-        <label htmlFor={inputId} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer mt-1">
-          <input
-            id={inputId}
-            type="checkbox"
-            className="w-4 h-4 rounded"
+        <div>
+          {field.label && field.label !== (field.placeholder || 'Yes') && (
+            <p className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+              {field.label}
+              {field.is_required && <span className="text-red-500 ml-0.5">*</span>}
+            </p>
+          )}
+          <BaseCheckbox
             checked={!!value}
-            onChange={e => onChange(e.target.checked)}
+            onChange={(_e, data) => onChange(data.checked)}
+            label={field.placeholder || 'Yes'}
             required={field.is_required}
-            {...aria}
           />
-          {field.placeholder || 'Yes'}
-        </label>
+          {field.help_text && (
+            <p className="mt-1 text-xs text-slate-400">{field.help_text}</p>
+          )}
+        </div>
       )
 
     default:
       return (
-        <input
-          id={inputId}
-          type="text"
-          className={base}
+        <BaseInput
+          label={field.label}
+          hint={field.help_text}
+          required={field.is_required}
           value={value ?? ''}
           placeholder={field.placeholder}
           onChange={e => onChange(e.target.value)}
-          required={field.is_required}
-          {...aria}
         />
       )
   }
 }
 
-function ReadValue({ field, value, choices }) {
+function ReadValue({ field, value }) {
   if (value === null || value === undefined || value === '') {
     return <p className="text-sm text-slate-400 italic">—</p>
   }

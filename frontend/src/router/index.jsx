@@ -33,6 +33,7 @@ import Agenda from '../pages/secretariat/Agenda'
 import Decisions from '../pages/secretariat/Decisions'
 import Notifications from '../pages/secretariat/Notifications'
 import TaskManagement from '../pages/secretariat/TaskManagement'
+import MinutesIndex from '../pages/secretariat/MinutesIndex'
 import Account from '../pages/pages/Account'
 import StaffChatbot from '../pages/assistant/StaffChatbot'
 import HrManagerGuide from '../pages/guide/HrManagerGuide'
@@ -76,6 +77,7 @@ export default function AppRouter() {
           <Route path="/secretariat/meetings" element={<CommissionSittings />} />
           <Route path="/secretariat/meetings/:meetingId/minutes" element={<MinutesEditor />} />
           <Route path="/secretariat/agenda" element={<Agenda />} />
+          <Route path="/secretariat/minutes" element={<MinutesIndex />} />
           <Route path="/secretariat/decisions" element={<Decisions />} />
           <Route path="/secretariat/tasks" element={<TaskManagement />} />
           <Route path="/secretariat/notifications" element={<Notifications />} />

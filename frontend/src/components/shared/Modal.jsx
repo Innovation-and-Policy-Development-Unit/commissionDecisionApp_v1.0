@@ -62,7 +62,11 @@ export default function Modal({
             </div>
           )}
           <DialogContent className="overflow-y-auto flex-1">{children}</DialogContent>
-          {footer && <DialogActions>{footer}</DialogActions>}
+                {footer && (
+                  <DialogActions className="flex gap-2 justify-end flex-wrap">
+                    {footer}
+                  </DialogActions>
+                )}
         </DialogBody>
       </DialogSurface>
     </Dialog>
