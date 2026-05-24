@@ -205,6 +205,8 @@ def _submission_queryset_for(user):
         if not profile.ministry_id:
             return qs.none()
         return qs.filter(ministry_id=profile.ministry_id)
+    if role == Role.TRAVELLER:
+        return qs.filter(created_by=user)
     if role == Role.DEPT_ADMIN:
         if not profile.department_id:
             return qs.none()
@@ -476,6 +478,28 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 kwargs["department_id"] = profile.department_id
             submission = serializer.save(**kwargs)
 
+        elif profile.role == Role.TRAVELLER:
+            from .travel_forms import is_travel_form_code, requires_approval_letter
+
+            form_code = self.request.data.get("form_type_code") or ""
+            if not is_travel_form_code(form_code):
+                raise PermissionDenied(
+                    "Travellers may only create PSC Forms 4.4, 4.5, and 4.6."
+                )
+            endorsers = self.request.data.get("travel_endorsers") or {}
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": False,
+                "secretary_only": True,
+                "requires_travel_letter": requires_approval_letter(form_code),
+                "travel_endorsers": endorsers if isinstance(endorsers, dict) else {},
+            }
+            if profile.ministry_id:
+                kwargs["ministry_id"] = profile.ministry_id
+            if profile.department_id:
+                kwargs["department_id"] = profile.department_id
+            submission = serializer.save(**kwargs)
+
         elif profile.role == Role.CSU_MANAGER:
             # OPSC CSU internal submission — routes directly to Secretary
             ministry_id = _resolve_opsc_ministry(profile)
@@ -510,7 +534,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission = serializer.save()
         else:
             raise PermissionDenied(
-                "Only PSC Officers, Admins, Secretaries, Ministry staff, OPSC unit staff, "
+                "Only PSC Officers, Admins, Secretaries, Ministry staff, Travellers, OPSC unit staff, "
                 "or Compliance unit staff can create submissions."
             )
         _log(self.request, _AL.Action.CREATE,
@@ -588,7 +612,44 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             current_stage=prev,
             target_stage=target,
             is_internal=submission.is_internal,
+            secretary_only=submission.secretary_only,
         )
+
+        if (
+            submission.secretary_only
+            and prev == WorkflowStage.DRAFT
+            and target == WorkflowStage.SUBMITTED
+        ):
+            from .travel_signatures import endorsements_complete
+
+            if not endorsements_complete(submission):
+                return Response(
+                    {
+                        "detail": (
+                            "All required ministry endorsements must be digitally signed "
+                            "before submitting to the Public Service Commission."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        if (
+            submission.secretary_only
+            and target == WorkflowStage.APPROVED
+            and submission.requires_travel_letter
+        ):
+            from .travel_signatures import signed_section_keys
+
+            if "secretary_decision" not in signed_section_keys(submission):
+                return Response(
+                    {
+                        "detail": (
+                            "Secretary must record an approval decision (digital sign-off) "
+                            "before marking this travel request as approved."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         # ── Unit managers can only transition submissions routed to their unit ──
         _unit_role_to_routed = {
@@ -624,11 +685,19 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     "This submission has not been assigned to you. Contact your unit manager."
                 )
 
+        if (
+            submission.secretary_only
+            and prev == WorkflowStage.DRAFT
+            and target == WorkflowStage.SUBMITTED
+        ):
+            target = WorkflowStage.SECRETARY_REVIEW
+
         # ── A3: pre-submit package validation (draft → submitted) ───────────────
         if (
             prev == WorkflowStage.DRAFT
-            and target == WorkflowStage.SUBMITTED
+            and target in {WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW}
             and not acknowledge_gaps
+            and not submission.secretary_only
         ):
             from django.conf import settings as django_settings
 
@@ -674,7 +743,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             WorkflowStage.RETURNED,
             WorkflowStage.DEFERRED_BACK_TO_HR,
         }
-        if target not in _allowed_targets_with_gaps:
+        if target not in _allowed_targets_with_gaps and not submission.secretary_only:
             unchecked_mandatory = submission.checklist_items.filter(
                 document__mandatory_for_stage=prev,
                 is_present=False,
@@ -696,7 +765,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission.current_stage = target
 
             # ── On first submission: auto-assign scheduled_meeting based on cutoff ──
-            if prev == WorkflowStage.DRAFT and target == WorkflowStage.SUBMITTED:
+            if (
+                prev == WorkflowStage.DRAFT
+                and target == WorkflowStage.SUBMITTED
+                and not submission.secretary_only
+            ):
                 self._assign_scheduled_meeting(submission)
 
             # ── On HR responding to deferral: route to manager queue ──
@@ -790,6 +863,24 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     ).get(pk=sid)
                 )
             )
+
+        if target == WorkflowStage.APPROVED and submission.requires_travel_letter:
+            sid = submission.id
+            uid = request.user.id
+
+            def _issue_letter(submission_id=sid, user_id=uid):
+                from .models import Submission as Sub
+                from .travel_letter import build_travel_approval_letter
+
+                sub = Sub.objects.filter(pk=submission_id).first()
+                if not sub:
+                    return
+                from django.contrib.auth.models import User
+
+                sec = User.objects.filter(pk=user_id).first()
+                build_travel_approval_letter(sub, secretary_user=sec)
+
+            transaction.on_commit(_issue_letter)
 
         _log(request, _AL.Action.UPDATE,
              resource_type="Submission", resource_id=submission.id,

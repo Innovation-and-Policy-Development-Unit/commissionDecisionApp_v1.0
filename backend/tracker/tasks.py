@@ -1674,3 +1674,324 @@ def generate_document_redaction_preview(document_id: int):
         return
     doc.ai_redaction_spans = data or {"processed": True, "error": err, "spans": []}
     doc.save(update_fields=["ai_redaction_spans"])
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ── P1–P4 AI Analysis Tasks ──────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _build_submission_context(submission) -> str:
+    """Return a text block describing a submission for use in AI prompts."""
+    from .models import SubmissionDocument, SubmissionChecklistItem
+
+    docs = SubmissionDocument.objects.filter(submission=submission).values_list("original_name", flat=True)
+    doc_list = "\n".join(f"  - {d}" for d in docs) or "  (none)"
+    checklist = SubmissionChecklistItem.objects.filter(submission=submission)
+    cl_present = checklist.filter(is_present=True).count()
+    cl_total = checklist.count()
+
+    lines = [
+        f"Reference: {submission.reference_number or 'N/A'}",
+        f"Title: {submission.title or 'N/A'}",
+        f"Form Type: {submission.form_type_code or 'N/A'}",
+        f"Ministry: {submission.ministry.name if submission.ministry else 'N/A'}",
+        f"Officer Name: {submission.officer_name or 'N/A'}",
+        f"Officer Grade: {submission.officer_grade or 'N/A'}",
+        f"Stage: {submission.current_stage or 'N/A'}",
+        f"Submission Date: {submission.submitted_at.date() if submission.submitted_at else 'N/A'}",
+        f"Checklist Completeness: {cl_present}/{cl_total}",
+        f"Narrative/Description: {(submission.description or 'N/A')[:1500]}",
+        f"Documents on file:\n{doc_list}",
+    ]
+    return "\n".join(lines)
+
+
+# ── A4: Duplicate Detection ───────────────────────────────────────────────────
+
+@shared_task
+def detect_submission_duplicates(submission_id: int, force: bool = False):
+    """A4 — Detect duplicate/similar submissions using Claude Sonnet."""
+    from django.utils import timezone
+    from .models import Submission
+    from .ai.A4_duplicate_detector import detect_duplicates
+    from .ai.claude_client import ai_enabled
+
+    if not ai_enabled():
+        return
+
+    try:
+        submission = Submission.objects.select_related("ministry").get(pk=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("A4_DUPLICATE | Submission %s not found", submission_id)
+        return
+
+    if not force and submission.ai_duplicate_processed:
+        return
+
+    # Build context for candidate similar submissions (same ministry, similar form type)
+    candidates = Submission.objects.filter(
+        ministry=submission.ministry,
+    ).exclude(pk=submission_id).order_by("-submitted_at")[:20]
+
+    submission_ctx = _build_submission_context(submission)
+    existing_ctx = "\n\n---\n\n".join(
+        _build_submission_context(c) for c in candidates
+    ) or "No existing submissions found."
+
+    data, err = detect_duplicates(submission_ctx, existing_ctx)
+
+    if err or not data:
+        app_log.error("A4_DUPLICATE | Sub %s | Error: %s", submission_id, err)
+        submission.ai_duplicate_processed = True
+        submission.ai_duplicate_recommendation = f"AI error: {err or 'empty response'}"
+        submission.ai_duplicate_generated_at = timezone.now()
+        submission.save(update_fields=[
+            "ai_duplicate_processed", "ai_duplicate_recommendation",
+            "ai_duplicate_generated_at", "updated_at",
+        ])
+        return
+
+    submission.ai_duplicate_processed = True
+    submission.ai_duplicate_is_duplicate = data.get("is_duplicate", False)
+    submission.ai_duplicate_confidence = data.get("confidence", 0)
+    submission.ai_duplicate_similar_cases = data.get("similar_cases", [])
+    submission.ai_duplicate_recommendation = data.get("recommendation", "")
+    submission.ai_duplicate_generated_at = timezone.now()
+    submission.save(update_fields=[
+        "ai_duplicate_processed", "ai_duplicate_is_duplicate",
+        "ai_duplicate_confidence", "ai_duplicate_similar_cases",
+        "ai_duplicate_recommendation", "ai_duplicate_generated_at", "updated_at",
+    ])
+    app_log.info("A4_DUPLICATE | Sub %s | is_duplicate=%s confidence=%s",
+                 submission_id, submission.ai_duplicate_is_duplicate,
+                 submission.ai_duplicate_confidence)
+
+
+def queue_duplicate_detection(submission_id: int, force: bool = False) -> None:
+    try:
+        detect_submission_duplicates.delay(submission_id, force=force)
+    except Exception as exc:
+        app_log.warning("A4_DUPLICATE_FALLBACK | %s | %s", submission_id, exc)
+        detect_submission_duplicates(submission_id, force=force)
+
+
+# ── B2: Risk Assessment ───────────────────────────────────────────────────────
+
+@shared_task
+def run_risk_assessment(submission_id: int, force: bool = False):
+    """B2 — Risk assessment using Claude Sonnet."""
+    from django.utils import timezone
+    from .models import Submission
+    from .ai.B2_risk_assessment import assess_risk
+    from .ai.claude_client import ai_enabled
+
+    if not ai_enabled():
+        return
+
+    try:
+        submission = Submission.objects.select_related("ministry").get(pk=submission_id)
+    except Submission.DoesNotExist:
+        return
+
+    if not force and submission.ai_risk_processed:
+        return
+
+    submission_ctx = _build_submission_context(submission)
+    data, err = assess_risk(submission_ctx)
+
+    if err or not data:
+        submission.ai_risk_processed = True
+        submission.ai_risk_recommendation = f"AI error: {err or 'empty response'}"
+        submission.ai_risk_generated_at = timezone.now()
+        submission.save(update_fields=[
+            "ai_risk_processed", "ai_risk_recommendation", "ai_risk_generated_at", "updated_at"
+        ])
+        return
+
+    submission.ai_risk_processed = True
+    submission.ai_risk_score = data.get("risk_score", 0)
+    submission.ai_risk_level = data.get("risk_level", "")
+    submission.ai_risk_factors = data.get("risk_factors", [])
+    submission.ai_risk_mitigation = data.get("mitigation_steps", [])
+    submission.ai_risk_recommendation = data.get("recommendation", "")
+    submission.ai_risk_generated_at = timezone.now()
+    submission.save(update_fields=[
+        "ai_risk_processed", "ai_risk_score", "ai_risk_level",
+        "ai_risk_factors", "ai_risk_mitigation", "ai_risk_recommendation",
+        "ai_risk_generated_at", "updated_at",
+    ])
+    app_log.info("B2_RISK | Sub %s | level=%s score=%s",
+                 submission_id, submission.ai_risk_level, submission.ai_risk_score)
+
+
+def queue_risk_assessment(submission_id: int, force: bool = False) -> None:
+    try:
+        run_risk_assessment.delay(submission_id, force=force)
+    except Exception as exc:
+        app_log.warning("B2_RISK_FALLBACK | %s | %s", submission_id, exc)
+        run_risk_assessment(submission_id, force=force)
+
+
+# ── B3: Recommended Outcome ───────────────────────────────────────────────────
+
+@shared_task
+def generate_recommended_outcome(submission_id: int, force: bool = False):
+    """B3 — Recommend decision outcome using Claude Sonnet."""
+    from django.utils import timezone
+    from .models import Submission
+    from .ai.B3_recommended_outcome import recommend_outcome
+    from .ai.claude_client import ai_enabled
+
+    if not ai_enabled():
+        return
+
+    try:
+        submission = Submission.objects.select_related("ministry").get(pk=submission_id)
+    except Submission.DoesNotExist:
+        return
+
+    if not force and submission.ai_outcome_processed:
+        return
+
+    submission_ctx = _build_submission_context(submission)
+    data, err = recommend_outcome(submission_ctx)
+
+    if err or not data:
+        submission.ai_outcome_processed = True
+        submission.ai_outcome_rationale = f"AI error: {err or 'empty response'}"
+        submission.ai_outcome_generated_at = timezone.now()
+        submission.save(update_fields=[
+            "ai_outcome_processed", "ai_outcome_rationale", "ai_outcome_generated_at", "updated_at"
+        ])
+        return
+
+    submission.ai_outcome_processed = True
+    submission.ai_outcome_recommendation = data.get("recommendation", "")
+    submission.ai_outcome_confidence = data.get("confidence", 0)
+    submission.ai_outcome_rationale = data.get("rationale", "")
+    submission.ai_outcome_conditions = data.get("conditions", [])
+    submission.ai_outcome_precedents = data.get("precedents", [])
+    submission.ai_outcome_legal_basis = data.get("legal_basis", "")
+    submission.ai_outcome_generated_at = timezone.now()
+    submission.save(update_fields=[
+        "ai_outcome_processed", "ai_outcome_recommendation", "ai_outcome_confidence",
+        "ai_outcome_rationale", "ai_outcome_conditions", "ai_outcome_precedents",
+        "ai_outcome_legal_basis", "ai_outcome_generated_at", "updated_at",
+    ])
+    app_log.info("B3_OUTCOME | Sub %s | recommendation=%s confidence=%s",
+                 submission_id, submission.ai_outcome_recommendation,
+                 submission.ai_outcome_confidence)
+
+
+def queue_recommended_outcome(submission_id: int, force: bool = False) -> None:
+    try:
+        generate_recommended_outcome.delay(submission_id, force=force)
+    except Exception as exc:
+        app_log.warning("B3_OUTCOME_FALLBACK | %s | %s", submission_id, exc)
+        generate_recommended_outcome(submission_id, force=force)
+
+
+# ── B5: Notice of Allegation ──────────────────────────────────────────────────
+
+@shared_task
+def generate_notice_of_allegation(submission_id: int, response_deadline_days: int = 14, force: bool = False):
+    """B5 — Draft notice of allegation letter using Claude Sonnet."""
+    from django.utils import timezone
+    from .models import Submission
+    from .ai.B5_notice_of_allegation import draft_notice_of_allegation
+    from .ai.claude_client import ai_enabled
+
+    if not ai_enabled():
+        return
+
+    try:
+        submission = Submission.objects.select_related("ministry").get(pk=submission_id)
+    except Submission.DoesNotExist:
+        return
+
+    if not force and submission.ai_noa_processed:
+        return
+
+    submission_ctx = _build_submission_context(submission)
+    data, err = draft_notice_of_allegation(submission_ctx, response_deadline_days=response_deadline_days)
+
+    if err or not data:
+        submission.ai_noa_processed = True
+        submission.ai_noa_content = f"AI error: {err or 'empty response'}"
+        submission.ai_noa_generated_at = timezone.now()
+        submission.save(update_fields=[
+            "ai_noa_processed", "ai_noa_content", "ai_noa_generated_at", "updated_at"
+        ])
+        return
+
+    submission.ai_noa_processed = True
+    submission.ai_noa_content = data.get("letter_content", "")
+    submission.ai_noa_subject = data.get("subject_line", "")
+    submission.ai_noa_key_points = data.get("key_points", [])
+    submission.ai_noa_generated_at = timezone.now()
+    submission.save(update_fields=[
+        "ai_noa_processed", "ai_noa_content", "ai_noa_subject",
+        "ai_noa_key_points", "ai_noa_generated_at", "updated_at",
+    ])
+    app_log.info("B5_NOA | Sub %s | subject=%s", submission_id, submission.ai_noa_subject)
+
+
+def queue_notice_of_allegation(submission_id: int, response_deadline_days: int = 14, force: bool = False) -> None:
+    try:
+        generate_notice_of_allegation.delay(submission_id, response_deadline_days=response_deadline_days, force=force)
+    except Exception as exc:
+        app_log.warning("B5_NOA_FALLBACK | %s | %s", submission_id, exc)
+        generate_notice_of_allegation(submission_id, response_deadline_days=response_deadline_days, force=force)
+
+
+# ── F3: Outcome Letter ────────────────────────────────────────────────────────
+
+@shared_task
+def generate_outcome_letter(submission_id: int, outcome: str = "", conditions: list = None, force: bool = False):
+    """F3 — Draft formal outcome letter using Claude Sonnet."""
+    from django.utils import timezone
+    from .models import Submission
+    from .ai.F3_outcome_letter import draft_outcome_letter
+    from .ai.claude_client import ai_enabled
+
+    if not ai_enabled():
+        return
+
+    try:
+        submission = Submission.objects.select_related("ministry").get(pk=submission_id)
+    except Submission.DoesNotExist:
+        return
+
+    if not force and submission.ai_letter_processed:
+        return
+
+    submission_ctx = _build_submission_context(submission)
+    data, err = draft_outcome_letter(submission_ctx, outcome=outcome, conditions=conditions or [])
+
+    if err or not data:
+        submission.ai_letter_processed = True
+        submission.ai_letter_content = f"AI error: {err or 'empty response'}"
+        submission.ai_letter_generated_at = timezone.now()
+        submission.save(update_fields=[
+            "ai_letter_processed", "ai_letter_content", "ai_letter_generated_at", "updated_at"
+        ])
+        return
+
+    submission.ai_letter_processed = True
+    submission.ai_letter_content = data.get("letter_content", "")
+    submission.ai_letter_subject = data.get("subject_line", "")
+    submission.ai_letter_action_items = data.get("action_items", [])
+    submission.ai_letter_generated_at = timezone.now()
+    submission.save(update_fields=[
+        "ai_letter_processed", "ai_letter_content", "ai_letter_subject",
+        "ai_letter_action_items", "ai_letter_generated_at", "updated_at",
+    ])
+    app_log.info("F3_LETTER | Sub %s | subject=%s", submission_id, submission.ai_letter_subject)
+
+
+def queue_outcome_letter(submission_id: int, outcome: str = "", conditions: list = None, force: bool = False) -> None:
+    try:
+        generate_outcome_letter.delay(submission_id, outcome=outcome, conditions=conditions or [], force=force)
+    except Exception as exc:
+        app_log.warning("F3_LETTER_FALLBACK | %s | %s", submission_id, exc)
+        generate_outcome_letter(submission_id, outcome=outcome, conditions=conditions or [], force=force)

@@ -23,6 +23,7 @@ class Role(models.TextChoices):
     HEAD_OF_AGENCY = "head_of_agency", "Head of Agency (DG/Director)"
     MINISTRY_HR    = "ministry_hr",    "Ministry HR Officer"
     DEPT_ADMIN     = "dept_admin",     "Department Admin Officer"
+    TRAVELLER      = "traveller",      "Public Servant (Travel)"
     # ── OPSC Unit Manager roles (checklist review) ─────────────────────────
     VIPAM_MANAGER       = "vipam_manager",       "VIPAM Manager"
     HR_UNIT_MANAGER     = "hr_unit_manager",     "HR Unit Manager"
@@ -273,6 +274,63 @@ class PSCFormResponse(models.Model):
 
     def __str__(self):
         return f"Response for {self.submission}"
+
+
+class FormSectionSignature(models.Model):
+    """In-system digital signature on a travel form endorsement section."""
+
+    submission = models.ForeignKey(
+        "Submission", on_delete=models.CASCADE, related_name="section_signatures"
+    )
+    section_key = models.CharField(max_length=64)
+    signed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="form_section_signatures"
+    )
+    signer_name = models.CharField(max_length=255, blank=True)
+    signed_at = models.DateTimeField(auto_now_add=True)
+    approved = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="For secretary_decision: True=approved, False=not approved.",
+    )
+    remarks = models.TextField(blank=True)
+    signature_image = models.ImageField(
+        upload_to="form_section_signatures/%Y/%m/",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        unique_together = [("submission", "section_key")]
+        ordering = ["signed_at"]
+
+    def __str__(self):
+        return f"{self.section_key} on {self.submission_id}"
+
+
+class TravelApprovalLetter(models.Model):
+    """Official PSC letter issued after Secretary approval (Forms 4.5 & 4.6)."""
+
+    submission = models.OneToOneField(
+        "Submission", on_delete=models.CASCADE, related_name="travel_approval_letter"
+    )
+    subject = models.CharField(max_length=500)
+    body_text = models.TextField()
+    body_html = models.TextField(blank=True)
+    issued_at = models.DateTimeField(auto_now_add=True)
+    issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="travel_letters_issued",
+    )
+
+    class Meta:
+        ordering = ["-issued_at"]
+
+    def __str__(self):
+        return f"Letter for {self.submission_id}: {self.subject[:60]}"
 
 
 class ReferenceCounter(models.Model):
@@ -1153,6 +1211,19 @@ class Submission(models.Model):
     is_internal = models.BooleanField(
         default=False,
         help_text="True when submitted by OPSC staff (CSU/ODU). Routes directly to Secretary, no checklist.",
+    )
+    secretary_only = models.BooleanField(
+        default=False,
+        help_text="True for travel forms 4.4–4.6: Secretary decides; never forwarded to Commission.",
+    )
+    requires_travel_letter = models.BooleanField(
+        default=False,
+        help_text="True when Secretary approval must generate an official letter (Forms 4.5 & 4.6).",
+    )
+    travel_endorsers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="User IDs for ministry endorsement signers: hod, director, dg, minister.",
     )
     # ── CMS integration ────────────────────────────────────────────────────
     cms_case_id        = models.CharField(max_length=50, blank=True, default="",

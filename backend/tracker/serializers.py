@@ -1840,3 +1840,79 @@ class UiTranslationSerializer(serializers.ModelSerializer):
         if " " in key:
             raise serializers.ValidationError("Use dot notation (e.g. nav.dashboard), not spaces.")
         return key
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ── P1–P4 New Serializers ──────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class AiDuplicateResultSerializer(serializers.Serializer):
+    """Read-only view of A4 duplicate detection results on a Submission."""
+    ai_duplicate_processed = serializers.BooleanField(read_only=True)
+    ai_duplicate_is_duplicate = serializers.BooleanField(read_only=True, allow_null=True)
+    ai_duplicate_confidence = serializers.IntegerField(read_only=True, allow_null=True)
+    ai_duplicate_similar_cases = serializers.JSONField(read_only=True, allow_null=True)
+    ai_duplicate_recommendation = serializers.CharField(read_only=True)
+    ai_duplicate_generated_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
+class AiRiskResultSerializer(serializers.Serializer):
+    """Read-only view of B2 risk assessment results on a Submission."""
+    ai_risk_processed = serializers.BooleanField(read_only=True)
+    ai_risk_score = serializers.IntegerField(read_only=True, allow_null=True)
+    ai_risk_level = serializers.CharField(read_only=True)
+    ai_risk_factors = serializers.JSONField(read_only=True, allow_null=True)
+    ai_risk_mitigation = serializers.JSONField(read_only=True, allow_null=True)
+    ai_risk_recommendation = serializers.CharField(read_only=True)
+    ai_risk_generated_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
+class AiOutcomeResultSerializer(serializers.Serializer):
+    """Read-only view of B3 recommended outcome results on a Submission."""
+    ai_outcome_processed = serializers.BooleanField(read_only=True)
+    ai_outcome_recommendation = serializers.CharField(read_only=True)
+    ai_outcome_confidence = serializers.IntegerField(read_only=True, allow_null=True)
+    ai_outcome_rationale = serializers.CharField(read_only=True)
+    ai_outcome_conditions = serializers.JSONField(read_only=True, allow_null=True)
+    ai_outcome_precedents = serializers.JSONField(read_only=True, allow_null=True)
+    ai_outcome_legal_basis = serializers.CharField(read_only=True)
+    ai_outcome_generated_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
+class AiNoaResultSerializer(serializers.Serializer):
+    """Read-only view of B5 Notice of Allegation results on a Submission."""
+    ai_noa_processed = serializers.BooleanField(read_only=True)
+    ai_noa_subject = serializers.CharField(read_only=True)
+    ai_noa_content = serializers.CharField(read_only=True)
+    ai_noa_key_points = serializers.JSONField(read_only=True, allow_null=True)
+    ai_noa_generated_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
+class AiLetterResultSerializer(serializers.Serializer):
+    """Read-only view of F3 Outcome Letter results on a Submission."""
+    ai_letter_processed = serializers.BooleanField(read_only=True)
+    ai_letter_subject = serializers.CharField(read_only=True)
+    ai_letter_content = serializers.CharField(read_only=True)
+    ai_letter_action_items = serializers.JSONField(read_only=True, allow_null=True)
+    ai_letter_generated_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
+class WebPushSubscriptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import WebPushSubscription
+        model = WebPushSubscription
+        fields = ("id", "endpoint", "p256dh_key", "auth_key", "user_agent", "created_at", "updated_at")
+        read_only_fields = ("id", "created_at", "updated_at")
+
+
+class DocumentVersionSerializer(serializers.ModelSerializer):
+    uploaded_by_username = serializers.CharField(source="uploaded_by.username", read_only=True, allow_null=True)
+
+    class Meta:
+        from .models import DocumentVersion
+        model = DocumentVersion
+        fields = (
+            "id", "document", "version_num", "file", "filename",
+            "uploaded_by", "uploaded_by_username", "uploaded_at", "notes", "is_current",
+        )
+        read_only_fields = ("id", "version_num", "uploaded_by", "uploaded_by_username", "uploaded_at", "is_current")

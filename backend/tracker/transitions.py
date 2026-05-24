@@ -12,6 +12,10 @@ INTERNAL_SUBMITTER_ROLES = {
     Role.ODU_MANAGER,
 }
 
+TRAVELLER_SUBMITTER_ROLES = {
+    Role.TRAVELLER,
+}
+
 _COMPLIANCE_SUBMITTER_ROLES = {
     Role.COMPLIANCE_SENIOR,
     Role.COMPLIANCE_PRINCIPAL,
@@ -40,6 +44,28 @@ _INTERNAL_STAGE_GRAPH = {
         WorkflowStage.REJECTED,
     ],
     # Allow Secretary to push back for correction
+    WorkflowStage.REJECTED: [
+        WorkflowStage.DRAFT,
+    ],
+}
+
+# Ministry travel forms (4.4–4.6): traveller + endorsements → Secretary only
+_SECRETARY_ONLY_STAGE_GRAPH = {
+    WorkflowStage.DRAFT: [
+        WorkflowStage.SUBMITTED,
+    ],
+    WorkflowStage.SUBMITTED: [
+        WorkflowStage.SECRETARY_REVIEW,
+    ],
+    WorkflowStage.SECRETARY_REVIEW: [
+        WorkflowStage.APPROVED,
+        WorkflowStage.REJECTED,
+        WorkflowStage.RETURNED_FOR_CLARIFICATION,
+    ],
+    WorkflowStage.RETURNED_FOR_CLARIFICATION: [
+        WorkflowStage.DRAFT,
+        WorkflowStage.SUBMITTED,
+    ],
     WorkflowStage.REJECTED: [
         WorkflowStage.DRAFT,
     ],
@@ -231,11 +257,63 @@ _STAFF_STAGES = {
 # Public API
 # ---------------------------------------------------------------------------
 
-def assert_transition_allowed(*, role: str, current_stage: str, target_stage: str, is_internal: bool = False) -> None:
+def assert_transition_allowed(
+    *,
+    role: str,
+    current_stage: str,
+    target_stage: str,
+    is_internal: bool = False,
+    secretary_only: bool = False,
+) -> None:
     """Raise PermissionDenied if the role cannot move current_stage → target_stage.
 
     Pass is_internal=True for OPSC-internal submissions (CSU/ODU → Secretary workflow).
+    Pass secretary_only=True for ministry travel forms (4.4–4.6).
     """
+
+    # ── Travel / secretary-only workflow (ministry origin) ─────────────────
+    if secretary_only:
+        graph = _SECRETARY_ONLY_STAGE_GRAPH
+        allowed_targets = graph.get(current_stage, [])
+        if target_stage not in allowed_targets and role != Role.PSC_ADMIN:
+            raise PermissionDenied("That transition is not allowed in the travel submission workflow.")
+
+        if role in TRAVELLER_SUBMITTER_ROLES:
+            allowed_pairs = {
+                (WorkflowStage.DRAFT, WorkflowStage.SUBMITTED),
+                (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
+                (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
+            }
+            if (current_stage, target_stage) not in allowed_pairs:
+                raise PermissionDenied("Travellers can submit or respond to clarification requests.")
+            return
+
+        if role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
+            if current_stage == WorkflowStage.SUBMITTED and target_stage == WorkflowStage.SECRETARY_REVIEW:
+                return
+            if current_stage == WorkflowStage.SECRETARY_REVIEW and target_stage in {
+                WorkflowStage.APPROVED,
+                WorkflowStage.REJECTED,
+                WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            }:
+                return
+            raise PermissionDenied(
+                "Secretary can move travel submissions: Submitted→Secretary Review, "
+                "or Secretary Review→Approved/Rejected/Returned."
+            )
+
+        if role == Role.PSC_OFFICER:
+            if (current_stage, target_stage) == (
+                WorkflowStage.SUBMITTED,
+                WorkflowStage.SECRETARY_REVIEW,
+            ):
+                return
+            raise PermissionDenied("PSC Officers can register travel submissions for Secretary review.")
+
+        if role == Role.PSC_ADMIN:
+            return
+
+        raise PermissionDenied("Only the traveller, PSC Officer, or Secretary may act on travel submissions.")
 
     # ── Internal submission workflow ─────────────────────────────────────────
     if is_internal:
@@ -369,8 +447,25 @@ def assert_transition_allowed(*, role: str, current_stage: str, target_stage: st
         return
 
 
-def iter_allowed_targets(role: str, current_stage: str, is_internal: bool = False) -> list:
+def iter_allowed_targets(
+    role: str, current_stage: str, is_internal: bool = False, secretary_only: bool = False
+) -> list:
     """Return all stage values the role may transition to from current_stage."""
+    if secretary_only:
+        if role == Role.PSC_ADMIN:
+            return list(_SECRETARY_ONLY_STAGE_GRAPH.get(current_stage, []))
+        if role in TRAVELLER_SUBMITTER_ROLES:
+            if current_stage == WorkflowStage.DRAFT:
+                return [WorkflowStage.SUBMITTED]
+            if current_stage == WorkflowStage.RETURNED_FOR_CLARIFICATION:
+                return [WorkflowStage.SUBMITTED, WorkflowStage.DRAFT]
+            return []
+        if role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
+            return list(_SECRETARY_ONLY_STAGE_GRAPH.get(current_stage, []))
+        if role == Role.PSC_OFFICER and current_stage == WorkflowStage.SUBMITTED:
+            return [WorkflowStage.SECRETARY_REVIEW]
+        return []
+
     if is_internal:
         if role == Role.PSC_ADMIN:
             return list(_INTERNAL_STAGE_GRAPH.get(current_stage, []))
