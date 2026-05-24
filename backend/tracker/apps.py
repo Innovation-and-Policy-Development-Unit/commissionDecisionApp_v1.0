@@ -35,6 +35,8 @@ class TrackerConfig(AppConfig):
             )
 
         try:
+            # Ensure daily brief models are registered with the tracker app.
+            import tracker.daily_brief.models  # noqa: F401
             from tracker.daily_brief.scheduler import sync_daily_brief_scheduler
             sync_daily_brief_scheduler()
         except Exception as exc:  # noqa: BLE001

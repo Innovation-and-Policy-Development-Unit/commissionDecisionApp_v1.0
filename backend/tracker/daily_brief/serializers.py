@@ -80,7 +80,7 @@ class DailyBriefStaffPreferenceSerializer(serializers.ModelSerializer):
 
 
 class DailyBriefDeliveryLogSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source="user.username", read_only=True, allow_null=True)
+    username = serializers.SerializerMethodField()
 
     class Meta:
         model = DailyBriefDeliveryLog
@@ -99,6 +99,11 @@ class DailyBriefDeliveryLogSerializer(serializers.ModelSerializer):
             "detail",
             "created_at",
         )
+
+    def get_username(self, obj):
+        if obj.user_id is None:
+            return None
+        return obj.user.username
 
 
 class DailyBriefPreferenceBulkSerializer(serializers.Serializer):

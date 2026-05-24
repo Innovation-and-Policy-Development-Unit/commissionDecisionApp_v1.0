@@ -1,15 +1,15 @@
+import logging
 from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from tracker.rbac import rbac_can_access_admin_panel
-from tracker.views import HasManageRoles
-
 from .collectors import active_staff_users
+from .permissions import HasAdminPanelAccess, HasManageRoles
 from .models import DailyBriefDeliveryLog, DailyBriefSettings, DailyBriefStaffPreference
 from .runner import run_daily_briefs
 from .scheduler import get_next_beat_run, sync_daily_brief_scheduler
@@ -21,12 +21,7 @@ from .serializers import (
     DailyBriefStaffPreferenceSerializer,
 )
 
-
-class HasAdminPanelAccess(permissions.BasePermission):
-    message = "Admin panel access required."
-
-    def has_permission(self, request, view):
-        return rbac_can_access_admin_panel(request.user)
+logger = logging.getLogger(__name__)
 
 
 class DailyBriefViewSet(viewsets.ViewSet):
@@ -37,8 +32,7 @@ class DailyBriefViewSet(viewsets.ViewSet):
 
     def get_permissions(self):
         if self.action in {
-            "settings",
-            "update_settings",
+            "brief_settings",
             "preferences",
             "update_preference",
             "bulk_preferences",
@@ -50,56 +44,81 @@ class DailyBriefViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"], url_path="dashboard")
     def dashboard(self, request):
-        settings = DailyBriefSettings.get_solo()
-        today = timezone.localdate()
-        logs_today = DailyBriefDeliveryLog.objects.filter(created_at__date=today)
-        briefs_sent_today = logs_today.filter(status=DailyBriefDeliveryLog.Status.SENT).count()
-        staff_receiving = (
-            logs_today.filter(
-                brief_type=DailyBriefDeliveryLog.BriefType.STAFF,
-                status=DailyBriefDeliveryLog.Status.SENT,
+        try:
+            settings = DailyBriefSettings.get_solo()
+            today = timezone.localdate()
+            logs_today = DailyBriefDeliveryLog.objects.filter(created_at__date=today)
+            briefs_sent_today = logs_today.filter(status=DailyBriefDeliveryLog.Status.SENT).count()
+            staff_receiving = (
+                logs_today.filter(
+                    brief_type=DailyBriefDeliveryLog.BriefType.STAFF,
+                    status=DailyBriefDeliveryLog.Status.SENT,
+                )
+                .values("user_id")
+                .distinct()
+                .count()
             )
-            .values("user_id")
-            .distinct()
-            .count()
-        )
 
-        week_ago = timezone.now() - timedelta(days=7)
-        failed_last_7 = DailyBriefDeliveryLog.objects.filter(
-            created_at__gte=week_ago,
-            status=DailyBriefDeliveryLog.Status.FAILED,
-        ).count()
+            week_ago = timezone.now() - timedelta(days=7)
+            failed_last_7 = DailyBriefDeliveryLog.objects.filter(
+                created_at__gte=week_ago,
+                status=DailyBriefDeliveryLog.Status.FAILED,
+            ).count()
 
-        beat_stale = False
-        if settings.last_beat_at:
-            beat_stale = (timezone.now() - settings.last_beat_at).total_seconds() > 28 * 3600
+            beat_stale = False
+            if settings.last_beat_at:
+                beat_stale = (timezone.now() - settings.last_beat_at).total_seconds() > 28 * 3600
 
-        recent = DailyBriefDeliveryLog.objects.all()[:15]
+            recent = DailyBriefDeliveryLog.objects.select_related("user").all()[:15]
 
-        staff_enabled_count = DailyBriefStaffPreference.objects.filter(enabled=True).count()
-        staff_total = active_staff_users().count()
+            staff_enabled_count = DailyBriefStaffPreference.objects.filter(enabled=True).count()
+            staff_total = active_staff_users().count()
 
-        return Response(
-            {
-                "module_status": settings.module_status,
-                "enabled": settings.enabled,
-                "test_mode": settings.test_mode,
-                "briefs_sent_today": briefs_sent_today,
-                "staff_receiving_today": staff_receiving,
-                "staff_enabled_count": staff_enabled_count,
-                "staff_total": staff_total,
-                "next_scheduled_run": get_next_beat_run(),
-                "delivery_hour": settings.delivery_hour,
-                "failed_last_7_days": failed_last_7,
-                "beat_stale_warning": beat_stale,
-                "last_beat_at": settings.last_beat_at,
-                "last_run_date": settings.last_run_date,
-                "recent_deliveries": DailyBriefDeliveryLogSerializer(recent, many=True).data,
-            }
-        )
+            last_beat_at = (
+                settings.last_beat_at.isoformat() if settings.last_beat_at else None
+            )
+            last_run_date = (
+                settings.last_run_date.isoformat() if settings.last_run_date else None
+            )
+
+            return Response(
+                {
+                    "module_status": settings.module_status,
+                    "enabled": settings.enabled,
+                    "test_mode": settings.test_mode,
+                    "briefs_sent_today": briefs_sent_today,
+                    "staff_receiving_today": staff_receiving,
+                    "staff_enabled_count": staff_enabled_count,
+                    "staff_total": staff_total,
+                    "next_scheduled_run": get_next_beat_run(),
+                    "delivery_hour": settings.delivery_hour,
+                    "failed_last_7_days": failed_last_7,
+                    "beat_stale_warning": beat_stale,
+                    "last_beat_at": last_beat_at,
+                    "last_run_date": last_run_date,
+                    "recent_deliveries": DailyBriefDeliveryLogSerializer(recent, many=True).data,
+                }
+            )
+        except (ProgrammingError, OperationalError) as exc:
+            logger.exception("Daily brief dashboard unavailable (database): %s", exc)
+            return Response(
+                {
+                    "detail": (
+                        "Daily Brief database tables are not available. "
+                        "Run migrations (0079_daily_brief) on the API server, then redeploy."
+                    ),
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except Exception as exc:
+            logger.exception("Daily brief dashboard error: %s", exc)
+            return Response(
+                {"detail": "Daily brief dashboard could not be loaded."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=False, methods=["get", "patch"], url_path="settings")
-    def settings(self, request):
+    def brief_settings(self, request):
         obj = DailyBriefSettings.get_solo()
         if request.method == "PATCH":
             ser = DailyBriefSettingsSerializer(obj, data=request.data, partial=True)

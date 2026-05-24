@@ -19,11 +19,23 @@ from tracker.models import (
     Submission,
     WorkflowStage,
 )
-from tracker.views import (
-    _commission_task_queryset_for,
-    _profile,
-    _submission_queryset_for,
-)
+
+def _submission_queryset_for(user):
+    from tracker.views import _submission_queryset_for as _fn
+
+    return _fn(user)
+
+
+def _commission_task_queryset_for(user):
+    from tracker.views import _commission_task_queryset_for as _fn
+
+    return _fn(user)
+
+
+def _profile(user):
+    from tracker.views import _profile as _fn
+
+    return _fn(user)
 
 # Terminal workflow stages (not "open" for manager KPIs / staff attention)
 TERMINAL_SUBMISSION_STAGES = {

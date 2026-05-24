@@ -40,6 +40,7 @@ export default function DailyBriefAdmin() {
   const [tab, setTab] = useState('dashboard')
   const [loading, setLoading] = useState(true)
   const [dashboard, setDashboard] = useState(null)
+  const [dashboardError, setDashboardError] = useState('')
   const [settings, setSettings] = useState(null)
   const [savingSettings, setSavingSettings] = useState(false)
   const [users, setUsers] = useState([])
@@ -62,8 +63,20 @@ export default function DailyBriefAdmin() {
   }, [user, canView, navigate])
 
   const fetchDashboard = useCallback(async () => {
-    const res = await api.get('/daily-brief/dashboard/')
-    setDashboard(res.data)
+    setDashboardError('')
+    try {
+      const res = await api.get('/daily-brief/dashboard/')
+      setDashboard(res.data)
+    } catch (err) {
+      setDashboard(null)
+      const detail = err.response?.data?.detail
+      setDashboardError(
+        typeof detail === 'string'
+          ? detail
+          : 'Daily Brief dashboard is unavailable. Check that API migrations have run.',
+      )
+      throw err
+    }
   }, [])
 
   const fetchSettings = useCallback(async () => {
@@ -275,12 +288,17 @@ export default function DailyBriefAdmin() {
         ))}
       </div>
 
-      {loading && !dashboard ? (
+      {loading && !dashboard && !dashboardError ? (
         <div className="flex justify-center h-48 items-center text-slate-400 text-sm gap-2">
           <RefreshCw size={16} className="animate-spin" /> Loading…
         </div>
       ) : (
         <>
+          {dashboardError && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-4 text-sm text-amber-900 dark:text-amber-100">
+              {dashboardError}
+            </div>
+          )}
           {tab === 'dashboard' && dashboard && (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center gap-3">
