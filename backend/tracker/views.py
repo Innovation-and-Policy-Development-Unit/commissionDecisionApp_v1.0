@@ -1,6 +1,5 @@
 import os
 from django.contrib.auth.models import User
-from django.core.exceptions import ObjectDoesNotExist
 from django.db import models, transaction
 from django.db.models import Count
 from django.http import HttpResponse
@@ -153,10 +152,9 @@ from .models import (
 
 
 def _profile(user):
-    try:
-        return user.psc_profile
-    except Profile.DoesNotExist as exc:
-        raise PermissionDenied("User profile is not configured for Commission Decision App.") from exc
+    from .profile_utils import ensure_psc_profile
+
+    return ensure_psc_profile(user)
 
 
 def _resolve_opsc_ministry(profile):
@@ -310,7 +308,7 @@ class CanMutateMinistryDepartment(permissions.BasePermission):
 
 
 class HasProfilePermission(permissions.BasePermission):
-    """PSC Tracker expects a Profile for role-scoped users; Django staff/superuser may access without one."""
+    """PSC Tracker expects a Profile for role-scoped users; staff/superuser get one auto-created."""
 
     message = (
         "This account has no PSC profile. Open Django Admin → PSC profiles → Add, "
@@ -318,15 +316,9 @@ class HasProfilePermission(permissions.BasePermission):
     )
 
     def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-        if request.user.is_superuser or request.user.is_staff:
-            return True
-        try:
-            request.user.psc_profile
-        except ObjectDoesNotExist:
-            return False
-        return True
+        from .profile_utils import user_has_psc_profile
+
+        return user_has_psc_profile(request.user)
 
 
 # ── Notification helpers ─────────────────────────────────────────────────────
@@ -1916,29 +1908,13 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
 @api_view(["GET", "PATCH"])
 @permission_classes([permissions.IsAuthenticated])
 def me_view(request):
+    from .profile_utils import ensure_psc_profile, PROFILE_MISSING_MSG
+
     user = request.user
     try:
-        profile = user.psc_profile
-    except Profile.DoesNotExist:
-        if user.is_superuser or user.is_staff:
-            # Superuser without a PSC profile: return a synthetic admin identity
-            return Response({
-                "id": None,
-                "username": user.username,
-                "email": user.email,
-                "role": "psc_admin",
-                "role_display": "PSC Administrator",
-                "full_name": user.get_full_name() or user.username,
-                "ministry": None,
-                "ministry_name": None,
-                "department": None,
-                "department_name": None,
-                "is_superuser": True,
-            })
-        return Response(
-            {"detail": "This account has no PSC profile. Contact an administrator."},
-            status=403,
-        )
+        profile = ensure_psc_profile(user)
+    except PermissionDenied:
+        return Response({"detail": PROFILE_MISSING_MSG}, status=403)
     if request.method == "PATCH":
         serializer = ProfileSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -2720,7 +2696,12 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
             )
 
         user = serializer.user
-        profile = getattr(user, "psc_profile", None)
+        from .profile_utils import ensure_psc_profile, PROFILE_MISSING_MSG
+
+        try:
+            profile = ensure_psc_profile(user)
+        except PermissionDenied:
+            return Response({"detail": PROFILE_MISSING_MSG}, status=status.HTTP_403_FORBIDDEN)
 
         # Check for valid trusted session → PIN-based re-auth (skip TOTP)
         if profile and profile.session_pin:

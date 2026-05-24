@@ -30,6 +30,14 @@ class AuthAPITests(TestCase):
         resp = self.client.get("/api/me/")
         self.assertIn(resp.status_code, (401, 403))
 
+    def test_me_staff_without_profile_auto_provisions(self):
+        staff = User.objects.create_user("staffnoprof", password="OldPass123!", is_staff=True)
+        self.client.force_authenticate(user=staff)
+        resp = self.client.get("/api/me/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["role"], Role.PSC_ADMIN)
+        self.assertTrue(Profile.objects.filter(user=staff, role=Role.PSC_ADMIN).exists())
+
     def test_password_policy(self):
         resp = self.client.get("/api/auth/password-policy/")
         self.assertEqual(resp.status_code, 200)
@@ -115,31 +123,21 @@ class SubmissionAPITests(TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["actor_username"], "CMS / compliance.manager")
 
-    def test_submission_detail_system_workflow_event(self):
-        """CMS/system events have actor=null; detail must not 500."""
+    def test_staff_without_profile_can_view_submission_detail(self):
         from django.utils import timezone
-        from ..models import Submission, WorkflowEvent, WorkflowStage
+        from ..models import Submission
 
+        staff = User.objects.create_user("staffview", password="test1234", is_staff=True)
         sub = Submission.objects.create(
-            title="CMS-linked matter",
+            title="Staff visibility test",
             form_category=self.form_cat,
             form_type_code="PSC 3.6",
             ministry=self.ministry,
             received_at=timezone.now(),
             created_by=self.user,
-            cms_case_id="cms-75",
-            cms_case_reference="CCMS-SM-2026-0075",
         )
-        WorkflowEvent.objects.create(
-            submission=sub,
-            actor=None,
-            actor_label="CMS / compliance.manager",
-            previous_stage=WorkflowStage.DRAFT,
-            new_stage=WorkflowStage.COMPLIANCE_UNDER_REVIEW,
-            remarks="Registered from CMS",
-        )
+        self.client.force_authenticate(user=staff)
         resp = self.client.get(f"/api/submissions/{sub.id}/")
         self.assertEqual(resp.status_code, 200)
-        events = resp.json().get("events") or []
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0]["actor_username"], "CMS / compliance.manager")
+        self.assertEqual(resp.json()["id"], sub.id)
+        self.assertTrue(Profile.objects.filter(user=staff, role=Role.PSC_ADMIN).exists())
