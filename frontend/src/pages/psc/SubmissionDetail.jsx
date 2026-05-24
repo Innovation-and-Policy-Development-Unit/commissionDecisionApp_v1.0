@@ -2,6 +2,8 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import PageHeader from '../../components/shared/PageHeader'
 import SubmissionSubwayMap from '../../components/submissions/SubmissionSubwayMap'
+import PolicyGuardrailDrawer from '../../components/submissions/PolicyGuardrailDrawer'
+import { policyGuardrailApplies } from '../../utils/policyGuardrail'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -180,6 +182,7 @@ export default function SubmissionDetail() {
   const [dynamicFormFields, setDynamicFormFields] = useState([])
   const [dynamicFormBusy, setDynamicFormBusy] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
 
   const isAdmin        = user?.role === 'psc_admin'
   const canTransition  = user && TRANSITION_ROLES.includes(user.role)
@@ -221,6 +224,8 @@ export default function SubmissionDetail() {
   const showDeadlineDrafts = user && DEADLINE_DRAFT_ROLES.includes(user.role)
   const showQualityScore = user && QUALITY_SCORE_ROLES.includes(user.role)
   const showPackageValidation = user && PACKAGE_VALIDATE_ROLES.includes(user.role)
+  const showPolicyGuardrail = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
+    && policyGuardrailApplies(submission)
   const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
   const canEditChecklist = user && CHECKLIST_EDIT_ROLES.includes(user.role)
   const showChecklist = !submission?.is_attachment && !submission?.is_internal
@@ -238,6 +243,10 @@ export default function SubmissionDetail() {
       }
     }
   }, [id])
+
+  useEffect(() => {
+    if (showPolicyGuardrail) setPolicyDrawerOpen(true)
+  }, [showPolicyGuardrail])
 
   const fetchTransitions = useCallback(async () => {
     if (!id || !user || !canTransition) { setAllowed([]); setTargetStage(''); return }
@@ -589,7 +598,7 @@ const stageDescriptions = {
 
   return (
     <>
-    <div>
+    <div className={showPolicyGuardrail && policyDrawerOpen ? 'lg:mr-[28rem] transition-[margin] duration-300' : ''}>
       <PageHeader
         title={submission.reference_number}
         subtitle={submission.title}
@@ -630,6 +639,28 @@ const stageDescriptions = {
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />{error}
         </div>
+      )}
+
+      {showPolicyGuardrail && (
+        <>
+          <PolicyGuardrailDrawer
+            open={policyDrawerOpen}
+            onOpenChange={setPolicyDrawerOpen}
+            submission={submission}
+            submissionId={id}
+            onUpdated={setSubmission}
+          />
+          {!policyDrawerOpen && (
+            <button
+              type="button"
+              onClick={() => setPolicyDrawerOpen(true)}
+              className="fixed bottom-24 right-6 z-[68] inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-lg bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500"
+            >
+              <span aria-hidden="true">🛡</span>
+              AI policy scan
+            </button>
+          )}
+        </>
       )}
 
       {showPackageValidation && (

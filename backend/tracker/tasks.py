@@ -1397,6 +1397,95 @@ def validate_submission_package_sync(submission_id: int, *, force: bool = False)
     return result
 
 
+# ── A6: Policy guardrail (pre-submit) ────────────────────────────────────────
+
+
+def compute_policy_guardrail_context_key(submission) -> str:
+    import hashlib
+    import json
+
+    from .models import PSCFormResponse
+
+    parts = [
+        submission.form_type_code or "",
+        str(submission.form_category_id or ""),
+        str(submission.ministry_id or ""),
+    ]
+    try:
+        data = submission.dynamic_form_response.data or {}
+        snippet = json.dumps(data, ensure_ascii=False, default=str, sort_keys=True)
+        parts.append(hashlib.sha256(snippet.encode()).hexdigest()[:16])
+    except PSCFormResponse.DoesNotExist:
+        parts.append("no_form")
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:32]
+
+
+def policy_guardrail_needs_refresh(submission) -> bool:
+    from .ai.policy_guardrail import policy_guardrail_applies
+
+    if not policy_guardrail_applies(submission):
+        return False
+    if not submission.ai_policy_processed:
+        return True
+    key = compute_policy_guardrail_context_key(submission)
+    return (submission.ai_policy_context_key or "") != key
+
+
+def queue_submission_policy_guardrail(submission_id: int, *, force: bool = False) -> None:
+    try:
+        scan_submission_policy_guardrail_task.delay(submission_id, force=force)
+    except Exception as exc:
+        app_log.warning("POLICY_GUARDRAIL_QUEUE_FALLBACK | %s | %s", submission_id, exc)
+        scan_submission_policy_guardrail_task(submission_id, force=force)
+
+
+@shared_task
+def scan_submission_policy_guardrail_task(submission_id: int, *, force: bool = False):
+    scan_submission_policy_guardrail_sync(submission_id, force=force)
+
+
+def scan_submission_policy_guardrail_sync(submission_id: int, *, force: bool = False) -> dict:
+    from .ai.policy_guardrail import (
+        persist_policy_guardrail,
+        policy_guardrail_applies,
+        run_policy_guardrail_scan,
+    )
+    from .models import Submission
+
+    submission = Submission.objects.select_related(
+        "ministry", "department", "form_category", "dg_endorsed_by",
+    ).get(pk=submission_id)
+
+    if not policy_guardrail_applies(submission):
+        return {
+            "confidence_score": None,
+            "summary": "Policy guardrail does not apply.",
+            "observations": [],
+            "skipped": True,
+        }
+
+    if not force and not policy_guardrail_needs_refresh(submission):
+        return {
+            "confidence_score": submission.ai_policy_confidence,
+            "summary": submission.ai_policy_summary or "",
+            "observations": submission.ai_policy_observations or [],
+            "skipped": False,
+        }
+
+    result = run_policy_guardrail_scan(submission)
+    if not result.get("skipped"):
+        submission.ai_policy_context_key = compute_policy_guardrail_context_key(submission)
+        persist_policy_guardrail(submission, result)
+        submission.save(update_fields=["ai_policy_context_key", "updated_at"])
+    app_log.info(
+        "POLICY_GUARDRAIL | Submission %s | confidence=%s obs=%s",
+        submission_id,
+        result.get("confidence_score"),
+        len(result.get("observations") or []),
+    )
+    return result
+
+
 # ── F1: Transition guidance ─────────────────────────────────────────────────
 
 

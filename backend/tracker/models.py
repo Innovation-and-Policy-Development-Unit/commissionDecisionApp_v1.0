@@ -968,6 +968,32 @@ class Submission(models.Model):
         blank=True,
         help_text="English + Bislama clarification text for ministry (returned for clarification).",
     )
+    # ── AI policy guardrail (pre-submit compliance scan) ────────────────────
+    ai_policy_observations = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of {severity, category, message, evidence} policy observations.",
+    )
+    ai_policy_confidence = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="0–100 likelihood of passing PSC review without return (higher is better).",
+    )
+    ai_policy_summary = models.TextField(
+        blank=True,
+        help_text="One-line policy guardrail summary for ministry submitters.",
+    )
+    ai_policy_processed = models.BooleanField(
+        default=False,
+        help_text="True once the latest policy guardrail scan completed.",
+    )
+    ai_policy_generated_at = models.DateTimeField(null=True, blank=True)
+    ai_policy_context_key = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Fingerprint of form/category data when policy scan ran.",
+    )
     # ── Parent/child (attachment) relationship ──────────────────────────────
     parent_submission = models.ForeignKey(
         'self', null=True, blank=True,

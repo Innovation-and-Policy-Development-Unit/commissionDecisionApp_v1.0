@@ -30,6 +30,7 @@ FEATURE_MODEL_TIER: dict[str, ModelTier] = {
     "A3_missing_information": "haiku",
     "A4_duplicate_detector": "sonnet",
     "A5_quality_score": "haiku",
+    "A6_policy_guardrail": "sonnet",
     # Category B — Case management
     "B1_case_summary": "haiku",
     "B2_risk_assessment": "sonnet",

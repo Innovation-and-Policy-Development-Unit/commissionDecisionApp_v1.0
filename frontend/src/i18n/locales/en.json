@@ -554,6 +554,26 @@
     "decision": "Decision",
     "implement": "Implementation"
   },
+  "policy_guardrail": {
+    "drawer_title": "AI policy observations",
+    "drawer_subtitle": "Pre-emptive compliance scan before you submit",
+    "ai_draft_label": "AI draft — verify with PSC policy and your DG",
+    "confidence_label": "Submit confidence",
+    "observations_title": "Observations",
+    "no_observations": "No policy flags from this scan.",
+    "no_summary": "Scan complete.",
+    "scanning": "Running smart scan…",
+    "scanning_hint": "Comparing your form against salary ceilings and recent commission decisions.",
+    "scan_failed": "Policy scan could not be started.",
+    "not_applicable": "Policy guardrail does not apply to this submission type.",
+    "poll_timeout": "Scan is taking longer than expected. Try rescan or refresh the page.",
+    "rescan": "Rescan",
+    "prompt": "Save your form or tap rescan to check policy compliance.",
+    "footer_hint": "Similar cases are drawn from the commission decision register. Fix high-severity items before submitting.",
+    "severity_high": "High",
+    "severity_medium": "Medium",
+    "severity_low": "Low"
+  },
   "subway": {
     "aria_label": "Submission journey map",
     "title": "Your submission journey",
