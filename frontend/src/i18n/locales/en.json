@@ -710,6 +710,21 @@
     "critical": "Critical",
     "maintenance": "Maintenance"
   },
+  "register_report": {
+    "ai_title": "AI report (Quarto PDF & HTML)",
+    "ai_subtitle": "Describe the report you need in plain language. SCDMS will filter the register, draft a summary, and build downloadable Quarto documents.",
+    "prompt_label": "What report do you need?",
+    "prompt_placeholder": "e.g. List all overdue ODU decisions with implementation status and manager responsible…",
+    "prompt_required": "Describe the report you need.",
+    "filters_hint": "Optional date/status/manager filters below are applied together with your request.",
+    "generate": "Generate PDF & HTML",
+    "generating": "Generating report…",
+    "generate_failed": "Could not start report generation.",
+    "ready": "Report ready",
+    "row_count": "{{count}} decision(s) in this report",
+    "download_html": "Download HTML",
+    "download_pdf": "Download PDF"
+  },
   "pwa": {
     "offline_banner": "You are offline. Cached pages may load, but live data requires a connection.",
     "update_title": "Update available",

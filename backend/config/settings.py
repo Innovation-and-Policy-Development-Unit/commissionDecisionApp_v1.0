@@ -423,6 +423,10 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # ── AI / Claude API (replaces former Gemini integration) ─────────────────────
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+
+# Quarto CLI (Commission Decision Register AI reports)
+QUARTO_BIN = os.getenv('QUARTO_BIN', 'quarto')
+QUARTO_RENDER_TIMEOUT = int(os.getenv('QUARTO_RENDER_TIMEOUT', '180'))
 # Fast tier: feedback, classification, extraction (see AI_Features_List.txt)
 CLAUDE_MODEL_HAIKU = os.getenv('CLAUDE_MODEL_HAIKU', 'claude-haiku-4-5-20251001')
 # Quality tier: executive briefs, minutes drafting, similarity, chatbots

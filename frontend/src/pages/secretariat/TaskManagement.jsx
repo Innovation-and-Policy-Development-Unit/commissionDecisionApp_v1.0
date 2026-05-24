@@ -9,7 +9,10 @@ import {
   ClipboardList, Plus, RefreshCw, Search, User, Users, X,
   CheckCircle2, Circle, Loader, FileText, Download, Calendar,
   AlertTriangle, Trash2, ChevronDown, ChevronRight, ListChecks,
+  Sparkles,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { formatApiError } from '../../utils/apiError'
 import clsx from 'clsx'
 
 const TASK_LINK_STAGES = new Set([
@@ -389,15 +392,82 @@ function MultiStaffSelect({ selected, onChange, staffList, label }) {
 
 // ── Report View ──────────────────────────────────────────────────────────────
 
+const AI_REPORT_EXAMPLES = [
+  'Overdue decisions assigned to ODU with implementation still with unit',
+  'All approved decisions from 2025 grouped by action unit with executive summary',
+  'Open and in-progress tasks for HRMU including way forward notes',
+  'Deferred decisions needing more information — full register table',
+]
+
 function ReportView() {
+  const { t } = useTranslation()
   const [rows, setRows] = useState([]); const [loading, setLoading] = useState(false); const [error, setError] = useState('')
   const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState('')
   const [rStatus, setRStatus] = useState(''); const [rManagerId, setRManagerId] = useState('')
   const [managers, setManagers] = useState([])
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiJob, setAiJob] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
 
   useEffect(() => {
     api.get('/commission-tasks/eligible-managers/').then(r => setManagers(Array.isArray(r.data) ? r.data : [])).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!aiJob?.id || aiJob.status === 'ready' || aiJob.status === 'failed') return undefined
+    const timer = setInterval(async () => {
+      try {
+        const res = await api.get(`/commission-tasks/register-report/${aiJob.id}/`)
+        setAiJob(res.data)
+      } catch {
+        /* keep polling */
+      }
+    }, 2500)
+    return () => clearInterval(timer)
+  }, [aiJob?.id, aiJob?.status])
+
+  const filterPayload = () => {
+    const p = {}
+    if (dateFrom) p.date_from = dateFrom
+    if (dateTo) p.date_to = dateTo
+    if (rStatus) p.status = rStatus
+    if (rManagerId) p.manager_id = rManagerId
+    return p
+  }
+
+  const downloadAiReport = async (url, filename) => {
+    const res = await api.get(url, { responseType: 'blob' })
+    const blobUrl = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 5000)
+  }
+
+  const generateAiReport = async () => {
+    const prompt = aiPrompt.trim()
+    if (!prompt) {
+      setAiError(t('register_report.prompt_required'))
+      return
+    }
+    setAiLoading(true)
+    setAiError('')
+    setAiJob(null)
+    try {
+      const res = await api.post('/commission-tasks/register-report/', {
+        prompt,
+        ...filterPayload(),
+      })
+      const statusRes = await api.get(`/commission-tasks/register-report/${res.data.id}/`)
+      setAiJob(statusRes.data)
+    } catch (err) {
+      setAiError(formatApiError(err, t('register_report.generate_failed')))
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   const fetchReport = async (format = 'json') => {
     setLoading(true); setError('')
@@ -422,8 +492,92 @@ function ReportView() {
     } finally { setLoading(false) }
   }
 
+  const aiReady = aiJob?.status === 'ready'
+  const aiFailed = aiJob?.status === 'failed'
+  const aiBusy = aiJob && !aiReady && !aiFailed
+
   return (
     <div>
+      <div className="card p-5 mb-4 border-l-4 border-l-indigo-500">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-300 shrink-0">
+            <Sparkles size={18} aria-hidden />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              {t('register_report.ai_title')}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {t('register_report.ai_subtitle')}
+            </p>
+          </div>
+        </div>
+        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+          {t('register_report.prompt_label')}
+        </label>
+        <textarea
+          className="input text-sm w-full min-h-[88px] mb-2"
+          value={aiPrompt}
+          onChange={e => setAiPrompt(e.target.value)}
+          placeholder={t('register_report.prompt_placeholder')}
+        />
+        <div className="flex flex-wrap gap-2 mb-3">
+          {AI_REPORT_EXAMPLES.map(ex => (
+            <button
+              key={ex}
+              type="button"
+              className="text-[10px] px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-300 transition-colors"
+              onClick={() => setAiPrompt(ex)}
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-400 mb-3">{t('register_report.filters_hint')}</p>
+        <button
+          type="button"
+          onClick={generateAiReport}
+          disabled={aiLoading || aiBusy}
+          className="btn-gradient py-2 px-4 text-sm inline-flex items-center gap-2 disabled:opacity-60"
+        >
+          {aiLoading || aiBusy ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          {aiBusy ? t('register_report.generating') : t('register_report.generate')}
+        </button>
+        {aiError && <p className="text-sm text-red-600 mt-3">{aiError}</p>}
+        {aiFailed && aiJob?.error_message && (
+          <p className="text-sm text-red-600 mt-3">{aiJob.error_message}</p>
+        )}
+        {aiReady && aiJob?.downloads && (
+          <div className="mt-4 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+            <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+              {aiJob.title || t('register_report.ready')}
+            </p>
+            {aiJob.subtitle && (
+              <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80 mt-1">{aiJob.subtitle}</p>
+            )}
+            <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+              {t('register_report.row_count', { count: aiJob.row_count ?? 0 })}
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <button
+                type="button"
+                className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
+                onClick={() => downloadAiReport(aiJob.downloads.html, 'decision_register_report.html')}
+              >
+                <Download size={14} /> {t('register_report.download_html')}
+              </button>
+              <button
+                type="button"
+                className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
+                onClick={() => downloadAiReport(aiJob.downloads.pdf, 'decision_register_report.pdf')}
+              >
+                <Download size={14} /> {t('register_report.download_pdf')}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
         <div><label className="block text-[10px] font-semibold text-slate-500 mb-1">From</label><input type="date" className="input text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
         <div><label className="block text-[10px] font-semibold text-slate-500 mb-1">To</label><input type="date" className="input text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>

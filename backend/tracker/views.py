@@ -1632,12 +1632,11 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="report")
     def report(self, request):
         """Generate a task report for secretaries. Supports ?date_from=&date_to=&status=&manager_id=&format=csv"""
-        from django.db.models import Count, Q
-        from datetime import date, datetime
+        from datetime import datetime, timedelta
 
-        qs = CommissionTask.objects.select_related(
-            "submission", "assigned_manager", "created_by",
-        ).prefetch_related("assigned_staff_m2m", "subtasks")
+        from .reports.decision_register import build_register_rows
+
+        qs = self.get_queryset()
 
         date_from = request.query_params.get("date_from")
         date_to = request.query_params.get("date_to")
@@ -1659,36 +1658,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         if manager_id:
             qs = qs.filter(assigned_manager_id=manager_id)
 
-        today = date.today()
-        rows = []
-        for t in qs:
-            staff_names = [u.username for u in t.assigned_staff_m2m.all()]
-            subtask_qs = t.subtasks.all()
-            subtask_total = subtask_qs.count()
-            subtask_done = subtask_qs.filter(status="completed").count()
-            overdue_days = (today - t.due_date).days if t.due_date and t.due_date < today else 0
-
-            rows.append({
-                "task_id": t.id,
-                "decision_number": t.decision_number,
-                "title": t.title,
-                "submission_ref": t.submission.reference_number if t.submission_id else "",
-                "submission_title": t.submission.title if t.submission_id else "",
-                "meeting_ref": t.meeting_reference or (t.meeting.title if t.meeting_id else ""),
-                "decision_detail": t.decision_detail,
-                "decision_outcome": t.get_decision_outcome_display() if t.decision_outcome else "",
-                "action_unit": t.action_unit,
-                "implementation_status": t.get_implementation_status_display() if t.implementation_status else "",
-                "way_forward": t.way_forward,
-                "manager": t.assigned_manager.username,
-                "staff": staff_names,
-                "status": t.status,
-                "due_date": t.due_date.isoformat() if t.due_date else None,
-                "decision_type": t.decision_type,
-                "subtask_count": subtask_total,
-                "subtask_completed": subtask_done,
-                "days_overdue": overdue_days,
-            })
+        rows = build_register_rows(qs)
 
         output_format = request.query_params.get("format", "json")
         if output_format == "csv":
@@ -1704,11 +1674,145 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             ])
             writer.writeheader()
             for r in rows:
-                r["staff"] = "; ".join(r["staff"])
+                if isinstance(r.get("staff"), list):
+                    r = {**r, "staff": "; ".join(r["staff"])}
                 writer.writerow(r)
             return response
 
         return Response(rows)
+
+    def _user_can_export_register_reports(self, user) -> bool:
+        if user.is_superuser or user.is_staff:
+            return True
+        return rbac_user_has_permission(user, "export_reports") or rbac_user_has_permission(
+            user, "view_reports"
+        )
+
+    def _get_register_report_for_user(self, request, report_id: int):
+        from .models import DecisionRegisterReport
+
+        report = DecisionRegisterReport.objects.filter(pk=report_id).first()
+        if not report:
+            return None
+        if report.requested_by_id != request.user.id and not (
+            request.user.is_superuser or request.user.is_staff
+        ):
+            if not rbac_user_has_permission(request.user, "export_reports"):
+                raise PermissionDenied("You cannot access this report.")
+        return report
+
+    @action(detail=False, methods=["post"], url_path="register-report")
+    def create_register_report(self, request):
+        """
+        Natural-language Commission Decision Register report (Quarto HTML + PDF).
+        POST { "prompt": "...", "date_from"?, "date_to"?, "status"?, "manager_id"? }
+        """
+        from .ai.decision_register_report import interpret_report_request
+        from .models import DecisionRegisterReport
+        from .reports.decision_register import build_data_summary
+        from .tasks import queue_decision_register_report
+
+        if not self._user_can_export_register_reports(request.user):
+            raise PermissionDenied("You do not have permission to generate register reports.")
+
+        prompt = (request.data.get("prompt") or "").strip()
+        if not prompt:
+            return Response({"detail": "Describe the report you need in the prompt field."}, status=400)
+
+        extra_filters = {}
+        for key in ("date_from", "date_to", "status", "manager_id"):
+            val = request.data.get(key)
+            if val not in (None, ""):
+                extra_filters[key] = val
+
+        base_qs = self.get_queryset()
+        spec, err = interpret_report_request(
+            user_prompt=prompt,
+            data_summary=build_data_summary(base_qs),
+            extra_filters=extra_filters or None,
+        )
+        if not spec:
+            return Response({"detail": err or "Could not plan report."}, status=400)
+
+        report = DecisionRegisterReport.objects.create(
+            requested_by=request.user,
+            prompt=prompt,
+            title=spec["title"],
+            subtitle=spec.get("subtitle", ""),
+            filter_spec=spec.get("filters") or {},
+            column_spec=spec.get("columns") or [],
+            narrative_markdown=spec.get("narrative_markdown", ""),
+            include_summary=spec.get("include_summary", True),
+            status=DecisionRegisterReport.Status.PENDING,
+        )
+        queue_decision_register_report(report.id)
+
+        return Response(
+            {
+                "id": report.id,
+                "status": report.status,
+                "title": report.title,
+                "subtitle": report.subtitle,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    @action(detail=False, methods=["get"], url_path=r"register-report/(?P<report_id>[0-9]+)")
+    def register_report_status(self, request, report_id=None):
+        """Poll report job status; includes download paths when ready."""
+        report = self._get_register_report_for_user(request, int(report_id))
+        if not report:
+            return Response({"detail": "Report not found."}, status=404)
+
+        payload = {
+            "id": report.id,
+            "status": report.status,
+            "title": report.title,
+            "subtitle": report.subtitle,
+            "row_count": report.row_count,
+            "error_message": report.error_message,
+            "created_at": report.created_at,
+            "completed_at": report.completed_at,
+            "downloads": {},
+        }
+        if report.status == report.Status.READY:
+            base = request.build_absolute_uri(
+                f"/api/commission-tasks/register-report/{report.id}/download/"
+            )
+            payload["downloads"] = {
+                "html": f"{base}?format=html",
+                "pdf": f"{base}?format=pdf",
+            }
+        return Response(payload)
+
+    @action(detail=False, methods=["get"], url_path=r"register-report/(?P<report_id>[0-9]+)/download")
+    def register_report_download(self, request, report_id=None):
+        """Download generated HTML or PDF (?format=html|pdf)."""
+        from django.http import FileResponse
+
+        report = self._get_register_report_for_user(request, int(report_id))
+        if not report:
+            return Response({"detail": "Report not found."}, status=404)
+        if report.status != report.Status.READY:
+            return Response({"detail": "Report is not ready yet."}, status=409)
+
+        fmt = (request.query_params.get("format") or "html").lower()
+        if fmt == "pdf":
+            if not report.pdf_file:
+                return Response({"detail": "PDF file is missing."}, status=404)
+            fh = report.pdf_file.open("rb")
+            return FileResponse(fh, as_attachment=True, filename=report.pdf_file.name.split("/")[-1])
+        if fmt == "html":
+            if not report.html_file:
+                return Response({"detail": "HTML file is missing."}, status=404)
+            fh = report.html_file.open("rb")
+            return FileResponse(
+                fh,
+                as_attachment=True,
+                filename=report.html_file.name.split("/")[-1],
+                content_type="text/html; charset=utf-8",
+            )
+        return Response({"detail": "format must be html or pdf."}, status=400)
 
     @action(detail=True, methods=["get", "post"], url_path="status-updates")
     def status_updates(self, request, pk=None):

@@ -1034,3 +1034,23 @@ def extract_action_items_from_minutes(meeting_id: int, minutes_text: str | None 
         meeting_id,
         len(data.get("action_items") or []),
     )
+
+
+@shared_task
+def generate_decision_register_report(report_id: int):
+    """Render Quarto HTML + PDF for a DecisionRegisterReport."""
+    from .reports.decision_register import run_report_generation
+
+    run_report_generation(report_id)
+
+
+def queue_decision_register_report(report_id: int) -> None:
+    try:
+        generate_decision_register_report.delay(report_id)
+    except Exception as exc:
+        app_log.warning(
+            "REGISTER_REPORT_QUEUE_FALLBACK | id=%s | %s",
+            report_id,
+            exc,
+        )
+        generate_decision_register_report(report_id)

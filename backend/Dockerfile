@@ -17,6 +17,18 @@ RUN groupadd -r scdms --gid=1001 && \
     mkdir -p /var/log/scdms /var/backups/scdms /var/scdms/media && \
     chown -R scdms:scdms /var/log/scdms /var/backups/scdms /var/scdms/media
 
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget ca-certificates \
+    texlive-latex-base texlive-latex-recommended texlive-fonts-recommended \
+    && QUARTO_VERSION=1.6.42 \
+    && wget -q "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.tar.gz" -O /tmp/quarto.tar.gz \
+    && mkdir -p /opt/quarto \
+    && tar -xzf /tmp/quarto.tar.gz -C /opt/quarto --strip-components=1 \
+    && ln -sf /opt/quarto/bin/quarto /usr/local/bin/quarto \
+    && rm -f /tmp/quarto.tar.gz \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /usr/local /usr/local
 
 COPY . .

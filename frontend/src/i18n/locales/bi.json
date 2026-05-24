@@ -672,6 +672,21 @@
     "critical": "I Impotan",
     "maintenance": "Maintenans"
   },
+  "register_report": {
+    "ai_title": "AI ripot (Quarto PDF mo HTML)",
+    "ai_subtitle": "Tokbaot wan ripot long plain language. SCDMS bae filtaem register, raetem samari, mo mekem PDF mo HTML blong download.",
+    "prompt_label": "Wan ripot yu wantem?",
+    "prompt_placeholder": "e.g. Ol overdue decision blong ODU wetem implementation status…",
+    "prompt_required": "Plis tokbaot wan ripot yu wantem.",
+    "filters_hint": "Ol filta blong date/status/manager i go wetem request blong yu.",
+    "generate": "Mekem PDF mo HTML",
+    "generating": "I stap mekem ripot…",
+    "generate_failed": "No save startem ripot.",
+    "ready": "Ripot i redi",
+    "row_count": "{{count}} decision long ripot",
+    "download_html": "Download HTML",
+    "download_pdf": "Download PDF"
+  },
   "pwa": {
     "offline_banner": "Yu no gat net. Sam pej i save lod from kash, be data blong laev i nid net.",
     "update_title": "Niu vesen i redi",

@@ -1378,6 +1378,53 @@ class CommissionTask(models.Model):
         return f"{ref}: {self.title}"
 
 
+class DecisionRegisterReport(models.Model):
+    """AI-generated Commission Decision Register export (Quarto HTML + PDF)."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="decision_register_reports",
+    )
+    prompt = models.TextField(help_text="Natural-language report request from the user.")
+    title = models.CharField(max_length=200, blank=True)
+    subtitle = models.CharField(max_length=300, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    error_message = models.TextField(blank=True)
+    filter_spec = models.JSONField(default=dict, blank=True)
+    column_spec = models.JSONField(default=list, blank=True)
+    narrative_markdown = models.TextField(blank=True)
+    include_summary = models.BooleanField(default=True)
+    row_count = models.PositiveIntegerField(default=0)
+    html_file = models.FileField(
+        upload_to="decision_register_reports/%Y/%m/",
+        blank=True,
+    )
+    pdf_file = models.FileField(
+        upload_to="decision_register_reports/%Y/%m/",
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Register report #{self.pk} — {self.title or self.status}"
+
+
 class CommissionTaskUpdate(models.Model):
     """
     Append-only status / comment log for transparency and ministerial reporting
