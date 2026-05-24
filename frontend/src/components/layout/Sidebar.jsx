@@ -289,7 +289,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
       <aside
         aria-label={t('accessibility.primary_navigation')}
         className={clsx(
-          'fixed top-0 start-0 h-full bg-white dark:bg-slate-800 border-e border-slate-200 dark:border-slate-700 z-30 flex flex-col sidebar-transition overflow-hidden',
+          'fixed top-10 start-0 h-[calc(100%-40px)] bg-white dark:bg-slate-800 border-e border-slate-200 dark:border-slate-700 z-30 flex flex-col sidebar-transition overflow-hidden',
           collapsed ? 'w-[5.5rem]' : 'w-64',
           mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full rtl:translate-x-full lg:translate-x-0 rtl:lg:translate-x-0'
         )}

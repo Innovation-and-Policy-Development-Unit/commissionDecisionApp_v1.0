@@ -501,6 +501,12 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     )
     attached_submissions = AttachedSubmissionSerializer(many=True, read_only=True)
     preliminary_quality_score = serializers.SerializerMethodField()
+    subway_map = serializers.SerializerMethodField()
+
+    def get_subway_map(self, obj):
+        from .subway_map import build_subway_map
+
+        return build_subway_map(obj)
 
     def get_preliminary_quality_score(self, obj):
         from .ai.submission_quality_score import preliminary_quality_score
@@ -592,6 +598,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_quality_processed",
             "ai_quality_generated_at",
             "preliminary_quality_score",
+            "subway_map",
             "ai_package_gaps",
             "ai_package_ready",
             "ai_package_summary",
@@ -601,6 +608,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_clarification_bilingual",
         )
         read_only_fields = (
+            "subway_map",
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",

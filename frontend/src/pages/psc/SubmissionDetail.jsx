@@ -1,15 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import PageHeader from '../../components/shared/PageHeader'
-import SubmissionProgressBar from '../../components/shared/SubmissionProgressBar'
-import SubmissionStepper from '../../components/shared/SubmissionStepper'
+import SubmissionSubwayMap from '../../components/submissions/SubmissionSubwayMap'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import {
   stageLabel, stageBadgeClass, stageDotClass, stageMeta,
-  needsHrAction, isTerminal, phaseForKey,
+  needsHrAction, isTerminal,
 } from '../../constants/stages'
 import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Sparkles, Loader2 } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
@@ -620,6 +619,13 @@ const stageDescriptions = {
         }
       />
 
+      <SubmissionSubwayMap
+        className="mb-4"
+        subwayMap={submission.subway_map}
+        currentStage={submission.current_stage}
+        events={submission.events}
+      />
+
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />{error}
@@ -718,49 +724,23 @@ const stageDescriptions = {
         {/* ── Left: details + timeline ── */}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* Lifecycle stepper */}
-          {submission.current_stage !== 'draft' && (
-            <div className={`card card-compact ${hrAction ? 'border-l-4 border-l-orange-400' : terminal ? 'border-l-4 border-l-emerald-400' : ''}`}>
-              {/* Status header row */}
-              <div className="flex items-center gap-2 mb-4">
-                {hrAction && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
-                    <RefreshCw size={11} className="animate-spin" />
-                    Action needed
-                  </span>
-                )}
-                {terminal && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                    <CheckCircle2 size={11} />
-                    Completed
-                  </span>
-                )}
-                {!hrAction && !terminal && (
-                  <span className="text-xs text-slate-400 dark:text-slate-500">
-                    {phaseForKey(submission.current_stage)?.label || stageLabel(submission.current_stage)}
-                  </span>
-                )}
-                <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                  <RefreshCw size={10} /> Live
-                </span>
-              </div>
-
-              {/* Visual stepper */}
-              <SubmissionStepper currentStage={submission.current_stage} />
-
-              {/* Contextual messages */}
-              {submission.current_stage === 'returned_for_clarification' && (
-                <p className="mt-4 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 rounded-lg px-3 py-2">
-                  This submission requires clarification. Please review the remarks, make the required changes, and resubmit for processing.
+          {/* Stage guidance (subway map is at page top) */}
+          {submission.current_stage !== 'draft' && (hrAction || terminal || submission.current_stage === 'matters_arising') && (
+            <div className={`card card-compact space-y-2 ${hrAction ? 'border-l-4 border-l-orange-400' : terminal ? 'border-l-4 border-l-emerald-400' : ''}`}>
+              {hrAction && (
+                <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
+                  <RefreshCw size={12} className="animate-spin shrink-0" />
+                  Action needed — see the journey map above for where to respond.
                 </p>
               )}
-              {submission.current_stage === 'deferred_back_to_hr' && (
-                <p className="mt-4 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 rounded-lg px-3 py-2">
-                  The Commission has deferred this matter and returned it for review. Once you have addressed the feedback, resubmit it as a <strong>Matter Arising</strong> for the next sitting.
+              {terminal && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                  <CheckCircle2 size={12} className="shrink-0" />
+                  This matter has reached a completed implementation stage.
                 </p>
               )}
               {submission.current_stage === 'matters_arising' && (
-                <p className="mt-4 text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                <p className="text-xs text-purple-600 dark:text-purple-400 flex items-start gap-1.5">
                   <Info size={12} className="mt-0.5 shrink-0" />
                   Previously deliberated matter — returning for further Commission consideration without re-entering the assessment pipeline.
                 </p>

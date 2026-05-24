@@ -554,6 +554,20 @@
     "decision": "Decision",
     "implement": "Implementation"
   },
+  "subway": {
+    "aria_label": "Submission journey map",
+    "title": "Your submission journey",
+    "progress_hint": "{{percent}}% through the PSC process",
+    "returned_badge": "Returned",
+    "complete_badge": "Complete",
+    "returned_title": "Action required at this station",
+    "returned_body": "{{stage}} — please address feedback at the {{station}} stage before resubmitting.",
+    "station_detail": "Stages at {{station}}",
+    "registered": "Registered",
+    "under_assessment": "Under Assessment",
+    "commission_sitting": "Commission Sitting",
+    "implementation": "Implementation"
+  },
   "meeting": {
     "create": "Create Meeting",
     "title": "Meeting Title",

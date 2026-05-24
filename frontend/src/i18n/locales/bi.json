@@ -467,6 +467,20 @@
     "decision": "Desisen",
     "implement": "Implimentesen"
   },
+  "subway": {
+    "aria_label": "Map blong jeni blong submisen",
+    "title": "Jeni blong submisen blong yu",
+    "progress_hint": "{{percent}}% blong proses PSC",
+    "returned_badge": "I go bak",
+    "complete_badge": "I finis",
+    "returned_title": "Yu mas mekem samting long stesen ia",
+    "returned_body": "{{stage}} — plis adresem fidbak long stesen {{station}} bae yu submitem bakegen.",
+    "station_detail": "Ol step long {{station}}",
+    "registered": "I rejista",
+    "under_assessment": "Asesmen",
+    "commission_sitting": "Komisin i siddown",
+    "implementation": "Implimentesen"
+  },
   "meeting": {
     "create": "Mekem Mitin",
     "title": "Taetol Blong Mitin",

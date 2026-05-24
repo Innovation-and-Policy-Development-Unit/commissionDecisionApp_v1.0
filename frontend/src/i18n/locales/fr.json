@@ -454,6 +454,20 @@
     "decision": "Décision",
     "implement": "Mise en œuvre"
   },
+  "subway": {
+    "aria_label": "Parcours de la soumission",
+    "title": "Parcours de votre soumission",
+    "progress_hint": "{{percent}} % du processus PSC",
+    "returned_badge": "Retourné",
+    "complete_badge": "Terminé",
+    "returned_title": "Action requise à cette étape",
+    "returned_body": "{{stage}} — veuillez traiter les remarques à l'étape {{station}} avant de resoumettre.",
+    "station_detail": "Étapes à {{station}}",
+    "registered": "Enregistré",
+    "under_assessment": "En évaluation",
+    "commission_sitting": "Séance de la Commission",
+    "implementation": "Mise en œuvre"
+  },
   "meeting": {
     "create": "Créer une réunion",
     "title": "Titre de la réunion",
