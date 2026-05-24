@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ClipboardList, Square, CheckSquare, Sparkles, Loader2, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { ClipboardList, Square, CheckSquare, Wand2, Loader2, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
@@ -16,7 +16,7 @@ function SuggestionBadge({ suggestion, t }) {
           : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
       )}
     >
-      <Sparkles size={9} />
+      <Wand2 size={9} />
       {suggestion.is_present
         ? t('submission.checklist_suggestion_present')
         : t('submission.checklist_suggestion_missing')}
@@ -177,7 +177,7 @@ export default function ChecklistPanel({
             {autofilling ? (
               <Loader2 size={12} className="animate-spin" />
             ) : (
-              <Sparkles size={12} />
+              <Wand2 size={12} />
             )}
             {autofilling
               ? t('submission.checklist_autofilling')
@@ -194,7 +194,7 @@ export default function ChecklistPanel({
       {hasSuggestions && pendingCount > 0 && (
         <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 dark:border-violet-700 dark:bg-violet-900/20">
           <p className="text-xs text-violet-700 dark:text-violet-300">
-            <Sparkles size={11} className="inline mr-1" />
+            <Wand2 size={11} className="inline mr-1" />
             {pendingCount} AI suggestion{pendingCount !== 1 ? 's' : ''} — review each or accept all.
           </p>
           <button

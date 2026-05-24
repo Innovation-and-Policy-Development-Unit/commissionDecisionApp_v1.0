@@ -742,6 +742,22 @@ class SubmissionViewSet(viewsets.ModelViewSet):
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,
              description=f"Stage transition: {prev} → {target}" + (f" | {remarks}" if remarks else ""))
+
+        if target == WorkflowStage.RETURNED_FOR_CLARIFICATION and remarks.strip():
+            from .tasks import queue_clarification_bilingual
+
+            sid = submission.id
+            rem = remarks.strip()
+            transaction.on_commit(lambda: queue_clarification_bilingual(sid, remarks=rem))
+
+        from .tasks import queue_transition_guidance
+
+        transaction.on_commit(
+            lambda: queue_transition_guidance(
+                submission.id, role=profile.role, force=True
+            )
+        )
+
         return Response(SubmissionDetailSerializer(submission).data)
 
     @action(detail=True, methods=["post"], url_path="validate-package")
@@ -922,9 +938,60 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def allowed_transitions(self, request, pk=None):
         submission = self.get_object()
         profile = _profile(request.user)
-        return Response(
-            {"allowed": iter_allowed_targets(profile.role, submission.current_stage, is_internal=submission.is_internal)}
+        allowed = iter_allowed_targets(
+            profile.role, submission.current_stage, is_internal=submission.is_internal
         )
+        guidance = submission.ai_transition_guidance or {}
+        stale = (
+            not guidance.get("processed")
+            or guidance.get("current_stage") != submission.current_stage
+        )
+        if stale:
+            from .tasks import queue_transition_guidance
+
+            queue_transition_guidance(submission.id, role=profile.role, force=True)
+        return Response({
+            "allowed": allowed,
+            "transition_guidance": guidance,
+            "transition_guidance_pending": stale,
+        })
+
+    @action(detail=True, methods=["get", "post"], url_path="transition-guidance")
+    def transition_guidance(self, request, pk=None):
+        """F1 — poll or refresh AI transition suggestions (async)."""
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if request.method == "POST":
+            from .tasks import queue_transition_guidance
+
+            queue_transition_guidance(submission.id, role=profile.role, force=True)
+            submission.ai_transition_guidance = {}
+            submission.save(update_fields=["ai_transition_guidance", "updated_at"])
+        submission.refresh_from_db()
+        guidance = submission.ai_transition_guidance or {}
+        return Response({
+            "transition_guidance": guidance,
+            "transition_guidance_pending": not guidance.get("processed"),
+        })
+
+    @action(detail=False, methods=["post"], url_path="nl-search")
+    def nl_search(self, request):
+        """Smart search — natural language → filter JSON + matching submission ids."""
+        from .ai.smart_search import apply_smart_filters, parse_nl_search_query
+
+        query = (request.data.get("query") or "").strip()
+        profile = _profile(request.user)
+        parsed, err = parse_nl_search_query(query, role=profile.role)
+        if not parsed:
+            return Response({"detail": err or "Could not parse query."}, status=400)
+        qs = _submission_queryset_for(request.user).filter(is_attachment=False)
+        qs = apply_smart_filters(qs, parsed.get("filters") or {})
+        ids = list(qs.values_list("id", flat=True)[:200])
+        return Response({
+            **parsed,
+            "submission_ids": ids,
+            "count": len(ids),
+        })
 
     @action(detail=True, methods=["get"])
     def checklist(self, request, pk=None):
@@ -1087,6 +1154,42 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         queue_document_extraction(doc.id)
         return Response({"detail": "Document extraction queued.", "document_id": doc.id})
+
+    @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/annotation-assist")
+    def document_annotation_assist(self, request, pk=None, doc_id=None):
+        submission = self.get_object()
+        doc = get_object_or_404(SubmissionDocument, id=doc_id, submission=submission)
+        profile = _profile(request.user)
+        if profile.role not in {
+            Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY,
+            Role.SENIOR_ADMIN_OFFICER, Role.PSC_MANAGER,
+        }:
+            raise PermissionDenied("Only PSC reviewers may request annotation suggestions.")
+        from .tasks import queue_document_annotation_assist
+
+        doc.ai_annotation_suggestions = {}
+        doc.save(update_fields=["ai_annotation_suggestions"])
+        queue_document_annotation_assist(doc.id)
+        doc.refresh_from_db()
+        return Response(SubmissionDocumentSerializer(doc).data)
+
+    @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/redaction-preview")
+    def document_redaction_preview(self, request, pk=None, doc_id=None):
+        submission = self.get_object()
+        doc = get_object_or_404(SubmissionDocument, id=doc_id, submission=submission)
+        profile = _profile(request.user)
+        if profile.role not in {
+            Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY,
+            Role.SENIOR_ADMIN_OFFICER,
+        }:
+            raise PermissionDenied("Only PSC staff may request redaction preview.")
+        from .tasks import queue_document_redaction_preview
+
+        doc.ai_redaction_spans = {}
+        doc.save(update_fields=["ai_redaction_spans"])
+        queue_document_redaction_preview(doc.id)
+        doc.refresh_from_db()
+        return Response(SubmissionDocumentSerializer(doc).data)
 
     @action(detail=True, methods=["get"], url_path="deadline-reminder-drafts")
     def deadline_reminder_drafts(self, request, pk=None):
@@ -1928,6 +2031,20 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                 content_type="text/html; charset=utf-8",
             )
         return Response({"detail": "format must be html or pdf."}, status=400)
+
+    @action(detail=True, methods=["post"], url_path="draft-subtasks")
+    def draft_subtasks(self, request, pk=None):
+        """Draft ODU/HR implementation subtasks from register fields (async)."""
+        task = self.get_object()
+        if not rbac_user_has_permission(request.user, "allocate_decision"):
+            raise PermissionDenied("Only secretariat may request subtask drafts.")
+        from .tasks import queue_draft_implementation_subtasks
+
+        task.ai_subtask_drafts = {}
+        task.save(update_fields=["ai_subtask_drafts", "updated_at"])
+        queue_draft_implementation_subtasks(task.id)
+        task.refresh_from_db()
+        return Response(CommissionTaskSerializer(task).data)
 
     @action(detail=True, methods=["get", "post"], url_path="status-updates")
     def status_updates(self, request, pk=None):
@@ -3597,7 +3714,11 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         )
         next_seq = (last_in_cat.sequence + 1) if last_in_cat else 1
 
-        serializer.save(category=category, sequence=next_seq)
+        item = serializer.save(category=category, sequence=next_seq)
+        from .tasks import queue_agenda_item_blurb
+
+        aid = item.id
+        transaction.on_commit(lambda: queue_agenda_item_blurb(aid))
 
     @action(detail=True, methods=["post"], url_path="push-to-next")
     def push_to_next_meeting(self, request, pk=None):

@@ -50,4 +50,13 @@ FEATURE_MODEL_TIER: dict[str, ModelTier] = {
     "submission_executive_brief": "sonnet",
     "minutes_draft": "sonnet",
     "decision_extract": "haiku",
+    # Batch 8 — workflow & documents
+    "transition_guidance": "haiku",
+    "agenda_blurb": "haiku",
+    "bilingual_ministry_comms": "haiku",
+    "implementation_subtask_draft": "haiku",
+    "staff_knowledge_rag": "sonnet",
+    "submission_nl_search": "sonnet",
+    "annotation_assist": "sonnet",
+    "redaction_preview": "sonnet",
 }

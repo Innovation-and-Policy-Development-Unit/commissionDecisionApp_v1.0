@@ -383,6 +383,11 @@ class AgendaItem(models.Model):
         help_text="e.g. 'Agenda 20'",
     )
     added_at = models.DateTimeField(auto_now_add=True)
+    agenda_blurb = models.TextField(
+        blank=True,
+        help_text="AI-generated 2–3 sentence agenda blurb for the sitting pack.",
+    )
+    agenda_blurb_processed = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["category", "sequence", "added_at"]
@@ -941,6 +946,16 @@ class Submission(models.Model):
         help_text="True once the latest package validation completed.",
     )
     ai_package_generated_at = models.DateTimeField(null=True, blank=True)
+    ai_transition_guidance = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="F1 transition helper: suggestions, blockers, rationales.",
+    )
+    ai_clarification_bilingual = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="English + Bislama clarification text for ministry (returned for clarification).",
+    )
     # ── Parent/child (attachment) relationship ──────────────────────────────
     parent_submission = models.ForeignKey(
         'self', null=True, blank=True,
@@ -1149,6 +1164,16 @@ class SubmissionDocument(models.Model):
     )
     document_type_note = models.CharField(max_length=255, blank=True)
     document_classified_at = models.DateTimeField(null=True, blank=True)
+    ai_annotation_suggestions = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="AI-suggested PDF review highlights (verify before applying).",
+    )
+    ai_redaction_spans = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="E3 suggested redaction spans (human approves).",
+    )
 
     class Meta:
         ordering = ['uploaded_at']
@@ -1444,6 +1469,11 @@ class CommissionTask(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    ai_subtask_drafts = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="AI-drafted subtask suggestions (verify before creating).",
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -1942,6 +1972,8 @@ class DeadlineReminderDraft(models.Model):
     consequence_note = models.TextField(blank=True)
     subject = models.CharField(max_length=500)
     body = models.TextField()
+    subject_bi = models.CharField(max_length=500, blank=True)
+    body_bi = models.TextField(blank=True)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,

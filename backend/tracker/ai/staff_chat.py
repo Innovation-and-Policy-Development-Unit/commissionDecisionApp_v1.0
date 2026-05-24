@@ -88,7 +88,12 @@ def tier_for_message(message: str) -> str:
 
 
 def build_staff_chat_system_prompt(user, user_message: str) -> str:
-    kb = load_knowledge_base()
+    from .knowledge_rag import format_retrieved_context
+
+    if is_status_focused_message(user_message):
+        kb = load_knowledge_base()[:8000]
+    else:
+        kb = format_retrieved_context(user_message, top_k=6)
     ctx = _user_context_block(user)
     sub_ctx = build_status_context(user, user_message)
     status_note = ""

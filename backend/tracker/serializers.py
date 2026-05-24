@@ -250,6 +250,7 @@ class CommissionTaskSerializer(serializers.ModelSerializer):
             "due_date",
             "due_date_notified",
             "subtasks",
+            "ai_subtask_drafts",
             "created_by",
             "created_at",
             "updated_at",
@@ -262,6 +263,7 @@ class CommissionTaskSerializer(serializers.ModelSerializer):
             "assigned_staff_username",
             "due_date_notified",
             "subtasks",
+            "ai_subtask_drafts",
             "created_by",
             "created_at",
             "updated_at",
@@ -581,6 +583,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_package_summary",
             "ai_package_processed",
             "ai_package_generated_at",
+            "ai_transition_guidance",
+            "ai_clarification_bilingual",
         )
         read_only_fields = (
             "ai_brief_summary",
@@ -597,6 +601,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_package_summary",
             "ai_package_processed",
             "ai_package_generated_at",
+            "ai_transition_guidance",
+            "ai_clarification_bilingual",
         )
 
 
@@ -634,6 +640,7 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
             'ocr_error', 'ocr_processed_at',
             'document_type', 'document_type_display', 'document_type_confidence',
             'document_type_note', 'document_classified_at',
+            'ai_annotation_suggestions', 'ai_redaction_spans',
         )
         read_only_fields = fields
 
@@ -996,8 +1003,10 @@ class AgendaItemSerializer(serializers.ModelSerializer):
         fields = (
             "id", "meeting", "submission", "submission_reference", "submission_title",
             "submission_ministry", "sequence", "category", "category_display",
-            "matters_arising_meeting_ref", "matters_arising_agenda_no",
+            "matters_arising_agenda_no", "matters_arising_meeting_ref",
+            "agenda_blurb", "agenda_blurb_processed",
         )
+        read_only_fields = ("agenda_blurb", "agenda_blurb_processed")
 
 
 class MeetingSerializer(serializers.ModelSerializer):
@@ -1492,12 +1501,14 @@ class DeadlineReminderDraftSerializer(serializers.ModelSerializer):
             'recipient_user', 'recipient_email', 'recipient_name', 'recipient_role',
             'ministry', 'ministry_name', 'stage', 'deadline_at',
             'outstanding_summary', 'consequence_note', 'subject', 'body',
+            'subject_bi', 'body_bi',
             'status', 'drafted_at', 'sent_at',
         )
         read_only_fields = (
             'submission_reference', 'submission_title', 'ministry_name',
             'drafted_at', 'sent_at', 'submission', 'recipient_user', 'ministry',
             'stage', 'deadline_at', 'recipient_email', 'recipient_name', 'recipient_role',
+            'subject_bi', 'body_bi',
         )
 
 

@@ -1012,6 +1012,21 @@ def draft_submission_deadline_reminders():
                 )
                 continue
 
+            subject = (data.get("subject") or "")[:500]
+            body = data.get("body") or ""
+            subject_bi = ""
+            body_bi = ""
+            try:
+                from .ai.bilingual_comms import enrich_deadline_draft_bilingual
+
+                bi = enrich_deadline_draft_bilingual(
+                    subject=subject, body=body, case_context=case_ctx
+                )
+                body_bi = bi.get("body_bi", "")[:10000]
+                subject_bi = (bi.get("subject_bi") or "")[:500]
+            except Exception as exc:
+                app_log.warning("DEADLINE_BI_SKIP | %s", exc)
+
             DeadlineReminderDraft.objects.create(
                 submission=submission,
                 recipient_user=user,
@@ -1023,8 +1038,10 @@ def draft_submission_deadline_reminders():
                 deadline_at=submission.assessment_deadline_at,
                 outstanding_summary=data.get("outstanding_summary", ""),
                 consequence_note=data.get("consequence_note", ""),
-                subject=(data.get("subject") or "")[:500],
-                body=data.get("body") or "",
+                subject=subject,
+                body=body,
+                subject_bi=subject_bi,
+                body_bi=body_bi,
             )
             created += 1
 
@@ -1316,3 +1333,170 @@ def validate_submission_package_sync(submission_id: int, *, force: bool = False)
         len(result.get("gaps") or []),
     )
     return result
+
+
+# ── F1: Transition guidance ─────────────────────────────────────────────────
+
+
+def queue_transition_guidance(submission_id: int, *, role: str, force: bool = False) -> None:
+    try:
+        generate_transition_guidance_task.delay(submission_id, role=role, force=force)
+    except Exception as exc:
+        app_log.warning("TRANSITION_GUIDANCE_FALLBACK | %s | %s", submission_id, exc)
+        generate_transition_guidance_task(submission_id, role=role, force=force)
+
+
+@shared_task
+def generate_transition_guidance_task(submission_id: int, *, role: str, force: bool = False):
+    from .ai.transition_helper import generate_transition_guidance
+    from .models import Submission
+
+    submission = Submission.objects.get(pk=submission_id)
+    if not force and submission.ai_transition_guidance.get("processed"):
+        return
+    guidance = generate_transition_guidance(
+        submission, role=role, is_internal=submission.is_internal
+    )
+    submission.ai_transition_guidance = guidance
+    submission.save(update_fields=["ai_transition_guidance", "updated_at"])
+
+
+# ── Agenda blurb ──────────────────────────────────────────────────────────────
+
+
+def queue_agenda_item_blurb(agenda_item_id: int) -> None:
+    try:
+        generate_agenda_item_blurb.delay(agenda_item_id)
+    except Exception as exc:
+        app_log.warning("AGENDA_BLURB_FALLBACK | %s | %s", agenda_item_id, exc)
+        generate_agenda_item_blurb(agenda_item_id)
+
+
+@shared_task
+def generate_agenda_item_blurb(agenda_item_id: int):
+    from .ai.agenda_blurb import generate_agenda_blurb
+    from .models import AgendaItem
+
+    item = AgendaItem.objects.select_related("submission", "meeting").get(pk=agenda_item_id)
+    blurb, _err = generate_agenda_blurb(submission=item.submission, meeting=item.meeting)
+    item.agenda_blurb = blurb
+    item.agenda_blurb_processed = True
+    item.save(update_fields=["agenda_blurb", "agenda_blurb_processed"])
+
+
+# ── Bilingual clarification remarks ─────────────────────────────────────────
+
+
+def queue_clarification_bilingual(submission_id: int, *, remarks: str) -> None:
+    try:
+        generate_clarification_bilingual.delay(submission_id, remarks=remarks)
+    except Exception as exc:
+        app_log.warning("CLARIFICATION_BI_FALLBACK | %s | %s", submission_id, exc)
+        generate_clarification_bilingual(submission_id, remarks=remarks)
+
+
+@shared_task
+def generate_clarification_bilingual(submission_id: int, *, remarks: str):
+    from .ai.bilingual_comms import translate_ministry_comms
+    from .models import Submission
+
+    submission = Submission.objects.get(pk=submission_id)
+    ctx = f"Returned for clarification. Reference {submission.reference_number}."
+    result = translate_ministry_comms(english_text=remarks, context=ctx)
+    submission.ai_clarification_bilingual = {
+        "processed": True,
+        "english": result.get("english") or remarks,
+        "bislama": result.get("bislama") or "",
+        "notes": result.get("notes") or "",
+        "disclaimer": "AI draft — verify before sending to ministry.",
+    }
+    submission.save(update_fields=["ai_clarification_bilingual", "updated_at"])
+
+
+# ── Implementation subtask drafts ─────────────────────────────────────────────
+
+
+def queue_draft_implementation_subtasks(task_id: int) -> None:
+    try:
+        draft_implementation_subtasks.delay(task_id)
+    except Exception as exc:
+        app_log.warning("SUBTASK_DRAFT_FALLBACK | %s | %s", task_id, exc)
+        draft_implementation_subtasks(task_id)
+
+
+@shared_task
+def draft_implementation_subtasks(task_id: int):
+    from .ai.implementation_subtasks import draft_subtasks_from_task
+    from .models import CommissionTask
+
+    task = CommissionTask.objects.select_related("submission").get(pk=task_id)
+    data, err = draft_subtasks_from_task(task)
+    task.ai_subtask_drafts = data or {"error": err or "Failed", "subtasks": []}
+    task.save(update_fields=["ai_subtask_drafts", "updated_at"])
+
+
+# ── Document annotation assist & redaction preview ───────────────────────────
+
+
+def queue_document_annotation_assist(document_id: int) -> None:
+    try:
+        generate_document_annotation_assist.delay(document_id)
+    except Exception as exc:
+        app_log.warning("ANNOTATION_ASSIST_FALLBACK | %s | %s", document_id, exc)
+        generate_document_annotation_assist(document_id)
+
+
+@shared_task
+def generate_document_annotation_assist(document_id: int):
+    from pathlib import Path
+
+    from .ai.annotation_assist import suggest_annotations
+    from .models import SubmissionDocument
+
+    doc = SubmissionDocument.objects.select_related("submission").get(pk=document_id)
+    try:
+        path = Path(doc.file.path)
+    except Exception as exc:
+        doc.ai_annotation_suggestions = {"processed": True, "error": str(exc), "suggestions": []}
+        doc.save(update_fields=["ai_annotation_suggestions"])
+        return
+    ctx = f"Submission {doc.submission.reference_number}: {doc.submission.title}"
+    data, err = suggest_annotations(
+        file_path=path,
+        original_name=doc.original_name,
+        extracted_text=doc.extracted_text,
+        submission_context=ctx,
+    )
+    doc.ai_annotation_suggestions = data or {"processed": True, "error": err, "suggestions": []}
+    doc.save(update_fields=["ai_annotation_suggestions"])
+
+
+def queue_document_redaction_preview(document_id: int) -> None:
+    try:
+        generate_document_redaction_preview.delay(document_id)
+    except Exception as exc:
+        app_log.warning("REDACTION_PREVIEW_FALLBACK | %s | %s", document_id, exc)
+        generate_document_redaction_preview(document_id)
+
+
+@shared_task
+def generate_document_redaction_preview(document_id: int):
+    from pathlib import Path
+
+    from .ai.redaction_preview import suggest_redaction_spans
+    from .models import SubmissionDocument
+
+    doc = SubmissionDocument.objects.get(pk=document_id)
+    try:
+        path = Path(doc.file.path)
+    except Exception as exc:
+        doc.ai_redaction_spans = {"processed": True, "error": str(exc), "spans": []}
+        doc.save(update_fields=["ai_redaction_spans"])
+        return
+    data, err = suggest_redaction_spans(
+        file_path=path,
+        original_name=doc.original_name,
+        extracted_text=doc.extracted_text,
+    )
+    doc.ai_redaction_spans = data or {"processed": True, "error": err, "spans": []}
+    doc.save(update_fields=["ai_redaction_spans"])
