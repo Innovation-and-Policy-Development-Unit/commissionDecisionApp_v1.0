@@ -724,6 +724,7 @@ class AuditLog(models.Model):
         PERMISSION     = "PERMISSION",     "Permission Change"
         EXPORT         = "EXPORT",         "Export"
         FEEDBACK       = "FEEDBACK",       "Feedback Submission"
+        DECISION       = "DECISION",       "Decision / Stage Proof"
 
     actor          = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
@@ -1737,6 +1738,17 @@ class WorkflowEvent(models.Model):
     new_stage = models.CharField(max_length=48, choices=WorkflowStage.choices)
     remarks = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    content_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        db_index=True,
+        help_text="SHA-256 of canonical decision snapshot (decision transitions only).",
+    )
+    proof_payload = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Immutable JSON snapshot used to verify content_hash.",
+    )
 
     class Meta:
         ordering = ["created_at"]

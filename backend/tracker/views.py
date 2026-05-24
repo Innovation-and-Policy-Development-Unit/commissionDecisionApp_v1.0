@@ -672,6 +672,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
+        from .decision_proof import create_decision_proof, is_decision_stage
+
+        proof_hash = ""
+        proof_payload = {}
+
         with transaction.atomic():
             submission.current_stage = target
 
@@ -689,12 +694,24 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 submission._set_assessment_deadline_from_start()
 
             submission.save(update_fields=_updated_fields(submission, prev, target))
+
+            if is_decision_stage(target):
+                proof_hash, proof_payload = create_decision_proof(
+                    submission=submission,
+                    previous_stage=prev,
+                    new_stage=target,
+                    actor=request.user,
+                    remarks=remarks,
+                )
+
             WorkflowEvent.objects.create(
                 submission=submission,
                 actor=request.user,
                 previous_stage=prev,
                 new_stage=target,
                 remarks=remarks,
+                content_hash=proof_hash,
+                proof_payload=proof_payload,
             )
 
             # ── Cascade final decisions to attached child submissions ──────────
@@ -763,6 +780,22 @@ class SubmissionViewSet(viewsets.ModelViewSet):
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,
              description=f"Stage transition: {prev} → {target}" + (f" | {remarks}" if remarks else ""))
+
+        if is_decision_stage(target) and proof_hash:
+            _log(
+                request,
+                _AL.Action.DECISION,
+                resource_type="Submission",
+                resource_id=submission.id,
+                resource_label=submission.reference_number,
+                description=f"Decision proof recorded: {prev} → {target}",
+                extra_data={
+                    "content_hash": proof_hash,
+                    "previous_stage": prev,
+                    "new_stage": target,
+                    "proof_version": proof_payload.get("v"),
+                },
+            )
 
         if target == WorkflowStage.RETURNED_FOR_CLARIFICATION and remarks.strip():
             from .tasks import queue_clarification_bilingual
@@ -1048,6 +1081,48 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         return Response({
             "transition_guidance": guidance,
             "transition_guidance_pending": not guidance.get("processed"),
+        })
+
+    @action(detail=True, methods=["get"], url_path="visual-audit-trail")
+    def visual_audit_trail(self, request, pk=None):
+        """Readable merged timeline: workflow events + audit log entries."""
+        from .decision_proof import build_visual_audit_trail
+
+        submission = self.get_object()
+        return Response({
+            "submission_id": submission.id,
+            "reference_number": submission.reference_number,
+            "entries": build_visual_audit_trail(submission),
+        })
+
+    @action(detail=True, methods=["get"], url_path="decision-proof")
+    def decision_proof(self, request, pk=None):
+        """Verify cryptographic decision proof for a workflow event."""
+        from .decision_proof import verify_stored_proof
+        from .models import WorkflowEvent
+
+        submission = self.get_object()
+        event_id = request.query_params.get("event_id")
+        if not event_id:
+            return Response({"detail": "event_id query parameter is required."}, status=400)
+        try:
+            event = WorkflowEvent.objects.get(pk=int(event_id), submission=submission)
+        except (WorkflowEvent.DoesNotExist, ValueError, TypeError):
+            return Response({"detail": "Workflow event not found."}, status=404)
+
+        verification = verify_stored_proof(event.content_hash, event.proof_payload or None)
+        actor_username = event.actor.username if event.actor_id else (event.actor_label or "System")
+        return Response({
+            "workflow_event_id": event.id,
+            "reference_number": submission.reference_number,
+            "previous_stage": event.previous_stage,
+            "new_stage": event.new_stage,
+            "actor_username": actor_username,
+            "recorded_at": event.created_at.isoformat(),
+            "remarks": event.remarks or "",
+            "content_hash": event.content_hash,
+            "proof_payload": event.proof_payload or {},
+            "verification": verification,
         })
 
     @action(detail=False, methods=["post"], url_path="nl-search")

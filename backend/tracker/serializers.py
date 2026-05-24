@@ -392,10 +392,23 @@ class WorkflowEventSerializer(serializers.ModelSerializer):
     """System/CMS events may have actor=null; use actor_label when present."""
 
     actor_username = serializers.SerializerMethodField()
+    has_decision_proof = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkflowEvent
-        fields = ("id", "actor_username", "previous_stage", "new_stage", "remarks", "created_at")
+        fields = (
+            "id",
+            "actor_username",
+            "previous_stage",
+            "new_stage",
+            "remarks",
+            "created_at",
+            "content_hash",
+            "has_decision_proof",
+        )
+
+    def get_has_decision_proof(self, obj):
+        return bool(obj.content_hash)
 
     def get_actor_username(self, obj):
         if obj.actor_id:
