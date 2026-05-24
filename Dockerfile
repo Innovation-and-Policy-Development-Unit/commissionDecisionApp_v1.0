@@ -1,0 +1,46 @@
+# Production API image for Render when the build context is the repository root.
+# (Render default looks for ./Dockerfile at repo root.)
+#
+# Recommended Render settings instead:
+#   Docker context: backend
+#   Dockerfile path: Dockerfile.render
+#
+# See render.yaml and docs/deployment-render.md
+
+FROM python:3.12-slim-bookworm AS builder
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+COPY backend/requirements.txt .
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+RUN groupadd -r scdms --gid=1001 && \
+    useradd -r -g scdms --uid=1001 --no-create-home scdms && \
+    mkdir -p /var/log/scdms /var/backups/scdms /var/scdms/media /app/logs && \
+    chown -R scdms:scdms /var/log/scdms /var/backups/scdms /var/scdms/media /app/logs
+
+COPY --from=builder /usr/local /usr/local
+
+COPY backend/ .
+RUN sed -i 's/\r$//' docker-entrypoint-render.sh && chmod +x docker-entrypoint-render.sh && \
+    chown -R scdms:scdms /app
+
+USER scdms
+
+ENV PORT=8000 \
+    RENDER=true \
+    DJANGO_BEHIND_PROXY=true \
+    MEDIA_ROOT=/var/scdms/media \
+    SERVE_MEDIA=true \
+    USE_WHITENOISE=true \
+    AUTO_SEED=0
+
+EXPOSE 8000
+ENTRYPOINT ["sh", "./docker-entrypoint-render.sh"]

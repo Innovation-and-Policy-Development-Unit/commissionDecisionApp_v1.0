@@ -114,6 +114,7 @@ Uploaded files are stored on a **10 GB persistent disk** mounted at `/var/scdms/
 
 | Symptom | Check |
 |---------|--------|
+| `open Dockerfile: no such file or directory` | Push latest `main` (includes root `Dockerfile`), **or** in each Docker service set **Root Directory** / context to `backend` and **Dockerfile Path** to `Dockerfile.render` |
 | 502 on API | Deploy logs; `migrate` errors; invalid `DATABASE_URL` |
 | CORS errors in browser | `CORS_ALLOWED_ORIGINS` must exactly match frontend origin (scheme + host, no trailing slash) |
 | Login works locally on Render but API 400 | `DJANGO_ALLOWED_HOSTS` must include API hostname |
@@ -132,3 +133,15 @@ You can create each service by hand using the same settings as `render.yaml`:
 - **Static site**: root `frontend`, build `npm ci && npm run build`, publish `dist`, SPA rewrite to `/index.html`.
 
 Link `DATABASE_URL` and Redis connection strings from managed instances in the Render dashboard.
+
+### Docker settings per service (if not using Blueprint)
+
+For **scdms-api**, **scdms-celery-worker**, and **scdms-celery-beat**:
+
+| Setting | Value |
+|---------|--------|
+| Environment | Docker |
+| Root Directory | `backend` |
+| Dockerfile Path | `Dockerfile.render` |
+
+Alternatively, leave Root Directory empty and use the repo-root **`Dockerfile`** (same production image).
