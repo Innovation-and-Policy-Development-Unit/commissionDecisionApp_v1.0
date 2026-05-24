@@ -11,11 +11,12 @@ from tracker.models import Profile, Role, Submission, SubmissionPresence
 class SubmissionPresenceTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        self.user_a = User.objects.create_user(username="officer_a", password="pass")
         self.submission = Submission.objects.create(
             title="Shared matter",
             received_at=timezone.now(),
+            created_by=self.user_a,
         )
-        self.user_a = User.objects.create_user(username="officer_a", password="pass")
         self.user_b = User.objects.create_user(username="officer_b", password="pass")
         Profile.objects.create(user=self.user_a, role=Role.PSC_OFFICER)
         Profile.objects.create(user=self.user_b, role=Role.PSC_OFFICER)
