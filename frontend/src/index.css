@@ -789,3 +789,47 @@
     opacity: 1;
   }
 }
+
+/* Sitting Pack — digital seal watermark (active session only) */
+.sitting-pack-seal-overlay {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+}
+
+.sitting-pack-seal-grid {
+  position: absolute;
+  inset: -20%;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 2.5rem 1rem;
+  transform: rotate(-24deg);
+  opacity: 0.07;
+}
+
+.sitting-pack-seal-line {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.sitting-pack-seal-badge {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  opacity: 0.35;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  user-select: none;
+}
+
+@media (max-width: 900px) {
+  .sitting-pack-split-stack {
+    grid-template-columns: 1fr !important;
+  }
+}

@@ -20,10 +20,12 @@ import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
+import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Plus, X, RefreshCw, Printer, Pencil, Check,
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
-  Send, ThumbsUp, Mail, ChevronsRight,
+  Send, ThumbsUp, Mail, ChevronsRight, Tablet,
 } from 'lucide-react'
 
 // ── Category config (order matches real PSC agenda template) ────────────────
@@ -94,6 +96,7 @@ function meetingNo(meeting) {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 export default function Agenda() {
+  const { t } = useTranslation()
   const toast   = useToast()
   const confirm = useConfirm()
   const { user } = useAuth()
@@ -314,6 +317,10 @@ export default function Agenda() {
   const role = user?.role || ''
   const isSecretaryOrAdmin = ['psc_secretary', 'senior_admin_officer', 'psc_admin'].includes(role)
   const isChairperson      = ['chairperson', 'psc_admin'].includes(role)
+  const canSittingPack = [
+    'psc_commissioner', 'chairperson', 'psc_secretary',
+    'senior_admin_officer', 'psc_admin', 'psc_manager',
+  ].includes(role)
 
   // ── Render helpers ───────────────────────────────────────────────────────
 
@@ -338,20 +345,33 @@ export default function Agenda() {
           title="Meeting Agenda"
           subtitle="Build and generate the formal PSC Commission meeting agenda"
           action={
-            selectedMeeting && !isCompleted && (
-              <div className="flex items-center gap-2">
+            selectedMeeting && (
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {canSittingPack && (
+                  <Link
+                    to={`/secretariat/agenda/sitting-pack?meeting=${selectedId}`}
+                    className="btn-outline flex items-center gap-2 px-4 py-2 border-indigo-300 text-indigo-800 dark:text-indigo-200"
+                  >
+                    <Tablet size={15} />
+                    {t('sitting_pack.enter', { defaultValue: 'Sitting Pack' })}
+                  </Link>
+                )}
+                {!isCompleted && (
                 <button
                   onClick={handlePrint}
                   className="btn-outline flex items-center gap-2 px-4 py-2"
                 >
                   <Printer size={15} /> Print / Export
                 </button>
+                )}
+                {!isCompleted && (
                 <button
                   onClick={() => { fetchSubmissions(); setModalOpen(true) }}
                   className="btn-primary flex items-center gap-2"
                 >
                   <Plus size={16} /> Add Item
                 </button>
+                )}
               </div>
             )
           }

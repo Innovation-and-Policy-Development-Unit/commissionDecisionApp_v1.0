@@ -574,6 +574,20 @@
     "severity_medium": "Medium",
     "severity_low": "Low"
   },
+  "sitting_pack": {
+    "enter": "Sitting Pack",
+    "title": "Sitting Pack — Meeting Mode",
+    "exit": "Exit meeting mode",
+    "back_agenda": "Back to agenda",
+    "no_meeting": "Select a meeting from the agenda page first.",
+    "no_items": "No agenda items for this sitting.",
+    "agenda_panel": "Agenda",
+    "agenda_hint": "Tap an item to open its executive brief.",
+    "select_item": "Select an agenda item to view the executive brief.",
+    "session_active": "Active session",
+    "session_failed": "Could not start Sitting Pack session.",
+    "ai_draft_badge": "AI draft"
+  },
   "subway": {
     "aria_label": "Submission journey map",
     "title": "Your submission journey",

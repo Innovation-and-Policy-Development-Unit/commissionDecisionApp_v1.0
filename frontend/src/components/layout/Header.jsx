@@ -116,6 +116,7 @@ const BREADCRUMB_MAP = {
   '/secretariat/meeting-room/minutes-pipeline': ['nav.group_commission', 'breadcrumb.minutes_pipeline'],
   '/secretariat/meetings':          ['nav.group_commission',  'breadcrumb.meetings'],
   '/secretariat/agenda':            ['nav.group_commission',  'breadcrumb.agenda'],
+  '/secretariat/agenda/sitting-pack': ['nav.group_commission', 'breadcrumb.agenda', 'sitting_pack.title'],
   '/secretariat/minutes':           ['nav.group_commission',  'breadcrumb.minutes'],
   '/secretariat/decisions':         ['nav.group_commission',  'breadcrumb.decisions'],
   '/secretariat/tasks':             ['nav.group_commission',  'breadcrumb.tasks'],

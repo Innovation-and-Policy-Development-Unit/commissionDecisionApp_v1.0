@@ -31,6 +31,7 @@ import MinutesEditor from '../pages/secretariat/MinutesEditor'
 import MeetingRoomHub from '../pages/meeting/MeetingRoomHub'
 import MinutesPipelineBrief from '../pages/meeting/MinutesPipelineBrief'
 import Agenda from '../pages/secretariat/Agenda'
+import AgendaSittingPack from '../pages/secretariat/AgendaSittingPack'
 import Decisions from '../pages/secretariat/Decisions'
 import Notifications from '../pages/secretariat/Notifications'
 import TaskManagement from '../pages/secretariat/TaskManagement'
@@ -52,6 +53,7 @@ export default function AppRouter() {
       <Route path="/auth/totp-setup"               element={<TOTPSetup />} />
 
       <Route element={<RequireAuth />}>
+        <Route path="/secretariat/agenda/sitting-pack" element={<AgendaSittingPack />} />
         <Route element={<Layout />}>
           <Route path="/" element={<PscDashboard />} />
           <Route path="/submissions" element={<SubmissionLog />} />
