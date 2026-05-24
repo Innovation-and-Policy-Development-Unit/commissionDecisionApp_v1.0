@@ -397,6 +397,46 @@ class AgendaItem(models.Model):
         return f"{self.meeting.reference_number} [{self.get_category_display()}] #{self.sequence}: {self.submission.reference_number}"
 
 
+class SittingPackSession(models.Model):
+    """
+    Active Sitting Pack (Meeting Mode) session for a commissioner or secretariat user.
+    Drives the on-screen digital seal watermark while the session is open.
+    """
+
+    HEARTBEAT_TIMEOUT_MINUTES = 15
+
+    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name="sitting_pack_sessions")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sitting_pack_sessions",
+    )
+    seal_code = models.CharField(max_length=16, db_index=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    last_heartbeat_at = models.DateTimeField(auto_now=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["meeting", "user", "ended_at"]),
+        ]
+
+    def __str__(self):
+        state = "active" if self.is_active else "ended"
+        return f"SittingPack {self.seal_code} ({self.meeting.reference_number}, {state})"
+
+    @property
+    def is_active(self) -> bool:
+        if self.ended_at:
+            return False
+        from django.utils import timezone
+        from datetime import timedelta
+
+        cutoff = timezone.now() - timedelta(minutes=self.HEARTBEAT_TIMEOUT_MINUTES)
+        return self.last_heartbeat_at >= cutoff
+
+
 class Profile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,

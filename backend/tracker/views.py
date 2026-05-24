@@ -896,8 +896,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         submission = self.get_object()
         profile = _profile(request.user)
-        if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admin can request a brief.")
+        from .sitting_pack import BRIEF_REQUEST_ROLES
+
+        if profile.role not in BRIEF_REQUEST_ROLES and not (
+            request.user.is_superuser or request.user.is_staff
+        ):
+            raise PermissionDenied(
+                "Only Commission members and Secretariat staff can request an executive brief."
+            )
 
         submission.ai_brief_processed = False
         submission.ai_brief_summary = ""
@@ -3594,6 +3600,59 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting.agenda_approved_at = timezone.now()
         meeting.save(update_fields=["agenda_status", "agenda_approved_by", "agenda_approved_at"])
         return Response({"detail": "Agenda approved by Chairperson."})
+
+    def _require_sitting_pack_access(self, request):
+        from .sitting_pack import user_can_use_sitting_pack
+
+        if not user_can_use_sitting_pack(request.user):
+            raise PermissionDenied("You do not have access to Sitting Pack meeting mode.")
+
+    @action(detail=True, methods=["post"], url_path="sitting-pack/start")
+    def sitting_pack_start(self, request, pk=None):
+        """Start an active Sitting Pack session (enables digital seal watermark)."""
+        from .sitting_pack import get_active_session, session_payload, start_session
+
+        meeting = self.get_object()
+        self._require_sitting_pack_access(request)
+        existing = get_active_session(meeting_id=meeting.id, user_id=request.user.id)
+        if existing:
+            return Response(session_payload(existing, user=request.user))
+        session = start_session(meeting=meeting, user=request.user)
+        return Response(session_payload(session, user=request.user), status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="sitting-pack/heartbeat")
+    def sitting_pack_heartbeat(self, request, pk=None):
+        from .sitting_pack import get_active_session, session_payload
+
+        meeting = self.get_object()
+        self._require_sitting_pack_access(request)
+        session_id = request.data.get("session_id")
+        session = get_active_session(meeting_id=meeting.id, user_id=request.user.id)
+        if not session or (session_id and session.id != int(session_id)):
+            return Response({"detail": "No active Sitting Pack session.", "active": False}, status=404)
+        session.last_heartbeat_at = timezone.now()
+        session.save(update_fields=["last_heartbeat_at"])
+        return Response(session_payload(session, user=request.user))
+
+    @action(detail=True, methods=["post"], url_path="sitting-pack/end")
+    def sitting_pack_end(self, request, pk=None):
+        from .sitting_pack import end_active_sessions
+
+        meeting = self.get_object()
+        self._require_sitting_pack_access(request)
+        end_active_sessions(meeting_id=meeting.id, user_id=request.user.id)
+        return Response({"detail": "Sitting Pack session ended.", "active": False})
+
+    @action(detail=True, methods=["get"], url_path="sitting-pack/status")
+    def sitting_pack_status(self, request, pk=None):
+        from .sitting_pack import get_active_session, session_payload
+
+        meeting = self.get_object()
+        self._require_sitting_pack_access(request)
+        session = get_active_session(meeting_id=meeting.id, user_id=request.user.id)
+        if not session:
+            return Response({"active": False})
+        return Response(session_payload(session, user=request.user))
 
     @action(detail=True, methods=["post"], url_path="circulate-agenda")
     def circulate_agenda(self, request, pk=None):
