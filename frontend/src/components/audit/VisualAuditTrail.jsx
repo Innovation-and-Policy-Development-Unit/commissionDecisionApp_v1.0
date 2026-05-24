@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Text,
@@ -35,7 +35,26 @@ function AuditEntryIcon({ entry }) {
   return <DocumentRegular style={{ color: tokens.colorBrandForeground1 }} />
 }
 
-export default function VisualAuditTrail({ submissionId, className }) {
+function entryMatchesStageFilter(entry, stageSet) {
+  if (!stageSet?.size) return true
+  if (entry.entry_type === 'workflow') {
+    return stageSet.has(entry.previous_stage) || stageSet.has(entry.new_stage)
+  }
+  const extra = entry.extra_data || {}
+  if (stageSet.has(extra.previous_stage) || stageSet.has(extra.new_stage)) return true
+  const desc = entry.description || ''
+  for (const code of stageSet) {
+    if (desc.includes(code)) return true
+  }
+  return false
+}
+
+export default function VisualAuditTrail({
+  submissionId,
+  className,
+  stageFilter = null,
+  filterLabel = '',
+}) {
   const { t } = useTranslation()
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
@@ -93,10 +112,26 @@ export default function VisualAuditTrail({ submissionId, className }) {
     )
   }
 
+  if (stageSet && !visibleEntries.length) {
+    return (
+      <Text size={200} className={className} style={{ color: tokens.colorNeutralForeground3 }}>
+        {t('subway.trail_filter_empty', { station: filterLabel || t('subway.station_fallback') })}
+      </Text>
+    )
+  }
+
   return (
+  <>
+    {filterLabel && stageSet && (
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Badge appearance="outline" color="brand" size="small">
+          {t('subway.trail_filter_active', { station: filterLabel })}
+        </Badge>
+      </div>
+    )}
     <ol className={clsx('relative', className)} aria-label={t('decision_proof.trail_aria')}>
-      {entries.map((entry, idx) => {
-        const isLast = idx === entries.length - 1
+      {visibleEntries.map((entry, idx) => {
+        const isLast = idx === visibleEntries.length - 1
         const isWorkflow = entry.entry_type === 'workflow'
         const ts = new Date(entry.timestamp)
 
@@ -195,5 +230,6 @@ export default function VisualAuditTrail({ submissionId, className }) {
         )
       })}
     </ol>
+  </>
   )
 }

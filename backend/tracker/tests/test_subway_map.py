@@ -29,7 +29,7 @@ class SubwayMapTests(SimpleTestCase):
     def test_under_assessment_station(self):
         sub = _FakeSubmission(WorkflowStage.UNDER_ASSESSMENT)
         data = build_subway_map(sub)
-        self.assertEqual(data["current_station_id"], "under_assessment")
+        self.assertEqual(data["current_station_id"], "assessment")
         self.assertEqual(data["path_variant"], "normal")
 
     def test_returned_for_clarification_amber_path(self):
@@ -42,5 +42,5 @@ class SubwayMapTests(SimpleTestCase):
         data = build_subway_map(sub)
         self.assertEqual(data["path_variant"], "returned")
         self.assertTrue(data["sent_back"]["active"])
-        self.assertEqual(data["sent_back"]["target_station_id"], "registered")
-        self.assertEqual(station_id_for_stage(WorkflowStage.COMMISSION_SITTING), "commission_sitting")
+        self.assertEqual(data["sent_back"]["target_station_id"], "intake")
+        self.assertEqual(station_id_for_stage(WorkflowStage.COMMISSION_SITTING), "commission")

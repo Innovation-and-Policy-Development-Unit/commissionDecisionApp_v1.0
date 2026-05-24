@@ -94,6 +94,7 @@ export default function SubmissionDetail() {
   const toast   = useToast()
   const confirm = useConfirm()
   const [submission, setSubmission] = useState(null)
+  const [auditStationFilter, setAuditStationFilter] = useState(null)
   const [allowed, setAllowed]       = useState([])
   const [transitionGuidance, setTransitionGuidance] = useState(null)
   const [guidancePending, setGuidancePending] = useState(false)
@@ -569,6 +570,8 @@ const stageDescriptions = {
         subwayMap={submission.subway_map}
         currentStage={submission.current_stage}
         events={submission.events}
+        selectedStationId={auditStationFilter?.stationId}
+        onStationSelect={setAuditStationFilter}
       />
 
       {error && (
@@ -1154,7 +1157,11 @@ const stageDescriptions = {
                 />
               )}
             </div>
-            <VisualAuditTrail submissionId={id} />
+            <VisualAuditTrail
+              submissionId={id}
+              stageFilter={auditStationFilter?.stages}
+              filterLabel={auditStationFilter?.label}
+            />
           </div>
         </div>
 

@@ -1,54 +1,27 @@
 /**
  * Client-side fallback when `subway_map` is not yet on the API payload.
- * Station ids and stage lists must match backend/tracker/subway_map.py.
+ * Must match backend/tracker/subway_map.py and constants/subwayStations.js.
  */
 
-export const SUBWAY_STATIONS = [
-  {
-    id: 'registered',
-    workflow_stages: [
-      'draft', 'submitted', 'received_by_psc', 'returned_for_clarification',
-      'registered_routed', 'manager_checklist_review', 'resubmitted', 'secretary_review',
-    ],
-  },
-  {
-    id: 'under_assessment',
-    workflow_stages: [
-      'under_assessment', 'compliance_under_review', 'deferred', 'tabled',
-      'awaiting_legal_advice', 'awaiting_cabinet_decision',
-    ],
-  },
-  {
-    id: 'commission_sitting',
-    workflow_stages: [
-      'forwarded_to_commission', 'commission_sitting', 'matters_arising',
-      'approved', 'rejected', 'returned', 'deferred_back_to_hr',
-    ],
-  },
-  {
-    id: 'implementation',
-    workflow_stages: [
-      'minutes_drafted_signed', 'decision_entered_assigned',
-      'under_implementation', 'implementation_report',
-    ],
-  },
-]
+import { ALERT_STAGES, SUBWAY_STATIONS, stationIndexForStage } from './subwayStations'
+
+export { SUBWAY_STATIONS, ALERT_STAGES, stationIndexForStage }
 
 const SENT_BACK = new Set(['returned_for_clarification', 'deferred_back_to_hr', 'returned'])
 
 const DEFAULT_RETURN_TARGET = {
-  returned_for_clarification: 'registered_routed',
+  returned_for_clarification: 'submitted',
   deferred_back_to_hr: 'under_assessment',
   returned: 'registered_routed',
 }
 
 function stationIdForStage(stage) {
-  const hit = SUBWAY_STATIONS.find(s => s.workflow_stages.includes(stage))
-  return hit?.id ?? 'registered'
+  const hit = SUBWAY_STATIONS.find((s) => s.stages.includes(stage))
+  return hit?.id ?? 'intake'
 }
 
 function stationIndex(id) {
-  return SUBWAY_STATIONS.findIndex(s => s.id === id)
+  return SUBWAY_STATIONS.findIndex((s) => s.id === id)
 }
 
 /** Build subway_map shape from current_stage + optional workflow events. */
@@ -68,9 +41,9 @@ export function buildSubwayMapFallback(currentStage, events = []) {
 
     let targetStationId = stationIdForStage(DEFAULT_RETURN_TARGET[stage] || previousStage)
     if (stage === 'returned_for_clarification' || stage === 'returned') {
-      targetStationId = 'registered'
+      targetStationId = 'intake'
     } else if (stage === 'deferred_back_to_hr') {
-      targetStationId = 'under_assessment'
+      targetStationId = 'assessment'
     }
 
     sentBack = {
@@ -86,13 +59,14 @@ export function buildSubwayMapFallback(currentStage, events = []) {
     ? sentBack.target_station_id
     : stationIdForStage(stage)
   const currentIdx = stationIndex(currentStationId)
-  const targetIdx = sentBack?.active ? stationIndex(sentBack.target_station_id) : currentIdx
-  const fromIdx = sentBack?.active ? stationIndex(sentBack.from_station_id) : currentIdx
+  const isAlert = ALERT_STAGES.has(stage)
 
   const stations = SUBWAY_STATIONS.map((st, i) => {
-    const inStation = st.workflow_stages.includes(stage)
+    const inStation = st.stages.includes(stage)
     let status = 'upcoming'
     if (sentBack?.active) {
+      const targetIdx = stationIndex(sentBack.target_station_id)
+      const fromIdx = stationIndex(sentBack.from_station_id)
       if (st.id === sentBack.target_station_id) status = 'returned'
       else if (st.id === sentBack.from_station_id) status = 'returned_from'
       else if (i < Math.min(targetIdx, fromIdx)) status = 'complete'
@@ -103,9 +77,10 @@ export function buildSubwayMapFallback(currentStage, events = []) {
 
     return {
       id: st.id,
-      label_key: `subway.${st.id}`,
+      label: st.label,
+      label_key: st.labelKey,
       status,
-      workflow_stages: st.workflow_stages,
+      workflow_stages: st.stages,
       current_substage: inStation ? stage : null,
     }
   })
@@ -113,19 +88,25 @@ export function buildSubwayMapFallback(currentStage, events = []) {
   let pathVariant = 'normal'
   if (stage === 'implementation_report') pathVariant = 'complete'
   else if (sentBack?.active) pathVariant = 'returned'
+  else if (isAlert) pathVariant = 'alert'
 
   let progressPercent = 0
   if (pathVariant === 'complete') progressPercent = 100
-  else if (sentBack?.active) progressPercent = Math.round((targetIdx + 0.35) / SUBWAY_STATIONS.length * 100)
-  else progressPercent = Math.round((currentIdx + 0.65) / SUBWAY_STATIONS.length * 100)
+  else if (sentBack?.active) {
+    progressPercent = Math.round((stationIndex(sentBack.target_station_id) + 0.35) / (SUBWAY_STATIONS.length - 1) * 100)
+  } else {
+    progressPercent = Math.round((currentIdx / (SUBWAY_STATIONS.length - 1)) * 100)
+  }
 
   return {
     stations,
     current_stage: stage,
     current_station_id: currentStationId,
+    current_station_index: currentIdx,
     path_variant: pathVariant,
+    is_alert_state: isAlert,
     sent_back: sentBack,
     progress_percent: Math.min(100, Math.max(0, progressPercent)),
-    station_order: SUBWAY_STATIONS.map(s => s.id),
+    station_order: SUBWAY_STATIONS.map((s) => s.id),
   }
 }
