@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
 import { CalendarDays, Clock, MapPin, X, Plus, CheckCircle2, XCircle, Calendar, ListChecks, RefreshCw, AlertCircle } from 'lucide-react'
+import MeetingBriefingPack from '../../components/meetings/MeetingBriefingPack'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
@@ -292,6 +293,7 @@ export default function Meetings() {
                     </span>
                   </td>
                   <td>
+                    <div className="flex flex-col items-end gap-1">
                     <div className="flex items-center gap-0.5 justify-end">
                       {m.status === 'scheduled' && (
                         <>
@@ -315,6 +317,10 @@ export default function Meetings() {
                           </button>
                         </>
                       )}
+                    </div>
+                    {(m.status === 'scheduled' || m.status === 'in_progress') && (
+                      <MeetingBriefingPack meetingId={m.id} meetingRef={m.reference_number} />
+                    )}
                     </div>
                   </td>
                 </tr>

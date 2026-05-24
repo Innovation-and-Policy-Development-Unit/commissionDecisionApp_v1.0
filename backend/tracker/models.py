@@ -1091,6 +1091,23 @@ class DocumentOcrStatus(models.TextChoices):
     SKIPPED = "skipped", "Skipped"
 
 
+class DocumentClassificationType(models.TextChoices):
+    """A2 — AI / rule-assigned document tags for search and checklist matching."""
+    UNCLASSIFIED = "unclassified", "Unclassified"
+    APPOINTMENT_LETTER = "appointment_letter", "Appointment letter"
+    MEDICAL_CERTIFICATE = "medical_certificate", "Medical certificate"
+    PSC_FORM = "psc_form", "PSC form"
+    POSITION_DESCRIPTION = "position_description", "Position description"
+    DG_ENDORSEMENT = "dg_endorsement", "DG / HoA endorsement"
+    ORGANISATIONAL_CHART = "organisational_chart", "Organisational chart"
+    LEGISLATION_POLICY = "legislation_policy", "Legislation / policy"
+    FINANCIAL_COSTING = "financial_costing", "Financial / costing"
+    CORRESPONDENCE = "correspondence", "Correspondence"
+    SUPPORTING_EVIDENCE = "supporting_evidence", "Supporting evidence"
+    MINUTES_REPORT = "minutes_report", "Minutes / report"
+    OTHER = "other", "Other"
+
+
 class SubmissionDocument(models.Model):
     """A file uploaded to a submission (DG-endorsed letter, position desc, etc.)."""
     submission = models.ForeignKey(
@@ -1119,6 +1136,19 @@ class SubmissionDocument(models.Model):
     )
     ocr_error = models.TextField(blank=True)
     ocr_processed_at = models.DateTimeField(null=True, blank=True)
+    document_type = models.CharField(
+        max_length=32,
+        choices=DocumentClassificationType.choices,
+        default=DocumentClassificationType.UNCLASSIFIED,
+        db_index=True,
+    )
+    document_type_confidence = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="0–100 confidence for document_type classification.",
+    )
+    document_type_note = models.CharField(max_length=255, blank=True)
+    document_classified_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['uploaded_at']
@@ -1468,6 +1498,56 @@ class DecisionRegisterReport(models.Model):
 
     def __str__(self):
         return f"Register report #{self.pk} — {self.title or self.status}"
+
+
+class MeetingBriefingPack(models.Model):
+    """C2 — AI-generated Commission sitting briefing pack (Quarto HTML + PDF)."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+
+    meeting = models.ForeignKey(
+        Meeting,
+        on_delete=models.CASCADE,
+        related_name="briefing_packs",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="meeting_briefing_packs",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    error_message = models.TextField(blank=True)
+    narrative_markdown = models.TextField(blank=True)
+    pack_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Structured agenda sections, flags, and submission rows for the template.",
+    )
+    html_file = models.FileField(
+        upload_to="meeting_briefing_packs/%Y/%m/",
+        blank=True,
+    )
+    pdf_file = models.FileField(
+        upload_to="meeting_briefing_packs/%Y/%m/",
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Briefing pack #{self.pk} — {self.meeting.reference_number}"
 
 
 class CommissionTaskUpdate(models.Model):

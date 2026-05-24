@@ -28,6 +28,7 @@ FEATURE_MODEL_TIER: dict[str, ModelTier] = {
     # Category C — Reporting
     "C1_nl_report": "sonnet",
     "C2_executive_summary": "sonnet",
+    "C2_meeting_briefing_pack": "sonnet",
     "C3_trend_analysis": "sonnet",
     "C4_minutes_action_items": "haiku",
     # Category D — Chatbots

@@ -12,6 +12,7 @@ from .models import (
     FlyingMinuteSignature,
     FormCategory,
     Meeting,
+    MeetingBriefingPack,
     MeetingTranscript,
     MeetingType,
     RecordingAudioSource,
@@ -604,6 +605,9 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
     file_size = serializers.SerializerMethodField()
     content_type = serializers.SerializerMethodField()
     ocr_status_display = serializers.CharField(source='get_ocr_status_display', read_only=True)
+    document_type_display = serializers.CharField(
+        source='get_document_type_display', read_only=True,
+    )
 
     def get_file_size(self, obj):
         try:
@@ -628,8 +632,33 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
             'uploaded_at', 'file_size', 'content_type',
             'ocr_status', 'ocr_status_display', 'extracted_text', 'extracted_facts',
             'ocr_error', 'ocr_processed_at',
+            'document_type', 'document_type_display', 'document_type_confidence',
+            'document_type_note', 'document_classified_at',
         )
         read_only_fields = fields
+
+
+class MeetingBriefingPackSerializer(serializers.ModelSerializer):
+    meeting_reference = serializers.CharField(
+        source='meeting.reference_number', read_only=True,
+    )
+    meeting_title = serializers.CharField(source='meeting.title', read_only=True)
+    downloads = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MeetingBriefingPack
+        fields = (
+            'id', 'meeting', 'meeting_reference', 'meeting_title', 'status',
+            'error_message', 'narrative_markdown', 'pack_data',
+            'created_at', 'completed_at', 'downloads',
+        )
+        read_only_fields = fields
+
+    def get_downloads(self, obj):
+        if obj.status != MeetingBriefingPack.Status.READY:
+            return None
+        base = f"/api/meetings/briefing-packs/{obj.id}/download/"
+        return {'html': f"{base}?format=html", 'pdf': f"{base}?format=pdf"}
 
 
 class UserSignatureSerializer(serializers.ModelSerializer):

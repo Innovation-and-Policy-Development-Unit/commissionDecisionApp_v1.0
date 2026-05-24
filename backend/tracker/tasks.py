@@ -780,6 +780,86 @@ def extract_document_facts(document_id: int):
         ]
     )
     app_log.info("DOC_EXTRACT_OK | doc=%s | chars=%d", document_id, len(doc.extracted_text))
+    queue_document_classification(document_id, force=True)
+
+
+# ── A2: Document type classification (Haiku) ─────────────────────────────────
+
+
+def queue_document_classification(document_id: int, *, force: bool = False) -> None:
+    try:
+        classify_submission_document.delay(document_id, force=force)
+    except Exception as exc:
+        app_log.warning(
+            "DOC_CLASSIFY_QUEUE_FALLBACK | doc=%s | %s",
+            document_id,
+            exc,
+        )
+        classify_submission_document(document_id, force=force)
+
+
+@shared_task
+def classify_submission_document(document_id: int, *, force: bool = False):
+    from django.utils import timezone
+
+    from .ai.document_classification import classify_document_from_signals
+    from .models import DocumentClassificationType, SubmissionDocument
+
+    try:
+        doc = SubmissionDocument.objects.select_related("submission").get(id=document_id)
+    except SubmissionDocument.DoesNotExist:
+        app_log.warning("DOC_CLASSIFY_SKIP | document %s missing", document_id)
+        return
+
+    if (
+        not force
+        and doc.document_classified_at
+        and doc.document_type != DocumentClassificationType.UNCLASSIFIED
+    ):
+        return
+
+    result = classify_document_from_signals(
+        original_name=doc.original_name,
+        description=doc.description,
+        extracted_text=doc.extracted_text or "",
+        extracted_facts=doc.extracted_facts if isinstance(doc.extracted_facts, dict) else None,
+    )
+    doc.document_type = result.get("document_type") or DocumentClassificationType.UNCLASSIFIED
+    doc.document_type_confidence = result.get("confidence")
+    doc.document_type_note = (result.get("note") or "")[:255]
+    doc.document_classified_at = timezone.now()
+    doc.save(
+        update_fields=[
+            "document_type",
+            "document_type_confidence",
+            "document_type_note",
+            "document_classified_at",
+        ]
+    )
+    app_log.info(
+        "DOC_CLASSIFY_OK | doc=%s | type=%s conf=%s",
+        document_id,
+        doc.document_type,
+        doc.document_type_confidence,
+    )
+
+
+# ── C2: Commission sitting briefing pack ───────────────────────────────────
+
+
+def queue_meeting_briefing_pack(pack_id: int) -> None:
+    try:
+        generate_meeting_briefing_pack.delay(pack_id)
+    except Exception as exc:
+        app_log.warning("MEETING_BRIEFING_QUEUE_FALLBACK | pack=%s | %s", pack_id, exc)
+        generate_meeting_briefing_pack(pack_id)
+
+
+@shared_task
+def generate_meeting_briefing_pack(pack_id: int):
+    from .reports.meeting_briefing import run_meeting_briefing_generation
+
+    run_meeting_briefing_generation(pack_id)
 
 
 # ── F2: AI-drafted deadline reminder emails (Haiku) ──────────────────────────

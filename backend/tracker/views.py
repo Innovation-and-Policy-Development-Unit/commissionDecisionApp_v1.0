@@ -70,6 +70,7 @@ from .serializers import (
     PSCFormResponseSerializer,
     PSCFormTypeSerializer,
     MeetingSerializer,
+    MeetingBriefingPackSerializer,
     AgendaItemSerializer,
     MinistrySerializer,
     MeSerializer,
@@ -1054,9 +1055,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 uploaded_by=request.user,
             )
             created_docs.append(doc)
-            from .tasks import queue_document_extraction
+            from .tasks import queue_document_classification, queue_document_extraction
 
             queue_document_extraction(doc.id)
+            queue_document_classification(doc.id)
 
         if submission.current_stage != WorkflowStage.DRAFT:
             from .tasks import queue_submission_quality_score
@@ -3460,6 +3462,82 @@ class MeetingViewSet(viewsets.ModelViewSet):
             "total_members": meeting.agenda_approved_by.count() if False else 0,
             "signatures": FlyingMinuteSignatureSerializer(sigs, many=True).data,
         })
+
+    def _user_can_generate_briefing_pack(self, user) -> bool:
+        if user.is_superuser or user.is_staff:
+            return True
+        profile = _profile(user)
+        return profile.role in {
+            Role.PSC_SECRETARY,
+            Role.SENIOR_ADMIN_OFFICER,
+            Role.PSC_ADMIN,
+            Role.CHAIRPERSON,
+        }
+
+    def _get_briefing_pack_for_user(self, request, pack_id: int):
+        from .models import MeetingBriefingPack
+
+        pack = MeetingBriefingPack.objects.select_related("meeting", "requested_by").filter(
+            pk=pack_id
+        ).first()
+        if not pack:
+            return None
+        if pack.requested_by_id != request.user.id and not (
+            request.user.is_superuser or request.user.is_staff
+        ):
+            if not self._user_can_generate_briefing_pack(request.user):
+                raise PermissionDenied("You cannot access this briefing pack.")
+        return pack
+
+    @action(detail=True, methods=["post"], url_path="briefing-pack/generate")
+    def generate_briefing_pack(self, request, pk=None):
+        """C2 — queue AI sitting briefing pack (HTML + PDF)."""
+        from .models import MeetingBriefingPack
+        from .tasks import queue_meeting_briefing_pack
+
+        meeting = self.get_object()
+        if not self._user_can_generate_briefing_pack(request.user):
+            raise PermissionDenied(
+                "Only PSC Secretary, Senior Admin Officer, Admin, or Chairperson may generate briefing packs."
+            )
+
+        pack = MeetingBriefingPack.objects.create(
+            meeting=meeting,
+            requested_by=request.user,
+            status=MeetingBriefingPack.Status.PENDING,
+        )
+        queue_meeting_briefing_pack(pack.id)
+        return Response(
+            MeetingBriefingPackSerializer(pack).data,
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    @action(detail=False, methods=["get"], url_path=r"briefing-packs/(?P<pack_id>[0-9]+)")
+    def briefing_pack_status(self, request, pack_id=None):
+        pack = self._get_briefing_pack_for_user(request, int(pack_id))
+        if not pack:
+            return Response({"detail": "Briefing pack not found."}, status=404)
+        data = MeetingBriefingPackSerializer(pack).data
+        return Response(data)
+
+    @action(detail=False, methods=["get"], url_path=r"briefing-packs/(?P<pack_id>[0-9]+)/download")
+    def briefing_pack_download(self, request, pack_id=None):
+        from django.http import FileResponse
+
+        from .models import MeetingBriefingPack
+
+        pack = self._get_briefing_pack_for_user(request, int(pack_id))
+        if not pack:
+            return Response({"detail": "Briefing pack not found."}, status=404)
+        if pack.status != MeetingBriefingPack.Status.READY:
+            return Response({"detail": "Briefing pack is not ready yet."}, status=400)
+
+        fmt = (request.query_params.get("format") or "pdf").lower()
+        if fmt == "html" and pack.html_file:
+            return FileResponse(pack.html_file.open("rb"), content_type="text/html; charset=utf-8")
+        if pack.pdf_file:
+            return FileResponse(pack.pdf_file.open("rb"), content_type="application/pdf")
+        return Response({"detail": "Requested file is not available."}, status=404)
 
 
 class AgendaItemViewSet(viewsets.ModelViewSet):

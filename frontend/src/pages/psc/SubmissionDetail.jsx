@@ -1075,6 +1075,14 @@ const stageDescriptions = {
                         <File size={16} className="text-slate-400 shrink-0 mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{doc.original_name}</p>
+                          {doc.document_type && doc.document_type !== 'unclassified' && (
+                            <span className="inline-flex mt-1 rounded-full bg-violet-100 dark:bg-violet-900/40 px-2 py-0.5 text-[10px] font-semibold text-violet-800 dark:text-violet-200">
+                              {doc.document_type_display || doc.document_type}
+                              {doc.document_type_confidence != null && (
+                                <span className="opacity-70 ml-1">({doc.document_type_confidence}%)</span>
+                              )}
+                            </span>
+                          )}
                           {doc.description && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{doc.description}</p>
                           )}

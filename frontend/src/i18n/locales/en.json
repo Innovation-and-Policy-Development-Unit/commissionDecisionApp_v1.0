@@ -422,6 +422,19 @@
     "package_severity_critical": "Critical",
     "package_severity_warning": "Warning",
     "package_severity_info": "Info",
+    "doc_type_unclassified": "Unclassified",
+    "doc_type_appointment_letter": "Appointment letter",
+    "doc_type_medical_certificate": "Medical certificate",
+    "doc_type_psc_form": "PSC form",
+    "doc_type_position_description": "Position description",
+    "doc_type_dg_endorsement": "DG / HoA endorsement",
+    "doc_type_organisational_chart": "Organisational chart",
+    "doc_type_legislation_policy": "Legislation / policy",
+    "doc_type_financial_costing": "Financial / costing",
+    "doc_type_correspondence": "Correspondence",
+    "doc_type_supporting_evidence": "Supporting evidence",
+    "doc_type_minutes_report": "Minutes / report",
+    "doc_type_other": "Other",
     "checklist_panel_title": "Required Documents",
     "checklist_autofill": "AI Autofill",
     "checklist_autofilling": "Analysing documents…",
@@ -435,6 +448,13 @@
     "checklist_notes_placeholder": "Notes…",
     "checklist_saving": "Saving…",
     "checklist_no_docs_hint": "Upload documents first so AI can analyse them."
+  },
+  "meeting_briefing": {
+    "title": "Sitting briefing pack",
+    "subtitle": "AI agenda overview: ready items, deferred, overdue, low quality scores.",
+    "generate": "Generate briefing",
+    "generating": "Building pack…",
+    "generate_failed": "Could not generate briefing pack."
   },
   "staff_chat": {
     "title": "Staff Assistant",
