@@ -1,26 +1,60 @@
 /**
- * Renders a dynamic PSC form based on PSCFormField definitions.
- * Uses Fluent-backed Base* inputs where applicable.
+ * Renders PSC dynamic forms from PSCFormField definitions.
+ * All editable types use Fluent-backed Base* primitives (Field, Input, accessibility).
  */
-import { useId } from 'react'
-import { Radio, RadioGroup } from '@fluentui/react-components'
+import { useMemo } from 'react'
 import BaseInput from './BaseInput'
 import BaseTextarea from './BaseTextarea'
 import BaseSelect from './BaseSelect'
 import BaseCheckbox from './BaseCheckbox'
+import BaseRadioGroup from './BaseRadioGroup'
+import BaseFieldSection from './BaseFieldSection'
+import BaseReadonlyField from './BaseReadonlyField'
+import BaseFieldSkeleton from './BaseFieldSkeleton'
 
-export default function DynamicFormRenderer({ fields = [], values = {}, onChange, readOnly = false }) {
+function skeletonVariant(fieldType) {
+  if (fieldType === 'textarea') return 'textarea'
+  if (fieldType === 'select' || fieldType === 'radio') return 'select'
+  return 'input'
+}
+
+function formatReadonlyValue(field, value) {
+  if (value === null || value === undefined || value === '') return null
+  if (field.field_type === 'checkbox') return value ? 'Yes' : 'No'
+  if (field.field_type === 'textarea') return String(value)
+  return String(value)
+}
+
+export default function DynamicFormRenderer({
+  fields = [],
+  values = {},
+  onChange,
+  readOnly = false,
+  /** field_key[] — show Fluent skeleton while AI/async fills these keys */
+  loadingFieldKeys = [],
+  /** { [field_key]: string } — per-field validation messages */
+  errors = {},
+  className = 'space-y-4',
+  'aria-label': ariaLabel = 'Form fields',
+}) {
+  const loadingSet = useMemo(
+    () => new Set(loadingFieldKeys),
+    [loadingFieldKeys],
+  )
+
   const handle = (key, value) => {
     if (onChange) onChange({ ...values, [key]: value })
   }
 
   return (
-    <div className="space-y-5">
+    <div className={className} role="group" aria-label={ariaLabel}>
       {fields.map(field => (
         <FieldRow
           key={field.id}
           field={field}
           value={values[field.field_key]}
+          error={errors[field.field_key]}
+          loading={loadingSet.has(field.field_key)}
           onChange={v => handle(field.field_key, v)}
           readOnly={readOnly}
         />
@@ -29,16 +63,19 @@ export default function DynamicFormRenderer({ fields = [], values = {}, onChange
   )
 }
 
-function FieldRow({ field, value, onChange, readOnly }) {
-  const groupId = useId()
-
+function FieldRow({ field, value, onChange, readOnly, loading, error }) {
   if (field.field_type === 'section_header') {
+    return <BaseFieldSection label={field.label} />
+  }
+
+  if (loading && !readOnly) {
     return (
-      <div className="pt-3 pb-1 border-b border-slate-200 dark:border-slate-700">
-        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wide">
-          {field.label}
-        </h4>
-      </div>
+      <BaseFieldSkeleton
+        label={field.label}
+        hint={field.help_text}
+        variant={skeletonVariant(field.field_type)}
+        ariaLabel={`Loading ${field.label}`}
+      />
     )
   }
 
@@ -47,16 +84,14 @@ function FieldRow({ field, value, onChange, readOnly }) {
     : []
 
   if (readOnly) {
+    const display = formatReadonlyValue(field, value)
     return (
-      <div>
-        <p className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-          {field.label}
-        </p>
-        <ReadValue field={field} value={value} />
-        {field.help_text && (
-          <p className="mt-1 text-xs text-slate-400">{field.help_text}</p>
-        )}
-      </div>
+      <BaseReadonlyField
+        label={field.label}
+        hint={field.help_text}
+        value={display}
+        multiline={field.field_type === 'textarea'}
+      />
     )
   }
 
@@ -66,6 +101,7 @@ function FieldRow({ field, value, onChange, readOnly }) {
         <BaseTextarea
           label={field.label}
           hint={field.help_text}
+          error={error}
           required={field.is_required}
           value={value ?? ''}
           placeholder={field.placeholder}
@@ -79,6 +115,7 @@ function FieldRow({ field, value, onChange, readOnly }) {
           type="number"
           label={field.label}
           hint={field.help_text}
+          error={error}
           required={field.is_required}
           value={value ?? ''}
           placeholder={field.placeholder}
@@ -92,6 +129,7 @@ function FieldRow({ field, value, onChange, readOnly }) {
           type="date"
           label={field.label}
           hint={field.help_text}
+          error={error}
           required={field.is_required}
           value={value ?? ''}
           onChange={e => onChange(e.target.value)}
@@ -104,6 +142,7 @@ function FieldRow({ field, value, onChange, readOnly }) {
           type="datetime-local"
           label={field.label}
           hint={field.help_text}
+          error={error}
           required={field.is_required}
           value={value ?? ''}
           onChange={e => onChange(e.target.value)}
@@ -115,6 +154,7 @@ function FieldRow({ field, value, onChange, readOnly }) {
         <BaseSelect
           label={field.label}
           hint={field.help_text}
+          error={error}
           required={field.is_required}
           placeholder="— Select —"
           options={choices}
@@ -125,26 +165,15 @@ function FieldRow({ field, value, onChange, readOnly }) {
 
     case 'radio':
       return (
-        <fieldset>
-          <legend className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-            {field.label}
-            {field.is_required && <span className="text-red-500 ml-0.5">*</span>}
-          </legend>
-          <RadioGroup
-            id={groupId}
-            value={value ?? ''}
-            onChange={(_e, data) => onChange(data.value)}
-            layout="vertical"
-            required={field.is_required}
-          >
-            {choices.map(c => (
-              <Radio key={c} value={c} label={c} />
-            ))}
-          </RadioGroup>
-          {field.help_text && (
-            <p className="mt-1 text-xs text-slate-400">{field.help_text}</p>
-          )}
-        </fieldset>
+        <BaseRadioGroup
+          label={field.label}
+          hint={field.help_text}
+          error={error}
+          required={field.is_required}
+          options={choices}
+          value={value ?? ''}
+          onChange={onChange}
+        />
       )
 
     case 'checkbox':
@@ -162,8 +191,13 @@ function FieldRow({ field, value, onChange, readOnly }) {
             label={field.placeholder || 'Yes'}
             required={field.is_required}
           />
-          {field.help_text && (
-            <p className="mt-1 text-xs text-slate-400">{field.help_text}</p>
+          {field.help_text && !error && (
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{field.help_text}</p>
+          )}
+          {error && (
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">
+              {error}
+            </p>
           )}
         </div>
       )
@@ -173,6 +207,7 @@ function FieldRow({ field, value, onChange, readOnly }) {
         <BaseInput
           label={field.label}
           hint={field.help_text}
+          error={error}
           required={field.is_required}
           value={value ?? ''}
           placeholder={field.placeholder}
@@ -180,24 +215,4 @@ function FieldRow({ field, value, onChange, readOnly }) {
         />
       )
   }
-}
-
-function ReadValue({ field, value }) {
-  if (value === null || value === undefined || value === '') {
-    return <p className="text-sm text-slate-400 italic">—</p>
-  }
-
-  if (field.field_type === 'checkbox') {
-    return <p className="text-sm text-slate-700 dark:text-slate-300">{value ? 'Yes' : 'No'}</p>
-  }
-
-  if (field.field_type === 'textarea') {
-    return (
-      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-        {String(value)}
-      </p>
-    )
-  }
-
-  return <p className="text-sm text-slate-700 dark:text-slate-300">{String(value)}</p>
 }

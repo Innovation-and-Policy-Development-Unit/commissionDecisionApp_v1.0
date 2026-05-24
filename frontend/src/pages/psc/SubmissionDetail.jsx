@@ -23,6 +23,9 @@ import DocumentSignatureModal from '../../components/shared/DocumentSignatureMod
 import PSCForm37Fields from './PSCForm37Fields'
 import PSCForm37View from './PSCForm37View'
 import DynamicFormRenderer from '../../components/shared/DynamicFormRenderer'
+import BaseSelect from '../../components/shared/BaseSelect'
+import BaseTextarea from '../../components/shared/BaseTextarea'
+import BaseButton from '../../components/shared/BaseButton'
 import MultiPageFormRenderer from '../../components/shared/MultiPageFormRenderer'
 import PSCForm22Preview from '../../components/shared/PSCForm22Preview'
 import PSCForm21Fields from './PSCForm21Fields'
@@ -1253,39 +1256,31 @@ const stageDescriptions = {
           {canTransition && allowed.length > 0 && (
             <form onSubmit={submitTransition} className="card card-compact space-y-4">
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Move to Next Stage</h3>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
-                  Select stage
-                </label>
-                <select className="input" value={targetStage} onChange={e => setTargetStage(e.target.value)}>
-                  {allowed.map(s => (
-                    <option key={s} value={s}>{stageLabel(s)}</option>
-                  ))}
-                </select>
-                {targetStage && (
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {stageMeta(targetStage).category}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
-                  Remarks <span className="font-normal text-slate-400">(optional)</span>
-                </label>
-                <textarea
-                  className="input min-h-[88px] text-sm"
-                  placeholder="Add notes about this transition…"
-                  value={remarks}
-                  onChange={e => setRemarks(e.target.value)}
-                />
-              </div>
-              <button
+              <BaseSelect
+                label="Select stage"
+                value={targetStage}
+                onChange={(_e, v) => setTargetStage(v)}
+                options={allowed.map(s => ({ value: s, label: stageLabel(s) }))}
+                hint={targetStage ? stageMeta(targetStage).category : undefined}
+              />
+              <BaseTextarea
+                label="Remarks"
+                hint="Optional"
+                placeholder="Add notes about this transition…"
+                value={remarks}
+                onChange={e => setRemarks(e.target.value)}
+                rows={3}
+              />
+              <BaseButton
                 type="submit"
-                className="btn-gradient w-full justify-center py-2.5 gap-2"
-                disabled={busy}
+                variant="primary"
+                className="w-full"
+                loading={busy}
+                loadingLabel="Saving"
+                icon={!busy ? <ArrowRight size={14} /> : undefined}
               >
-                {busy ? 'Saving…' : <><ArrowRight size={14} /> Apply Transition</>}
-              </button>
+                Apply transition
+              </BaseButton>
             </form>
           )}
 

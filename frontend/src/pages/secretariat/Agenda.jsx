@@ -15,6 +15,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
+import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -902,15 +903,11 @@ function StandardRow({ item, isCompleted, canDefer, editingItem, setEditingItem,
           </p>
         )}
         {!item.agenda_blurb_processed && !item.agenda_blurb && (
-          <div className="mt-1.5 space-y-1.5 print:hidden" aria-label="Generating agenda blurb" aria-busy="true">
-            <div className="h-2.5 rounded-full bg-violet-100 dark:bg-violet-900/30 animate-pulse w-11/12" />
-            <div className="h-2.5 rounded-full bg-violet-100 dark:bg-violet-900/30 animate-pulse w-3/4" />
-            <div className="h-2.5 rounded-full bg-violet-100 dark:bg-violet-900/30 animate-pulse w-5/6" />
-            <span className="inline-flex items-center gap-1 text-[10px] text-violet-500 dark:text-violet-400 mt-0.5">
-              <svg className="w-2.5 h-2.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true"><circle cx="12" cy="12" r="10" strokeOpacity={0.25}/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
-              Generating AI blurb…
-            </span>
-          </div>
+          <AiTextSkeleton
+            className="mt-1.5 print:hidden"
+            lines={3}
+            statusLabel="Generating AI blurb…"
+          />
         )}
         {item.agenda_blurb && (
           <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1 print:hidden">AI draft — verify</p>
