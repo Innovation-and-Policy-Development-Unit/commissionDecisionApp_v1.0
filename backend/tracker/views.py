@@ -190,6 +190,9 @@ def _submission_queryset_for(user):
         "form_category",
         "created_by",
         "parent_submission",
+        "scheduled_meeting",
+        "assigned_to",
+        "dg_endorsed_by",
     ).prefetch_related("events__actor", "attached_submissions")
     if user.is_superuser or user.is_staff:
         return qs
@@ -551,10 +554,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         profile = _profile(request.user)
         if profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             if submission_brief_needs_refresh(submission):
-                queue_submission_brief(submission.id)
-                submission.refresh_from_db(
-                    fields=["ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at"]
-                )
+                # Never block the HTTP response on Claude — Render times out long sync calls.
+                queue_submission_brief(submission.id, sync_fallback=False)
 
         _log(request, _AL.Action.READ,
              resource_type="Submission", resource_id=submission.id,
@@ -718,10 +719,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         submission.ai_brief_processed = False
         submission.ai_brief_summary = ""
         submission.save(update_fields=["ai_brief_processed", "ai_brief_summary", "updated_at"])
-        queue_submission_brief(submission.id, force=True)
-        submission.refresh_from_db(
-            fields=["ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at"]
-        )
+        queue_submission_brief(submission.id, force=True, sync_fallback=False)
         return Response(SubmissionDetailSerializer(submission).data)
 
     @action(detail=True, methods=["post"], url_path="assign")

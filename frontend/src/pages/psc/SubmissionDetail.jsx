@@ -28,6 +28,7 @@ import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
 import RestructureSubmissionForm from './RestructureSubmissionForm'
 import { CMS_PORTAL_URL, isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
+import { formatApiError } from '../../utils/apiError'
 
 // All roles that may trigger a transition
 const TRANSITION_ROLES = [
@@ -205,8 +206,10 @@ export default function SubmissionDetail() {
         const changed = prev?.current_stage !== r.data.current_stage
         return r.data
       })
-    } catch {
-      if (!submission) setError('Unable to load submission.')
+    } catch (err) {
+      if (!submission) {
+        setError(formatApiError(err, 'Unable to load submission.'))
+      }
     }
   }, [id])
 

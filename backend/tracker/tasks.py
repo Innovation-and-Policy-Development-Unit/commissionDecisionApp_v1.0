@@ -144,11 +144,24 @@ def _mark_submission_brief_failed(submission, message: str) -> None:
     )
 
 
-def queue_submission_brief(submission_id: int, *, force: bool = False) -> None:
-    """Queue via Celery when possible; otherwise run synchronously in-process."""
+def queue_submission_brief(
+    submission_id: int,
+    *,
+    force: bool = False,
+    sync_fallback: bool = True,
+) -> None:
+    """Queue via Celery when possible; optionally run synchronously in-process."""
     try:
         generate_submission_brief.delay(submission_id, force=force)
+        return
     except Exception as exc:
+        if not sync_fallback:
+            app_log.warning(
+                "BRIEF_QUEUE_SKIP | Submission %s | async only: %s",
+                submission_id,
+                exc,
+            )
+            return
         app_log.warning(
             "BRIEF_QUEUE_FALLBACK | Submission %s | running sync: %s",
             submission_id,
