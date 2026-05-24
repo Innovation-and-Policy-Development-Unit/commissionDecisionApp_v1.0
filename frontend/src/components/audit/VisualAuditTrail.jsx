@@ -86,6 +86,18 @@ export default function VisualAuditTrail({
     }
   }, [submissionId])
 
+  const stageSet = useMemo(() => {
+    if (!stageFilter) return null
+    const codes = Array.isArray(stageFilter) ? stageFilter : [stageFilter]
+    const set = new Set(codes.filter(Boolean))
+    return set.size ? set : null
+  }, [stageFilter])
+
+  const visibleEntries = useMemo(
+    () => entries.filter((entry) => entryMatchesStageFilter(entry, stageSet)),
+    [entries, stageSet],
+  )
+
   if (loading) {
     return (
       <div className={clsx('space-y-3 py-2', className)} role="status" aria-busy="true">

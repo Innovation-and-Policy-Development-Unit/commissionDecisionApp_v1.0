@@ -4836,6 +4836,86 @@ class SecurityScanViewSet(
         return Response(SecurityScanSerializer(scan).data, status=status.HTTP_201_CREATED)
 
 
+class KnowledgeCategoryViewSet(viewsets.ModelViewSet):
+    """Knowledge base categories — read: authenticated; write: admin."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = KnowledgeCategory.objects.all().order_by("display_order", "title")
+    serializer_class = KnowledgeCategorySerializer
+
+    def _require_kb_admin(self):
+        user = self.request.user
+        if user.is_superuser or user.is_staff:
+            return
+        try:
+            if user.psc_profile.role == Role.PSC_ADMIN:
+                return
+        except Exception:
+            pass
+        raise PermissionDenied("Only administrators can manage knowledge base categories.")
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        self._require_kb_admin()
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._require_kb_admin()
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_kb_admin()
+        return super().destroy(request, *args, **kwargs)
+
+
+class KnowledgeArticleViewSet(viewsets.ModelViewSet):
+    """Knowledge base articles — slug lookup; published-only for general staff."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = KnowledgeArticleSerializer
+    lookup_field = "slug"
+
+    def _is_kb_editor(self):
+        user = self.request.user
+        if user.is_superuser or user.is_staff:
+            return True
+        try:
+            return user.psc_profile.role == Role.PSC_ADMIN
+        except Exception:
+            return False
+
+    def _require_kb_admin(self):
+        if not self._is_kb_editor():
+            raise PermissionDenied("Only administrators can manage knowledge base articles.")
+
+    def get_queryset(self):
+        qs = KnowledgeArticle.objects.select_related("category", "created_by")
+        if self._is_kb_editor():
+            return qs
+        return qs.filter(is_published=True)
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        self._require_kb_admin()
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        self._require_kb_admin()
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_kb_admin()
+        return super().destroy(request, *args, **kwargs)
+
+
 class SecurityNoticeViewSet(viewsets.ModelViewSet):
     """
     GET    /security-notices/        — all authenticated users see live notices
