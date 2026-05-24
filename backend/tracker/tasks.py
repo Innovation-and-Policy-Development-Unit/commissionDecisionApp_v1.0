@@ -784,20 +784,21 @@ def extract_document_facts(document_id: int):
     doc.ocr_error = ""
     doc.save(update_fields=["ocr_status", "ocr_error"])
 
+    from .media_access import materialize_file_field
+
     try:
-        path = doc.file.path
-    except Exception as exc:
+        with materialize_file_field(doc.file) as path:
+            result, err = run_document_extraction(
+                file_path=path,
+                original_name=doc.original_name,
+                description=doc.description,
+            )
+    except FileNotFoundError as exc:
         doc.ocr_status = DocumentOcrStatus.FAILED
         doc.ocr_error = str(exc)
         doc.ocr_processed_at = timezone.now()
         doc.save(update_fields=["ocr_status", "ocr_error", "ocr_processed_at"])
         return
-
-    result, err = run_document_extraction(
-        file_path=__import__("pathlib").Path(path),
-        original_name=doc.original_name,
-        description=doc.description,
-    )
 
     if err or not result:
         doc.ocr_status = DocumentOcrStatus.FAILED
@@ -1515,25 +1516,25 @@ def queue_document_annotation_assist(document_id: int) -> None:
 
 @shared_task
 def generate_document_annotation_assist(document_id: int):
-    from pathlib import Path
-
     from .ai.annotation_assist import suggest_annotations
     from .models import SubmissionDocument
 
     doc = SubmissionDocument.objects.select_related("submission").get(pk=document_id)
+    from .media_access import materialize_file_field
+
+    ctx = f"Submission {doc.submission.reference_number}: {doc.submission.title}"
     try:
-        path = Path(doc.file.path)
-    except Exception as exc:
+        with materialize_file_field(doc.file) as path:
+            data, err = suggest_annotations(
+                file_path=path,
+                original_name=doc.original_name,
+                extracted_text=doc.extracted_text,
+                submission_context=ctx,
+            )
+    except FileNotFoundError as exc:
         doc.ai_annotation_suggestions = {"processed": True, "error": str(exc), "suggestions": []}
         doc.save(update_fields=["ai_annotation_suggestions"])
         return
-    ctx = f"Submission {doc.submission.reference_number}: {doc.submission.title}"
-    data, err = suggest_annotations(
-        file_path=path,
-        original_name=doc.original_name,
-        extracted_text=doc.extracted_text,
-        submission_context=ctx,
-    )
     doc.ai_annotation_suggestions = data or {"processed": True, "error": err, "suggestions": []}
     doc.save(update_fields=["ai_annotation_suggestions"])
 
@@ -1548,22 +1549,22 @@ def queue_document_redaction_preview(document_id: int) -> None:
 
 @shared_task
 def generate_document_redaction_preview(document_id: int):
-    from pathlib import Path
-
     from .ai.redaction_preview import suggest_redaction_spans
     from .models import SubmissionDocument
 
     doc = SubmissionDocument.objects.get(pk=document_id)
+    from .media_access import materialize_file_field
+
     try:
-        path = Path(doc.file.path)
-    except Exception as exc:
+        with materialize_file_field(doc.file) as path:
+            data, err = suggest_redaction_spans(
+                file_path=path,
+                original_name=doc.original_name,
+                extracted_text=doc.extracted_text,
+            )
+    except FileNotFoundError as exc:
         doc.ai_redaction_spans = {"processed": True, "error": str(exc), "spans": []}
         doc.save(update_fields=["ai_redaction_spans"])
         return
-    data, err = suggest_redaction_spans(
-        file_path=path,
-        original_name=doc.original_name,
-        extracted_text=doc.extracted_text,
-    )
     doc.ai_redaction_spans = data or {"processed": True, "error": err, "spans": []}
     doc.save(update_fields=["ai_redaction_spans"])

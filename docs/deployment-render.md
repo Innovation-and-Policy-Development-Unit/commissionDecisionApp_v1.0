@@ -154,7 +154,9 @@ Local Docker Compose is unchanged; use `docker compose` for development.
 
 ## Media uploads
 
-Uploaded files are stored on a **10 GB persistent disk** mounted at `/var/scdms/media` on the API service (`SERVE_MEDIA=true`). The disk is **not shared** with Celery workers. Background tasks that read files from disk may fail on workers unless you add shared object storage (S3, etc.) later.
+Uploaded files are stored on a **10 GB persistent disk** mounted at `/var/scdms/media` on the API service (`SERVE_MEDIA=true`). Render disks are **not** attachable to multiple services, so Celery workers fetch file bytes from the API over the private network (`http://scdms-api:10000/internal/media/...`) using a shared **`INTERNAL_MEDIA_TOKEN`** (auto-generated in `render.yaml` for new blueprints).
+
+If you deployed before this fix, add **`INTERNAL_MEDIA_TOKEN`** (same random value on **scdms-api** and **scdms-celery-worker**), redeploy both, then re-run **Extract text & facts** on the document.
 
 ## Custom domain
 
@@ -178,6 +180,7 @@ Uploaded files are stored on a **10 GB persistent disk** mounted at `/var/scdms/
 | Brief stuck on “Generating…” | `scdms-celery-worker` running; `ANTHROPIC_API_KEY` set; worker logs |
 | `scdms-celery-worker` failed | Open **Logs** — often OOM; blueprint uses `--pool=solo`. Redeploy after pull. Ensure worker has same `DATABASE_URL` / Redis env as API |
 | Broken images / uploads | `CDP_BASE_URL` set to public API URL; disk mounted on API |
+| OCR / extract: **File not found on disk** | `INTERNAL_MEDIA_TOKEN` on **api** and **worker** (same value); redeploy worker after API; check worker logs for `MEDIA_FETCH_FAIL` |
 | Admin has no CSS | `collectstatic` in deploy logs; `USE_WHITENOISE=true` |
 
 ## Manual deploy (without Blueprint)

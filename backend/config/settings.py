@@ -389,9 +389,21 @@ CORS_ALLOWED_ORIGINS = [
     if o.strip()
 ]
 
+# FRONTEND_URL is a single canonical origin for the React SPA.
+# Always include it in CORS so setting one env var is enough on Render / any host.
+_frontend_url = os.getenv('FRONTEND_URL', '').strip().rstrip('/')
+if _frontend_url and _frontend_url not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(_frontend_url)
+
+# CDP_BASE_URL is the public URL of this API server; include it too so same-origin
+# admin tooling (Swagger UI, etc.) is never blocked.
+_cdp_url = os.getenv('CDP_BASE_URL', '').strip().rstrip('/')
+if _cdp_url and _cdp_url not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(_cdp_url)
+
 ALLOW_OPEN_REGISTRATION = os.getenv('ALLOW_OPEN_REGISTRATION', 'true').lower() in ('1', 'true', 'yes')
 
-CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
 
 # ── Notifications & 2FA ──────────────────────────────────────────────────────
 
@@ -445,3 +457,15 @@ CMS_API_KEY = os.getenv('CMS_API_KEY', '')
 CMS_CALLBACK_SECRET = os.getenv('CMS_CALLBACK_SECRET', '')
 # Public base URL of this CDP server (used to build the cdp_callback_url sent to the CMS)
 CDP_BASE_URL = os.getenv('CDP_BASE_URL', 'http://localhost:8000')
+
+# Celery workers on Render cannot mount the API persistent disk; workers fetch files
+# from the API over the private network when both vars are set.
+INTERNAL_MEDIA_TOKEN = os.getenv('INTERNAL_MEDIA_TOKEN', '').strip()
+_MEDIA_FETCH = os.getenv('MEDIA_FETCH_BASE_URL', '').strip().rstrip('/')
+if _MEDIA_FETCH:
+    MEDIA_FETCH_BASE_URL = _MEDIA_FETCH
+elif _ON_RENDER:
+    # Render private hostname for scdms-api (see render.yaml service name)
+    MEDIA_FETCH_BASE_URL = os.getenv('RENDER_MEDIA_FETCH_BASE_URL', 'http://scdms-api:10000')
+else:
+    MEDIA_FETCH_BASE_URL = ''

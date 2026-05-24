@@ -23,6 +23,8 @@ from django.http import JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
+from tracker.views_internal import internal_media
+
 
 def root(_request):
     return JsonResponse(
@@ -77,6 +79,7 @@ def health(_request):
 urlpatterns = [
     path("", root),
     path("health/", health, name="health"),
+    path("internal/media/<path:file_path>", internal_media, name="internal-media"),
     path("admin/", admin.site.urls),
     path("api/", include("tracker.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
