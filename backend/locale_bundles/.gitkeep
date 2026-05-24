@@ -1,0 +1,2 @@
+# Locale JSON copied into the API image at build time (see Dockerfile.render).
+# Local Docker Compose mounts frontend/src/i18n/locales here instead.

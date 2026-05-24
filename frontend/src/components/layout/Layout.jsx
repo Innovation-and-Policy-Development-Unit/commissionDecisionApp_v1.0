@@ -108,6 +108,7 @@ export default function Layout() {
           onMobileClose={() => setMobileMenuOpen(false)}
         />
       )}
+      <BetaTestBanner />
       <Header onMenuClick={handleMenuClick} />
       {isHorizontal && (
         <HorizontalMenu
@@ -190,6 +191,10 @@ export default function Layout() {
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
       />
+    </div>
+  )
+}
+ />
     </div>
   )
 }

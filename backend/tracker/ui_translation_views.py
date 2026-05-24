@@ -111,6 +111,17 @@ class UiTranslationViewSet(viewsets.ModelViewSet):
     def sync_from_files(self, request):
         force = request.data.get("force") in (True, "true", "1", 1)
         stats = _sync_from_locale_files(force=force)
+        if stats["total_keys"] == 0:
+            return Response(
+                {
+                    "detail": (
+                        "No locale JSON files found on the server. "
+                        "Ensure frontend/src/i18n/locales is copied to backend/locale_bundles "
+                        "in the API image, or mount that folder in Docker."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(stats)
 
     @action(detail=False, methods=["post"], url_path="bulk-update")

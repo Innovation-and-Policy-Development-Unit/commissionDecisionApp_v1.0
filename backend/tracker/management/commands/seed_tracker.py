@@ -529,6 +529,8 @@ class Command(BaseCommand):
             self._seed_agenda_items()
             self._seed_commission_tasks()
 
+        self._seed_ui_translations()
+
         self.stdout.write(self.style.SUCCESS("\n[OK] Database seeded successfully."))
         if not submissions_only:
             self.stdout.write("  Login credentials:")
@@ -538,6 +540,24 @@ class Command(BaseCommand):
             for u in USERS:
                 self.stdout.write(f"  | {u[0]:<21} | {u[2]:<20} | {u[3]:<18} |")
             self.stdout.write("  +-----------------------+----------------------+--------------------+")
+
+    def _seed_ui_translations(self):
+        from tracker.models import UiTranslation
+        from tracker.ui_translation_views import _sync_from_locale_files
+
+        before = UiTranslation.objects.count()
+        stats = _sync_from_locale_files(force=False)
+        if stats["total_keys"] == 0:
+            self.stdout.write(self.style.WARNING(
+                "  [SKIP] UI translations: locale JSON not found (check locale_bundles or frontend/src/i18n/locales)."
+            ))
+            return
+        after = UiTranslation.objects.count()
+        self.stdout.write(
+            f"  [OK] UI translations: {stats['total_keys']} keys in files, "
+            f"{stats['created']} created, {stats['updated']} updated, "
+            f"{stats['skipped']} customized skipped ({after} rows, was {before})."
+        )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

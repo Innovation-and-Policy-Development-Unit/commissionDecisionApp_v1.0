@@ -11,8 +11,21 @@ SUPPORTED_LANGS = ("en", "fr", "bi")
 
 
 def locale_files_dir() -> Path:
-    """Frontend locale JSON shipped with the repo."""
-    return Path(settings.BASE_DIR).parent / "frontend" / "src" / "i18n" / "locales"
+    """
+    Directory containing en.json, fr.json, bi.json.
+
+    Resolution order:
+    1. backend/locale_bundles (Docker / Render image)
+    2. frontend/src/i18n/locales (local dev monorepo)
+    """
+    candidates = [
+        Path(settings.BASE_DIR) / "locale_bundles",
+        Path(settings.BASE_DIR).parent / "frontend" / "src" / "i18n" / "locales",
+    ]
+    for path in candidates:
+        if (path / "en.json").is_file():
+            return path
+    return candidates[0]
 
 
 def load_bundled_locale_files() -> dict[str, dict[str, Any]]:

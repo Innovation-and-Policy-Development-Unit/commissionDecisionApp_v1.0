@@ -191,7 +191,7 @@ export default function SubmissionLog() {
     } catch { /* handled by api interceptor */ }
   }
 
-  const cols = (isAdmin ? 9 : 7) + (showQualityColumn ? 1 : 0)
+  const cols = (isAdmin ? 6 : 4) + (showQualityColumn ? 1 : 0)
 
   return (
     <div>
@@ -333,14 +333,11 @@ export default function SubmissionLog() {
                   </th>
                 )}
                 <th>{t('submission.reference_short')}</th>
-                <th>{t('submission.title')}</th>
-                <th>{t('submission.ministry')}</th>
-                <th>{t('submission.progress')}</th>
+                <th className="min-w-[220px]">{t('submission.title')}</th>
                 <th>{t('submission.stage')}</th>
                 {showQualityColumn && (
-                  <th>{t('submission.quality_column')}</th>
+                  <th className="w-16">{t('submission.quality_column')}</th>
                 )}
-                <th>{t('submission.received_at')}</th>
                 <th>{t('submission.deadline_short')}</th>
                 {isAdmin && <th className="sr-only">Actions</th>}
               </tr>
@@ -384,25 +381,22 @@ export default function SubmissionLog() {
                         {r.reference_number}
                       </Link>
                     </td>
-                    <td className="max-w-xs">
+                    <td className="max-w-md">
                       <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{r.title}</p>
-                      {r.category_name && (
-                        <p className="text-xs text-slate-400 truncate">{r.category_name}</p>
-                      )}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {[r.category_name, r.ministry_name].filter(Boolean).join(' · ') || '—'}
+                      </p>
                     </td>
-                    <td>
-                      <span className="text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">{r.ministry_name}</span>
-                    </td>
-                    <td className="min-w-[90px]">
-                      {r.current_stage !== 'draft' && (
-                        <SubmissionProgressBar currentStage={r.current_stage} compact />
-                      )}
-                    </td>
-                    <td>
+                    <td className="min-w-[140px]">
                       <Badge variant={STAGE_VARIANT[r.current_stage] ?? 'secondary'} dot className="whitespace-nowrap">
                         {stageLabel(r.current_stage, t)}
                         {r.is_assessment_overdue && <span className="ml-1 text-red-500 font-bold">!</span>}
                       </Badge>
+                      {r.current_stage !== 'draft' && (
+                        <div className="mt-1.5 max-w-[140px]">
+                          <SubmissionProgressBar currentStage={r.current_stage} compact />
+                        </div>
+                      )}
                     </td>
                     {showQualityColumn && (
                       <td>
@@ -410,19 +404,22 @@ export default function SubmissionLog() {
                       </td>
                     )}
                     <td>
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                        {r.received_at ? new Date(r.received_at).toLocaleDateString(localeForDates) : '—'}
-                      </span>
-                    </td>
-                    <td>
                       {r.is_assessment_overdue ? (
                         <Badge variant="danger" className="whitespace-nowrap">{t('submission.overdue')}</Badge>
                       ) : (
-                        <span className="text-xs text-slate-500 whitespace-nowrap">
-                          {r.assessment_deadline_at
-                            ? new Date(r.assessment_deadline_at).toLocaleDateString(localeForDates)
-                            : '—'}
-                        </span>
+                        <div className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                          <span>
+                            {r.assessment_deadline_at
+                              ? new Date(r.assessment_deadline_at).toLocaleDateString(localeForDates)
+                              : '—'}
+                          </span>
+                          {r.received_at && (
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                              {t('submission.received_short')}{' '}
+                              {new Date(r.received_at).toLocaleDateString(localeForDates)}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </td>
                     {isAdmin && (
@@ -471,19 +468,19 @@ export default function SubmissionLog() {
                           </Link>
                         </div>
                       </td>
-                      <td className="max-w-xs" colSpan={2}>
+                      <td className="max-w-md">
                         <p className="truncate text-xs text-slate-600 dark:text-slate-400 pl-1">
                           <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 mr-1.5">JD attached</span>
                           {child.title}
                         </p>
                       </td>
-                      <td />
                       <td>
                         <Badge variant={STAGE_VARIANT[child.current_stage] ?? 'secondary'} dot className="whitespace-nowrap text-xs">
                           {stageLabel(child.current_stage, t)}
                         </Badge>
                       </td>
-                      <td colSpan={isAdmin ? 3 : 2} />
+                      {showQualityColumn && <td />}
+                      <td colSpan={isAdmin ? 2 : 1} />
                     </tr>
                   ))}
                 </>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -45,6 +45,7 @@ export default function AdminTranslationsPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [newRow, setNewRow] = useState(emptyRow())
   const [error, setError] = useState('')
+  const autoImportAttempted = useRef(false)
 
   useEffect(() => {
     if (user && !userCanManageTranslations(user)) navigate('/', { replace: true })
@@ -119,15 +120,17 @@ export default function AdminTranslationsPage() {
     }
   }
 
-  const syncFromFiles = async () => {
-    const ok = await confirm({
-      title: t('admin_translations.sync_title'),
-      message: t('admin_translations.sync_message'),
-      confirmLabel: t('admin_translations.sync_confirm'),
-      cancelLabel: t('common.cancel'),
-      variant: 'warning',
-    })
-    if (!ok) return
+  const syncFromFiles = async ({ skipConfirm = false } = {}) => {
+    if (!skipConfirm) {
+      const ok = await confirm({
+        title: t('admin_translations.sync_title'),
+        message: t('admin_translations.sync_message'),
+        confirmLabel: t('admin_translations.sync_confirm'),
+        cancelLabel: t('common.cancel'),
+        variant: 'warning',
+      })
+      if (!ok) return
+    }
     setSyncing(true)
     try {
       const { data } = await api.post('/ui-translations/sync-from-files/', { force: false })
@@ -141,12 +144,21 @@ export default function AdminTranslationsPage() {
       await fetchNamespaces()
       await fetchRows()
       await loadRemoteTranslationBundles()
+      return true
     } catch (err) {
       toast.error(err.response?.data?.detail || t('admin_translations.sync_failed'))
+      return false
     } finally {
       setSyncing(false)
     }
   }
+
+  useEffect(() => {
+    if (loading || autoImportAttempted.current) return
+    if (total > 0 || q.trim() || namespace) return
+    autoImportAttempted.current = true
+    syncFromFiles({ skipConfirm: true })
+  }, [loading, total, q, namespace])
 
   const addKey = async (e) => {
     e.preventDefault()
@@ -197,7 +209,7 @@ export default function AdminTranslationsPage() {
             <button
               type="button"
               className="btn-secondary text-sm flex items-center gap-2"
-              onClick={syncFromFiles}
+              onClick={() => syncFromFiles()}
               disabled={syncing}
             >
               <Download size={16} className={syncing ? 'animate-spin' : ''} aria-hidden="true" />
@@ -310,8 +322,20 @@ export default function AdminTranslationsPage() {
               ))}
               {!loading && !rows.length && (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-slate-400">
-                    {t('admin_translations.empty')}
+                  <td colSpan={4} className="py-12 text-center">
+                    <p className="text-slate-500 dark:text-slate-400 mb-4">
+                      {syncing ? t('admin_translations.importing') : t('admin_translations.empty')}
+                    </p>
+                    {!syncing && (
+                      <button
+                        type="button"
+                        className="btn-primary text-sm inline-flex items-center gap-2 mx-auto"
+                        onClick={() => syncFromFiles()}
+                      >
+                        <Download size={16} aria-hidden="true" />
+                        {t('admin_translations.import_json')}
+                      </button>
+                    )}
                   </td>
                 </tr>
               )}

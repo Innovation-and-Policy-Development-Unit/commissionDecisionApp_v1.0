@@ -5,7 +5,9 @@ Administrators can edit dashboard strings in **English**, **French**, and **Bisl
 ## Setup (once per environment)
 
 1. Run migrations: `python manage.py migrate`
-2. Import keys from locale JSON: `python manage.py sync_ui_translations`
+2. Import keys from locale JSON: open **Administration → UI translations** (auto-imports on first visit), or run `python manage.py sync_ui_translations`
+
+The API image includes `frontend/src/i18n/locales` as `backend/locale_bundles`. Local Docker Compose mounts that folder into the backend container.
 3. Ensure **Manage UI Translations** permission is assigned (PSC Admin has it by default after `seed_tracker`)
 
 ## How it works

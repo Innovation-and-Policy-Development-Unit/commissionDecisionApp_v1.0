@@ -22,7 +22,7 @@ services:
     runtime: docker
     plan: starter
     dockerfilePath: ./backend/Dockerfile.render
-    dockerContext: ./backend
+    dockerContext: .
     healthCheckPath: /health/
     disk:
       name: scdms-media
@@ -92,7 +92,7 @@ services:
     runtime: docker
     plan: starter
     dockerfilePath: ./backend/Dockerfile.render
-    dockerContext: ./backend
+    dockerContext: .
     # solo pool: fits Render Starter RAM; prefork often OOMs with Django + AI libs
     dockerCommand: celery -A config worker -l info --pool=solo --concurrency=1
     envVars:
@@ -135,7 +135,7 @@ services:
     runtime: docker
     plan: starter
     dockerfilePath: ./backend/Dockerfile.render
-    dockerContext: ./backend
+    dockerContext: .
     dockerCommand: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     envVars:
       - key: RENDER

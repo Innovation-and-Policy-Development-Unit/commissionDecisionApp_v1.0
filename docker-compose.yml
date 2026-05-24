@@ -79,6 +79,7 @@ services:
       - scdms_logs:/var/log/scdms
       - scdms_backups:/var/backups/scdms
       - scdms_media:/var/scdms/media
+      - ./frontend/src/i18n/locales:/app/locale_bundles:ro
     depends_on:
       db:
         condition: service_healthy

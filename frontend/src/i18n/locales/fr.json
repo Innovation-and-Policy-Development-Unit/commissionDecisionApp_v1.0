@@ -363,6 +363,7 @@
     "registered_at": "Enregistré le",
     "deadline": "Date limite d'évaluation",
     "deadline_short": "21 jours",
+    "received_short": "Reçu",
     "overdue": "En retard",
     "documents": "Documents",
     "checklist": "Liste de contrôle",
