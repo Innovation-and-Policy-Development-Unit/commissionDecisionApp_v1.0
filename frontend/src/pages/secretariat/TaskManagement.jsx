@@ -586,6 +586,9 @@ function ReportView() {
         )}
         {aiReady && aiJob?.downloads && (
           <div className="mt-4 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+            <p className="text-[10px] font-semibold uppercase text-amber-800 dark:text-amber-300 mb-2">
+              AI draft — verify before circulation
+            </p>
             <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
               {aiJob.title || t('register_report.ready')}
             </p>

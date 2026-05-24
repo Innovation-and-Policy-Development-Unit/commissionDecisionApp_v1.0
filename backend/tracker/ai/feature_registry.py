@@ -1,8 +1,12 @@
 """
 Roadmap: 24 AI features (see AI_Features_List.txt) → Claude model tier.
 
-Implemented Celery/API paths today use claude_client directly.
-Future features should call complete_json / complete_text with the tier below.
+Policy (enforced in code review):
+- Haiku: checklists, classification, quality score, reminders, action items, validation
+- Sonnet: briefs, NL reports, similarity, letters, long-context chat, vision/OCR on hard PDFs
+- Always: async Celery, no sync Claude on page load; store on models; "AI draft — verify" for formal output
+
+See AI_STANDARDS.md in this package.
 """
 
 from __future__ import annotations
@@ -10,6 +14,13 @@ from __future__ import annotations
 from typing import Literal
 
 ModelTier = Literal["haiku", "sonnet"]
+
+DEFAULT_TIER: ModelTier = "haiku"
+
+
+def get_model_tier(slug: str, *, default: ModelTier | None = None) -> ModelTier:
+    """Resolve Claude tier for a feature slug."""
+    return FEATURE_MODEL_TIER.get(slug, default or DEFAULT_TIER)
 
 # slug -> recommended tier per product spec
 FEATURE_MODEL_TIER: dict[str, ModelTier] = {

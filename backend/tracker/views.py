@@ -617,12 +617,23 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             and not acknowledge_gaps
         ):
             from django.conf import settings as django_settings
-            from .tasks import validate_submission_package_sync
 
             if getattr(django_settings, "AI_PACKAGE_BLOCK_SUBMIT", True):
-                pkg = validate_submission_package_sync(submission.id, force=True)
+                if not submission.ai_package_processed:
+                    return Response(
+                        {
+                            "detail": (
+                                "Run “Validate package” and wait for results before submitting, "
+                                "or submit with acknowledge_gaps if you must proceed."
+                            ),
+                            "package_ready": False,
+                            "package_summary": submission.ai_package_summary or "",
+                            "package_gaps": submission.ai_package_gaps or [],
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 critical = [
-                    g for g in (pkg.get("gaps") or [])
+                    g for g in (submission.ai_package_gaps or [])
                     if g.get("severity") == "critical"
                 ]
                 if critical:
@@ -633,9 +644,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                                 "Run “Validate package”, fix items, or submit with "
                                 "acknowledge_gaps if you must proceed."
                             ),
-                            "package_ready": pkg.get("ready"),
-                            "package_summary": pkg.get("summary"),
-                            "package_gaps": pkg.get("gaps"),
+                            "package_ready": submission.ai_package_ready,
+                            "package_summary": submission.ai_package_summary,
+                            "package_gaps": submission.ai_package_gaps,
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
@@ -762,8 +773,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="validate-package")
     def validate_package(self, request, pk=None):
-        """A3 — sync pre-submit package validation (checklist, forms, attachments)."""
-        from .tasks import validate_submission_package_sync
+        """A3 — queue pre-submit package validation (Haiku, async)."""
+        from .tasks import queue_submission_package_validation
 
         submission = self.get_object()
         profile = _profile(request.user)
@@ -785,9 +796,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        validate_submission_package_sync(submission.id, force=True)
+        submission.ai_package_processed = False
+        submission.save(update_fields=["ai_package_processed", "updated_at"])
+        queue_submission_package_validation(submission.id, force=True)
         submission.refresh_from_db()
-        return Response(SubmissionDetailSerializer(submission).data)
+        return Response(
+            SubmissionDetailSerializer(submission).data,
+            status=status.HTTP_202_ACCEPTED,
+        )
 
     @action(detail=True, methods=["post"], url_path="score-quality")
     def score_quality(self, request, pk=None):
@@ -1065,6 +1081,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         suggestions, err = suggest_checklist_items(submission, items)
 
         return Response({
+            "disclaimer": "AI draft — verify before marking checklist items present.",
             "suggestions": suggestions,
             "items": ChecklistItemSerializer(items, many=True).data,
             "error": err,
@@ -1925,9 +1942,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         Natural-language Commission Decision Register report (Quarto HTML).
         POST { "prompt": "...", "date_from"?, "date_to"?, "status"?, "manager_id"? }
         """
-        from .ai.decision_register_report import interpret_report_request
         from .models import DecisionRegisterReport
-        from .reports.decision_register import build_data_summary
         from .tasks import queue_decision_register_report
 
         if not self._user_can_export_register_reports(request.user):
@@ -1943,24 +1958,11 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             if val not in (None, ""):
                 extra_filters[key] = val
 
-        base_qs = self.get_queryset()
-        spec, err = interpret_report_request(
-            user_prompt=prompt,
-            data_summary=build_data_summary(base_qs),
-            extra_filters=extra_filters or None,
-        )
-        if not spec:
-            return Response({"detail": err or "Could not plan report."}, status=400)
-
         report = DecisionRegisterReport.objects.create(
             requested_by=request.user,
             prompt=prompt,
-            title=spec["title"],
-            subtitle=spec.get("subtitle", ""),
-            filter_spec=spec.get("filters") or {},
-            column_spec=spec.get("columns") or [],
-            narrative_markdown=spec.get("narrative_markdown", ""),
-            include_summary=spec.get("include_summary", True),
+            title="",
+            filter_spec={"_ui_filters": extra_filters} if extra_filters else {},
             status=DecisionRegisterReport.Status.PENDING,
         )
         queue_decision_register_report(report.id)

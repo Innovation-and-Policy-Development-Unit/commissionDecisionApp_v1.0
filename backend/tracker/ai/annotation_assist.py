@@ -44,7 +44,7 @@ def suggest_annotations(
     elif lower.endswith((".png", ".jpg", ".jpeg", ".webp")):
         images = image_file_base64(file_path)
 
-    tier = FEATURE_MODEL_TIER.get("E1_ocr_extraction", "sonnet")
+    tier = FEATURE_MODEL_TIER.get("annotation_assist", "sonnet")
     user_text = f"Document: {original_name}\n{submission_context}\n\nExtracted text:\n{(extracted_text or '')[:4000]}"
 
     if images:

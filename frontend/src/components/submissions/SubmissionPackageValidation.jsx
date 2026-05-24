@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ClipboardCheck, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import clsx from 'clsx'
@@ -6,6 +6,8 @@ import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
 
 const SEVERITY_ORDER = ['critical', 'warning', 'info']
+const POLL_MS = 3000
+const POLL_MAX = 40
 
 function severityClass(severity) {
   if (severity === 'critical') {
@@ -25,6 +27,7 @@ export default function SubmissionPackageValidation({
   const { t } = useTranslation()
   const [validating, setValidating] = useState(false)
   const [localError, setLocalError] = useState('')
+  const [pollTimedOut, setPollTimedOut] = useState(false)
 
   if (!submission || submission.current_stage !== 'draft') return null
 
@@ -34,16 +37,52 @@ export default function SubmissionPackageValidation({
   )
   const hasResult = submission.ai_package_processed
   const ready = submission.ai_package_ready
+  const processing = !hasResult && validating
+
+  useEffect(() => {
+    if (!submissionId || hasResult) return undefined
+    if (!validating && submission.ai_package_processed) return undefined
+
+    let attempts = 0
+    const interval = setInterval(async () => {
+      attempts += 1
+      if (attempts > POLL_MAX) {
+        clearInterval(interval)
+        setPollTimedOut(true)
+        setValidating(false)
+        return
+      }
+      try {
+        const res = await api.get(`/submissions/${submissionId}/`)
+        onUpdated?.(res.data)
+        if (res.data.ai_package_processed) {
+          clearInterval(interval)
+          setValidating(false)
+          setPollTimedOut(false)
+        }
+      } catch {
+        /* ignore */
+      }
+    }, POLL_MS)
+
+    return () => clearInterval(interval)
+  }, [submissionId, hasResult, validating, onUpdated])
 
   const handleValidate = async () => {
     setValidating(true)
     setLocalError('')
+    setPollTimedOut(false)
+    onUpdated?.({ ...submission, ai_package_processed: false })
     try {
-      const res = await api.post(`/submissions/${submissionId}/validate-package/`)
+      await api.post(`/submissions/${submissionId}/validate-package/`)
+      const res = await api.get(`/submissions/${submissionId}/`)
       onUpdated?.(res.data)
+      if (!res.data.ai_package_processed) {
+        /* polling effect continues */
+        return
+      }
     } catch (err) {
       setLocalError(formatApiError(err, t('submission.package_validate_failed')))
-    } finally {
       setValidating(false)
     }
   }
@@ -72,16 +111,26 @@ export default function SubmissionPackageValidation({
         <button
           type="button"
           onClick={handleValidate}
-          disabled={validating}
+          disabled={validating || processing}
           className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1.5 shrink-0"
         >
-          {validating ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />}
-          {validating ? t('submission.package_validating') : t('submission.package_validate')}
+          {(validating || processing) ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />}
+          {(validating || processing) ? t('submission.package_validating') : t('submission.package_validate')}
         </button>
       </div>
 
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 mb-2">
+        AI draft — verify before submitting
+      </p>
+
       {localError && (
         <p className="text-sm text-red-600 dark:text-red-400 mb-3">{localError}</p>
+      )}
+
+      {pollTimedOut && !hasResult && (
+        <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+          Validation is taking longer than expected. Refresh the page or try again.
+        </p>
       )}
 
       {hasResult && (
@@ -129,7 +178,7 @@ export default function SubmissionPackageValidation({
         </div>
       )}
 
-      {!hasResult && (
+      {!hasResult && !validating && (
         <p className="text-sm text-slate-600 dark:text-slate-300">
           {t('submission.package_prompt')}
         </p>

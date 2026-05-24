@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .claude_client import ai_enabled, complete_text_with_error
-from .feature_registry import FEATURE_MODEL_TIER
+from .feature_registry import get_model_tier
 
 
 def generate_agenda_blurb(*, submission, meeting) -> tuple[str, str | None]:
@@ -20,7 +20,7 @@ def generate_agenda_blurb(*, submission, meeting) -> tuple[str, str | None]:
             None,
         )
 
-    tier = FEATURE_MODEL_TIER.get("C2_executive_summary", "haiku")
+    tier = get_model_tier("agenda_blurb")
     text, err = complete_text_with_error(
         system=(
             "Write a 2–3 sentence agenda blurb for a PSC Commission sitting pack. "

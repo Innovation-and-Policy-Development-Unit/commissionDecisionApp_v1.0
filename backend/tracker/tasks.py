@@ -65,10 +65,12 @@ def process_feedback_with_ai(feedback_id: int):
     user_input = f"User Feedback Description: {feedback.body}"
 
     try:
+        from .ai.feature_registry import get_model_tier
+
         ai_data = complete_json(
             system=SYSTEM_INSTRUCTION,
             user=user_input,
-            tier="haiku",
+            tier=get_model_tier("feedback_triage"),
         )
         if not ai_data or not isinstance(ai_data, dict):
             log.error("AI_FAIL | FeedbackComment %s | empty Claude response", feedback_id)
@@ -148,9 +150,9 @@ def queue_submission_brief(
     submission_id: int,
     *,
     force: bool = False,
-    sync_fallback: bool = True,
+    sync_fallback: bool = False,
 ) -> None:
-    """Queue via Celery when possible; optionally run synchronously in-process."""
+    """Queue via Celery when possible; sync only when explicitly requested (dev fallback)."""
     try:
         generate_submission_brief.delay(submission_id, force=force)
         return
@@ -344,10 +346,12 @@ def generate_submission_brief(submission_id: int, force: bool = False):
     user_input = f"Submission context:\n\n{context}"
 
     try:
+        from .ai.feature_registry import get_model_tier
+
         data, api_err = complete_json_with_error(
             system=SUBMISSION_BRIEF_INSTRUCTION,
             user=user_input,
-            tier="sonnet",
+            tier=get_model_tier("submission_executive_brief"),
             max_tokens=4096,
         )
         if not data:
@@ -483,10 +487,12 @@ def draft_minutes_from_transcript(meeting_id: int, user_id: int = None):
     )
 
     try:
+        from .ai.feature_registry import get_model_tier
+
         minutes_data = complete_json(
             system="You draft formal Vanuatu Public Service Commission minutes.",
             user=prompt,
-            tier="sonnet",
+            tier=get_model_tier("minutes_draft"),
             max_tokens=8192,
         )
         if not minutes_data:
@@ -583,10 +589,12 @@ def extract_decisions_from_minutes(meeting_id: int):
     )
 
     try:
+        from .ai.feature_registry import get_model_tier
+
         decisions = complete_json(
             system="You extract structured Commission decisions from minutes.",
             user=prompt,
-            tier="haiku",
+            tier=get_model_tier("decision_extract"),
             max_tokens=4096,
         )
         if decisions is None:
@@ -1281,6 +1289,19 @@ def package_validation_needs_refresh(submission) -> bool:
     if submission.ai_package_generated_at and submission.updated_at > submission.ai_package_generated_at:
         return True
     return False
+
+
+def queue_submission_package_validation(submission_id: int, *, force: bool = False) -> None:
+    try:
+        validate_submission_package_task.delay(submission_id, force=force)
+    except Exception as exc:
+        app_log.warning("PACKAGE_VALIDATE_QUEUE_FALLBACK | %s | %s", submission_id, exc)
+        validate_submission_package_task(submission_id, force=force)
+
+
+@shared_task
+def validate_submission_package_task(submission_id: int, *, force: bool = False):
+    validate_submission_package_sync(submission_id, force=force)
 
 
 def validate_submission_package_sync(submission_id: int, *, force: bool = False) -> dict:

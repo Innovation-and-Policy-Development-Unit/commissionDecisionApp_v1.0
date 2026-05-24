@@ -135,6 +135,10 @@ export default function SubmissionQualityScore({ submission, submissionId, onUpd
         )}
       </div>
 
+      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80 mb-2">
+        AI draft — verify before routing decisions
+      </p>
+
       {loading && (
         <div className="flex items-center gap-2 text-sm opacity-90">
           <Loader2 size={16} className="animate-spin" />

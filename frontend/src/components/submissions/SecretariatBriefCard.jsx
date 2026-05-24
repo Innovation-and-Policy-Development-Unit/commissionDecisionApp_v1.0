@@ -69,6 +69,10 @@ export default function SecretariatBriefCard({ submission, submissionId, onUpdat
 
   return (
     <div className="card p-5 mb-4 border-l-4 border-l-indigo-500 bg-gradient-to-br from-indigo-50/80 to-white dark:from-indigo-950/30 dark:to-slate-900">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 mb-2">
+        AI draft — verify before Commission routing
+      </p>
+
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-300">

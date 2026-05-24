@@ -273,7 +273,9 @@ def _safe_slug(title: str) -> str:
 
 
 def run_report_generation(report_id: int) -> None:
-    """Celery/sync worker: load DecisionRegisterReport, generate files, update status."""
+    """Celery worker: interpret NL prompt (Sonnet), then render Quarto HTML."""
+    from .ai.decision_register_report import interpret_report_request
+
     report = DecisionRegisterReport.objects.select_related("requested_by").get(pk=report_id)
     report.status = DecisionRegisterReport.Status.PROCESSING
     report.save(update_fields=["status", "updated_at"])
@@ -283,6 +285,35 @@ def run_report_generation(report_id: int) -> None:
         from tracker.views import _commission_task_queryset_for
 
         base_qs = _commission_task_queryset_for(report.requested_by)
+
+        if not report.title:
+            raw_spec = report.filter_spec if isinstance(report.filter_spec, dict) else {}
+            ui_filters = raw_spec.get("_ui_filters") or {}
+            spec, err = interpret_report_request(
+                user_prompt=report.prompt,
+                data_summary=build_data_summary(base_qs),
+                extra_filters=ui_filters or None,
+            )
+            if not spec:
+                raise RuntimeError(err or "Could not interpret report request.")
+            report.title = spec["title"]
+            report.subtitle = spec.get("subtitle", "")
+            report.filter_spec = spec.get("filters") or {}
+            report.column_spec = spec.get("columns") or []
+            report.narrative_markdown = spec.get("narrative_markdown", "")
+            report.include_summary = spec.get("include_summary", True)
+            report.save(
+                update_fields=[
+                    "title",
+                    "subtitle",
+                    "filter_spec",
+                    "column_spec",
+                    "narrative_markdown",
+                    "include_summary",
+                    "updated_at",
+                ]
+            )
+
         filters = report.filter_spec or {}
         qs = apply_filters(base_qs, filters)
         rows = filter_rows_by_spec(build_register_rows(qs), filters)

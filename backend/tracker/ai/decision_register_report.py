@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from .claude_client import ai_enabled, complete_json_with_error
+from .feature_registry import get_model_tier
 
 logger = logging.getLogger("scdms.app")
 
@@ -160,7 +161,7 @@ def interpret_report_request(
     data, err = complete_json_with_error(
         system=SYSTEM,
         user=user_msg,
-        tier="sonnet",
+        tier=get_model_tier("C1_nl_report"),
         max_tokens=4096,
     )
     if not data:
