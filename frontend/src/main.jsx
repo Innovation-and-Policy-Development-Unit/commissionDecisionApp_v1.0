@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import ErrorBoundary from './components/shared/ErrorBoundary.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
+import FluentThemeProvider from './fluent/FluentThemeProvider.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { ToastProvider } from './context/ToastContext.jsx'
 import { ConfirmProvider } from './context/ConfirmContext.jsx'
@@ -15,13 +16,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
         <ThemeProvider>
-          <AuthProvider>
-            <ToastProvider>
-              <ConfirmProvider>
-                <App />
-              </ConfirmProvider>
-            </ToastProvider>
-          </AuthProvider>
+          <FluentThemeProvider>
+            <AuthProvider>
+              <ToastProvider>
+                <ConfirmProvider>
+                  <App />
+                </ConfirmProvider>
+              </ToastProvider>
+            </AuthProvider>
+          </FluentThemeProvider>
         </ThemeProvider>
       </BrowserRouter>
     </ErrorBoundary>

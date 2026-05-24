@@ -1,28 +1,26 @@
 import { forwardRef } from 'react'
+import { Button, Spinner } from '@fluentui/react-components'
 import clsx from 'clsx'
-import { FOCUS_RING, MIN_TOUCH } from '../../utils/a11y'
+import { MIN_TOUCH } from '../../utils/a11y'
 
-const VARIANTS = {
-  primary: 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm',
-  secondary:
-    'bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100',
-  outline:
-    'border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200',
-  ghost:
-    'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300',
-  danger: 'bg-red-600 hover:bg-red-700 text-white',
-  unstyled: '',
+const APPEARANCE = {
+  primary: 'primary',
+  secondary: 'secondary',
+  outline: 'outline',
+  ghost: 'subtle',
+  danger: 'primary',
+  unstyled: 'transparent',
 }
 
-const SIZES = {
-  sm: 'px-3 py-1.5 text-xs gap-1.5',
-  md: 'px-4 py-2 text-sm gap-2',
-  lg: 'px-6 py-3 text-base gap-2',
-  icon: 'p-2',
+const SIZE = {
+  sm: 'small',
+  md: 'medium',
+  lg: 'large',
+  icon: 'medium',
 }
 
 /**
- * Accessible button — focus ring, disabled state, optional icon-only label.
+ * Accessible button — Fluent UI v9, mapped from liner template variants.
  */
 const BaseButton = forwardRef(function BaseButton(
   {
@@ -41,30 +39,29 @@ const BaseButton = forwardRef(function BaseButton(
   ref,
 ) {
   const isIconOnly = iconOnly || (size === 'icon' && !children)
+  const appearance = APPEARANCE[variant] ?? 'subtle'
 
   return (
-    <button
+    <Button
       ref={ref}
       type={type}
+      appearance={appearance}
+      size={SIZE[size] ?? 'medium'}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       aria-disabled={disabled || loading || undefined}
+      aria-label={isIconOnly && !props['aria-label'] ? loadingLabel : props['aria-label']}
       className={clsx(
-        'inline-flex items-center justify-center font-medium transition-colors duration-150',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        VARIANTS[variant] ?? VARIANTS.ghost,
-        SIZES[size] ?? SIZES.md,
+        variant === 'danger' && '!bg-red-600 hover:!bg-red-700 !text-white',
         touchTarget && MIN_TOUCH,
-        FOCUS_RING,
         className,
       )}
+      icon={loading ? <Spinner size="tiny" aria-hidden /> : undefined}
       {...props}
     >
-      {loading && (
-        <span className="sr-only">{loadingLabel}</span>
-      )}
-      {children}
-    </button>
+      {loading && <span className="sr-only">{loadingLabel}</span>}
+      {!loading && children}
+    </Button>
   )
 })
 
