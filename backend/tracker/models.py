@@ -1099,6 +1099,47 @@ class Submission(models.Model):
         default="",
         help_text="Fingerprint of form/category data when policy scan ran.",
     )
+    # ── A4 Duplicate Detection ──────────────────────────────────────────────
+    ai_duplicate_processed    = models.BooleanField(default=False, db_index=True)
+    ai_duplicate_is_duplicate = models.BooleanField(null=True, blank=True)
+    ai_duplicate_confidence   = models.PositiveSmallIntegerField(null=True, blank=True)
+    ai_duplicate_similar_cases = models.JSONField(null=True, blank=True)
+    ai_duplicate_recommendation = models.TextField(blank=True)
+    ai_duplicate_generated_at = models.DateTimeField(null=True, blank=True)
+
+    # ── B2 Risk Assessment ──────────────────────────────────────────────────
+    ai_risk_processed     = models.BooleanField(default=False, db_index=True)
+    ai_risk_score         = models.PositiveSmallIntegerField(null=True, blank=True)
+    ai_risk_level         = models.CharField(max_length=20, blank=True)
+    ai_risk_factors       = models.JSONField(null=True, blank=True)
+    ai_risk_mitigation    = models.JSONField(null=True, blank=True)
+    ai_risk_recommendation = models.TextField(blank=True)
+    ai_risk_generated_at  = models.DateTimeField(null=True, blank=True)
+
+    # ── B3 Recommended Outcome ──────────────────────────────────────────────
+    ai_outcome_processed      = models.BooleanField(default=False, db_index=True)
+    ai_outcome_recommendation = models.CharField(max_length=50, blank=True)
+    ai_outcome_confidence     = models.PositiveSmallIntegerField(null=True, blank=True)
+    ai_outcome_rationale      = models.TextField(blank=True)
+    ai_outcome_conditions     = models.JSONField(null=True, blank=True)
+    ai_outcome_precedents     = models.JSONField(null=True, blank=True)
+    ai_outcome_legal_basis    = models.TextField(blank=True)
+    ai_outcome_generated_at   = models.DateTimeField(null=True, blank=True)
+
+    # ── B5 Notice of Allegation ─────────────────────────────────────────────
+    ai_noa_processed    = models.BooleanField(default=False, db_index=True)
+    ai_noa_content      = models.TextField(blank=True)
+    ai_noa_subject      = models.CharField(max_length=255, blank=True)
+    ai_noa_key_points   = models.JSONField(null=True, blank=True)
+    ai_noa_generated_at = models.DateTimeField(null=True, blank=True)
+
+    # ── F3 Outcome Letter ───────────────────────────────────────────────────
+    ai_letter_processed    = models.BooleanField(default=False, db_index=True)
+    ai_letter_content      = models.TextField(blank=True)
+    ai_letter_subject      = models.CharField(max_length=255, blank=True)
+    ai_letter_action_items = models.JSONField(null=True, blank=True)
+    ai_letter_generated_at = models.DateTimeField(null=True, blank=True)
+
     # ── Parent/child (attachment) relationship ──────────────────────────────
     parent_submission = models.ForeignKey(
         'self', null=True, blank=True,
@@ -2549,3 +2590,39 @@ class UiTranslation(models.Model):
 
     def __str__(self):
         return self.key
+
+
+class WebPushSubscription(models.Model):
+    """Stores browser Web Push subscriptions per user."""
+    user       = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="push_subscriptions")
+    endpoint   = models.TextField(unique=True)
+    p256dh_key = models.TextField()
+    auth_key   = models.TextField()
+    user_agent = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"Push subscription for {self.user.username}"
+
+
+class DocumentVersion(models.Model):
+    """Tracks uploaded versions of a submission document."""
+    document    = models.ForeignKey('SubmissionDocument', on_delete=models.CASCADE, related_name="versions")
+    version_num = models.PositiveSmallIntegerField(default=1)
+    file        = models.FileField(upload_to='documents/versions/')
+    filename    = models.CharField(max_length=255)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    notes       = models.TextField(blank=True)
+    is_current  = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-version_num"]
+        unique_together = [("document", "version_num")]
+
+    def __str__(self):
+        return f"{self.document} v{self.version_num}"
