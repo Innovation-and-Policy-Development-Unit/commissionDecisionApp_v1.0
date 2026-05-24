@@ -39,9 +39,11 @@ from .models import (
     SystemSetting,
     FeedbackReport,
     FeedbackComment,
+    FormSectionSignature,
     RequiredDocument,
     SubmissionChecklistItem,
     SubmissionDocument,
+    TravelApprovalLetter,
     DocumentAnnotation,
     DocumentSignature,
     UserSignature,
@@ -603,7 +605,9 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "estimated_meeting_date",
             "is_attachment",
             "is_internal",
-            "cms_case_id",
+            "secretary_only",
+            "requires_travel_letter",
+            "travel_endorsers",
             "cms_case_closed_at",
             "cms_case_reference",
             "cms_dispatched_at",
@@ -763,6 +767,41 @@ class DocumentSignatureSerializer(serializers.ModelSerializer):
         return rep
 
 
+class FormSectionSignatureSerializer(serializers.ModelSerializer):
+    signed_by_username = serializers.CharField(source="signed_by.username", read_only=True)
+
+    class Meta:
+        model = FormSectionSignature
+        fields = (
+            "id",
+            "submission",
+            "section_key",
+            "signed_by",
+            "signed_by_username",
+            "signer_name",
+            "signed_at",
+            "approved",
+            "remarks",
+            "signature_image",
+        )
+        read_only_fields = fields
+
+
+class TravelApprovalLetterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TravelApprovalLetter
+        fields = (
+            "id",
+            "submission",
+            "subject",
+            "body_text",
+            "body_html",
+            "issued_at",
+            "issued_by",
+        )
+        read_only_fields = fields
+
+
 class DocumentAnnotationSerializer(serializers.ModelSerializer):
     annotated_by_username = serializers.CharField(source='annotated_by.username', read_only=True)
 
@@ -835,8 +874,9 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             "parent_submission",
             "is_attachment",
             "is_internal",
+            "travel_endorsers",
         )
-        read_only_fields = ("id", "is_internal")
+        read_only_fields = ("id", "is_internal", "secretary_only", "requires_travel_letter")
 
     def validate(self, attrs):
         request = self.context.get("request")

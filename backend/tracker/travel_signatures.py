@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import shutil
-from io import BytesIO
-
 from django.core.files.base import ContentFile
-from django.utils import timezone
 
 from .models import FormSectionSignature, Notification
 from .travel_forms import (
@@ -28,9 +24,25 @@ def signed_section_keys(submission) -> set[str]:
 def endorsements_complete(submission) -> bool:
     if not submission.secretary_only:
         return True
-    return not missing_endorsements(
-        submission.form_type_code or "", signed_section_keys(submission)
-    )
+    form_data = {}
+    try:
+        form_data = submission.dynamic_form_response.data or {}
+    except Exception:
+        pass
+    signed = signed_section_keys(submission)
+    for section in endorsement_sections(submission.form_type_code or ""):
+        if section.get("optional"):
+            if (
+                section["key"] == "minister_signature"
+                and submission.form_type_code == "PSC 4.5"
+                and form_data.get("dg_is_applicant")
+            ):
+                pass  # required when DG is applicant
+            else:
+                continue
+        if section["key"] not in signed:
+            return False
+    return True
 
 
 def copy_profile_signature(profile) -> ContentFile | None:

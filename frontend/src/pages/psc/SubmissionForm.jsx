@@ -7,6 +7,7 @@ import { useToast } from '../../context/ToastContext'
 import PSCForm37Fields from './PSCForm37Fields'
 import ComplianceCmsGuidance from './ComplianceCmsGuidance'
 import { isComplianceRole } from '../../constants/compliance'
+import { ENDORSER_SLOTS, isTravelFormCode, TRAVEL_CATEGORY_CODE } from '../../constants/travel'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -411,7 +412,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
   })
 
   const allowed =
-    user && ['psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin',
+    user && ['psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'traveller',
               ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager'].includes(user.role)
 
   useEffect(() => {
@@ -460,6 +461,21 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
   if (isComplianceUser) {
     return (
       <ComplianceCmsGuidance modal={modal} />
+    )
+  }
+
+  // ── Route travellers to travel-only form (PSC 4.4–4.6) ─────────────────
+  if (user?.role === 'traveller') {
+    return (
+      <TravelSubmissionForm
+        modal={modal}
+        onClose={onClose}
+        onSuccess={onSuccess}
+        formTypes={formTypes.filter(ft => isTravelFormCode(ft.code))}
+        categories={categories.filter(c => c.code === TRAVEL_CATEGORY_CODE)}
+        ministries={ministries}
+        departments={departments}
+      />
     )
   }
 

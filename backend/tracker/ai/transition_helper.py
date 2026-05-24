@@ -86,7 +86,9 @@ def build_transition_context(submission: Submission, role: str, allowed: list[st
 def generate_transition_guidance(
     submission: Submission, *, role: str, is_internal: bool = False
 ) -> dict[str, Any]:
-    allowed = iter_allowed_targets(role, submission.current_stage, is_internal=is_internal)
+    allowed = iter_allowed_targets(
+        role, submission.current_stage, is_internal=is_internal, secretary_only=submission.secretary_only
+    )
     suggestions: list[dict[str, Any]] = []
 
     for stage in allowed:

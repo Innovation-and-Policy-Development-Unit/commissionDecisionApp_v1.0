@@ -1154,7 +1154,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         submission = self.get_object()
         profile = _profile(request.user)
         allowed = iter_allowed_targets(
-            profile.role, submission.current_stage, is_internal=submission.is_internal
+            profile.role,
+            submission.current_stage,
+            is_internal=submission.is_internal,
+            secretary_only=submission.secretary_only,
         )
         guidance = submission.ai_transition_guidance or {}
         stale = (
@@ -1170,6 +1173,90 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             "transition_guidance": guidance,
             "transition_guidance_pending": stale,
         })
+
+    @action(detail=True, methods=["get"], url_path="travel-endorsements")
+    def travel_endorsements(self, request, pk=None):
+        submission = self.get_object()
+        from .travel_forms import endorsement_sections, secretary_decision_section
+        from .travel_signatures import signed_section_keys
+
+        if not submission.secretary_only:
+            return Response({"sections": [], "signed": []})
+        sections = list(endorsement_sections(submission.form_type_code or ""))
+        sec = secretary_decision_section(submission.form_type_code or "")
+        if sec:
+            sections.append(sec)
+        signed = list(
+            submission.section_signatures.select_related("signed_by").values(
+                "section_key",
+                "signer_name",
+                "signed_at",
+                "approved",
+                "remarks",
+                "signed_by_id",
+            )
+        )
+        return Response(
+            {
+                "sections": sections,
+                "signed": signed,
+                "signed_keys": list(signed_section_keys(submission)),
+                "travel_endorsers": submission.travel_endorsers or {},
+                "requires_travel_letter": submission.requires_travel_letter,
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="sign-travel-section")
+    def sign_travel_section(self, request, pk=None):
+        submission = self.get_object()
+        section_key = request.data.get("section_key")
+        if not section_key:
+            return Response({"detail": "section_key is required."}, status=status.HTTP_400_BAD_REQUEST)
+        approved = request.data.get("approved")
+        if approved is not None:
+            approved = bool(approved)
+        remarks = request.data.get("remarks", "")
+        try:
+            from .travel_signatures import sign_travel_section
+
+            sig = sign_travel_section(
+                submission=submission,
+                user=request.user,
+                section_key=section_key,
+                approved=approved,
+                remarks=remarks,
+            )
+        except PermissionDenied as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if section_key == "secretary_decision" and approved is False:
+            submission.current_stage = WorkflowStage.REJECTED
+            submission.save(update_fields=["current_stage", "updated_at"])
+
+        from .serializers import FormSectionSignatureSerializer
+
+        return Response(FormSectionSignatureSerializer(sig).data)
+
+    @action(detail=True, methods=["get"], url_path="travel-approval-letter")
+    def travel_approval_letter(self, request, pk=None):
+        submission = self.get_object()
+        if not submission.requires_travel_letter:
+            return Response(
+                {"detail": "This submission does not require an approval letter."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            letter = submission.travel_approval_letter
+        except Exception:
+            return Response(
+                {"detail": "Approval letter has not been issued yet."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        from .serializers import TravelApprovalLetterSerializer
+
+        return Response(TravelApprovalLetterSerializer(letter).data)
 
     @action(detail=True, methods=["get", "post"], url_path="transition-guidance")
     def transition_guidance(self, request, pk=None):
