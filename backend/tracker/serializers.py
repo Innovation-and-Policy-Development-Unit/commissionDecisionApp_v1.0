@@ -595,6 +595,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "implementation_due_date",
             "notes",
             "logged_by",
+            "created_by",
             "assigned_to",
             "assigned_to_name",
             "assigned_at",

@@ -223,6 +223,120 @@ function InternalDocumentUpload({ files, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Travel submission form (Traveller — PSC 4.4 / 4.5 / 4.6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories, ministries, departments }) {
+  const navigate = useNavigate()
+  const toast = useToast()
+  const [form, setForm] = useState({
+    title: '',
+    form_type_code: '',
+    department: '',
+    notes: '',
+    hod: '',
+    director: '',
+    dg: '',
+    minister: '',
+  })
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const categoryId = categories[0]?.id
+
+  const submit = async e => {
+    e.preventDefault()
+    if (!form.form_type_code) { setError('Select a travel form type.'); return }
+    setBusy(true)
+    setError('')
+    try {
+      const travel_endorsers = {
+        hod: form.hod ? Number(form.hod) : null,
+        director: form.director ? Number(form.director) : null,
+        dg: form.dg ? Number(form.dg) : null,
+        minister: form.minister ? Number(form.minister) : null,
+      }
+      const payload = {
+        title: form.title.trim(),
+        form_type_code: form.form_type_code,
+        ...(categoryId ? { form_category: categoryId } : {}),
+        notes: form.notes,
+        received_at: new Date().toISOString(),
+        travel_endorsers,
+      }
+      if (form.department) payload.department = Number(form.department)
+      const { data: submission } = await api.post('/submissions/', payload)
+      toast.success('Travel request created. Complete the form and collect endorsements before submitting to PSC.')
+      if (onSuccess) onSuccess(submission.id)
+      else navigate(`/submissions/${submission.id}`)
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Could not create travel request.'
+      setError(typeof msg === 'object' ? JSON.stringify(msg) : msg)
+      toast.error(String(msg))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const needsMinister = form.form_type_code === 'PSC 4.6'
+
+  return (
+    <div>
+      {!modal && (
+        <PageHeader
+          title="New travel request"
+          subtitle="PSC Forms 4.4–4.6 route to the Secretary only — not the Commission."
+        />
+      )}
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+      <form onSubmit={submit} className={modal ? 'space-y-4' : 'card p-6 space-y-4 max-w-3xl'}>
+        <div>
+          <label className="block text-sm font-medium mb-1">Travel form <span className="text-red-500">*</span></label>
+          <select className="input" required value={form.form_type_code} onChange={e => setForm(f => ({ ...f, form_type_code: e.target.value }))}>
+            <option value="">— Select —</option>
+            {formTypes.map(ft => <option key={ft.code} value={ft.code}>{ft.code} — {ft.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Title / subject <span className="text-red-500">*</span></label>
+          <input className="input" required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Overseas training — Port Vila workshop" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Department</label>
+          <select className="input" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
+            <option value="">— Select department —</option>
+            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </div>
+        <div className="rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/20 p-4 space-y-3">
+          <p className="text-sm font-medium text-sky-900 dark:text-sky-100">Ministry endorsers</p>
+          <p className="text-xs text-sky-800/80">Nominate who will digitally sign each section (they must have a profile signature uploaded).</p>
+          {ENDORSER_SLOTS.filter(s => s.key !== 'minister' || needsMinister || form.form_type_code === 'PSC 4.5').map(slot => (
+            <div key={slot.key}>
+              <label className="block text-xs font-medium mb-1">{slot.label}</label>
+              <input
+                className="input text-sm"
+                type="number"
+                min="1"
+                placeholder="User ID of endorser"
+                value={form[slot.key] || ''}
+                onChange={e => setForm(f => ({ ...f, [slot.key]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Notes</label>
+          <textarea className="input" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+        </div>
+        <button type="submit" className="btn-primary px-6 py-2.5" disabled={busy}>{busy ? 'Saving…' : 'Create travel request'}</button>
+      </form>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Internal Submission Form (CSU Manager / ODU)
 // ─────────────────────────────────────────────────────────────────────────────
 

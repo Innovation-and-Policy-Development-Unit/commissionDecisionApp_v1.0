@@ -23,6 +23,7 @@ import SubmissionQualityScore from '../../components/submissions/SubmissionQuali
 import SubmissionPackageValidation from '../../components/submissions/SubmissionPackageValidation'
 import DeadlineReminderDrafts from '../../components/submissions/DeadlineReminderDrafts'
 import DocumentAnnotatorModal from '../../components/shared/DocumentAnnotatorModal'
+import TravelEndorsementPanel from '../../components/travel/TravelEndorsementPanel'
 import DocumentSignatureModal from '../../components/shared/DocumentSignatureModal'
 import PSCForm37Fields from './PSCForm37Fields'
 import PSCForm37View from './PSCForm37View'
@@ -167,7 +168,7 @@ export default function SubmissionDetail() {
     && policyGuardrailApplies(submission)
   const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
   const canEditChecklist = user && CHECKLIST_EDIT_ROLES.includes(user.role)
-  const showChecklist = !submission?.is_attachment && !submission?.is_internal
+  const showChecklist = !submission?.is_attachment && !submission?.is_internal && !submission?.secretary_only
 
   const fetchSubmission = useCallback(async () => {
     try {
@@ -789,7 +790,15 @@ const stageDescriptions = {
                 </p>
               </div>
             )}
-          </div>
+          </motion.div>
+
+          {submission.secretary_only && (
+            <TravelEndorsementPanel
+              submissionId={id}
+              submission={submission}
+              onSigned={() => { fetchSubmission(); fetchTransitions() }}
+            />
+          )}
 
           {/* ── Digitized PSC Form ── */}
           {form37 !== null && (
