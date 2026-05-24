@@ -60,6 +60,7 @@ const menuItems = [
     audience: 'all',
     items: [
       { label: 'Smart Report (AI)', labelKey: 'nav.smart_reports', icon: Sparkles, path: '/reports' },
+      { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
       { label: 'Staff Assistant', labelKey: 'nav.staff_assistant', icon: Bot, path: '/assistant' },
     ],
   },
@@ -130,6 +131,7 @@ const menuItems = [
       { label: 'System Config',            labelKey: 'nav.system_config',          icon: Settings,     path: '/admin/system-config',          visibility: 'roles' },
       { label: 'Email templates',          labelKey: 'nav.email_templates',        icon: Mail,         path: '/admin/email-templates',        visibility: 'roles' },
       { label: 'UI translations',          labelKey: 'nav.ui_translations',        icon: Languages,    path: '/admin/ui-translations',        visibility: 'translations' },
+      { label: 'Knowledge Base',         labelKey: 'nav.knowledge_base',         icon: BookOpen,     path: '/admin/knowledge-base',         visibility: 'admin' },
       { label: 'Security',                 labelKey: 'nav.security',               icon: ShieldAlert,  path: '/admin/security',               visibility: 'audit' },
       { label: 'User Feedback',            labelKey: 'nav.feedback',               icon: MessageSquare, path: '/admin/feedback',              visibility: 'feedback' },
       { label: 'Backup & Restore',         labelKey: 'nav.backup_restore',         icon: HardDrive,    path: '/admin/backup-restore',         visibility: 'roles' },

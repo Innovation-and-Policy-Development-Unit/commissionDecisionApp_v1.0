@@ -26,6 +26,8 @@ import AdminSecurityPage from '../pages/admin/AdminSecurityPage'
 import FeedbackManagementPage from '../pages/admin/FeedbackManagementPage'
 import FormTypesAdmin from '../pages/admin/FormTypesAdmin'
 import FormBuilder from '../pages/admin/FormBuilder'
+import KnowledgeBaseAdmin from '../pages/admin/KnowledgeBaseAdmin'
+import KnowledgeArticleEditor from '../pages/admin/KnowledgeArticleEditor'
 import CommissionSittings from '../pages/secretariat/CommissionSittings'
 import MinutesEditor from '../pages/secretariat/MinutesEditor'
 import MeetingRoomHub from '../pages/meeting/MeetingRoomHub'
@@ -38,6 +40,8 @@ import TaskManagement from '../pages/secretariat/TaskManagement'
 import MinutesIndex from '../pages/secretariat/MinutesIndex'
 import Account from '../pages/pages/Account'
 import StaffChatbot from '../pages/assistant/StaffChatbot'
+import KnowledgeBaseBrowse from '../pages/psc/KnowledgeBaseBrowse'
+import ArticleViewer from '../pages/psc/ArticleViewer'
 import HrManagerGuide from '../pages/guide/HrManagerGuide'
 import UnitManagerGuide from '../pages/guide/UnitManagerGuide'
 import SecretaryGuide from '../pages/guide/SecretaryGuide'
@@ -60,6 +64,8 @@ export default function AppRouter() {
           <Route path="/submissions/new" element={<SubmissionForm />} />
           <Route path="/submissions/:id" element={<SubmissionDetail />} />
           <Route path="/reports" element={<SmartReports />} />
+          <Route path="/wiki" element={<KnowledgeBaseBrowse />} />
+          <Route path="/wiki/:slug" element={<ArticleViewer />} />
           <Route path="/assistant" element={<StaffChatbot />} />
           <Route path="/status-assistant" element={<Navigate to="/assistant" replace />} />
           <Route path="/meetings/capture" element={<MeetingCapture />} />
@@ -73,6 +79,9 @@ export default function AppRouter() {
           <Route path="/admin/feedback" element={<FeedbackManagementPage />} />
           <Route path="/admin/form-types" element={<FormTypesAdmin />} />
           <Route path="/admin/form-types/:formTypeId/builder" element={<FormBuilder />} />
+          <Route path="/admin/knowledge-base" element={<KnowledgeBaseAdmin />} />
+          <Route path="/admin/knowledge-base/new" element={<KnowledgeArticleEditor />} />
+          <Route path="/admin/knowledge-base/edit/:slug" element={<KnowledgeArticleEditor />} />
           <Route path="/admin/backup-restore" element={<AdminBackupRestorePage />} />
           <Route path="/admin-panel" element={<Navigate to="/admin/roles-permissions?tab=users" replace />} />
           <Route path="/secretariat/meeting-room" element={<MeetingRoomHub />} />

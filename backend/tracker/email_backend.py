@@ -45,8 +45,8 @@ def resolve_smtp_config():
     """
     Merge env + admin UI SMTP settings.
 
-    Env host/port/TLS apply when SMTP_HOST is set, but empty env credentials
-    fall back to SystemSetting so Gmail saved in Admin is not ignored.
+    When .env sets SMTP_HOST but leaves credentials empty (e.g. Mailpit defaults),
+    use Admin / SystemSetting values entirely so Gmail configured in the UI works.
     """
     env_cfg = _smtp_config_from_env()
     db_cfg = _smtp_config_from_settings()
@@ -54,15 +54,16 @@ def resolve_smtp_config():
     if not env_cfg:
         return db_cfg
 
-    username = env_cfg["username"] or db_cfg["username"]
-    password = env_cfg["password"] or db_cfg["password"]
+    if not env_cfg["username"] and db_cfg.get("username"):
+        return db_cfg
+
     return {
         "host": env_cfg["host"],
         "port": env_cfg["port"],
-        "username": username,
-        "password": password,
-        "use_tls": env_cfg["use_tls"] if env_cfg["username"] else db_cfg["use_tls"],
-        "use_ssl": env_cfg["use_ssl"] if env_cfg["username"] else db_cfg["use_ssl"],
+        "username": env_cfg["username"] or db_cfg["username"],
+        "password": env_cfg["password"] or db_cfg["password"],
+        "use_tls": env_cfg["use_tls"],
+        "use_ssl": env_cfg["use_ssl"],
     }
 
 
