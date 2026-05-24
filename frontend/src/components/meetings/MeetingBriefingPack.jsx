@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, Loader2, Sparkles } from 'lucide-react'
+import { Download, Sparkles } from 'lucide-react'
+import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
 
@@ -66,9 +67,18 @@ export default function MeetingBriefingPack({ meetingId, meetingRef }) {
         disabled={busy || processing}
         className="btn-outline text-xs py-1 px-2 inline-flex items-center gap-1"
       >
-        {busy || processing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+        <Sparkles size={12} />
         {processing ? t('meeting_briefing.generating') : t('meeting_briefing.generate')}
       </button>
+      {processing && (
+        <div className="mt-2">
+          <AiProcessingIndicator
+            label={t('common.ai_thinking')}
+            size="sm"
+            variant="indigo"
+          />
+        </div>
+      )}
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
       {failed && job?.error_message && (
         <p className="text-xs text-red-600 mt-2">{job.error_message}</p>

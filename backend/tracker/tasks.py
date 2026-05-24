@@ -126,12 +126,37 @@ Output valid JSON only (no markdown fences):
 }"""
 
 
+def compute_submission_ai_context_key(submission) -> str:
+    """Stable fingerprint — only changes when stage, documents, or checklist meaningfully change."""
+    import hashlib
+
+    from django.db.models import Count, Max
+
+    from .models import SubmissionChecklistItem, SubmissionDocument
+
+    doc_stats = SubmissionDocument.objects.filter(submission=submission).aggregate(
+        n=Count("id"),
+        latest=Max("uploaded_at"),
+    )
+    cl = SubmissionChecklistItem.objects.filter(submission=submission)
+    cl_total = cl.count()
+    cl_present = cl.filter(is_present=True).count()
+    parts = [
+        submission.current_stage or "",
+        str(doc_stats["n"] or 0),
+        doc_stats["latest"].isoformat() if doc_stats["latest"] else "",
+        f"{cl_present}/{cl_total}",
+        submission.form_type_code or "",
+        str(submission.ai_package_ready),
+    ]
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:32]
+
+
 def submission_brief_needs_refresh(submission) -> bool:
     if not submission.ai_brief_processed:
         return True
-    if submission.ai_brief_generated_at and submission.updated_at > submission.ai_brief_generated_at:
-        return True
-    return False
+    key = compute_submission_ai_context_key(submission)
+    return (submission.ai_brief_context_key or "") != key
 
 
 def _mark_submission_brief_failed(submission, message: str) -> None:
@@ -141,8 +166,15 @@ def _mark_submission_brief_failed(submission, message: str) -> None:
     submission.ai_brief_summary = message.strip()
     submission.ai_brief_processed = True
     submission.ai_brief_generated_at = timezone.now()
+    submission.ai_brief_context_key = compute_submission_ai_context_key(submission)
     submission.save(
-        update_fields=["ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at", "updated_at"]
+        update_fields=[
+            "ai_brief_summary",
+            "ai_brief_processed",
+            "ai_brief_generated_at",
+            "ai_brief_context_key",
+            "updated_at",
+        ]
     )
 
 
@@ -352,7 +384,7 @@ def generate_submission_brief(submission_id: int, force: bool = False):
             system=SUBMISSION_BRIEF_INSTRUCTION,
             user=user_input,
             tier=get_model_tier("submission_executive_brief"),
-            max_tokens=4096,
+            max_tokens=2048,
         )
         if not data:
             detail = api_err or "Unknown error"
@@ -369,8 +401,13 @@ def generate_submission_brief(submission_id: int, force: bool = False):
         submission.ai_brief_summary = _format_submission_brief(data)
         submission.ai_brief_processed = True
         submission.ai_brief_generated_at = timezone.now()
+        submission.ai_brief_context_key = compute_submission_ai_context_key(submission)
         submission.save(update_fields=[
-            "ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at", "updated_at",
+            "ai_brief_summary",
+            "ai_brief_processed",
+            "ai_brief_generated_at",
+            "ai_brief_context_key",
+            "updated_at",
         ])
         app_log.info("BRIEF_COMPLETE | Submission %s", submission_id)
     except Exception as exc:
@@ -1192,9 +1229,8 @@ QUALITY_SCORE_STAGES = frozenset({
 def submission_quality_needs_refresh(submission) -> bool:
     if not submission.ai_quality_processed:
         return True
-    if submission.ai_quality_generated_at and submission.updated_at > submission.ai_quality_generated_at:
-        return True
-    return False
+    key = compute_submission_ai_context_key(submission)
+    return (submission.ai_quality_context_key or "") != key
 
 
 def _mark_submission_quality_failed(submission, message: str) -> None:
@@ -1203,11 +1239,13 @@ def _mark_submission_quality_failed(submission, message: str) -> None:
     submission.ai_quality_explanation = message.strip()[:2000]
     submission.ai_quality_processed = True
     submission.ai_quality_generated_at = timezone.now()
+    submission.ai_quality_context_key = compute_submission_ai_context_key(submission)
     submission.save(
         update_fields=[
             "ai_quality_explanation",
             "ai_quality_processed",
             "ai_quality_generated_at",
+            "ai_quality_context_key",
             "updated_at",
         ]
     )
@@ -1252,6 +1290,7 @@ def score_submission_quality(submission_id: int, *, force: bool = False):
     submission.ai_quality_review_effort = result.get("review_effort", "")
     submission.ai_quality_processed = True
     submission.ai_quality_generated_at = timezone.now()
+    submission.ai_quality_context_key = compute_submission_ai_context_key(submission)
     submission.save(
         update_fields=[
             "ai_quality_score",
@@ -1260,6 +1299,7 @@ def score_submission_quality(submission_id: int, *, force: bool = False):
             "ai_quality_review_effort",
             "ai_quality_processed",
             "ai_quality_generated_at",
+            "ai_quality_context_key",
             "updated_at",
         ]
     )

@@ -1,0 +1,712 @@
+---
+title: "SCDMS — HR Manager Guide"
+subtitle: "Preparing and Submitting Cases to the Public Service Commission"
+author: "Office of the Public Service Commission, Vanuatu"
+date: last-modified
+date-format: "MMMM YYYY"
+lang: en
+
+format:
+  html:
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-title: "Contents"
+    toc-location: left
+    number-sections: true
+    number-depth: 3
+    smooth-scroll: true
+    embed-resources: true
+    page-layout: article
+    grid:
+      sidebar-width: 270px
+      body-width: 860px
+---
+
+```{=html}
+<style>
+/* ═══════════════════════════════════════════════════════════
+   SCDMS ROLE GUIDE — DESIGN SYSTEM (HR Manager edition)
+   Public Service Commission of Vanuatu
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  --psc-navy:   #1e3a8a;
+  --psc-blue:   #2563eb;
+  --psc-indigo: #4338ca;
+  --psc-teal:   #0d9488;
+  --psc-slate:  #475569;
+  --psc-amber:  #d97706;
+  --psc-red:    #dc2626;
+  --psc-green:  #16a34a;
+  --bg-light:   #f8fafc;
+  --border:     #e2e8f0;
+}
+body { font-family: "Georgia","Times New Roman",serif; font-size: 1.02rem; line-height: 1.75; color: #1e293b; }
+h1,h2,h3,h4 { font-family: "Helvetica Neue",Arial,sans-serif; font-weight: 700; line-height: 1.25; }
+h1 { font-size: 2rem; color: var(--psc-navy); margin-top: 2.5rem; border-bottom: 3px solid var(--psc-blue); padding-bottom: .5rem; }
+h2 { font-size: 1.45rem; color: var(--psc-indigo); margin-top: 2rem; }
+h3 { font-size: 1.15rem; color: var(--psc-slate); margin-top: 1.5rem; }
+h4 { font-size: 1rem; color: #334155; }
+p  { margin-bottom: 1rem; }
+
+#title-block-header {
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 55%, #0d9488 100%);
+  color: #fff; padding: 3.5rem 3rem 2.5rem;
+  border-radius: 0 0 1.25rem 1.25rem; margin-bottom: 2.5rem;
+  box-shadow: 0 4px 24px rgba(30,58,138,.25);
+}
+#title-block-header .title { font-size: 2.4rem; font-weight: 800; letter-spacing: -.5px; margin-bottom: .35rem; }
+#title-block-header .subtitle { font-size: 1.1rem; opacity: .88; font-style: normal; font-weight: 400; margin-bottom: 1rem; }
+#title-block-header .quarto-title-meta { opacity: .7; font-size: .88rem; font-family: "Helvetica Neue",Arial,sans-serif; }
+
+#TOC { font-family: "Helvetica Neue",Arial,sans-serif; font-size: .84rem; line-height: 1.5; }
+#TOC a { color: var(--psc-slate); text-decoration: none; }
+#TOC a:hover { color: var(--psc-blue); }
+#TOC .active { color: var(--psc-blue); font-weight: 600; }
+
+.role-chip { display:inline-flex; align-items:center; gap:.3rem; padding:.22rem .85rem; border-radius:9999px; font-family:"Helvetica Neue",Arial,sans-serif; font-size:.76rem; font-weight:700; letter-spacing:.02em; text-transform:uppercase; margin:.18rem .1rem; line-height:1.5; }
+.role-ministry  { background:#dbeafe; color:#1d4ed8; border:1px solid #bfdbfe; }
+.role-psc       { background:#ede9fe; color:#4338ca; border:1px solid #ddd6fe; }
+.role-unit      { background:#d1fae5; color:#065f46; border:1px solid #a7f3d0; }
+.role-exec      { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
+.role-all       { background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; }
+
+.applies-to { background:#f8fafc; border-left:4px solid var(--psc-blue); border-radius:0 .5rem .5rem 0; padding:.6rem 1rem; margin:1rem 0 1.5rem; font-family:"Helvetica Neue",Arial,sans-serif; }
+.applies-to p { margin:0; font-size:.82rem; font-weight:600; color:var(--psc-slate); text-transform:uppercase; letter-spacing:.04em; margin-bottom:.35rem; }
+
+.stage { display:inline-flex; align-items:center; padding:.22rem .7rem; border-radius:.4rem; font-family:"Helvetica Neue",Arial,sans-serif; font-size:.78rem; font-weight:700; white-space:nowrap; margin:.1rem; }
+.stage-draft       { background:#f1f5f9; color:#334155; }
+.stage-submitted   { background:#eff6ff; color:#1d4ed8; }
+.stage-received    { background:#eff6ff; color:#1e40af; }
+.stage-returned    { background:#fff7ed; color:#9a3412; }
+.stage-registered  { background:#eef2ff; color:#3730a3; }
+.stage-review      { background:#faf5ff; color:#6b21a8; }
+.stage-approved    { background:#f0fdf4; color:#14532d; }
+.stage-decision    { background:#fff7ed; color:#7c2d12; }
+
+.flow { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin:1rem 0; padding:.75rem 1rem; background:var(--bg-light); border-radius:.6rem; border:1px solid var(--border); }
+.flow-arrow { color:#94a3b8; font-size:.9rem; }
+
+.steps { counter-reset:step-counter; margin:1.2rem 0; }
+.step { display:flex; gap:1rem; align-items:flex-start; padding:.9rem 1.1rem; margin-bottom:.7rem; background:#fff; border:1px solid var(--border); border-radius:.65rem; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+.step::before { counter-increment:step-counter; content:counter(step-counter); display:inline-flex; align-items:center; justify-content:center; min-width:1.8rem; height:1.8rem; background:var(--psc-blue); color:#fff; border-radius:50%; font-family:"Helvetica Neue",Arial,sans-serif; font-size:.78rem; font-weight:800; flex-shrink:0; margin-top:.1rem; }
+.step-body { flex:1; min-width:0; }
+.step-body strong { color:var(--psc-navy); }
+
+.ai-panel { background:linear-gradient(135deg,#4338ca 0%,#7c3aed 100%); color:#fff; border-radius:.8rem; padding:1.1rem 1.4rem; margin:1.25rem 0; }
+.ai-panel h4 { margin:0 0 .4rem; font-size:1rem; color:#fff; font-family:"Helvetica Neue",Arial,sans-serif; }
+.ai-panel p { margin:0; opacity:.92; font-size:.9rem; font-family:"Helvetica Neue",Arial,sans-serif; }
+.ai-label { display:inline-block; background:rgba(255,255,255,.2); border-radius:.3rem; padding:.05rem .4rem; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.35rem; font-family:"Helvetica Neue",Arial,sans-serif; }
+
+.callout { border-radius:.65rem; margin:1.2rem 0; }
+.callout-note    { border-left-color:var(--psc-blue); }
+.callout-tip     { border-left-color:var(--psc-teal); }
+.callout-warning { border-left-color:var(--psc-amber); }
+.callout-important { border-left-color:var(--psc-red); }
+
+table { font-family:"Helvetica Neue",Arial,sans-serif; font-size:.88rem; border-collapse:collapse; width:100%; margin:1.1rem 0; }
+thead tr { background:var(--psc-navy); color:#fff; }
+thead th { padding:.55rem .85rem; text-align:left; font-weight:600; letter-spacing:.02em; }
+tbody tr:nth-child(even) { background:#f8fafc; }
+tbody td { padding:.5rem .85rem; border-bottom:1px solid #e2e8f0; vertical-align:top; }
+tbody tr:hover { background:#eff6ff; }
+
+.doc-checklist { list-style:none; padding:0; margin:1rem 0; }
+.doc-checklist li { display:flex; align-items:flex-start; gap:.6rem; padding:.45rem .1rem; border-bottom:1px solid #f1f5f9; font-size:.93rem; }
+.doc-checklist li:last-child { border-bottom:none; }
+.check-box { display:inline-flex; align-items:center; justify-content:center; width:1.2rem; height:1.2rem; border:2px solid #cbd5e1; border-radius:.25rem; flex-shrink:0; margin-top:.15rem; color:transparent; }
+
+.part-header { background:linear-gradient(90deg,var(--psc-navy) 0%,var(--psc-indigo) 100%); color:#fff; border-radius:.75rem; padding:1.5rem 2rem; margin:3rem 0 2rem; }
+.part-header .part-label { font-family:"Helvetica Neue",Arial,sans-serif; font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; opacity:.75; margin-bottom:.3rem; }
+.part-header h2 { color:#fff; margin:0; font-size:1.5rem; border:none; }
+.part-header p { margin:.4rem 0 0; opacity:.85; font-size:.9rem; }
+
+.glossary-term { font-family:"Helvetica Neue",Arial,sans-serif; font-weight:700; color:var(--psc-navy); }
+
+@media print {
+  #TOC,#title-block-header .quarto-title-meta { display:none; }
+  body { font-size:.9rem; }
+  .part-header { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+</style>
+```
+
+::: {.applies-to}
+<p>Applies to</p>
+<span class="role-chip role-ministry">Ministry HR Officer</span>
+<span class="role-chip role-exec">Head of Agency / DG</span>
+<span class="role-chip role-ministry">Department Admin Officer</span>
+:::
+
+This guide covers everything you need to submit cases to the Public Service Commission and manage them from preparation through to decision implementation. It is written specifically for Ministry HR Managers and equivalent officers working on the ministry side of the PSC process.
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part I</div>
+  <h2>Getting Started</h2>
+  <p>Signing in, understanding your dashboard, and the PSC process at a glance.</p>
+</div>
+```
+
+# Your Role in SCDMS {#sec-role}
+
+The Submission & Commission Decision Management System (SCDMS) is the Public Service Commission's secure digital platform for managing every aspect of the PSC approval process — from the initial submission through to the final decision and its implementation.
+
+As an HR Manager, your work in the system centres on three activities:
+
+1. **Preparing** — assembling and submitting your ministry's cases
+2. **Tracking** — monitoring progress as PSC processes each submission
+3. **Implementing** — recording and confirming the implementation of PSC decisions
+
+The system is designed so that you never need to call PSC to check on a submission's status. Every stage change triggers an automatic notification, and the current stage is always visible on your dashboard.
+
+::: {.callout-note}
+## Who this guide is for
+This guide covers the workflows available to users with the **Ministry HR Officer**, **Department Admin Officer**, or **Head of Agency** role. If you can also log in as a PSC officer or have access to the secretariat menus, refer to the Unit Manager Guide for those additional capabilities.
+:::
+
+# Signing In and Your Dashboard {#sec-login}
+
+## Signing In
+
+Navigate to the SCDMS address provided by your PSC contact. Enter your username and password on the login screen. If your account uses two-factor authentication (2FA), enter the verification code from your authenticator app when prompted.
+
+::: {.callout-tip}
+## First-time login
+On your first login you will be asked to set up two-factor authentication. Use a free authenticator app (Google Authenticator, Microsoft Authenticator, or Authy) to scan the QR code shown on screen. Store your backup codes in a secure location.
+:::
+
+If you forget your password, click **Forgot password?** on the login screen. A reset link will be sent to your registered email address.
+
+## Your Dashboard
+
+After signing in you arrive at the **Dashboard**, which displays:
+
+- **My Submissions** — all submissions your ministry has created, with their current stage and last-updated timestamp
+- **Awaiting my action** — submissions that require your input (e.g. responding to a PSC request)
+- **Recent decisions** — decisions received in the last 90 days
+- **Quick actions** — buttons to create a new submission or view the full submission list
+
+The submission count chips use colour to communicate urgency: green for progressing normally, amber for submissions that have been with PSC for an extended period, and red for items awaiting your action.
+
+# How the PSC Decision Process Works {#sec-process}
+
+Understanding the overall process helps you prepare better submissions and set realistic expectations with your management.
+
+::: {.flow}
+<span class="stage stage-draft">Draft</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-submitted">Submitted to PSC</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-received">Received by PSC</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-registered">Registered & Assigned</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-review">Under Review</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-approved">Commission Decision</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-decision">Decision Issued</span>
+:::
+
+| Stage | What it means for you |
+|---|---|
+| **Draft** | Your submission is saved but not yet sent to PSC. You can edit freely. |
+| **Submitted to PSC** | You have submitted. PSC has been notified. |
+| **Received / Registered** | PSC has accepted and registered your case. No further action from you unless requested. |
+| **Under Review** | A PSC unit is assessing your case. You may be contacted for clarification. |
+| **Returned** | PSC has returned the submission for additional information. You must respond before processing resumes. |
+| **Commission Decision** | Your case has been placed before the Commission. |
+| **Decision Issued** | The formal decision has been recorded and you will receive notification. Implement as directed. |
+
+Processing times vary by case type and Commission sitting schedule. The system will keep you updated automatically at each stage transition.
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part II</div>
+  <h2>Preparing and Submitting a Case</h2>
+  <p>Creating your submission, uploading the required documents, and sending it to PSC.</p>
+</div>
+```
+
+# Creating a New Submission {#sec-create}
+
+::: {.applies-to}
+<p>Applies to</p>
+<span class="role-chip role-ministry">Ministry HR Officer</span>
+<span class="role-chip role-exec">Head of Agency / DG</span>
+:::
+
+## Starting the Form
+
+From the Dashboard or the **Submissions** page, click the **+ New Submission** button in the upper-right corner. The submission form opens as a guided, multi-section page.
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Select the ministry and department.** Choose your ministry from the dropdown. The department list filters automatically to show only departments within your ministry. If your department is missing, contact your PSC liaison officer.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Choose the submission category.** Select the broad category that matches your case — for example, *Appointments*, *Promotions*, *Discipline & Termination*, or *Leave Without Pay*. The category determines which PSC Form Type applies.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Select the specific form type.** Based on your chosen category, a list of applicable PSC form types appears. Select the one that most precisely describes your matter. Each form type shows a description to guide your selection.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Enter the submission details.** Complete all required fields: case title, the officer's name and position number, grade, and any supporting narrative. Required fields are marked with an asterisk (*).
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Save as Draft.** Click **Save Draft** at any time to preserve your work. The submission will appear in your dashboard under *Draft* status. You can return to it later and continue editing before submitting.
+:::
+:::
+:::
+
+::: {.callout-tip}
+## Writing an effective case title
+Use a clear, descriptive title that identifies the officer, position, and nature of the case. For example: *Promotion — John Doe, Senior Administrative Officer, Grade 11, Ministry of Finance.* Avoid vague titles like *HR Matter* or *Appointment Request*.
+:::
+
+## Understanding Form Types
+
+The PSC form type you select determines the required documents checklist. Common form types include:
+
+| Form | Purpose |
+|---|---|
+| **PSC Form 21** | First-time appointments and re-appointments |
+| **PSC Form 22** | Transfers within the Public Service |
+| **PSC Form 37** | Confirmation of appointments |
+| **Promotion Forms** | Various grades — select the form matching the target grade |
+| **Discipline Forms** | Termination, suspension, surcharge matters |
+
+If you are unsure which form applies, consult the **Staff Assistant** (accessible from the left navigation under *Help & Resources*) or contact your PSC liaison.
+
+# The Required Documents Checklist {#sec-checklist}
+
+Every submission must be accompanied by a specific set of supporting documents. SCDMS displays the required documents as a **checklist** on the submission detail page, based on the form type you selected.
+
+::: {.callout-important}
+## Incomplete submissions will be returned
+If mandatory documents are missing, PSC will return the submission to you and processing will not resume until all required documents are provided. Use the checklist and the AI verification tool (described below) to confirm completeness before submitting.
+:::
+
+## Reading the Checklist
+
+The checklist panel appears on the left side of the submission detail page, labelled **Required Documents**. Each row shows:
+
+- A **checkbox** indicating whether the document has been confirmed present
+- The **document name** (e.g. *Appointment Letter*, *Medical Certificate*, *PSC Form 21*)
+- An optional **description** explaining what the document must contain
+- Any **notes** added by you or generated by the AI assistant
+
+A checklist item is confirmed as present either by you ticking it manually or by accepting an AI suggestion (see @sec-ai-autofill below).
+
+## Manually Confirming Items
+
+If you know a document is attached, click the checkbox next to that item to mark it present. You can also expand the notes field by clicking the chevron icon to record where in the attachment package the document can be found, or to note any relevant comments.
+
+# Uploading Documents {#sec-upload}
+
+## Attaching Files
+
+On the submission detail page, navigate to the **Documents** panel. Click **Upload Documents** and select one or more files from your computer. Supported formats are PDF, Word (.docx), and image files (PNG, JPEG). PDF is strongly preferred — it preserves formatting and is easier for PSC officers to review.
+
+::: {.callout-tip}
+## File naming conventions
+Name your files clearly before uploading. Use a format like `PSC_Form21_JohnDoe.pdf` or `MedicalCertificate_JaneDoe_2024.pdf`. Clear names help PSC officers locate specific documents quickly and reduce back-and-forth requests.
+:::
+
+After upload, the system processes each document through an OCR (optical character recognition) pipeline that extracts text. This extracted text is used by the AI checklist assistant (see @sec-ai-autofill) and is also available for PSC officers to search within. Processing typically completes within a few seconds to a minute depending on file size.
+
+## Viewing Uploaded Documents
+
+Uploaded documents appear in the Documents panel with their filename, upload date, and the name of the officer who uploaded them. Click any document row to preview it or download a copy. You can remove a document before submission by clicking the delete icon on that row.
+
+# AI-Powered Document Verification {#sec-ai-autofill}
+
+::: {.ai-panel}
+<div class="ai-label">AI Feature A1 — Checklist Autofill</div>
+<h4>AI Document Check</h4>
+<p>After uploading your documents, let the AI assistant scan them and verify that each required checklist item is present. This dramatically reduces the risk of a returned submission.</p>
+:::
+
+## How it Works
+
+Once you have uploaded your supporting documents, the **Autofill** button appears in the checklist panel header (it is disabled until at least one document has been uploaded). Clicking it sends the extracted text from all uploaded documents to the AI assistant, which analyses the content and suggests which checklist items appear to be present.
+
+The AI returns a suggestion for each checklist item:
+
+- **Present** (shown with a green badge) — the AI found evidence of this document in the uploaded files
+- **Missing** (shown with an amber badge) — the AI found no evidence of this document
+
+Each suggestion includes a brief note explaining what it found (or did not find) — for example: *"Found in 'PSCForm21_JohnDoe.pdf' — confirms appointment to Grade 11 position."*
+
+## Reviewing and Accepting Suggestions
+
+::: {.callout-warning}
+## AI suggestions are for review — not automatic changes
+The AI never updates the checklist without your approval. Review each suggestion carefully. The AI can occasionally misidentify documents or miss content in scanned files with poor image quality.
+:::
+
+After the AI analysis completes:
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Review each suggestion** by reading the note accompanying it. If the suggestion is correct, click **Accept** (green button) to confirm the item. If it is incorrect, click **Reject** (grey button) to dismiss the suggestion without making any change.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Accept all** with one click using the **Accept All** banner that appears at the top of the checklist. Use this only when you have reviewed all suggestions and are confident they are accurate.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Address missing items.** For any document the AI marks as missing, verify whether the document was uploaded. If it is missing, obtain and upload it before proceeding. If it was uploaded but not recognised (e.g. a scanned document with low image quality), manually tick the checklist item and add a note.
+:::
+:::
+:::
+
+## Limitations and Best Practices
+
+| Best practice | Reason |
+|---|---|
+| Upload PDF files rather than scanned images | OCR accuracy is significantly higher for digital PDFs |
+| Upload all documents before running autofill | The AI can only analyse what has been uploaded |
+| Re-run autofill after adding missing documents | A fresh analysis incorporates all available content |
+| Always review — do not accept blindly | A 30-second review prevents a two-week delay if a document is actually missing |
+
+# Submitting to PSC {#sec-submit}
+
+## Final Pre-Submission Review
+
+Before submitting, complete the following checklist:
+
+<ul class="doc-checklist">
+  <li><span class="check-box"></span>All required checklist items are confirmed present (no amber badges remain)</li>
+  <li><span class="check-box"></span>The case title accurately describes the submission</li>
+  <li><span class="check-box"></span>The officer's name, position number, and grade are correct</li>
+  <li><span class="check-box"></span>The selected form type is the correct one for this matter</li>
+  <li><span class="check-box"></span>All documents are uploaded in PDF format where possible</li>
+  <li><span class="check-box"></span>The Head of Agency has been consulted and supports the submission (where required)</li>
+</ul>
+
+## Submitting
+
+When the submission is complete, click **Submit to PSC** at the top of the submission detail page. A confirmation dialog will appear, asking you to confirm the submission. Once confirmed:
+
+- The submission status changes from **Draft** to **Submitted to PSC**
+- PSC staff receive an automatic notification
+- You receive an email confirmation with the submission reference number
+- The submission becomes read-only (you can no longer edit it unless PSC returns it)
+
+::: {.callout-important}
+## You cannot edit after submitting
+Once submitted, the submission is locked. If you realise you made an error or forgot a document, contact your PSC liaison and ask them to return the submission to you. This will change the status back to *Returned* and unlock it for editing.
+:::
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part III</div>
+  <h2>Tracking Your Submission</h2>
+  <p>Monitoring progress and responding to requests from PSC.</p>
+</div>
+```
+
+# Monitoring Status and Notifications {#sec-tracking}
+
+## Submission Status Page
+
+From your Dashboard or the Submissions list, click any submission to open its detail page. The right-hand panel displays:
+
+- **Current stage** — the named stage with a colour-coded badge
+- **Stage history** — a timeline showing every stage transition with the date and the officer who made the change
+- **Last updated** — date and time of the most recent activity
+
+You do not need to do anything to update this page — the stage changes automatically as PSC officers process your case. Refresh the page at any time to see the latest status.
+
+## Email Notifications
+
+SCDMS sends automatic email notifications to your registered email address at key events:
+
+| Event | Notification sent to |
+|---|---|
+| Submission received by PSC | You (submitter) |
+| Submission registered and assigned | You |
+| Submission returned for additional information | You (with details of what is required) |
+| Decision issued | You and your Head of Agency |
+| Implementation due date approaching | You |
+
+Notifications include the submission reference number and a direct link back to the submission in SCDMS.
+
+::: {.callout-tip}
+## Check your spam folder
+Automated emails from SCDMS occasionally end up in spam or junk folders. Add the PSC sender address to your contacts to ensure delivery.
+:::
+
+# Responding to PSC Requests {#sec-respond}
+
+## When PSC Returns a Submission
+
+If PSC requires additional information or documents, they will return the submission to you. The status changes to **Returned** and you receive an email notification explaining what is needed.
+
+When you open the returned submission, a prominent notice at the top of the page displays PSC's request — specifically, what additional documents or information are required and by what date (if specified).
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Read the return notice carefully.** The notice explains precisely what PSC requires. If anything is unclear, contact your PSC liaison for clarification before uploading documents.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Upload the additional documents.** Use the Documents panel to upload the requested items. Run the AI autofill again to verify the new documents address the checklist gaps.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Add a response note.** In the **Submission Notes** field (visible on the returned submission), briefly describe what you have added and where PSC can find the requested documents. For example: *"Uploaded updated medical certificate (expires March 2026) and revised PSC Form 21 with corrected grade."*
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Re-submit.** Click **Re-submit to PSC**. The submission status returns to *Submitted to PSC* and PSC is notified.
+:::
+:::
+:::
+
+::: {.callout-warning}
+## Respond promptly to avoid delays
+Returned submissions are removed from the active processing queue until you re-submit them. Delays in responding push your case further back in the schedule, potentially missing the next available Commission sitting.
+:::
+
+## Responding to Clarification Requests
+
+Sometimes PSC will request clarification without formally returning the submission — for example, a phone call or an in-system message asking about a specific detail. Respond through the agreed channel and, if appropriate, update the submission notes in SCDMS for the record.
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part IV</div>
+  <h2>After the Decision</h2>
+  <p>Understanding, receiving, and implementing the Commission's decision.</p>
+</div>
+```
+
+# Understanding and Receiving the Decision {#sec-decision}
+
+## Decision Notification
+
+When the Commission has considered your case and a decision has been recorded, you receive an email notification. The submission status changes to **Decision Issued**. Open the submission in SCDMS to view the full decision details.
+
+## Reading the Decision
+
+The decision panel on the submission detail page shows:
+
+- **Decision type** — for example, *Approved*, *Rejected*, *Approved with conditions*, or *Deferred*
+- **Decision date** — the date the Commission made the decision
+- **Decision text** — the formal wording of the decision
+- **Conditions** (if any) — any conditions attached to an approval
+- **Implementation instructions** — specific steps your ministry must take
+- **Implementation deadline** — the date by which implementation must be completed and reported
+
+::: {.callout-important}
+## Decisions must be implemented as recorded
+The SCDMS decision is the official record. If the written decision appears to differ from what was communicated verbally, contact the PSC Secretary immediately before taking any action. Do not implement a decision that contradicts the system record.
+:::
+
+## If a Submission is Rejected
+
+A rejection does not necessarily mean the matter is permanently closed. The decision text will specify whether:
+
+- The case may be resubmitted once specific conditions are met
+- The matter is deferred to a future sitting
+- The decision is final
+
+Consult your Head of Agency and, if applicable, legal counsel before deciding on next steps.
+
+# Implementing the Decision {#sec-implement}
+
+::: {.applies-to}
+<p>Applies to</p>
+<span class="role-chip role-ministry">Ministry HR Officer</span>
+<span class="role-chip role-exec">Head of Agency / DG</span>
+:::
+
+Implementation is the process of carrying out the Commission's decision and reporting back to PSC that it has been done.
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Review the implementation requirements.** Read the decision text and any attached conditions or implementation instructions in full. Make note of the deadline.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Take the necessary HR actions.** Depending on the decision, this may include issuing an appointment letter, updating payroll records, serving a formal notice to the officer, or updating the establishment register.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Upload implementation evidence.** Return to the submission in SCDMS and upload evidence that the decision has been implemented — for example, a signed copy of the appointment letter, a payroll extract, or a completion report.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Mark implementation complete.** Click the **Mark as Implemented** button (visible when the submission is in *Decision Issued* status). Enter the implementation date and any relevant notes. The submission moves to **Implemented** status and PSC is notified.
+:::
+:::
+:::
+
+::: {.callout-tip}
+## Record implementation promptly
+Even if the full implementation takes time (for example, payroll updates may depend on the next pay cycle), record any interim steps in the submission notes. This demonstrates to PSC that action has been taken.
+:::
+
+## Missed Deadlines
+
+If you anticipate that implementation will not be completed by the deadline, contact your PSC liaison in advance to request an extension. Late or missing implementation reports may result in the matter being escalated.
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part V</div>
+  <h2>Tools and Account Management</h2>
+  <p>Getting help, using the AI assistant, and keeping your account secure.</p>
+</div>
+```
+
+# Staff Assistant AI {#sec-assistant}
+
+The **Staff Assistant** is an AI-powered chatbot built specifically for PSC work. Access it from the left navigation menu under *Help & Resources* → **Staff Assistant**.
+
+You can ask the Assistant questions such as:
+
+- *"What documents are required for a PSC Form 21?"*
+- *"What is the current status of submission PSC-2024-00142?"*
+- *"Explain the difference between a promotion and a reclassification."*
+- *"Draft a cover letter for an application to the Grade 12 Senior Officer position."*
+
+::: {.callout-tip}
+## Be specific in your questions
+The more context you provide, the more useful the response. Include the form type, the officer's grade, and the nature of the case when asking for advice on a specific matter.
+:::
+
+The Assistant does not have the authority to change submission data or make decisions. It is an information and drafting aid.
+
+# Account Security {#sec-security}
+
+## Changing Your Password
+
+Go to your profile by clicking your name in the top-right corner and selecting **Account**. Under the *Security* tab, enter your current password and then your new password twice to confirm. Passwords must be at least 12 characters and contain a mix of letters, numbers, and symbols.
+
+## Two-Factor Authentication
+
+Two-factor authentication (2FA) adds a second layer of security. If 2FA is enabled on your account, you must enter a code from your authenticator app each time you sign in. This protects your account even if your password is compromised.
+
+::: {.callout-important}
+## Keep your backup codes safe
+When you set up 2FA, SCDMS generates a set of one-time backup codes. Store these in a secure location separate from your phone. If you lose access to your authenticator app, backup codes are the only way to regain access without contacting your system administrator.
+:::
+
+## Session Lock
+
+SCDMS will automatically lock your session after a period of inactivity. You will be prompted to enter your PIN or password to resume. This prevents unauthorised access if you step away from your computer.
+
+## What to Do If Your Account Is Compromised
+
+If you believe your account has been accessed without your authorisation, immediately:
+
+1. Change your password
+2. Contact your PSC system administrator and report the suspected breach
+3. Review the **Stage History** on any submissions you own for unexpected changes
+
+---
+
+# Appendix A — Case Type Quick Reference {#sec-appendix-a}
+
+| Category | Typical form type | Common required documents |
+|---|---|---|
+| First appointment | PSC Form 21 | Medical certificate, police clearance, academic certificates, CV, PSC Form 21 |
+| Re-appointment | PSC Form 21 | Current appointment letter, performance appraisal, PSC Form 21 |
+| Transfer | PSC Form 22 | Current appointment details, head of agency endorsement, PSC Form 22 |
+| Promotion | Grade-specific promotion form | Performance appraisal (3 years), qualification evidence, organisational chart, endorsement |
+| Confirmation | PSC Form 37 | Probationary period report, supervisor confirmation, PSC Form 37 |
+| Leave Without Pay | LWOP form | Personal statement, head of agency endorsement, LWOP form |
+| Discipline | Discipline form | Investigation report, show-cause notice and response, head of agency recommendation |
+| Extension of contract | Extension form | Contract expiry evidence, performance record, extension recommendation |
+
+*Note: This table provides general guidance only. Always verify the exact requirements by reviewing the checklist generated for your specific form type in SCDMS.*
+
+# Appendix B — Pre-Submission Checklist {#sec-appendix-b}
+
+Before clicking **Submit to PSC**, confirm:
+
+<ul class="doc-checklist">
+  <li><span class="check-box"></span>Form type is correct for the nature of the case</li>
+  <li><span class="check-box"></span>Officer's name, position number, and grade are verified against the establishment register</li>
+  <li><span class="check-box"></span>Ministry and department are correctly selected</li>
+  <li><span class="check-box"></span>All mandatory checklist items are confirmed present (no amber/missing badges)</li>
+  <li><span class="check-box"></span>All documents are in PDF format (where possible)</li>
+  <li><span class="check-box"></span>File names are clear and descriptive</li>
+  <li><span class="check-box"></span>Supporting narrative is complete and professionally written</li>
+  <li><span class="check-box"></span>Head of Agency endorsement obtained and documented</li>
+  <li><span class="check-box"></span>AI autofill has been run and any gaps addressed</li>
+  <li><span class="check-box"></span>Submission notes field summarises the case and any unusual circumstances</li>
+</ul>
+
+# Appendix C — Glossary {#sec-appendix-c}
+
+<dl>
+<dt class="glossary-term">Checklist</dt>
+<dd>The list of required supporting documents for a given form type. Generated automatically by SCDMS based on the form type selected.</dd>
+
+<dt class="glossary-term">Draft</dt>
+<dd>The initial stage of a submission. A draft can be freely edited and has not yet been sent to PSC.</dd>
+
+<dt class="glossary-term">Form Type</dt>
+<dd>The PSC case category — for example, PSC Form 21 (appointment), PSC Form 22 (transfer), or PSC Form 37 (confirmation). Each form type has an associated required-document checklist.</dd>
+
+<dt class="glossary-term">Head of Agency (HoA)</dt>
+<dd>The Director General or equivalent officer who leads a ministry or department. Many PSC submissions require HoA endorsement.</dd>
+
+<dt class="glossary-term">Implementation</dt>
+<dd>The act of carrying out the Commission's decision. HR Managers must record implementation in SCDMS and upload evidence of completion.</dd>
+
+<dt class="glossary-term">OCR (Optical Character Recognition)</dt>
+<dd>Technology used by SCDMS to extract readable text from uploaded documents, including scanned images. OCR text is used by the AI checklist assistant.</dd>
+
+<dt class="glossary-term">Reference Number</dt>
+<dd>The unique identifier assigned to each submission (e.g. PSC-2024-00142). Always quote this number when communicating with PSC about a submission.</dd>
+
+<dt class="glossary-term">Returned</dt>
+<dd>A submission stage indicating that PSC has sent the submission back to the ministry for additional information or documents. A returned submission must be completed and re-submitted.</dd>
+
+<dt class="glossary-term">Stage</dt>
+<dd>The current point in the PSC processing workflow. Each stage transition is recorded in the submission's stage history.</dd>
+
+<dt class="glossary-term">Two-Factor Authentication (2FA)</dt>
+<dd>A security mechanism that requires a second form of verification (typically a time-based code from an authenticator app) in addition to your password.</dd>
+</dl>
+
+---
+
+*For technical assistance, contact your PSC system administrator. For queries about PSC policy or your submission, contact your PSC liaison officer.*
+
+*Office of the Public Service Commission, Vanuatu — [scdms@psc.gov.vu](mailto:scdms@psc.gov.vu)*

@@ -35,6 +35,8 @@ import Notifications from '../pages/secretariat/Notifications'
 import TaskManagement from '../pages/secretariat/TaskManagement'
 import Account from '../pages/pages/Account'
 import StaffChatbot from '../pages/assistant/StaffChatbot'
+import HrManagerGuide from '../pages/guide/HrManagerGuide'
+import UnitManagerGuide from '../pages/guide/UnitManagerGuide'
 
 export default function AppRouter() {
   return (
@@ -76,6 +78,8 @@ export default function AppRouter() {
           <Route path="/secretariat/decisions" element={<Decisions />} />
           <Route path="/secretariat/tasks" element={<TaskManagement />} />
           <Route path="/secretariat/notifications" element={<Notifications />} />
+          <Route path="/guide/hr-manager" element={<HrManagerGuide />} />
+          <Route path="/guide/unit-manager" element={<UnitManagerGuide />} />
           <Route path="/pages/account" element={<Account />} />
           <Route path="/404" element={<Error404 />} />
           <Route path="*" element={<Navigate to="/404" replace />} />

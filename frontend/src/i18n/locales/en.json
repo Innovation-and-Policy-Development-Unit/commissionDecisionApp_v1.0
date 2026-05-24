@@ -37,7 +37,10 @@
     "feedback": "User Feedback",
     "backup_restore": "Backup & Restore",
     "account": "Account",
-    "logout": "Logout"
+    "logout": "Logout",
+    "group_help": "Help & Resources",
+    "guide_hr_manager": "HR Manager Guide",
+    "guide_unit_manager": "Unit Manager Guide"
   },
   "breadcrumb": {
     "dashboard": "Dashboard",
@@ -121,6 +124,7 @@
     "apply": "Apply",
     "export": "Export",
     "import": "Import",
+    "ai_thinking": "AI is thinking…",
     "download": "Download",
     "upload": "Upload",
     "refresh": "Refresh",

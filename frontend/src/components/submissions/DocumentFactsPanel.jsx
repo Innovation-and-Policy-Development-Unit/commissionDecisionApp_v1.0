@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Sparkles, Loader2, Search, AlertCircle } from 'lucide-react'
+import { Search, AlertCircle } from 'lucide-react'
+import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import api from '../../api/client'
 import clsx from 'clsx'
 
@@ -46,6 +47,9 @@ export default function DocumentFactsPanel({ submissionId, doc, canExtract, onRe
         <span className={clsx('text-[10px] font-bold uppercase px-2 py-0.5 rounded-full', STATUS_STYLES[doc.ocr_status] || STATUS_STYLES.pending)}>
           {doc.ocr_status_display || doc.ocr_status || 'pending'}
         </span>
+        {(doc.ocr_status === 'processing' || busy) && (
+          <AiProcessingIndicator label="AI is thinking…" size="sm" variant="slate" />
+        )}
         {canExtract && (
           <button
             type="button"
@@ -53,7 +57,6 @@ export default function DocumentFactsPanel({ submissionId, doc, canExtract, onRe
             disabled={busy || doc.ocr_status === 'processing'}
             className="inline-flex items-center gap-1 text-[10px] font-bold text-primary-600 hover:text-primary-700 disabled:opacity-50"
           >
-            {busy || doc.ocr_status === 'processing' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
             {doc.ocr_status === 'completed' ? 'Re-extract' : 'Extract text & facts'}
           </button>
         )}

@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, ScrollText, Bell, ListTodo,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
-  Headphones, Mail, FolderOpen, ExternalLink, Bot,
+  Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen,
 } from 'lucide-react'
 import { CMS_PORTAL_URL } from '../constants/compliance'
 import {
@@ -71,6 +71,32 @@ const menuItems = [
         path: '/secretariat/tasks',
       },
       { label: 'Notifications',   labelKey: 'nav.notifications', icon: Bell,         path: '/secretariat/notifications' },
+    ],
+  },
+  {
+    group: 'Help & Resources',
+    groupKey: 'nav.group_help',
+    groupIcon: BookOpen,
+    audience: 'all',
+    items: [
+      {
+        label: 'HR Manager Guide',
+        labelKey: 'nav.guide_hr_manager',
+        icon: BookOpen,
+        path: '/guide/hr-manager',
+        roles: ['ministry_hr', 'dept_admin', 'head_of_agency'],
+      },
+      {
+        label: 'Unit Manager Guide',
+        labelKey: 'nav.guide_unit_manager',
+        icon: BookOpen,
+        path: '/guide/unit-manager',
+        roles: [
+          'hr_unit_manager', 'hr_unit_principal',
+          'vipam_manager', 'vipam_principal',
+          'odu_manager', 'senior_admin_officer',
+        ],
+      },
     ],
   },
   {

@@ -8,12 +8,97 @@ import clsx from 'clsx'
 import {
   Menu, Search, Bell, Settings, Sun, SunDim, Moon, ChevronDown,
   User, LogOut, Lock, CreditCard, HelpCircle, Shield, X,
-  CheckCircle2, AlertCircle, Info, ChevronRight, MessageSquare
+  CheckCircle2, AlertCircle, Info, ChevronRight, MessageSquare,
+  Plus, LayoutDashboard, FileText, Gavel, Headphones, BarChart3,
+  Bot, CalendarDays, ListTodo, Zap, Keyboard,
 } from 'lucide-react'
 import BrandLogo from '../shared/BrandLogo'
 import LanguageSwitcher from '../shared/LanguageSwitcher'
 import DesktopNotificationSettings from '../notifications/DesktopNotificationSettings'
 import { useNotifications } from '../../hooks/useNotifications'
+
+// ── Quick actions shown before / alongside search results ──────────────────
+const ALL_QUICK_ACTIONS = [
+  {
+    id: 'new-submission',
+    label: 'New Submission',
+    sublabel: 'Create a new PSC submission',
+    icon: Plus,
+    path: '/submissions/new',
+    kbd: 'N',
+    roles: ['ministry_hr', 'dept_admin', 'head_of_agency', 'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'hr_unit_manager', 'vipam_manager', 'odu_manager'],
+  },
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    sublabel: 'Return to your dashboard',
+    icon: LayoutDashboard,
+    path: '/',
+    kbd: 'G D',
+    roles: null,
+  },
+  {
+    id: 'submissions',
+    label: 'Submissions',
+    sublabel: 'View all submissions',
+    icon: FileText,
+    path: '/submissions',
+    kbd: 'G S',
+    roles: null,
+  },
+  {
+    id: 'assistant',
+    label: 'Staff Assistant',
+    sublabel: 'AI-powered PSC assistant',
+    icon: Bot,
+    path: '/assistant',
+    kbd: 'G A',
+    roles: null,
+  },
+  {
+    id: 'reports',
+    label: 'Reports',
+    sublabel: 'Analytics and export',
+    icon: BarChart3,
+    path: '/reports',
+    kbd: 'G R',
+    roles: ['ministry_hr', 'dept_admin', 'head_of_agency', 'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'hr_unit_principal', 'vipam_principal'],
+  },
+  {
+    id: 'meeting-room',
+    label: 'Meeting Room',
+    sublabel: 'Live sitting management',
+    icon: Headphones,
+    path: '/secretariat/meeting-room',
+    kbd: 'G M',
+    roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'principal_officer', 'senior_officer', 'hr_unit_manager', 'vipam_manager'],
+  },
+  {
+    id: 'decisions',
+    label: 'Decisions',
+    sublabel: 'Commission decision register',
+    icon: Gavel,
+    path: '/secretariat/decisions',
+    roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'hr_unit_principal', 'vipam_principal'],
+  },
+  {
+    id: 'meetings',
+    label: 'Meetings',
+    sublabel: 'Commission sittings',
+    icon: CalendarDays,
+    path: '/secretariat/meetings',
+    roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager'],
+  },
+  {
+    id: 'tasks',
+    label: 'Tasks',
+    sublabel: 'Minutes decision tasks',
+    icon: ListTodo,
+    path: '/secretariat/tasks',
+    kbd: 'G T',
+    roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'hr_unit_manager', 'vipam_manager'],
+  },
+]
 
 /**
  * Breadcrumbs are translation-keyed so they react to language switching.
@@ -157,6 +242,21 @@ export default function Header({ onMenuClick }) {
 
   const startOffset = isHorizontal ? 'start-0' : (sidebarCollapsed ? 'lg:start-[5.5rem]' : 'lg:start-64')
 
+  // Filter quick actions for the current user's role
+  const quickActions = useMemo(() => {
+    if (!user) return []
+    return ALL_QUICK_ACTIONS.filter(a => !a.roles || a.roles.includes(user.role) || user.is_staff)
+  }, [user])
+
+  // Filtered quick actions based on current query
+  const filteredQuickActions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return quickActions
+    return quickActions.filter(
+      a => a.label.toLowerCase().includes(q) || a.sublabel.toLowerCase().includes(q),
+    )
+  }, [quickActions, searchQuery])
+
   const handleSearchChange = useCallback(e => {
     const v = e.target.value
     setSearchQuery(v)
@@ -174,7 +274,18 @@ export default function Header({ onMenuClick }) {
   const handleSearchClose = useCallback(() => {
     setSearchOpen(false); setSearchQuery(''); setSearchResults([])
   }, [])
-  const handleSearchOpen = useCallback(() => setSearchOpen(true), [])
+  const handleSearchOpen = useCallback(() => {
+    setSearchOpen(true)
+    // Focus the input on next tick (it may not be mounted yet)
+    setTimeout(() => searchInputRef.current?.focus(), 0)
+  }, [])
+
+  // Listen for the global shortcut event dispatched by useGlobalShortcuts
+  useEffect(() => {
+    const onOpenSearch = () => handleSearchOpen()
+    document.addEventListener('psc:search:open', onOpenSearch)
+    return () => document.removeEventListener('psc:search:open', onOpenSearch)
+  }, [handleSearchOpen])
   const handleNotifToggle = handleNotifOpen
   const handleUserToggle = useCallback(() => setUserOpen(o => !o), [])
   const handleSignOut = useCallback(() => {
@@ -302,46 +413,115 @@ export default function Header({ onMenuClick }) {
                   <path d="M12 2a10 10 0 0 1 10 10" />
                 </svg>
               )}
-              {/* Results dropdown */}
-              {searchResults.length > 0 && (
+              {/* Combined dropdown: quick actions + record search results */}
+              {(filteredQuickActions.length > 0 || searchResults.length > 0 || (searchQuery.trim().length >= 2 && !searchLoading)) && (
                 <div
-                  className="absolute top-full mt-1 left-0 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden"
+                  className="absolute top-full mt-1 left-0 w-96 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden"
                   role="listbox"
-                  aria-label={t('header.search')}
+                  aria-label="Search and quick actions"
                 >
-                  <ul className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
-                    {searchResults.map((r, i) => (
-                      <li key={i} role="option" aria-selected="false">
-                        <button
-                          type="button"
-                          className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-700/60"
-                          onClick={() => { navigate(r.url); handleSearchClose() }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                              r.type === 'submission' ? 'bg-blue-100 text-blue-700' :
-                              r.type === 'task'       ? 'bg-violet-100 text-violet-700' :
-                                                       'bg-slate-100 text-slate-600'
-                            }`}>
-                              {r.type}
-                            </span>
-                            <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{r.label}</span>
-                          </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{r.sublabel}</p>
-                          {r.meta && <p className="text-[10px] text-slate-400 mt-0.5">{r.meta}</p>}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {searchQuery.trim().length >= 2 && !searchLoading && searchResults.length === 0 && (
-                <div
-                  className="absolute top-full mt-1 left-0 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 px-4 py-3 text-xs text-slate-500"
-                  role="status"
-                  aria-live="polite"
-                >
-                  {t('header.search_no_results', { query: searchQuery })}
+                  <div className="max-h-[28rem] overflow-y-auto custom-scrollbar">
+                    {/* Quick Actions section */}
+                    {filteredQuickActions.length > 0 && (
+                      <div>
+                        <div className="px-3 pt-2.5 pb-1 flex items-center gap-1.5">
+                          <Zap size={10} className="text-amber-400" />
+                          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                            Quick Actions
+                          </span>
+                        </div>
+                        <ul className="pb-1">
+                          {filteredQuickActions.map(action => {
+                            const Icon = action.icon
+                            return (
+                              <li key={action.id} role="option" aria-selected="false">
+                                <button
+                                  type="button"
+                                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-700/60"
+                                  onClick={() => { navigate(action.path); handleSearchClose() }}
+                                >
+                                  <span className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                                    <Icon size={13} className="text-slate-500 dark:text-slate-400" />
+                                  </span>
+                                  <span className="flex-1 min-w-0 text-left">
+                                    <span className="block text-xs font-semibold text-slate-800 dark:text-slate-200">{action.label}</span>
+                                    <span className="block text-[10px] text-slate-400 dark:text-slate-500 truncate">{action.sublabel}</span>
+                                  </span>
+                                  {action.kbd && (
+                                    <kbd className="shrink-0 hidden sm:inline-flex items-center gap-0.5 text-[9px] font-mono text-slate-400 dark:text-slate-500">
+                                      {action.kbd.split(' ').map((k, ki) => (
+                                        <span key={ki} className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-600">
+                                          {k}
+                                        </span>
+                                      ))}
+                                    </kbd>
+                                  )}
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Record search results section */}
+                    {searchResults.length > 0 && (
+                      <div className={filteredQuickActions.length > 0 ? 'border-t border-slate-100 dark:border-slate-700' : ''}>
+                        <div className="px-3 pt-2.5 pb-1">
+                          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                            Records
+                          </span>
+                        </div>
+                        <ul className="pb-1">
+                          {searchResults.map((r, i) => (
+                            <li key={i} role="option" aria-selected="false">
+                              <button
+                                type="button"
+                                className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-700/60"
+                                onClick={() => { navigate(r.url); handleSearchClose() }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                    r.type === 'submission' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
+                                    r.type === 'task'       ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' :
+                                                             'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                                  }`}>
+                                    {r.type}
+                                  </span>
+                                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{r.label}</span>
+                                </div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{r.sublabel}</p>
+                                {r.meta && <p className="text-[10px] text-slate-400 mt-0.5">{r.meta}</p>}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* No results message */}
+                    {searchQuery.trim().length >= 2 && !searchLoading && searchResults.length === 0 && filteredQuickActions.length === 0 && (
+                      <p
+                        className="px-4 py-3 text-xs text-slate-500"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {t('header.search_no_results', { query: searchQuery })}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Footer hint */}
+                  <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 flex items-center gap-3">
+                    <span className="text-[10px] text-slate-400">
+                      Press <kbd className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1 font-mono text-[9px]">↑↓</kbd> to navigate,{' '}
+                      <kbd className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1 font-mono text-[9px]">↵</kbd> to select,{' '}
+                      <kbd className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1 font-mono text-[9px]">Esc</kbd> to close
+                    </span>
+                    <span className="ml-auto text-[10px] text-slate-400">
+                      <kbd className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-1 font-mono text-[9px]">?</kbd> shortcuts
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -366,6 +546,17 @@ export default function Header({ onMenuClick }) {
           </button>
         )}
       </div>
+
+      {/* Keyboard shortcuts hint button */}
+      <button
+        type="button"
+        onClick={() => document.dispatchEvent(new CustomEvent('psc:shortcuts:open'))}
+        aria-label="Keyboard shortcuts (?)"
+        title="Keyboard shortcuts (?)"
+        className="hidden sm:flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+      >
+        <Keyboard size={18} aria-hidden="true" />
+      </button>
 
       {/* Language switcher */}
       <LanguageSwitcher />

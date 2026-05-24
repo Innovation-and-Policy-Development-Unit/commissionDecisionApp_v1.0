@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
@@ -12,6 +12,8 @@ import FeedbackPanel from '../shared/FeedbackPanel'
 import StaffChatPanel from '../assistant/StaffChatPanel'
 import StaffChatFab from '../assistant/StaffChatFab'
 import LockOverlay from '../auth/LockOverlay'
+import KeyboardShortcutsModal from '../shared/KeyboardShortcutsModal'
+import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts'
 import { MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -28,8 +30,21 @@ export default function Layout() {
   } = useTheme()
   const { isLocked } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [staffChatOpen, setStaffChatOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
+  useGlobalShortcuts({
+    navigate,
+    onToggleShortcuts: () => setShortcutsOpen(o => !o),
+  })
+
+  useEffect(() => {
+    const onOpen = () => setShortcutsOpen(o => !o)
+    document.addEventListener('psc:shortcuts:open', onOpen)
+    return () => document.removeEventListener('psc:shortcuts:open', onOpen)
+  }, [])
 
   const onAssistantPage = location.pathname === '/assistant'
   const hideStaffChatFab = onAssistantPage
@@ -129,6 +144,12 @@ export default function Layout() {
 
       {/* Lock Screen Overlay */}
       <LockOverlay />
+
+      {/* Keyboard shortcuts help modal */}
+      <KeyboardShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
     </div>
   )
 }

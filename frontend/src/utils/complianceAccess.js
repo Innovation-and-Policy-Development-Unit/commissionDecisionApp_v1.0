@@ -30,6 +30,13 @@ export function userIsSecretariatStaff(user) {
 
 /** Menu audience tags on nav items / groups */
 export function menuItemVisibleForUser(item, user) {
+  // Role-gated items: visible only to the listed roles (or site admins)
+  if (item.roles && item.roles.length > 0) {
+    if (!user) return false
+    if (userIsAdmin(user)) return true
+    return item.roles.includes(user.role)
+  }
+
   const audience = item.audience ?? 'all'
   if (audience === 'all') return true
   if (!user) return false

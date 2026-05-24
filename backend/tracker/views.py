@@ -541,14 +541,24 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
-        from .tasks import queue_submission_brief, submission_brief_needs_refresh
+        from .tasks import (
+            QUALITY_SCORE_STAGES,
+            queue_submission_brief,
+            queue_submission_quality_score,
+            submission_brief_needs_refresh,
+            submission_quality_needs_refresh,
+        )
 
         submission = self.get_object()
         profile = _profile(request.user)
         if profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             if submission_brief_needs_refresh(submission):
-                # Never block the HTTP response on Claude — Render times out long sync calls.
                 queue_submission_brief(submission.id, sync_fallback=False)
+        if (
+            submission.current_stage in QUALITY_SCORE_STAGES
+            and submission_quality_needs_refresh(submission)
+        ):
+            queue_submission_quality_score(submission.id, force=False)
 
         _log(request, _AL.Action.READ,
              resource_type="Submission", resource_id=submission.id,
@@ -716,7 +726,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .tasks import SUBMISSION_BRIEF_STAGES, queue_submission_brief
         if target in SUBMISSION_BRIEF_STAGES:
             sid = submission.id
-            transaction.on_commit(lambda: queue_submission_brief(sid, force=True))
+            transaction.on_commit(lambda: queue_submission_brief(sid, force=False))
 
         from .tasks import queue_submission_quality_score
 
@@ -730,7 +740,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         )
         if _quality_triggers and submission.current_stage != WorkflowStage.DRAFT:
             sid = submission.id
-            transaction.on_commit(lambda: queue_submission_quality_score(sid, force=True))
+            transaction.on_commit(lambda: queue_submission_quality_score(sid, force=False))
 
         # ── Legacy: dispatch to CMS only when portal created submission without CMS link ──
         if target == WorkflowStage.COMPLIANCE_UNDER_REVIEW and not submission.cms_case_id:

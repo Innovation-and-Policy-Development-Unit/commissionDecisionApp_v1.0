@@ -493,6 +493,12 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         source="parent_submission.title", read_only=True, default=None
     )
     attached_submissions = AttachedSubmissionSerializer(many=True, read_only=True)
+    preliminary_quality_score = serializers.SerializerMethodField()
+
+    def get_preliminary_quality_score(self, obj):
+        from .ai.submission_quality_score import preliminary_quality_score
+
+        return preliminary_quality_score(obj)
 
     def get_is_assessment_overdue(self, obj):
         return obj.is_assessment_overdue
@@ -578,6 +584,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_quality_review_effort",
             "ai_quality_processed",
             "ai_quality_generated_at",
+            "preliminary_quality_score",
             "ai_package_gaps",
             "ai_package_ready",
             "ai_package_summary",
@@ -596,6 +603,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_quality_review_effort",
             "ai_quality_processed",
             "ai_quality_generated_at",
+            "preliminary_quality_score",
             "ai_package_gaps",
             "ai_package_ready",
             "ai_package_summary",

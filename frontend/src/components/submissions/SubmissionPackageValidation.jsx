@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ClipboardCheck, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ClipboardCheck, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
@@ -114,7 +115,7 @@ export default function SubmissionPackageValidation({
           disabled={validating || processing}
           className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1.5 shrink-0"
         >
-          {(validating || processing) ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />}
+          <ClipboardCheck size={14} />
           {(validating || processing) ? t('submission.package_validating') : t('submission.package_validate')}
         </button>
       </div>
@@ -178,7 +179,17 @@ export default function SubmissionPackageValidation({
         </div>
       )}
 
-      {!hasResult && !validating && (
+      {(validating || processing) && (
+        <div className="mb-3">
+          <AiProcessingIndicator
+            label={t('submission.package_validating', { defaultValue: 'AI is thinking…' })}
+            size="md"
+            variant="violet"
+          />
+        </div>
+      )}
+
+      {!hasResult && !validating && !processing && (
         <p className="text-sm text-slate-600 dark:text-slate-300">
           {t('submission.package_prompt')}
         </p>

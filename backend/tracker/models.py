@@ -902,6 +902,12 @@ class Submission(models.Model):
         help_text="True once the latest brief generation completed.",
     )
     ai_brief_generated_at = models.DateTimeField(null=True, blank=True)
+    ai_brief_context_key = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Fingerprint of stage/docs/checklist when brief was generated.",
+    )
     # ── AI quality score (compliance / unit review triage) ───────────────────
     ai_quality_score = models.PositiveSmallIntegerField(
         null=True,
@@ -927,6 +933,12 @@ class Submission(models.Model):
         help_text="True once the latest quality scoring completed.",
     )
     ai_quality_generated_at = models.DateTimeField(null=True, blank=True)
+    ai_quality_context_key = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Fingerprint of stage/docs/checklist when quality was scored.",
+    )
     # ── AI pre-submit package validation (A3 missing information) ─────────────
     ai_package_gaps = models.JSONField(
         default=list,

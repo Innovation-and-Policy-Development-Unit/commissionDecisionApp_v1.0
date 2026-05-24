@@ -82,6 +82,33 @@ def _sanitize_result(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def preliminary_quality_score(submission) -> int | None:
+    """
+    Instant checklist-based estimate (no API). Shown while Haiku scoring runs.
+    """
+    if submission.current_stage == "draft":
+        return None
+
+    from ..models import SubmissionChecklistItem
+
+    items = SubmissionChecklistItem.objects.filter(submission=submission)
+    if items.exists():
+        total = items.count()
+        present = items.filter(is_present=True).count()
+        score = int(40 + 55 * (present / max(total, 1)))
+    else:
+        score = 72
+
+    if submission.ai_package_processed and not submission.ai_package_ready:
+        score -= 12
+    critical = sum(
+        1 for g in (submission.ai_package_gaps or [])
+        if g.get("severity") == "critical"
+    )
+    score -= min(25, critical * 8)
+    return max(0, min(100, score))
+
+
 def score_submission_from_context(context: str) -> tuple[dict[str, Any] | None, str | None]:
     """Return (result_dict, error_message)."""
     if not ai_enabled():

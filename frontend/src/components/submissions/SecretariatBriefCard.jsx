@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Sparkles, Loader2, RefreshCw, AlertCircle } from 'lucide-react'
+import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react'
+import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import api from '../../api/client'
 
 const POLL_MS = 3000
@@ -93,15 +94,31 @@ export default function SecretariatBriefCard({ submission, submissionId, onUpdat
           disabled={regenerating || isLoading}
           className="btn-outline btn-sm shrink-0 disabled:opacity-50"
         >
-          {regenerating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          {regenerating ? (
+            <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />
+          ) : (
+            <RefreshCw size={14} />
+          )}
           {t('submission.ai_brief_regenerate')}
         </button>
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-indigo-700 dark:text-indigo-300 py-4">
-          <Loader2 size={18} className="animate-spin shrink-0" />
-          {t('submission.ai_brief_generating')}
+        <div className="space-y-3 py-2">
+          <div className="text-sm text-slate-600 dark:text-slate-300 rounded-lg border border-indigo-100 dark:border-indigo-900/50 px-3 py-2 bg-white/50 dark:bg-slate-800/30">
+            <p className="font-semibold text-slate-800 dark:text-slate-100">{submission.title}</p>
+            <p className="text-xs mt-1 text-slate-500">
+              {submission.reference_number}
+              {submission.ministry?.name ? ` · ${submission.ministry.name}` : ''}
+              {' · '}{submission.current_stage?.replace(/_/g, ' ')}
+            </p>
+            <p className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-2">AI executive brief loading…</p>
+          </div>
+          <AiProcessingIndicator
+            label={t('submission.ai_brief_generating', { defaultValue: 'AI is thinking…' })}
+            size="lg"
+            variant="indigo"
+          />
         </div>
       ) : showBrief ? (
         <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed bg-white/60 dark:bg-slate-800/40 rounded-xl px-4 py-3 border border-indigo-100 dark:border-indigo-900/50">

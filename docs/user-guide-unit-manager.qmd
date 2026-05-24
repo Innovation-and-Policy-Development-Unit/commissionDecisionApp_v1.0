@@ -1,0 +1,853 @@
+---
+title: "SCDMS — Unit Manager Processing Guide"
+subtitle: "Reviewing Submissions and Managing the PSC Pipeline"
+author: "Office of the Public Service Commission, Vanuatu"
+date: last-modified
+date-format: "MMMM YYYY"
+lang: en
+
+format:
+  html:
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-title: "Contents"
+    toc-location: left
+    number-sections: true
+    number-depth: 3
+    smooth-scroll: true
+    embed-resources: true
+    page-layout: article
+    grid:
+      sidebar-width: 270px
+      body-width: 860px
+---
+
+```{=html}
+<style>
+/* ═══════════════════════════════════════════════════════════
+   SCDMS ROLE GUIDE — DESIGN SYSTEM (Unit Manager edition)
+   Public Service Commission of Vanuatu
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  --psc-navy:   #1e3a8a;
+  --psc-blue:   #2563eb;
+  --psc-indigo: #4338ca;
+  --psc-teal:   #0d9488;
+  --psc-slate:  #475569;
+  --psc-amber:  #d97706;
+  --psc-red:    #dc2626;
+  --psc-green:  #16a34a;
+  --bg-light:   #f8fafc;
+  --border:     #e2e8f0;
+}
+body { font-family: "Georgia","Times New Roman",serif; font-size: 1.02rem; line-height: 1.75; color: #1e293b; }
+h1,h2,h3,h4 { font-family: "Helvetica Neue",Arial,sans-serif; font-weight: 700; line-height: 1.25; }
+h1 { font-size: 2rem; color: var(--psc-navy); margin-top: 2.5rem; border-bottom: 3px solid var(--psc-blue); padding-bottom: .5rem; }
+h2 { font-size: 1.45rem; color: var(--psc-indigo); margin-top: 2rem; }
+h3 { font-size: 1.15rem; color: var(--psc-slate); margin-top: 1.5rem; }
+h4 { font-size: 1rem; color: #334155; }
+p  { margin-bottom: 1rem; }
+
+#title-block-header {
+  background: linear-gradient(135deg, #064e3b 0%, #065f46 40%, #0d9488 100%);
+  color: #fff; padding: 3.5rem 3rem 2.5rem;
+  border-radius: 0 0 1.25rem 1.25rem; margin-bottom: 2.5rem;
+  box-shadow: 0 4px 24px rgba(6,78,59,.25);
+}
+#title-block-header .title { font-size: 2.4rem; font-weight: 800; letter-spacing: -.5px; margin-bottom: .35rem; }
+#title-block-header .subtitle { font-size: 1.1rem; opacity: .88; font-style: normal; font-weight: 400; margin-bottom: 1rem; }
+#title-block-header .quarto-title-meta { opacity: .7; font-size: .88rem; font-family: "Helvetica Neue",Arial,sans-serif; }
+
+#TOC { font-family: "Helvetica Neue",Arial,sans-serif; font-size: .84rem; line-height: 1.5; }
+#TOC a { color: var(--psc-slate); text-decoration: none; }
+#TOC a:hover { color: var(--psc-teal); }
+#TOC .active { color: var(--psc-teal); font-weight: 600; }
+
+.role-chip { display:inline-flex; align-items:center; gap:.3rem; padding:.22rem .85rem; border-radius:9999px; font-family:"Helvetica Neue",Arial,sans-serif; font-size:.76rem; font-weight:700; letter-spacing:.02em; text-transform:uppercase; margin:.18rem .1rem; line-height:1.5; }
+.role-ministry  { background:#dbeafe; color:#1d4ed8; border:1px solid #bfdbfe; }
+.role-psc       { background:#ede9fe; color:#4338ca; border:1px solid #ddd6fe; }
+.role-unit      { background:#d1fae5; color:#065f46; border:1px solid #a7f3d0; }
+.role-exec      { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
+.role-all       { background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; }
+
+.applies-to { background:#f0fdf4; border-left:4px solid var(--psc-teal); border-radius:0 .5rem .5rem 0; padding:.6rem 1rem; margin:1rem 0 1.5rem; font-family:"Helvetica Neue",Arial,sans-serif; }
+.applies-to p { margin:0; font-size:.82rem; font-weight:600; color:var(--psc-slate); text-transform:uppercase; letter-spacing:.04em; margin-bottom:.35rem; }
+
+.stage { display:inline-flex; align-items:center; padding:.22rem .7rem; border-radius:.4rem; font-family:"Helvetica Neue",Arial,sans-serif; font-size:.78rem; font-weight:700; white-space:nowrap; margin:.1rem; }
+.stage-draft       { background:#f1f5f9; color:#334155; }
+.stage-submitted   { background:#eff6ff; color:#1d4ed8; }
+.stage-received    { background:#eff6ff; color:#1e40af; }
+.stage-returned    { background:#fff7ed; color:#9a3412; }
+.stage-registered  { background:#eef2ff; color:#3730a3; }
+.stage-review      { background:#faf5ff; color:#6b21a8; }
+.stage-assessment  { background:#f5f3ff; color:#4c1d95; }
+.stage-onhold      { background:#fffbeb; color:#92400e; }
+.stage-commission  { background:#fdf4ff; color:#701a75; }
+.stage-approved    { background:#f0fdf4; color:#14532d; }
+.stage-rejected    { background:#fff1f2; color:#881337; }
+.stage-decision    { background:#fff7ed; color:#7c2d12; }
+.stage-implement   { background:#f0fdf4; color:#14532d; }
+
+.flow { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin:1rem 0; padding:.75rem 1rem; background:var(--bg-light); border-radius:.6rem; border:1px solid var(--border); }
+.flow-arrow { color:#94a3b8; font-size:.9rem; }
+
+.steps { counter-reset:step-counter; margin:1.2rem 0; }
+.step { display:flex; gap:1rem; align-items:flex-start; padding:.9rem 1.1rem; margin-bottom:.7rem; background:#fff; border:1px solid var(--border); border-radius:.65rem; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+.step::before { counter-increment:step-counter; content:counter(step-counter); display:inline-flex; align-items:center; justify-content:center; min-width:1.8rem; height:1.8rem; background:var(--psc-teal); color:#fff; border-radius:50%; font-family:"Helvetica Neue",Arial,sans-serif; font-size:.78rem; font-weight:800; flex-shrink:0; margin-top:.1rem; }
+.step-body { flex:1; min-width:0; }
+.step-body strong { color:var(--psc-navy); }
+
+.ai-panel { background:linear-gradient(135deg,#4338ca 0%,#7c3aed 100%); color:#fff; border-radius:.8rem; padding:1.1rem 1.4rem; margin:1.25rem 0; }
+.ai-panel h4 { margin:0 0 .4rem; font-size:1rem; color:#fff; font-family:"Helvetica Neue",Arial,sans-serif; }
+.ai-panel p { margin:0; opacity:.92; font-size:.9rem; font-family:"Helvetica Neue",Arial,sans-serif; }
+.ai-label { display:inline-block; background:rgba(255,255,255,.2); border-radius:.3rem; padding:.05rem .4rem; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.35rem; font-family:"Helvetica Neue",Arial,sans-serif; }
+
+.callout { border-radius:.65rem; margin:1.2rem 0; }
+.callout-note    { border-left-color:var(--psc-blue); }
+.callout-tip     { border-left-color:var(--psc-teal); }
+.callout-warning { border-left-color:var(--psc-amber); }
+.callout-important { border-left-color:var(--psc-red); }
+
+table { font-family:"Helvetica Neue",Arial,sans-serif; font-size:.88rem; border-collapse:collapse; width:100%; margin:1.1rem 0; }
+thead tr { background:var(--psc-navy); color:#fff; }
+thead th { padding:.55rem .85rem; text-align:left; font-weight:600; letter-spacing:.02em; }
+tbody tr:nth-child(even) { background:#f8fafc; }
+tbody td { padding:.5rem .85rem; border-bottom:1px solid #e2e8f0; vertical-align:top; }
+tbody tr:hover { background:#f0fdf4; }
+
+.doc-checklist { list-style:none; padding:0; margin:1rem 0; }
+.doc-checklist li { display:flex; align-items:flex-start; gap:.6rem; padding:.45rem .1rem; border-bottom:1px solid #f1f5f9; font-size:.93rem; }
+.doc-checklist li:last-child { border-bottom:none; }
+.check-box { display:inline-flex; align-items:center; justify-content:center; width:1.2rem; height:1.2rem; border:2px solid #cbd5e1; border-radius:.25rem; flex-shrink:0; margin-top:.15rem; color:transparent; }
+
+.part-header { background:linear-gradient(90deg,#064e3b 0%,#065f46 60%,#0d9488 100%); color:#fff; border-radius:.75rem; padding:1.5rem 2rem; margin:3rem 0 2rem; }
+.part-header .part-label { font-family:"Helvetica Neue",Arial,sans-serif; font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.12em; opacity:.75; margin-bottom:.3rem; }
+.part-header h2 { color:#fff; margin:0; font-size:1.5rem; border:none; }
+.part-header p { margin:.4rem 0 0; opacity:.85; font-size:.9rem; }
+
+.score-bar { display:flex; align-items:center; gap:1rem; margin:.5rem 0; }
+.score-fill { height:.6rem; border-radius:9999px; flex-shrink:0; }
+.score-high { background:#16a34a; }
+.score-mid  { background:#d97706; }
+.score-low  { background:#dc2626; }
+
+.glossary-term { font-family:"Helvetica Neue",Arial,sans-serif; font-weight:700; color:var(--psc-navy); }
+
+@media print {
+  #TOC,#title-block-header .quarto-title-meta { display:none; }
+  body { font-size:.9rem; }
+  .part-header { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+</style>
+```
+
+::: {.applies-to}
+<p>Applies to</p>
+<span class="role-chip role-unit">HR Unit Manager</span>
+<span class="role-chip role-unit">VIPAM Manager</span>
+<span class="role-chip role-unit">ODU Manager</span>
+<span class="role-chip role-unit">Senior Admin Officer</span>
+:::
+
+This guide is written for OPSC Unit Managers and equivalent officers responsible for reviewing and processing ministry submissions within the PSC pipeline. It covers the full workflow from receiving an incoming case through to recording the Commission's decision and tracking implementation.
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part I</div>
+  <h2>Getting Started</h2>
+  <p>Your dashboard, your queue, and the complete processing pipeline.</p>
+</div>
+```
+
+# Your Role in the PSC Pipeline {#sec-role}
+
+As an OPSC Unit Manager, you sit at the heart of the PSC decision process. Submissions from ministries flow into your queue, and your role is to assess their completeness and quality, manage them through the workflow stages, prepare them for the Commission's consideration, and ensure decisions are recorded and implemented.
+
+Your three primary responsibilities in SCDMS are:
+
+1. **Assessment** — reviewing incoming submissions for completeness, accuracy, and compliance with PSC requirements
+2. **Pipeline management** — advancing submissions through the defined workflow stages and coordinating with PSC officers, the Secretary, and the Commission
+3. **Decision administration** — recording decisions, issuing notifications, and tracking implementation
+
+The AI tools embedded in SCDMS assist with the most time-consuming parts of assessment, allowing you to focus your professional judgement on matters that genuinely require it.
+
+::: {.callout-note}
+## Scope of this guide
+This guide covers the processing capabilities available to HR Unit Managers, VIPAM Managers, ODU Managers, and Senior Administration Officers. Some features — such as minutes editing and agenda management — are also covered here but require the PSC Secretary or PSC Administrator role for certain actions.
+:::
+
+# Your Dashboard and Submission Queue {#sec-dashboard}
+
+## Dashboard Overview
+
+After signing in, your dashboard displays:
+
+- **Incoming queue** — submissions assigned to your unit that are awaiting action
+- **In progress** — submissions currently being processed
+- **Awaiting Commission** — cases scheduled for an upcoming sitting
+- **Awaiting implementation** — decisions issued and awaiting ministry confirmation
+- **KPI summary** — average processing time and case volumes for your unit
+
+The queue is sorted by **urgency**: submissions approaching a sitting deadline appear first, followed by those that have been waiting longest.
+
+## Navigating to a Submission
+
+Click any submission row to open the full submission detail page. This page is the primary working view — it shows the case details, documents, checklist, quality metrics, workflow controls, and stage history all in one place.
+
+Use the **Submissions** menu item to access the full list with filtering and search options. Filter by status, form type, ministry, or date range to manage large volumes efficiently.
+
+# The Complete Processing Pipeline {#sec-pipeline}
+
+Understanding the full pipeline allows you to anticipate what comes next and manage your queue proactively.
+
+::: {.flow}
+<span class="stage stage-submitted">Submitted</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-received">Received</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-registered">Registered</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-review">Unit Review</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-assessment">Assessment</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-commission">Commission</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-decision">Decision</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-implement">Implemented</span>
+:::
+
+| Stage | Responsible officer | Typical action |
+|---|---|---|
+| **Submitted** | Ministry HR Manager | Ministry has submitted; awaiting PSC receipt |
+| **Received** | PSC Secretary / Admin | Acknowledged receipt |
+| **Registered** | PSC Secretary | Assigned a register number and unit |
+| **Unit Review** | Unit Manager (you) | Checklist, package validation, quality assessment |
+| **Assessment** | Unit Manager / Principal | Detailed merit assessment and recommendation |
+| **On Hold** | Any PSC officer | Waiting for additional information from ministry |
+| **Commission** | PSC Secretary | Placed on Commission agenda |
+| **Decision** | PSC Secretary | Commission decision recorded |
+| **Decision Issued** | PSC Secretary | Formal notification sent to ministry |
+| **Implementation** | Ministry HR Manager | Ministry implementing the decision |
+| **Implemented** | Ministry HR Manager | Implementation confirmed |
+
+Your work is concentrated in the **Unit Review**, **Assessment**, and **On Hold** stages.
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part II</div>
+  <h2>Reviewing a Submission</h2>
+  <p>AI-assisted assessment tools for completeness, validity, and quality.</p>
+</div>
+```
+
+# Opening and Initial Assessment {#sec-initial}
+
+## Opening a Submission
+
+Click any submission from your queue to open the detail page. Take 60 seconds to read the case overview before touching any tools:
+
+- **Case title and form type** — confirms the nature of the matter
+- **Ministry and department** — identifies the submitting organisation
+- **Submission notes** (if any) — the ministry's own explanation of the case
+- **Reference number** — the official registration number
+
+Then review the document list to confirm files have been uploaded. A submission with no uploaded documents should be returned immediately (see @sec-return).
+
+## The AI Assessment Panel
+
+On the right side of the submission detail page, the **AI Assessment** panel summarises all AI-generated indicators:
+
+- **Quality Score** (A5) — a 0–100 score reflecting the overall submission quality
+- **Package Validation status** (A3) — whether critical documents appear to be present
+- **Checklist completion** — fraction of required documents confirmed
+
+These indicators are produced by different AI tools, each described in detail in the following chapters. Run them in this sequence for maximum efficiency:
+
+::: {.flow}
+<span class="stage stage-review">1. AI Checklist Autofill</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-assessment">2. Package Validation</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-review">3. Quality Score</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-commission">Decision: proceed or return</span>
+:::
+
+# AI Checklist Autofill (A1) {#sec-autofill}
+
+::: {.ai-panel}
+<div class="ai-label">AI Feature A1 — Checklist Autofill</div>
+<h4>Automated Document Verification</h4>
+<p>Scans all uploaded document text and suggests whether each required checklist item is present or missing, with a one-sentence explanation for each suggestion. Runs in under 30 seconds.</p>
+:::
+
+## What it Does
+
+The checklist for each submission is determined by the form type selected by the ministry. The A1 autofill tool reads the extracted text from every uploaded document and, for each required checklist item, determines whether supporting evidence appears in the documents. It then presents its findings as suggestions — present or missing — with a brief note citing the evidence (or lack thereof).
+
+## Running the Autofill
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Locate the Checklist panel** on the submission detail page (left column). Confirm that at least one document has been uploaded — the **Autofill** button is disabled until documents are present.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Click Autofill** (the wand icon in the checklist panel header). The analysis typically completes in 10–30 seconds. A spinner indicates the AI is working.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Review each suggestion.** Each checklist item now shows either a green **Present** badge or an amber **Missing** badge, plus the AI's one-sentence explanation. Read the notes — they cite the specific file or phrase that supports the assessment.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Accept or reject individually.** For each suggestion, click **Accept** (green) to confirm the AI's assessment, or **Reject** (grey) to dismiss it and use your own judgement. Rejecting a suggestion does not lock the item — you can still manually toggle the checkbox.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Use Accept All** for bulk confirmation when you have reviewed the notes and are satisfied the AI's assessment is correct across all items. A single click confirms all pending suggestions simultaneously.
+:::
+:::
+:::
+
+::: {.callout-warning}
+## Always read the notes before accepting
+The AI occasionally misidentifies documents — particularly when file names are generic (e.g. *document.pdf*) or when scanned images have poor OCR quality. A 30-second review of the notes prevents errors in the official record.
+:::
+
+## Interpreting Results
+
+| Result | Meaning | Your action |
+|---|---|---|
+| Green — Present | AI found evidence of the document | Accept if the note is credible; reject if not |
+| Amber — Missing | AI found no evidence | Verify manually; if truly missing, note for return |
+| No badge | Item not yet evaluated | Toggle manually or re-run autofill |
+
+## When to Re-run
+
+If the ministry uploads additional documents after you have run autofill, clear the existing suggestions and run autofill again. A fresh analysis incorporates all available content.
+
+# Package Validation (A3) {#sec-validation}
+
+::: {.ai-panel}
+<div class="ai-label">AI Feature A3 — Package Validation</div>
+<h4>Cross-Document Consistency Check</h4>
+<p>Analyses the submission as a whole — checking that information is consistent across documents and that the overall case narrative is coherent. Identifies gaps and contradictions that individual checklist items cannot catch.</p>
+:::
+
+## What it Does
+
+While the checklist verifies that individual documents are present, Package Validation examines the submission holistically. It checks for:
+
+- **Internal consistency** — does the officer's name, grade, and position number appear consistently across all documents?
+- **Date coherence** — are appointment dates, medical certificate dates, and form dates logically consistent?
+- **Narrative completeness** — is the case narrative sufficient to support the decision being requested?
+- **Policy compliance indicators** — are there obvious departures from standard PSC requirements?
+
+## Running Package Validation
+
+Click the **Validate Package** button in the AI Assessment panel on the right side of the submission detail page. Results are stored against the submission and displayed as a structured list of:
+
+- **Gaps** — missing or insufficient information
+- **Warnings** — potential inconsistencies that require your attention
+- **Confirmations** — areas where the package is strong
+
+::: {.callout-tip}
+## Use validation after autofill
+Package validation is most useful once the checklist is reasonably complete. Run autofill first to confirm document presence, then run package validation to identify deeper issues.
+:::
+
+## Acting on Validation Results
+
+Each gap or warning includes a description of the issue and, where applicable, a suggestion for how the ministry can address it. Use these findings to:
+
+- Draft a specific, actionable return notice if the package is insufficient (see @sec-return)
+- Document your assessment rationale in the submission notes
+- Prepare questions for the ministry if clarification is needed before returning
+
+# Quality Scoring (A5) {#sec-quality}
+
+::: {.ai-panel}
+<div class="ai-label">AI Feature A5 — Quality Score</div>
+<h4>Overall Submission Quality Assessment</h4>
+<p>A 0–100 composite score reflecting document completeness, narrative quality, information consistency, and compliance with PSC form requirements. Useful for triage and for setting processing priorities.</p>
+:::
+
+## Understanding the Score
+
+The quality score is a composite indicator, not a pass/fail threshold. It is best used for:
+
+- **Triage** — quickly identifying submissions that clearly need to be returned versus those that are ready to proceed
+- **Documentation** — providing an auditable quality metric in the submission record
+- **Trend analysis** — identifying ministries or form types that consistently produce high or low quality submissions
+
+| Score range | Interpretation | Typical action |
+|---|---|---|
+| **80–100** | Strong submission | Proceed to assessment; minor gaps only |
+| **60–79** | Adequate submission | Proceed with noted reservations; document gaps |
+| **40–59** | Marginal submission | Consider returning for specific improvements |
+| **0–39** | Insufficient submission | Return with detailed requirements |
+
+::: {.callout-important}
+## The score informs — it does not decide
+A score of 85 does not automatically mean a submission should proceed. A submission may score well on completeness but still have a policy issue that makes it unsuitable for the Commission. Your professional assessment is always the final word.
+:::
+
+## Where the Score Appears
+
+The quality score appears in:
+
+- The **AI Assessment panel** on the submission detail page
+- The **Submissions list** as a small score indicator on each row
+- **Reports** — the analytics page includes average quality score by ministry, form type, and time period
+
+# Returning a Submission for Additional Information {#sec-return}
+
+::: {.applies-to}
+<p>Applies to</p>
+<span class="role-chip role-unit">HR Unit Manager</span>
+<span class="role-chip role-unit">VIPAM Manager</span>
+<span class="role-chip role-unit">ODU Manager</span>
+:::
+
+When a submission is insufficient and cannot proceed to the Commission, return it to the ministry with clear, specific instructions.
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Use the AI tools to identify all gaps** before returning. A single, comprehensive return notice is better than multiple sequential requests — it minimises delays for the ministry and reduces processing overhead for your unit.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Click Return to Ministry** in the workflow controls panel. A dialog appears where you must enter the return reason.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Write a specific return notice.** List each missing document or required change as a numbered item. For example: *(1) Medical certificate missing — must be dated within 3 months of submission; (2) PSC Form 21 unsigned — must be signed and dated by the Head of Agency.* Vague return notices increase re-submission errors.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Set a response deadline** (optional but recommended). Specify the date by which the ministry must re-submit if the case is to be considered at the next Commission sitting.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Confirm the return.** The submission status changes to **Returned** and the ministry HR Manager receives an automatic email notification with the return notice.
+:::
+:::
+:::
+
+::: {.callout-tip}
+## Copy the AI package validation output
+The Package Validation tool's gap list is an excellent starting point for your return notice. Copy the key findings, review them for accuracy, and rewrite them in plain English before submitting the return notice.
+:::
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part III</div>
+  <h2>Advancing Through the Pipeline</h2>
+  <p>Stage transitions, on-hold management, and preparing cases for the Commission sitting.</p>
+</div>
+```
+
+# Stage Transitions and Workflow Controls {#sec-stages}
+
+## Advancing a Submission
+
+The workflow controls panel (right side of the submission detail page) shows the current stage and available next actions. The actions available to you depend on your role and the current stage.
+
+Common transitions you will initiate:
+
+| Current stage | Your action | Next stage |
+|---|---|---|
+| Submitted | Acknowledge receipt | Received |
+| Received | Register and assign | Registered |
+| Registered | Open for review | Unit Review |
+| Unit Review | Begin assessment | Assessment |
+| Assessment | Place on agenda | Commission |
+| Unit Review / Assessment | Return to ministry | Returned |
+| Unit Review / Assessment | Place on hold | On Hold |
+| Commission | Record decision | Decision |
+
+Each transition requires confirmation in a dialog. Some transitions also require you to fill in additional fields — for example, registering a submission requires entry of the register number.
+
+## Placing a Submission On Hold
+
+Use **On Hold** when you are waiting for information that the ministry has been asked to provide informally (without formally returning the submission). This status is visible to PSC staff but not to the ministry.
+
+On-hold submissions do not appear in the active processing queue. Set a review date when placing a submission on hold so it reappears in your queue at the right time.
+
+# Scheduling and Agenda Preparation {#sec-agenda}
+
+::: {.applies-to}
+<p>Applies to</p>
+<span class="role-chip role-unit">HR Unit Manager</span>
+<span class="role-chip role-unit">VIPAM Manager</span>
+<span class="role-chip role-psc">PSC Secretary</span>
+:::
+
+## Adding a Submission to the Agenda
+
+When a submission has been assessed and is ready for the Commission, it must be placed on the agenda for an upcoming sitting.
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Navigate to the Commission Sittings page** in the left navigation under *Commission Decision → Meetings*. Select the relevant upcoming meeting.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Open the Agenda tab** within the meeting view. Click **Add Agenda Item** and search for the submission by reference number or case title.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Set the order and category.** Drag items to reorder them, or use the order field. Group related cases (e.g. all promotion matters) together where possible.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Generate the agenda blurb** (optional but recommended). The AI can draft a concise two-to-three sentence summary of the case for inclusion in the agenda document. Click **Generate Blurb** on the agenda item row and review the output before saving.
+:::
+:::
+:::
+
+## Briefing Pack Generation
+
+Once the agenda is finalised, generate the briefing pack for Commission members. Navigate to the meeting and click **Generate Briefing Pack**. The system compiles all agenda items, their supporting summaries, and relevant case data into a structured pack. Review the generated pack before the sitting and make any manual edits needed.
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part IV</div>
+  <h2>Commission Sitting and Decision</h2>
+  <p>Recording discussions, capturing decisions, and issuing notifications.</p>
+</div>
+```
+
+# In-Meeting Tools {#sec-meeting}
+
+::: {.applies-to}
+<p>Applies to</p>
+<span class="role-chip role-psc">PSC Secretary</span>
+<span class="role-chip role-unit">HR Unit Manager</span>
+:::
+
+## Meeting Room Hub
+
+The **Meeting Room** (accessible from the left navigation under *Commission Decision → Meeting Room*) is the central hub for live sitting management. It provides:
+
+- **Live agenda view** — the current agenda item is highlighted; click an item to jump to its submission detail
+- **Discussion notes** — real-time note-taking for each agenda item
+- **Decision recording** — record Commission decisions as they are made
+- **Minutes pipeline** — access the minutes extraction tools for processing audio recordings
+
+## Recording Decisions in Real Time
+
+For each agenda item that the Commission resolves:
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Open the agenda item** from the meeting room view. The submission detail opens in a side panel.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Click Record Decision.** Select the decision type: *Approved*, *Approved with Conditions*, *Rejected*, *Deferred*, or *Withdrawn*.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Enter the decision text.** This is the formal wording that will appear in the official decision record and in notifications to the ministry. Write clearly and precisely — this text is the authoritative record.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Set conditions and implementation deadline** if applicable. Any conditions attached to an approval must be specified here. The implementation deadline triggers automatic reminders to the ministry.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Save the decision.** The submission stage changes to *Decision* and is queued for formal notification.
+:::
+:::
+:::
+
+::: {.callout-important}
+## Precision in decision text is critical
+The decision text recorded in SCDMS is the official record. It must be precise, unambiguous, and consistent with what the Commission resolved. If you are unsure of the exact wording, note it as *provisional* and have the PSC Secretary confirm before issuing the notification.
+:::
+
+# Decision Notifications {#sec-notifications}
+
+::: {.applies-to}
+<p>Applies to</p>
+<span class="role-chip role-psc">PSC Secretary</span>
+<span class="role-chip role-unit">Senior Admin Officer</span>
+:::
+
+## Issuing Formal Notifications
+
+After a decision has been recorded, it must be formally communicated to the submitting ministry. Navigate to the **Notifications** section (*Commission Decision → Notifications*).
+
+Each pending notification is listed with the submission reference, decision type, ministry, and the officer responsible for issuing it.
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Select the notification** and review the auto-generated draft. The system pre-populates the decision text, reference number, ministry details, and implementation deadline.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Review and edit the draft.** Ensure the salutation, ministry name, and implementation instructions are correct. The Staff Assistant AI can help draft additional paragraphs if needed.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Approve and issue.** Click **Issue Notification**. The notification is sent to the ministry HR Manager by email and the submission stage changes to *Decision Issued*.
+:::
+:::
+:::
+
+# Tracking Implementation {#sec-tracking}
+
+Once a decision has been issued, the responsibility shifts to the ministry — but you continue to monitor progress.
+
+## The Implementation Queue
+
+The Dashboard's **Awaiting Implementation** panel lists all submissions in the *Decision Issued* state, sorted by implementation deadline. The colour coding:
+
+- **Green** — deadline is more than two weeks away
+- **Amber** — deadline is within two weeks
+- **Red** — deadline has passed or is overdue
+
+## When the Ministry Reports Implementation
+
+When the ministry marks a submission as implemented, you receive a notification. Review the implementation evidence they have uploaded:
+
+- Is the evidence appropriate for the type of decision? (e.g. signed appointment letter for an appointment decision)
+- Does the implementation date align with the decision?
+- Are there any conditions that have not been addressed?
+
+If the implementation is satisfactory, no further action is required — the submission moves to **Implemented** status automatically.
+
+If the evidence is insufficient, contact the ministry and request additional documentation. Use the submission notes field to record your communications.
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part V</div>
+  <h2>Reports, Analytics, and AI Tools</h2>
+  <p>Performance reporting, the Staff Assistant, and OCR document extraction.</p>
+</div>
+```
+
+# Reports and Analytics {#sec-reports}
+
+Navigate to **Reports** in the left menu to access the full reporting suite. The following reports are most relevant to Unit Managers:
+
+## Unit Performance Report
+
+| Metric | Description |
+|---|---|
+| **Cases received** | Total submissions assigned to your unit in the selected period |
+| **Cases resolved** | Submissions where a decision was reached |
+| **Average processing time** | From receipt to decision, in calendar days |
+| **Return rate** | Percentage of submissions returned to ministries |
+| **Quality score distribution** | Average score by ministry and form type |
+
+Use these metrics for:
+
+- Identifying ministries that consistently submit incomplete packages (target for pre-submission guidance)
+- Monitoring your unit's throughput relative to previous periods
+- Preparing unit performance reports for the PSC Secretary
+
+## Decision Register
+
+The **Decision Register** provides a searchable, exportable record of all Commission decisions. Filter by date range, ministry, form type, or decision type. The register can be exported to Excel or PDF for external reporting purposes.
+
+## Exporting Data
+
+On any report page, click **Export** to download the underlying data in Excel format. The Excel export includes all columns shown on screen plus additional metadata fields. For PDF export (formatted report), click **Export PDF** — this generates a print-ready report with the PSC letterhead.
+
+# Staff Assistant AI {#sec-assistant}
+
+The **Staff Assistant** is an AI chatbot specialised in PSC policies, procedures, and your active submissions. Access it from *Help & Resources → Staff Assistant* in the left navigation.
+
+Unit Managers find the Assistant most useful for:
+
+- **Policy queries** — *"What is the PSC policy on acting appointments exceeding 12 months?"*
+- **Draft language** — *"Draft the return notice for submission PSC-2024-00198 citing missing medical certificate and incomplete Form 21"*
+- **Status summaries** — *"Summarise the current status of all submissions from the Ministry of Finance"*
+- **Procedural questions** — *"What are the steps to place a submission on hold without returning it?"*
+
+::: {.callout-tip}
+## Reference submission numbers in your questions
+When asking about a specific case, include the submission reference number (e.g. *PSC-2024-00142*). The Assistant can access the submission's metadata and provide context-aware answers.
+:::
+
+The Assistant does not have authority to change submission data. It is an information and drafting aid only.
+
+# Document OCR and AI Extraction (E1) {#sec-ocr}
+
+::: {.ai-panel}
+<div class="ai-label">AI Feature E1 — Document Extraction</div>
+<h4>OCR Text Extraction and Structured Fact Recognition</h4>
+<p>Each uploaded document is automatically processed through OCR to extract readable text. The AI then identifies and structures key facts — officer name, position, grade, dates — for quick reference without opening the document.</p>
+:::
+
+## How OCR Works
+
+When a ministry uploads a document, SCDMS automatically:
+
+1. **Extracts text** using optical character recognition (OCR). Digital PDFs are processed directly; scanned images are first converted to machine-readable text.
+2. **Identifies key facts** — the AI reads the extracted text and identifies structured data such as the officer's name, position number, grade, appointment date, and relevant policy references.
+3. **Stores both** — the raw extracted text and the structured facts are stored against the document and are searchable.
+
+## Using Extracted Facts in Your Review
+
+In the document list on a submission, click any document row to expand it. Alongside the filename and upload date, you will see:
+
+- **Extracted text preview** — the first 300 characters of the OCR output, useful for quickly confirming the document's content
+- **Key facts** (where identified) — structured fields extracted by the AI, such as the officer's name, grade, and date
+
+These extractions power the A1 checklist autofill and feed into the A3 package validation. They are also used by the Staff Assistant when answering queries about specific submissions.
+
+## When OCR Quality is Low
+
+Scanned documents with poor image quality, unusual fonts, or handwritten content may produce incomplete OCR output. When you see a note that extracted text is unavailable or very short for a document that should contain significant content, flag it:
+
+- Open the document to view it directly
+- If the content is unreadable in the system, request that the ministry re-upload a cleaner version
+- Make a note in the submission's notes field that OCR quality was low for that document
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part VI</div>
+  <h2>Account and Security</h2>
+  <p>Managing your account, two-factor authentication, and session security.</p>
+</div>
+```
+
+# Account Management {#sec-account}
+
+## Changing Your Password
+
+Click your name in the top-right corner and select **Account**. Under the *Security* tab, enter your current password and the new password twice. Passwords must be at least 12 characters and include letters, numbers, and symbols.
+
+## Two-Factor Authentication
+
+Two-factor authentication is mandatory for all PSC staff accounts. If your 2FA device is lost or replaced:
+
+1. Contact your SCDMS administrator to temporarily disable 2FA on your account
+2. Log in and immediately re-enrol using your new device
+3. Store your backup codes in a secure location
+
+## Session Inactivity Lock
+
+Your session locks automatically after a configurable period of inactivity. Enter your PIN to resume. The inactivity timeout is set by your administrator and is typically 15 minutes for PSC staff.
+
+::: {.callout-important}
+## Lock your screen when leaving your workstation
+The session lock activates automatically, but always manually lock your screen (Windows: `Win + L`) before leaving your workstation unattended. SCDMS contains confidential personnel data.
+:::
+
+---
+
+# Appendix A — Complete Stage Reference {#sec-appendix-a}
+
+| Stage code | Display name | Responsible | Description |
+|---|---|---|---|
+| `draft` | Draft | Ministry | Ministry is preparing the submission |
+| `submitted` | Submitted to PSC | Ministry | Ministry has submitted; PSC not yet acted |
+| `received` | Received | PSC Secretary | PSC has acknowledged receipt |
+| `registered` | Registered & Assigned | PSC Secretary | Register number assigned; unit assigned |
+| `under_review` | Unit Review | Unit Manager | Unit is reviewing for completeness |
+| `assessment` | Under Assessment | Unit Manager / Principal | Merit and compliance assessment underway |
+| `on_hold` | On Hold | PSC Officer | Waiting for information; clock paused |
+| `returned` | Returned | Ministry | Returned to ministry for additional information |
+| `scheduled` | Scheduled for Sitting | PSC Secretary | Placed on Commission agenda |
+| `commission` | Before Commission | PSC Secretary | Commission is considering the case |
+| `decision_pending` | Decision Pending | PSC Secretary | Decision made; awaiting formal recording |
+| `decision` | Decision Recorded | PSC Secretary | Decision recorded in system |
+| `decision_issued` | Decision Issued | PSC Secretary | Formal notification sent to ministry |
+| `implementation` | Implementing | Ministry | Ministry is implementing the decision |
+| `implementation_report` | Implemented | Ministry | Implementation confirmed and recorded |
+
+# Appendix B — AI Feature Reference {#sec-appendix-b}
+
+| Feature | Code | Tool | What it does | When to use |
+|---|---|---|---|---|
+| Checklist Autofill | A1 | Haiku | Scans uploaded docs; suggests present/missing per checklist item | First step of every review |
+| Package Validation | A3 | Haiku | Cross-document consistency and completeness check | After checklist is substantially complete |
+| Quality Score | A5 | Haiku | 0–100 composite quality indicator | Triage and documentation |
+| Document Extraction | E1 | Sonnet Vision | OCR text and structured fact extraction | Automatic on upload |
+| Staff Assistant | — | Sonnet | Policy and procedure Q&A; drafting | On demand |
+| Agenda Blurb | — | Haiku | Drafts 2–3 sentence agenda summary | When placing on Commission agenda |
+
+# Appendix C — Glossary {#sec-appendix-c}
+
+<dl>
+<dt class="glossary-term">A1 / A3 / A5</dt>
+<dd>Internal codes for AI feature tiers. A1 is checklist autofill, A3 is package validation, A5 is quality scoring. All run on Claude Haiku for fast, cost-effective analysis.</dd>
+
+<dt class="glossary-term">Agenda Blurb</dt>
+<dd>A concise AI-generated summary of a submission for inclusion in the Commission agenda. Must be reviewed and approved by the PSC officer before use.</dd>
+
+<dt class="glossary-term">Briefing Pack</dt>
+<dd>A compiled document containing agenda items, case summaries, and relevant data for Commission members to review before a sitting. Generated from the meeting management page.</dd>
+
+<dt class="glossary-term">Checklist Autofill</dt>
+<dd>The AI feature that reads uploaded document text and suggests whether each required checklist item is present. Suggestions must be confirmed or rejected by a PSC officer.</dd>
+
+<dt class="glossary-term">E1</dt>
+<dd>Internal code for the document extraction feature. Automatically runs OCR on uploaded files and extracts structured facts using the Claude Sonnet vision model.</dd>
+
+<dt class="glossary-term">OCR (Optical Character Recognition)</dt>
+<dd>Technology that converts images of text (scanned documents, photographs of pages) into machine-readable text. The quality of OCR output depends on the image quality of the source document.</dd>
+
+<dt class="glossary-term">On Hold</dt>
+<dd>A submission stage indicating that processing has been paused pending information, without formally returning the submission to the ministry. On-hold submissions do not appear in the active processing queue.</dd>
+
+<dt class="glossary-term">Package Validation</dt>
+<dd>AI-powered cross-document review that checks for internal consistency, completeness, and compliance indicators across all documents in a submission package.</dd>
+
+<dt class="glossary-term">Quality Score</dt>
+<dd>A 0–100 composite indicator of submission quality, combining document completeness, narrative quality, and information consistency. An indicative tool — not a binary pass/fail threshold.</dd>
+
+<dt class="glossary-term">Stage History</dt>
+<dd>The chronological log of every stage transition for a submission, including the date, time, officer responsible, and any notes recorded at each transition.</dd>
+
+<dt class="glossary-term">VIPAM</dt>
+<dd>Vanuatu Institute of Public Administration and Management. The VIPAM Unit within OPSC handles matters related to training, capacity building, and some human resource development cases.</dd>
+</dl>
+
+---
+
+*For technical assistance, contact your SCDMS administrator. For policy queries, consult the PSC Secretary or refer to the Staff Assistant.*
+
+*Office of the Public Service Commission, Vanuatu — [scdms@psc.gov.vu](mailto:scdms@psc.gov.vu)*

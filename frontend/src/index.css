@@ -15,6 +15,8 @@
   --p-800:   0  38  70;
   --p-900:   0  30  56;
   --p-hex: #004276;
+  --p-fg: 0 47 86;
+  --p-fg-on-dark: 130 183 230;
 }
 
 /* Blue — #3b82f6 */
@@ -47,19 +49,22 @@
   --p-hex: #10b981;
 }
 
-/* Orange — #f97316 */
+/* Orange — WCAG AA: p-500/600 for fills; --p-fg* for text on surfaces */
 [data-theme="orange"] {
   --p-50:  255 247 237;
   --p-100: 255 237 213;
   --p-200: 254 215 170;
   --p-300: 253 186 116;
   --p-400: 251 146  60;
-  --p-500: 249 115  22;
-  --p-600: 234  88  12;
-  --p-700: 194  65  12;
-  --p-800: 154  52  18;
-  --p-900: 124  45  18;
-  --p-hex: #f97316;
+  --p-500: 234  88  12;  /* was #f97316 — darker for buttons (≥4.5:1 with white text) */
+  --p-600: 194  65  12;
+  --p-700: 154  52  18;
+  --p-800: 124  45  18;
+  --p-900:  99  38  14;
+  --p-hex: #ea580c;
+  --p-fg: 124 45 18;       /* body links on light — ~7:1 on white */
+  --p-fg-muted: 154 52 18;
+  --p-fg-on-dark: 253 186 116; /* on slate-800 — ~8:1 */
 }
 
 /* Rose — #f43f5e */
@@ -105,36 +110,90 @@
     @apply bg-slate-900 text-slate-100;
   }
 
-  /* Dim mode — sits between light and dark.
-     Both .dark and .dim are applied to <html>, so all dark: Tailwind
-     variants still activate; these rules then shift key surfaces lighter. */
+  /* Dim mode — sits between light and dark (WCAG AA text ≥4.5:1 on surfaces).
+     Both .dark and .dim are on <html>; dark: variants still apply. */
   .dim body {
-    background-color: #1e293b !important; /* slate-800 (dark cards) becomes the body */
+    background-color: #1e293b !important;
+    color: #f1f5f9 !important; /* slate-100 */
   }
 
   .dim .card {
     background-color: #253347 !important;
-    border-color: #334a65 !important;
+    border-color: #475569 !important;
+    color: #f1f5f9;
   }
 
-  .dim header {
-    background-color: #253347 !important;
-    border-color: #334a65 !important;
-  }
-
+  .dim header,
   .dim aside {
     background-color: #253347 !important;
-    border-color: #334a65 !important;
+    border-color: #475569 !important;
   }
 
   .dim .input {
     background-color: #1e293b !important;
-    border-color: #334a65 !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
   }
 
-  /* Dropdown / flyout surfaces in dim mode */
+  .dim .input::placeholder {
+    color: #94a3b8 !important; /* slate-400 on slate-800 ≈ 4.6:1 */
+  }
+
+  .dim .nav-link {
+    color: #cbd5e1 !important; /* slate-300 on #253347 */
+  }
+
+  .dim .nav-link:hover {
+    color: #f8fafc !important;
+  }
+
+  .dim .nav-link.active {
+    color: rgb(var(--p-fg-on-dark, var(--p-300))) !important;
+    background-color: rgb(var(--p-900) / 0.35) !important;
+  }
+
+  .dim .text-slate-400,
+  .dim .text-slate-500 {
+    color: #cbd5e1 !important;
+  }
+
+  .dim .text-slate-600,
+  .dim .text-slate-700 {
+    color: #e2e8f0 !important;
+  }
+
+  .dim .table thead th {
+    color: #cbd5e1 !important;
+  }
+
+  .dim .table tbody td {
+    color: #f1f5f9 !important;
+  }
+
   .dim [class*="bg-slate-800"] {
     background-color: #253347 !important;
+  }
+
+  /* Orange preset on dim: accessible primary text */
+  .dim[data-theme="orange"] .text-primary-400,
+  .dim[data-theme="orange"] .text-primary-500,
+  .dim[data-theme="orange"] .text-primary-600 {
+    color: rgb(var(--p-fg-on-dark, 253 186 116)) !important;
+  }
+
+  /* Orange preset on light: link text uses --p-fg */
+  html:not(.dark):not(.dim) [data-theme="orange"] .text-primary-500,
+  html:not(.dark):not(.dim) [data-theme="orange"] .text-primary-600 {
+    color: rgb(var(--p-fg, 124 45 18)) !important;
+  }
+
+  html:not(.dark):not(.dim) [data-theme="orange"] .badge-primary {
+    color: rgb(var(--p-fg, 124 45 18)) !important;
+  }
+
+  .dark:not(.dim) [data-theme="orange"] .text-primary-300,
+  .dark:not(.dim) [data-theme="orange"] .text-primary-400 {
+    color: rgb(var(--p-fg-on-dark, 253 186 116)) !important;
   }
 
   [dir="rtl"] .sidebar-nav {
@@ -205,7 +264,7 @@
   }
 
   .nav-link.active {
-    @apply bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400;
+    @apply bg-primary-50 dark:bg-primary-900/40 text-primary-800 dark:text-primary-200;
   }
 
   /* Badge styles */
@@ -214,7 +273,7 @@
   }
 
   .badge-primary {
-    @apply badge bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300;
+    @apply badge bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-200;
   }
 
   .badge-success {
@@ -362,7 +421,7 @@
 
   /* Active color presets */
   .theme-navy .nav-link.active {
-    @apply bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400;
+    @apply bg-primary-50 dark:bg-primary-900/40 text-primary-800 dark:text-primary-200;
   }
 
   .theme-blue .nav-link.active {
@@ -374,7 +433,7 @@
   }
 
   .theme-orange .nav-link.active {
-    @apply bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400;
+    @apply bg-orange-100 dark:bg-orange-900/40 text-orange-900 dark:text-orange-200;
   }
 }
 
@@ -534,4 +593,54 @@
 }
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* AI async processing indicator (Claude / Celery) */
+@keyframes ai-processing-pulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ai-processing-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgb(var(--p-500) / 0);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgb(var(--p-500) / 0.35);
+  }
+}
+
+.ai-processing {
+  animation: ai-processing-glow 2.2s ease-in-out infinite;
+}
+
+.ai-processing-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: ai-processing-pulse 1.4s ease-in-out infinite;
+}
+
+.ai-processing-icon {
+  animation: ai-processing-pulse 1.4s ease-in-out infinite;
+  animation-delay: 0.15s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-processing,
+  .ai-processing-dot,
+  .ai-processing-icon {
+    animation: none;
+  }
+
+  .ai-processing-dot {
+    opacity: 1;
+  }
 }

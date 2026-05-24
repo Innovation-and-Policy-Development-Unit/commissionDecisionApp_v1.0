@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Gauge, Loader2, RefreshCw, AlertCircle } from 'lucide-react'
+import { Gauge, RefreshCw, AlertCircle } from 'lucide-react'
+import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import clsx from 'clsx'
 import api from '../../api/client'
 
@@ -43,9 +44,13 @@ export function QualityScoreBadge({ submission, compact = false }) {
 
   if (loading) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
-        <Loader2 size={12} className="animate-spin" aria-hidden />
-        {compact ? '…' : t('submission.quality_scoring')}
+      <span
+        className="inline-flex items-center gap-1.5 text-[10px] text-slate-600 dark:text-slate-300"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="ai-processing-dot shrink-0" aria-hidden />
+        {compact ? 'AI…' : t('submission.quality_scoring')}
       </span>
     )
   }
@@ -129,7 +134,11 @@ export default function SubmissionQualityScore({ submission, submissionId, onUpd
             disabled={rescoring || loading}
             className="btn-outline text-xs py-1 px-2 inline-flex items-center gap-1 shrink-0"
           >
-            {rescoring || loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+            {rescoring || loading ? (
+              <span className="inline-block w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />
+            ) : (
+              <RefreshCw size={12} />
+            )}
             {t('submission.quality_rescore')}
           </button>
         )}
@@ -140,9 +149,18 @@ export default function SubmissionQualityScore({ submission, submissionId, onUpd
       </p>
 
       {loading && (
-        <div className="flex items-center gap-2 text-sm opacity-90">
-          <Loader2 size={16} className="animate-spin" />
-          {t('submission.quality_scoring')}
+        <div className="space-y-3">
+          {submission.preliminary_quality_score != null && (
+            <p className="text-sm opacity-90">
+              <span className="font-semibold">~{submission.preliminary_quality_score}/100</span>
+              <span className="text-xs opacity-75 ml-2">(checklist estimate — AI refining…)</span>
+            </p>
+          )}
+          <AiProcessingIndicator
+            label={t('submission.quality_scoring', { defaultValue: 'AI is thinking…' })}
+            size="md"
+            variant="violet"
+          />
         </div>
       )}
 
