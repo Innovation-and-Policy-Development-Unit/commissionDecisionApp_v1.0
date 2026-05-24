@@ -4,6 +4,7 @@ import PageHeader from '../../components/shared/PageHeader'
 import SubmissionSubwayMap from '../../components/submissions/SubmissionSubwayMap'
 import VisualAuditTrail from '../../components/audit/VisualAuditTrail'
 import VerificationBadge from '../../components/audit/VerificationBadge'
+import SubmissionPresenceBar from '../../components/submissions/SubmissionPresenceBar'
 import PolicyGuardrailDrawer from '../../components/submissions/PolicyGuardrailDrawer'
 import { policyGuardrailApplies } from '../../utils/policyGuardrail'
 import api from '../../api/client'
@@ -70,75 +71,6 @@ const CHECKLIST_EDIT_ROLES = [
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
   'vipam_manager', 'hr_unit_manager', 'compliance_manager', 'compliance_senior',
 ]
-
-// ─── Visual timeline ──────────────────────────────────────────────────────────
-
-function WorkflowTimeline({ events, currentStage }) {
-  if (!events?.length) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500 py-4">
-        <Clock size={14} />
-        No stage transitions recorded yet.
-      </div>
-    )
-  }
-
-  return (
-    <ol className="relative">
-      {events.map((ev, idx) => {
-        const isLast = idx === events.length - 1
-        const dotClass = stageDotClass(ev.new_stage)
-        const badgeClass = stageBadgeClass(ev.new_stage)
-        return (
-          <li key={ev.id} className="flex gap-4 pb-6 last:pb-0">
-            {/* Dot + connector line */}
-            <div className="flex flex-col items-center">
-              <div className={`w-3 h-3 rounded-full ring-2 ring-white dark:ring-slate-800 shrink-0 mt-1 ${dotClass}`} />
-              {!isLast && <div className="w-px flex-1 mt-1 bg-slate-200 dark:bg-slate-700" />}
-            </div>
-
-            {/* Content */}
-            <div className="min-w-0 flex-1 pb-1">
-              <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  {stageLabel(ev.previous_stage)}
-                </span>
-                <ArrowRight size={11} className="text-slate-400 shrink-0" />
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${badgeClass}`}>
-                  {stageLabel(ev.new_stage)}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                {ev.actor_username} · {new Date(ev.created_at).toLocaleString('en-VU', {
-                  day: '2-digit', month: 'short', year: 'numeric',
-                  hour: '2-digit', minute: '2-digit',
-                })}
-              </p>
-              {ev.remarks && (
-                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 rounded-lg px-3 py-2 border border-slate-100 dark:border-slate-700 italic">
-                  "{ev.remarks}"
-                </p>
-              )}
-            </div>
-          </li>
-        )
-      })}
-
-      {/* Current stage cap */}
-      <li className="flex gap-4">
-        <div className="flex flex-col items-center">
-          <div className={`w-3 h-3 rounded-full ring-2 ring-white dark:ring-slate-800 shrink-0 mt-1 ring-offset-1 ${stageDotClass(currentStage)}`} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold ${stageBadgeClass(currentStage)}`}>
-            <CheckCircle2 size={10} />
-            {stageLabel(currentStage)} — current
-          </span>
-        </div>
-      </li>
-    </ol>
-  )
-}
 
 // ─── Stage badge ──────────────────────────────────────────────────────────────
 
@@ -629,6 +561,8 @@ const stageDescriptions = {
           </div>
         }
       />
+
+      <SubmissionPresenceBar submissionId={id} />
 
       <SubmissionSubwayMap
         className="mb-4"
@@ -1197,16 +1131,30 @@ const stageDescriptions = {
             />
           )}
 
-          {/* Workflow timeline */}
-          <div className="card card-compact">
-            <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700">
+          {/* Visual audit trail (workflow + tamper-evident decision proofs) */}
+          <div id="audit-trail" className="card card-compact scroll-mt-24">
+            <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700 flex-wrap">
               <FileText size={14} className="text-slate-400" />
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Workflow Timeline</h3>
-              {submission.events?.length > 0 && (
-                <span className="ml-auto text-xs text-slate-400">{submission.events.length} transition{submission.events.length !== 1 ? 's' : ''}</span>
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Visual Audit Trail
+              </h3>
+              {submission.events?.some((e) => e.has_decision_proof || e.content_hash) && (
+                <VerificationBadge
+                  submissionId={id}
+                  workflowEventId={
+                    [...(submission.events || [])]
+                      .reverse()
+                      .find((e) => e.has_decision_proof || e.content_hash)?.id
+                  }
+                  contentHash={
+                    [...(submission.events || [])]
+                      .reverse()
+                      .find((e) => e.content_hash)?.content_hash
+                  }
+                />
               )}
             </div>
-            <WorkflowTimeline events={submission.events} currentStage={submission.current_stage} />
+            <VisualAuditTrail submissionId={id} />
           </div>
         </div>
 

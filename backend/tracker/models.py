@@ -437,6 +437,33 @@ class SittingPackSession(models.Model):
         return self.last_heartbeat_at >= cutoff
 
 
+class SubmissionPresence(models.Model):
+    """Who is actively viewing a submission (heartbeat-based, no WebSockets)."""
+
+    PRESENCE_TIMEOUT_SECONDS = 90
+
+    submission = models.ForeignKey(
+        "Submission",
+        on_delete=models.CASCADE,
+        related_name="presence_records",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="submission_presence_records",
+    )
+    last_seen_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        unique_together = ("submission", "user")
+        indexes = [
+            models.Index(fields=["submission", "last_seen_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} on submission {self.submission_id}"
+
+
 class Profile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,

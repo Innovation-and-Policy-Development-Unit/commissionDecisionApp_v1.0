@@ -574,6 +574,28 @@
     "severity_medium": "Medium",
     "severity_low": "Low"
   },
+  "presence": {
+    "aria_bar": "Colleagues viewing this submission",
+    "only_you": "You are the only person viewing this file right now.",
+    "reviewing_single": "{{name}} is currently reviewing this.",
+    "reviewing_multiple": "{{name}} and {{count}} other(s) are currently reviewing this."
+  },
+  "decision_proof": {
+    "badge_label": "Verified",
+    "popover_title": "Decision proof",
+    "popover_subtitle": "SHA-256 snapshot at the moment this decision was recorded",
+    "verifying": "Verifying integrity…",
+    "status_valid": "Tamper check passed",
+    "status_invalid": "Integrity check failed",
+    "hash_hint": "This hash fingerprints the submission package at decision time. Any change after approval breaks the match.",
+    "copy_hash": "Copy hash",
+    "copied": "Copied",
+    "load_failed": "Could not load verification details.",
+    "trail_aria": "Submission audit trail",
+    "trail_empty": "No audit entries recorded yet.",
+    "trail_load_failed": "Could not load audit trail.",
+    "hash_short": "Proof {{hash}}"
+  },
   "sitting_pack": {
     "enter": "Sitting Pack",
     "title": "Sitting Pack — Meeting Mode",

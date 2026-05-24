@@ -2,7 +2,10 @@ import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
-import { Plus, X, Gavel, CheckCircle2, XCircle, RotateCcw, Clock, FileText, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Plus, X, Gavel, CheckCircle2, XCircle, RotateCcw, Clock, FileText, RefreshCw,
+  ChevronLeft, ChevronRight, ShieldCheck,
+} from 'lucide-react'
 import api from '../../api/client'
 
 const PER_PAGE = 15
@@ -145,6 +148,7 @@ export default function Decisions() {
                 <th>{t('secretariat.title_subject')}</th>
                 <th>{t('submission.ministry')}</th>
                 <th>{t('secretariat.outcome_col')}</th>
+                <th>{t('decision_proof.badge_label')}</th>
                 <th>{t('secretariat.last_updated_col')}</th>
                 <th className="text-end">{t('secretariat.details_col')}</th>
               </tr>
@@ -152,7 +156,7 @@ export default function Decisions() {
             <tbody>
               {loading && !submissions.length ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-slate-400">
+                  <td colSpan={7} className="py-10 text-center text-slate-400">
                     <RefreshCw size={20} aria-hidden="true" className="animate-spin mx-auto mb-2" />
                     {t('secretariat.loading_decisions')}
                   </td>
@@ -165,6 +169,20 @@ export default function Decisions() {
                   </td>
                   <td className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.ministry_name}</td>
                   <td><DecisionBadge decision={d.current_stage} /></td>
+                  <td>
+                    {['approved', 'rejected'].includes(d.current_stage) ? (
+                      <Link
+                        to={`/submissions/${d.id}#audit-trail`}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+                        title={t('decision_proof.popover_title')}
+                      >
+                        <ShieldCheck size={14} aria-hidden />
+                        {t('decision_proof.badge_label')}
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-slate-300">—</span>
+                    )}
+                  </td>
                   <td className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                     {new Date(d.updated_at).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
@@ -180,7 +198,7 @@ export default function Decisions() {
               ))}
               {!loading && !filtered.length && (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-slate-400">
+                  <td colSpan={7} className="py-10 text-center text-slate-400">
                     {t('secretariat.no_decisions_match')}
                   </td>
                 </tr>

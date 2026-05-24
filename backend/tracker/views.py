@@ -1125,6 +1125,50 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             "verification": verification,
         })
 
+    @action(detail=True, methods=["post"], url_path="presence/heartbeat")
+    def presence_heartbeat(self, request, pk=None):
+        """Register active viewing; returns other users on this submission."""
+        from .submission_presence import serialize_viewers, touch_presence
+
+        submission = self.get_object()
+        touch_presence(submission_id=submission.id, user=request.user)
+        viewers = serialize_viewers(
+            submission_id=submission.id,
+            current_user_id=request.user.id,
+        )
+        others = [v for v in viewers if not v["is_self"]]
+        return Response({
+            "viewers": viewers,
+            "others": others,
+            "other_count": len(others),
+        })
+
+    @action(detail=True, methods=["get"], url_path="presence")
+    def presence_list(self, request, pk=None):
+        """List users currently viewing this submission (no heartbeat)."""
+        from .submission_presence import serialize_viewers
+
+        submission = self.get_object()
+        viewers = serialize_viewers(
+            submission_id=submission.id,
+            current_user_id=request.user.id,
+        )
+        others = [v for v in viewers if not v["is_self"]]
+        return Response({
+            "viewers": viewers,
+            "others": others,
+            "other_count": len(others),
+        })
+
+    @action(detail=True, methods=["post"], url_path="presence/leave")
+    def presence_leave(self, request, pk=None):
+        """Remove presence when leaving the submission detail page."""
+        from .submission_presence import clear_presence
+
+        submission = self.get_object()
+        clear_presence(submission_id=submission.id, user_id=request.user.id)
+        return Response({"detail": "Presence cleared."})
+
     @action(detail=False, methods=["post"], url_path="nl-search")
     def nl_search(self, request):
         """Smart search — natural language → filter JSON + matching submission ids."""
