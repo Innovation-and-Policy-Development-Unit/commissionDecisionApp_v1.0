@@ -34,6 +34,15 @@ class TrackerConfig(AppConfig):
                 "Backup schedule could not be synced to Celery beat: %s", exc
             )
 
+        try:
+            from tracker.daily_brief.scheduler import sync_daily_brief_scheduler
+            sync_daily_brief_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger("scdms.security").warning(
+                "Daily brief schedule could not be synced: %s", exc
+            )
+
         # Wire up signal handlers for AI feedback analysis
         try:
             import tracker.signals  # noqa: F401

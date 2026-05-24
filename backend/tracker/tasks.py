@@ -1637,6 +1637,23 @@ def queue_document_redaction_preview(document_id: int) -> None:
 
 
 @shared_task
+def run_daily_briefs_task():
+    """Hourly Celery beat check; sends briefs when local hour matches settings."""
+    from django.utils import timezone
+
+    from tracker.daily_brief.models import DailyBriefSettings
+    from tracker.daily_brief.runner import run_daily_briefs
+    from tracker.daily_brief.scheduler import should_run_delivery_now
+
+    settings = DailyBriefSettings.get_solo()
+    settings.last_beat_at = timezone.now()
+    settings.save(update_fields=["last_beat_at"])
+
+    if should_run_delivery_now():
+        run_daily_briefs()
+
+
+@shared_task
 def generate_document_redaction_preview(document_id: int):
     from .ai.redaction_preview import suggest_redaction_spans
     from .models import SubmissionDocument

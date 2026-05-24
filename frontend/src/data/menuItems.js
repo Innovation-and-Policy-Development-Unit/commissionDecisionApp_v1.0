@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, ScrollText, Bell, ListTodo,
+  LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen, Languages, Sparkles,
 } from 'lucide-react'
@@ -130,6 +130,7 @@ const menuItems = [
       { label: 'API Keys',                 labelKey: 'nav.api_keys',               icon: Lock,         path: '/admin/api-keys',               visibility: 'roles' },
       { label: 'System Config',            labelKey: 'nav.system_config',          icon: Settings,     path: '/admin/system-config',          visibility: 'roles' },
       { label: 'Email templates',          labelKey: 'nav.email_templates',        icon: Mail,         path: '/admin/email-templates',        visibility: 'roles' },
+      { label: 'Daily Brief',              labelKey: 'nav.daily_brief',            icon: Calendar,     path: '/admin/daily-brief',            visibility: 'roles' },
       { label: 'UI translations',          labelKey: 'nav.ui_translations',        icon: Languages,    path: '/admin/ui-translations',        visibility: 'translations' },
       { label: 'Knowledge Base',         labelKey: 'nav.knowledge_base',         icon: BookOpen,     path: '/admin/knowledge-base',         visibility: 'admin' },
       { label: 'Security',                 labelKey: 'nav.security',               icon: ShieldAlert,  path: '/admin/security',               visibility: 'audit' },

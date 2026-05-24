@@ -127,6 +127,7 @@ const BREADCRUMB_MAP = {
   '/admin/api-keys':                ['nav.group_admin',       'breadcrumb.api_keys'],
   '/admin/system-config':           ['nav.group_admin',       'breadcrumb.system_config'],
   '/admin/email-templates':         ['nav.group_admin',       'breadcrumb.email_templates'],
+  '/admin/daily-brief':             ['nav.group_admin',       'nav.daily_brief'],
   '/admin/ui-translations':         ['nav.group_admin',       'breadcrumb.ui_translations'],
   '/admin/security':                ['nav.group_admin',       'breadcrumb.security'],
   '/admin/feedback':                ['nav.group_admin',       'breadcrumb.feedback'],

@@ -211,6 +211,50 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
         "body_html_template": "",
     },
+    {
+        "slug": "daily_brief_staff",
+        "name": "Daily brief (staff)",
+        "category": "system",
+        "description": "Personalized morning digest for PSC staff (tasks, submissions, notifications, meetings).",
+        "placeholders": _ph("brief_date, sections_html, portal_url"),
+        "subject_template": "Your daily brief — {{brief_date}}",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "Here is your Commission Decision App brief for {{brief_date}}.\n\n"
+            "Open the portal: {{portal_url}}\n\n"
+            "— Sections are included in the HTML version of this email."
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:system-ui,sans-serif;color:#334155;max-width:640px;\">"
+            "<p>{{greeting}}</p>"
+            "<p>Your daily brief for <strong>{{brief_date}}</strong>.</p>"
+            "{{sections_html}}"
+            "<p style=\"margin-top:1.5em;\"><a href=\"{{portal_url}}\" style=\"color:#2563eb;\">"
+            "Open Commission Decision App</a></p></div>"
+        ),
+    },
+    {
+        "slug": "daily_brief_manager",
+        "name": "Daily brief (manager)",
+        "category": "system",
+        "description": "Management KPI digest: overdue tasks, pipeline stages, new submissions, meetings.",
+        "placeholders": _ph("brief_date, kpis_html, portal_url"),
+        "subject_template": "Manager daily brief — {{brief_date}}",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "Manager digest for {{brief_date}}.\n\n"
+            "Portal: {{portal_url}}\n\n"
+            "— KPI details are in the HTML version."
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:system-ui,sans-serif;color:#334155;max-width:640px;\">"
+            "<p>{{greeting}}</p>"
+            "<p>Manager daily brief for <strong>{{brief_date}}</strong>.</p>"
+            "{{kpis_html}}"
+            "<p style=\"margin-top:1.5em;\"><a href=\"{{portal_url}}\" style=\"color:#2563eb;\">"
+            "Open Commission Decision App</a></p></div>"
+        ),
+    },
 ]
 
 

@@ -6,6 +6,7 @@ from .views_webhooks import cms_register_submission, cms_signoff_callback
 from .staff_chat_views import StaffChatSessionViewSet
 from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
+from .daily_brief.views import DailyBriefViewSet
 from .views import (
     AuditLogViewSet,
     BackupViewSet,
@@ -102,6 +103,7 @@ router.register(
     basename="deadline-reminder-draft",
 )
 router.register(r"ui-translations", UiTranslationViewSet, basename="ui-translation")
+router.register(r"daily-brief", DailyBriefViewSet, basename="daily-brief")
 
 urlpatterns = [
     path("", include(router.urls)),

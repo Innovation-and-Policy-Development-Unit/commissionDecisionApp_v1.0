@@ -19,6 +19,7 @@ import AdminPanel from '../pages/admin/AdminPanel'
 import MinistriesDepartments from '../pages/admin/MinistriesDepartments'
 import AdminApiKeysPage from '../pages/admin/AdminApiKeysPage'
 import AdminSystemConfigPage from '../pages/admin/AdminSystemConfigPage'
+import DailyBriefAdmin from '../pages/admin/DailyBriefAdmin'
 import AdminEmailTemplatesPage from '../pages/admin/AdminEmailTemplatesPage'
 import AdminTranslationsPage from '../pages/admin/AdminTranslationsPage'
 import AdminBackupRestorePage from '../pages/admin/AdminBackupRestorePage'
@@ -74,6 +75,7 @@ export default function AppRouter() {
           <Route path="/admin/api-keys" element={<AdminApiKeysPage />} />
           <Route path="/admin/system-config" element={<AdminSystemConfigPage />} />
           <Route path="/admin/email-templates" element={<AdminEmailTemplatesPage />} />
+          <Route path="/admin/daily-brief" element={<DailyBriefAdmin />} />
           <Route path="/admin/ui-translations" element={<AdminTranslationsPage />} />
           <Route path="/admin/security" element={<AdminSecurityPage />} />
           <Route path="/admin/feedback" element={<FeedbackManagementPage />} />
