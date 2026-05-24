@@ -28,7 +28,7 @@ Product spec: `AI_Features_List.txt` (repo root)
 | Decision extraction | `extract_decisions_from_minutes` | Haiku |
 | **Action register (C4)** | `extract_action_items_from_minutes` | Haiku |
 | Staff Assistant | sync API (`staff_chat_views`) | Sonnet |
-| **Submission status (D2)** | sync API (`status_chat_views`) | Haiku |
+| **Submission status (D2)** | Staff Assistant (`staff_chat` + live case data) | Haiku when status-focused |
 
 ## Meeting audio
 

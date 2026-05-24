@@ -72,17 +72,54 @@ After changing **`VITE_API_BASE_URL`**, trigger a **manual redeploy** of `scdms-
 3. **Frontend**: open the static site URL, log in (create superuser below if needed).
 4. **Celery**: in Render logs for `scdms-celery-worker`, confirm the worker starts without import errors.
 
-## Create an admin user
+## Seed demo data on Render
 
-Render **Shell** on `scdms-api` (paid plans) or a one-off job:
+Use this after the first successful deploy (migrations must have run on `scdms-api`).
+
+### Option A — Environment variable (easiest)
+
+1. Open **`scdms-api`** → **Environment**.
+2. Add or set **`AUTO_SEED`** = `1`.
+3. **Manual Deploy** (clear build cache optional).
+4. Watch **Logs** for `seed_tracker` / `[OK] Database seeded successfully`.
+5. Set **`AUTO_SEED`** back to **`0`** and deploy again (do not leave seeding on every restart in production).
+
+### Option B — Render Shell (recommended for production)
+
+1. Open **`scdms-api`** → **Shell** (requires a paid plan with shell access).
+2. Run:
+
+```bash
+python manage.py seed_tracker
+```
+
+Idempotent: ministries, departments, roles, and users are updated; **submissions are only created if the database has none**. To wipe and re-seed submissions:
+
+```bash
+python manage.py seed_tracker --clear
+```
+
+Reference data only (no demo submissions):
+
+```bash
+python manage.py seed_tracker --no-submissions
+```
+
+### Demo logins (after `seed_tracker`)
+
+| Username | Password | Role |
+|----------|----------|------|
+| `admin` | `Admin1234!` | PSC Admin |
+| `j.iati` | `Secretary123!` | PSC Secretary |
+| `hr.finance` | `Ministry123!` | Ministry HR (MFEM) |
+| `hr.health` | `Ministry123!` | Ministry HR (MOH) |
+| `dg.mfem` | `DG12345!` | Head of Agency (MFEM) |
+
+Change these passwords after any public demo. For a custom admin instead of seed users:
 
 ```bash
 python manage.py createsuperuser
 ```
-
-For a demo dataset once:
-
-1. Set `AUTO_SEED=1` on `scdms-api`, deploy, then set back to `0`.
 
 ## Files added for Render
 

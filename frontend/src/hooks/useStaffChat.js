@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next'
 import api from '../api/client'
 
 export const STAFF_CHAT_SUGGESTIONS = [
+  'What is the status of case PSC-2026-00042?',
+  'What are my ministry\'s active submissions?',
   'What are the steps after a submission is registered and routed?',
   'Which PSC form is used for a serious misconduct referral?',
-  'What is the assessment deadline for a submission under assessment?',
-  'What is the status of submission PSC-2026-00001?',
 ]
 
 export function useStaffChat({ enabled = true } = {}) {

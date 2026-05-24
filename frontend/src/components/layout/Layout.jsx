@@ -11,8 +11,6 @@ import SecurityNoticesBanner from '../shared/SecurityNoticesBanner'
 import FeedbackPanel from '../shared/FeedbackPanel'
 import StaffChatPanel from '../assistant/StaffChatPanel'
 import StaffChatFab from '../assistant/StaffChatFab'
-import StatusChatPanel from '../assistant/StatusChatPanel'
-import StatusChatFab from '../assistant/StatusChatFab'
 import LockOverlay from '../auth/LockOverlay'
 import { MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
@@ -28,18 +26,13 @@ export default function Layout() {
     toggleFeedbackPanel,
     feedbackEnabled
   } = useTheme()
-  const { isLocked, user } = useAuth()
+  const { isLocked } = useAuth()
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [staffChatOpen, setStaffChatOpen] = useState(false)
-  const [statusChatOpen, setStatusChatOpen] = useState(false)
 
-  const ministryStatusRoles = ['ministry_hr', 'dept_admin', 'head_of_agency']
-  const isMinistryStatusUser = user && ministryStatusRoles.includes(user.role)
   const onAssistantPage = location.pathname === '/assistant'
-  const onStatusPage = location.pathname === '/status-assistant'
-  const hideStaffChatFab = onAssistantPage || isMinistryStatusUser
-  const hideStatusChatFab = onStatusPage || !isMinistryStatusUser
+  const hideStaffChatFab = onAssistantPage
 
   const handleMenuClick = () => {
     if (window.innerWidth < 1024) {
@@ -113,16 +106,6 @@ export default function Layout() {
         open={staffChatOpen}
         onClick={() => setStaffChatOpen((o) => !o)}
         hidden={hideStaffChatFab}
-      />
-
-      <StatusChatPanel
-        open={statusChatOpen}
-        onClose={() => setStatusChatOpen(false)}
-      />
-      <StatusChatFab
-        open={statusChatOpen}
-        onClick={() => setStatusChatOpen((o) => !o)}
-        hidden={hideStatusChatFab}
       />
 
       {/* Floating Feedback Tab */}

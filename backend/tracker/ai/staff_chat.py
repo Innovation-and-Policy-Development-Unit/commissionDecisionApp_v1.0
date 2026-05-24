@@ -1,7 +1,7 @@
 """
-Staff Chatbot (feature D1 + light D2): PSC regulations/procedures Q&A and submission status.
+Staff Chatbot (D1 + D2): PSC procedures Q&A and submission status in one assistant.
 
-Uses Claude Sonnet with a static knowledge base file and optional live submission lookup.
+Status lookups use live SCDMS data (see status_chat.build_status_context).
 """
 
 from __future__ import annotations
@@ -14,12 +14,21 @@ from django.conf import settings
 
 from .claude_client import ai_enabled, complete_chat_with_error
 from .feature_registry import FEATURE_MODEL_TIER
+from .status_chat import (
+    _MY_CASES_PATTERN,
+    build_status_context,
+    extract_reference_numbers,
+)
 
 logger = logging.getLogger("scdms.app")
 
-_REF_PATTERN = re.compile(r"\b(PSC-\d{4}-\d+)\b", re.IGNORECASE)
 _MAX_HISTORY = 20
 _KB_CACHE: str | None = None
+
+_STATUS_KEYWORDS = re.compile(
+    r"\b(status|where is my|what happened to|overdue|track(?:ing)? my)\b",
+    re.IGNORECASE,
+)
 
 
 def _knowledge_path() -> Path:
@@ -63,49 +72,40 @@ def _user_context_block(user) -> str:
     return "\n".join(lines)
 
 
-def _submission_context_for_message(message: str, user) -> str:
-    match = _REF_PATTERN.search(message or "")
-    if not match:
-        return ""
-    ref = match.group(1).upper()
-    from tracker.models import Submission
+def is_status_focused_message(message: str) -> bool:
+    """Use Haiku for case-status queries; Sonnet for procedure / policy questions."""
+    if extract_reference_numbers(message):
+        return True
+    if _MY_CASES_PATTERN.search(message or ""):
+        return True
+    return bool(_STATUS_KEYWORDS.search(message or ""))
 
-    from tracker.views import _submission_queryset_for  # lazy — avoids import cycles
 
-    sub = (
-        _submission_queryset_for(user)
-        .filter(reference_number__iexact=ref)
-        .select_related("ministry", "department", "form_category")
-        .first()
-    )
-    if not sub:
-        return (
-            f"\nSubmission lookup: No accessible submission found for reference {ref}. "
-            "Tell the user you cannot see that case (wrong reference or no permission).\n"
-        )
-    return (
-        f"\nLive submission context for {sub.reference_number} (authorised for this user):\n"
-        f"- Title: {sub.title}\n"
-        f"- Form: {sub.form_type_code or '—'}\n"
-        f"- Ministry: {sub.ministry.name if sub.ministry_id else '—'}\n"
-        f"- Current stage: {sub.get_current_stage_display()} ({sub.current_stage})\n"
-        f"- Received: {sub.received_at}\n"
-        f"- Assessment deadline: {sub.assessment_deadline_at or '—'}\n"
-        f"- CMS case: {sub.cms_case_reference or sub.cms_case_id or '—'}\n"
-    )
+def tier_for_message(message: str) -> str:
+    if is_status_focused_message(message):
+        return FEATURE_MODEL_TIER.get("D2_status_chatbot", "haiku")
+    return FEATURE_MODEL_TIER.get("staff_chatbot", "sonnet")
 
 
 def build_staff_chat_system_prompt(user, user_message: str) -> str:
     kb = load_knowledge_base()
     ctx = _user_context_block(user)
-    sub_ctx = _submission_context_for_message(user_message, user)
+    sub_ctx = build_status_context(user, user_message)
+    status_note = ""
+    if is_status_focused_message(user_message):
+        status_note = (
+            "\nThe user is asking about submission/case STATUS. "
+            "Answer in plain English for a ministry HR officer when applicable: "
+            "current stage, what is outstanding, deadlines, and sensible next steps. "
+            "Use only the live case data below — never invent details.\n"
+        )
     return f"""You are the PSC Staff Assistant inside the Submission & Commission Decision Management System (SCDMS) for the Office of the Public Service Commission, Vanuatu.
 
 Your role:
 - Answer questions about PSC procedures, forms, workflow stages, and how to use SCDMS.
 - Help staff understand what happens next in a process (checklists, assessment, commission sittings).
-- When live submission data is provided below, answer status questions in plain English.
-
+- Answer submission STATUS questions (e.g. "What is the status of PSC-2026-00042?") using live data when provided.
+{status_note}
 Rules:
 - Be concise, professional, and practical. Use bullet lists when helpful.
 - If you are not certain, say so and recommend confirming with the relevant unit (Secretariat, ODU, Compliance, etc.).
@@ -114,15 +114,13 @@ Rules:
 - Prefer Vanuatu English; acknowledge Bislama terms if the user uses them.
 
 {ctx}
+
+Live submission / case data (when applicable):
 {sub_ctx}
 
 Reference knowledge base:
 {kb}
 """
-
-
-def staff_chat_tier() -> str:
-    return FEATURE_MODEL_TIER.get("staff_chatbot", "sonnet")
 
 
 def generate_staff_chat_reply(
@@ -144,10 +142,11 @@ def generate_staff_chat_reply(
             messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": user_message.strip()})
 
-    tier = staff_chat_tier()
+    tier = tier_for_message(user_message)
+    max_tokens = 2048 if tier == "haiku" else 4096
     return complete_chat_with_error(
         system=system,
         messages=messages,
         tier=tier if tier in ("haiku", "sonnet") else "sonnet",
-        max_tokens=4096,
+        max_tokens=max_tokens,
     )

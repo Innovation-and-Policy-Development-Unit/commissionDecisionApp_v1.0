@@ -35,7 +35,6 @@ import Notifications from '../pages/secretariat/Notifications'
 import TaskManagement from '../pages/secretariat/TaskManagement'
 import Account from '../pages/pages/Account'
 import StaffChatbot from '../pages/assistant/StaffChatbot'
-import StatusChatbot from '../pages/assistant/StatusChatbot'
 
 export default function AppRouter() {
   return (
@@ -55,7 +54,7 @@ export default function AppRouter() {
           <Route path="/submissions/:id" element={<SubmissionDetail />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/assistant" element={<StaffChatbot />} />
-          <Route path="/status-assistant" element={<StatusChatbot />} />
+          <Route path="/status-assistant" element={<Navigate to="/assistant" replace />} />
           <Route path="/meetings/capture" element={<MeetingCapture />} />
           <Route path="/admin/roles-permissions" element={<AdminPanel />} />
           <Route path="/admin/ministries-departments" element={<MinistriesDepartments />} />
