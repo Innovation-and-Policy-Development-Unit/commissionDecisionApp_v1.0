@@ -40,6 +40,12 @@ const EMPTY_CAT = { code: '', name: '', psc_forms_summary: '', display_order: 0 
 const DIGITIZED_KEYS = [
   { value: '', label: '— None —' },
   { value: 'psc_3_7', label: 'psc_3_7 (PSC Form 3-7 fields)' },
+  { value: 'comp_smdr', label: 'comp_smdr (Compliance SMDR)' },
+  { value: 'comp_par', label: 'comp_par (Preliminary Assessment)' },
+  { value: 'comp_psdb', label: 'comp_psdb (PSDB Order)' },
+  { value: 'comp_14d', label: 'comp_14d (14-day Notice Response)' },
+  { value: 'comp_omb', label: 'comp_omb (Ombudsman request)' },
+  { value: 'comp_psa', label: 'comp_psa (PSA Amendment)' },
 ]
 
 // ── Category XML parser ───────────────────────────────────────────────────────

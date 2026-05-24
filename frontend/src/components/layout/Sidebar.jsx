@@ -125,6 +125,22 @@ function CollapsedGroupItem({ group }) {
             }
             const ItemIcon = entry.icon
             const entryLabel = translateLabel(entry, t)
+            if (entry.external && entry.href) {
+              return (
+                <a
+                  key={entry.href}
+                  href={entry.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  role="menuitem"
+                  onClick={() => setDropdownOpen(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 mx-1.5 rounded-md text-sm transition-all duration-150 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                >
+                  <ItemIcon size={15} className="shrink-0" aria-hidden="true" />
+                  <span>{entryLabel}</span>
+                </a>
+              )
+            }
             return (
               <NavLink
                 key={entry.path}
@@ -164,6 +180,19 @@ function NavItem({ item }) {
   const label = translateLabel(item, t)
 
   if (!hasChildren) {
+    if (item.external && item.href) {
+      return (
+        <a
+          href={item.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        >
+          <Icon size={18} className="shrink-0" aria-hidden="true" />
+          <span>{label}</span>
+        </a>
+      )
+    }
     return (
       <NavLink
         to={item.path}

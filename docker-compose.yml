@@ -14,12 +14,29 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - internal
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    env_file:
+      - .env
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    command: >
+      sh -c 'redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --appendfsync everysec'
+    volumes:
+      - redis_data:/data
     expose:
       - "6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - internal
     restart: unless-stopped
 
   # Local SMTP + web inbox for development (Mailpit). UI: http://localhost:8025
@@ -28,6 +45,9 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+    networks:
+      - internal
+      - app
     restart: unless-stopped
 
   backend:
@@ -50,6 +70,11 @@ services:
       SMTP_TLS: ${SMTP_TLS:-false}
       SMTP_SSL: ${SMTP_SSL:-false}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-PSC Tracker Dev <dev@localhost>}
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_MODEL_HAIKU: ${CLAUDE_MODEL_HAIKU:-claude-haiku-4-5-20251001}
+      CLAUDE_MODEL_SONNET: ${CLAUDE_MODEL_SONNET:-claude-sonnet-4-6}
     volumes:
       - scdms_logs:/var/log/scdms
       - scdms_backups:/var/backups/scdms
@@ -57,16 +82,21 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       mailpit:
         condition: service_started
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.create_connection(('127.0.0.1',8000),3); s.close()\""]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 45s
+      retries: 8
+      start_period: 90s
     expose:
       - "8000"
+    networks:
+      - internal
+      - app
     restart: unless-stopped
 
   celery_worker:
@@ -78,8 +108,12 @@ services:
       - .env
     environment:
       POSTGRES_HOST: db
-      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_MODEL_HAIKU: ${CLAUDE_MODEL_HAIKU:-claude-haiku-4-5-20251001}
+      CLAUDE_MODEL_SONNET: ${CLAUDE_MODEL_SONNET:-claude-sonnet-4-6}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_TLS: ${SMTP_TLS:-false}
@@ -90,9 +124,19 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       mailpit:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping -t 10 2>/dev/null | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 90s
+    networks:
+      - internal
+      # Outbound HTTPS (Anthropic API) — internal network has no internet
+      - app
     restart: unless-stopped
 
   celery_beat:
@@ -104,7 +148,8 @@ services:
       - .env
     environment:
       POSTGRES_HOST: db
-      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
@@ -114,7 +159,15 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - internal
     restart: unless-stopped
 
   web:
@@ -128,10 +181,22 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - app
     restart: unless-stopped
+
+networks:
+  # Data stores — not reachable from web; no outbound internet
+  internal:
+    driver: bridge
+    internal: true
+  # Application tier — web ↔ backend; also used for outbound API (Claude) from workers
+  app:
+    driver: bridge
 
 volumes:
   psc_pgdata:
+  redis_data:
   scdms_logs:
   scdms_backups:
   scdms_media:

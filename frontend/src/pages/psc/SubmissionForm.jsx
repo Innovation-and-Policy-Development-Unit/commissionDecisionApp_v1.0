@@ -5,6 +5,8 @@ import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import PSCForm37Fields from './PSCForm37Fields'
+import ComplianceCmsGuidance from './ComplianceCmsGuidance'
+import { isComplianceRole } from '../../constants/compliance'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -400,11 +402,17 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
   const [busy, setBusy] = useState(false)
 
   const isInternalUser = user && INTERNAL_ROLES.includes(user.role)
+  const isComplianceUser = user && isComplianceRole(user.role)
   const isMinistryUser = user && ['ministry_hr', 'dept_admin'].includes(user.role)
+
+  const internalFormTypesResolved = formTypes.filter(ft => {
+    const cat = categories.find(c => String(c.id) === String(ft.form_category))
+    return cat?.code === 'INTERNAL' || cat?.name === 'Internal Submissions'
+  })
 
   const allowed =
     user && ['psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin',
-              ...INTERNAL_ROLES].includes(user.role)
+              ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager'].includes(user.role)
 
   useEffect(() => {
     Promise.all([
@@ -448,6 +456,13 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
       )
   }
 
+  // ── Compliance: cases are created in CMS, not in this portal ───────────
+  if (isComplianceUser) {
+    return (
+      <ComplianceCmsGuidance modal={modal} />
+    )
+  }
+
   // ── Route internal users to their own simplified form ───────────────────
   if (isInternalUser) {
     return (
@@ -455,7 +470,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
         modal={modal}
         onClose={onClose}
         onSuccess={onSuccess}
-        internalFormTypes={internalFormTypes}
+        internalFormTypes={internalFormTypesResolved}
       />
     )
   }

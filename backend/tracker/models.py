@@ -28,6 +28,7 @@ class Role(models.TextChoices):
     HR_UNIT_MANAGER     = "hr_unit_manager",     "HR Unit Manager"
     ODU_MANAGER         = "odu_manager",         "ODU Manager"
     COMPLIANCE_MANAGER  = "compliance_manager",  "Compliance Manager"
+    COMPLIANCE_SENIOR   = "compliance_senior",   "Compliance Senior Officer"
     CSU_MANAGER         = "csu_manager",         "CSU Manager"
     # ── OPSC Unit Principal roles (assigned checklist/assessment work) ──────
     VIPAM_PRINCIPAL       = "vipam_principal",       "VIPAM Principal"
@@ -46,6 +47,8 @@ class WorkflowStage(models.TextChoices):
     REGISTERED_ROUTED          = "registered_routed",          "Registered and Routed"
     MANAGER_CHECKLIST_REVIEW   = "manager_checklist_review",   "Manager Checklist Review"
     UNDER_ASSESSMENT           = "under_assessment",           "Under Assessment"
+    # ── CMS compliance routing ─────────────────────────────────────────────
+    COMPLIANCE_UNDER_REVIEW    = "compliance_under_review",    "Compliance Under Review (CMS)"
     # ── Hold / deferral states ─────────────────────────────────────────────
     DEFERRED                   = "deferred",                   "Deferred"
     TABLED                     = "tabled",                     "Tabled"
@@ -286,7 +289,7 @@ class RecordingAudioSource(models.TextChoices):
 
 class TranscriptSource(models.TextChoices):
     ZOOM_ASR = "zoom_asr", "Zoom/Teams ASR"
-    AI_WHISPER = "ai_whisper", "AI transcription (Gemini)"
+    AI_WHISPER = "ai_whisper", "AI-assisted transcript (text via Claude)"
     MANUAL_PASTE = "manual_paste", "Manual paste"
 
 
@@ -908,6 +911,21 @@ class Submission(models.Model):
         default=False,
         help_text="True when submitted by OPSC staff (CSU/ODU). Routes directly to Secretary, no checklist.",
     )
+    # ── CMS integration ────────────────────────────────────────────────────
+    cms_case_id        = models.CharField(max_length=50, blank=True, default="",
+        help_text="Primary key of the corresponding Case in the CMS (set after dispatch).")
+    cms_case_reference = models.CharField(max_length=50, blank=True, default="",
+        help_text="Human-readable CMS reference, e.g. CCMS-SM-2026-0001.")
+    cms_dispatched_at  = models.DateTimeField(null=True, blank=True,
+        help_text="When the submission was successfully dispatched to the CMS.")
+    cms_signoff_at     = models.DateTimeField(null=True, blank=True,
+        help_text="When the CMS compliance manager signed off and returned the submission.")
+    cms_signoff_outcome = models.CharField(max_length=255, blank=True, default="",
+        help_text="Outcome note from the CMS sign-off callback.")
+    cms_case_closed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When SCDMS notified CMS to close the linked case after portal completion.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="submissions_logged"
     )
@@ -1405,7 +1423,12 @@ class CommissionSubTask(models.Model):
 
 class WorkflowEvent(models.Model):
     submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name="events")
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        help_text="Null for system-generated events (e.g. CMS callback).",
+    )
+    actor_label = models.CharField(max_length=150, blank=True,
+        help_text="Denormalised label used when actor is a system (not a user).")
     previous_stage = models.CharField(max_length=48, choices=WorkflowStage.choices)
     new_stage = models.CharField(max_length=48, choices=WorkflowStage.choices)
     remarks = models.TextField(blank=True)
@@ -1989,3 +2012,40 @@ class ODURestructureChecklist(models.Model):
             self.b19_final_docs_ready, self.b20_manager_final_check,
         ]
         return sum(1 for f in fields if f is True)
+
+
+class StaffChatSession(models.Model):
+    """Per-user conversation thread for the PSC Staff Assistant."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="staff_chat_sessions",
+    )
+    title = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.title or f"Chat #{self.pk}"
+
+
+class StaffChatMessage(models.Model):
+    class Role(models.TextChoices):
+        USER = "user", "User"
+        ASSISTANT = "assistant", "Assistant"
+
+    session = models.ForeignKey(
+        StaffChatSession,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    role = models.CharField(max_length=16, choices=Role.choices)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]

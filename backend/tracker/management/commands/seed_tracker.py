@@ -58,6 +58,7 @@ CATEGORIES = [
 ]
 
 MINISTRIES = [
+    ("OPSC",     "Office of the Public Service Commission"),
     ("OPM",      "Office of the Prime Minister"),
     ("MFEM",     "Ministry of Finance & Economic Management"),
     ("MET",      "Ministry of Education & Training"),
@@ -77,6 +78,11 @@ MINISTRIES = [
 
 # (ministry_code, dept_code, dept_name)
 DEPARTMENTS = [
+    ("OPSC",    "COMPLIANCE",    "Compliance Unit"),
+    ("OPSC",    "ODU",           "Organisation Development Unit"),
+    ("OPSC",    "CSU",           "Corporate Services Unit"),
+    ("OPSC",    "VIPAM",         "VIPAM Unit"),
+    ("OPSC",    "HR_UNIT",       "HR Unit"),
     ("OPM",     "DEPT_STATE",    "Department of Strategic Policy, Planning & Aid Coordination"),
     ("OPM",     "OGCIO",         "Office of the Government Chief Information Officer"),
     ("MFEM",    "CIR",           "Customs & Inland Revenue"),
@@ -121,10 +127,12 @@ USERS = [
     ("m.carlot",       "m.carlot@psc.gov.vu",        "Commissioner123!",  "psc_commissioner",       None),
     ("j.taue",         "j.taue@psc.gov.vu",          "Commissioner123!",  "chairperson",            None),
     # Unit Managers
-    ("m.vipam",        "m.vipam@psc.gov.vu",         "Manager123!",       "vipam_manager",          None),
-    ("m.hrunit",       "m.hrunit@psc.gov.vu",        "Manager123!",       "hr_unit_manager",        None),
-    ("m.odu",          "m.odu@psc.gov.vu",           "Manager123!",       "odu_manager",            None),
-    ("m.compliance",   "m.compliance@psc.gov.vu",    "Manager123!",       "compliance_manager",     None),
+    ("m.vipam",        "m.vipam@psc.gov.vu",         "Manager123!",       "vipam_manager",          "OPSC"),
+    ("m.hrunit",       "m.hrunit@psc.gov.vu",        "Manager123!",       "hr_unit_manager",        "OPSC"),
+    ("m.odu",          "m.odu@psc.gov.vu",           "Manager123!",       "odu_manager",            "OPSC"),
+    ("m.compliance",   "m.compliance@psc.gov.vu",    "Manager123!",       "compliance_manager",     "OPSC"),
+    ("s.compliance",   "s.compliance@psc.gov.vu",    "Officer123!",       "compliance_senior",      "OPSC"),
+    ("p.compliance",   "p.compliance@psc.gov.vu",    "Officer123!",       "compliance_principal",   "OPSC"),
     # OPSC Manager — allocates decisions to staff after Chairperson signs minutes
     ("m.opsc",         "m.opsc@psc.gov.vu",          "Manager123!",       "psc_manager",            None),
     # Ministry HR
@@ -695,8 +703,22 @@ class Command(BaseCommand):
             "view_reports", "view_audit_trail",
         ]),
         ("compliance_manager", (
-            "Compliance Manager — reviews checklist for compliance-related submissions "
-            "and approves or returns them for clarification."
+            "Compliance Manager — manages cases in CMS; registers linked records with the "
+            "Commission Portal for Secretary review and sign-off."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "view_reports", "view_audit_trail",
+        ]),
+        ("compliance_senior", (
+            "Compliance Senior Officer — creates and maintains compliance cases in CMS "
+            "(PSA amendments: Principal and Manager only in CMS)."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "view_reports", "view_audit_trail",
+        ]),
+        ("compliance_principal", (
+            "Compliance Principal — assigned compliance cases in CMS; may register all "
+            "linked portal types including PSA amendments."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
             "view_reports", "view_audit_trail",

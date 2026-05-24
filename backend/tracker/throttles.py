@@ -38,3 +38,8 @@ class FeedbackCreateThrottle(UserRateThrottle):
 class SessionPinVerifyThrottle(AnonRateThrottle):
     """Limit PIN verification attempts per IP — prevents 5-digit brute force."""
     scope = 'session_pin_verify'
+
+
+class StaffChatThrottle(UserRateThrottle):
+    """Limit Staff Assistant messages per user — controls Claude API cost."""
+    scope = 'staff_chat'

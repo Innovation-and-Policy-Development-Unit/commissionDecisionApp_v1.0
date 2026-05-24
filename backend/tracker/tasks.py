@@ -45,24 +45,6 @@ Output Schema:
 "translated_text": "string"}"""
 
 
-def _get_gemini_client():
-    """Return a lazy-initialised Gemini client, or None if the key is missing."""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        log.warning("GEMINI_API_KEY not set — AI feedback analysis is disabled.")
-        return None
-    try:
-        from google import genai
-
-        return genai.Client(api_key=api_key)
-    except ImportError:
-        log.error(
-            "google-generativeai package not installed — "
-            "run: pip install google-generativeai"
-        )
-        return None
-
-
 @shared_task
 def process_feedback_with_ai(feedback_id: int):
     """Analyse a single FeedbackComment and persist the AI results."""
@@ -78,23 +60,19 @@ def process_feedback_with_ai(feedback_id: int):
         log.debug("AI_SKIP | FeedbackComment %s already processed", feedback_id)
         return
 
-    client = _get_gemini_client()
-    if client is None:
-        return
+    from .ai.claude_client import complete_json
 
     user_input = f"User Feedback Description: {feedback.body}"
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            config={
-                "system_instruction": SYSTEM_INSTRUCTION,
-                "response_mime_type": "application/json",
-            },
-            contents=user_input,
+        ai_data = complete_json(
+            system=SYSTEM_INSTRUCTION,
+            user=user_input,
+            tier="haiku",
         )
-
-        ai_data = response.parsed
+        if not ai_data or not isinstance(ai_data, dict):
+            log.error("AI_FAIL | FeedbackComment %s | empty Claude response", feedback_id)
+            return
 
         feedback.ai_summary = ai_data.get("summary", "")
         feedback.ai_severity = ai_data.get("severity", "")
@@ -154,6 +132,31 @@ def submission_brief_needs_refresh(submission) -> bool:
     return False
 
 
+def _mark_submission_brief_failed(submission, message: str) -> None:
+    """Stop the UI spinner — record a readable error in the brief field."""
+    from django.utils import timezone
+
+    submission.ai_brief_summary = message.strip()
+    submission.ai_brief_processed = True
+    submission.ai_brief_generated_at = timezone.now()
+    submission.save(
+        update_fields=["ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at", "updated_at"]
+    )
+
+
+def queue_submission_brief(submission_id: int, *, force: bool = False) -> None:
+    """Queue via Celery when possible; otherwise run synchronously in-process."""
+    try:
+        generate_submission_brief.delay(submission_id, force=force)
+    except Exception as exc:
+        app_log.warning(
+            "BRIEF_QUEUE_FALLBACK | Submission %s | running sync: %s",
+            submission_id,
+            exc,
+        )
+        generate_submission_brief(submission_id, force=force)
+
+
 def build_submission_brief_context(submission) -> str:
     """Assemble structured text context for the AI brief."""
     from .models import (
@@ -198,8 +201,13 @@ def build_submission_brief_context(submission) -> str:
         lines.append(f"Checklist: {label} — {status}")
 
     for ev in WorkflowEvent.objects.filter(submission=submission).order_by("-created_at")[:8]:
+        actor_name = (
+            ev.actor.username
+            if ev.actor_id
+            else (ev.actor_label or "System")
+        )
         lines.append(
-            f"Workflow: {ev.previous_stage} → {ev.new_stage} by {ev.actor.username}"
+            f"Workflow: {ev.previous_stage} → {ev.new_stage} by {actor_name}"
             + (f" | {ev.remarks}" if ev.remarks else "")
         )
 
@@ -285,125 +293,71 @@ def generate_submission_brief(submission_id: int, force: bool = False):
     if not force and not submission_brief_needs_refresh(submission):
         return
 
-    client = _get_gemini_client()
-    if client is None:
+    from .ai.claude_client import ai_enabled, complete_json_with_error, get_model_id
+
+    if not ai_enabled():
+        _mark_submission_brief_failed(
+            submission,
+            "AI brief could not be generated: ANTHROPIC_API_KEY is not configured on the server. "
+            "Add the key to .env and restart the backend, then click Regenerate.",
+        )
+        app_log.error("BRIEF_FAIL | Submission %s | ANTHROPIC_API_KEY missing", submission_id)
         return
 
     context = build_submission_brief_context(submission)
     user_input = f"Submission context:\n\n{context}"
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            config={
-                "system_instruction": SUBMISSION_BRIEF_INSTRUCTION,
-                "response_mime_type": "application/json",
-            },
-            contents=user_input,
+        data, api_err = complete_json_with_error(
+            system=SUBMISSION_BRIEF_INSTRUCTION,
+            user=user_input,
+            tier="sonnet",
+            max_tokens=4096,
         )
-        raw = response.text or ""
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            data = {"executive_summary": raw.strip()}
+        if not data:
+            detail = api_err or "Unknown error"
+            _mark_submission_brief_failed(
+                submission,
+                f"AI brief could not be generated: {detail} "
+                f"(model={get_model_id('sonnet')}). Check .env and click Regenerate.",
+            )
+            app_log.error("BRIEF_FAIL | Submission %s | %s", submission_id, detail)
+            return
+        if not isinstance(data, dict):
+            data = {"executive_summary": str(data)}
 
         submission.ai_brief_summary = _format_submission_brief(data)
         submission.ai_brief_processed = True
         submission.ai_brief_generated_at = timezone.now()
         submission.save(update_fields=[
-            "ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at",
+            "ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at", "updated_at",
         ])
         app_log.info("BRIEF_COMPLETE | Submission %s", submission_id)
     except Exception as exc:
+        _mark_submission_brief_failed(
+            submission,
+            f"AI brief could not be generated: {exc}. "
+            "Check ANTHROPIC_API_KEY, Celery worker logs, and try Regenerate.",
+        )
         app_log.error("BRIEF_FAIL | Submission %s | %s", submission_id, exc)
 
 
 # ── Meeting transcription ────────────────────────────────────────────────────
 
 
-TRANSCRIBE_PROMPT = """You are a Commission Secretary in Vanuatu. Transcribe this meeting recording accurately.
-Identify different speakers where possible (e.g. "Chairperson:", "Commissioner X:", "Secretary:").
-The meeting may contain English, Bislama, or French — keep the original language in the transcript.
-Output the full verbatim transcript as plain text with speaker labels.
-
-After the transcript, add a structured JSON block at the end with this schema:
-{
-  "speakers": ["list of identified speakers"],
-  "language": "en|bi|fr|mixed",
-  "duration_minutes": <estimated duration>,
-  "topics_discussed": ["topic1", "topic2"],
-  "key_decisions": [{"decision": "...", "submission_ref": "..."}],
-  "action_items": [{"action": "...", "responsible": "...", "deadline": "..."}]
-}
-
-Separate the transcript and JSON with "---STRUCTURED---" on its own line."""
-
-
 @shared_task
 def transcribe_meeting_recording(meeting_id: int, audio_path: str):
-    """Transcribe a meeting recording using Gemini and save the transcript.
+    """Audio file is stored; transcription is not done via Claude API.
 
-    Output is English-biased ASR; Bislama-heavy sittings need secretariat review
-    and a Claude text-repair pass before chair approval (see claude-prompt endpoint).
+    Use Zoom/local ASR, paste text into the transcript editor, then Claude prompt
+  repair (GET /meetings/{id}/claude-prompt/) or draft_minutes_from_transcript.
     """
-    from django.utils import timezone
-
-    from .models import Meeting, MeetingTranscript, TranscriptSource
-
-    try:
-        meeting = Meeting.objects.get(id=meeting_id)
-    except Meeting.DoesNotExist:
-        app_log.warning("TRANSCRIBE_SKIP | Meeting %s not found", meeting_id)
-        return
-
-    client = _get_gemini_client()
-    if client is None:
-        return
-
-    try:
-        audio_file = client.files.upload(path=audio_path)
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[TRANSCRIBE_PROMPT, audio_file],
-        )
-
-        full_text = response.text
-        transcript, _, structured_part = full_text.partition("---STRUCTURED---")
-
-        structured_data = {}
-        if structured_part.strip():
-            try:
-                structured_data = json.loads(structured_part.strip())
-            except json.JSONDecodeError:
-                app_log.warning("TRANSCRIBE | Could not parse structured JSON for meeting %s", meeting_id)
-
-        transcript_obj, created = MeetingTranscript.objects.get_or_create(
-            meeting=meeting,
-            defaults={
-                "raw_text": transcript.strip(),
-                "structured_data": structured_data,
-                "audio_file": os.path.basename(audio_path),
-                "source": TranscriptSource.AI_WHISPER,
-                "ai_processed": True,
-                "processed_at": timezone.now(),
-            },
-        )
-        if not created:
-            transcript_obj.raw_text = transcript.strip()
-            transcript_obj.structured_data = structured_data
-            transcript_obj.audio_file = os.path.basename(audio_path)
-            transcript_obj.source = TranscriptSource.AI_WHISPER
-            transcript_obj.ai_processed = True
-            transcript_obj.processed_at = timezone.now()
-            transcript_obj.save()
-
-        app_log.info(
-            "TRANSCRIBE_COMPLETE | Meeting %s | audio=%s | length=%d chars",
-            meeting_id, os.path.basename(audio_path), len(transcript),
-        )
-
-    except Exception as exc:
-        app_log.error("TRANSCRIBE_FAIL | Meeting %s | %s", meeting_id, exc)
+    app_log.warning(
+        "TRANSCRIBE_SKIP | Claude API does not accept audio uploads. "
+        "Meeting %s file=%s — paste ASR transcript manually.",
+        meeting_id,
+        os.path.basename(audio_path) if audio_path else "",
+    )
 
 
 # ── Minutes drafting from transcript ─────────────────────────────────────────
@@ -448,7 +402,7 @@ Output ONLY valid JSON. No conversational text, no markdown formatting."""
 
 @shared_task
 def draft_minutes_from_transcript(meeting_id: int, user_id: int = None):
-    """Draft structured minutes from meeting transcript using Gemini."""
+    """Draft structured minutes from meeting transcript using Claude."""
     from django.contrib.auth.models import User
 
     from .models import AgendaItem, Meeting, MeetingTranscript, Minutes, MinutesStatus
@@ -469,9 +423,7 @@ def draft_minutes_from_transcript(meeting_id: int, user_id: int = None):
         app_log.warning("MINUTES_SKIP | Transcript not yet processed for meeting %s", meeting_id)
         return
 
-    client = _get_gemini_client()
-    if client is None:
-        return
+    from .ai.claude_client import complete_json
 
     agenda_qs = AgendaItem.objects.filter(meeting=meeting).select_related("submission")
     agenda_lines = []
@@ -495,15 +447,15 @@ def draft_minutes_from_transcript(meeting_id: int, user_id: int = None):
     )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            config={
-                "response_mime_type": "application/json",
-            },
-            contents=prompt,
+        minutes_data = complete_json(
+            system="You draft formal Vanuatu Public Service Commission minutes.",
+            user=prompt,
+            tier="sonnet",
+            max_tokens=8192,
         )
-
-        minutes_data = response.parsed
+        if not minutes_data:
+            app_log.error("MINUTES_FAIL | Meeting %s | empty Claude response", meeting_id)
+            return
 
         creator = None
         if user_id:
@@ -569,7 +521,7 @@ Output ONLY valid JSON. No conversational text, no markdown formatting."""
 
 @shared_task
 def extract_decisions_from_minutes(meeting_id: int):
-    """Extract formal decisions from minutes content using Gemini."""
+    """Extract formal decisions from minutes content using Claude."""
     from .models import Meeting
 
     try:
@@ -588,24 +540,22 @@ def extract_decisions_from_minutes(meeting_id: int):
         app_log.warning("DECISION_SKIP | Minutes empty for meeting %s", meeting_id)
         return
 
-    client = _get_gemini_client()
-    if client is None:
-        return
+    from .ai.claude_client import complete_json
 
     prompt = DECISION_EXTRACT_PROMPT.format(
         minutes_content=json.dumps(minutes.content, indent=2),
     )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            config={
-                "response_mime_type": "application/json",
-            },
-            contents=prompt,
+        decisions = complete_json(
+            system="You extract structured Commission decisions from minutes.",
+            user=prompt,
+            tier="haiku",
+            max_tokens=4096,
         )
-
-        decisions = response.parsed
+        if decisions is None:
+            app_log.error("DECISION_EXTRACT_FAIL | Meeting %s | empty Claude response", meeting_id)
+            return
 
         minutes.content["extracted_decisions"] = decisions
         minutes.save(update_fields=["content"])

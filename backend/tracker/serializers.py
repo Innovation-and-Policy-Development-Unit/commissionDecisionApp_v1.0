@@ -46,6 +46,8 @@ from .models import (
     UserSignature,
     ODURestructureChecklist,
     RestructureSubmissionData,
+    StaffChatMessage,
+    StaffChatSession,
 )
 from .rbac import (
     rbac_can_access_admin_panel,
@@ -377,11 +379,20 @@ class FormCategorySerializer(serializers.ModelSerializer):
 
 
 class WorkflowEventSerializer(serializers.ModelSerializer):
-    actor_username = serializers.CharField(source="actor.username", read_only=True)
+    """System/CMS events may have actor=null; use actor_label when present."""
+
+    actor_username = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkflowEvent
         fields = ("id", "actor_username", "previous_stage", "new_stage", "remarks", "created_at")
+
+    def get_actor_username(self, obj):
+        if obj.actor_id:
+            return obj.actor.username
+        if obj.actor_label:
+            return obj.actor_label
+        return "System"
 
 
 class AttachedSubmissionSerializer(serializers.ModelSerializer):
@@ -539,6 +550,12 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "estimated_meeting_date",
             "is_attachment",
             "is_internal",
+            "cms_case_id",
+            "cms_case_closed_at",
+            "cms_case_reference",
+            "cms_dispatched_at",
+            "cms_signoff_at",
+            "cms_signoff_outcome",
             "parent_submission",
             "parent_reference",
             "parent_title",
@@ -690,6 +707,26 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             "is_internal",
         )
         read_only_fields = ("id", "is_internal")
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if not request or not getattr(request, "user", None):
+            return attrs
+        try:
+            profile = request.user.psc_profile
+            role = profile.role
+        except Exception:
+            return attrs
+        from .cms_register import CMS_ORIGIN_MESSAGE
+        from .compliance_forms import COMPLIANCE_SUBMITTER_ROLES
+
+        form_type_code = attrs.get("form_type_code") or ""
+        if role in COMPLIANCE_SUBMITTER_ROLES:
+            raise PermissionDenied(CMS_ORIGIN_MESSAGE)
+        elif form_type_code.startswith("COMP-"):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Only Compliance unit staff may create compliance submission types.")
+        return attrs
 
     def create(self, validated_data):
         request = self.context["request"]
@@ -1021,13 +1058,35 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError("This reset link has expired.")
         return rt
 
+    def validate_password(self, value):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from .validators import validate_complexity
+
+        try:
+            validate_complexity(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
+
     def save(self):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from .validators import record_password, validate_history
+
         rt = self.validated_data["token"]
-        rt.user.set_password(self.validated_data["password"])
-        rt.user.save()
+        user = rt.user
+        password = self.validated_data["password"]
+        try:
+            validate_history(password, user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"password": list(exc.messages)})
+        record_password(user)
+        user.set_password(password)
+        user.save(update_fields=["password"])
         rt.used = True
-        rt.save()
-        return rt.user
+        rt.save(update_fields=["used"])
+        return user
 
 
 class SystemPermissionSerializer(serializers.ModelSerializer):
@@ -1541,3 +1600,49 @@ class RestructureSubmissionDataSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Each costing row must be an object.")
             cleaned.append({k: row.get(k, "") for k in EXPECTED})
         return cleaned
+
+
+class StaffChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffChatMessage
+        fields = ("id", "role", "content", "created_at")
+        read_only_fields = fields
+
+
+class StaffChatSessionListSerializer(serializers.ModelSerializer):
+    message_count = serializers.SerializerMethodField()
+    last_preview = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffChatSession
+        fields = ("id", "title", "created_at", "updated_at", "message_count", "last_preview")
+        read_only_fields = ("id", "created_at", "updated_at", "message_count", "last_preview")
+
+    def get_message_count(self, obj):
+        return obj.messages.count()
+
+    def get_last_preview(self, obj):
+        last = obj.messages.order_by("-created_at").first()
+        if not last:
+            return ""
+        text = last.content or ""
+        return text[:120] + ("…" if len(text) > 120 else "")
+
+
+class StaffChatSessionDetailSerializer(serializers.ModelSerializer):
+    messages = StaffChatMessageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = StaffChatSession
+        fields = ("id", "title", "created_at", "updated_at", "messages")
+        read_only_fields = fields
+
+
+class StaffChatSendSerializer(serializers.Serializer):
+    message = serializers.CharField(max_length=8000, trim_whitespace=True)
+    session_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_message(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Message cannot be empty.")
+        return value.strip()

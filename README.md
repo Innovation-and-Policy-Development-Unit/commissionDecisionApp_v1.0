@@ -494,10 +494,14 @@ SMTP_USER=
 SMTP_PASSWORD=
 
 # ── Celery / Redis ────────────────────────────────────────────────────────────
-CELERY_BROKER_URL=redis://redis:6379/0
+REDIS_PASSWORD=<strong-redis-password>
+CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
 
-# ── AI Feedback Analysis ──────────────────────────────────────────────────────
-GEMINI_API_KEY=
+# ── Anthropic Claude (AI features) ───────────────────────────────────────────
+ANTHROPIC_API_KEY=
+CLAUDE_MODEL_HAIKU=claude-3-5-haiku-20241022
+CLAUDE_MODEL_SONNET=claude-sonnet-4-20250514
 
 # ── Monitoring (optional) ─────────────────────────────────────────────────────
 SENTRY_DSN=
@@ -524,7 +528,21 @@ docker compose up -d
 
 This starts seven services: `db`, `redis`, `mailpit`, `backend`, `celery_worker`, `celery_beat`, `web`.
 
+**Networks:** `db` and `redis` run on an **internal** network (not reachable from `web`). `web` only joins the **app** network and talks to `backend`. **Redis** requires `REDIS_PASSWORD` in `.env`; compose sets `CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0`.
+
 The application is available at **http://localhost:8080** (or the port set by `WEB_PORT`).
+
+### Production HTTPS (TLS)
+
+Development uses **HTTP only**. For production, terminate TLS at a reverse proxy (**Caddy** or host **Nginx** recommended) or use the optional Certbot overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+See **[docs/deployment-tls.md](docs/deployment-tls.md)** for certificates, `DOMAIN`, and security headers.
+
+For **Render.com** (managed Postgres, Redis, Gunicorn API, static frontend), see **[docs/deployment-render.md](docs/deployment-render.md)** and the root **`render.yaml`** blueprint.
 
 ### Local SMTP (development)
 

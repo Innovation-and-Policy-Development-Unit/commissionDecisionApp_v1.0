@@ -12,6 +12,18 @@ INTERNAL_SUBMITTER_ROLES = {
     Role.ODU_MANAGER,
 }
 
+_COMPLIANCE_SUBMITTER_ROLES = {
+    Role.COMPLIANCE_SENIOR,
+    Role.COMPLIANCE_PRINCIPAL,
+    Role.COMPLIANCE_MANAGER,
+}
+
+_COMPLIANCE_CREATOR_ALLOWED = {
+    (WorkflowStage.DRAFT, WorkflowStage.SUBMITTED),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
+}
+
 # ---------------------------------------------------------------------------
 # Internal stage graph — short 4-stage workflow for OPSC internal submissions
 # DRAFT → SUBMITTED → SECRETARY_REVIEW → APPROVED / REJECTED
@@ -52,6 +64,14 @@ _STAGE_GRAPH = {
     WorkflowStage.MANAGER_CHECKLIST_REVIEW: [
         WorkflowStage.UNDER_ASSESSMENT,
         WorkflowStage.RETURNED_FOR_CLARIFICATION,
+        WorkflowStage.COMPLIANCE_UNDER_REVIEW,
+    ],
+    # ── CMS compliance routing ─────────────────────────────────────────────
+    # Outbound: Compliance Manager dispatches to CMS (auto-fires API call).
+    # Inbound (SECRETARY_REVIEW): set programmatically by the CMS callback webhook,
+    # not by a user transition, so it does not need a graph entry here.
+    WorkflowStage.COMPLIANCE_UNDER_REVIEW: [
+        WorkflowStage.SECRETARY_REVIEW,
     ],
     # ── Assessment ─────────────────────────────────────────────────────────
     WorkflowStage.UNDER_ASSESSMENT: [
@@ -192,6 +212,7 @@ _OFFICER_FORBIDDEN = {
     WorkflowStage.IMPLEMENTATION_REPORT,
     WorkflowStage.TABLED,
     WorkflowStage.DEFERRED_BACK_TO_HR,
+    WorkflowStage.COMPLIANCE_UNDER_REVIEW,
 }
 
 _MANAGER_STAGES = {
@@ -223,7 +244,15 @@ def assert_transition_allowed(*, role: str, current_stage: str, target_stage: st
         if target_stage not in allowed_targets and role != Role.PSC_ADMIN:
             raise PermissionDenied("That transition is not allowed in the internal submission workflow.")
 
-        # Internal submitters (CSU/ODU) can only submit their own draft
+        # Compliance unit creators (internal OPSC submissions)
+        if role in _COMPLIANCE_SUBMITTER_ROLES:
+            if (current_stage, target_stage) in _COMPLIANCE_CREATOR_ALLOWED:
+                return
+            raise PermissionDenied(
+                "Compliance staff can submit a draft or respond to a clarification request."
+            )
+
+        # Internal submitters (CSU/ODU managers) can only submit their own draft
         if role in INTERNAL_SUBMITTER_ROLES:
             if (current_stage, target_stage) != (WorkflowStage.DRAFT, WorkflowStage.SUBMITTED):
                 raise PermissionDenied("CSU/ODU users can only submit their draft.")
@@ -345,6 +374,10 @@ def iter_allowed_targets(role: str, current_stage: str, is_internal: bool = Fals
     if is_internal:
         if role == Role.PSC_ADMIN:
             return list(_INTERNAL_STAGE_GRAPH.get(current_stage, []))
+        if role in _COMPLIANCE_SUBMITTER_ROLES:
+            return [
+                t.value for (s, t) in _COMPLIANCE_CREATOR_ALLOWED if s == current_stage
+            ]
         if role in INTERNAL_SUBMITTER_ROLES:
             if current_stage == WorkflowStage.DRAFT:
                 return [WorkflowStage.SUBMITTED]

@@ -36,6 +36,7 @@ ALLOWED_HOSTS = [
     if h.strip()
 ]
 
+_ON_RENDER = os.getenv("RENDER", "").lower() in ("1", "true", "yes")
 
 # Application definition
 
@@ -57,8 +58,12 @@ INSTALLED_APPS = [
     'tracker',
 ]
 
-MIDDLEWARE = [
+_MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+]
+if os.getenv("USE_WHITENOISE", "").lower() in ("1", "true", "yes") or _ON_RENDER:
+    _MIDDLEWARE.append("whitenoise.middleware.WhiteNoiseMiddleware")
+_MIDDLEWARE += [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -69,6 +74,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+MIDDLEWARE = _MIDDLEWARE
 
 ROOT_URLCONF = 'config.urls'
 
@@ -115,6 +121,36 @@ if os.getenv('USE_SQLITE', '').lower() in ('1', 'true', 'yes'):
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+
+# Render.com / Heroku-style DATABASE_URL (takes precedence over POSTGRES_*)
+_database_url = os.getenv("DATABASE_URL", "").strip()
+if _database_url:
+    import dj_database_url
+
+    DATABASES["default"] = dj_database_url.config(
+        default=_database_url,
+        conn_max_age=int(os.getenv("CONN_MAX_AGE", "600")),
+        conn_health_checks=True,
+        ssl_require=_database_url.startswith("postgres") and "sslmode=disable" not in _database_url,
+    )
+
+# Optional single REDIS_URL for managed Redis (Render Key Value)
+_redis_url = os.getenv("REDIS_URL", "").strip()
+if _redis_url and not os.getenv("CELERY_BROKER_URL"):
+    os.environ["CELERY_BROKER_URL"] = _redis_url
+    os.environ["CELERY_RESULT_BACKEND"] = os.getenv("CELERY_RESULT_BACKEND", _redis_url)
+
+_BEHIND_PROXY = _ON_RENDER or os.getenv("DJANGO_BEHIND_PROXY", "").lower() in ("1", "true", "yes")
+if _BEHIND_PROXY:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+    if not DEBUG:
+        SESSION_COOKIE_SECURE = True
+        CSRF_COOKIE_SECURE = True
+
+_cdp_public = os.getenv("CDP_BASE_URL", "").strip().rstrip("/")
+if _cdp_public and not DEBUG:
+    MEDIA_URL = f"{_cdp_public}/media/"
 
 
 # Password validation
@@ -179,6 +215,7 @@ REST_FRAMEWORK = {
         'password_change': '10/min',
         'submission_create': '10/hour',
         'feedback_create':   '5/hour',
+        'staff_chat':        '30/hour',
         'session_pin_verify': '5/min',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -383,3 +420,20 @@ CELERY_TIMEZONE = 'Pacific/Efate'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# ── AI / Claude API (replaces former Gemini integration) ─────────────────────
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+# Fast tier: feedback, classification, extraction (see AI_Features_List.txt)
+CLAUDE_MODEL_HAIKU = os.getenv('CLAUDE_MODEL_HAIKU', 'claude-haiku-4-5-20251001')
+# Quality tier: executive briefs, minutes drafting, similarity, chatbots
+CLAUDE_MODEL_SONNET = os.getenv('CLAUDE_MODEL_SONNET', 'claude-sonnet-4-6')
+
+# ── CMS integration (Case Management System) ──────────────────────────────────
+# URL of the CMS backend API, e.g. https://cms.internal or http://localhost:8001
+CMS_API_URL = os.getenv('CMS_API_URL', 'http://localhost:8001')
+# JWT or API token the CDP uses when POSTing cases to the CMS
+CMS_API_KEY = os.getenv('CMS_API_KEY', '')
+# Shared secret the CMS sends back in X-CMS-Callback-Key on sign-off callbacks
+CMS_CALLBACK_SECRET = os.getenv('CMS_CALLBACK_SECRET', '')
+# Public base URL of this CDP server (used to build the cdp_callback_url sent to the CMS)
+CDP_BASE_URL = os.getenv('CDP_BASE_URL', 'http://localhost:8000')

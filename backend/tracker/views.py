@@ -117,7 +117,7 @@ from .serializers import (
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
-from .throttles import SessionPinVerifyThrottle
+from .throttles import PasswordResetThrottle, SessionPinVerifyThrottle
 from .models import (
     AuditLog,
     CommissionTask,
@@ -168,10 +168,13 @@ def _resolve_opsc_ministry(profile):
     """
     if profile.ministry_id:
         return profile.ministry_id
-    opsc = Ministry.objects.filter(
-        models.Q(name__icontains='Public Service Commission') |
-        models.Q(name__icontains='OPSC')
-    ).first()
+    opsc = (
+        Ministry.objects.filter(code__iexact="OPSC").first()
+        or Ministry.objects.filter(
+            models.Q(name__icontains="Public Service Commission")
+            | models.Q(name__icontains="OPSC")
+        ).first()
+    )
     if opsc:
         return opsc.pk
     raise PermissionDenied(
@@ -206,6 +209,11 @@ def _submission_queryset_for(user):
         Role.VIPAM_PRINCIPAL,
         Role.COMPLIANCE_PRINCIPAL,
     }
+    if role in {Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL}:
+        return qs.filter(
+            form_category__code="COMPLIANCE",
+            is_internal=True,
+        ).exclude(cms_case_id="").filter(cms_case_id__isnull=False)
     if role in _UNIT_PRINCIPAL_ROLES:
         # Principals see only submissions explicitly assigned to them
         return qs.filter(assigned_to=user)
@@ -490,11 +498,20 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             }
             submission = serializer.save(**kwargs)
 
+        elif profile.role in {
+            Role.COMPLIANCE_SENIOR,
+            Role.COMPLIANCE_PRINCIPAL,
+            Role.COMPLIANCE_MANAGER,
+        }:
+            from .cms_register import CMS_ORIGIN_MESSAGE
+            raise PermissionDenied(CMS_ORIGIN_MESSAGE)
+
         elif profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY}:
             submission = serializer.save()
         else:
             raise PermissionDenied(
-                "Only PSC Officers, Admins, Secretaries, Ministry staff, or OPSC unit staff can create submissions."
+                "Only PSC Officers, Admins, Secretaries, Ministry staff, OPSC unit staff, "
+                "or Compliance unit staff can create submissions."
             )
         _log(self.request, _AL.Action.CREATE,
              resource_type="Submission", resource_id=submission.id,
@@ -528,13 +545,16 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
-        from .tasks import generate_submission_brief, submission_brief_needs_refresh
+        from .tasks import queue_submission_brief, submission_brief_needs_refresh
 
         submission = self.get_object()
         profile = _profile(request.user)
         if profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             if submission_brief_needs_refresh(submission):
-                generate_submission_brief.delay(submission.id)
+                queue_submission_brief(submission.id)
+                submission.refresh_from_db(
+                    fields=["ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at"]
+                )
 
         _log(request, _AL.Action.READ,
              resource_type="Submission", resource_id=submission.id,
@@ -657,9 +677,27 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             lambda: _dispatch_transition_notifications(submission, prev, target, request.user)
         )
 
-        from .tasks import SUBMISSION_BRIEF_STAGES, generate_submission_brief
+        from .tasks import SUBMISSION_BRIEF_STAGES, queue_submission_brief
         if target in SUBMISSION_BRIEF_STAGES:
-            transaction.on_commit(lambda: generate_submission_brief.delay(submission.id, force=True))
+            sid = submission.id
+            transaction.on_commit(lambda: queue_submission_brief(sid, force=True))
+
+        # ── Legacy: dispatch to CMS only when portal created submission without CMS link ──
+        if target == WorkflowStage.COMPLIANCE_UNDER_REVIEW and not submission.cms_case_id:
+            from .cms_bridge import dispatch_submission_to_cms
+            transaction.on_commit(lambda: dispatch_submission_to_cms.delay(submission.pk))
+
+        # ── CMS-first: close linked CMS case when SCDMS matter is complete ──
+        if submission.cms_case_id:
+            from .cms_close import maybe_close_cms_case
+            sid = submission.pk
+            transaction.on_commit(
+                lambda: maybe_close_cms_case(
+                    Submission.objects.prefetch_related(
+                        "commission_tasks__subtasks"
+                    ).get(pk=sid)
+                )
+            )
 
         _log(request, _AL.Action.UPDATE,
              resource_type="Submission", resource_id=submission.id,
@@ -670,7 +708,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="generate-brief")
     def generate_brief(self, request, pk=None):
         """Queue AI executive brief generation for Secretariat review."""
-        from .tasks import generate_submission_brief
+        from .tasks import queue_submission_brief
 
         submission = self.get_object()
         profile = _profile(request.user)
@@ -678,12 +716,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admin can request a brief.")
 
         submission.ai_brief_processed = False
-        submission.save(update_fields=["ai_brief_processed", "updated_at"])
-        generate_submission_brief.delay(submission.id, force=True)
-        return Response({
-            "detail": "Executive brief generation started. Refresh shortly.",
-            "ai_brief_processed": False,
-        })
+        submission.ai_brief_summary = ""
+        submission.save(update_fields=["ai_brief_processed", "ai_brief_summary", "updated_at"])
+        queue_submission_brief(submission.id, force=True)
+        submission.refresh_from_db(
+            fields=["ai_brief_summary", "ai_brief_processed", "ai_brief_generated_at"]
+        )
+        return Response(SubmissionDetailSerializer(submission).data)
 
     @action(detail=True, methods=["post"], url_path="assign")
     def assign(self, request, pk=None):
@@ -1238,6 +1277,18 @@ class PSCFormTypeViewSet(viewsets.ModelViewSet):
         cat = self.request.query_params.get('form_category')
         if cat:
             qs = qs.filter(form_category_id=cat)
+        audience = self.request.query_params.get('audience')
+        if audience == 'compliance':
+            from .compliance_forms import compliance_form_codes_for_role
+
+            try:
+                profile = self.request.user.psc_profile
+            except Exception:
+                return qs.none()
+            codes = compliance_form_codes_for_role(profile.role)
+            if not codes:
+                return qs.none()
+            qs = qs.filter(code__in=codes)
         return qs
 
     def _require_admin(self):
@@ -1411,6 +1462,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         if user.is_superuser or user.is_staff:
             updated = serializer.save()
             _notify_new_assignees(updated)
+            self._maybe_close_cms_for_task(updated)
             return
 
         vd = serializer.validated_data
@@ -1421,6 +1473,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("Cannot move a task to another submission.")
             updated = serializer.save()
             _notify_new_assignees(updated)
+            self._maybe_close_cms_for_task(updated)
             return
 
         is_manager = task.assigned_manager_id == user.id and rbac_user_has_permission(user, "assign_task")
@@ -1434,15 +1487,29 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("You cannot reassign the submission or manager for this task.")
             updated = serializer.save()
             _notify_new_assignees(updated)
+            self._maybe_close_cms_for_task(updated)
             return
 
         if is_staff:
             if keys - {"status"}:
                 raise PermissionDenied("You may only update the task status.")
             serializer.save()
+            self._maybe_close_cms_for_task(task)
             return
 
         raise PermissionDenied("You cannot update this task.")
+
+    def _maybe_close_cms_for_task(self, task):
+        sub = task.submission
+        if not sub or not (sub.cms_case_id or "").strip():
+            return
+        from .cms_close import maybe_close_cms_case
+        sub_id = sub.pk
+        transaction.on_commit(
+            lambda: maybe_close_cms_case(
+                Submission.objects.prefetch_related("commission_tasks__subtasks").get(pk=sub_id)
+            )
+        )
 
     @action(detail=True, methods=["get", "post", "patch", "delete"], url_path="subtasks")
     def subtasks(self, request, pk=None):
@@ -1480,6 +1547,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             ser = CommissionSubTaskSerializer(subtask, data=request.data, partial=True)
             ser.is_valid(raise_exception=True)
             ser.save()
+            self._maybe_close_cms_for_task(task)
             return Response(CommissionSubTaskSerializer(subtask).data)
 
         if request.method == "DELETE":
@@ -2764,9 +2832,36 @@ class SessionPinVerifyView(APIView):
 
 # ── Password Reset ────────────────────────────────────────────────────────────
 
+
+def _password_reset_frontend_base(request) -> str:
+    """Build the SPA base URL for links in reset emails (not the API host)."""
+    import os
+    from urllib.parse import urlparse
+
+    origin = (request.headers.get("Origin") or "").strip()
+    if not origin and request.headers.get("Referer"):
+        parsed = urlparse(request.headers.get("Referer", ""))
+        if parsed.scheme and parsed.netloc:
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+    if origin:
+        return origin.rstrip("/")
+
+    from django.conf import settings as django_settings
+
+    explicit = os.getenv("FRONTEND_URL", "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+    cors = getattr(django_settings, "CORS_ALLOWED_ORIGINS", None) or []
+    if cors:
+        first = cors[0] if isinstance(cors, (list, tuple)) else str(cors).split(",")[0]
+        return str(first).strip().rstrip("/")
+    return "http://localhost:8080"
+
+
 class PasswordResetRequestView(APIView):
     """Request a password reset token (logged to console in dev, emailed in prod)."""
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PasswordResetThrottle]
 
     def post(self, request):
         ser = PasswordResetRequestSerializer(data=request.data)
@@ -2775,10 +2870,9 @@ class PasswordResetRequestView(APIView):
         try:
             user = User.objects.get(email__iexact=email, is_active=True)
             token = PasswordResetToken.generate_for(user)
-            
-            # Use the origin from request headers if available (for frontend link)
-            origin = request.headers.get("Origin") or f"{request.scheme}://{request.get_host()}"
-            reset_url = f"{origin}/auth/reset-password/confirm?token={token.token}"
+
+            base = _password_reset_frontend_base(request)
+            reset_url = f"{base}/auth/reset-password/confirm?token={token.token}"
             
             from django.conf import settings
             from django.core.mail import send_mail
@@ -2827,11 +2921,24 @@ class PasswordResetRequestView(APIView):
 class PasswordResetConfirmView(APIView):
     """Validate reset token and set new password."""
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PasswordResetThrottle]
 
     def post(self, request):
         ser = PasswordResetConfirmSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        ser.save()
+        user = ser.save()
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        _security_log.info("PASSWORD_RESET_COMPLETE | username=%s", user.username)
+        _log(
+            request,
+            _AL.Action.PASSWORD_CHANGE,
+            resource_type="User",
+            resource_id=user.id,
+            resource_label=user.username,
+            description=f"Password reset via email link for {user.username}",
+        )
         return Response({"detail": "Password updated successfully. You may now sign in."})
 
 
@@ -4179,35 +4286,25 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="transcribe")
     def transcribe(self, request):
-        """AI: transcribe the uploaded recording for a meeting."""
-        from .tasks import transcribe_meeting_recording
+        """Recording is stored; paste ASR text manually (Claude API does not accept audio)."""
         serializer = TranscriptGenerateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         meeting_id = serializer.validated_data["meeting_id"]
         try:
-            meeting = Meeting.objects.get(id=meeting_id)
+            Meeting.objects.get(id=meeting_id)
         except Meeting.DoesNotExist:
             return Response({"detail": "Meeting not found."}, status=404)
 
-        import glob as _glob
-        recordings_dir = os.path.join(settings.MEDIA_ROOT, "recordings")
-        audio_path = None
-        if hasattr(meeting, "transcript") and meeting.transcript.audio_file:
-            candidate = os.path.join(recordings_dir, meeting.transcript.audio_file)
-            if os.path.isfile(candidate):
-                audio_path = candidate
-        if not audio_path:
-            pattern = os.path.join(recordings_dir, f"*{meeting_id}*")
-            matches = _glob.glob(pattern)
-            if matches:
-                audio_path = matches[0]
-        if not audio_path:
-            return Response(
-                {"detail": "No recording file found for this meeting. Upload one first via POST /meetings/upload/."},
-                status=400,
-            )
-        transcribe_meeting_recording.delay(meeting_id, audio_path)
-        return Response({"detail": "Transcription started. Check back shortly."})
+        return Response(
+            {
+                "detail": (
+                    "Automatic audio transcription is not available via the Claude API. "
+                    "Upload your Zoom ASR transcript with PATCH /meetings/{id}/transcript/, "
+                    "then use Generate minutes or the Claude repair prompt."
+                ),
+            },
+            status=501,
+        )
 
     @action(detail=False, methods=["post"], url_path="extract-decisions")
     def extract_decisions(self, request):

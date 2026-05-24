@@ -2,6 +2,8 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from .views_webhooks import cms_register_submission, cms_signoff_callback
+from .staff_chat_views import StaffChatSessionViewSet
 from .views import (
     AuditLogViewSet,
     BackupViewSet,
@@ -86,6 +88,7 @@ router.register(r"transcripts",      TranscriptViewSet,       basename="transcri
 router.register(r"doc-annotations",  DocumentAnnotationViewSet, basename="doc-annotation")
 router.register(r"doc-signatures",   DocumentSignatureViewSet,  basename="doc-signature")
 router.register(r"odu-checklists",   ODUChecklistViewSet,       basename="odu-checklist")
+router.register(r"staff-chat/sessions", StaffChatSessionViewSet, basename="staff-chat-session")
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -115,4 +118,7 @@ urlpatterns = [
     path("auth/verify-pin/",      VerifyPinView.as_view(),      name="verify-pin"),
     path("my-signature/",         MySignatureView.as_view(),    name="my-signature"),
     path("search/", global_search_view),
+    # ── Inbound webhooks from external systems ───────────────────────────────
+    path("webhooks/cms-signoff/", cms_signoff_callback, name="cms-signoff-callback"),
+    path("webhooks/cms-register/", cms_register_submission, name="cms-register-submission"),
 ]

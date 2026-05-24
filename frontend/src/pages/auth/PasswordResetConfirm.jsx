@@ -8,7 +8,7 @@
  * sets a new password via POST /auth/password-reset/confirm/.
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Eye, EyeOff, KeyRound, ArrowRight, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
 import Logo from '../../components/shared/Logo'
@@ -32,10 +32,21 @@ function passwordStrength(pw) {
   return { score, ...map[score] }
 }
 
+function policyHintLines(policy) {
+  if (!policy) return []
+  const lines = [`At least ${policy.min_length} characters`]
+  if (policy.require_uppercase) lines.push('One uppercase letter (A–Z)')
+  if (policy.require_lowercase) lines.push('One lowercase letter (a–z)')
+  if (policy.require_digits) lines.push('One digit (0–9)')
+  if (policy.require_special) lines.push('One special character (!@#$% …)')
+  return lines
+}
+
 export default function PasswordResetConfirm() {
   const [searchParams]    = useSearchParams()
   const token             = searchParams.get('token') || ''
 
+  const [policy, setPolicy] = useState(null)
   const [password,   setPassword]   = useState('')
   const [confirm,    setConfirm]    = useState('')
   const [showPw,     setShowPw]     = useState(false)
@@ -44,6 +55,14 @@ export default function PasswordResetConfirm() {
   const [error,      setError]      = useState('')
   const [done,       setDone]       = useState(false)
 
+  useEffect(() => {
+    api.get('/auth/password-policy/')
+      .then(res => setPolicy(res.data))
+      .catch(() => setPolicy(null))
+  }, [])
+
+  const minLength = policy?.min_length ?? 8
+  const policyLines = useMemo(() => policyHintLines(policy), [policy])
   const strength = passwordStrength(password)
   const mismatch = confirm && password !== confirm
 
@@ -63,12 +82,17 @@ export default function PasswordResetConfirm() {
       await api.post('/auth/password-reset/confirm/', { token, password })
       setDone(true)
     } catch (err) {
-      const data   = err.response?.data
-      const detail = data?.detail || data?.token || data?.password
-      const msg =
-        Array.isArray(detail)         ? detail.join(' ') :
-        typeof detail === 'string'    ? detail :
-        'Failed to reset password. The link may have expired.'
+      const data = err.response?.data
+      let msg = 'Failed to reset password. The link may have expired.'
+      if (typeof data?.detail === 'string') {
+        msg = data.detail
+      } else if (data?.password) {
+        const pw = data.password
+        msg = Array.isArray(pw) ? pw.join(' ') : String(pw)
+      } else if (data?.token) {
+        const tk = data.token
+        msg = Array.isArray(tk) ? tk.join(' ') : String(tk)
+      }
       setError(msg)
     } finally {
       setLoading(false)
@@ -113,9 +137,16 @@ export default function PasswordResetConfirm() {
                 <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1">
                   Set a new password
                 </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">
-                  Choose a strong password for your SCDMS account. It must be at least 8 characters long.
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                  Choose a strong password for your SCDMS account.
                 </p>
+                {policyLines.length > 0 && (
+                  <ul className="mb-6 text-xs text-slate-500 dark:text-slate-400 space-y-1 list-disc ps-4">
+                    {policyLines.map(line => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                )}
 
                 {error && (
                   <div className="mb-5 flex items-start gap-3 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
@@ -135,12 +166,12 @@ export default function PasswordResetConfirm() {
                       <input
                         type={showPw ? 'text' : 'password'}
                         className="input pe-10"
-                        placeholder="Minimum 8 characters"
+                        placeholder={`Minimum ${minLength} characters`}
                         value={password}
                         autoComplete="new-password"
                         onChange={e => { setPassword(e.target.value); setError('') }}
                         required
-                        minLength={8}
+                        minLength={minLength}
                       />
                       <button
                         type="button"

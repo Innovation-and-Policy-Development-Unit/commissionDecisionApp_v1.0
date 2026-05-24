@@ -17,6 +17,6 @@ mkdir -p "${MEDIA_ROOT:-/var/scdms/media}" 2>/dev/null || true
 python manage.py migrate --noinput
 if [ "${AUTO_SEED:-1}" != "0" ]; then
   # Idempotent: reference data every start; dummy submissions only when none exist.
-  python manage.py seed_tracker
+  python manage.py seed_tracker || echo "seed_tracker finished with warnings (non-fatal)"
 fi
 exec python manage.py runserver 0.0.0.0:8000

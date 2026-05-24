@@ -1,7 +1,8 @@
 import axios from 'axios'
 
+/** Same-origin /api in Docker; full URL on Render static site (VITE_API_BASE_URL). */
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   headers: { 'Content-Type': 'application/json' },
 })
 

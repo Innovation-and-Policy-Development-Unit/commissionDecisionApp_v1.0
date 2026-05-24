@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom'
-import { Eye, EyeOff, ArrowRight, ShieldCheck, Clock, Lock, KeyRound } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, ShieldCheck, Lock, KeyRound, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/client'
 
@@ -37,27 +37,12 @@ export default function Login() {
   const [password,         setPassword]         = useState('')
   const [error,            setError]            = useState('')
   const [loading,          setLoading]          = useState(false)
-  const [inactivityBanner, setInactivityBanner] = useState(false)
   const [show2FA,          setShow2FA]          = useState(false)
   const [showPIN,          setShowPIN]          = useState(false)
   const [otp,              setOtp]              = useState('')
   const [pin,              setPin]              = useState('')
   const [simPush,          setSimPush]          = useState(false)
   const [pushState,        setPushState]        = useState('idle') // idle, pending, approved
-
-  useEffect(() => {
-    const flag = sessionStorage.getItem('psc-inactivity-logout')
-    if (flag) {
-      setInactivityBanner(true)
-      sessionStorage.removeItem('psc-inactivity-logout')
-    }
-    const onInactivity = () => {
-      sessionStorage.setItem('psc-inactivity-logout', '1')
-      setInactivityBanner(true)
-    }
-    window.addEventListener('psc-auth:inactivity-logout', onInactivity)
-    return () => window.removeEventListener('psc-auth:inactivity-logout', onInactivity)
-  }, [])
 
   if (accessToken && !authReady) {
     return (
@@ -198,12 +183,6 @@ export default function Login() {
                   <p className="text-sm text-slate-500">Sign in to your SCDMS account to continue.</p>
                 </div>
 
-                {inactivityBanner && (
-                  <div className="mb-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    <Clock size={15} className="mt-0.5 shrink-0" />
-                    <span>Your session expired due to 15 minutes of inactivity. Please sign in again.</span>
-                  </div>
-                )}
                 {error && (
                   <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {error}
@@ -232,7 +211,6 @@ export default function Login() {
                       <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Password</label>
                       <Link
                         to="/auth/reset-password"
-                        onClick={e => { e.preventDefault(); alert('Feature coming soon') }}
                         className="text-xs text-primary-600 hover:text-primary-700 hover:underline font-medium"
                       >
                         Forgot password?

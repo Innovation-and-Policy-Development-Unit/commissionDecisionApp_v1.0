@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
@@ -9,6 +9,8 @@ import HorizontalMenu from './HorizontalMenu'
 import SettingsPanel from './SettingsPanel'
 import SecurityNoticesBanner from '../shared/SecurityNoticesBanner'
 import FeedbackPanel from '../shared/FeedbackPanel'
+import StaffChatPanel from '../assistant/StaffChatPanel'
+import StaffChatFab from '../assistant/StaffChatFab'
 import LockOverlay from '../auth/LockOverlay'
 import { MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
@@ -25,7 +27,12 @@ export default function Layout() {
     feedbackEnabled
   } = useTheme()
   const { isLocked } = useAuth()
+  const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [staffChatOpen, setStaffChatOpen] = useState(false)
+
+  const onAssistantPage = location.pathname === '/assistant'
+  const hideStaffChatFab = onAssistantPage
 
   const handleMenuClick = () => {
     if (window.innerWidth < 1024) {
@@ -90,6 +97,16 @@ export default function Layout() {
       {feedbackEnabled && (
         <FeedbackPanel open={feedbackPanelOpen} onClose={closeFeedbackPanel} />
       )}
+
+      <StaffChatPanel
+        open={staffChatOpen}
+        onClose={() => setStaffChatOpen(false)}
+      />
+      <StaffChatFab
+        open={staffChatOpen}
+        onClick={() => setStaffChatOpen((o) => !o)}
+        hidden={hideStaffChatFab}
+      />
 
       {/* Floating Feedback Tab */}
       {feedbackEnabled && !feedbackPanelOpen && (

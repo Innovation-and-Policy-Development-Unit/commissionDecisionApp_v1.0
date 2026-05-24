@@ -20,6 +20,7 @@
     "dashboard": "Dasbod",
     "submissions": "Ol Submisen",
     "reports": "Ol Ripot",
+    "staff_assistant": "Staff Assistant",
     "meeting_room": "Rum blong Mitin",
     "meetings": "Ol Mitin",
     "logitech_guide": "Logitech GROUP",
@@ -358,8 +359,28 @@
     "ai_brief_subtitle": "Samari we AI i jeneret — yu no nid long riviu evri dokumen.",
     "ai_brief_generating": "I jeneret brief…",
     "ai_brief_regenerate": "Jeneret gen",
-    "ai_brief_empty": "Brief i no save jeneret. Jekem GEMINI_API_KEY mo trae gen.",
+    "ai_brief_empty": "Brief i no save jeneret. Jekem ANTHROPIC_API_KEY mo trae gen.",
+    "ai_brief_timeout": "Brief i tekem taem tumas. Jekem Celery worker mo ANTHROPIC_API_KEY long .env, mo klik Regenerate.",
     "ai_brief_generated": "I jeneret long {{time}}"
+  },
+  "staff_chat": {
+    "title": "Staff Assistant",
+    "subtitle": "Askem long ol proses PSC, form, mo status blong submisen",
+    "assistant_name": "PSC Staff Assistant",
+    "signed_in_as": "Yu login olsem {{role}}",
+    "new_chat": "Niu toktok",
+    "history": "Recent",
+    "no_history": "I no gat toktok yet",
+    "untitled": "Toktok",
+    "welcome_short": "Askem long ol proses, form, o status blong submisen.",
+    "open_fab": "Open Staff Assistant",
+    "close": "Klosem",
+    "open_full": "Open full page",
+    "send": "Send",
+    "placeholder": "Raetem ask blong yu…",
+    "thinking": "I tingting…",
+    "error_send": "I no save sendem mesij. Traem bakegen.",
+    "confirm_delete": "Deletem dis toktok?"
   },
   "stage": {
     "draft": "Draf",
@@ -609,6 +630,7 @@
     "confirm_password": "Konfemem Paswod",
     "loading_session": "I stap lodem sesen…",
     "inactivity_logout": "Sistem i lokaut yu from yu no muvum eni samting. Plis sain in bakegen.",
+    "inactivity_locked_hint": "Skrin i lok from yu no muv. Raetem PIN blong sesen blong kontiniu.",
     "invalid_credentials": "Nem blong yusa no paswod i rong",
     "approve_push": "Apruv pus notifikesen long telefon blong yu",
     "push_pending": "I wet blong yu apruv…",
@@ -625,9 +647,21 @@
     "submit": "Sanem",
     "submitted": "Tank yu — mifala i risivim fidbak blong yu."
   },
+  "account": {
+    "inactivity_lock_title": "Lokem skrin automatik",
+    "inactivity_lock_desc": "Taem yu no muv mouse o kiibod, skrin i lok. Raetem PIN — yu stap insaed long sistem.",
+    "inactivity_lock_label": "Lokem skrin afta",
+    "inactivity_lock_minutes": "{{count}} minit",
+    "inactivity_lock_never": "Neva (lokem manual nomo)",
+    "inactivity_lock_saved_off": "Lokem automatik i off.",
+    "inactivity_lock_saved": "Skrin bae i lok afta {{count}} minit blong no aktiviti.",
+    "inactivity_lock_pin_required": "Setem PIN blong sesen fast — sapos nogat, yu no save openem skrin."
+  },
   "lock": {
     "title": "Sesen i lok",
     "subtitle": "Raetem PIN blong yu blong stat bakegen.",
+    "subtitle_inactivity": "Sesen i lok. Raetem PIN blong kontiniu wok.",
+    "subtitle_no_pin": "Sesen i lok. Setem PIN long Account, o sain aot mo sain in bakegen.",
     "pin": "PIN",
     "unlock": "Openem",
     "sign_out_instead": "Sain aot nomo"
