@@ -14,6 +14,12 @@ export function userCanManageRoles(user) {
   return Boolean(user.is_superuser || user.is_staff || user.role === 'psc_admin')
 }
 
+export function userCanManageTranslations(user) {
+  if (!user) return false
+  if (typeof user.can_manage_translations === 'boolean') return user.can_manage_translations
+  return userCanManageRoles(user)
+}
+
 export function userCanAccessAdminPanel(user) {
   if (!user) return false
   if (typeof user.can_access_admin_panel === 'boolean') return user.can_access_admin_panel

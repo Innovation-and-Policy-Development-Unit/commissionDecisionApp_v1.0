@@ -1,12 +1,13 @@
 import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, ScrollText, Bell, ListTodo,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
-  Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen,
+  Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen, Languages,
 } from 'lucide-react'
 import { CMS_PORTAL_URL } from '../constants/compliance'
 import {
   userCanAccessAdminPanel,
   userCanManageRoles,
+  userCanManageTranslations,
   userCanViewAuditLog,
   userCanManageFeedback,
 } from '../utils/adminAccess'
@@ -120,6 +121,7 @@ const menuItems = [
       { label: 'API Keys',                 labelKey: 'nav.api_keys',               icon: Lock,         path: '/admin/api-keys',               visibility: 'roles' },
       { label: 'System Config',            labelKey: 'nav.system_config',          icon: Settings,     path: '/admin/system-config',          visibility: 'roles' },
       { label: 'Email templates',          labelKey: 'nav.email_templates',        icon: Mail,         path: '/admin/email-templates',        visibility: 'roles' },
+      { label: 'UI translations',          labelKey: 'nav.ui_translations',        icon: Languages,    path: '/admin/ui-translations',        visibility: 'translations' },
       { label: 'Security',                 labelKey: 'nav.security',               icon: ShieldAlert,  path: '/admin/security',               visibility: 'audit' },
       { label: 'User Feedback',            labelKey: 'nav.feedback',               icon: MessageSquare, path: '/admin/feedback',              visibility: 'feedback' },
       { label: 'Backup & Restore',         labelKey: 'nav.backup_restore',         icon: HardDrive,    path: '/admin/backup-restore',         visibility: 'roles' },
@@ -180,6 +182,7 @@ export function getVisibleMenuForUser(user, feedbackEnabled = true) {
             if (!feedbackEnabled) return false
             return userCanManageFeedback(user)
           }
+          if (vis === 'translations') return userCanManageTranslations(user)
           return true
         })
         if (items.length === 0) return null

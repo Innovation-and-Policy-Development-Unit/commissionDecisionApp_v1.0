@@ -9,7 +9,12 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { ToastProvider } from './context/ToastContext.jsx'
 import { ConfirmProvider } from './context/ConfirmContext.jsx'
 import './i18n/index.js'
+import { loadRemoteTranslationBundles } from './i18n/remoteTranslations.js'
 import './index.css'
+
+loadRemoteTranslationBundles().catch(() => {
+  /* bundled locale JSON remains active */
+})
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <StrictMode>

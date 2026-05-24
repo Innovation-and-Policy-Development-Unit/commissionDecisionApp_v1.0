@@ -610,6 +610,7 @@ class Command(BaseCommand):
         # Administration
         ("manage_users",        "Manage Users",        "administration", "Create, edit, and deactivate user accounts."),
         ("manage_roles",        "Manage Roles & Permissions","administration","Configure role definitions and their permission sets."),
+        ("manage_ui_translations", "Manage UI Translations", "administration", "Edit dashboard labels in English, French, and Bislama without changing code."),
         ("view_audit_trail",    "View Audit Trail",    "administration", "Access the full workflow event audit trail for all submissions."),
         # Feedback
         ("feedback_view",       "View Feedback",       "feedback",       "View user submitted feedback reports."),
@@ -626,7 +627,7 @@ class Command(BaseCommand):
             "forward_commission", "record_decision", "allocate_decision", "assign_task",
             "update_implementation", "view_reports", "export_reports",
             "manage_meetings", "manage_agenda", "manage_notifications",
-            "manage_users", "manage_roles", "view_audit_trail",
+            "manage_users", "manage_roles", "manage_ui_translations", "view_audit_trail",
             "feedback_view", "feedback_manage", "feedback_respond", "feedback_configure",
         ]),
         ("psc_officer", "Receives and processes submissions through initial operational workflow stages.", [

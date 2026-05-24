@@ -2356,3 +2356,43 @@ class StaffChatMessage(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class UiTranslation(models.Model):
+    """
+    Dashboard UI string overrides (i18next keys).
+    Bundled en/fr/bi JSON files are the baseline; rows here override at runtime.
+    """
+
+    key = models.CharField(max_length=255, unique=True, db_index=True)
+    namespace = models.CharField(max_length=64, db_index=True, blank=True, default="")
+    text_en = models.TextField(blank=True)
+    text_fr = models.TextField(blank=True)
+    text_bi = models.TextField(blank=True)
+    is_customized = models.BooleanField(
+        default=False,
+        help_text="True when an administrator edited values in the UI.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ui_translation_updates",
+    )
+
+    class Meta:
+        ordering = ["namespace", "key"]
+        verbose_name = "UI translation"
+        verbose_name_plural = "UI translations"
+
+    def save(self, *args, **kwargs):
+        if not self.namespace:
+            from .i18n_utils import namespace_from_key
+
+            self.namespace = namespace_from_key(self.key)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.key

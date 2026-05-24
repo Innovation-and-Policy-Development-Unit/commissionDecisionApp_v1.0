@@ -49,10 +49,12 @@ from .models import (
     RestructureSubmissionData,
     StaffChatMessage,
     StaffChatSession,
+    UiTranslation,
 )
 from .rbac import (
     rbac_can_access_admin_panel,
     rbac_user_can_manage_roles,
+    rbac_user_can_manage_translations,
     rbac_user_can_manage_users,
     rbac_user_can_view_audit_log,
 )
@@ -124,6 +126,7 @@ class MeSerializer(serializers.ModelSerializer):
     session_pin_set = serializers.SerializerMethodField()
     can_manage_users    = serializers.SerializerMethodField()
     can_manage_roles    = serializers.SerializerMethodField()
+    can_manage_translations = serializers.SerializerMethodField()
     can_access_admin_panel = serializers.SerializerMethodField()
     can_view_audit_log  = serializers.SerializerMethodField()
 
@@ -140,6 +143,7 @@ class MeSerializer(serializers.ModelSerializer):
             "is_staff",
             "can_manage_users",
             "can_manage_roles",
+            "can_manage_translations",
             "can_access_admin_panel",
             "can_view_audit_log",
             "two_factor_enabled",
@@ -177,6 +181,9 @@ class MeSerializer(serializers.ModelSerializer):
 
     def get_can_manage_roles(self, obj):
         return rbac_user_can_manage_roles(obj.user)
+
+    def get_can_manage_translations(self, obj):
+        return rbac_user_can_manage_translations(obj.user)
 
     def get_can_access_admin_panel(self, obj):
         return rbac_can_access_admin_panel(obj.user)
@@ -1760,3 +1767,31 @@ class StaffChatSendSerializer(serializers.Serializer):
         if not value or not value.strip():
             raise serializers.ValidationError("Message cannot be empty.")
         return value.strip()
+
+
+class UiTranslationSerializer(serializers.ModelSerializer):
+    updated_by_username = serializers.CharField(source="updated_by.username", read_only=True)
+
+    class Meta:
+        model = UiTranslation
+        fields = (
+            "id",
+            "key",
+            "namespace",
+            "text_en",
+            "text_fr",
+            "text_bi",
+            "is_customized",
+            "updated_at",
+            "updated_by",
+            "updated_by_username",
+        )
+        read_only_fields = ("namespace", "updated_at", "updated_by", "updated_by_username")
+
+    def validate_key(self, value):
+        key = (value or "").strip()
+        if not key:
+            raise serializers.ValidationError("Key is required.")
+        if " " in key:
+            raise serializers.ValidationError("Use dot notation (e.g. nav.dashboard), not spaces.")
+        return key
