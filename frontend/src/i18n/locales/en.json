@@ -40,7 +40,8 @@
     "logout": "Logout",
     "group_help": "Help & Resources",
     "guide_hr_manager": "HR Manager Guide",
-    "guide_unit_manager": "Unit Manager Guide"
+    "guide_unit_manager": "Unit Manager Guide",
+    "guide_secretary": "Secretary Guide"
   },
   "breadcrumb": {
     "dashboard": "Dashboard",

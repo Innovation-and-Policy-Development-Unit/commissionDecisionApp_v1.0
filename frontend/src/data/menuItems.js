@@ -97,6 +97,13 @@ const menuItems = [
           'odu_manager', 'senior_admin_officer',
         ],
       },
+      {
+        label: 'Secretary Guide',
+        labelKey: 'nav.guide_secretary',
+        icon: BookOpen,
+        path: '/guide/secretary',
+        roles: ['psc_secretary', 'senior_admin_officer', 'psc_admin'],
+      },
     ],
   },
   {
