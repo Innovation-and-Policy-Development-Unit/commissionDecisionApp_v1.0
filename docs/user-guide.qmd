@@ -1,1132 +1,1884 @@
 ---
 title: "SCDMS User Guide"
 subtitle: "Submissions & Commission Decision Management System"
-subtitle-block-banner: true
-author: "Public Service Commission — Vanuatu"
+author: "Office of the Public Service Commission, Vanuatu"
 date: last-modified
-date-format: "D MMMM YYYY"
+date-format: "MMMM YYYY"
 lang: en
 
 format:
   html:
-    theme: cosmo
+    theme: flatly
     toc: true
     toc-depth: 3
-    toc-title: "Contents"
+    toc-title: "Table of Contents"
     toc-location: left
     number-sections: true
     number-depth: 3
     smooth-scroll: true
     embed-resources: true
     page-layout: article
+    grid:
+      sidebar-width: 280px
+      body-width: 900px
 ---
 
 ```{=html}
 <style>
-/* ── Colour palette matching the app's design language ── */
+/* ═══════════════════════════════════════════════════════════
+   SCDMS USER GUIDE — DESIGN SYSTEM
+   Public Service Commission of Vanuatu
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Palette ── */
 :root {
+  --psc-navy:   #1e3a8a;
   --psc-blue:   #2563eb;
-  --psc-indigo: #4f46e5;
+  --psc-indigo: #4338ca;
   --psc-teal:   #0d9488;
+  --psc-slate:  #475569;
   --psc-amber:  #d97706;
   --psc-red:    #dc2626;
   --psc-green:  #16a34a;
-  --psc-slate:  #475569;
+  --bg-light:   #f8fafc;
+  --border:     #e2e8f0;
 }
 
-/* Hero / title block */
-#title-block-header {
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #0d9488 100%);
-  color: white;
-  padding: 3rem 2rem 2rem;
-  border-radius: 0 0 1rem 1rem;
-  margin-bottom: 2rem;
+/* ── Base typography ── */
+body {
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 1.02rem;
+  line-height: 1.75;
+  color: #1e293b;
 }
-#title-block-header .title    { font-size: 2.2rem; font-weight: 800; }
-#title-block-header .subtitle { font-size: 1.1rem; opacity: .85; margin-top: .3rem; }
-#title-block-header .author,
-#title-block-header .date     { opacity: .75; font-size: .9rem; }
-
-/* Role chips */
-.role-chip {
-  display: inline-block;
-  padding: .2rem .75rem;
-  border-radius: 9999px;
-  font-size: .78rem;
-  font-weight: 600;
-  margin: .15rem;
-  line-height: 1.6;
-}
-.role-ministry  { background: #dbeafe; color: #1d4ed8; }
-.role-psc       { background: #ede9fe; color: #4f46e5; }
-.role-unit      { background: #d1fae5; color: #065f46; }
-.role-exec      { background: #fef3c7; color: #92400e; }
-.role-compliance{ background: #fce7f3; color: #9d174d; }
-
-/* Stage badges — mirroring the app */
-.stage-badge {
-  display: inline-block;
-  padding: .2rem .65rem;
-  border-radius: .4rem;
-  font-size: .75rem;
+h1, h2, h3, h4 {
+  font-family: "Helvetica Neue", "Arial", sans-serif;
   font-weight: 700;
+  line-height: 1.25;
+}
+h1 { font-size: 2rem; color: var(--psc-navy); margin-top: 2.5rem; border-bottom: 3px solid var(--psc-blue); padding-bottom: .5rem; }
+h2 { font-size: 1.45rem; color: var(--psc-indigo); margin-top: 2rem; }
+h3 { font-size: 1.15rem; color: var(--psc-slate); margin-top: 1.5rem; }
+h4 { font-size: 1rem; color: #334155; }
+p  { margin-bottom: 1rem; }
+
+/* ── Title block — executive banner ── */
+#title-block-header {
+  background: linear-gradient(135deg, var(--psc-navy) 0%, #1d4ed8 55%, var(--psc-teal) 100%);
+  color: #ffffff;
+  padding: 3.5rem 3rem 2.5rem;
+  border-radius: 0 0 1.25rem 1.25rem;
+  margin-bottom: 2.5rem;
+  box-shadow: 0 4px 24px rgba(30,58,138,.25);
+}
+#title-block-header .title {
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  margin-bottom: .35rem;
+}
+#title-block-header .subtitle {
+  font-size: 1.1rem;
+  opacity: .88;
+  font-style: normal;
+  font-weight: 400;
+  margin-bottom: 1rem;
+}
+#title-block-header .quarto-title-meta {
+  opacity: .7;
+  font-size: .88rem;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ── Sidebar TOC ── */
+#TOC {
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: .84rem;
+  line-height: 1.5;
+}
+#TOC a { color: var(--psc-slate); text-decoration: none; }
+#TOC a:hover { color: var(--psc-blue); }
+#TOC .active { color: var(--psc-blue); font-weight: 600; }
+
+/* ── Role chips ── */
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .22rem .85rem;
+  border-radius: 9999px;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: .76rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  margin: .18rem .1rem;
+  line-height: 1.5;
+}
+.role-ministry  { background:#dbeafe; color:#1d4ed8; border:1px solid #bfdbfe; }
+.role-psc       { background:#ede9fe; color:#4338ca; border:1px solid #ddd6fe; }
+.role-unit      { background:#d1fae5; color:#065f46; border:1px solid #a7f3d0; }
+.role-exec      { background:#fef3c7; color:#78350f; border:1px solid #fde68a; }
+.role-compliance{ background:#fce7f3; color:#831843; border:1px solid #fbcfe8; }
+.role-all       { background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; }
+
+/* ── Applies-to header ── */
+.applies-to {
+  background: #f8fafc;
+  border-left: 4px solid var(--psc-blue);
+  border-radius: 0 .5rem .5rem 0;
+  padding: .6rem 1rem;
+  margin: 1rem 0 1.5rem;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+}
+.applies-to p {
+  margin: 0;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--psc-slate);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: .35rem;
+}
+
+/* ── Workflow stage badges ── */
+.stage {
+  display: inline-flex;
+  align-items: center;
+  padding: .22rem .7rem;
+  border-radius: .4rem;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: .78rem;
+  font-weight: 700;
+  white-space: nowrap;
   margin: .1rem;
 }
-.stage-draft       { background: #f1f5f9; color: #475569; }
-.stage-submitted   { background: #eff6ff; color: #1d4ed8; }
-.stage-received    { background: #f0fdf4; color: #166534; }
-.stage-returned    { background: #fff7ed; color: #9a3412; }
-.stage-registered  { background: #ede9fe; color: #4c1d95; }
-.stage-review      { background: #fefce8; color: #713f12; }
-.stage-assessment  { background: #ecfdf5; color: #065f46; }
-.stage-commission  { background: #fdf4ff; color: #6b21a8; }
-.stage-approved    { background: #dcfce7; color: #14532d; }
-.stage-rejected    { background: #fef2f2; color: #7f1d1d; }
-.stage-implement   { background: #f0fdfa; color: #0f766e; }
+.stage-draft       { background:#f1f5f9; color:#334155; }
+.stage-submitted   { background:#eff6ff; color:#1d4ed8; }
+.stage-received    { background:#eff6ff; color:#1e40af; }
+.stage-returned    { background:#fff7ed; color:#9a3412; }
+.stage-registered  { background:#eef2ff; color:#3730a3; }
+.stage-review      { background:#faf5ff; color:#6b21a8; }
+.stage-assessment  { background:#f5f3ff; color:#4c1d95; }
+.stage-onhold      { background:#fffbeb; color:#92400e; }
+.stage-commission  { background:#fdf4ff; color:#701a75; }
+.stage-approved    { background:#f0fdf4; color:#14532d; }
+.stage-rejected    { background:#fff1f2; color:#881337; }
+.stage-decision    { background:#fff7ed; color:#7c2d12; }
+.stage-postdecision{ background:#f0fdfa; color:#134e4a; }
+.stage-implement   { background:#f0fdf4; color:#14532d; }
 
-/* Workflow arrows */
-.workflow-row {
+/* ── Workflow arrow row ── */
+.flow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: .4rem;
-  margin: .6rem 0;
-  font-size: .85rem;
+  margin: 1rem 0;
+  padding: .75rem 1rem;
+  background: var(--bg-light);
+  border-radius: .6rem;
+  border: 1px solid var(--border);
 }
-.workflow-arrow { color: #94a3b8; font-weight: 300; }
+.flow-arrow { color: #94a3b8; font-size: .9rem; }
 
-/* Step cards */
-.step-card {
-  border-left: 4px solid var(--psc-blue);
-  background: #f8fafc;
-  border-radius: .5rem;
+/* ── Numbered step cards ── */
+.steps { counter-reset: step-counter; margin: 1.2rem 0; }
+.step {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
   padding: .9rem 1.1rem;
-  margin-bottom: .8rem;
+  margin-bottom: .7rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: .65rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
 }
-.step-card h4 { margin: 0 0 .4rem; color: var(--psc-blue); font-size: .95rem; }
-.step-num {
+.step::before {
+  counter-increment: step-counter;
+  content: counter(step-counter);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.6rem; height: 1.6rem;
+  min-width: 1.8rem;
+  height: 1.8rem;
   background: var(--psc-blue);
-  color: white;
+  color: #fff;
   border-radius: 50%;
-  font-size: .75rem;
-  font-weight: 700;
-  margin-right: .5rem;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: .78rem;
+  font-weight: 800;
   flex-shrink: 0;
+  margin-top: .1rem;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-body strong { color: var(--psc-navy); }
+
+/* ── AI feature panels ── */
+.ai-panel {
+  background: linear-gradient(135deg, #4338ca 0%, #7c3aed 100%);
+  color: #fff;
+  border-radius: .8rem;
+  padding: 1.1rem 1.4rem;
+  margin: 1.25rem 0;
+}
+.ai-panel h4 {
+  margin: 0 0 .4rem;
+  font-size: 1rem;
+  color: #fff;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+}
+.ai-panel p { margin: 0; opacity: .92; font-size: .9rem; font-family: "Helvetica Neue", Arial, sans-serif; }
+.ai-label {
+  display: inline-block;
+  background: rgba(255,255,255,.2);
+  border-radius: .3rem;
+  padding: .05rem .4rem;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: .35rem;
+  font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
-/* AI feature banner */
-.ai-banner {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: white;
-  border-radius: .75rem;
-  padding: 1rem 1.2rem;
-  margin: 1rem 0;
+/* ── Info/tip/warning callout override ── */
+.callout {
+  border-radius: .65rem;
+  margin: 1.2rem 0;
 }
-.ai-banner h4 { margin: 0 0 .3rem; font-size: 1rem; }
-.ai-banner p  { margin: 0; opacity: .9; font-size: .88rem; }
+.callout-note    { border-left-color: var(--psc-blue); }
+.callout-tip     { border-left-color: var(--psc-teal); }
+.callout-warning { border-left-color: var(--psc-amber); }
+.callout-important { border-left-color: var(--psc-red); }
 
-/* Tip / info blockquote overrides are handled by Quarto callouts */
-
-/* Table improvements */
+/* ── Tables ── */
 table {
+  font-family: "Helvetica Neue", Arial, sans-serif;
   font-size: .88rem;
+  border-collapse: collapse;
   width: 100%;
+  margin: 1.1rem 0;
 }
-thead { background: #f1f5f9; }
-th    { font-weight: 600; color: #334155; }
-td, th { padding: .5rem .75rem !important; vertical-align: top; }
+thead tr { background: var(--psc-navy); color: #fff; }
+thead th { padding: .55rem .85rem; text-align: left; font-weight: 600; letter-spacing: .02em; }
+tbody tr:nth-child(even) { background: #f8fafc; }
+tbody td { padding: .5rem .85rem; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+tbody tr:hover { background: #eff6ff; }
 
-/* Sidebar TOC fix */
-#TOC { font-size: .85rem; }
+/* ── Checklist items in doc ── */
+.doc-checklist { list-style: none; padding: 0; margin: 1rem 0; }
+.doc-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding: .45rem .1rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: .93rem;
+}
+.doc-checklist li:last-child { border-bottom: none; }
+.check-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid #cbd5e1;
+  border-radius: .25rem;
+  flex-shrink: 0;
+  margin-top: .15rem;
+  color: transparent;
+}
 
-/* Print */
+/* ── Part dividers ── */
+.part-header {
+  background: linear-gradient(90deg, var(--psc-navy) 0%, var(--psc-indigo) 100%);
+  color: #fff;
+  border-radius: .75rem;
+  padding: 1.5rem 2rem;
+  margin: 3rem 0 2rem;
+}
+.part-header .part-label {
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  opacity: .75;
+  margin-bottom: .3rem;
+}
+.part-header h2 {
+  color: #fff;
+  margin: 0;
+  font-size: 1.5rem;
+  border: none;
+}
+.part-header p { margin: .4rem 0 0; opacity: .85; font-size: .9rem; }
+
+/* ── Glossary ── */
+.glossary dt {
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700;
+  color: var(--psc-navy);
+  margin-top: 1rem;
+}
+.glossary dd { margin-left: 1.5rem; color: #334155; }
+
+/* ── Print ── */
 @media print {
-  #TOC { display: none; }
-  .callout { break-inside: avoid; }
+  #TOC, .quarto-sidebar { display: none !important; }
+  body { font-size: .92rem; }
+  .part-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1 { page-break-before: always; }
+  .step, .callout { break-inside: avoid; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  #title-block-header { padding: 2rem 1.25rem 1.5rem; }
+  #title-block-header .title { font-size: 1.7rem; }
+  .flow { flex-direction: column; align-items: flex-start; }
 }
 </style>
 ```
 
-# Introduction {.unnumbered}
+# Preface {.unnumbered}
 
-The **Submissions & Commission Decision Management System (SCDMS)** is the digital platform of the Public Service Commission (PSC) of Vanuatu. It manages the complete lifecycle of HR submissions — from the moment a ministry prepares a draft through to the commission's decision and the resulting implementation actions.
+This guide is the official reference for all users of the **Submissions and Commission Decision Management System** (SCDMS) of the Public Service Commission of Vanuatu.
 
-This guide is written for **all user roles** on the system. Each chapter is clearly labelled with which roles it applies to, so you can focus on the sections relevant to your work.
+SCDMS manages the complete life cycle of human resource submissions — from the moment a ministry prepares a draft through to the commission's decision and the subsequent implementation of that decision. It is used by ministry HR officers and Director Generals who prepare and track submissions, by PSC Officers and Secretariat who process and assess them, by Commissioners and the Chairperson who deliberate and decide, and by OPSC Managers who carry out the resulting implementation.
 
-::: {.callout-tip title="How to read this guide"}
-Look for the role labels at the start of each section:
+**How to use this guide.** The document is organised into parts, each covering a distinct phase of the workflow. At the beginning of each section, a labelled strip indicates which roles that section applies to. If you are a Director General reviewing submission status, focus on Parts I and V. If you are a Ministry HR Officer, Parts I, II, and VI are your primary reference. PSC Secretariat and Officers should read all parts.
 
-<span class="role-chip role-ministry">Ministry HR / Dept Admin / Head of Agency</span>
-<span class="role-chip role-psc">PSC Officer / Secretary / Commissioner</span>
+The guide can be read front-to-back or used as a reference by navigating the table of contents on the left.
+
+::: {.callout-note title="Role labels used throughout this guide"}
+<span class="role-chip role-ministry">Ministry HR · Dept Admin · Head of Agency</span>
+<span class="role-chip role-psc">PSC Officer · Secretary · Commissioner · Chairperson</span>
 <span class="role-chip role-unit">Unit Managers & Principals</span>
-<span class="role-chip role-exec">OPSC Manager / Senior Officer</span>
+<span class="role-chip role-exec">OPSC Manager · Principal · Senior Officer</span>
 <span class="role-chip role-compliance">Compliance Officer</span>
+<span class="role-chip role-all">All users</span>
 :::
 
 ---
 
-# Signing In & Your Account
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part I</div>
+  <h2>Getting Started</h2>
+  <p>Signing in, navigating the system, and understanding your account.</p>
+</div>
+```
 
-## Logging In
+# Signing In to SCDMS
 
-Open the SCDMS web address in your browser. You will see the login screen.
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-all">All users</span></div>
 
-1. Enter your **username** and **password**.
-2. Click **Sign In**.
+## Your Login Credentials
 
-::: {.callout-note title="Forgot your password?"}
-Click **Forgot password?** on the login screen. Enter your email address and you will receive a reset link. If you do not receive it within a few minutes, check your spam folder or contact your system administrator.
+SCDMS is a web-based application accessible from any modern browser on any device. Open the SCDMS address provided by your office and you will arrive at the login screen.
+
+Enter your **username** and **password**, then click **Sign In**. Your credentials are assigned by the PSC — contact your office administrator if you have not yet received them.
+
+::: {.callout-tip title="Forgotten your password?"}
+Click **Forgot password?** on the login screen and enter your email address. A password-reset link will arrive within a few minutes. Check your spam folder if it does not appear in your inbox. The link expires after 24 hours.
 :::
 
 ## Two-Factor Authentication
 
-If your account has two-factor authentication (2FA) enabled, after entering your password you will be prompted for a **one-time code**.
+If your account has two-factor authentication (2FA) enabled — which is strongly recommended for all users — you will be prompted for a one-time code after entering your password.
 
-- Open your authenticator app (e.g. Google Authenticator, Microsoft Authenticator) on your phone.
-- Enter the 6-digit code shown for the SCDMS entry.
-- The code refreshes every 30 seconds — if it is about to expire, wait for the next one.
-
-## Session Lock & PIN
-
-The system can lock your screen after a period of inactivity, keeping you signed in but requiring a PIN to continue.
-
-- **To set a PIN:** Go to your profile → *Account settings* → *Session PIN*.
-- **To lock manually:** Click your avatar in the top-right corner → *Lock session*.
-- **To unlock:** Enter your PIN and click *Unlock*.
-
-::: {.callout-warning title="Working on a shared computer?"}
-Always lock your session or sign out when you step away from a shared device.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Open your authenticator application (Google Authenticator, Microsoft Authenticator, or equivalent) on your phone.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Find the **SCDMS** entry. A six-digit code is displayed, refreshing every 30 seconds.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Enter the code on the SCDMS login screen and click **Verify**. If the code is almost expired, wait for the next one to appear before entering it.
+:::
+:::
 :::
 
-## Profile & Preferences
+## Your Session — Locking and Signing Out
 
-Click your name or avatar in the top-right corner to access:
+SCDMS keeps you signed in across browser sessions. However, to protect sensitive submission data, two mechanisms are available:
 
-| Option | What it does |
-|--------|-------------|
-| **My Profile** | View your account details and role |
-| **Lock session** | Lock the screen until your PIN is entered |
-| **Dark / Light mode** | Toggle the colour theme |
-| **Language** | Switch between English, French, and Bislama |
-| **Sign Out** | End your session completely |
+**Session Lock** keeps you signed in but requires a PIN to continue. It activates automatically after a configurable period of inactivity, or you can trigger it manually. Use this when you step away from your desk briefly.
 
-## Installing SCDMS as an App (Optional)
+**Sign Out** ends your session completely. Always sign out at the end of the working day, particularly on shared or public devices.
 
-SCDMS works as a **Progressive Web App** — you can install it on your desktop or phone for quick access.
+To manage your session:
 
-- **Chrome/Edge:** Click the install icon in the browser address bar, then *Install*.
-- **iOS Safari:** Tap *Share* → *Add to Home Screen*.
-- Once installed, SCDMS opens in its own window without browser chrome.
+- **Lock manually:** Click your name or avatar in the top-right corner → **Lock session**.
+- **Set a session PIN:** Your profile → *Account settings* → *Session PIN*. Choose a PIN you will remember but that others cannot guess easily.
+- **Sign Out:** Click your name → **Sign Out**.
+
+::: {.callout-important title="Shared devices"}
+If you use a shared computer, always sign out completely at the end of your session. Locking is suitable for brief absences only. Never leave a screen showing submission details unattended.
+:::
 
 ---
 
 # Navigating the System
 
-## The Main Sidebar
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-all">All users</span></div>
 
-The left-hand sidebar contains your main navigation. The links shown depend on your role — you will only see sections relevant to you.
+## The Layout
 
-| Section | Who sees it | Purpose |
-|---------|-------------|---------|
-| **Dashboard** | Everyone | Overview, metrics, recent activity |
-| **Submissions** | Ministry, PSC, Unit Managers | Create, track, and review submissions |
-| **Reports** | PSC, Secretariat, OPSC | Generate executive reports |
-| **Meetings** | Secretariat, Commissioners | Schedule and manage sittings |
-| **Agenda** | Secretariat | Manage commission sitting agendas |
+SCDMS has three main areas:
+
+- **The left sidebar** — primary navigation between sections
+- **The top header bar** — search, notifications, and your account menu
+- **The main content area** — the page you are currently working on
+
+The links shown in the sidebar depend on your role. You will only see sections relevant to your responsibilities.
+
+## The Sidebar Navigation
+
+| Section | Visible to | Purpose |
+|---|---|---|
+| **Dashboard** | All users | Live metrics, activity feed, and recent submissions |
+| **Submissions** | Ministry, PSC, Unit Managers | Create, track, and process submissions |
+| **Reports** | PSC, Secretariat, OPSC | Generate executive and operational reports |
+| **Meetings** | Secretariat, Commissioners | Schedule and manage commission sittings |
+| **Agenda** | Secretariat | Build and finalise sitting agendas |
 | **Decisions** | Secretariat, OPSC | Record and track commission decisions |
-| **Meeting Room** | Secretariat | Recording upload and minutes pipeline |
-| **Notifications** | Secretariat | Issue decision notification letters |
-| **Tasks** | OPSC Managers | Post-decision implementation tasks |
-| **Staff Assistant** | Everyone | AI chatbot for PSC guidance |
+| **Meeting Room** | Secretariat, Chairperson | Upload recordings and generate minutes |
+| **Notifications** | Secretariat | Issue official decision notification letters |
+| **Tasks** | OPSC Managers and Officers | Post-decision implementation tasks |
+| **Staff Assistant** | All users | AI-powered guidance on PSC procedures |
 
 ## The Header Bar
 
-The top bar gives you quick access to:
+The header provides three key functions:
 
-- **Search** — search submissions and tasks by reference, title, ministry, or stage
-- **Notifications bell** — view unread alerts; badge shows unread count
-- **User menu** — profile, lock, theme, sign out
+**Search.** The search bar finds submissions and tasks by reference number (e.g. `PSC-2026-00123`), title, ministry, or current stage. Results update as you type.
 
-## Notifications
+**Notifications.** The bell icon shows a red badge when new notifications are waiting. Click it to open the notification panel, then click any item to navigate to the relevant submission or task. Use **Mark all as read** to clear the badge.
 
-The bell icon in the top-right shows a red badge when you have unread notifications.
+**Account menu.** Click your name or avatar to access your profile, session lock, theme toggle (light or dark mode), language selection, and sign-out.
 
-- Click the bell to open the notification panel.
-- Click a notification to jump to the relevant submission or task.
-- Click **Mark all as read** to clear the badge.
+## Language and Theme
 
-You can also enable **browser push notifications** (permission required):
+SCDMS is available in **English**, **French**, and **Bislama**. To change the language, open the account menu and select your preference. The interface updates immediately.
 
-1. Click your profile → *Desktop notification settings*.
-2. Click *Enable notifications* and allow the browser prompt.
-3. You will now receive alerts even when SCDMS is in a background tab.
+To toggle between light and dark mode, open the account menu and click the theme option.
+
+## Desktop Notifications
+
+You can enable browser push notifications to receive alerts even when SCDMS is in a background tab.
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Open the account menu → **Desktop notification settings**.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Enable**. The browser will display a permission prompt — click **Allow**.
+:::
+:::
+::: {.step}
+::: {.step-body}
+From this point, you will receive pop-up alerts for new tasks and submission stage changes.
+:::
+:::
+:::
+
+To turn notifications off, return to Desktop notification settings → **Turn off desktop alerts**.
+
+## Installing SCDMS as an App
+
+SCDMS can be installed as a Progressive Web App (PWA), giving it its own window and icon on your desktop or home screen — no browser chrome required.
+
+- **On Windows (Chrome or Edge):** Look for an install icon in the browser address bar. Click it, then click **Install**.
+- **On iOS (Safari):** Tap the Share button → **Add to Home Screen**.
+- **On Android:** Tap the browser menu → **Install app** or **Add to Home Screen**.
+
+Once installed, SCDMS behaves like a native application and launches directly without opening a browser.
 
 ---
 
-# Your Role in the System
+# Understanding Your Role
 
-SCDMS has different roles for different parts of the organisation. Your role determines which actions you can perform and which submissions you can see.
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-all">All users</span></div>
 
-## Role Overview
+Your role in SCDMS determines which sections of the system you can access, which submissions you can view, and which actions you can perform. Roles are assigned by the system administrator and cannot be changed by users.
 
 ::: {.panel-tabset}
 
 ### Ministry Side
 
-<span class="role-chip role-ministry">Ministry HR Officer</span>
-<span class="role-chip role-ministry">Department Admin Officer</span>
-<span class="role-chip role-ministry">Head of Agency (DG/Director)</span>
+<span class="role-chip role-ministry">Ministry HR Officer · Department Admin Officer · Head of Agency (DG/Director)</span>
 
-Ministry-side users **prepare and submit HR cases** to the PSC. You can:
+Ministry-side users prepare and submit HR cases to the PSC on behalf of their ministry or department.
 
-- Create new submissions and fill in digital forms
-- Upload supporting documents
+**You can:**
+
+- Create new submissions and complete digital PSC forms
+- Upload and manage supporting documents for your submissions
 - Run the AI package validation check before submitting
-- Track your submission's progress through the PSC workflow
-- Respond to requests for clarification (resubmit)
-- Use the AI Autofill to check your required documents checklist
+- Monitor the progress of your submissions through the PSC pipeline
+- Respond to requests for clarification and resubmit
+- View the required documents checklist and use AI Autofill
+- Contact PSC staff via the Staff Assistant
 
-You **cannot** advance a submission past the PSC Intake stage or view other ministries' submissions.
+**You cannot:**
+
+- View other ministries' submissions
+- Advance a submission past the stage of *Submitted to PSC*
+- Annotate or sign submission documents
+- Access commission agendas, decisions, or implementation tasks
 
 ### PSC Internal Staff
 
-<span class="role-chip role-psc">PSC Officer</span>
-<span class="role-chip role-psc">PSC Secretary</span>
-<span class="role-chip role-psc">Senior Administration Officer</span>
-<span class="role-chip role-psc">PSC Commissioner</span>
-<span class="role-chip role-psc">Chairperson</span>
-<span class="role-chip role-psc">PSC Administrator</span>
+<span class="role-chip role-psc">PSC Officer · PSC Secretary · Senior Administration Officer · PSC Commissioner · Chairperson · PSC Administrator</span>
 
-PSC staff **manage the full submission pipeline**. You can:
+PSC internal staff manage the full submission pipeline from receipt through to the commission's decision.
 
-- Receive, register, and route submissions
-- Return submissions for clarification
-- Move submissions through all workflow stages
+**PSC Officers and Senior Administration Officers** can:
+
+- Receive, register, and route all submissions
+- Return submissions for clarification with specific remarks
+- Move submissions through all processing stages
 - Annotate and sign documents
-- Manage the commission agenda and sittings
-- Draft and sign official minutes
-- Extract decisions and record outcomes
+- Generate AI executive briefs and quality scores
+- Manage the commission's agenda and sittings
 
-### Unit Managers & Principals
+**PSC Secretary and Senior Administration Officer** additionally:
 
-<span class="role-chip role-unit">VIPAM Manager / Principal</span>
-<span class="role-chip role-unit">HR Unit Manager / Principal</span>
-<span class="role-chip role-unit">ODU Manager / Principal</span>
-<span class="role-chip role-unit">Compliance Manager / Senior / Principal</span>
-<span class="role-chip role-unit">CSU Manager</span>
+- Draft and finalise minutes using the Bislama-aware pipeline
+- Issue official decision notification letters to ministries
+- Set and monitor assessment deadlines
 
-Unit staff **conduct detailed assessments** of submissions routed to their unit. You can:
+**PSC Commissioner and Chairperson** focus on:
+
+- Reviewing commission agendas and sitting briefings
+- Participating in commission deliberations
+- Reviewing and signing official minutes
+
+### Unit Managers and Principals
+
+<span class="role-chip role-unit">VIPAM Manager/Principal · HR Unit Manager/Principal · ODU Manager/Principal · Compliance Manager/Senior/Principal · CSU Manager</span>
+
+Unit staff conduct the detailed assessment of submissions routed to their unit. Their primary work occurs during the *Manager Checklist Review* and *Under Assessment* stages.
+
+**You can:**
 
 - View submissions routed to your unit
 - Complete the required-document checklist review
-- Run AI Autofill on the checklist
+- Use AI Autofill to speed up checklist work
 - Annotate and sign submission documents
-- View and generate quality scores
-- Update assessment outcomes
+- View and regenerate AI quality scores
+- Record assessment outcomes and transition submissions
 
 ### OPSC Post-Decision
 
-<span class="role-chip role-exec">OPSC Manager</span>
-<span class="role-chip role-exec">Principal Officer</span>
-<span class="role-chip role-exec">Senior Officer</span>
+<span class="role-chip role-exec">OPSC Manager · Principal Officer · Senior Officer</span>
 
-Post-decision roles **implement commission decisions**. You can:
+Post-decision roles carry out the actions required to implement commission decisions. They work primarily with tasks assigned following a decision.
+
+**You can:**
 
 - View decisions and implementation tasks assigned to you
-- Update task status and add progress notes
-- Create sub-tasks and assign them to team members
-- Access submission history and documents for context
+- Create and manage sub-tasks for your team
+- Record progress updates on tasks
+- Access submission documents and history for context
+- View and generate reports on implementation progress
 
 ### Compliance
 
-<span class="role-chip role-compliance">Compliance Manager</span>
-<span class="role-chip role-compliance">Compliance Senior Officer</span>
-<span class="role-chip role-compliance">Compliance Principal</span>
+<span class="role-chip role-compliance">Compliance Manager · Compliance Senior Officer · Compliance Principal</span>
 
-Compliance users handle **CMS-linked compliance matters**. You can:
+Compliance users handle submissions linked to the Case Management System (CMS). Their work takes place in SCDMS for review and oversight, with formal case management occurring in the external CMS portal.
 
-- View submissions routed to the compliance unit
-- Manage compliance checklist review
-- Access the external Case Management System (CMS) via the portal link
-- Annotate and review submission documents
+**You can:**
+
+- View compliance-related submissions routed to your unit
+- Complete checklist review for your cases
+- Annotate submission documents
+- Access the CMS portal via the direct link in SCDMS
+- Generate quality scores and executive briefs
 
 :::
 
 ---
 
-# Submissions — Ministry Side
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part II</div>
+  <h2>Preparing &amp; Submitting Cases</h2>
+  <p>For Ministry HR Officers, Department Admin Officers, and Heads of Agency.</p>
+</div>
+```
 
-<span class="role-chip role-ministry">Ministry HR Officer · Dept Admin · Head of Agency</span>
+# Creating a Submission
 
-This chapter covers everything you need to do from preparing a submission to tracking it through the PSC pipeline.
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-ministry">Ministry HR · Dept Admin · Head of Agency</span></div>
 
-## Creating a New Submission
+## Starting a New Submission
 
-1. Click **Submissions** in the sidebar.
-2. Click the **New Submission** button in the top-right.
-3. Fill in the required fields:
+Every HR matter presented to the PSC begins as a draft submission in SCDMS. The submission is the central record to which documents, form data, checklist confirmations, and workflow history are all attached.
 
-| Field | Notes |
-|-------|-------|
-| **Title** | A clear, specific title — e.g. *Appointment of Grade 10 Economist, Department of Finance* |
-| **Form category** | Select the relevant HR category (appointment, promotion, discipline, etc.) |
-| **Form type** | Select the specific PSC form (e.g. PSC 2-1, PSC 3-7, ORG-3.1) |
-| **Ministry** | Your ministry — auto-filled if your account is linked |
-| **Department** | The relevant department |
-| **Classification** | Sensitivity level of the matter |
-| **Notes** | Any background notes for PSC officers (optional) |
-
-4. Click **Save**. A reference number (e.g. `PSC-2026-00123`) is assigned automatically.
-
-::: {.callout-tip title="Good titles save time"}
-Avoid vague titles like *"Staff matter"*. Write the person's title, grade, and department. PSC officers process dozens of cases — a clear title helps yours get routed and assessed faster.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+**Open the Submissions log.** Click **Submissions** in the left sidebar.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Create a new record.** Click **New Submission** in the top-right corner of the page.
+:::
+:::
+::: {.step}
+::: {.step-body}
+**Complete the submission form.** Fill in the fields described in the table below, then click **Save**. A reference number in the format `PSC-YYYY-#####` is assigned automatically.
+:::
+:::
 :::
 
-## Filling In a Digital Form
+| Field | Required? | Guidance |
+|---|---|---|
+| **Title** | Yes | Write a specific, descriptive title. Example: *Appointment — Grade 10 Economist, Department of Finance* |
+| **Form category** | Yes | Select the category that describes the HR matter (appointment, promotion, discipline, restructure, etc.) |
+| **Form type** | If applicable | Select the specific PSC form type, e.g. *PSC 3-7*, *PSC 2-1*, *ORG-3.1* |
+| **Ministry** | Yes | Your ministry. Pre-filled if your account is linked to a ministry |
+| **Department** | If applicable | The relevant department within the ministry |
+| **Classification** | Yes | Sensitivity level of the matter |
+| **DG/Head of Agency endorsement** | Where required | Record the name of the approving officer |
+| **Notes** | Optional | Background context for PSC officers (not visible to other ministries) |
 
-For submissions that use a **digitized form** (PSC 2-1, PSC 2-2, PSC 3-7, ORG-3.1, or other form-builder forms), a form panel appears in the submission detail view.
-
-- Fill in all fields marked as required.
-- Click **Save form** before navigating away — unsaved changes are lost.
-- You can return and edit the form as many times as needed while the submission is in **Draft**.
-
-::: {.callout-note title="PSC Form 2-2 — Live Preview"}
-PSC Form 2-2 has a **Preview Form** toggle in the top-right of the form panel. Turn it on to see a formatted preview of how the printed form will look as you fill it in.
+::: {.callout-tip title="The title matters more than you may think"}
+PSC officers process dozens of submissions simultaneously. A clear, specific title — naming the grade, position, and department — helps your submission get routed and assessed correctly and quickly. Vague titles such as *"Staff matter"* or *"PSC form"* cause delays at the intake stage.
 :::
+
+## Completing a Digital Form
+
+When your selected form type is digitised, a form panel appears in the submission detail. Fill in all required fields and click **Save form** before navigating away. Unsaved changes are lost.
+
+The following form types have dedicated screens:
+
+| Form | Description |
+|---|---|
+| **PSC 2-1** | Establishment of a new position (dedicated field layout) |
+| **PSC 2-2** | Position description — includes a live formatted preview |
+| **PSC 3-7** | Personnel action form — standard PSC personnel form |
+| **ORG-3.1** | Organisational restructure submission template |
+| **Other digitised forms** | Built using the PSC form builder; follow the on-screen field instructions |
+
+::: {.callout-note title="PSC 2-2 Live Preview"}
+PSC Form 2-2 includes a live preview of the formatted document as you type. Toggle it on with the **Preview Form** button in the top-right of the form panel. This lets you verify the final printed appearance before submitting.
+:::
+
+You may edit the form as many times as needed while the submission remains in **Draft** status. Once submitted to PSC, form editing is no longer available to ministry users.
+
+---
+
+# Documents and the Required Checklist
+
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-ministry">Ministry HR · Dept Admin · Head of Agency</span><span class="role-chip role-unit">Unit Managers & Principals</span></div>
 
 ## Uploading Supporting Documents
 
-Every submission requires supporting documents. To upload:
+Every PSC submission requires supporting documents. These are attached in the **Documents** panel visible in the submission detail view.
 
-1. Open your submission and scroll to the **Documents** panel.
-2. Enter an optional **description** (e.g. *Cover letter*, *Medical certificate*).
-3. Click **Choose file & upload** and select your file.
-4. The file appears in the document list immediately.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Scroll to the **Documents** panel within the submission detail.
+:::
+:::
+::: {.step}
+::: {.step-body}
+In the **Description** field, enter a clear name for the document — for example, *"Cover letter from DG — Ministry of Finance"* or *"Position description — Economist Grade 10"*.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Choose file & upload** and select the file from your device. The document appears in the list immediately.
+:::
+:::
+:::
 
-**Accepted formats:** PDF, Word (.doc, .docx), Excel (.xls, .xlsx), PNG, JPG, JPEG — maximum 20 MB per file.
+**Accepted formats:** PDF, Microsoft Word (.doc, .docx), Excel (.xls, .xlsx), and image files (PNG, JPG, JPEG). Maximum size: **20 MB per file**.
 
-::: {.callout-tip title="Describe your documents clearly"}
-The description you enter is used by the AI checklist autofill to match documents to the required-document list. Name them precisely — *"Position description — Finance Officer Grade 10"* is far more useful than *"doc1"*.
+::: {.callout-tip title="Name your documents precisely"}
+The description you enter when uploading is used by the AI Checklist Autofill to match each uploaded file to the required-document list. The more specific the description, the more accurate the AI's suggestions. *"Medical certificate — John Smith, 14 March 2026"* is far more useful than *"doc"* or *"file1"*.
 :::
 
 ### Document Processing (OCR)
 
-After upload, the system extracts text from PDFs and images automatically. You will see a status indicator:
+After a document is uploaded, the system automatically extracts its text in the background. This process takes a few seconds to a minute depending on file size and complexity. The status is shown next to each document:
 
 | Status | Meaning |
-|--------|---------|
-| ⏳ Processing | Text extraction is underway — wait a moment |
-| ✅ Done | Text extracted; AI features can now read this document |
-| ⚠️ Failed | Extraction could not be completed (scanned image may be low quality) |
+|---|---|
+| *Processing* | Text extraction is underway — wait before running AI features |
+| *Done* | Text has been extracted; all AI features can now read this document |
+| *Failed* | Extraction could not be completed (often caused by a low-quality scan or an unsupported format) |
 
-OCR extraction runs in the background. The document is available for download immediately; AI features work best once extraction is complete.
+You may download and use the document at any time regardless of OCR status. AI features, however, work best once extraction is complete.
 
 ## The Required Documents Checklist
 
-The **Required Documents** checklist panel (visible in the submission detail) lists every document your form type requires. Each item shows:
+The **Required Documents** panel in the submission detail lists every document type that the PSC requires for your form category or specific form type. Each row shows:
 
-- ☐ or ☑ — whether the document has been confirmed as present
-- The document name and description
-- Any notes added by you or the AI
+- A checkbox indicating whether the document has been confirmed as **present** (☑) or is still **missing** (☐)
+- The document name and a description of what is expected
+- Any notes recorded about that item
 
-### Manually Marking Items
+The counter at the top of the panel shows how many items have been confirmed out of the total required.
 
-Click the checkbox next to any item to toggle it between present (☑) and missing (☐). You can also expand an item with the chevron (∨) to add a note explaining the status.
+### Manually Confirming Items
 
-### AI Autofill — Automatic Suggestions {#sec-autofill}
+Click the checkbox on any row to toggle the item between *present* and *missing*. Expand a row using the chevron (∨) icon to add or edit a short note — for example, to explain that a document is not applicable in this specific case.
 
-<div class="ai-banner">
-<h4>✦ AI Feature — Checklist Autofill</h4>
-<p>Upload your documents first, then let the AI analyse them and suggest which checklist items are satisfied. You review and confirm each suggestion — the AI never changes the checklist without your approval.</p>
-</div>
+When you upload a document using the **per-item upload** button visible on some checklist rows, the system automatically marks that item as present. If the same document is later deleted, the item reverts to missing.
 
-**To use AI Autofill:**
+### AI Checklist Autofill {#sec-autofill}
 
-1. Upload all your supporting documents and wait for OCR to complete.
-2. In the **Required Documents** panel, click **AI Autofill**.
-3. The system analyses all extracted document text — this takes a few seconds.
-4. Each checklist item receives a colour-coded suggestion:
-   - 🟢 **AI suggests: present** — the AI found evidence in your uploaded documents
-   - 🟡 **AI suggests: missing** — no matching evidence found
-   - A short note explains what the AI found (or didn't find)
-5. Review each suggestion:
-   - Click **Accept** to confirm a single item and save the AI's reasoning as a note
-   - Click **Reject** to dismiss a suggestion and leave the item unchanged
-   - Click **Accept all suggestions** to confirm all items at once
-
-::: {.callout-warning title="Always review AI suggestions"}
-AI Autofill is a time-saving assistant, not an automatic approver. The system may occasionally suggest an item is present based on partial text matches. Review each note before accepting — especially for critical documents.
+::: {.ai-panel}
+<div class="ai-label">AI Feature A1</div>
+<h4>Checklist Autofill</h4>
+<p>After uploading your documents, Autofill analyses the extracted text and suggests which checklist items are satisfied — with a one-sentence explanation of its reasoning. You review and confirm each suggestion; the AI never changes the checklist without your approval.</p>
 :::
 
-## Validating Your Package Before Submission {#sec-validate}
+**When to use:** Once you have uploaded all your supporting documents and their OCR status shows *Done*, run Autofill to quickly populate the checklist. This is the single greatest time-saving feature for unit managers during the checklist review stage.
 
-Before you submit to PSC, run the **AI Package Validation** check. This reviews your entire draft package and flags potential issues.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+In the **Required Documents** panel, click the **AI Autofill** button (top-right of the panel). The button is disabled if no documents have been uploaded yet.
+:::
+:::
+::: {.step}
+::: {.step-body}
+The AI analyses all extracted document text against the checklist item names and descriptions. This takes five to fifteen seconds.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Each item receives a suggestion badge:
+- **AI suggests: present** (green) — evidence was found in the uploaded documents
+- **AI suggests: missing** (amber) — no matching evidence was found
 
-<div class="ai-banner">
-<h4>✦ AI Feature — Package Validation</h4>
-<p>The AI checks your required documents checklist, uploaded files, and form data for gaps that could cause the PSC to return your submission for clarification.</p>
-</div>
+A brief note below each badge explains the AI's reasoning.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Review each suggestion, then:
 
-1. Open your submission (must be in **Draft** stage).
-2. Scroll to the **Validate package before submit** panel at the top.
-3. Click **Validate package**.
-4. The AI returns a summary and a list of issues grouped by severity:
-
-| Severity | Meaning | Action |
-|----------|---------|--------|
-| 🔴 **Critical** | Will likely block processing | Must fix before submitting |
-| 🟡 **Warning** | Should fix if possible | Recommended before submitting |
-| ℹ️ **Info** | Nice-to-have improvements | Optional |
-
-5. Fix any critical issues, then run validation again.
-6. When ready, use the **Move to Next Stage** panel → select **Submitted to PSC** → click **Apply Transition**.
-
-::: {.callout-note title="Submitting with critical gaps"}
-If critical gaps remain, the system will warn you when you attempt to submit. You can choose *Submit anyway* to proceed despite the gaps — but the PSC may return the submission for clarification. Use this option only when you have a good reason.
+- Click **Accept** to confirm a single item and save the AI's reasoning as a note
+- Click **Reject** to dismiss a suggestion and leave the item unchanged
+- Click **Accept all suggestions** (in the banner at the top) to confirm all items simultaneously
+:::
+:::
 :::
 
-## Tracking Your Submission
-
-Once submitted, you can monitor progress on the **Submissions** list and in the submission detail.
-
-### Submission List
-
-- Go to **Submissions** in the sidebar.
-- Your submissions appear with their current stage, reference number, and last-updated date.
-- Use the search bar to filter by reference, title, or stage.
-
-### Submission Detail — Progress Bar
-
-Open any submission to see:
-
-- **Stage badge** — current stage in colour-coded format
-- **Progress bar** — visual indication of where the submission sits in the lifecycle
-- **Timeline** — full history of every stage transition, who made it, when, and any remarks
-
-### Returned for Clarification
-
-If the PSC returns your submission, you will receive a notification. The stage will show:
-
-<span class="stage-badge stage-returned">Returned for Clarification</span>
-
-1. Open the submission and read the PSC remarks in the timeline.
-2. Make the required changes (upload missing documents, edit form data, etc.).
-3. In **Move to Next Stage**, select **Resubmitted** and add a brief note explaining what you changed.
-4. Click **Apply Transition**.
+::: {.callout-warning title="Always review AI suggestions before accepting"}
+The AI reads text from your uploaded documents and makes inferences based on names and descriptions. It performs well on clear, complete documents but may occasionally suggest an item is present based on a partial or indirect text match. Review each suggestion — especially for critical documents such as DG endorsements or signed letters — before accepting.
+:::
 
 ---
 
-# Submissions — PSC Staff
+# Submitting a Case to the PSC {#sec-validate}
 
-<span class="role-chip role-psc">PSC Officer · Secretary · Senior Admin Officer</span>
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-ministry">Ministry HR · Dept Admin · Head of Agency</span></div>
+
+## AI Package Validation
+
+Before submitting your case to the PSC, run the **Package Validation** check. This AI-powered review examines your entire draft package and flags items that are missing or incomplete — the same issues that would cause PSC to return the submission for clarification.
+
+::: {.ai-panel}
+<div class="ai-label">AI Feature A3</div>
+<h4>Package Validation</h4>
+<p>The AI reviews your checklist status, uploaded documents, form fields, DG endorsement, and submission title, then produces a gap report with severity levels. Running this before submitting significantly reduces the chance of your case being returned for clarification.</p>
+:::
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Open the submission (it must be in **Draft** status). The **Validate package before submit** panel appears at the top of the submission detail.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Validate package**. The validation runs in a few seconds.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Review the results. Issues are grouped by severity:
+
+| Severity | Meaning | Recommended action |
+|---|---|---|
+| 🔴 **Critical** | Will likely block processing or force a return | Resolve before submitting |
+| 🟡 **Warning** | Should be resolved if possible | Resolve where feasible |
+| ℹ️ **Info** | Suggested improvements | Optional |
+:::
+:::
+::: {.step}
+::: {.step-body}
+Address any critical gaps — upload missing documents, complete empty form fields, or record the required endorsement — then click **Validate package** again to confirm the issues are resolved.
+:::
+:::
+:::
+
+::: {.callout-note title="Submitting with unresolved critical items"}
+If critical gaps remain and you believe the submission must proceed anyway, you may still submit. The system will alert you to the outstanding issues when you initiate the transition and ask you to confirm that you wish to submit regardless. The PSC may still return the case for clarification upon receipt. Use this option only with a clear justification.
+:::
+
+## Submitting to the PSC
+
+When you are satisfied that the package is complete:
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+In the **Move to Next Stage** panel on the right side of the submission detail, select **Submitted to PSC** from the stage dropdown.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Optionally add a brief note in the **Remarks** field — for example, to highlight something the PSC officer should be aware of.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Apply Transition**. The submission stage changes to *Submitted to PSC* and PSC staff are notified.
+:::
+:::
+:::
+
+Once submitted, you will no longer be able to edit the form data or required-document checklist. You can continue to upload documents.
+
+---
+
+# Tracking Your Submission
+
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-ministry">Ministry HR · Dept Admin · Head of Agency</span><span class="role-chip role-psc">PSC Officers (read)</span></div>
+
+## The Submission List
+
+Click **Submissions** in the sidebar to see all submissions visible to your account. The list shows:
+
+- Reference number (e.g. `PSC-2026-00123`)
+- Title
+- Ministry and department
+- Current stage with a colour-coded badge
+- Last-updated date
+- An overdue indicator if the 21-day assessment target has been exceeded
+
+The list paginates at **15 submissions per page**. Use the navigation at the bottom to move between pages, or use the search bar to filter by reference, title, ministry name, or stage.
+
+## The Submission Detail View
+
+Click any submission to open its detail view. Here you will find:
+
+- **Progress bar** — a phase-by-phase visual indicator of where the submission sits in the PSC lifecycle
+- **Stage badge** — the current workflow stage with any overdue flag
+- **Workflow timeline** — a complete, date-stamped history of every stage transition, showing who made the move and any remarks they recorded
+
+## Responding to a Clarification Request
+
+If the PSC returns your submission, the stage will change to:
+
+<div class="flow">
+<span class="stage stage-returned">Returned for Clarification</span>
+</div>
+
+You will receive a notification. Open the submission and read the PSC officer's remarks in the workflow timeline — these will describe precisely what is missing or incorrect.
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Make the required changes: upload the missing document, correct the form field, or add the endorsement specified in the remarks.
+:::
+:::
+::: {.step}
+::: {.step-body}
+In **Move to Next Stage**, select **Resubmitted**.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Add a brief note in the **Remarks** field confirming what you have changed.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Apply Transition**. PSC staff are notified that the case has been resubmitted.
+:::
+:::
+:::
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part III</div>
+  <h2>PSC Processing Pipeline</h2>
+  <p>For PSC Officers, Secretariat, and Unit Managers.</p>
+</div>
+```
+
+# PSC Intake and Processing
+
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-psc">PSC Officer · PSC Secretary · Senior Admin Officer</span></div>
 
 ## The Submissions Log
 
-The **Submissions** list is your main workspace. It shows all submissions visible to your role.
+The Submissions log at **Submissions** in the sidebar is the primary workspace for PSC staff. It shows all submissions visible to your role, with a quality score column for PSC and unit staff, enabling triage of review effort.
 
-- **Search:** Use the search bar to find by reference (e.g. `PSC-2026-00123`), title, ministry, or stage.
-- **Filter by stage:** Click the stage filter chips to narrow the list.
-- **Quality column:** The AI quality score (0–100) is shown to help triage effort required.
-- **Overdue flag:** Submissions exceeding the 21-day assessment target are marked overdue.
+**Filtering options:**
+
+- **Free-text search** — reference number, title, ministry name, or stage label
+- **Stage filter** — narrow by stage category (Pre-submission, Assessment, Commission, etc.)
+- **Ministry filter** — narrow by specific ministry or department
+- **Natural language search** — for example, enter *"all overdue submissions from Ministry of Finance"*
+
+The list paginates at **15 per page**.
 
 ## Receiving and Registering Submissions
 
-When a ministry submits a case, it arrives at **Submitted to PSC**. As a PSC Officer:
+When a ministry submits a case, it arrives at the stage *Submitted to PSC*. The standard intake flow is as follows:
 
-<div class="workflow-row">
-<span class="stage-badge stage-submitted">Submitted to PSC</span>
-<span class="workflow-arrow">→</span>
-<span class="stage-badge stage-received">Received by PSC</span>
-<span class="workflow-arrow">→</span>
-<span class="stage-badge stage-registered">Registered & Routed</span>
+<div class="flow">
+<span class="stage stage-submitted">Submitted to PSC</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-received">Received by PSC</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-registered">Registered and Routed</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-review">Manager Checklist Review</span>
 </div>
 
-1. Open the submission and review the documents and form data.
-2. In **Move to Next Stage**, select **Received by PSC** and add any intake remarks.
-3. After formal registration, transition to **Registered and Routed** — select the appropriate unit in the routed unit field.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Open the submission. Review the attached documents, completed form, and submission notes to ensure the package is coherent and relates to the stated form type.
+:::
+:::
+::: {.step}
+::: {.step-body}
+In **Move to Next Stage**, select **Received by PSC**. Add a brief intake remark if needed. Click **Apply Transition**.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Following formal registration in the PSC register, select **Registered and Routed**. Set the appropriate routed unit in the **Routed unit** field before applying the transition.
+:::
+:::
+:::
 
-### Returning for Clarification
+### Returning a Submission for Clarification
 
-If the submission is incomplete:
+If the submission is incomplete or inconsistent:
 
-1. Select **Returned for Clarification** in **Move to Next Stage**.
-2. Enter clear remarks explaining exactly what is missing or incorrect.
-3. The ministry user receives a notification and can resubmit.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Select **Returned for Clarification** in **Move to Next Stage**.
+:::
+:::
+::: {.step}
+::: {.step-body}
+In the **Remarks** field, write a precise description of every issue. Be specific: *"The position description for Grade 10 Finance Officer is missing — please attach the current approved PD"* is clear and actionable. *"Missing documents"* is not.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Apply Transition**. The ministry user receives a notification and can see your remarks in the workflow timeline.
+:::
+:::
+:::
 
-::: {.callout-tip title="Write clear return remarks"}
-Vague remarks like *"missing documents"* create confusion and delays. Be specific: *"Position description for Grade 10 Finance Officer is missing — please attach the current approved PD"*.
+::: {.callout-tip title="Precise return remarks protect everyone"}
+A vague return remark forces the ministry to seek clarification by phone or email, creating delays and an incomplete audit record. A specific remark specifying exactly what is required — document name, field that must be completed, officer whose endorsement is needed — creates a clear record and allows the ministry to respond correctly in one attempt.
 :::
 
 ## Setting Assessment Deadlines
 
-The PSC targets a **21-day assessment turnaround**. To set the deadline:
+The PSC targets a 21-day turnaround from receipt to decision. To set the assessment deadline on a submission, locate the **Assessment deadline** field in the **Quick Info** panel on the right side of the submission detail.
 
-1. Open the submission detail → scroll to the **Quick Info** panel (right column).
-2. The **Assessment deadline** field shows the current deadline if set.
-3. Overdue submissions are flagged with a red *Overdue* tag throughout the system.
+Submissions that have exceeded their deadline are flagged with an *Overdue* indicator throughout the system — in the submission list, in the submission detail, and in the dashboard.
 
-## Moving Through Workflow Stages
+## Stage Transitions — General Principles
 
-Use the **Move to Next Stage** panel (right column of submission detail) to advance or move a submission. Only stages permitted for your role and the current stage are shown.
+The **Move to Next Stage** panel (right column of the submission detail) shows only the transitions permitted for your role and the current stage. Select the target stage, add remarks where relevant, and click **Apply Transition**.
 
-::: {.callout-note title="Stage transition remarks"}
-Adding remarks when you transition a stage creates a permanent audit record. PSC Officers should always add remarks when returning for clarification, routing, or deferring — this protects both the PSC and the ministry.
+::: {.callout-note title="Record your reasoning"}
+The remarks field on every transition is optional, but recording your reasoning creates a permanent audit trail that protects both the PSC and the submitting ministry. Always add remarks when returning for clarification, deferring, or routing to a specific unit.
 :::
+
+---
+
+# Reviewing and Annotating Documents
+
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-psc">PSC Officer · Secretary · Commissioners · Chairperson</span><span class="role-chip role-unit">Unit Managers</span><span class="role-chip role-exec">OPSC Manager</span></div>
+
+## Viewing Submission Documents
+
+All uploaded documents are listed in the **Documents** panel within the submission detail. Click **Open** next to any document to view it — PDFs open in a new tab; other file types are downloaded.
 
 ## Annotating Documents
 
-PSC Officers and Secretariat can **annotate PDF documents** to add comments, highlight sections, or draw attention to issues.
+Authorised users can add annotations to PDF documents — useful for highlighting sections, flagging issues, or adding review notes that are visible to other reviewers.
 
-1. In the **Documents** panel, click **Annotate** next to a PDF.
-2. The annotation editor opens. Use the toolbar to:
-   - Draw freehand with the pen tool
-   - Add text annotations
-   - Highlight areas with shapes
-3. Click **Save annotations** when done.
-4. Other authorised users can see your annotations — they are overlaid on the document.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+In the **Documents** panel, click **Annotate** next to a PDF document. A badge shows the number of existing annotations if any are present.
+:::
+:::
+::: {.step}
+::: {.step-body}
+The annotation editor opens. Use the toolbar to draw freehand, add text boxes, or highlight areas.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Save annotations**. Your annotations are overlaid on the document and are visible to all other authorised users who open the same document.
+:::
+:::
+:::
 
 ## Signing Documents
 
-Authorised users (Secretariat, Commissioners, OPSC Managers) can place a digital signature on PDF documents.
+Commissioners, the Chairperson, the Secretariat, OPSC Managers, and Principal Officers may place a digital signature on PDF documents — used most commonly for signing minutes, endorsement letters, and official reports.
 
-1. In the **Documents** panel, click **Sign** next to a PDF.
-2. The signature editor shows the document. Choose your signature placement.
-3. If you have a saved signature in your profile, it is used automatically; otherwise, draw one.
-4. Click **Place signature** and confirm the position.
-5. A timestamp and your name are recorded with the signature.
-
-## AI Features for PSC Officers
-
-### AI Executive Brief {#sec-brief}
-
-<div class="ai-banner">
-<h4>✦ AI Feature — Executive Brief</h4>
-<p>The AI reads all uploaded documents and generates a concise executive summary of the submission — what is being asked, the background, and flags for attention.</p>
-</div>
-
-The brief appears automatically for submissions visible to Secretariat staff. To regenerate:
-
-- Open the submission → scroll to the **AI executive brief** panel.
-- Click **Regenerate** if the brief is outdated or shows an error.
-- The brief takes 10–30 seconds to generate.
-
-### AI Quality Score {#sec-quality}
-
-<div class="ai-banner">
-<h4>✦ AI Feature — Quality Score</h4>
-<p>The AI scores the submission on Completeness, Clarity, Evidence Quality, and PSC Formatting. Higher scores mean less rework is likely needed.</p>
-</div>
-
-The quality score (0–100) appears in the submission list and detail. To re-score:
-
-- Open the submission → scroll to the **Submission quality score** panel.
-- Click **Re-score**.
-
-**Interpreting the score:**
-
-| Score range | Effort estimate |
-|-------------|----------------|
-| 75–100 | Low review effort — generally well-prepared |
-| 50–74 | Moderate review effort — some gaps likely |
-| 0–49 | High review effort — significant gaps expected |
-
-### Deadline Reminder Drafts {#sec-deadlines}
-
-When a submission has an assessment deadline set, the system can generate **AI-drafted reminder emails** for ministry contacts and assigned officers. These are draft templates only — no email is sent automatically.
-
-- Scroll to the **AI deadline reminder drafts** panel.
-- Personalised drafts are shown for each contact type.
-- Copy the draft into your email client and send manually.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+In the **Documents** panel, click **Sign** next to a PDF. A badge shows the number of signatures already placed.
+:::
+:::
+::: {.step}
+::: {.step-body}
+The signature editor opens. If you have a saved signature in your profile, it is available immediately. Otherwise, draw your signature using the signature pad.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Position the signature on the page by clicking the desired location. Confirm placement.
+:::
+:::
+::: {.step}
+::: {.step-body}
+The signature is recorded with your name and a timestamp. It is permanently attached to the document.
+:::
+:::
+:::
 
 ---
 
-# Submissions — Unit Managers & Assessment
+# Unit Assessment
 
-<span class="role-chip role-unit">VIPAM · HR Unit · ODU · Compliance · CSU Managers & Principals</span>
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-unit">Unit Managers & Principals</span></div>
 
-Submissions routed to your unit appear in your **Submissions** list with the stage:
+## Your Assigned Submissions
 
-<span class="stage-badge stage-review">Manager Checklist Review</span> or <span class="stage-badge stage-assessment">Under Assessment</span>
+Submissions routed to your unit appear in your Submissions list at the stage:
+
+<div class="flow">
+<span class="stage stage-review">Manager Checklist Review</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-assessment">Under Assessment</span>
+</div>
 
 ## Checklist Review Stage
 
-At **Manager Checklist Review**, your primary task is to verify that all required documents are present.
+At *Manager Checklist Review*, your primary responsibility is to verify that the ministry has provided every required document for the submission's form type.
 
-1. Open the submission → go to the **Required Documents** panel.
-2. For each item, confirm whether the document is present:
-   - Check the checkbox if the document is uploaded and complete.
-   - Add a note if needed (e.g. *"Not applicable — temporary appointment"*).
-3. Use **AI Autofill** to speed up this review (see @sec-autofill).
-4. Once all items are confirmed, transition to **Under Assessment**.
-
-::: {.callout-warning title="Checklist blocking"}
-If required documents are not confirmed as present, the system may block transition to later stages. Ensure all items are properly marked or have a recorded explanation.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Open the submission and scroll to the **Required Documents** panel.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Run **AI Autofill** to generate automatic suggestions based on the uploaded documents (see @sec-autofill for the full guide). Wait for OCR to complete on all documents before running Autofill.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Review each AI suggestion and accept or reject it. For items without an AI suggestion, manually check the uploaded documents and mark each item accordingly.
+:::
+:::
+::: {.step}
+::: {.step-body}
+For any item that is absent, add a note explaining whether it is missing, not applicable, or pending receipt from the ministry.
+:::
+:::
+::: {.step}
+::: {.step-body}
+When the checklist is complete, use **Move to Next Stage** → **Under Assessment** to advance the submission to your unit's assessment team.
+:::
+:::
 :::
 
-## Conducting Assessment
+::: {.callout-warning title="Checklist must be complete before advancing"}
+The system enforces that required documents are confirmed before certain stage transitions can proceed. If items remain unconfirmed without a recorded reason, the transition may be blocked.
+:::
 
-At **Under Assessment**, your unit conducts its detailed review according to PSC procedures.
+## Conducting the Assessment
 
-Use the submission detail to access:
+During the *Under Assessment* stage, your unit principal or team carries out the detailed review. The following tools are available:
 
-- **Documents** — read all uploaded supporting files; annotate as needed
-- **AI Executive Brief** — quick summary generated from the document content
-- **Quality Score** — triage indicator for expected effort
-- **Workflow Timeline** — full history of the case
+- **Documents panel** — open and read all uploaded files; annotate as needed
+- **AI Executive Brief** — auto-generated summary of the submission (see @sec-brief)
+- **AI Quality Score** — triage indicator for expected assessment effort (see @sec-quality)
+- **Workflow timeline** — full history of the case, including all return remarks and intake notes
 
-When assessment is complete, transition to the appropriate next stage based on your unit's outcome.
+When the assessment is complete, transition the submission according to the outcome. Refer to the **Appendix A** stage reference for the available transitions from *Under Assessment*.
 
 ## ODU Restructure Checklist
 
-For organisational restructure submissions (form type **ORG-3.1**), an additional **ODU Restructure Checklist** form appears. ODU Officers fill in all 20 checklist items, then submit the checklist. The ODU Manager then approves it.
+For organisational restructure submissions (form type **ORG-3.1**), an additional **ODU Restructure Checklist** panel appears. ODU Officers complete all 20 items of the structured checklist, then click **Submit checklist**. The ODU Manager reviews it and clicks **Approve checklist** to finalise the unit's assessment.
 
 ---
 
-# Commission Sittings & Agenda
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part IV</div>
+  <h2>Commission Sittings &amp; Minutes</h2>
+  <p>For the PSC Secretariat, Commissioners, and the Chairperson.</p>
+</div>
+```
 
-<span class="role-chip role-psc">PSC Secretary · Senior Admin Officer · PSC Commissioner · Chairperson</span>
+# Managing Commission Sittings
+
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-psc">PSC Secretary · Senior Admin Officer · Commissioners · Chairperson</span></div>
 
 ## Scheduling a Sitting
 
-1. Go to **Meetings** in the sidebar.
-2. Click **New Sitting**.
-3. Fill in the details:
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Go to **Meetings** in the sidebar. Click **Create Meeting** (or **New Sitting**).
+:::
+:::
+::: {.step}
+::: {.step-body}
+Complete the sitting details:
 
-| Field | Notes |
-|-------|-------|
+| Field | Options / Notes |
+|---|---|
 | **Title** | e.g. *Ordinary Sitting No. 12 — 2026* |
-| **Type** | Ordinary, Special, Flying Minute, or Emergency |
-| **Date & Time** | Scheduled sitting date and start time |
-| **Venue** | Meeting room or virtual |
-| **Notes** | Any additional context |
+| **Type** | Ordinary · Special · Flying Minute · Emergency |
+| **Date** | Sitting date |
+| **Time** | Scheduled start time |
+| **Venue** | Meeting room or virtual location |
+| **Notes** | Preparatory notes for internal reference |
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Save**. The sitting is created with status *Scheduled* and appears in the meetings list.
+:::
+:::
+:::
 
-4. Click **Save**. The sitting status starts as **Scheduled**.
+## Building the Agenda {#sec-agenda}
 
-## Building the Agenda
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Go to **Agenda** in the sidebar. Select the sitting for which you are building the agenda.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Add agenda item**. A search panel appears showing only submissions currently at the stage *Forwarded to Commission*.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Select the submission to add. Optionally set a **sequence number** to control the discussion order.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Repeat for all matters to be considered at this sitting.
+:::
+:::
+:::
 
-1. Go to **Agenda** in the sidebar.
-2. Select the sitting you want to build the agenda for.
-3. Click **Add agenda item**.
-4. Select a submission from the list — only submissions in **Forwarded to Commission** are shown.
-5. Optionally set a sequence number to control the order of discussion.
-6. Repeat for all items.
+The agenda moves through the following status flow before being distributed to members:
 
-**Agenda status flow:**
-
-<div class="workflow-row">
-<span class="stage-badge stage-draft">Draft</span>
-<span class="workflow-arrow">→</span>
-<span class="stage-badge stage-submitted">With Secretary for Approval</span>
-<span class="workflow-arrow">→</span>
-<span class="stage-badge stage-received">Secretary Approved</span>
-<span class="workflow-arrow">→</span>
-<span class="stage-badge stage-commission">Circulated to Members</span>
+<div class="flow">
+<span class="stage stage-draft">Draft</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-submitted">With Secretary for Approval</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-received">Secretary Approved</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-commission">Circulated to Members</span>
 </div>
 
 ::: {.callout-note title="Removing agenda items"}
-Items can be removed from the agenda before it is finalised. Once circulated, changes require a new agenda version to be created.
+Items may be removed from the agenda at any point before it is marked as *Circulated to Members*. Once circulated, changes to the agenda require a formal amendment.
 :::
 
 ## AI Sitting Briefing Pack
 
-<div class="ai-banner">
-<h4>✦ AI Feature — Sitting Briefing Pack</h4>
-<p>Before the sitting, generate an AI-written overview of the agenda — ready items, deferred matters, overdue cases, and quality score distribution.</p>
-</div>
+::: {.ai-panel}
+<div class="ai-label">AI Feature — Sitting Briefing</div>
+<h4>Pre-Sitting Briefing Pack</h4>
+<p>Generate a concise AI briefing overview before each sitting. It summarises ready items, deferred matters, overdue cases, and the quality score distribution of submissions on the agenda.</p>
+:::
 
-1. Open the sitting from the **Meetings** list.
-2. Click **Generate briefing pack**.
-3. The AI compiles the briefing from all agenda items — takes 10–20 seconds.
-4. Use it to prepare for the chair's opening remarks or to brief commissioners.
+Open the sitting from the Meetings list and click **Generate briefing pack**. The briefing is ready within 10–20 seconds and can be regenerated if the agenda changes after initial generation.
 
 ---
 
-# Meeting Room & Minutes Pipeline
+# The Minutes Pipeline
 
-<span class="role-chip role-psc">PSC Secretary · Chairperson</span>
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-psc">PSC Secretary · Chairperson</span></div>
 
-Commission sittings are recorded to ensure an accurate permanent record. SCDMS manages the full pipeline from recording to signed minutes.
+Commission sittings must be recorded to produce an accurate, signed set of minutes. SCDMS manages the entire process — from audio upload to the Chairperson's digital signature — within the **Meeting Room** section.
 
 ## Recording Requirements
 
-::: {.callout-important title="Required: Logitech GROUP Conference System"}
-Official commission sittings must use the **Logitech GROUP** push-to-talk conference system, not laptop or phone microphones. The system is calibrated to produce clean audio without echo or overlap — essential for accurate transcription and the Bislama AI repair step.
+::: {.callout-important title="The Logitech GROUP conference system is required for official sittings"}
+Official commission sittings must use the **Logitech GROUP** push-to-talk conference microphone system, routed as a single audio feed into Zoom or Microsoft Teams. This ensures clean, audible recordings without echo, overlap, or background noise — essential for accurate transcription.
 
-Contact your IT support if the conference system is not available or not working.
+Laptop built-in microphones, mobile phones, and consumer headsets are not acceptable for official sitting recordings. Contact your office IT support if the conference system is not operational.
 :::
 
-A **setup guide** for the Logitech GROUP is accessible inside the **Meeting Room** section of SCDMS. It walks you through connecting the hub to Zoom or Microsoft Teams and testing the microphone.
+A step-by-step **Logitech GROUP setup guide** is available directly within the Meeting Room section of SCDMS. It covers connecting the hub to Zoom or Teams, testing audio levels, and using the expansion microphones for larger boardrooms.
 
-## The Minutes Pipeline
+## The Five-Step Minutes Workflow
 
-The minutes workflow follows five steps:
+### Step 1 — Upload the Recording
 
-::: {.step-card}
-<span class="step-num">1</span> **Upload the Recording**
+Go to **Meeting Room** in the sidebar. Select the relevant sitting, then drag-and-drop the meeting recording (the Zoom or Teams export file) into the upload area, or click to browse for the file. Maximum file size: **500 MB**.
 
-In **Meeting Room**, select the sitting and drag-drop (or browse for) the Zoom or Teams export file. Maximum size: 500 MB. Once uploaded, the system is ready for transcription.
+Once uploaded, the system is ready for transcription.
+
+### Step 2 — Generate or Paste a Transcript
+
+You have two options for obtaining the raw transcript:
+
+**Option A — Paste from Zoom or Teams:**
+After the meeting, download the automatic transcript from Zoom (`.vtt` file or plain text) or Microsoft Teams. Paste it into the transcript text panel in SCDMS.
+
+**Option B — AI Transcribe:**
+Click **AI Transcribe** to run automatic speech recognition on the uploaded audio file. Processing time depends on recording length.
+
+::: {.callout-warning title="Automatic transcripts require repair before use"}
+Neither Zoom nor Microsoft Teams automatic speech recognition understands Bislama. Bislama words are often transcribed as garbled English phonetics — for example, *"sore eye"* instead of the Bislama word *"save"*, or *"man i go"* appearing as *"mango"*. **The raw transcript must be repaired before it can be used to generate minutes.** Proceeding without repair produces minutes that misquote speakers and misrepresent decisions.
 :::
 
-::: {.step-card}
-<span class="step-num">2</span> **Paste or Generate a Transcript**
+### Step 3 — Repair Bislama Text
 
-You have two options:
+SCDMS includes a pre-configured prompt that harnesses Claude's language understanding to repair Bislama ASR errors in one step.
 
-- **Paste from Zoom:** After the meeting, download the Zoom auto-transcript (`.vtt` or plain text) and paste it into the transcript panel.
-- **AI Transcribe:** Click *AI Transcribe* to run automatic speech recognition on the uploaded recording. Wait for processing to complete.
-
-::: {.callout-warning title="Bislama in automatic transcripts"}
-Zoom and Teams ASR does not recognise Bislama. Bislama words are often transcribed as garbled English phonetics (e.g. *"sore eye"* instead of *"save"*). You **must** repair the transcript before generating minutes.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+In the transcript panel, click **Copy Claude prompt**. This copies a pre-formatted prompt — containing the full raw transcript — to your clipboard.
 :::
 :::
-
-::: {.step-card}
-<span class="step-num">3</span> **Repair Bislama Text (Claude)**
-
-1. Click **Copy Claude prompt** — a pre-filled prompt containing the raw transcript is copied to your clipboard.
-2. Open [claude.ai](https://claude.ai) in your browser, paste the prompt, and send.
-3. Claude returns a corrected, professional-English transcript.
-4. Copy Claude's output back into the SCDMS transcript panel and click **Save transcript**.
+::: {.step}
+::: {.step-body}
+Open [claude.ai](https://claude.ai) in your browser. Paste the copied prompt and press Enter.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Claude returns a corrected transcript with Bislama phrases properly interpreted, garbled phonetics repaired, and the text expressed in professional English.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Select and copy Claude's output. Return to SCDMS, paste it into the transcript panel, and click **Save transcript**.
+:::
+:::
 :::
 
-::: {.step-card}
-<span class="step-num">4</span> **Generate Draft Minutes**
+### Step 4 — Generate Draft Minutes
 
-Click **Generate minutes**. The AI drafts formal minutes from the repaired transcript — including agenda items discussed, key points raised, and decisions made.
+Click **Generate minutes**. The AI produces a formal draft of the sitting minutes from the repaired transcript — including a record of the items discussed, key points raised by members, and the decisions made.
 
-Review and edit the draft in the minutes editor. The editor supports rich text formatting.
+Review the draft in the minutes editor and make any necessary corrections. The editor supports rich text formatting.
+
+### Step 5 — Extract Decisions and Chairperson Sign-Off
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Click **Extract decisions**. The AI reads the minutes and identifies each decision outcome — approvals, rejections, deferrals, and returns — as discrete records.
 :::
-
-::: {.step-card}
-<span class="step-num">5</span> **Extract Decisions & Chair Sign-Off**
-
-1. Click **Extract decisions** — the AI identifies decision outcomes from the minutes text.
-2. Review each extracted decision and confirm or edit.
-3. Once the minutes are finalised, the **Chairperson** opens the minutes and clicks **Sign minutes**.
-4. The signature is placed with a timestamp, completing the formal record.
 :::
-
----
-
-# Decisions & Post-Decision Workflow
-
-<span class="role-chip role-psc">PSC Secretary · Senior Admin Officer</span>
-<span class="role-chip role-exec">OPSC Manager · Principal Officer · Senior Officer</span>
-
-## Recording a Decision
-
-After the commission sitting is completed:
-
-1. Go to **Decisions** in the sidebar.
-2. Find the submission and click **Record decision**.
-3. Select the outcome: **Approved**, **Rejected**, **Deferred**, or **Returned**.
-4. Add any remarks or conditions from the commission discussion.
-5. Click **Save decision**.
-
-The submission transitions to the appropriate post-decision stage automatically.
-
-## Issuing Decision Notifications
-
-<span class="role-chip role-psc">PSC Secretary</span>
-
-After a decision is recorded, the affected ministry must be notified.
-
-1. Go to **Notifications** in the sidebar.
-2. Find the notification record for the decision.
-3. Review and edit the notification letter template as needed.
-4. Select the notification channel: **Letter**, **Email**, or **Portal notice**.
-5. Click **Mark as issued** when the letter has been sent.
-6. Once the ministry confirms receipt, click **Mark as acknowledged**.
-
-## Implementation Tasks
-
-<span class="role-chip role-exec">OPSC Manager · Principal Officer · Senior Officer</span>
-
-After a decision is entered and assigned, implementation tasks appear in your **Tasks** list.
-
-### Viewing Your Tasks
-
-1. Go to **Tasks** in the sidebar (or the **Tasks** section on the dashboard).
-2. Filter by status: **Open**, **In Progress**, or **Completed**.
-3. Click a task to open it.
-
-### Working with Tasks
-
-| Action | How |
-|--------|-----|
-| **Start a task** | Open the task → click *Mark In Progress* |
-| **Add an update** | Open the task → type in the *Add update* field → click *Save update* |
-| **Create a sub-task** | Open the task → click *Add sub-task* → fill in details |
-| **Assign to someone** | Open the task → click the *Assignee* field → select a user |
-| **Complete a task** | Open the task → click *Mark Completed* |
-| **Set a due date** | Open the task → click the *Due date* field |
-
-::: {.callout-tip title="Use updates to keep a record"}
-Add brief progress updates whenever you take a significant action on a task. This creates a searchable audit trail and keeps managers informed without requiring separate emails.
+::: {.step}
+::: {.step-body}
+Review each extracted decision. Edit or correct any entries where the AI has misread the minutes.
+:::
+:::
+::: {.step}
+::: {.step-body}
+When the Chairperson is satisfied with the final minutes, they open the minutes document within SCDMS and click **Sign minutes**. The signature is placed with a timestamp, completing the official record.
+:::
+:::
 :::
 
 ---
 
-# AI Features Reference
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part V</div>
+  <h2>Decisions, Notifications &amp; Implementation</h2>
+  <p>For PSC Secretariat and OPSC Managers.</p>
+</div>
+```
 
-SCDMS includes several AI-powered features to save time and improve submission quality. All AI features require an internet connection. They augment — but do not replace — human review and judgment.
+# Recording Decisions and Issuing Notifications
 
-## Overview of AI Features
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-psc">PSC Secretary · Senior Admin Officer</span></div>
 
-| Feature | Who can use it | Where to find it |
-|---------|---------------|-----------------|
-| **Checklist Autofill** | Ministry HR, PSC Officers, Unit Managers | Submission detail → Required Documents panel |
-| **Package Validation** | Ministry HR, PSC Officers | Submission detail → Validate package panel (Draft stage only) |
-| **Executive Brief** | PSC Secretary, Senior Admin, PSC Admin | Submission detail → AI executive brief panel |
-| **Quality Score** | PSC Officers, Unit Managers, OPSC Managers | Submission detail and submission list |
-| **Deadline Reminder Drafts** | PSC Secretary, Officers | Submission detail → Deadline drafts panel |
-| **Sitting Briefing Pack** | PSC Secretary, Chairperson | Meeting detail → Generate briefing pack |
-| **AI Transcribe** | PSC Secretary | Meeting Room → Transcription step |
-| **AI Minutes Draft** | PSC Secretary | Meeting Room → Minutes step |
-| **Decision Extraction** | PSC Secretary | Meeting Room → Decisions step |
-| **Staff Assistant** | Everyone | Sidebar → Staff Assistant |
-| **AI Reports** | PSC Officers, Secretariat, OPSC | Reports page |
+## Recording a Commission Decision
+
+Following each sitting, decisions are formally recorded in SCDMS.
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Go to **Decisions** in the sidebar. The decisions register shows all submissions that have reached a decision stage, filtered by outcome type.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Locate the submission and click **Record decision** (or open the submission and use **Move to Next Stage** to select the decision outcome).
+:::
+:::
+::: {.step}
+::: {.step-body}
+Select the outcome from the four options:
+
+| Outcome | Meaning |
+|---|---|
+| **Approved** | The commission has approved the HR matter |
+| **Rejected** | The commission has declined the application |
+| **Deferred** | The matter is held for a future sitting (more information needed) |
+| **Returned** | The matter is returned to the ministry for further action |
+:::
+:::
+::: {.step}
+::: {.step-body}
+Add the decision reference number and any remarks or conditions from the commission deliberation. Click **Save**.
+:::
+:::
+:::
+
+## Issuing Official Notification Letters
+
+Following each decision, the affected ministry must be formally notified. SCDMS manages the full notification tracking process.
+
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Go to **Notifications** in the sidebar. Find the notification record for the relevant decision.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Select the notification channel:
+
+| Channel | When to use |
+|---|---|
+| **Official Letter** | Standard formal notification by printed letter |
+| **Email** | Electronic notification for time-sensitive decisions |
+| **Portal Notice** | Notification delivered within SCDMS to the ministry's account |
+:::
+:::
+::: {.step}
+::: {.step-body}
+Review and edit the notification letter text as required, then mark it as **Pending Issue** when it is ready for despatch.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Mark as Issued** once the letter has been sent or delivered. Record the date of issue.
+:::
+:::
+::: {.step}
+::: {.step-body}
+When the ministry acknowledges receipt, click **Mark as Acknowledged**. The notification status becomes *Acknowledged*, completing the formal record.
+:::
+:::
+:::
+
+Notification status flow:
+
+<div class="flow">
+<span class="stage stage-draft">Draft</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-onhold">Pending Issue</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-submitted">Issued</span>
+<span class="flow-arrow">→</span>
+<span class="stage stage-approved">Acknowledged</span>
+</div>
+
+---
+
+# Post-Decision Implementation Tasks
+
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-exec">OPSC Manager · Principal Officer · Senior Officer</span></div>
+
+## Your Task List
+
+After a decision is recorded and assigned, implementation tasks appear in your **Tasks** list in the sidebar. These tasks represent the specific actions required to implement the commission's decision.
+
+Tasks are filtered by status:
+
+| Status | Meaning |
+|---|---|
+| **Open** | Not yet started |
+| **In Progress** | Actively being worked on |
+| **Completed** | All actions have been taken |
+| **Cancelled** | No longer required |
+
+## Working with Tasks
+
+Click any task to open its detail view.
+
+| Action | How to do it |
+|---|---|
+| **Begin work** | Open the task → click *Mark In Progress* |
+| **Record a progress update** | Open the task → type in *Add update* → click *Save update* |
+| **Set or change the due date** | Open the task → click the *Due date* field |
+| **Assign to a team member** | Open the task → click *Assigned to* → select the user |
+| **Create a sub-task** | Open the task → click *Add sub-task* → complete the details |
+| **Mark as complete** | Open the task → click *Mark Completed* |
+
+::: {.callout-tip title="Record progress updates regularly"}
+Each progress update you add becomes a permanent, timestamped record in the task history. Regular updates eliminate the need for status meetings and email chains, and create a clear implementation audit trail for reporting and accountability.
+:::
+
+---
+
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part VI</div>
+  <h2>AI Features Reference</h2>
+  <p>A complete guide to all AI-powered tools in SCDMS.</p>
+</div>
+```
+
+# AI Features in SCDMS
+
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-all">All users (features vary by role)</span></div>
+
+SCDMS includes a suite of AI features designed to reduce manual effort, surface information faster, and improve the quality of submissions before they reach the commission. All AI features require an active internet connection and work alongside — not instead of — your professional judgement.
+
+## Summary of AI Features
+
+| Feature | Who can use it | When to use it |
+|---|---|---|
+| **Checklist Autofill** | Ministry HR, PSC Officers, Unit Managers | After uploading documents, to auto-suggest checklist items |
+| **Package Validation** | Ministry HR, PSC Officers | Before submitting, to check for critical gaps |
+| **Quality Score** | PSC Officers, Unit Managers, OPSC Managers | At intake or assessment, to triage review effort |
+| **Executive Brief** | PSC Secretary, Senior Admin, PSC Admin | To quickly understand an unfamiliar submission |
+| **Deadline Reminder Drafts** | PSC Secretary, Officers | When the assessment deadline is approaching |
+| **Sitting Briefing Pack** | PSC Secretary, Chairperson | Before each commission sitting |
+| **AI Transcribe** | PSC Secretary | To convert a sitting recording to text |
+| **AI Minutes Draft** | PSC Secretary | To produce draft minutes from the repaired transcript |
+| **Decision Extraction** | PSC Secretary | To identify decisions from the draft minutes |
+| **Staff Assistant** | All users | At any time, for guidance on procedures or case status |
+| **AI Reports** | PSC Officers, Secretariat, OPSC | When generating custom reports |
 
 ## Checklist Autofill
 
-See @sec-autofill for the full step-by-step guide.
+*See @sec-autofill for the complete step-by-step guide.*
 
-**How it works:** The AI reads the extracted text from all uploaded documents and matches it against the named required-document items. It gives each item a present/missing suggestion with a one-sentence explanation of its reasoning.
+**How it works:** The AI reads extracted text from all uploaded documents and matches it against each required-document item by name and description. It returns a present/missing suggestion for each item, with a one-sentence note explaining what it found (or did not find).
 
-**Best results:** Upload and allow OCR to complete for all documents before running Autofill. Use descriptive document descriptions when uploading.
+**Best results:** Ensure OCR extraction is complete (status shows *Done*) on all documents before running Autofill. Use descriptive document names when uploading to improve matching accuracy.
 
 ## Package Validation
 
-See @sec-validate for the full guide.
+*See @sec-validate for the complete step-by-step guide.*
 
-**How it works:** The AI reviews the entire draft package — checklist status, uploaded files, form fields, endorsements, and title — and produces a gap report with severity levels.
+**How it works:** The AI examines the whole draft package — checklist status, uploaded files, form fields, endorsement records, and submission title — and produces a gap report with three severity levels: Critical, Warning, and Info.
 
-**Limitation:** Validation only runs on drafts. Once submitted, rerun validation by returning the submission to draft (PSC Officer action).
+**Limitation:** Validation is only available for submissions in **Draft** status. Once a submission has been sent to PSC, the ministry cannot re-run validation. PSC Officers can return a submission to draft to permit another validation cycle if needed.
 
-## Executive Brief {#sec-brief-detail}
+## AI Quality Score {#sec-quality}
 
-**How it works:** The AI reads all uploaded document text and the submission metadata, then writes a 3–5 paragraph executive brief covering: the request, background, key documents, and any flags for the secretariat.
+::: {.ai-panel}
+<div class="ai-label">AI Feature A5</div>
+<h4>Submission Quality Score</h4>
+<p>The AI assigns a score from 0 to 100 based on four dimensions of submission quality. Higher scores indicate better-prepared submissions that require less rework.</p>
+:::
 
-**When to use:** Use it to quickly understand an unfamiliar submission, or to prepare briefing notes before a sitting.
+The quality score is displayed in the submissions list (for eligible roles) and in the submission detail. To request a fresh score, click **Re-score** in the **Submission quality score** panel.
 
-**Regenerate when:** New documents are uploaded, or the brief seems outdated.
+**Scoring dimensions:**
 
-## Quality Score {#sec-quality-detail}
+| Dimension | What is assessed |
+|---|---|
+| **Completeness** | Are all expected sections, fields, and documents present? |
+| **Clarity** | Is the writing clear, professional, and free of ambiguity? |
+| **Evidence quality** | Are supporting documents appropriate, complete, and relevant? |
+| **PSC formatting** | Does the submission follow PSC structure, form conventions, and labelling? |
 
-**How it works:** Four dimensions are scored by the AI:
+**Interpreting the overall score:**
 
-| Dimension | What it measures |
-|-----------|----------------|
-| **Completeness** | Are all expected sections and documents present? |
-| **Clarity** | Is the writing clear and professionally worded? |
-| **Evidence Quality** | Are supporting documents appropriate and sufficient? |
-| **PSC Formatting** | Does the submission follow PSC structure and format? |
+| Score | Effort indicator |
+|---|---|
+| 75–100 | Low review effort expected — generally well-prepared |
+| 50–74 | Moderate review effort expected — some gaps likely |
+| 0–49 | High review effort expected — significant gaps anticipated |
 
-The four scores are averaged into an overall score (0–100). The score is recalculated each time you click *Re-score*.
+Use the quality score as a triage tool when prioritising your work queue, not as a final assessment of merit.
+
+## AI Executive Brief {#sec-brief}
+
+::: {.ai-panel}
+<div class="ai-label">AI Feature B1</div>
+<h4>Executive Brief</h4>
+<p>The AI reads all uploaded documents and generates a concise executive summary covering the request, background context, key documents on file, and any flags for the secretariat.</p>
+:::
+
+The brief is generated automatically for submissions visible to Secretariat staff. If it is outdated or you wish to refresh it after new documents are uploaded:
+
+- Open the submission → scroll to the **AI executive brief** panel → click **Regenerate**.
+
+Generation takes 10–30 seconds. Use the brief to quickly understand an unfamiliar submission without reading every attached document in full.
+
+## Deadline Reminder Drafts
+
+When a submission has an assessment deadline set, the system can generate personalised draft reminder communications for ministry contacts and assigned officers.
+
+Find this panel in the submission detail when a deadline is recorded. The drafts are templates only — copy the text into your email client and send manually. No email is sent automatically by SCDMS.
 
 ## Staff Assistant (AI Chatbot) {#sec-chatbot}
 
-<div class="ai-banner">
-<h4>✦ Staff Assistant</h4>
-<p>Ask the Staff Assistant anything about PSC procedures, which form to use, case status, or policy guidance — in English or Bislama.</p>
-</div>
-
-1. Click **Staff Assistant** in the sidebar.
-2. Type your question in the chat box and press **Enter** or click **Send**.
-3. The assistant responds immediately.
-
-**What you can ask:**
-
-- *"Which form do I use for a temporary acting appointment?"*
-- *"What is the status of PSC-2026-00042?"* — paste a reference number for an instant case summary
-- *"What documents are needed for a promotion submission?"*
-- *"Wanem samting mi mas putum long PSC 3-7?"* — Bislama questions are supported
-
-::: {.callout-warning title="Not legal advice"}
-Staff Assistant guidance is based on PSC procedures and documentation. It is not a substitute for formal legal advice or official PSC rulings. For critical decisions, always confirm with your unit manager or the relevant PSC officer.
+::: {.ai-panel}
+<div class="ai-label">AI Feature D2 / D3</div>
+<h4>Staff Assistant</h4>
+<p>Ask the Staff Assistant about PSC procedures, which form to use, case status, or policy guidance — in English or Bislama. Available from the sidebar at any time.</p>
 :::
 
-## AI Reports
+Click **Staff Assistant** in the sidebar. Type your question and press **Enter** or click **Send**.
 
-<span class="role-chip role-psc">PSC Officers · Secretariat · OPSC Managers</span>
+**Examples of what you can ask:**
 
-The **Reports** page lets you generate executive and operational reports using plain-English prompts.
+- *"Which form do I use for a temporary acting appointment?"*
+- *"What documents are required for a promotion submission?"*
+- *"What is the current status of PSC-2026-00042?"* — enter a case reference for an instant summary
+- *"How many days does PSC have to decide on a submission?"*
+- Questions in Bislama are fully supported
 
-1. Go to **Reports** in the sidebar.
-2. Describe what you want in the text box — e.g.:
-   - *"Show all approved appointment submissions from the Ministry of Finance in 2026"*
-   - *"List overdue ODU decisions with implementation status"*
-   - *"Summary of commission decisions by outcome for Q1 2026"*
-3. Set any additional filters (date range, unit, status).
-4. Click **Generate report**.
-5. Review the report preview and download as **CSV**, **PDF**, or **HTML**.
+::: {.callout-warning title="The Staff Assistant provides guidance, not legal advice"}
+The Staff Assistant draws on PSC procedures and system data to answer questions. It is a practical reference tool, not a substitute for formal legal advice or official PSC rulings. For critical decisions or matters with legal implications, always confirm with the relevant PSC officer or your unit manager.
+:::
 
----
+## AI Report Generation
 
-# Dashboard & Reports
+The **Reports** section (sidebar → **Reports**) allows users to generate executive and operational reports using a plain-English description of what they need.
 
-<span class="role-chip role-psc">All PSC users · OPSC Managers</span>
-
-## Dashboard Overview
-
-The **Dashboard** is your landing page after sign-in. It shows real-time metrics relevant to your role.
-
-### Key Metrics Cards
-
-| Card | What it shows |
-|------|--------------|
-| **Total submissions** | All submissions in the system (your visible scope) |
-| **Completion rate** | Percentage of received submissions that have been decided |
-| **Active cases** | Submissions currently in the active processing pipeline |
-| **Overdue** | Submissions exceeding the 21-day assessment target |
-
-### Submissions Activity Chart
-
-The bar chart shows **submissions received vs. decided** over your selected time range. Use the day / week / month selector to zoom in or out.
-
-### Recent Submissions
-
-A live list of the most recently updated submissions — click any row to open the detail view.
-
-### Recent Activity Feed
-
-Shows the latest system events:
-
-- New submission logged
-- Stage advanced
-- Decision recorded
-- Notification issued
-- Deadline passed
-- Agenda finalised
-
-### Workflow Performance Radar
-
-A six-dimension radar chart showing system performance across: Processing, Compliance, Timeliness, Completion, Quality, and Volume.
-
-## Submission List — Advanced Filtering
-
-From the **Submissions** page:
-
-- **Search bar:** Filter by reference, title, ministry, or stage text.
-- **Stage filter:** Click stage chips to show only submissions in that stage.
-- **Ministry filter:** Narrow by ministry or department.
-- Results paginate at 15 per page; use the navigation at the bottom to move between pages.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Go to **Reports** in the sidebar.
+:::
+:::
+::: {.step}
+::: {.step-body}
+In the text field, describe what you want — for example:
+  - *"All approved appointment submissions from the Ministry of Finance in 2026"*
+  - *"Overdue ODU submissions with current implementation status"*
+  - *"Summary of decisions by outcome for the first quarter of 2026"*
+:::
+:::
+::: {.step}
+::: {.step-body}
+Set any additional filters — date range, unit, ministry, or status — using the filter controls.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Click **Generate report**. Preview the output and download in your preferred format: **CSV**, **PDF**, or **HTML**.
+:::
+:::
+:::
 
 ---
 
-# Account Security & Best Practices
+```{=html}
+<div class="part-header">
+  <div class="part-label">Part VII</div>
+  <h2>Dashboard &amp; Reporting</h2>
+  <p>For all users — metrics, trends, and the submissions register.</p>
+</div>
+```
 
-## Strong Passwords
+# Dashboard Overview
 
-- Use a password of at least 12 characters with a mix of letters, numbers, and symbols.
-- Do not share your password with colleagues — each user must have their own login.
-- Change your password if you suspect it may have been compromised.
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-all">All users (content varies by role)</span></div>
+
+The **Dashboard** is the home screen that appears after sign-in. It shows live metrics and activity relevant to your role.
+
+## Key Metrics Cards
+
+Six metric cards are shown at the top of the dashboard:
+
+| Card | What it measures |
+|---|---|
+| **Processing time** | Average days from submission receipt to decision |
+| **Compliance rate** | Percentage of submissions meeting procedural standards |
+| **Timeliness** | Percentage of submissions decided within the 21-day target |
+| **Completion rate** | Decided submissions as a proportion of all received |
+| **Quality score** | Average AI quality score across all active submissions |
+| **Volume** | Total submissions in the current reporting period |
+
+## Charts and Visualisations
+
+**Monthly trend (area chart):** Shows submissions *received*, *decided*, and the *target* line over the past 12 months. Use the period selector to switch between day, week, and month views.
+
+**Weekly intake (bar chart):** Breaks down new and resubmitted cases by day of the week over the current week.
+
+**Workflow performance (radar chart):** A six-dimension performance overview across Processing, Compliance, Timeliness, Completion, Quality, and Volume. Use it to spot which areas of the pipeline are performing below expectation.
+
+**Recent activity feed:** The last eight system events — new submission logged, stage advanced, decision recorded, deadline passed, notification issued, agenda finalised. Click any item to navigate to the relevant record.
+
+**Recent submissions list:** The six most recently updated submissions, showing reference, title, ministry, and current stage.
+
+---
+
+# Account Security
+
+<div class="applies-to"><p>Applies to</p><span class="role-chip role-all">All users</span></div>
+
+## Password and Account Security
+
+SCDMS holds sensitive HR information. Protecting your account is a professional and legal responsibility.
+
+**Password guidance:**
+
+- Use a password of at least 12 characters, combining upper- and lower-case letters, numbers, and symbols.
+- Do not write your password on a sticky note or in a shared document.
+- Do not share your password with colleagues. Each user must have their own account.
+- Change your password immediately if you suspect it may have been seen by someone else.
 
 ## Two-Factor Authentication
 
-Enable 2FA on your account for an extra layer of protection:
+Enable 2FA on your account for a second layer of protection. Even if your password is compromised, access requires your phone as well.
 
-1. Go to your profile → **Security settings**.
-2. Follow the on-screen steps to link an authenticator app.
-3. Save your backup codes in a secure place.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Open the account menu (top-right) → **Security settings**.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Follow the on-screen instructions to link an authenticator app. Scan the QR code displayed on screen using your phone's authenticator application.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Save your backup recovery codes in a secure location — these allow you to regain access if you lose your phone.
+:::
+:::
+:::
 
-## Session Management
+## Reporting a Security Concern
 
-- **Lock your screen** whenever you step away — even briefly.
-- **Sign out completely** at the end of each working day, especially on shared devices.
-- **Do not leave the system unlocked** on an unattended device with sensitive submissions visible.
+If you believe your account may have been accessed without your authorisation, or if you notice unexpected behaviour in the system:
 
-## Reporting Issues
-
-If you notice unexpected behaviour, data that looks incorrect, or think your account may have been accessed without your knowledge:
-
-1. Sign out immediately.
-2. Contact your unit manager or PSC IT support.
-3. Use the **Feedback** button (flag icon in the sidebar or bottom of any page) to report bugs or system errors — attach a screenshot if possible.
-
----
-
-# Quick Reference
-
-## Workflow Stage Reference
-
-| Stage | Who acts | Next steps |
-|-------|---------|-----------|
-| <span class="stage-badge stage-draft">Draft</span> | Ministry HR | Fill form, upload docs, validate, submit |
-| <span class="stage-badge stage-submitted">Submitted to PSC</span> | PSC Officer | Receive and acknowledge |
-| <span class="stage-badge stage-received">Received by PSC</span> | PSC Officer | Register and route |
-| <span class="stage-badge stage-returned">Returned for Clarification</span> | Ministry HR | Fix and resubmit |
-| <span class="stage-badge stage-registered">Registered & Routed</span> | Unit Manager | Begin checklist review |
-| <span class="stage-badge stage-review">Manager Checklist Review</span> | Unit Manager | Confirm required documents |
-| <span class="stage-badge stage-assessment">Under Assessment</span> | Unit Principal | Conduct detailed assessment |
-| <span class="stage-badge stage-commission">Forwarded to Commission</span> | Secretariat | Add to agenda |
-| <span class="stage-badge stage-commission">Commission Sitting</span> | Commissioner / Chair | Deliberate and decide |
-| <span class="stage-badge stage-approved">Approved</span> | Secretariat | Record decision, issue notification |
-| <span class="stage-badge stage-rejected">Rejected</span> | Secretariat | Record decision, notify ministry |
-| <span class="stage-badge stage-implement">Under Implementation</span> | OPSC Manager | Execute and report implementation |
-
-## Common Actions — Quick Links
-
-| I want to… | Go to… |
-|------------|--------|
-| Create a new submission | Submissions → New Submission |
-| Upload a document | Submission detail → Documents panel |
-| Run AI checklist autofill | Submission detail → Required Documents → AI Autofill |
-| Validate before submitting | Submission detail → Validate package panel |
-| Check a submission status | Submissions (search by reference) |
-| Ask about PSC procedures | Staff Assistant |
-| View my tasks | Tasks (sidebar) |
-| Generate a report | Reports (sidebar) |
-| Manage sitting agenda | Agenda (sidebar) |
-| Upload a meeting recording | Meeting Room → Select sitting |
-| Lock my screen | User menu (top right) → Lock session |
-
-## Document Checklist — What to Prepare Before Submitting
-
-Before submitting a case to PSC, ensure you have:
-
-- [ ] A clear, specific submission title (not generic)
-- [ ] The correct form type selected and all fields completed
-- [ ] All required documents uploaded (see your checklist panel)
-- [ ] AI Autofill run and suggestions reviewed
-- [ ] AI Package Validation run with no critical issues (or a documented reason for proceeding)
-- [ ] DG / Head of Agency endorsement recorded where required
-- [ ] Document descriptions filled in clearly
-
----
-
-# Getting Help
-
-## Staff Assistant
-
-The fastest way to get an answer is the **Staff Assistant** — available from the sidebar at any time. Ask in plain English or Bislama.
-
-## Contact PSC Support
-
-For issues the Staff Assistant cannot resolve:
-
-- Speak to your **unit manager** or assigned PSC officer.
-- Use the **Feedback** button in SCDMS to report a bug or request a feature.
-
-## System Status
-
-If the system is unavailable or showing an error, try:
-
-1. Refreshing the page (press F5 or Ctrl+R).
-2. Clearing your browser cache and signing in again.
-3. Checking your internet connection.
-4. Contacting your unit manager if the issue persists.
-
-::: {.callout-note title="Working offline"}
-SCDMS works in your browser. If your internet connection drops, an **Offline** banner appears at the top of the screen. Recently-visited pages may still load from cache, but you cannot submit forms or upload documents until the connection is restored.
+::: {.steps}
+::: {.step}
+::: {.step-body}
+Sign out of SCDMS immediately.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Contact your unit manager or the PSC IT helpdesk without delay.
+:::
+:::
+::: {.step}
+::: {.step-body}
+Use the **Feedback** icon in the SCDMS sidebar to report unexpected system behaviour — attach a screenshot if possible to help diagnose the issue.
+:::
+:::
 :::
 
 ---
 
-::: {.callout-note title="Document version"}
-This guide reflects SCDMS version 1.0. Features and workflows may be updated — the Staff Assistant can answer questions about the latest system behaviour.
+# Appendix A: Complete Workflow Stage Reference {.unnumbered}
+
+The following table lists every workflow stage in SCDMS, the category it belongs to, and the users who typically act at that stage.
+
+| Stage | Category | Who acts |
+|---|---|---|
+| <span class="stage stage-draft">Draft</span> | Pre-submission | Ministry HR, Dept Admin, Head of Agency |
+| <span class="stage stage-submitted">Submitted to PSC</span> | Pre-submission | Ministry HR initiates; PSC Officer receives |
+| <span class="stage stage-received">Received by PSC</span> | PSC Intake | PSC Officer |
+| <span class="stage stage-returned">Returned for Clarification</span> | Clarification | Ministry HR responds |
+| <span class="stage stage-registered">Registered and Routed</span> | PSC Intake | PSC Officer routes to unit |
+| <span class="stage stage-review">Manager Checklist Review</span> | Assessment | Unit Manager |
+| <span class="stage stage-assessment">Under Assessment</span> | Assessment | Unit Principal / team |
+| <span class="stage stage-onhold">Deferred</span> | On Hold | PSC Officer |
+| <span class="stage stage-onhold">Tabled</span> | On Hold | PSC Secretary |
+| <span class="stage stage-onhold">Awaiting Legal Advice</span> | On Hold | PSC Officer |
+| <span class="stage stage-onhold">Awaiting Cabinet Decision</span> | On Hold | PSC Officer |
+| <span class="stage stage-submitted">Resubmitted</span> | Resubmission | Ministry HR |
+| <span class="stage stage-commission">Forwarded to Commission</span> | Commission | PSC Secretary |
+| <span class="stage stage-commission">Commission Sitting</span> | Commission | Commissioner, Chairperson |
+| <span class="stage stage-commission">Matters Arising</span> | Commission | PSC Secretary |
+| <span class="stage stage-approved">Approved</span> | Decision | PSC Secretary records |
+| <span class="stage stage-rejected">Rejected</span> | Decision | PSC Secretary records |
+| <span class="stage stage-decision">Returned (Decision)</span> | Decision | PSC Secretary records |
+| <span class="stage stage-decision">Deferred Back to HR</span> | Decision | PSC Secretary records |
+| <span class="stage stage-postdecision">Minutes Drafted and Signed</span> | Post-decision | PSC Secretary, Chairperson |
+| <span class="stage stage-postdecision">Decision Entered and Assigned</span> | Post-decision | PSC Secretary |
+| <span class="stage stage-implement">Under Implementation</span> | Implementation | OPSC Manager |
+| <span class="stage stage-implement">Implementation Report</span> | Implementation | OPSC Manager (terminal stage) |
+
+---
+
+# Appendix B: Quick Action Finder {.unnumbered}
+
+| I want to… | Go to… |
+|---|---|
+| Create a new submission | **Submissions** → *New Submission* |
+| Upload a document | Submission detail → *Documents* panel |
+| Run AI checklist autofill | Submission detail → *Required Documents* → *AI Autofill* |
+| Validate my package before submitting | Submission detail → *Validate package* panel (Draft stage only) |
+| Submit to PSC | Submission detail → *Move to Next Stage* → *Submitted to PSC* |
+| Track submission progress | **Submissions** → search by reference |
+| Return a submission for clarification | Submission detail → *Move to Next Stage* → *Returned for Clarification* |
+| Annotate a document | Submission detail → *Documents* → *Annotate* |
+| Sign a document | Submission detail → *Documents* → *Sign* |
+| View and confirm the checklist | Submission detail → *Required Documents* panel |
+| Run AI quality score | Submission detail → *Submission quality score* → *Re-score* |
+| Generate an executive brief | Submission detail → *AI executive brief* → *Regenerate* |
+| Build a sitting agenda | **Agenda** → select sitting → *Add agenda item* |
+| Generate a sitting briefing | **Meetings** → open sitting → *Generate briefing pack* |
+| Upload a meeting recording | **Meeting Room** → select sitting → upload |
+| Generate draft minutes | **Meeting Room** → *Minutes pipeline* → *Generate minutes* |
+| Record a commission decision | **Decisions** → *Record decision* |
+| Issue a notification letter | **Notifications** → select record → *Mark as Issued* |
+| View my tasks | **Tasks** in the sidebar |
+| Ask about PSC procedures | **Staff Assistant** in the sidebar |
+| Generate a report | **Reports** in the sidebar |
+| Change my language | Account menu (top-right) → language selection |
+| Lock my screen | Account menu → *Lock session* |
+| Enable desktop notifications | Account menu → *Desktop notification settings* → *Enable* |
+
+---
+
+# Appendix C: Pre-Submission Checklist {.unnumbered}
+
+Before clicking *Submitted to PSC*, verify that each of the following is in order.
+
+<ul class="doc-checklist">
+  <li><span class="check-box">☐</span> The submission title is specific — it names the grade, position, and department</li>
+  <li><span class="check-box">☐</span> The correct form category and form type are selected</li>
+  <li><span class="check-box">☐</span> All required form fields are completed and the form has been saved</li>
+  <li><span class="check-box">☐</span> All supporting documents have been uploaded with clear, descriptive names</li>
+  <li><span class="check-box">☐</span> OCR extraction has completed on all uploaded documents (status: <em>Done</em>)</li>
+  <li><span class="check-box">☐</span> AI Autofill has been run and all suggestions have been reviewed</li>
+  <li><span class="check-box">☐</span> All required checklist items are confirmed as present (or have a recorded explanation)</li>
+  <li><span class="check-box">☐</span> AI Package Validation has been run with no unresolved Critical issues</li>
+  <li><span class="check-box">☐</span> DG / Head of Agency endorsement is recorded where required</li>
+  <li><span class="check-box">☐</span> Submission notes include any context the PSC officer should be aware of</li>
+</ul>
+
+---
+
+# Appendix D: Glossary {.unnumbered}
+
+::: {.glossary}
+
+**Assessment deadline**
+: The target date by which a submission should be assessed and a recommendation forwarded to the commission. The PSC standard is 21 days from the date of registration.
+
+**Checklist / Required Documents Checklist**
+: A list of documents specified by the PSC as mandatory for a given form type or category. Each item must be confirmed as present before a submission can advance to commission stage.
+
+**Commission sitting**
+: A formally convened meeting of the Public Service Commission at which HR matters on the agenda are deliberated and decided.
+
+**Draft**
+: The initial stage of a submission, while it is being prepared by the ministry. The ministry HR officer controls the submission at this stage and it has not yet been sent to the PSC.
+
+**DG endorsement**
+: Formal approval by the Director General or Head of Agency, recorded on the submission as confirmation that the ministry leadership supports the HR action being proposed.
+
+**Flying minute**
+: A type of commission sitting conducted by written circulation rather than in person, used for urgent or routine matters that do not require deliberation.
+
+**Matters arising**
+: A workflow stage for submissions that have been previously considered by the commission and are returning for further consideration, bypassing the standard assessment pipeline.
+
+**OCR (Optical Character Recognition)**
+: The automatic process by which SCDMS extracts readable text from uploaded PDF and image documents. Extracted text enables AI features such as Autofill, Package Validation, and the Executive Brief.
+
+**OPSC**
+: Office of the Public Service Commission — the executive body responsible for implementing PSC decisions and managing the civil service.
+
+**Progressive Web App (PWA)**
+: A web application that can be installed on a device like a native app, providing quick access without opening a browser.
+
+**Reference number**
+: The unique identifier assigned to each submission in the format `PSC-YYYY-#####`, where YYYY is the year and ##### is a sequential number.
+
+**Resubmission**
+: When a ministry re-submits a case that was previously returned for clarification. The revised submission re-enters the PSC intake process.
+
+**Routed unit**
+: The OPSC unit (VIPAM, HR Unit, ODU, Compliance, CSU) to which a submission is assigned for detailed assessment following registration.
+
+**Two-factor authentication (2FA)**
+: A security measure requiring a second verification step — a one-time code from an authenticator app — in addition to the username and password.
+
+**Workflow stage**
+: The current position of a submission in the PSC processing lifecycle. Each stage corresponds to a specific point in the process and determines which actions are available and who can take them.
+
+:::
+
+---
+
+# Appendix E: Getting Help {.unnumbered}
+
+## Staff Assistant
+
+The fastest way to get an answer is the **Staff Assistant**, available from the sidebar at any time. It can answer questions about PSC procedures, submission status, form requirements, and general guidance — in English or Bislama.
+
+## Contact the PSC
+
+For issues the Staff Assistant cannot resolve, contact your designated PSC officer or the PSC Secretariat directly.
+
+## Reporting System Problems
+
+Use the **Feedback** button within SCDMS (look for the flag or feedback icon in the sidebar or at the bottom of any page) to report system errors or unexpected behaviour. Attach a screenshot where possible — this significantly speeds up the resolution of technical issues.
+
+## Working Offline
+
+::: {.callout-note title="If your internet connection drops"}
+When your browser cannot reach the server, SCDMS displays an **Offline** banner at the top of the screen. Pages you have recently visited may still load from the browser cache, but you cannot submit data or upload documents until the connection is restored. Once the connection returns, the banner disappears automatically.
+:::
+
+---
+
+::: {.callout-note title="Document information"}
+This guide covers SCDMS version 1.0 and reflects the system as deployed for the Public Service Commission of Vanuatu. As the system is updated, the Staff Assistant can be asked about any new features or changed workflows.
 :::
