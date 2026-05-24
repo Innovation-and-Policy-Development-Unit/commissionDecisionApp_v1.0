@@ -18,6 +18,8 @@ redis==4.6.0
 bandit>=1.7
 pip-audit>=2.6
 anthropic>=0.40.0
+pypdf>=4.0
+pymupdf>=1.24.0
 drf-spectacular>=0.27
 drf-spectacular-sidecar>=2025.0
 django-health-check>=4.0

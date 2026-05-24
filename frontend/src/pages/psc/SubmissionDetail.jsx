@@ -12,6 +12,8 @@ import {
 } from '../../constants/stages'
 import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
+import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
+import DeadlineReminderDrafts from '../../components/submissions/DeadlineReminderDrafts'
 import DocumentAnnotatorModal from '../../components/shared/DocumentAnnotatorModal'
 import DocumentSignatureModal from '../../components/shared/DocumentSignatureModal'
 import PSCForm37Fields from './PSCForm37Fields'
@@ -36,6 +38,13 @@ const TRANSITION_ROLES = [
 
 const UNIT_MANAGER_ROLES = ['vipam_manager', 'hr_unit_manager', 'odu_manager', 'compliance_manager']
 const SECRETARIAT_BRIEF_ROLES = ['psc_secretary', 'senior_admin_officer', 'psc_admin']
+const DOC_EXTRACT_ROLES = [
+  'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
+  'compliance_manager', 'compliance_senior', 'compliance_principal',
+]
+const DEADLINE_DRAFT_ROLES = [
+  'psc_secretary', 'psc_admin', 'psc_officer', 'senior_admin_officer', 'psc_manager',
+]
 
 // ─── Visual timeline ──────────────────────────────────────────────────────────
 
@@ -186,6 +195,8 @@ export default function SubmissionDetail() {
 
   const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
   const showSecretariatBrief = user && SECRETARIAT_BRIEF_ROLES.includes(user.role)
+  const showDeadlineDrafts = user && DEADLINE_DRAFT_ROLES.includes(user.role)
+  const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
 
   const fetchSubmission = useCallback(async () => {
     try {
@@ -294,6 +305,15 @@ export default function SubmissionDetail() {
     fetchAnnotationCounts()
     fetchSignatureCounts()
   }, [fetchDocuments, fetchAnnotationCounts, fetchSignatureCounts])
+
+  useEffect(() => {
+    const processing = documents.some(
+      d => d.ocr_status === 'pending' || d.ocr_status === 'processing',
+    )
+    if (!processing) return undefined
+    const timer = setInterval(fetchDocuments, 4000)
+    return () => clearInterval(timer)
+  }, [documents, fetchDocuments])
 
   useEffect(() => {
     if (submission?.form_type_code !== 'PSC 3-7') return
@@ -532,6 +552,18 @@ const stageDescriptions = {
           submissionId={id}
           onUpdated={setSubmission}
         />
+      )}
+
+      {showDeadlineDrafts && submission?.assessment_deadline_at && (
+        <div className="card p-5 mb-4">
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">
+            AI deadline reminder drafts
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+            Personalised emails for ministry contacts and assigned officers when the assessment deadline is approaching.
+          </p>
+          <DeadlineReminderDrafts submissionId={id} />
+        </div>
       )}
 
       {isCmsLinkedCompliance && (
@@ -966,6 +998,12 @@ const stageDescriptions = {
                           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                             {formatBytes(doc.file_size)}{doc.file_size ? ' · ' : ''}{doc.uploaded_by_username} · {new Date(doc.uploaded_at).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </p>
+                          <DocumentFactsPanel
+                            submissionId={id}
+                            doc={doc}
+                            canExtract={canExtractDocs}
+                            onRefresh={fetchDocuments}
+                          />
                         </div>
                         <DocActions doc={doc} />
                       </li>

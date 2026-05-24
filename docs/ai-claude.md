@@ -22,8 +22,12 @@ Product spec: `AI_Features_List.txt` (repo root)
 |---------|------|------------|
 | Feedback triage | `process_feedback_with_ai` | Haiku |
 | Secretary executive brief | `generate_submission_brief` | Sonnet |
+| **OCR + key facts (E1)** | `extract_document_facts` (on upload) | Sonnet (+ vision for scans) |
+| **Deadline reminder drafts (F2)** | `draft_submission_deadline_reminders` (daily beat) | Haiku |
 | Minutes draft from transcript | `draft_minutes_from_transcript` | Sonnet |
 | Decision extraction | `extract_decisions_from_minutes` | Haiku |
+| **Action register (C4)** | `extract_action_items_from_minutes` | Haiku |
+| Staff Assistant | sync API (`staff_chat_views`) | Sonnet |
 
 ## Meeting audio
 

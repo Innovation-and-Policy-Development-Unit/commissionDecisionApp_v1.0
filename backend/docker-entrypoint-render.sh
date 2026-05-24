@@ -1,11 +1,17 @@
 #!/bin/sh
 # Production entrypoint for Render / PaaS (Gunicorn + migrate + collectstatic).
 set -e
-if [ "$#" -gt 0 ]; then
+
+mkdir -p /var/log/scdms /var/backups/scdms "${MEDIA_ROOT:-/var/scdms/media}" /app/logs 2>/dev/null || true
+
+# Celery worker/beat: skip web-only startup (API service runs migrations).
+if [ "$1" = "celery" ]; then
   exec "$@"
 fi
 
-mkdir -p /var/log/scdms /var/backups/scdms "${MEDIA_ROOT:-/var/scdms/media}" 2>/dev/null || true
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
 
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput

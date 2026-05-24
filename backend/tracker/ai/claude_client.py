@@ -222,6 +222,70 @@ def complete_json(
     return data
 
 
+def complete_json_with_images(
+    *,
+    system: str,
+    user_text: str,
+    images: list[tuple[str, str]],
+    tier: ModelTier = "sonnet",
+    max_tokens: int = 8192,
+) -> tuple[Any | None, str | None]:
+    """Vision: images as list of (media_type, base64_data). Returns parsed JSON."""
+    client = get_anthropic_client()
+    if client is None:
+        return None, "ANTHROPIC_API_KEY is not set"
+    if not images:
+        return None, "No images provided for vision extraction"
+
+    content: list[dict] = []
+    for media_type, b64 in images[:10]:
+        content.append(
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": media_type, "data": b64},
+            }
+        )
+    content.append({"type": "text", "text": user_text})
+
+    sys = (
+        f"{system.strip()}\n\n"
+        "Respond with valid JSON only. No markdown code fences or commentary."
+    )
+    model = get_model_id(tier)
+    fallback = _CURRENT_DEFAULTS[tier]
+    models_to_try = [model]
+    if fallback not in models_to_try:
+        models_to_try.append(fallback)
+
+    last_exc: Exception | None = None
+    for attempt_model in models_to_try:
+        try:
+            response = client.messages.create(
+                model=attempt_model,
+                max_tokens=max_tokens,
+                system=sys,
+                messages=[{"role": "user", "content": content}],
+            )
+            text = _extract_text(response)
+            if not text:
+                return None, f"Claude returned empty content (model={attempt_model})"
+            return _parse_json_text(text), None
+        except Exception as exc:
+            last_exc = exc
+            if _is_model_not_found(exc) and attempt_model != fallback:
+                logger.warning(
+                    "CLAUDE_VISION_RETRY | model=%s not found, retrying with %s",
+                    attempt_model,
+                    fallback,
+                )
+                continue
+            logger.exception("CLAUDE_VISION_FAIL | model=%s | %s", attempt_model, exc)
+            return None, _api_error_message(exc)
+    if last_exc:
+        return None, _api_error_message(last_exc)
+    return None, "Claude vision request failed"
+
+
 def complete_chat_with_error(
     *,
     system: str,

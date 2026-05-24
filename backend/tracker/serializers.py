@@ -575,6 +575,7 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
     uploaded_by_username = serializers.CharField(source='uploaded_by.username', read_only=True)
     file_size = serializers.SerializerMethodField()
     content_type = serializers.SerializerMethodField()
+    ocr_status_display = serializers.CharField(source='get_ocr_status_display', read_only=True)
 
     def get_file_size(self, obj):
         try:
@@ -594,8 +595,13 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SubmissionDocument
-        fields = ('id', 'original_name', 'description', 'uploaded_by_username',
-                  'uploaded_at', 'file_size', 'content_type')
+        fields = (
+            'id', 'original_name', 'description', 'uploaded_by_username',
+            'uploaded_at', 'file_size', 'content_type',
+            'ocr_status', 'ocr_status_display', 'extracted_text', 'extracted_facts',
+            'ocr_error', 'ocr_processed_at',
+        )
+        read_only_fields = fields
 
 
 class UserSignatureSerializer(serializers.ModelSerializer):
@@ -1404,6 +1410,37 @@ class TranscriptGenerateSerializer(serializers.Serializer):
 class DecisionExtractSerializer(serializers.Serializer):
     """Extract decisions from minutes content."""
     meeting_id = serializers.IntegerField()
+
+
+class ActionItemsExtractSerializer(serializers.Serializer):
+    """Extract structured action register from minutes (C4)."""
+    meeting_id = serializers.IntegerField()
+    minutes_text = serializers.CharField(required=False, allow_blank=True)
+
+
+class DeadlineReminderDraftSerializer(serializers.ModelSerializer):
+    submission_reference = serializers.CharField(
+        source='submission.reference_number', read_only=True,
+    )
+    submission_title = serializers.CharField(source='submission.title', read_only=True)
+    ministry_name = serializers.CharField(source='ministry.name', read_only=True, allow_null=True)
+
+    class Meta:
+        from .models import DeadlineReminderDraft
+
+        model = DeadlineReminderDraft
+        fields = (
+            'id', 'submission', 'submission_reference', 'submission_title',
+            'recipient_user', 'recipient_email', 'recipient_name', 'recipient_role',
+            'ministry', 'ministry_name', 'stage', 'deadline_at',
+            'outstanding_summary', 'consequence_note', 'subject', 'body',
+            'status', 'drafted_at', 'sent_at',
+        )
+        read_only_fields = (
+            'submission_reference', 'submission_title', 'ministry_name',
+            'drafted_at', 'sent_at', 'submission', 'recipient_user', 'ministry',
+            'stage', 'deadline_at', 'recipient_email', 'recipient_name', 'recipient_role',
+        )
 
 
 class SessionPinSetupSerializer(serializers.Serializer):

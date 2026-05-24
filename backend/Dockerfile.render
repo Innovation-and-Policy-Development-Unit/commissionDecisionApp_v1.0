@@ -14,8 +14,8 @@ WORKDIR /app
 
 RUN groupadd -r scdms --gid=1001 && \
     useradd -r -g scdms --uid=1001 --no-create-home scdms && \
-    mkdir -p /var/log/scdms /var/backups/scdms /var/scdms/media && \
-    chown -R scdms:scdms /var/log/scdms /var/backups/scdms /var/scdms/media
+    mkdir -p /var/log/scdms /var/backups/scdms /var/scdms/media /app/logs && \
+    chown -R scdms:scdms /var/log/scdms /var/backups/scdms /var/scdms/media /app/logs
 
 COPY --from=builder /usr/local /usr/local
 

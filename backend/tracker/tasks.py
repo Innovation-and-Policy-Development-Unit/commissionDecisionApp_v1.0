@@ -193,6 +193,12 @@ def build_submission_brief_context(submission) -> str:
     for doc in SubmissionDocument.objects.filter(submission=submission).order_by("uploaded_at"):
         desc = f" — {doc.description}" if doc.description else ""
         lines.append(f"Document: {doc.original_name}{desc}")
+        if doc.extracted_text:
+            snippet = doc.extracted_text[:500].replace("\n", " ")
+            lines.append(f"  Extracted text (snippet): {snippet}…")
+        facts = doc.extracted_facts or {}
+        if isinstance(facts, dict) and facts.get("document_summary"):
+            lines.append(f"  Document summary: {facts.get('document_summary')}")
 
     checklist = SubmissionChecklistItem.objects.filter(submission=submission).select_related("document")
     for item in checklist:
@@ -668,3 +674,350 @@ def notify_approaching_due_dates():
     total = len(notified_task_ids) + len(notified_subtask_ids)
     app_log.info("DUE_DATE_NOTIFY | Complete: %d items notified", total)
     return total
+
+
+# ── E1: OCR + key facts from scanned documents ───────────────────────────────
+
+
+def queue_document_extraction(document_id: int) -> None:
+    try:
+        extract_document_facts.delay(document_id)
+    except Exception as exc:
+        app_log.warning(
+            "DOC_EXTRACT_QUEUE_FALLBACK | doc=%s | sync: %s",
+            document_id,
+            exc,
+        )
+        extract_document_facts(document_id)
+
+
+@shared_task
+def extract_document_facts(document_id: int):
+    """OCR / key-facts extraction for a submission document (E1)."""
+    from django.utils import timezone
+
+    from .ai.document_extraction import run_document_extraction
+    from .models import DocumentOcrStatus, SubmissionDocument
+
+    try:
+        doc = SubmissionDocument.objects.select_related("submission").get(id=document_id)
+    except SubmissionDocument.DoesNotExist:
+        app_log.warning("DOC_EXTRACT_SKIP | document %s missing", document_id)
+        return
+
+    doc.ocr_status = DocumentOcrStatus.PROCESSING
+    doc.ocr_error = ""
+    doc.save(update_fields=["ocr_status", "ocr_error"])
+
+    try:
+        path = doc.file.path
+    except Exception as exc:
+        doc.ocr_status = DocumentOcrStatus.FAILED
+        doc.ocr_error = str(exc)
+        doc.ocr_processed_at = timezone.now()
+        doc.save(update_fields=["ocr_status", "ocr_error", "ocr_processed_at"])
+        return
+
+    result, err = run_document_extraction(
+        file_path=__import__("pathlib").Path(path),
+        original_name=doc.original_name,
+        description=doc.description,
+    )
+
+    if err or not result:
+        doc.ocr_status = DocumentOcrStatus.FAILED
+        doc.ocr_error = err or "Extraction returned no data"
+        doc.ocr_processed_at = timezone.now()
+        doc.save(update_fields=["ocr_status", "ocr_error", "ocr_processed_at"])
+        app_log.error("DOC_EXTRACT_FAIL | doc=%s | %s", document_id, doc.ocr_error)
+        return
+
+    doc.extracted_text = (result.get("extracted_text") or "")[:500000]
+    facts = result.get("key_facts") or {}
+    if result.get("document_summary"):
+        facts = {**facts, "document_summary": result["document_summary"]}
+    doc.extracted_facts = facts
+    doc.ocr_status = DocumentOcrStatus.COMPLETED
+    doc.ocr_processed_at = timezone.now()
+    doc.ocr_error = ""
+    doc.save(
+        update_fields=[
+            "extracted_text",
+            "extracted_facts",
+            "ocr_status",
+            "ocr_processed_at",
+            "ocr_error",
+        ]
+    )
+    app_log.info("DOC_EXTRACT_OK | doc=%s | chars=%d", document_id, len(doc.extracted_text))
+
+
+# ── F2: AI-drafted deadline reminder emails (Haiku) ──────────────────────────
+
+DEADLINE_REMINDER_DAYS_BEFORE = 5
+
+DEADLINE_REMINDER_PROMPT = """You are drafting a formal reminder email for the Vanuatu Public Service Commission Secretariat.
+
+Write a personalised email to the recipient about an approaching case deadline.
+Tone: professional, clear, respectful. Use English; you may note Bislama terms if in context.
+
+Output valid JSON only:
+{{
+  "subject": "email subject line with case reference",
+  "body": "full email body with greeting, paragraphs, and sign-off from PSC Secretariat",
+  "outstanding_summary": "1-2 sentences on what is still required",
+  "consequence_note": "1 sentence on consequence of missing the deadline under PSC processes"
+}}
+
+Case context:
+{case_context}
+
+Recipient:
+{recipient_context}
+"""
+
+
+def _submission_deadline_recipients(submission):
+    """Ministry HR contacts, assigned principal, and DG endorser for this case."""
+    from django.contrib.auth.models import User
+
+    from .models import Profile, Role
+
+    seen_emails = set()
+    recipients = []
+
+    def add_user(user, role_label):
+        if not user or not user.is_active:
+            return
+        email = (user.email or "").strip()
+        if not email or email in seen_emails:
+            return
+        seen_emails.add(email)
+        recipients.append((user, email, role_label))
+
+    if submission.assigned_to_id:
+        add_user(submission.assigned_to, "assigned_principal")
+
+    if submission.dg_endorsed_by_id:
+        add_user(submission.dg_endorsed_by, "dg_endorser")
+
+    if submission.ministry_id:
+        hr_users = User.objects.filter(
+            is_active=True,
+            psc_profile__role=Role.MINISTRY_HR,
+            psc_profile__ministry_id=submission.ministry_id,
+        ).select_related("psc_profile")
+        for u in hr_users:
+            add_user(u, "ministry_hr")
+
+    return recipients
+
+
+def _build_deadline_case_context(submission) -> str:
+    from .models import SubmissionChecklistItem, WorkflowStage
+
+    lines = [
+        f"Reference: {submission.reference_number}",
+        f"Title: {submission.title}",
+        f"Ministry: {submission.ministry.name if submission.ministry_id else '—'}",
+        f"Current stage: {submission.get_current_stage_display()} ({submission.current_stage})",
+        f"Assessment deadline: {submission.assessment_deadline_at}",
+        f"Overdue: {submission.is_assessment_overdue}",
+    ]
+    missing = SubmissionChecklistItem.objects.filter(
+        submission=submission, is_present=False,
+    ).select_related("document")[:15]
+    if missing:
+        lines.append("Missing checklist items:")
+        for item in missing:
+            label = item.document.name if item.document_id else "Item"
+            lines.append(f"  - {label}")
+    if submission.current_stage == WorkflowStage.RETURNED_FOR_CLARIFICATION:
+        lines.append("Outstanding: ministry must resubmit clarification/documents.")
+    return "\n".join(lines)
+
+
+@shared_task
+def draft_submission_deadline_reminders():
+    """Daily: draft personalised deadline emails for cases nearing assessment deadline (F2)."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .ai.claude_client import complete_json_with_error
+    from .ai.feature_registry import FEATURE_MODEL_TIER
+    from .email_notify import user_recipient_context
+    from .models import DeadlineReminderDraft, Submission, WorkflowStage
+
+    now = timezone.now()
+    window_end = now + timedelta(days=DEADLINE_REMINDER_DAYS_BEFORE)
+
+    submissions = Submission.objects.filter(
+        current_stage__in=[
+            WorkflowStage.UNDER_ASSESSMENT,
+            WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            WorkflowStage.SECRETARY_REVIEW,
+            WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+        ],
+        assessment_deadline_at__isnull=False,
+        assessment_deadline_at__gte=now,
+        assessment_deadline_at__lte=window_end,
+    ).select_related("ministry", "assigned_to", "dg_endorsed_by")
+
+    tier = FEATURE_MODEL_TIER.get("F2_deadline_notifications", "haiku")
+    created = 0
+
+    for submission in submissions:
+        case_ctx = _build_deadline_case_context(submission)
+        for user, email, role_label in _submission_deadline_recipients(submission):
+            exists = DeadlineReminderDraft.objects.filter(
+                submission=submission,
+                recipient_email=email,
+                stage=submission.current_stage,
+                deadline_at=submission.assessment_deadline_at,
+                status=DeadlineReminderDraft.Status.DRAFT,
+            ).exists()
+            if exists:
+                continue
+
+            recip_ctx = user_recipient_context(user)
+            recip_ctx["role"] = role_label
+            prompt = DEADLINE_REMINDER_PROMPT.format(
+                case_context=case_ctx,
+                recipient_context="\n".join(f"{k}: {v}" for k, v in recip_ctx.items()),
+            )
+
+            data, err = complete_json_with_error(
+                system="You draft PSC Secretariat reminder emails.",
+                user=prompt,
+                tier=tier,
+                max_tokens=2048,
+            )
+            if err or not data:
+                app_log.warning(
+                    "DEADLINE_DRAFT_FAIL | sub=%s | %s | %s",
+                    submission.id,
+                    email,
+                    err,
+                )
+                continue
+
+            DeadlineReminderDraft.objects.create(
+                submission=submission,
+                recipient_user=user,
+                recipient_email=email,
+                recipient_name=recip_ctx.get("full_name") or email,
+                recipient_role=role_label,
+                ministry=submission.ministry,
+                stage=submission.current_stage,
+                deadline_at=submission.assessment_deadline_at,
+                outstanding_summary=data.get("outstanding_summary", ""),
+                consequence_note=data.get("consequence_note", ""),
+                subject=(data.get("subject") or "")[:500],
+                body=data.get("body") or "",
+            )
+            created += 1
+
+    app_log.info("DEADLINE_DRAFT_COMPLETE | created=%d", created)
+    return created
+
+
+# ── C4: Meeting minutes → action register (Haiku) ───────────────────────────
+
+ACTION_ITEMS_PROMPT = """You are a Commission Secretary in Vanuatu. Extract a structured action register from meeting minutes text.
+
+Minutes:
+{minutes_text}
+
+Output valid JSON only:
+{{
+  "decisions": [
+    {{"decision": "string", "context": "string"}}
+  ],
+  "action_items": [
+    {{
+      "action": "string",
+      "owner": "string",
+      "deadline": "string or null",
+      "priority": "high|medium|low",
+      "source_section": "agenda item ref or AOB"
+    }}
+  ],
+  "deferred_matters": [
+    {{"matter": "string", "reason": "string", "next_step": "string"}}
+  ],
+  "follow_up_questions": [
+    {{"question": "string", "directed_to": "string"}}
+  ],
+  "summary": "2-3 sentence overview of actions required"
+}}
+
+Include every action item with a clear owner where stated. Output ONLY valid JSON."""
+
+
+@shared_task
+def extract_action_items_from_minutes(meeting_id: int, minutes_text: str | None = None):
+    """Extract action register from minutes content or pasted text (C4, Haiku)."""
+    from .models import Meeting
+
+    try:
+        meeting = Meeting.objects.get(id=meeting_id)
+    except Meeting.DoesNotExist:
+        app_log.warning("ACTION_ITEMS_SKIP | meeting %s not found", meeting_id)
+        return
+
+    text = (minutes_text or "").strip()
+    if not text:
+        try:
+            minutes = meeting.minutes
+            if minutes.content:
+                import json as _json
+
+                text = _json.dumps(minutes.content, indent=2)
+        except Exception:
+            pass
+    if not text:
+        try:
+            text = meeting.transcript.raw_text or ""
+        except Exception:
+            pass
+
+    if not text.strip():
+        app_log.warning("ACTION_ITEMS_SKIP | meeting %s | no minutes text", meeting_id)
+        return
+
+    from .ai.claude_client import complete_json_with_error
+    from .ai.feature_registry import FEATURE_MODEL_TIER
+
+    tier = FEATURE_MODEL_TIER.get("C4_minutes_action_items", "haiku")
+    data, err = complete_json_with_error(
+        system="You extract Commission meeting action registers.",
+        user=ACTION_ITEMS_PROMPT.format(minutes_text=text[:80000]),
+        tier=tier,
+        max_tokens=8192,
+    )
+    if err or not data:
+        app_log.error("ACTION_ITEMS_FAIL | meeting %s | %s", meeting_id, err)
+        return
+
+    from django.contrib.auth.models import User
+
+    from .models import Minutes
+
+    minutes_obj, _ = Minutes.objects.get_or_create(
+        meeting=meeting,
+        defaults={
+            "content": {},
+            "created_by": User.objects.filter(is_superuser=True).first(),
+        },
+    )
+    content = minutes_obj.content if isinstance(minutes_obj.content, dict) else {}
+    content["action_register"] = data
+    minutes_obj.content = content
+    minutes_obj.save(update_fields=["content"])
+
+    app_log.info(
+        "ACTION_ITEMS_OK | meeting %s | actions=%d",
+        meeting_id,
+        len(data.get("action_items") or []),
+    )

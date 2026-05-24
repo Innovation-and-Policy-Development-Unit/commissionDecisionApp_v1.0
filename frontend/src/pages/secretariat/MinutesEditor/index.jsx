@@ -4,6 +4,7 @@ import {
   FileText, Save, CheckCircle2, AlertCircle, ArrowLeft,
   Sparkles, Mic, Brain, Download, ChevronDown, ChevronRight,
   Plus, Trash2, Loader2, PenSquare, Copy, Upload, AlertTriangle, ExternalLink,
+  ListTodo,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -144,6 +145,7 @@ export default function MinutesEditor() {
   const [pasteText, setPasteText] = useState('')
   const [savingTranscript, setSavingTranscript] = useState(false)
   const [copiedPrompt, setCopiedPrompt] = useState(false)
+  const [actionPasteText, setActionPasteText] = useState('')
 
   const [content, setContent] = useState({
     opening: '',
@@ -167,7 +169,12 @@ export default function MinutesEditor() {
       if (minsRes.status === 'fulfilled' && minsRes.value.data.length > 0) {
         const m = minsRes.value.data[0]
         setMinutes(m)
-        if (m.content && typeof m.content === 'object') setContent(m.content)
+        if (m.content && typeof m.content === 'object') {
+          setContent(m.content)
+          if (m.content.action_register?.summary) {
+            setActionPasteText('')
+          }
+        }
       }
       if (tRes.status === 'fulfilled' && tRes.value.data.length > 0) {
         const tr = tRes.value.data[0]
@@ -448,6 +455,34 @@ export default function MinutesEditor() {
             {aiBusy === 'extract' ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
             {t('meeting_room.minutes_extract')}
           </button>
+          <button
+            type="button"
+            onClick={() => runAiAction(
+              'actions',
+              '/minutes/extract-action-items/',
+              {
+                meeting_id: parseInt(meetingId),
+                minutes_text: actionPasteText.trim() || pasteText.trim(),
+              },
+            )}
+            disabled={aiBusy !== null || (!actionPasteText.trim() && !pasteText.trim() && !(content.agenda_items?.length))}
+            className="flex items-center gap-2 px-4 py-2.5 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-100 border border-teal-200 dark:border-teal-800 rounded-xl text-teal-700 dark:text-teal-300 font-bold text-xs disabled:opacity-50"
+          >
+            {aiBusy === 'actions' ? <Loader2 size={14} className="animate-spin" /> : <ListTodo size={14} />}
+            Extract action register
+          </button>
+        </div>
+
+        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+            Paste minutes for action-item extraction (optional)
+          </label>
+          <textarea
+            className="input min-h-[80px] resize-y text-xs font-mono mb-1"
+            value={actionPasteText}
+            onChange={e => setActionPasteText(e.target.value)}
+            placeholder="Paste full minutes here, or leave blank to use saved minutes / transcript above."
+          />
         </div>
 
         {transcript?.source && (
@@ -457,6 +492,48 @@ export default function MinutesEditor() {
           </p>
         )}
       </div>
+
+      {content.action_register && (
+        <div className="card p-6 mb-6 border-teal-200 dark:border-teal-800">
+          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+            <ListTodo size={18} className="text-teal-600" />
+            AI action register
+          </h2>
+          {content.action_register.summary && (
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{content.action_register.summary}</p>
+          )}
+          {(content.action_register.action_items || []).length > 0 && (
+            <div className="mb-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Action items</p>
+              <ul className="space-y-2">
+                {content.action_register.action_items.map((ai, idx) => (
+                  <li key={idx} className="text-sm rounded-lg bg-slate-50 dark:bg-slate-800/50 px-3 py-2 border border-slate-100 dark:border-slate-700">
+                    <span className="font-medium text-slate-800 dark:text-slate-100">{ai.action}</span>
+                    <span className="text-slate-500 dark:text-slate-400"> — {ai.owner || 'TBC'}</span>
+                    {ai.deadline && <span className="text-xs text-amber-600 dark:text-amber-400"> · due {ai.deadline}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(content.action_register.deferred_matters || []).length > 0 && (
+            <div className="mb-4 text-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Deferred</p>
+              {content.action_register.deferred_matters.map((d, i) => (
+                <p key={i} className="text-slate-600 dark:text-slate-400 mb-1">{d.matter} — {d.next_step}</p>
+              ))}
+            </div>
+          )}
+          {(content.action_register.follow_up_questions || []).length > 0 && (
+            <div className="text-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Follow-up questions</p>
+              {content.action_register.follow_up_questions.map((q, i) => (
+                <p key={i} className="text-slate-600 dark:text-slate-400 mb-1">{q.question} → {q.directed_to}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Minutes Editor */}
       <div className="space-y-4">

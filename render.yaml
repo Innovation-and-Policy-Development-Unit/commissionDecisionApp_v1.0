@@ -84,7 +84,8 @@ services:
     plan: starter
     dockerfilePath: ./backend/Dockerfile.render
     dockerContext: ./backend
-    dockerCommand: celery -A config worker -l info
+    # solo pool: fits Render Starter RAM; prefork often OOMs with Django + AI libs
+    dockerCommand: celery -A config worker -l info --pool=solo --concurrency=1
     envVars:
       - key: RENDER
         value: "true"

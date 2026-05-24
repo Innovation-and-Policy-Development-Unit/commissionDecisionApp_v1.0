@@ -368,7 +368,7 @@ LOGGING = {
             'propagate': False,
         },
         'celery': {
-            'handlers': ['console', 'celery_file'],
+            'handlers': ['console', 'celery_file'] if not _ON_RENDER else ['console'],
             'level': os.getenv('CELERY_LOG_LEVEL', 'INFO'),
             'propagate': False,
         },

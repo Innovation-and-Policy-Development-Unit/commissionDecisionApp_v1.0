@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views_webhooks import cms_register_submission, cms_signoff_callback
 from .staff_chat_views import StaffChatSessionViewSet
+from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .views import (
     AuditLogViewSet,
     BackupViewSet,
@@ -89,6 +90,11 @@ router.register(r"doc-annotations",  DocumentAnnotationViewSet, basename="doc-an
 router.register(r"doc-signatures",   DocumentSignatureViewSet,  basename="doc-signature")
 router.register(r"odu-checklists",   ODUChecklistViewSet,       basename="odu-checklist")
 router.register(r"staff-chat/sessions", StaffChatSessionViewSet, basename="staff-chat-session")
+router.register(
+    r"deadline-reminder-drafts",
+    DeadlineReminderDraftViewSet,
+    basename="deadline-reminder-draft",
+)
 
 urlpatterns = [
     path("", include(router.urls)),

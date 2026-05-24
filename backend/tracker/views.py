@@ -954,10 +954,48 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 uploaded_by=request.user,
             )
             created_docs.append(doc)
+            from .tasks import queue_document_extraction
+
+            queue_document_extraction(doc.id)
 
         if len(created_docs) == 1:
             return Response(SubmissionDocumentSerializer(created_docs[0]).data, status=status.HTTP_201_CREATED)
         return Response(SubmissionDocumentSerializer(created_docs, many=True).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/extract-facts")
+    def extract_document_facts(self, request, pk=None, doc_id=None):
+        """Re-run OCR / key-facts extraction on a document (E1)."""
+        submission = self.get_object()
+        doc = get_object_or_404(SubmissionDocument, id=doc_id, submission=submission)
+        profile = _profile(request.user)
+        if profile.role not in {
+            Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY,
+            Role.SENIOR_ADMIN_OFFICER, Role.COMPLIANCE_MANAGER,
+            Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_PRINCIPAL,
+        }:
+            raise PermissionDenied("Only PSC staff may run document extraction.")
+
+        from .tasks import queue_document_extraction
+
+        queue_document_extraction(doc.id)
+        return Response({"detail": "Document extraction queued.", "document_id": doc.id})
+
+    @action(detail=True, methods=["get"], url_path="deadline-reminder-drafts")
+    def deadline_reminder_drafts(self, request, pk=None):
+        """List AI-drafted deadline reminders for this submission."""
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {
+            Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.PSC_OFFICER,
+            Role.SENIOR_ADMIN_OFFICER, Role.PSC_MANAGER,
+        }:
+            raise PermissionDenied("Only PSC staff may view deadline reminder drafts.")
+
+        from .models import DeadlineReminderDraft
+        from .serializers import DeadlineReminderDraftSerializer
+
+        drafts = DeadlineReminderDraft.objects.filter(submission=submission).order_by("-drafted_at")
+        return Response(DeadlineReminderDraftSerializer(drafts, many=True).data)
 
     @action(detail=True, methods=["get", "delete"], url_path="documents/(?P<doc_id>[0-9]+)")
     def document_detail(self, request, pk=None, doc_id=None):
@@ -1947,6 +1985,27 @@ def global_search_view(request):
             "stage": s.current_stage,
             "url": f"/submissions/{s.id}",
         })
+
+    # ── Document OCR text (PSC staff) ──────────────────────────────────────
+    if profile.role not in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
+        doc_hits = (
+            SubmissionDocument.objects.filter(
+                models.Q(extracted_text__icontains=q)
+                | models.Q(original_name__icontains=q)
+            )
+            .filter(submission_id__in=_submission_queryset_for(request.user).values("id"))
+            .select_related("submission")[:10]
+        )
+        for doc in doc_hits:
+            results.append({
+                "type": "document",
+                "id": doc.id,
+                "label": doc.original_name,
+                "sublabel": doc.submission.reference_number,
+                "meta": "Extracted document text",
+                "stage": None,
+                "url": f"/submissions/{doc.submission_id}",
+            })
 
     # ── Commission tasks (PSC staff only) ──────────────────────────────────
     if profile.role not in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
@@ -3103,9 +3162,16 @@ class MeetingViewSet(viewsets.ModelViewSet):
         ser.is_valid(raise_exception=True)
         source = ser.validated_data.get("source") or TranscriptSource.MANUAL_PASTE
         transcript_obj, _ = MeetingTranscript.objects.get_or_create(meeting=meeting)
-        transcript_obj.raw_text = ser.validated_data["raw_text"]
+        raw = ser.validated_data["raw_text"]
+        transcript_obj.raw_text = raw
         transcript_obj.source = source
-        transcript_obj.save(update_fields=["raw_text", "source"])
+        if len(raw.strip()) >= 50:
+            transcript_obj.ai_processed = True
+            transcript_obj.processed_at = timezone.now()
+            transcript_obj.save(update_fields=["raw_text", "source", "ai_processed", "processed_at"])
+        else:
+            transcript_obj.ai_processed = False
+            transcript_obj.save(update_fields=["raw_text", "source", "ai_processed"])
         return Response(MeetingTranscriptSerializer(transcript_obj).data)
 
     @action(detail=True, methods=["get"], url_path="claude-prompt")
@@ -4275,9 +4341,10 @@ class MinutesViewSet(viewsets.ModelViewSet):
         except Meeting.DoesNotExist:
             return Response({"detail": "Meeting not found."}, status=404)
 
-        if not hasattr(meeting, "transcript") or not meeting.transcript.ai_processed:
+        transcript = getattr(meeting, "transcript", None)
+        if not transcript or not (transcript.ai_processed or (transcript.raw_text or "").strip()):
             return Response(
-                {"detail": "No processed transcript found for this meeting. Run transcription first."},
+                {"detail": "Save a meeting transcript first (paste ASR text in the minutes editor)."},
                 status=400,
             )
 
@@ -4326,6 +4393,37 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
         extract_decisions_from_minutes.delay(meeting_id)
         return Response({"detail": "Decision extraction started. Check back shortly."})
+
+    @action(detail=False, methods=["post"], url_path="extract-action-items")
+    def extract_action_items(self, request):
+        """AI (Haiku): extract action register from minutes or pasted text (C4)."""
+        from .serializers import ActionItemsExtractSerializer
+        from .tasks import extract_action_items_from_minutes
+
+        serializer = ActionItemsExtractSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        meeting_id = serializer.validated_data["meeting_id"]
+        minutes_text = serializer.validated_data.get("minutes_text") or ""
+
+        try:
+            meeting = Meeting.objects.get(id=meeting_id)
+        except Meeting.DoesNotExist:
+            return Response({"detail": "Meeting not found."}, status=404)
+
+        if not minutes_text.strip():
+            has_minutes = hasattr(meeting, "minutes") and meeting.minutes.content
+            has_transcript = getattr(meeting, "transcript", None) and meeting.transcript.raw_text
+            if not has_minutes and not has_transcript:
+                return Response(
+                    {"detail": "Provide minutes_text or save minutes/transcript first."},
+                    status=400,
+                )
+
+        extract_action_items_from_minutes.delay(
+            meeting_id,
+            minutes_text=minutes_text.strip() or None,
+        )
+        return Response({"detail": "Action item extraction started. Refresh shortly."})
 
     @action(detail=True, methods=["post"], url_path="sign")
     def sign(self, request, pk=None):

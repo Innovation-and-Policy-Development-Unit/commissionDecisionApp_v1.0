@@ -1039,6 +1039,14 @@ def _submission_doc_path(instance, filename):
     return f"submission_documents/{instance.submission_id}/{filename}"
 
 
+class DocumentOcrStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    PROCESSING = "processing", "Processing"
+    COMPLETED = "completed", "Completed"
+    FAILED = "failed", "Failed"
+    SKIPPED = "skipped", "Skipped"
+
+
 class SubmissionDocument(models.Model):
     """A file uploaded to a submission (DG-endorsed letter, position desc, etc.)."""
     submission = models.ForeignKey(
@@ -1051,6 +1059,22 @@ class SubmissionDocument(models.Model):
         'auth.User', on_delete=models.SET_NULL, null=True,
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    ocr_status = models.CharField(
+        max_length=16,
+        choices=DocumentOcrStatus.choices,
+        default=DocumentOcrStatus.PENDING,
+    )
+    extracted_text = models.TextField(
+        blank=True,
+        help_text="Full OCR / text extraction for search and AI context.",
+    )
+    extracted_facts = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Structured key facts: names, dates, positions, references, statements.",
+    )
+    ocr_error = models.TextField(blank=True)
+    ocr_processed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['uploaded_at']
@@ -1708,6 +1732,63 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"Notification for {self.recipient.username}: {self.title}"
+
+
+class DeadlineReminderDraft(models.Model):
+    """AI-drafted personalised deadline reminder email (F2) — review before send."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SENT = "sent", "Sent"
+        CANCELLED = "cancelled", "Cancelled"
+
+    submission = models.ForeignKey(
+        Submission,
+        on_delete=models.CASCADE,
+        related_name="deadline_reminder_drafts",
+    )
+    recipient_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deadline_reminder_drafts",
+    )
+    recipient_email = models.EmailField()
+    recipient_name = models.CharField(max_length=255)
+    recipient_role = models.CharField(max_length=64, blank=True)
+    ministry = models.ForeignKey(
+        "Ministry",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deadline_reminder_drafts",
+    )
+    stage = models.CharField(max_length=64)
+    deadline_at = models.DateTimeField()
+    outstanding_summary = models.TextField(blank=True)
+    consequence_note = models.TextField(blank=True)
+    subject = models.CharField(max_length=500)
+    body = models.TextField()
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.DRAFT,
+    )
+    drafted_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-drafted_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["submission", "recipient_email", "stage", "deadline_at"],
+                name="uniq_deadline_reminder_draft",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Deadline draft — {self.submission.reference_number} → {self.recipient_email}"
 
 
 class MinutesStatus(models.TextChoices):

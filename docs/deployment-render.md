@@ -118,6 +118,7 @@ Uploaded files are stored on a **10 GB persistent disk** mounted at `/var/scdms/
 | CORS errors in browser | `CORS_ALLOWED_ORIGINS` must exactly match frontend origin (scheme + host, no trailing slash) |
 | Login works locally on Render but API 400 | `DJANGO_ALLOWED_HOSTS` must include API hostname |
 | Brief stuck on “Generating…” | `scdms-celery-worker` running; `ANTHROPIC_API_KEY` set; worker logs |
+| `scdms-celery-worker` failed | Open **Logs** — often OOM; blueprint uses `--pool=solo`. Redeploy after pull. Ensure worker has same `DATABASE_URL` / Redis env as API |
 | Broken images / uploads | `CDP_BASE_URL` set to public API URL; disk mounted on API |
 | Admin has no CSS | `collectstatic` in deploy logs; `USE_WHITENOISE=true` |
 
