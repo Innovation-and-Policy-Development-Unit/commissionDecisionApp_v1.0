@@ -710,6 +710,17 @@
     "critical": "Critical",
     "maintenance": "Maintenance"
   },
+  "pwa": {
+    "offline_banner": "You are offline. Cached pages may load, but live data requires a connection.",
+    "update_title": "Update available",
+    "update_body": "A new version of SCDMS is ready. Reload to get the latest fixes and features.",
+    "update_action": "Reload now",
+    "update_later": "Later",
+    "install_title": "Install SCDMS",
+    "install_body": "Add this app to your home screen for quick access, like a native app.",
+    "install_action": "Install",
+    "install_later": "Not now"
+  },
   "accessibility": {
     "skip_to_content": "Skip to main content",
     "main_content": "Main content",

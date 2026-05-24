@@ -672,6 +672,17 @@
     "critical": "I Impotan",
     "maintenance": "Maintenans"
   },
+  "pwa": {
+    "offline_banner": "Yu no gat net. Sam pej i save lod from kash, be data blong laev i nid net.",
+    "update_title": "Niu vesen i redi",
+    "update_body": "Niu vesen blong SCDMS i redi. Reload blong karem ol niu fix mo faetja.",
+    "update_action": "Reload nao",
+    "update_later": "Lata",
+    "install_title": "Instalem SCDMS",
+    "install_body": "Putum app long hom skrin blong yu blong opnem kwik, olsem wan app.",
+    "install_action": "Instalem",
+    "install_later": "Noh nao"
+  },
   "accessibility": {
     "skip_to_content": "Go stret long konten",
     "main_content": "Mein konten",
