@@ -1,28 +1,33 @@
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
 import { Plus, X, Send, CheckCircle2, Clock, FileText, Bell, Mail, Printer, Eye } from 'lucide-react'
 
-// ── Reference data ────────────────────────────────────────────────────────────
-
-const CHANNEL_OPTIONS = [
-  { value: 'letter',  label: 'Official Letter', icon: FileText },
-  { value: 'email',   label: 'Email',            icon: Mail     },
-  { value: 'portal',  label: 'Portal Notice',    icon: Bell     },
-]
-
-const STATUS_META = {
-  draft:        { label: 'Draft',        cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',     icon: FileText    },
-  issued:       { label: 'Issued',       cls: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',          icon: Send        },
-  acknowledged: { label: 'Acknowledged', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300', icon: CheckCircle2 },
-  pending:      { label: 'Pending Issue',cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',  icon: Clock       },
+function useChannelOptions(t) {
+  return useMemo(() => ([
+    { value: 'letter', label: t('secretariat.channel_letter'), icon: FileText },
+    { value: 'email', label: t('secretariat.channel_email'), icon: Mail },
+    { value: 'portal', label: t('secretariat.channel_portal'), icon: Bell },
+  ]), [t])
 }
 
-const DECISION_OUTCOMES = {
-  approved: { label: 'Approved',  cls: 'text-emerald-600 dark:text-emerald-400' },
-  rejected: { label: 'Rejected',  cls: 'text-red-600 dark:text-red-400'         },
-  deferred: { label: 'Deferred',  cls: 'text-amber-600 dark:text-amber-400'     },
-  returned: { label: 'Returned',  cls: 'text-orange-600 dark:text-orange-400'   },
-  noted:    { label: 'Noted',     cls: 'text-slate-500 dark:text-slate-400'     },
+function useStatusMeta(t) {
+  return useMemo(() => ({
+    draft: { label: t('secretariat.notif_status_draft'), cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300', icon: FileText },
+    issued: { label: t('secretariat.notif_status_issued'), cls: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300', icon: Send },
+    acknowledged: { label: t('secretariat.notif_status_acknowledged'), cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300', icon: CheckCircle2 },
+    pending: { label: t('secretariat.notif_status_pending'), cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', icon: Clock },
+  }), [t])
+}
+
+function useDecisionOutcomes(t) {
+  return useMemo(() => ({
+    approved: { label: t('secretariat.outcome_approved'), cls: 'text-emerald-600 dark:text-emerald-400' },
+    rejected: { label: t('secretariat.outcome_rejected'), cls: 'text-red-600 dark:text-red-400' },
+    deferred: { label: t('secretariat.outcome_deferred'), cls: 'text-amber-600 dark:text-amber-400' },
+    returned: { label: t('secretariat.outcome_returned'), cls: 'text-orange-600 dark:text-orange-400' },
+    noted: { label: t('secretariat.decision_outcome_noted'), cls: 'text-slate-500 dark:text-slate-400' },
+  }), [t])
 }
 
 const MOCK_NOTIFICATIONS = [
