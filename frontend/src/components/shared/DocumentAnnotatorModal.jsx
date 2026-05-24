@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import {
   X, ChevronLeft, ChevronRight, PenLine, CircleDot, Type,
-  RotateCcw, Save, Loader2, FileText, AlertTriangle,
+  RotateCcw, Save, Loader2, FileText, AlertTriangle, Sparkles,
 } from 'lucide-react'
 import api from '../../api/client'
 
@@ -63,8 +63,25 @@ export default function DocumentAnnotatorModal({ document: doc, submissionId, on
   const [savedPages,  setSavedPages]  = useState({})
   const [dirty,       setDirty]       = useState(false)
   const [pageDataUrl, setPageDataUrl] = useState(null)
+  const [aiSuggestions, setAiSuggestions] = useState(null)
+  const [aiRedactions, setAiRedactions] = useState(null)
+  const [aiBusy, setAiBusy] = useState(null)
 
   const pageStateRef = useRef({})
+
+  const pollDocAi = useCallback(async () => {
+    try {
+      const r = await api.get(`/submissions/${submissionId}/documents/`)
+      const fresh = (r.data || []).find(d => d.id === doc.id)
+      if (!fresh) return
+      if (fresh.ai_annotation_suggestions?.processed) {
+        setAiSuggestions(fresh.ai_annotation_suggestions)
+      }
+      if (fresh.ai_redaction_spans?.processed) {
+        setAiRedactions(fresh.ai_redaction_spans)
+      }
+    } catch { /* ignore */ }
+  }, [submissionId, doc.id])
 
   // ── Load saved annotations ──────────────────────────────────────────────────
   useEffect(() => {
@@ -82,6 +99,38 @@ export default function DocumentAnnotatorModal({ document: doc, submissionId, on
       })
       .catch(() => {})
   }, [doc.id])
+
+  useEffect(() => {
+    pollDocAi()
+  }, [pollDocAi])
+
+  const requestAnnotationAssist = async () => {
+    setAiBusy('annotate')
+    setAiSuggestions(null)
+    try {
+      await api.post(`/submissions/${submissionId}/documents/${doc.id}/annotation-assist/`)
+      const iv = setInterval(async () => {
+        await pollDocAi()
+      }, 3000)
+      setTimeout(() => clearInterval(iv), 120000)
+    } finally {
+      setAiBusy(null)
+    }
+  }
+
+  const requestRedactionPreview = async () => {
+    setAiBusy('redact')
+    setAiRedactions(null)
+    try {
+      await api.post(`/submissions/${submissionId}/documents/${doc.id}/redaction-preview/`)
+      const iv = setInterval(async () => {
+        await pollDocAi()
+      }, 3000)
+      setTimeout(() => clearInterval(iv), 120000)
+    } finally {
+      setAiBusy(null)
+    }
+  }
 
   // ── Fetch PDF and render first page ────────────────────────────────────────
   useEffect(() => {
@@ -429,6 +478,46 @@ export default function DocumentAnnotatorModal({ document: doc, submissionId, on
           {dirty && (
             <p className="text-xs text-amber-400">Unsaved changes — click Save Page.</p>
           )}
+          <div className="border-t border-slate-700 pt-3 space-y-2">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">AI assist</p>
+            <p className="text-[10px] text-amber-400">AI draft — verify</p>
+            <button
+              type="button"
+              onClick={requestAnnotationAssist}
+              disabled={!!aiBusy}
+              className="w-full text-xs py-1.5 rounded bg-slate-800 border border-slate-600 text-slate-200 hover:bg-slate-700 inline-flex items-center justify-center gap-1 disabled:opacity-50"
+            >
+              {aiBusy === 'annotate' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              Suggest highlights
+            </button>
+            <button
+              type="button"
+              onClick={requestRedactionPreview}
+              disabled={!!aiBusy}
+              className="w-full text-xs py-1.5 rounded bg-slate-800 border border-slate-600 text-slate-200 hover:bg-slate-700 inline-flex items-center justify-center gap-1 disabled:opacity-50"
+            >
+              {aiBusy === 'redact' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              Redaction preview
+            </button>
+            {aiSuggestions?.suggestions?.length > 0 && (
+              <ul className="text-[11px] text-slate-300 space-y-1 max-h-32 overflow-y-auto">
+                {aiSuggestions.suggestions.map((s, i) => (
+                  <li key={i} className="border-l-2 border-violet-500 pl-2">
+                    p.{s.page_number}: {s.comment || s.text_excerpt}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {aiRedactions?.spans?.length > 0 && (
+              <ul className="text-[11px] text-amber-200 space-y-1 max-h-32 overflow-y-auto">
+                {aiRedactions.spans.map((s, i) => (
+                  <li key={i} className="border-l-2 border-amber-500 pl-2">
+                    p.{s.page_number}: {s.reason || s.label} — {s.text_excerpt}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           {Object.keys(savedPages).length > 0 && (
             <div className="border-t border-slate-700 pt-3">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Annotated Pages</p>

@@ -1922,7 +1922,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="register-reports/generate")
     def create_register_report(self, request):
         """
-        Natural-language Commission Decision Register report (Quarto HTML + PDF).
+        Natural-language Commission Decision Register report (Quarto HTML).
         POST { "prompt": "...", "date_from"?, "date_to"?, "status"?, "manager_id"? }
         """
         from .ai.decision_register_report import interpret_report_request
@@ -2015,22 +2015,17 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Report is not ready yet."}, status=409)
 
         fmt = (request.query_params.get("format") or "html").lower()
-        if fmt == "pdf":
-            if not report.pdf_file:
-                return Response({"detail": "PDF file is missing."}, status=404)
-            fh = report.pdf_file.open("rb")
-            return FileResponse(fh, as_attachment=True, filename=report.pdf_file.name.split("/")[-1])
-        if fmt == "html":
-            if not report.html_file:
-                return Response({"detail": "HTML file is missing."}, status=404)
-            fh = report.html_file.open("rb")
-            return FileResponse(
-                fh,
-                as_attachment=True,
-                filename=report.html_file.name.split("/")[-1],
-                content_type="text/html; charset=utf-8",
-            )
-        return Response({"detail": "format must be html or pdf."}, status=400)
+        if fmt != "html":
+            return Response({"detail": "Only format=html is supported."}, status=400)
+        if not report.html_file:
+            return Response({"detail": "HTML file is missing."}, status=404)
+        fh = report.html_file.open("rb")
+        return FileResponse(
+            fh,
+            as_attachment=True,
+            filename=report.html_file.name.split("/")[-1],
+            content_type="text/html; charset=utf-8",
+        )
 
     @action(detail=True, methods=["post"], url_path="draft-subtasks")
     def draft_subtasks(self, request, pk=None):
@@ -3649,12 +3644,15 @@ class MeetingViewSet(viewsets.ModelViewSet):
         if pack.status != MeetingBriefingPack.Status.READY:
             return Response({"detail": "Briefing pack is not ready yet."}, status=400)
 
-        fmt = (request.query_params.get("format") or "pdf").lower()
-        if fmt == "html" and pack.html_file:
-            return FileResponse(pack.html_file.open("rb"), content_type="text/html; charset=utf-8")
-        if pack.pdf_file:
-            return FileResponse(pack.pdf_file.open("rb"), content_type="application/pdf")
-        return Response({"detail": "Requested file is not available."}, status=404)
+        fmt = (request.query_params.get("format") or "html").lower()
+        if fmt != "html":
+            return Response({"detail": "Only format=html is supported."}, status=400)
+        if not pack.html_file:
+            return Response({"detail": "HTML file is not available."}, status=404)
+        return FileResponse(
+            pack.html_file.open("rb"),
+            content_type="text/html; charset=utf-8",
+        )
 
 
 class AgendaItemViewSet(viewsets.ModelViewSet):

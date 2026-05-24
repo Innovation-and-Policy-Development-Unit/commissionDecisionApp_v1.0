@@ -20,7 +20,6 @@ RUN groupadd -r scdms --gid=1001 && \
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget ca-certificates \
-    texlive-latex-base texlive-latex-recommended texlive-fonts-recommended \
     && QUARTO_VERSION=1.6.42 \
     && wget -q "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.tar.gz" -O /tmp/quarto.tar.gz \
     && mkdir -p /opt/quarto \

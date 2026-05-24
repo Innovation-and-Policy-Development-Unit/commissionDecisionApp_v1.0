@@ -1,5 +1,5 @@
 """
-Build Commission Decision Register datasets and render Quarto HTML + PDF reports.
+Build Commission Decision Register datasets and render Quarto HTML reports.
 """
 
 from __future__ import annotations
@@ -210,10 +210,8 @@ def render_quarto_report(
     rows: list[dict[str, Any]],
     generated_by: str,
     user_prompt: str,
-) -> tuple[Path, Path]:
-    """
-    Render .qmd via Quarto; return (html_path, pdf_path) in a temp directory.
-  """
+) -> Path:
+    """Render .qmd via Quarto; return html_path in a temp directory."""
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATE_DIR)),
         autoescape=select_autoescape(default_for_string=False),
@@ -245,10 +243,10 @@ def render_quarto_report(
     quarto = _quarto_bin()
     if not quarto_available():
         raise RuntimeError(
-            "Quarto is not installed on the server. Install Quarto CLI to generate PDF/HTML reports."
+            "Quarto is not installed on the server. Install Quarto CLI to generate HTML reports."
         )
 
-    cmd = [quarto, "render", str(qmd_path), "--to", "html", "--to", "pdf", "--quiet"]
+    cmd = [quarto, "render", str(qmd_path), "--to", "html", "--quiet"]
     logger.info("QUARTO_RENDER | %s", " ".join(cmd))
     proc = subprocess.run(
         cmd,
@@ -264,14 +262,9 @@ def render_quarto_report(
         )
 
     html_path = work_dir / "report.html"
-    pdf_path = work_dir / "report.pdf"
     if not html_path.is_file():
         raise RuntimeError("Quarto did not produce report.html")
-    if not pdf_path.is_file():
-        raise RuntimeError(
-            "Quarto did not produce report.pdf (LaTeX may be missing on the server)."
-        )
-    return html_path, pdf_path
+    return html_path
 
 
 def _safe_slug(title: str) -> str:
@@ -295,7 +288,7 @@ def run_report_generation(report_id: int) -> None:
         rows = filter_rows_by_spec(build_register_rows(qs), filters)
 
         generated_by = report.requested_by.get_full_name() or report.requested_by.username
-        html_path, pdf_path = render_quarto_report(
+        html_path = render_quarto_report(
             spec={
                 "title": report.title,
                 "subtitle": report.subtitle,
@@ -313,8 +306,6 @@ def run_report_generation(report_id: int) -> None:
 
         with html_path.open("rb") as fh:
             report.html_file.save(f"{slug}.html", File(fh), save=False)
-        with pdf_path.open("rb") as fh:
-            report.pdf_file.save(f"{slug}.pdf", File(fh), save=False)
 
         report.status = DecisionRegisterReport.Status.READY
         report.row_count = len(rows)
@@ -327,7 +318,6 @@ def run_report_generation(report_id: int) -> None:
                 "error_message",
                 "completed_at",
                 "html_file",
-                "pdf_file",
                 "updated_at",
             ]
         )

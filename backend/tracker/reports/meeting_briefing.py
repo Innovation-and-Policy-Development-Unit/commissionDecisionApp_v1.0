@@ -1,5 +1,5 @@
 """
-C2 — Build meeting briefing data and render Quarto HTML + PDF.
+C2 — Build meeting briefing data and render Quarto HTML.
 """
 
 from __future__ import annotations
@@ -209,7 +209,7 @@ def render_meeting_briefing_quarto(
     narrative: str,
     pack_data: dict[str, Any],
     generated_by: str,
-) -> tuple[Path, Path]:
+) -> Path:
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATE_DIR)),
         autoescape=select_autoescape(default_for_string=False),
@@ -237,7 +237,7 @@ def render_meeting_briefing_quarto(
     if not quarto_available():
         raise RuntimeError("Quarto is not installed on the server.")
 
-    cmd = [quarto, "render", str(qmd_path), "--to", "html", "--to", "pdf", "--quiet"]
+    cmd = [quarto, "render", str(qmd_path), "--to", "html", "--quiet"]
     proc = subprocess.run(
         cmd,
         cwd=str(work_dir),
@@ -280,7 +280,7 @@ def run_meeting_briefing_generation(pack_id: int) -> None:
         pack.narrative_markdown = narrative
 
         generated_by = pack.requested_by.get_full_name() or pack.requested_by.username
-        html_path, pdf_path = render_meeting_briefing_quarto(
+        html_path = render_meeting_briefing_quarto(
             meeting=meeting,
             narrative=narrative,
             pack_data=pack_data,
@@ -291,8 +291,6 @@ def run_meeting_briefing_generation(pack_id: int) -> None:
 
         with html_path.open("rb") as fh:
             pack.html_file.save(f"{slug}_briefing.html", File(fh), save=False)
-        with pdf_path.open("rb") as fh:
-            pack.pdf_file.save(f"{slug}_briefing.pdf", File(fh), save=False)
 
         pack.status = MeetingBriefingPack.Status.READY
         pack.error_message = ""

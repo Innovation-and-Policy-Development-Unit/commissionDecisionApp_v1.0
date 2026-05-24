@@ -234,7 +234,7 @@ function Modal({ title, subtitle, onClose, children, wide }) {
 
 // ── Subtask Section ──────────────────────────────────────────────────────────
 
-function SubtaskSection({ taskId, subtasks, onRefresh }) {
+function SubtaskSection({ taskId, subtasks, aiDrafts, onRefresh, onDraftRefresh }) {
   const toast   = useToast()
   const confirm = useConfirm()
   const [expanded, setExpanded] = useState(true)
@@ -246,6 +246,7 @@ function SubtaskSection({ taskId, subtasks, onRefresh }) {
   const [staffOpts, setStaffOpts] = useState([])
   const [subSaving, setSubSaving] = useState(false)
   const [subErr, setSubErr] = useState('')
+  const [draftBusy, setDraftBusy] = useState(false)
 
   const loadStaff = useCallback(async () => {
     try { const r = await api.get('/commission-tasks/eligible-staff/'); setStaffOpts(Array.isArray(r.data) ? r.data : []) } catch { setStaffOpts([]) }
@@ -284,12 +285,48 @@ function SubtaskSection({ taskId, subtasks, onRefresh }) {
     setSstaff(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
+  const requestAiDrafts = async () => {
+    setDraftBusy(true)
+    try {
+      await api.post(`/commission-tasks/${taskId}/draft-subtasks/`)
+      onDraftRefresh?.()
+      toast.success('AI subtask draft queued — refresh in a few seconds.')
+    } catch {
+      toast.error('Could not request subtask draft.')
+    } finally { setDraftBusy(false) }
+  }
+
   return (
     <div className="border-t border-slate-100 dark:border-slate-700 pt-4 mt-4">
-      <button type="button" onClick={() => setExpanded(!expanded)} className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-3">
-        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        Subtasks ({subtasks?.length || 0})
-      </button>
+      <div className="flex items-center gap-2 mb-3">
+        <button type="button" onClick={() => setExpanded(!expanded)} className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          Subtasks ({subtasks?.length || 0})
+        </button>
+        <button
+          type="button"
+          onClick={requestAiDrafts}
+          disabled={draftBusy}
+          className="ml-auto text-xs inline-flex items-center gap-1 text-violet-600 dark:text-violet-400 hover:underline disabled:opacity-50"
+        >
+          {draftBusy ? <Loader size={12} className="animate-spin" /> : <Sparkles size={12} />}
+          Draft from register
+        </button>
+      </div>
+      {aiDrafts?.subtasks?.length > 0 && (
+        <div className="mb-3 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-950/20 p-3 space-y-2">
+          <p className="text-[10px] font-semibold uppercase text-amber-700 dark:text-amber-300">AI draft — verify before creating subtasks</p>
+          {aiDrafts.subtasks.map((s, i) => (
+            <div key={i} className="text-xs text-slate-700 dark:text-slate-300">
+              <p className="font-semibold">{s.title}</p>
+              {s.description && <p className="text-slate-500 mt-0.5">{s.description}</p>}
+              {s.suggested_due_days && (
+                <p className="text-[10px] text-slate-400 mt-0.5">Suggested due: ~{s.suggested_due_days} days</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {expanded && (
         <div className="space-y-2">
           {(subtasks || []).map(sub => (
@@ -565,13 +602,6 @@ function ReportView() {
                 onClick={() => downloadAiReport(aiJob.downloads.html, 'decision_register_report.html')}
               >
                 <Download size={14} /> {t('register_report.download_html')}
-              </button>
-              <button
-                type="button"
-                className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
-                onClick={() => downloadAiReport(aiJob.downloads.pdf, 'decision_register_report.pdf')}
-              >
-                <Download size={14} /> {t('register_report.download_pdf')}
               </button>
             </div>
           </div>
@@ -1084,6 +1114,7 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
   const [err, setErr] = useState('')
   const [managers, setManagers] = useState([])
   const [subtasks, setSubtasks] = useState(task.subtasks || [])
+  const [aiDrafts, setAiDrafts] = useState(task.ai_subtask_drafts || null)
   const [showReassign, setShowReassign] = useState(false)
 
   useEffect(() => {
@@ -1093,6 +1124,20 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
   const refreshSubtasks = useCallback(async () => {
     try { const res = await api.get(`/commission-tasks/${task.id}/subtasks/`); setSubtasks(Array.isArray(res.data) ? res.data : []) } catch { }
   }, [task.id])
+
+  const refreshAiDrafts = useCallback(async () => {
+    try {
+      const res = await api.get(`/commission-tasks/${task.id}/`)
+      setAiDrafts(res.data.ai_subtask_drafts || null)
+    } catch { /* ignore */ }
+  }, [task.id])
+
+  useEffect(() => {
+    const pending = aiDrafts && !aiDrafts.subtasks?.length && !aiDrafts.error
+    if (!pending) return undefined
+    const t = setInterval(refreshAiDrafts, 4000)
+    return () => clearInterval(t)
+  }, [aiDrafts, refreshAiDrafts])
 
   const reassignStaff = async () => {
     if (!selectedStaff.length) return
@@ -1226,7 +1271,13 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
 
         {/* Subtask Section (for managers and coordinators) */}
         {mode !== 'staff' && (
-          <SubtaskSection taskId={task.id} subtasks={subtasks} onRefresh={refreshSubtasks} />
+          <SubtaskSection
+            taskId={task.id}
+            subtasks={subtasks}
+            aiDrafts={aiDrafts}
+            onRefresh={refreshSubtasks}
+            onDraftRefresh={refreshAiDrafts}
+          />
         )}
 
         <div className="flex justify-end gap-2 pt-2">

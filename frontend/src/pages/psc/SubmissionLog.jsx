@@ -6,7 +6,7 @@ import Badge from '../../components/shared/Badge'
 import api from '../../api/client'
 import { stageLabel, stageBadgeClass, STAGE_META } from '../../constants/stages'
 import SubmissionProgressBar from '../../components/shared/SubmissionProgressBar'
-import { PlusCircle, RefreshCw, X, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText } from 'lucide-react'
+import { PlusCircle, RefreshCw, X, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2 } from 'lucide-react'
 import SubmissionForm from './SubmissionForm'
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
@@ -51,6 +51,10 @@ export default function SubmissionLog() {
   const [page, setPage]           = useState(1)
   const [modalOpen, setModalOpen] = useState(false)
   const [selected, setSelected]   = useState(new Set())
+  const [nlQuery, setNlQuery]     = useState('')
+  const [nlBusy, setNlBusy]       = useState(false)
+  const [nlMeta, setNlMeta]       = useState(null)
+  const [nlIdSet, setNlIdSet]     = useState(null)
 
   const isAdmin = user?.role === 'psc_admin'
   const isComplianceUser = user && isComplianceRole(user.role)
@@ -98,9 +102,39 @@ export default function SubmissionLog() {
     return groups
   }, [])
 
+  const runNlSearch = async () => {
+    const query = nlQuery.trim()
+    if (!query) return
+    setNlBusy(true)
+    try {
+      const res = await api.post('/submissions/nl-search/', { query })
+      setNlMeta({
+        explanation: res.data.explanation,
+        disclaimer: res.data.disclaimer,
+        filters: res.data.filters,
+        count: res.data.count,
+      })
+      setNlIdSet(new Set(res.data.submission_ids || []))
+      setPage(1)
+    } catch (err) {
+      const d = err.response?.data
+      setNlMeta({ error: typeof d?.detail === 'string' ? d.detail : 'Smart search failed.' })
+      setNlIdSet(null)
+    } finally {
+      setNlBusy(false)
+    }
+  }
+
+  const clearNlSearch = () => {
+    setNlQuery('')
+    setNlMeta(null)
+    setNlIdSet(null)
+  }
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
     return rows.filter(r => {
+      if (nlIdSet && !nlIdSet.has(r.id)) return false
       if (stageFilter && r.current_stage !== stageFilter) return false
       if (ministryFilter && r.ministry_name !== ministryFilter) return false
       if (s && !(
@@ -110,7 +144,7 @@ export default function SubmissionLog() {
       )) return false
       return true
     })
-  }, [rows, q, stageFilter, ministryFilter])
+  }, [rows, q, stageFilter, ministryFilter, nlIdSet])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const safePage   = Math.min(page, totalPages)
@@ -189,7 +223,8 @@ export default function SubmissionLog() {
 
       <div className="card overflow-hidden">
         {/* ── Toolbar ── */}
-        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-3">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
@@ -243,6 +278,42 @@ export default function SubmissionLog() {
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             {t('submission.reload')}
           </button>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            className="input text-sm flex-1"
+            placeholder='Smart search, e.g. "ODU restructures deferred in 2025"'
+            value={nlQuery}
+            onChange={e => setNlQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runNlSearch() } }}
+          />
+          <button
+            type="button"
+            onClick={runNlSearch}
+            disabled={nlBusy || !nlQuery.trim()}
+            className="btn-secondary text-sm inline-flex items-center gap-2 shrink-0 disabled:opacity-50"
+          >
+            {nlBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            Smart search
+          </button>
+          {nlIdSet && (
+            <button type="button" onClick={clearNlSearch} className="btn-outline text-sm shrink-0">
+              Clear AI filter
+            </button>
+          )}
+        </div>
+        {nlMeta && (
+          <div className={`text-xs rounded-lg px-3 py-2 ${nlMeta.error ? 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200' : 'bg-violet-50 text-violet-900 dark:bg-violet-950/30 dark:text-violet-100'}`}>
+            {nlMeta.error ? nlMeta.error : (
+              <>
+                <span className="font-semibold">AI draft — verify filters.</span>{' '}
+                {nlMeta.explanation}
+                {nlMeta.count != null && ` (${nlMeta.count} match${nlMeta.count !== 1 ? 'es' : ''})`}
+              </>
+            )}
+          </div>
+        )}
         </div>
 
         {/* ── Table ── */}

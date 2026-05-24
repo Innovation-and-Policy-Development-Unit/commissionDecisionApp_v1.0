@@ -665,7 +665,7 @@ class MeetingBriefingPackSerializer(serializers.ModelSerializer):
         if obj.status != MeetingBriefingPack.Status.READY:
             return None
         base = f"/api/meetings/briefing-packs/{obj.id}/download/"
-        return {'html': f"{base}?format=html", 'pdf': f"{base}?format=pdf"}
+        return {'html': f"{base}?format=html"}
 
 
 class UserSignatureSerializer(serializers.ModelSerializer):

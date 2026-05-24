@@ -65,6 +65,13 @@ export default function DeadlineReminderDrafts({ submissionId }) {
           </div>
           <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">{d.subject}</p>
           <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap line-clamp-4 mb-2">{d.body}</p>
+          {(d.subject_bi || d.body_bi) && (
+            <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 space-y-1">
+              <p className="text-[10px] font-semibold uppercase text-amber-700 dark:text-amber-300">AI draft — verify (Bislama)</p>
+              {d.subject_bi && <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{d.subject_bi}</p>}
+              {d.body_bi && <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap line-clamp-4">{d.body_bi}</p>}
+            </div>
+          )}
           {d.outstanding_summary && (
             <p className="text-[11px] text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1 mb-2">
               Outstanding: {d.outstanding_summary}

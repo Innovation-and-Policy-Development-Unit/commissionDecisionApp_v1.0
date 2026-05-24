@@ -155,6 +155,14 @@ export default function Agenda() {
     } catch { toast.error('Failed to load agenda items.') }
   }
 
+  const hasPendingBlurbs = items.some(i => !i.agenda_blurb_processed)
+
+  useEffect(() => {
+    if (!selectedId || !hasPendingBlurbs) return undefined
+    const t = setInterval(() => fetchItems(selectedId), 5000)
+    return () => clearInterval(t)
+  }, [selectedId, hasPendingBlurbs])
+
   const fetchSubmissions = async () => {
     setLoadingSubs(true)
     try {
@@ -903,6 +911,17 @@ function StandardRow({ item, isCompleted, canDefer, editingItem, setEditingItem,
             <span className="text-slate-400 dark:text-slate-500"> — {item.submission_ministry}</span>
           )}
         </p>
+        {item.agenda_blurb && (
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed print:text-black">
+            {item.agenda_blurb}
+          </p>
+        )}
+        {!item.agenda_blurb_processed && (
+          <p className="text-[10px] text-violet-500 mt-1 print:hidden">Generating agenda blurb…</p>
+        )}
+        {item.agenda_blurb && (
+          <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1 print:hidden">AI draft — verify</p>
+        )}
         <p className="text-[11px] text-slate-400 font-mono mt-0.5 print:hidden">{item.submission_reference}</p>
 
         {/* Inline category editor */}

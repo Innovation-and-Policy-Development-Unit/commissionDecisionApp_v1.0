@@ -100,7 +100,7 @@ def generate_transition_guidance(
         })
 
     if ai_enabled() and allowed:
-        tier = FEATURE_MODEL_TIER.get("F1_smart_routing", "haiku")
+        tier = FEATURE_MODEL_TIER.get("transition_guidance", "haiku")
         ctx = build_transition_context(submission, role, allowed)
         data, _err = complete_json_with_error(
             system=(

@@ -73,21 +73,14 @@ export default function MeetingBriefingPack({ meetingId, meetingRef }) {
       {failed && job?.error_message && (
         <p className="text-xs text-red-600 mt-2">{job.error_message}</p>
       )}
-      {ready && job?.downloads && (
+      {ready && job?.downloads?.html && (
         <div className="flex flex-wrap gap-2 mt-2">
-          <button
-            type="button"
-            className="text-xs text-indigo-700 dark:text-indigo-300 inline-flex items-center gap-1 hover:underline"
-            onClick={() => download(job.downloads.pdf, `${meetingRef || 'sitting'}_briefing.pdf`)}
-          >
-            <Download size={12} /> PDF
-          </button>
           <button
             type="button"
             className="text-xs text-indigo-700 dark:text-indigo-300 inline-flex items-center gap-1 hover:underline"
             onClick={() => download(job.downloads.html, `${meetingRef || 'sitting'}_briefing.html`)}
           >
-            <Download size={12} /> HTML
+            <Download size={12} /> {t('register_report.download_html')}
           </button>
         </div>
       )}

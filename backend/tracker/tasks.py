@@ -1152,7 +1152,7 @@ def extract_action_items_from_minutes(meeting_id: int, minutes_text: str | None 
 
 @shared_task
 def generate_decision_register_report(report_id: int):
-    """Render Quarto HTML + PDF for a DecisionRegisterReport."""
+    """Render Quarto HTML for a DecisionRegisterReport."""
     from .reports.decision_register import run_report_generation
 
     run_report_generation(report_id)
@@ -1431,7 +1431,13 @@ def draft_implementation_subtasks(task_id: int):
 
     task = CommissionTask.objects.select_related("submission").get(pk=task_id)
     data, err = draft_subtasks_from_task(task)
-    task.ai_subtask_drafts = data or {"error": err or "Failed", "subtasks": []}
+    task.ai_subtask_drafts = data or {
+        "processed": True,
+        "error": err or "Failed",
+        "subtasks": [],
+    }
+    if data:
+        task.ai_subtask_drafts["processed"] = True
     task.save(update_fields=["ai_subtask_drafts", "updated_at"])
 
 

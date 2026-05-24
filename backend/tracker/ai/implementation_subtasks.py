@@ -38,7 +38,7 @@ def draft_subtasks_from_task(task) -> tuple[dict[str, Any] | None, str | None]:
         f"Way forward: {task.way_forward or '—'}",
         f"Submission: {task.submission.reference_number if task.submission_id else '—'}",
     ]
-    tier = FEATURE_MODEL_TIER.get("C4_minutes_action_items", "haiku")
+    tier = FEATURE_MODEL_TIER.get("implementation_subtask_draft", "haiku")
     data, err = complete_json_with_error(
         system=SYSTEM,
         user="\n".join(lines),
