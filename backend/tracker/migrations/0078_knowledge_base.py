@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("tracker", "0061_workflow_choice_field_sync"),
+        ("tracker", "0077_submission_presence"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

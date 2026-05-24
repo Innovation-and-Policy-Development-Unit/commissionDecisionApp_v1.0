@@ -72,10 +72,14 @@ export default function KnowledgeBaseAdmin() {
   const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
+  // Stable ref so toast never appears in useCallback deps (prevents infinite loop)
+  const toastRef = React.useRef(toast);
+  React.useEffect(() => { toastRef.current = toast; }, [toast]);
 
   const [categories, setCategories] = useState([]);
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
 
   // Category Modal State
   const [catModalOpen, setCatModalOpen] = useState(false);
@@ -84,6 +88,7 @@ export default function KnowledgeBaseAdmin() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const [catRes, artRes] = await Promise.all([
         api.get('/knowledge/categories/'),
@@ -93,11 +98,18 @@ export default function KnowledgeBaseAdmin() {
       setArticles(artRes.data.results || artRes.data);
     } catch (error) {
       console.error('Error fetching knowledge base data:', error);
-      toast.error('Failed to load knowledge base data.');
+      const status = error?.response?.status;
+      setFetchError(status === 404
+        ? 'Knowledge base endpoints are not available yet on this server.'
+        : 'Failed to load knowledge base data.');
+      // Only show toast for unexpected errors (not 404 — endpoint may not be deployed yet)
+      if (status !== 404) {
+        toastRef.current.error('Failed to load knowledge base data.');
+      }
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []); // no deps — stable function, uses toastRef for side-effects
 
   useEffect(() => {
     fetchData();
@@ -170,10 +182,21 @@ export default function KnowledgeBaseAdmin() {
 
   return (
     <div className={styles.container}>
-      <PageHeader 
-        title="Knowledge Base Management" 
+      <PageHeader
+        title="Knowledge Base Management"
         subtitle="Manage official OPSC documentation, SOPs, and circulars."
       />
+
+      {fetchError && (
+        <div style={{ padding: '16px', borderRadius: '8px', background: 'var(--colorStatusWarningBackground1, #fff4ce)', border: '1px solid var(--colorStatusWarningBorder1, #f0c000)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span>⚠️</span>
+          <div>
+            <Text weight="semibold">Knowledge Base Unavailable</Text>
+            <Text block size={200}>{fetchError}</Text>
+            <Button size="small" appearance="subtle" onClick={fetchData} style={{ marginTop: '4px' }}>Retry</Button>
+          </div>
+        </div>
+      )}
 
       {/* Categories Section */}
       <Card className={styles.tableCard}>

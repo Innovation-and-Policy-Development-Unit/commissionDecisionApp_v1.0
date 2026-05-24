@@ -76,9 +76,11 @@ export default function KnowledgeBaseBrowse() {
   const [articles, setArticles] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setUnavailable(false);
     try {
       const [catRes, artRes] = await Promise.all([
         api.get('/knowledge/categories/'),
@@ -88,6 +90,7 @@ export default function KnowledgeBaseBrowse() {
       setArticles(artRes.data.results || artRes.data);
     } catch (error) {
       console.error('KB Error:', error);
+      if (error?.response?.status === 404) setUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -102,10 +105,28 @@ export default function KnowledgeBaseBrowse() {
     a.category_title.toLowerCase().includes(search.toLowerCase())
   );
 
+  if (unavailable) {
+    return (
+      <div className={styles.container}>
+        <PageHeader
+          title="OPSC Wiki & Knowledge Base"
+          subtitle="Access official Standard Operating Procedures, Public Service Acts, and Circulars."
+        />
+        <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--colorNeutralForeground3)' }}>
+          <BookOpenRegular fontSize={48} style={{ opacity: 0.3 }} />
+          <Text block size={400} weight="semibold" style={{ marginTop: '16px' }}>Knowledge Base Coming Soon</Text>
+          <Text block size={200} style={{ marginTop: '8px' }}>
+            This feature is not yet available on this server. Please check back later.
+          </Text>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.container}>
-      <PageHeader 
-        title="OPSC Wiki & Knowledge Base" 
+      <PageHeader
+        title="OPSC Wiki & Knowledge Base"
         subtitle="Access official Standard Operating Procedures, Public Service Acts, and Circulars."
       />
 
