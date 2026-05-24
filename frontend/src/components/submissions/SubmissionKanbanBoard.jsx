@@ -265,7 +265,10 @@ export default function SubmissionKanbanBoard({
                   {label}
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  {t('submission.kanban.card_count', { count: cards.length })}
+                  {t('submission.kanban.card_count', {
+                    count: cards.length,
+                    defaultValue: `${cards.length} submission${cards.length === 1 ? '' : 's'}`,
+                  })}
                 </p>
               </header>
               <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[120px]">

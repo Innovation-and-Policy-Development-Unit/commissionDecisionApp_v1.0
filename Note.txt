@@ -1,0 +1,5 @@
+Implement:  1. Kanban Board for Submissions
+   * Visual Workflow: We will create a new "Kanban" tab in the Submission Log.
+   * Columns: Mapped to high-level stations (Intake, Assessment, Commission, etc.).
+   * Interaction: Drag-and-drop cards between columns will automatically trigger the backend workflow transition
+     (opening the remarks dialog for confirmation).

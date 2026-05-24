@@ -345,6 +345,25 @@ export default function SubmissionLog() {
         )}
         </div>
 
+        {viewMode === 'kanban' && (
+          <div className="p-4">
+            {loading ? (
+              <div className="py-16 text-center text-slate-400 dark:text-slate-500">
+                <RefreshCw size={24} className="mx-auto mb-2 animate-spin opacity-40" />
+                <p className="text-sm">{t('common.loading')}</p>
+              </div>
+            ) : (
+              <SubmissionKanbanBoard
+                submissions={filtered}
+                showQualityColumn={showQualityColumn}
+                onRefresh={loadRows}
+              />
+            )}
+          </div>
+        )}
+
+        {viewMode === 'list' && (
+        <>
         {/* ── Table ── */}
         <div className="table-wrapper">
           <table className="table">
