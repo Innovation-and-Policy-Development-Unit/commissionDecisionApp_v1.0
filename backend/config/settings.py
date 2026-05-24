@@ -431,6 +431,10 @@ QUARTO_RENDER_TIMEOUT = int(os.getenv('QUARTO_RENDER_TIMEOUT', '180'))
 CLAUDE_MODEL_HAIKU = os.getenv('CLAUDE_MODEL_HAIKU', 'claude-haiku-4-5-20251001')
 # Quality tier: executive briefs, minutes drafting, similarity, chatbots
 CLAUDE_MODEL_SONNET = os.getenv('CLAUDE_MODEL_SONNET', 'claude-sonnet-4-6')
+# A3 — block draft→submitted when critical package gaps remain (set false to warn only)
+AI_PACKAGE_BLOCK_SUBMIT = os.getenv('AI_PACKAGE_BLOCK_SUBMIT', 'true').lower() in (
+    '1', 'true', 'yes', 'on',
+)
 
 # ── CMS integration (Case Management System) ──────────────────────────────────
 # URL of the CMS backend API, e.g. https://cms.internal or http://localhost:8001

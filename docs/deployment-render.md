@@ -65,6 +65,26 @@ Set these on **`scdms-api`** (and ensure **`scdms-web`** has the frontend URL).
 
 After changing **`VITE_API_BASE_URL`**, trigger a **manual redeploy** of `scdms-web` (static sites bake env at build time).
 
+### Static site CSS / MIME errors
+
+If the browser reports `text/plain` for `/assets/*.css`, the SPA catch-all was serving `index.html` for asset URLs (often after a deploy when an old cached `index.html` points at removed hashed files). The blueprint uses an `/assets/*` rewrite **before** `/* → /index.html`, and `frontend/public/_headers` sets cache + MIME headers. After fixing, **Clear site data** or hard-refresh (`Ctrl+Shift+R`) on `scdms-web`, or use the PWA “Update” banner.
+
+### API 403 on submissions
+
+Usually **no PSC profile** for the logged-in user. In Render Shell on `scdms-api`:
+
+```bash
+python manage.py shell -c "
+from django.contrib.auth.models import User
+from tracker.models import Profile, Role
+u = User.objects.get(username='THEIR_USERNAME')
+Profile.objects.get_or_create(user=u, defaults={'role': Role.PSC_SECRETARY})
+print('OK', u.username, u.psc_profile.role)
+"
+```
+
+Redeploy **`scdms-api`** so `profile_utils.ensure_psc_profile` runs (staff/superuser auto-get PSC Admin). Non-staff users must have a profile row.
+
 ## Verify deployment
 
 1. **Health**: open `https://<api-host>/health/` — `database` and `redis` should be `true`.

@@ -575,6 +575,11 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_quality_review_effort",
             "ai_quality_processed",
             "ai_quality_generated_at",
+            "ai_package_gaps",
+            "ai_package_ready",
+            "ai_package_summary",
+            "ai_package_processed",
+            "ai_package_generated_at",
         )
         read_only_fields = (
             "ai_brief_summary",
@@ -586,6 +591,11 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_quality_review_effort",
             "ai_quality_processed",
             "ai_quality_generated_at",
+            "ai_package_gaps",
+            "ai_package_ready",
+            "ai_package_summary",
+            "ai_package_processed",
+            "ai_package_generated_at",
         )
 
 
@@ -697,7 +707,7 @@ class ChecklistItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubmissionChecklistItem
         fields = ('id', 'document', 'document_name', 'document_description',
-                  'is_present', 'checked_by_username', 'checked_at')
+                  'is_present', 'notes', 'checked_by_username', 'checked_at')
         read_only_fields = ('document', 'checked_by_username', 'checked_at')
 
 
@@ -787,6 +797,7 @@ class PSCFormTypeSerializer(serializers.ModelSerializer):
 class TransitionSerializer(serializers.Serializer):
     new_stage = serializers.ChoiceField(choices=WorkflowStage.choices)
     remarks = serializers.CharField(required=False, allow_blank=True)
+    acknowledge_gaps = serializers.BooleanField(required=False, default=False)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):

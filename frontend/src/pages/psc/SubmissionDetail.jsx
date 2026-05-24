@@ -12,8 +12,10 @@ import {
 } from '../../constants/stages'
 import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
+import ChecklistPanel from '../../components/submissions/ChecklistPanel'
 import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
 import SubmissionQualityScore from '../../components/submissions/SubmissionQualityScore'
+import SubmissionPackageValidation from '../../components/submissions/SubmissionPackageValidation'
 import DeadlineReminderDrafts from '../../components/submissions/DeadlineReminderDrafts'
 import DocumentAnnotatorModal from '../../components/shared/DocumentAnnotatorModal'
 import DocumentSignatureModal from '../../components/shared/DocumentSignatureModal'
@@ -51,6 +53,15 @@ const QUALITY_SCORE_ROLES = [
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_manager',
   'odu_manager', 'hr_unit_manager', 'vipam_manager', 'compliance_manager',
   'compliance_senior', 'compliance_principal',
+]
+const PACKAGE_VALIDATE_ROLES = [
+  'ministry_hr', 'dept_admin', 'head_of_agency',
+  'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
+]
+const CHECKLIST_EDIT_ROLES = [
+  'ministry_hr', 'dept_admin', 'head_of_agency',
+  'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
+  'vipam_manager', 'hr_unit_manager', 'compliance_manager', 'compliance_senior',
 ]
 
 // ─── Visual timeline ──────────────────────────────────────────────────────────
@@ -204,7 +215,10 @@ export default function SubmissionDetail() {
   const showSecretariatBrief = user && SECRETARIAT_BRIEF_ROLES.includes(user.role)
   const showDeadlineDrafts = user && DEADLINE_DRAFT_ROLES.includes(user.role)
   const showQualityScore = user && QUALITY_SCORE_ROLES.includes(user.role)
+  const showPackageValidation = user && PACKAGE_VALIDATE_ROLES.includes(user.role)
   const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
+  const canEditChecklist = user && CHECKLIST_EDIT_ROLES.includes(user.role)
+  const showChecklist = !submission?.is_attachment && !submission?.is_internal
 
   const fetchSubmission = useCallback(async () => {
     try {
@@ -478,16 +492,58 @@ const stageDescriptions = {
   const submitTransition = async e => {
     e.preventDefault()
     if (!targetStage) return
-    setBusy(true)
-    setError('')
-    try {
-      await api.post(`/submissions/${id}/transition/`, { new_stage: targetStage, remarks })
+
+    const runTransition = async (acknowledgeGaps = false) => {
+      await api.post(`/submissions/${id}/transition/`, {
+        new_stage: targetStage,
+        remarks,
+        acknowledge_gaps: acknowledgeGaps,
+      })
       setRemarks('')
       await reload()
       toast.success('Stage updated successfully.')
+    }
+
+    setBusy(true)
+    setError('')
+    try {
+      await runTransition(false)
     } catch (err) {
-      const msg = err.response?.data?.detail
-        || (typeof err.response?.data === 'object' ? JSON.stringify(err.response.data) : null)
+      const data = err.response?.data
+      const gaps = data?.package_gaps
+      if (
+        targetStage === 'submitted'
+        && Array.isArray(gaps)
+        && gaps.some(g => g.severity === 'critical')
+      ) {
+        setSubmission(prev => ({
+          ...prev,
+          ai_package_gaps: gaps,
+          ai_package_ready: data.package_ready,
+          ai_package_summary: data.package_summary,
+          ai_package_processed: true,
+        }))
+        const proceed = await confirm({
+          title: 'Critical gaps found',
+          message: `${data.detail || 'Fix critical items before submitting.'} Submit anyway?`,
+          confirmLabel: 'Submit anyway',
+        })
+        if (proceed) {
+          try {
+            await runTransition(true)
+          } catch (err2) {
+            const msg2 = err2.response?.data?.detail || 'Transition failed.'
+            setError(String(msg2))
+            toast.error(String(msg2))
+          }
+          return
+        }
+        setError(data.detail || 'Submission blocked until critical gaps are resolved.')
+        toast.error('Fix critical gaps or confirm submit anyway.')
+        return
+      }
+      const msg = data?.detail
+        || (typeof data === 'object' ? JSON.stringify(data) : null)
         || 'Transition failed.'
       setError(String(msg))
       toast.error(String(msg))
@@ -554,6 +610,14 @@ const stageDescriptions = {
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />{error}
         </div>
+      )}
+
+      {showPackageValidation && (
+        <SubmissionPackageValidation
+          submission={submission}
+          submissionId={id}
+          onUpdated={setSubmission}
+        />
       )}
 
       {showQualityScore && (
@@ -1063,6 +1127,17 @@ const stageDescriptions = {
               </div>
             )
           })()}
+
+          {/* ── Required Documents Checklist (AI autofill) ── */}
+          {showChecklist && checklist.length > 0 && (
+            <ChecklistPanel
+              checklist={checklist}
+              setChecklist={setChecklist}
+              submissionId={id}
+              canEdit={canEditChecklist}
+              hasDocuments={documents.length > 0}
+            />
+          )}
 
           {/* ── Restructure Submission Form (ORG-3.1 template) ── */}
           {isRestructureSubmission && (

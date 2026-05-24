@@ -53,8 +53,10 @@ export default function PwaManager() {
     if (isStandaloneDisplay()) return undefined
 
     const onBeforeInstall = (e) => {
+      // Defer the browser mini-infobar; we call prompt() from the install button.
       e.preventDefault()
       setInstallPrompt(e)
+      /* Chrome may log "Banner not shown…" in DevTools — expected when using a custom install UI. */
     }
     window.addEventListener('beforeinstallprompt', onBeforeInstall)
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall)

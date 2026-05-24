@@ -565,6 +565,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ser.is_valid(raise_exception=True)
         target = ser.validated_data["new_stage"]
         remarks = ser.validated_data.get("remarks", "")
+        acknowledge_gaps = bool(ser.validated_data.get("acknowledge_gaps"))
         prev = submission.current_stage
 
         assert_transition_allowed(
@@ -607,6 +608,36 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied(
                     "This submission has not been assigned to you. Contact your unit manager."
                 )
+
+        # ── A3: pre-submit package validation (draft → submitted) ───────────────
+        if (
+            prev == WorkflowStage.DRAFT
+            and target == WorkflowStage.SUBMITTED
+            and not acknowledge_gaps
+        ):
+            from django.conf import settings as django_settings
+            from .tasks import validate_submission_package_sync
+
+            if getattr(django_settings, "AI_PACKAGE_BLOCK_SUBMIT", True):
+                pkg = validate_submission_package_sync(submission.id, force=True)
+                critical = [
+                    g for g in (pkg.get("gaps") or [])
+                    if g.get("severity") == "critical"
+                ]
+                if critical:
+                    return Response(
+                        {
+                            "detail": (
+                                "Cannot submit: critical package gaps were found. "
+                                "Run “Validate package”, fix items, or submit with "
+                                "acknowledge_gaps if you must proceed."
+                            ),
+                            "package_ready": pkg.get("ready"),
+                            "package_summary": pkg.get("summary"),
+                            "package_gaps": pkg.get("gaps"),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
         # ── Checklist gate: all required documents must be present ──────────────
         if prev == WorkflowStage.MANAGER_CHECKLIST_REVIEW and target == WorkflowStage.UNDER_ASSESSMENT:
@@ -710,6 +741,35 @@ class SubmissionViewSet(viewsets.ModelViewSet):
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,
              description=f"Stage transition: {prev} → {target}" + (f" | {remarks}" if remarks else ""))
+        return Response(SubmissionDetailSerializer(submission).data)
+
+    @action(detail=True, methods=["post"], url_path="validate-package")
+    def validate_package(self, request, pk=None):
+        """A3 — sync pre-submit package validation (checklist, forms, attachments)."""
+        from .tasks import validate_submission_package_sync
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        _submit_roles = {
+            Role.MINISTRY_HR,
+            Role.DEPT_ADMIN,
+            Role.HEAD_OF_AGENCY,
+            Role.PSC_OFFICER,
+            Role.PSC_ADMIN,
+            Role.PSC_SECRETARY,
+            Role.SENIOR_ADMIN_OFFICER,
+        }
+        if profile.role not in _submit_roles and not request.user.is_staff:
+            raise PermissionDenied("You do not have permission to validate this submission package.")
+
+        if submission.current_stage != WorkflowStage.DRAFT:
+            return Response(
+                {"detail": "Package validation is only available while the submission is in Draft."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        validate_submission_package_sync(submission.id, force=True)
+        submission.refresh_from_db()
         return Response(SubmissionDetailSerializer(submission).data)
 
     @action(detail=True, methods=["post"], url_path="score-quality")
@@ -876,53 +936,20 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         """
         submission = self.get_object()
 
-        # Attached submissions have no independent checklist — reviewed alongside parent
-        if submission.is_attachment:
+        if submission.is_attachment or submission.is_internal:
             return Response([])
 
-        # Internal OPSC submissions have no required-document checklist
-        if submission.is_internal:
-            return Response([])
+        from .submission_checklist import ensure_submission_checklist_items
 
-        # Resolve the PSCFormType instance for this submission (may be None)
-        form_type_obj = None
-        if submission.form_type_code:
-            from tracker.models import PSCFormType
-            form_type_obj = PSCFormType.objects.filter(code=submission.form_type_code).first()
-
-        if form_type_obj:
-            # If there are form-type-specific docs, show those INSTEAD of category docs
-            type_specific = RequiredDocument.objects.filter(
-                is_active=True, form_type=form_type_obj
-            )
-            if type_specific.exists():
-                required_docs = type_specific
-            else:
-                # Fall back to category-level + global docs
-                required_docs = RequiredDocument.objects.filter(
-                    is_active=True, form_type__isnull=True
-                ).filter(
-                    models.Q(form_category=submission.form_category) |
-                    models.Q(form_category__isnull=True)
-                )
-        else:
-            required_docs = RequiredDocument.objects.filter(
-                is_active=True, form_type__isnull=True
-            ).filter(
-                models.Q(form_category=submission.form_category) |
-                models.Q(form_category__isnull=True)
-            )
-
-        for doc in required_docs:
-            SubmissionChecklistItem.objects.get_or_create(submission=submission, document=doc)
+        ensure_submission_checklist_items(submission)
         items = SubmissionChecklistItem.objects.filter(
             submission=submission
-        ).select_related('document', 'checked_by')
+        ).select_related("document", "checked_by")
         return Response(ChecklistItemSerializer(items, many=True).data)
 
     @action(detail=True, methods=["patch"], url_path="checklist/(?P<item_id>[0-9]+)")
     def checklist_toggle(self, request, pk=None, item_id=None):
-        """Toggle is_present on a checklist item."""
+        """Toggle is_present on a checklist item; optionally persist notes."""
         submission = self.get_object()
         item = get_object_or_404(SubmissionChecklistItem, id=item_id, submission=submission)
         is_present = bool(request.data.get("is_present", False))
@@ -933,8 +960,47 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         else:
             item.checked_by = None
             item.checked_at = None
+        if "notes" in request.data:
+            item.notes = str(request.data["notes"])[:1000]
         item.save()
         return Response(ChecklistItemSerializer(item).data)
+
+    @action(detail=True, methods=["post"], url_path="checklist/autofill")
+    def checklist_autofill(self, request, pk=None):
+        """A1 — AI suggestions for checklist items based on OCR'd document text."""
+        from .ai.checklist_autofill import suggest_checklist_items
+        from .submission_checklist import ensure_submission_checklist_items
+
+        submission = self.get_object()
+
+        if submission.is_attachment or submission.is_internal:
+            return Response({"suggestions": {}, "items": [], "error": None})
+
+        _autofill_roles = {
+            Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY,
+            Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY,
+            Role.SENIOR_ADMIN_OFFICER,
+            Role.VIPAM_MANAGER, Role.HR_UNIT_MANAGER,
+            Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_SENIOR,
+        }
+        profile = _profile(request.user)
+        if profile.role not in _autofill_roles and not request.user.is_staff:
+            raise PermissionDenied("You do not have permission to use AI checklist autofill.")
+
+        ensure_submission_checklist_items(submission)
+        items = list(
+            SubmissionChecklistItem.objects.filter(submission=submission).select_related(
+                "document", "checked_by"
+            )
+        )
+
+        suggestions, err = suggest_checklist_items(submission, items)
+
+        return Response({
+            "suggestions": suggestions,
+            "items": ChecklistItemSerializer(items, many=True).data,
+            "error": err,
+        })
 
     @action(detail=True, methods=["get", "post"])
     def documents(self, request, pk=None):
@@ -1742,6 +1808,11 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             if not rbac_user_has_permission(request.user, "export_reports"):
                 raise PermissionDenied("You cannot access this report.")
         return report
+
+    @action(detail=False, methods=["post"], url_path="register-report")
+    def create_register_report_legacy(self, request):
+        """Backward-compatible alias (older frontends POST here and hit 405 on detail routes)."""
+        return self.create_register_report(request)
 
     @action(detail=False, methods=["post"], url_path="register-reports/generate")
     def create_register_report(self, request):

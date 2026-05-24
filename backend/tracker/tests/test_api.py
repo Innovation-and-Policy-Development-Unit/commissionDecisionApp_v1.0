@@ -141,3 +141,22 @@ class SubmissionAPITests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["id"], sub.id)
         self.assertTrue(Profile.objects.filter(user=staff, role=Role.PSC_ADMIN).exists())
+
+    def test_validate_package_on_draft(self):
+        from django.utils import timezone
+        from ..models import Submission, WorkflowStage
+
+        sub = Submission.objects.create(
+            title="Short",
+            form_category=self.form_cat,
+            form_type_code="PSC 3.6",
+            ministry=self.ministry,
+            received_at=timezone.now(),
+            created_by=self.user,
+            current_stage=WorkflowStage.DRAFT,
+        )
+        resp = self.client.post(f"/api/submissions/{sub.id}/validate-package/")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get("ai_package_processed"))
+        self.assertIsInstance(data.get("ai_package_gaps"), list)

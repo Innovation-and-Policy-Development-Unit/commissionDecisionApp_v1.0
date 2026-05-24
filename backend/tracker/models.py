@@ -922,6 +922,25 @@ class Submission(models.Model):
         help_text="True once the latest quality scoring completed.",
     )
     ai_quality_generated_at = models.DateTimeField(null=True, blank=True)
+    # ── AI pre-submit package validation (A3 missing information) ─────────────
+    ai_package_gaps = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of {severity, category, message} gaps before submit.",
+    )
+    ai_package_ready = models.BooleanField(
+        default=False,
+        help_text="True when AI/rules found no critical gaps for submit.",
+    )
+    ai_package_summary = models.TextField(
+        blank=True,
+        help_text="One-line AI summary of package readiness.",
+    )
+    ai_package_processed = models.BooleanField(
+        default=False,
+        help_text="True once the latest package validation completed.",
+    )
+    ai_package_generated_at = models.DateTimeField(null=True, blank=True)
     # ── Parent/child (attachment) relationship ──────────────────────────────
     parent_submission = models.ForeignKey(
         'self', null=True, blank=True,
@@ -1233,6 +1252,7 @@ class SubmissionChecklistItem(models.Model):
         RequiredDocument, on_delete=models.PROTECT, related_name='checklist_items',
     )
     is_present = models.BooleanField(default=False)
+    notes = models.TextField(blank=True, help_text="Officer notes or AI-generated reason for this item's status.")
     checked_by = models.ForeignKey(
         'auth.User', null=True, blank=True, on_delete=models.SET_NULL,
     )

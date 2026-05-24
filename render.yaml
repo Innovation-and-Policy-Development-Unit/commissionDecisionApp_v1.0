@@ -154,7 +154,11 @@ services:
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
+    # Do not rewrite hashed bundles — catch-all only was serving index.html for *.css (MIME error).
     routes:
+      - type: rewrite
+        source: /assets/*
+        destination: /assets/:splat
       - type: rewrite
         source: /*
         destination: /index.html

@@ -269,6 +269,23 @@ def build_submission_brief_context(submission) -> str:
     return "\n".join(lines)
 
 
+def build_submission_package_context(submission) -> str:
+    """Context for A3 pre-submit validation (draft package completeness)."""
+    from .submission_checklist import expected_documents_lines
+
+    base = build_submission_brief_context(submission)
+    extra = ["", "Expected checklist (ministry submissions):"]
+    doc_lines = expected_documents_lines(submission)
+    if doc_lines:
+        extra.extend(doc_lines)
+    else:
+        extra.append(
+            "- No required-document checklist applies "
+            "(internal OPSC submission or attachment)."
+        )
+    return base + "\n" + "\n".join(extra)
+
+
 def _format_submission_brief(data: dict) -> str:
     """Turn JSON brief into readable plain text for the UI."""
     parts = []
@@ -1159,3 +1176,63 @@ def queue_submission_quality_score(submission_id: int, *, force: bool = False) -
             exc,
         )
         score_submission_quality(submission_id, force=force)
+
+
+def package_validation_needs_refresh(submission) -> bool:
+    if not submission.ai_package_processed:
+        return True
+    if submission.ai_package_generated_at and submission.updated_at > submission.ai_package_generated_at:
+        return True
+    return False
+
+
+def validate_submission_package_sync(submission_id: int, *, force: bool = False) -> dict:
+    """
+    Run A3 package validation synchronously (draft pre-submit).
+    Returns {ready, summary, gaps} and persists on the submission.
+    """
+    from .models import Submission
+    from .ai.submission_package_validation import (
+        persist_package_validation,
+        validate_package_from_context,
+    )
+
+    submission = Submission.objects.select_related(
+        "ministry", "department", "created_by", "dg_endorsed_by", "form_category",
+    ).get(pk=submission_id)
+
+    if submission.current_stage != "draft":
+        return {
+            "ready": submission.ai_package_ready,
+            "summary": submission.ai_package_summary or "",
+            "gaps": submission.ai_package_gaps or [],
+        }
+
+    if not force and not package_validation_needs_refresh(submission):
+        return {
+            "ready": submission.ai_package_ready,
+            "summary": submission.ai_package_summary or "",
+            "gaps": submission.ai_package_gaps or [],
+        }
+
+    context = build_submission_package_context(submission)
+    result, err = validate_package_from_context(submission, context)
+    if not result:
+        result = {
+            "ready": False,
+            "summary": err or "Package validation failed.",
+            "gaps": [{
+                "severity": "warning",
+                "category": "other",
+                "message": err or "Package validation could not be completed.",
+            }],
+        }
+
+    persist_package_validation(submission, result)
+    app_log.info(
+        "PACKAGE_VALIDATE | Submission %s | ready=%s gaps=%s",
+        submission_id,
+        result.get("ready"),
+        len(result.get("gaps") or []),
+    )
+    return result

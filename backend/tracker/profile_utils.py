@@ -29,13 +29,11 @@ def ensure_psc_profile(user):
 
 
 def user_has_psc_profile(user) -> bool:
-    """True when the user may call profile-gated APIs."""
+    """True when the user may call profile-gated APIs (creates profile for staff/superuser)."""
     if not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_staff:
-        return True
     try:
-        user.psc_profile
+        ensure_psc_profile(user)
         return True
-    except Profile.DoesNotExist:
+    except PermissionDenied:
         return False
