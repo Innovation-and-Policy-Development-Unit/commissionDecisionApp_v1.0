@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import PageHeader from '../../../components/shared/PageHeader'
-import { Calendar, List, Search, RefreshCw, X, Plus } from 'lucide-react'
+import { Calendar, List, Search, RefreshCw, Plus } from 'lucide-react'
+import Modal from '../../../components/shared/Modal'
 import KPIBanner from './components/KPIBanner'
 import OperationalSidebar from './components/OperationalSidebar'
 import CalendarView from './components/CalendarView'
@@ -154,60 +155,55 @@ export default function CommissionSittings() {
 
       <LogitechGroupGuideDialog open={logitechGuideOpen} onClose={() => setLogitechGuideOpen(false)} />
 
-      {/* Schedule Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-scale-in">
-            <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-              <h2 className="text-xl font-black text-slate-900 dark:text-white">Schedule Sitting</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl text-slate-400">
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleCreate} className="p-8 space-y-5">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Sitting Title</label>
-                <input 
-                  className="input" required 
-                  placeholder='e.g. "8th Ordinary Sitting 2024"' 
-                  value={form.title} 
-                  onChange={e => setForm({...form, title: e.target.value})} 
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
-                  <input type="date" className="input" required value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Time</label>
-                  <input type="time" className="input" required value={form.time} onChange={e => setForm({...form, time: e.target.value})} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Venue</label>
-                <select className="input" value={form.venue} onChange={e => setForm({...form, venue: e.target.value})}>
-                  {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Sitting Type</label>
-                <select className="input" value={form.type} onChange={e => setForm({...form, type: e.target.value})}>
-                  {SITTING_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-              <div className="pt-4 flex gap-3">
-                <button type="submit" disabled={saving} className="flex-1 btn-gradient py-3 shadow-lg shadow-primary-500/20">
-                  {saving ? 'Scheduling...' : 'Schedule Sitting'}
-                </button>
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 btn-secondary">
-                  Cancel
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={isModalOpen}
+        title="Schedule Sitting"
+        onClose={() => setIsModalOpen(false)}
+        size="md"
+      >
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Sitting title</label>
+            <input
+              className="input"
+              required
+              placeholder='e.g. "8th Ordinary Sitting 2024"'
+              value={form.title}
+              onChange={e => setForm({ ...form, title: e.target.value })}
+            />
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date</label>
+              <input type="date" className="input" required value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Time</label>
+              <input type="time" className="input" required value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Venue</label>
+            <select className="input" value={form.venue} onChange={e => setForm({ ...form, venue: e.target.value })}>
+              {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Sitting type</label>
+            <select className="input" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+              {SITTING_TYPES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-3 pt-2">
+            <button type="submit" disabled={saving} className="btn-primary flex-1 py-2.5 disabled:opacity-50">
+              {saving ? 'Scheduling…' : 'Schedule sitting'}
+            </button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary px-6 py-2.5">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

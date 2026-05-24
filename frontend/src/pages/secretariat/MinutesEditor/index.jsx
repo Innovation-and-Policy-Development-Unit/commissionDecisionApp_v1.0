@@ -370,7 +370,7 @@ export default function MinutesEditor() {
       )}
 
       {/* Transcript workflow */}
-      <div className="card p-6 mb-6">
+      <div className="card card-compact mb-6">
         <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
           {t('meeting_room.minutes_workflow_title')}
         </h2>
@@ -494,7 +494,7 @@ export default function MinutesEditor() {
       </div>
 
       {content.action_register && (
-        <div className="card p-6 mb-6 border-teal-200 dark:border-teal-800">
+        <div className="card card-compact mb-6 border-teal-200 dark:border-teal-800">
           <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
             <ListTodo size={18} className="text-teal-600" />
             AI action register

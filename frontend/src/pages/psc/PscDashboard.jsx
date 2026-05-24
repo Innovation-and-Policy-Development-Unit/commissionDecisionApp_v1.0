@@ -117,7 +117,7 @@ function Sparkline({ data, color, type = 'area', gradId }) {
 
 function StatCard({ title, value, unit = '', trend, trendInversed = false, sub, sparkData, sparkType = 'area', color, gradId }) {
   return (
-    <div className="card p-5 flex flex-col gap-2">
+    <div className="card card-compact flex flex-col gap-2">
       <div className="flex items-start justify-between">
         <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-snug">{title}</p>
         <TrendBadge value={trend} inversed={trendInversed} />
@@ -238,7 +238,7 @@ export default function PscDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
         {/* Main activity card */}
-        <div className="xl:col-span-2 card p-5">
+        <div className="xl:col-span-2 card card-compact">
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('dashboard.activity_overview')}</h2>
@@ -325,7 +325,7 @@ export default function PscDashboard() {
         {/* Right stacked mini cards */}
         <div className="flex flex-col gap-4">
           {/* Completion rate */}
-          <div className="card p-5 flex-1">
+          <div className="card card-compact flex-1">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('dashboard.completion_rate')}</p>
               <TrendBadge value={3.2} />
@@ -348,7 +348,7 @@ export default function PscDashboard() {
           </div>
 
           {/* Total cases with bar sparkline */}
-          <div className="card p-5 flex-1">
+          <div className="card card-compact flex-1">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('dashboard.all_submissions')}</p>
               <TrendBadge value={12.5} />
@@ -415,7 +415,7 @@ export default function PscDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
         {/* Monthly submissions bar chart */}
-        <div className="xl:col-span-2 card p-5">
+        <div className="xl:col-span-2 card card-compact">
           <div className="flex items-start justify-between mb-1">
             <div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('dashboard.pipeline')}</h3>
@@ -456,7 +456,7 @@ export default function PscDashboard() {
         <div className="flex flex-col gap-4">
 
           {/* Key Metrics */}
-          <div className="card p-5">
+          <div className="card card-compact">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('dashboard.key_metrics')}</h3>
             </div>
@@ -484,7 +484,7 @@ export default function PscDashboard() {
           </div>
 
           {/* Workflow Performance Radar */}
-          <div className="card p-5 flex-1">
+          <div className="card card-compact flex-1">
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-3">{t('dashboard.workflow_performance')}</h3>
             <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
@@ -509,7 +509,7 @@ export default function PscDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
         {/* Weekly intake */}
-        <div className="xl:col-span-2 card p-5">
+        <div className="xl:col-span-2 card card-compact">
           <div className="flex items-start justify-between mb-1">
             <div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('dashboard.weekly_intake')}</h3>
@@ -535,7 +535,7 @@ export default function PscDashboard() {
         </div>
 
         {/* Top Ministries */}
-        <div className="card p-5">
+        <div className="card card-compact">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('dashboard.top_ministries')}</h3>
             <Link to="/submissions" className="text-xs text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-0.5">
@@ -631,7 +631,7 @@ export default function PscDashboard() {
         </div>
 
         {/* Recent Activity feed */}
-        <div className="card p-5">
+        <div className="card card-compact">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('dashboard.recent_activity')}</h3>
             <span className="flex items-center gap-1.5 text-xs text-emerald-500 font-medium">

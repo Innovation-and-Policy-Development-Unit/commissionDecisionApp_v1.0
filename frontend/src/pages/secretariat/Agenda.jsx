@@ -14,6 +14,7 @@
  */
 import { useEffect, useState, useMemo, useRef } from 'react'
 import PageHeader from '../../components/shared/PageHeader'
+import Modal from '../../components/shared/Modal'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -87,25 +88,6 @@ function meetingNo(meeting) {
   if (!meeting) return ''
   const m = meeting.reference_number?.match(/(\d+)$/)
   return m ? String(parseInt(m[1])) : meeting.reference_number
-}
-
-// ── Modal ───────────────────────────────────────────────────────────────────
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-lg bg-white dark:bg-slate-800 rounded-xl shadow-2xl my-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="px-6 py-6">{children}</div>
-      </div>
-    </div>
-  )
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -633,8 +615,12 @@ export default function Agenda() {
       )}
 
       {/* ── Add Item Modal ─────────────────────────────────────────────── */}
-      {modalOpen && (
-        <Modal title="Add Agenda Item" onClose={() => setModalOpen(false)}>
+      <Modal
+        open={modalOpen}
+        title="Add Agenda Item"
+        onClose={() => setModalOpen(false)}
+        size="md"
+      >
           <form onSubmit={handleAdd} className="space-y-4">
             {/* Submission — pick first so we can auto-fill category */}
             <div>
@@ -746,8 +732,7 @@ export default function Agenda() {
               </button>
             </div>
           </form>
-        </Modal>
-      )}
+      </Modal>
 
       {/* Print styles */}
       <style>{`
@@ -777,7 +762,7 @@ function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isChairper
   const currentIdx = WORKFLOW_STEPS.findIndex(s => s.key === status)
 
   return (
-    <div className="card p-4 mb-6">
+    <div className="card card-compact mb-4">
       {/* Step indicators */}
       <div className="flex items-center gap-0 mb-4">
         {WORKFLOW_STEPS.map((step, idx) => {

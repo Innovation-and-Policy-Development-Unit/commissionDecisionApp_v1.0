@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
+import Modal from '../../components/shared/Modal'
 import Badge from '../../components/shared/Badge'
 import api from '../../api/client'
 import { stageLabel, stageBadgeClass, STAGE_META } from '../../constants/stages'
 import SubmissionProgressBar from '../../components/shared/SubmissionProgressBar'
-import { PlusCircle, RefreshCw, X, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2 } from 'lucide-react'
+import { PlusCircle, RefreshCw, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2 } from 'lucide-react'
 import SubmissionForm from './SubmissionForm'
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
@@ -548,33 +549,19 @@ export default function SubmissionLog() {
       </div>
 
       {/* ── New Submission modal ── */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8" role="dialog" aria-modal="true">
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-2xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl my-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('submission.new_submission')}</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('submission.new_submission_hint')}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="px-6 py-6">
-              <SubmissionForm
-                modal
-                onClose={() => setModalOpen(false)}
-                onSuccess={id => { setModalOpen(false); navigate(`/submissions/${id}`) }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={t('submission.new_submission')}
+        subtitle={t('submission.new_submission_hint')}
+        size="lg"
+      >
+        <SubmissionForm
+          modal
+          onClose={() => setModalOpen(false)}
+          onSuccess={id => { setModalOpen(false); navigate(`/submissions/${id}`) }}
+        />
+      </Modal>
     </div>
   )
 }

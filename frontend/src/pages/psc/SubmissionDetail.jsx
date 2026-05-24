@@ -649,7 +649,7 @@ const stageDescriptions = {
       )}
 
       {showDeadlineDrafts && submission?.assessment_deadline_at && (
-        <div className="card p-5 mb-4">
+        <div className="card card-compact mb-4">
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">
             AI deadline reminder drafts
           </h3>
@@ -710,14 +710,14 @@ const stageDescriptions = {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* ── Left: details + timeline ── */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4">
 
           {/* Lifecycle stepper */}
           {submission.current_stage !== 'draft' && (
-            <div className={`card p-5 ${hrAction ? 'border-l-4 border-l-orange-400' : terminal ? 'border-l-4 border-l-emerald-400' : ''}`}>
+            <div className={`card card-compact ${hrAction ? 'border-l-4 border-l-orange-400' : terminal ? 'border-l-4 border-l-emerald-400' : ''}`}>
               {/* Status header row */}
               <div className="flex items-center gap-2 mb-4">
                 {hrAction && (
@@ -766,7 +766,7 @@ const stageDescriptions = {
           )}
 
           {/* Submission metadata */}
-          <div className="card p-5 space-y-4 text-sm">
+          <div className="card card-compact space-y-4 text-sm">
             {/* Stage + category header */}
               <div className="flex flex-wrap items-start gap-3 pb-3 border-b border-slate-100 dark:border-slate-700">
                 <div className="flex-1 min-w-0">
@@ -836,7 +836,7 @@ const stageDescriptions = {
 
           {/* ── Digitized PSC Form ── */}
           {form37 !== null && (
-            <div className="card p-5">
+            <div className="card card-compact">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
                 <FileText size={14} className="text-slate-400" />
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -990,12 +990,12 @@ const stageDescriptions = {
                     )
                   ) : (
                     isDedicatedForm ? (
-                      <div className="card p-5">
+                      <div className="card card-compact">
                         {submission.form_type_code === 'PSC 2-1' && <PSCForm21View data={dynamicForm} />}
                         {submission.form_type_code === 'PSC 2-2' && <PSCForm22View data={dynamicForm} />}
                       </div>
                     ) : (
-                      <div className="card p-5">
+                      <div className="card card-compact">
                         <DynamicFormRenderer
                           fields={dynamicFormFields}
                           values={dynamicForm}
@@ -1071,7 +1071,7 @@ const stageDescriptions = {
             )
 
             return (
-              <div className="card p-5">
+              <div className="card card-compact">
                 {/* Panel header */}
                 <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700">
                   <Paperclip size={14} className="text-slate-400" />
@@ -1182,7 +1182,7 @@ const stageDescriptions = {
           )}
 
           {/* Workflow timeline */}
-          <div className="card p-5">
+          <div className="card card-compact">
             <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700">
               <FileText size={14} className="text-slate-400" />
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Workflow Timeline</h3>
@@ -1198,7 +1198,7 @@ const stageDescriptions = {
         <div className="space-y-5">
 
           {canTransition && (transitionGuidance?.suggestions?.length > 0 || guidancePending) && (
-            <div className="card p-5 space-y-3 border border-violet-200/60 dark:border-violet-900/40">
+            <div className="card card-compact space-y-3 border border-violet-200/60 dark:border-violet-900/40">
               <div className="flex items-center gap-2">
                 <Sparkles size={14} className="text-violet-500" />
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Transition guidance</h3>
@@ -1229,7 +1229,7 @@ const stageDescriptions = {
           )}
 
           {submission?.ai_clarification_bilingual?.processed && (
-            <div className="card p-5 space-y-3 border border-sky-200/60 dark:border-sky-900/40">
+            <div className="card card-compact space-y-3 border border-sky-200/60 dark:border-sky-900/40">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
                 AI draft — verify ministry communication
               </p>
@@ -1251,7 +1251,7 @@ const stageDescriptions = {
           )}
 
           {canTransition && allowed.length > 0 && (
-            <form onSubmit={submitTransition} className="card p-5 space-y-4">
+            <form onSubmit={submitTransition} className="card card-compact space-y-4">
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Move to Next Stage</h3>
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
@@ -1290,7 +1290,7 @@ const stageDescriptions = {
           )}
 
           {canTransition && !allowed.length && (
-            <div className="card p-5">
+            <div className="card card-compact">
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 No transitions available from <span className="font-medium">{stageLabel(submission.current_stage)}</span> for your role.
               </p>
@@ -1298,14 +1298,14 @@ const stageDescriptions = {
           )}
 
           {!canTransition && (
-            <div className="card p-5 text-sm text-slate-600 dark:text-slate-300">
+            <div className="card card-compact text-sm text-slate-600 dark:text-slate-300">
               You have read-only access to this submission.
             </div>
           )}
 
           {/* Linked Job Descriptions panel — shown on Form 2-1 when children exist */}
           {submission.form_type_code === 'PSC 2-1' && submission.attached_submissions?.length > 0 && (
-            <div className="card p-5 space-y-3">
+            <div className="card card-compact space-y-3">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-700">
                 <Paperclip size={14} className="text-violet-500" />
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -1333,7 +1333,7 @@ const stageDescriptions = {
           )}
 
           {/* Quick facts sidebar */}
-          <div className="card p-5 space-y-3 text-xs">
+          <div className="card card-compact space-y-3 text-xs">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Quick Info</p>
             <div className="flex justify-between text-slate-500 dark:text-slate-400">
               <span>Logged by</span>

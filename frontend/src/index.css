@@ -232,6 +232,11 @@
     @apply bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-card;
   }
 
+  /** Data-dense workflow screens (submissions, secretariat) */
+  .card-compact {
+    @apply p-4;
+  }
+
   .card-hover {
     @apply card transition-all duration-200 hover:shadow-card-md hover:-translate-y-0.5;
   }

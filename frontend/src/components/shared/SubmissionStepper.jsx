@@ -114,7 +114,10 @@ export default function SubmissionStepper({ currentStage, className }) {
             <div key={phase.key} className="flex-1 flex flex-col items-center relative">
               {/* Connector line before this node */}
               {i > 0 && (
-                <div className="absolute top-4 right-1/2 w-full h-0.5 -translate-y-1/2 overflow-hidden">
+                <div
+                  className="absolute top-4 right-1/2 z-0 w-full h-0.5 -translate-y-1/2 overflow-hidden pointer-events-none"
+                  aria-hidden="true"
+                >
                   <div className="w-full h-full bg-slate-200 dark:bg-slate-700" />
                   <div
                     className={clsx(
@@ -129,7 +132,8 @@ export default function SubmissionStepper({ currentStage, className }) {
                 </div>
               )}
 
-              {/* Node */}
+              {/* Node — z-10 so connector (positioned, z-0) stays behind the circle */}
+              <div className="relative z-10">
               <StepNode
                 phase={phase}
                 index={i}
@@ -138,6 +142,7 @@ export default function SubmissionStepper({ currentStage, className }) {
                 isFuture={isFuture}
                 isSentBack={isSentBack}
               />
+              </div>
 
               {/* Phase label */}
               <span

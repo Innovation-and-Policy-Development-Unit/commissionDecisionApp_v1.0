@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
-import { Plus, X, Send, CheckCircle2, Clock, FileText, Bell, Mail, Printer, Eye } from 'lucide-react'
+import Modal from '../../components/shared/Modal'
+import { Plus, Send, CheckCircle2, Clock, FileText, Bell, Mail, Printer, Eye } from 'lucide-react'
 
 function useChannelOptions(t) {
   return useMemo(() => ([
@@ -67,26 +68,6 @@ function OutcomeText({ outcome }) {
   return <span className={`text-xs font-medium ${m.cls}`}>{m.label}</span>
 }
 
-function Modal({ title, subtitle, onClose, children }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-lg bg-white dark:bg-slate-800 rounded-xl shadow-2xl my-auto animate-scale-in">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-            {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="px-6 py-6">{children}</div>
-      </div>
-    </div>
-  )
-}
-
 function SummaryBar({ notifications }) {
   const counts = {
     draft:        notifications.filter(n => n.status === 'draft').length,
@@ -99,7 +80,7 @@ function SummaryBar({ notifications }) {
       {Object.entries(STATUS_META).map(([k, meta]) => {
         const Icon = meta.icon
         return (
-          <div key={k} className="card px-4 py-3 flex items-center gap-3">
+          <div key={k} className="card px-3 py-2.5 flex items-center gap-3">
             <Icon size={18} className={`shrink-0 ${meta.cls.split(' ')[1]}`} />
             <div>
               <p className="text-xl font-bold text-slate-800 dark:text-slate-100 leading-none">{counts[k]}</p>
@@ -306,12 +287,13 @@ export default function Notifications() {
       </div>
 
       {/* New Notification modal */}
-      {issueModalOpen && (
-        <Modal
-          title="Prepare Notification"
-          subtitle="Create a notification record for a commission decision."
-          onClose={() => setIssueModalOpen(false)}
-        >
+      <Modal
+        open={issueModalOpen}
+        title="Prepare Notification"
+        subtitle="Create a notification record for a commission decision."
+        onClose={() => setIssueModalOpen(false)}
+        size="md"
+      >
           <form onSubmit={handleIssue} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -364,12 +346,16 @@ export default function Notifications() {
               <button type="button" className="btn-secondary px-6 py-2.5" onClick={() => setIssueModalOpen(false)}>Cancel</button>
             </div>
           </form>
-        </Modal>
-      )}
+      </Modal>
 
-      {/* Detail view modal */}
-      {viewTarget && (
-        <Modal title={viewTarget.reference} subtitle={`Decision: ${viewTarget.decision_ref}`} onClose={() => setViewTarget(null)}>
+      <Modal
+        open={!!viewTarget}
+        title={viewTarget?.reference}
+        subtitle={viewTarget ? `Decision: ${viewTarget.decision_ref}` : undefined}
+        onClose={() => setViewTarget(null)}
+        size="md"
+      >
+        {viewTarget && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -440,8 +426,8 @@ export default function Notifications() {
               <button className="btn-secondary px-5 py-2.5 text-sm" onClick={() => setViewTarget(null)}>Close</button>
             </div>
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

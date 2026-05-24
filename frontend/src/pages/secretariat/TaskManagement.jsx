@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import PageHeader from '../../components/shared/PageHeader'
+import Modal from '../../components/shared/Modal'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
@@ -209,24 +210,6 @@ function TaskStatusUpdatesSection({ taskId }) {
         <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">Add update</label>
         <textarea className="input text-sm w-full min-h-[72px]" value={body} onChange={e => setBody(e.target.value)} placeholder="e.g. Awaiting legal advice; revised deadline proposed for ..." maxLength={8000} />
         <button type="button" onClick={add} disabled={posting || !body.trim()} className="btn-outline py-1.5 px-3 text-xs disabled:opacity-50">{posting ? 'Posting...' : 'Post update'}</button>
-      </div>
-    </div>
-  )
-}
-
-function Modal({ title, subtitle, onClose, children, wide }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative z-10 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} bg-white dark:bg-slate-800 rounded-xl shadow-2xl my-auto animate-scale-in`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-            {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
-          </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"><X size={18} /></button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
       </div>
     </div>
   )
@@ -535,7 +518,7 @@ function ReportView() {
 
   return (
     <div>
-      <div className="card p-5 mb-4 border-l-4 border-l-indigo-500">
+      <div className="card card-compact mb-4 border-l-4 border-l-indigo-500">
         <div className="flex items-start gap-3 mb-3">
           <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-300 shrink-0">
             <Sparkles size={18} aria-hidden />
@@ -1035,7 +1018,13 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Allocate commission task" subtitle="Record a decision and assign an OPSC Manager to action it." onClose={onClose} wide>
+    <Modal
+      open
+      title="Allocate commission task"
+      subtitle="Record a decision and assign an OPSC Manager to action it."
+      onClose={onClose}
+      size="lg"
+    >
       <form onSubmit={submit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
         {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
 
@@ -1199,7 +1188,13 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Update task" subtitle={task.decision_number || task.submission_reference_number || 'Commission Task'} onClose={onClose} wide>
+    <Modal
+      open
+      title="Update task"
+      subtitle={task.decision_number || task.submission_reference_number || 'Commission Task'}
+      onClose={onClose}
+      size="lg"
+    >
       <form onSubmit={submit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
         {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
 

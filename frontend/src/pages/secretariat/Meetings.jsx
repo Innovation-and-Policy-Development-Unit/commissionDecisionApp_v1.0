@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
-import { CalendarDays, Clock, MapPin, X, Plus, CheckCircle2, XCircle, Calendar, ListChecks, RefreshCw, AlertCircle } from 'lucide-react'
+import { CalendarDays, Clock, MapPin, Plus, CheckCircle2, XCircle, Calendar, ListChecks, RefreshCw, AlertCircle } from 'lucide-react'
+import Modal from '../../components/shared/Modal'
 import MeetingBriefingPack from '../../components/meetings/MeetingBriefingPack'
 import clsx from 'clsx'
 import api from '../../api/client'
@@ -45,28 +46,6 @@ function emptyForm() {
   return { title: '', date: today, time: '09:00', venue: VENUES[0], type: 'ordinary', notes: '' }
 }
 
-function Modal({ title, onClose, children, closeLabel }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-      <div className="relative z-10 w-full max-w-lg bg-white dark:bg-slate-800 rounded-xl shadow-2xl my-auto animate-scale-in">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={closeLabel}
-            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </div>
-        <div className="px-6 py-6">{children}</div>
-      </div>
-    </div>
-  )
-}
-
 // ── Stats strip ───────────────────────────────────────────────────────────────
 
 function StatsStrip({ meetings }) {
@@ -88,7 +67,7 @@ function StatsStrip({ meetings }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
       {stats.map(({ label, value, icon: Icon }) => (
-        <div key={label} className="card px-4 py-3 flex items-center gap-3">
+        <div key={label} className="card px-3 py-2.5 flex items-center gap-3">
           <Icon size={18} className="text-primary-500 shrink-0" aria-hidden="true" />
           <div>
             <p className="text-xl font-bold text-slate-800 dark:text-slate-100 leading-none">{value}</p>
@@ -338,12 +317,13 @@ export default function Meetings() {
       </div>
 
       {/* Schedule Sitting modal */}
-      {modalOpen && (
-        <Modal
-          title={t('secretariat.schedule_modal_title')}
-          closeLabel={t('common.close')}
-          onClose={() => setModalOpen(false)}
-        >
+      <Modal
+        open={modalOpen}
+        title={t('secretariat.schedule_modal_title')}
+        closeLabel={t('common.close')}
+        onClose={() => setModalOpen(false)}
+        size="md"
+      >
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
               <label htmlFor="m-title" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('secretariat.sitting_title')}</label>
@@ -382,8 +362,7 @@ export default function Meetings() {
               <button type="button" className="btn-secondary px-6 py-2.5" onClick={() => setModalOpen(false)}>{t('common.cancel')}</button>
             </div>
           </form>
-        </Modal>
-      )}
+      </Modal>
     </div>
   )
 }
