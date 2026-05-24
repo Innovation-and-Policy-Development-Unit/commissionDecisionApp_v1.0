@@ -11,6 +11,7 @@ import SubmissionForm from './SubmissionForm'
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { isComplianceRole } from '../../constants/compliance'
+import { QualityScoreBadge } from '../../components/submissions/SubmissionQualityScore'
 
 const PER_PAGE = 15
 
@@ -54,6 +55,11 @@ export default function SubmissionLog() {
   const isAdmin = user?.role === 'psc_admin'
   const isComplianceUser = user && isComplianceRole(user.role)
   const canCreateSubmission = user && !isComplianceUser
+  const showQualityColumn = user && [
+    'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_manager',
+    'odu_manager', 'hr_unit_manager', 'vipam_manager', 'compliance_manager',
+    'compliance_senior', 'compliance_principal',
+  ].includes(user.role)
 
   const localeForDates = useMemo(() => {
     const map = { en: 'en-GB', fr: 'fr-FR', bi: 'en-GB' }
@@ -150,7 +156,7 @@ export default function SubmissionLog() {
     } catch { /* handled by api interceptor */ }
   }
 
-  const cols = isAdmin ? 9 : 7
+  const cols = (isAdmin ? 9 : 7) + (showQualityColumn ? 1 : 0)
 
   return (
     <div>
@@ -259,6 +265,9 @@ export default function SubmissionLog() {
                 <th>{t('submission.ministry')}</th>
                 <th>{t('submission.progress')}</th>
                 <th>{t('submission.stage')}</th>
+                {showQualityColumn && (
+                  <th>{t('submission.quality_column')}</th>
+                )}
                 <th>{t('submission.received_at')}</th>
                 <th>{t('submission.deadline_short')}</th>
                 {isAdmin && <th className="sr-only">Actions</th>}
@@ -323,6 +332,11 @@ export default function SubmissionLog() {
                         {r.is_assessment_overdue && <span className="ml-1 text-red-500 font-bold">!</span>}
                       </Badge>
                     </td>
+                    {showQualityColumn && (
+                      <td>
+                        <QualityScoreBadge submission={r} compact />
+                      </td>
+                    )}
                     <td>
                       <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
                         {r.received_at ? new Date(r.received_at).toLocaleDateString(localeForDates) : '—'}

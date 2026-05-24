@@ -361,7 +361,20 @@
     "ai_brief_regenerate": "Jeneret gen",
     "ai_brief_empty": "Brief i no save jeneret. Jekem ANTHROPIC_API_KEY mo trae gen.",
     "ai_brief_timeout": "Brief i tekem taem tumas. Jekem Celery worker mo ANTHROPIC_API_KEY long .env, mo klik Regenerate.",
-    "ai_brief_generated": "I jeneret long {{time}}"
+    "ai_brief_generated": "I jeneret long {{time}}",
+    "quality_title": "Skor blong kwoliti blong submisen",
+    "quality_subtitle": "AI blong ol reviewer — skor ia i save soem hao mo wok blong jekem bifo assessment.",
+    "quality_column": "Kwoliti",
+    "quality_scoring": "I stap skorem submisen…",
+    "quality_rescore": "Skorem gen",
+    "quality_failed": "Skor i no save jeneret.",
+    "quality_effort_low": "Wok blong jekem i smol",
+    "quality_effort_moderate": "Wok blong jekem i medel",
+    "quality_effort_high": "Wok blong jekem i bigwan",
+    "quality_dim_completeness": "Komplet",
+    "quality_dim_clarity": "Klia",
+    "quality_dim_evidence_quality": "Evidens",
+    "quality_dim_psc_formatting": "Format PSC"
   },
   "staff_chat": {
     "title": "Staff Assistant",

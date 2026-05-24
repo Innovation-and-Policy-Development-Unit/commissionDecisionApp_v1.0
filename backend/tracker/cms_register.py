@@ -137,4 +137,9 @@ def register_submission_from_cms(*, payload: dict) -> Submission:
         sub.reference_number,
         initial_stage,
     )
+
+    from .tasks import queue_submission_quality_score
+
+    queue_submission_quality_score(sub.pk, force=True)
+
     return sub

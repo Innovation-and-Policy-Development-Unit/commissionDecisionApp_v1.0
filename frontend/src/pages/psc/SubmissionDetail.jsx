@@ -13,6 +13,7 @@ import {
 import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
+import SubmissionQualityScore from '../../components/submissions/SubmissionQualityScore'
 import DeadlineReminderDrafts from '../../components/submissions/DeadlineReminderDrafts'
 import DocumentAnnotatorModal from '../../components/shared/DocumentAnnotatorModal'
 import DocumentSignatureModal from '../../components/shared/DocumentSignatureModal'
@@ -45,6 +46,11 @@ const DOC_EXTRACT_ROLES = [
 ]
 const DEADLINE_DRAFT_ROLES = [
   'psc_secretary', 'psc_admin', 'psc_officer', 'senior_admin_officer', 'psc_manager',
+]
+const QUALITY_SCORE_ROLES = [
+  'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_manager',
+  'odu_manager', 'hr_unit_manager', 'vipam_manager', 'compliance_manager',
+  'compliance_senior', 'compliance_principal',
 ]
 
 // ─── Visual timeline ──────────────────────────────────────────────────────────
@@ -197,6 +203,7 @@ export default function SubmissionDetail() {
   const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
   const showSecretariatBrief = user && SECRETARIAT_BRIEF_ROLES.includes(user.role)
   const showDeadlineDrafts = user && DEADLINE_DRAFT_ROLES.includes(user.role)
+  const showQualityScore = user && QUALITY_SCORE_ROLES.includes(user.role)
   const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
 
   const fetchSubmission = useCallback(async () => {
@@ -547,6 +554,15 @@ const stageDescriptions = {
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />{error}
         </div>
+      )}
+
+      {showQualityScore && (
+        <SubmissionQualityScore
+          submission={submission}
+          submissionId={id}
+          onUpdated={setSubmission}
+          canRescore
+        />
       )}
 
       {showSecretariatBrief && (

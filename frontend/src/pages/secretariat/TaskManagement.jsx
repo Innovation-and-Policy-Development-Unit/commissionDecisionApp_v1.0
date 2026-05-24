@@ -418,7 +418,7 @@ function ReportView() {
     if (!aiJob?.id || aiJob.status === 'ready' || aiJob.status === 'failed') return undefined
     const timer = setInterval(async () => {
       try {
-        const res = await api.get(`/commission-tasks/register-report/${aiJob.id}/`)
+        const res = await api.get(`/commission-tasks/register-reports/${aiJob.id}/`)
         setAiJob(res.data)
       } catch {
         /* keep polling */
@@ -456,11 +456,11 @@ function ReportView() {
     setAiError('')
     setAiJob(null)
     try {
-      const res = await api.post('/commission-tasks/register-report/', {
+      const res = await api.post('/commission-tasks/register-reports/generate/', {
         prompt,
         ...filterPayload(),
       })
-      const statusRes = await api.get(`/commission-tasks/register-report/${res.data.id}/`)
+      const statusRes = await api.get(`/commission-tasks/register-reports/${res.data.id}/`)
       setAiJob(statusRes.data)
     } catch (err) {
       setAiError(formatApiError(err, t('register_report.generate_failed')))

@@ -1054,3 +1054,108 @@ def queue_decision_register_report(report_id: int) -> None:
             exc,
         )
         generate_decision_register_report(report_id)
+
+
+# ── Submission quality score (A5) ─────────────────────────────────────────────
+
+QUALITY_SCORE_STAGES = frozenset({
+    "submitted",
+    "manager_checklist_review",
+    "secretary_review",
+    "under_assessment",
+    "compliance_under_review",
+})
+
+
+def submission_quality_needs_refresh(submission) -> bool:
+    if not submission.ai_quality_processed:
+        return True
+    if submission.ai_quality_generated_at and submission.updated_at > submission.ai_quality_generated_at:
+        return True
+    return False
+
+
+def _mark_submission_quality_failed(submission, message: str) -> None:
+    from django.utils import timezone
+
+    submission.ai_quality_explanation = message.strip()[:2000]
+    submission.ai_quality_processed = True
+    submission.ai_quality_generated_at = timezone.now()
+    submission.save(
+        update_fields=[
+            "ai_quality_explanation",
+            "ai_quality_processed",
+            "ai_quality_generated_at",
+            "updated_at",
+        ]
+    )
+
+
+@shared_task
+def score_submission_quality(submission_id: int, *, force: bool = False):
+    """Assign AI quality score (0–100) for compliance / unit review triage."""
+    from django.utils import timezone
+
+    from .models import Submission
+
+    try:
+        submission = Submission.objects.select_related(
+            "ministry", "department", "created_by", "dg_endorsed_by", "assigned_to",
+        ).get(pk=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("QUALITY_SKIP | Submission %s not found", submission_id)
+        return
+
+    if submission.current_stage == "draft":
+        return
+
+    if not force and not submission_quality_needs_refresh(submission):
+        return
+
+    from .ai.submission_quality_score import score_submission_from_context
+
+    context = build_submission_brief_context(submission)
+    result, err = score_submission_from_context(context)
+    if not result:
+        _mark_submission_quality_failed(
+            submission,
+            err or "Quality score could not be generated. Check ANTHROPIC_API_KEY and try again.",
+        )
+        app_log.error("QUALITY_FAIL | Submission %s | %s", submission_id, err)
+        return
+
+    submission.ai_quality_score = result["score"]
+    submission.ai_quality_explanation = result["explanation"]
+    submission.ai_quality_dimensions = result.get("dimensions") or {}
+    submission.ai_quality_review_effort = result.get("review_effort", "")
+    submission.ai_quality_processed = True
+    submission.ai_quality_generated_at = timezone.now()
+    submission.save(
+        update_fields=[
+            "ai_quality_score",
+            "ai_quality_explanation",
+            "ai_quality_dimensions",
+            "ai_quality_review_effort",
+            "ai_quality_processed",
+            "ai_quality_generated_at",
+            "updated_at",
+        ]
+    )
+    app_log.info(
+        "QUALITY_OK | Submission %s | score=%s effort=%s",
+        submission_id,
+        submission.ai_quality_score,
+        submission.ai_quality_review_effort,
+    )
+
+
+def queue_submission_quality_score(submission_id: int, *, force: bool = False) -> None:
+    try:
+        score_submission_quality.delay(submission_id, force=force)
+    except Exception as exc:
+        app_log.warning(
+            "QUALITY_QUEUE_FALLBACK | Submission %s | %s",
+            submission_id,
+            exc,
+        )
+        score_submission_quality(submission_id, force=force)

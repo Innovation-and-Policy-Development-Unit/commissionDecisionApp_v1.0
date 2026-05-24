@@ -683,6 +683,20 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             sid = submission.id
             transaction.on_commit(lambda: queue_submission_brief(sid, force=True))
 
+        from .tasks import queue_submission_quality_score
+
+        _quality_triggers = (
+            target == WorkflowStage.SUBMITTED
+            or (
+                prev == WorkflowStage.DEFERRED_BACK_TO_HR
+                and submission.current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            )
+            or target == WorkflowStage.SECRETARY_REVIEW
+        )
+        if _quality_triggers and submission.current_stage != WorkflowStage.DRAFT:
+            sid = submission.id
+            transaction.on_commit(lambda: queue_submission_quality_score(sid, force=True))
+
         # ── Legacy: dispatch to CMS only when portal created submission without CMS link ──
         if target == WorkflowStage.COMPLIANCE_UNDER_REVIEW and not submission.cms_case_id:
             from .cms_bridge import dispatch_submission_to_cms
@@ -704,6 +718,36 @@ class SubmissionViewSet(viewsets.ModelViewSet):
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,
              description=f"Stage transition: {prev} → {target}" + (f" | {remarks}" if remarks else ""))
+        return Response(SubmissionDetailSerializer(submission).data)
+
+    @action(detail=True, methods=["post"], url_path="score-quality")
+    def score_quality(self, request, pk=None):
+        """Re-run AI submission quality score (compliance / unit review triage)."""
+        from .tasks import queue_submission_quality_score
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        _review_roles = {
+            Role.PSC_OFFICER,
+            Role.PSC_ADMIN,
+            Role.PSC_SECRETARY,
+            Role.SENIOR_ADMIN_OFFICER,
+            Role.PSC_MANAGER,
+            Role.ODU_MANAGER,
+            Role.HR_UNIT_MANAGER,
+            Role.VIPAM_MANAGER,
+            Role.COMPLIANCE_MANAGER,
+            Role.COMPLIANCE_SENIOR,
+            Role.COMPLIANCE_PRINCIPAL,
+        }
+        if profile.role not in _review_roles and not request.user.is_staff:
+            raise PermissionDenied("You do not have permission to request a quality score.")
+
+        submission.ai_quality_processed = False
+        submission.ai_quality_score = None
+        submission.save(update_fields=["ai_quality_processed", "ai_quality_score", "updated_at"])
+        queue_submission_quality_score(submission.id, force=True)
+        submission.refresh_from_db()
         return Response(SubmissionDetailSerializer(submission).data)
 
     @action(detail=True, methods=["post"], url_path="generate-brief")
@@ -955,6 +999,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             from .tasks import queue_document_extraction
 
             queue_document_extraction(doc.id)
+
+        if submission.current_stage != WorkflowStage.DRAFT:
+            from .tasks import queue_submission_quality_score
+
+            sid = submission.id
+            transaction.on_commit(lambda: queue_submission_quality_score(sid))
 
         if len(created_docs) == 1:
             return Response(SubmissionDocumentSerializer(created_docs[0]).data, status=status.HTTP_201_CREATED)
@@ -1701,7 +1751,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("You cannot access this report.")
         return report
 
-    @action(detail=False, methods=["post"], url_path="register-report")
+    @action(detail=False, methods=["post"], url_path="register-reports/generate")
     def create_register_report(self, request):
         """
         Natural-language Commission Decision Register report (Quarto HTML + PDF).
@@ -1757,7 +1807,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             status=status.HTTP_202_ACCEPTED,
         )
 
-    @action(detail=False, methods=["get"], url_path=r"register-report/(?P<report_id>[0-9]+)")
+    @action(detail=False, methods=["get"], url_path=r"register-reports/(?P<report_id>[0-9]+)")
     def register_report_status(self, request, report_id=None):
         """Poll report job status; includes download paths when ready."""
         report = self._get_register_report_for_user(request, int(report_id))
@@ -1777,7 +1827,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         }
         if report.status == report.Status.READY:
             base = request.build_absolute_uri(
-                f"/api/commission-tasks/register-report/{report.id}/download/"
+                f"/api/commission-tasks/register-reports/{report.id}/download/"
             )
             payload["downloads"] = {
                 "html": f"{base}?format=html",
@@ -1785,7 +1835,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             }
         return Response(payload)
 
-    @action(detail=False, methods=["get"], url_path=r"register-report/(?P<report_id>[0-9]+)/download")
+    @action(detail=False, methods=["get"], url_path=r"register-reports/(?P<report_id>[0-9]+)/download")
     def register_report_download(self, request, report_id=None):
         """Download generated HTML or PDF (?format=html|pdf)."""
         from django.http import FileResponse

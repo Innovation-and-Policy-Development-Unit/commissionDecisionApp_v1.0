@@ -397,7 +397,20 @@
     "ai_brief_regenerate": "Regenerate",
     "ai_brief_empty": "Brief could not be generated. Check ANTHROPIC_API_KEY and try Regenerate.",
     "ai_brief_timeout": "Brief generation is taking too long. Ensure Celery worker is running, ANTHROPIC_API_KEY is set in .env, then click Regenerate.",
-    "ai_brief_generated": "Generated {{time}}"
+    "ai_brief_generated": "Generated {{time}}",
+    "quality_title": "Submission quality score",
+    "quality_subtitle": "AI triage for reviewers — higher scores usually mean less rework before assessment.",
+    "quality_column": "Quality",
+    "quality_scoring": "Scoring submission…",
+    "quality_rescore": "Re-score",
+    "quality_failed": "Quality score could not be generated.",
+    "quality_effort_low": "Low review effort",
+    "quality_effort_moderate": "Moderate review effort",
+    "quality_effort_high": "High review effort",
+    "quality_dim_completeness": "Completeness",
+    "quality_dim_clarity": "Clarity",
+    "quality_dim_evidence_quality": "Evidence",
+    "quality_dim_psc_formatting": "PSC formatting"
   },
   "staff_chat": {
     "title": "Staff Assistant",

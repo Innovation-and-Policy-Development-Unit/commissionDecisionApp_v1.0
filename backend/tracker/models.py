@@ -897,6 +897,31 @@ class Submission(models.Model):
         help_text="True once the latest brief generation completed.",
     )
     ai_brief_generated_at = models.DateTimeField(null=True, blank=True)
+    # ── AI quality score (compliance / unit review triage) ───────────────────
+    ai_quality_score = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="0–100 AI quality score (higher = less review work expected).",
+    )
+    ai_quality_explanation = models.TextField(
+        blank=True,
+        help_text="Brief AI explanation of the quality score.",
+    )
+    ai_quality_dimensions = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Per-dimension scores: completeness, clarity, evidence_quality, psc_formatting.",
+    )
+    ai_quality_review_effort = models.CharField(
+        max_length=16,
+        blank=True,
+        help_text="low | moderate | high — expected reviewer effort.",
+    )
+    ai_quality_processed = models.BooleanField(
+        default=False,
+        help_text="True once the latest quality scoring completed.",
+    )
+    ai_quality_generated_at = models.DateTimeField(null=True, blank=True)
     # ── Parent/child (attachment) relationship ──────────────────────────────
     parent_submission = models.ForeignKey(
         'self', null=True, blank=True,

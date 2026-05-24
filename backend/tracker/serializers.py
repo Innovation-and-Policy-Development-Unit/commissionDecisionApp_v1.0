@@ -463,6 +463,12 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",
+            "ai_quality_score",
+            "ai_quality_explanation",
+            "ai_quality_dimensions",
+            "ai_quality_review_effort",
+            "ai_quality_processed",
+            "ai_quality_generated_at",
         )
 
 
@@ -563,11 +569,23 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",
+            "ai_quality_score",
+            "ai_quality_explanation",
+            "ai_quality_dimensions",
+            "ai_quality_review_effort",
+            "ai_quality_processed",
+            "ai_quality_generated_at",
         )
         read_only_fields = (
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",
+            "ai_quality_score",
+            "ai_quality_explanation",
+            "ai_quality_dimensions",
+            "ai_quality_review_effort",
+            "ai_quality_processed",
+            "ai_quality_generated_at",
         )
 
 
