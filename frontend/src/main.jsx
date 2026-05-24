@@ -10,6 +10,10 @@ import { ToastProvider } from './context/ToastContext.jsx'
 import { ConfirmProvider } from './context/ConfirmContext.jsx'
 import './i18n/index.js'
 import { loadRemoteTranslationBundles } from './i18n/remoteTranslations.js'
+import { initFluentTypography } from './fluent/initFluentTypography.js'
+
+initFluentTypography()
+
 import './index.css'
 
 loadRemoteTranslationBundles().catch(() => {

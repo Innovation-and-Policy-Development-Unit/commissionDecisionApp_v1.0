@@ -98,12 +98,89 @@
   }
 
   html {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--fontFamilyBase);
+    font-size: var(--fontSizeBase300);
+    line-height: var(--lineHeightBase300);
+    font-weight: var(--fontWeightRegular);
+    letter-spacing: var(--letterSpacingBase300, normal);
     scroll-behavior: smooth;
   }
 
-  body {
-    @apply bg-slate-100 text-slate-900 antialiased;
+  body,
+  #root {
+    @apply bg-slate-100 text-slate-900 antialiased font-sans;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    font-weight: inherit;
+  }
+
+  h1,
+  .text-h1 {
+    font-size: var(--fontSizeHero800);
+    line-height: var(--lineHeightHero800);
+    font-weight: var(--fontWeightSemibold);
+  }
+
+  h2,
+  .text-h2 {
+    font-size: var(--fontSizeHero700);
+    line-height: var(--lineHeightHero700);
+    font-weight: var(--fontWeightSemibold);
+  }
+
+  h3,
+  .text-h3 {
+    font-size: var(--fontSizeBase600);
+    line-height: var(--lineHeightBase600);
+    font-weight: var(--fontWeightSemibold);
+  }
+
+  h4,
+  .text-h4 {
+    font-size: var(--fontSizeBase500);
+    line-height: var(--lineHeightBase500);
+    font-weight: var(--fontWeightSemibold);
+  }
+
+  h5,
+  .text-h5 {
+    font-size: var(--fontSizeBase400);
+    line-height: var(--lineHeightBase400);
+    font-weight: var(--fontWeightSemibold);
+  }
+
+  h6,
+  .text-h6 {
+    font-size: var(--fontSizeBase300);
+    line-height: var(--lineHeightBase300);
+    font-weight: var(--fontWeightSemibold);
+  }
+
+  p,
+  li,
+  label,
+  button,
+  input,
+  textarea,
+  select,
+  option {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-family: var(--fontFamilyMonospace) !important;
+  }
+
+  /* Legacy template — same stack as UI (Fluent / Segoe UI system) */
+  .font-serif {
+    font-family: var(--fontFamilyBase) !important;
   }
 
   .dark body {
@@ -443,6 +520,67 @@
 }
 
 @layer utilities {
+  /* Map arbitrary Tailwind pixel sizes → nearest Fluent typography token */
+  [class*='text-[7px]'],
+  [class*='text-[8px]'],
+  [class*='text-[9px]'],
+  [class*='text-[10px]'] {
+    font-size: var(--fontSizeBase100) !important;
+    line-height: var(--lineHeightBase100) !important;
+  }
+
+  [class*='text-[11px]'],
+  [class*='text-[12px]'] {
+    font-size: var(--fontSizeBase200) !important;
+    line-height: var(--lineHeightBase200) !important;
+  }
+
+  [class*='text-[13px]'],
+  [class*='text-[14px]'] {
+    font-size: var(--fontSizeBase300) !important;
+    line-height: var(--lineHeightBase300) !important;
+  }
+
+  [class*='text-[15px]'],
+  [class*='text-[16px]'],
+  [class*='text-[17px]'] {
+    font-size: var(--fontSizeBase400) !important;
+    line-height: var(--lineHeightBase400) !important;
+  }
+
+  [class*='text-[18px]'],
+  [class*='text-[20px]'],
+  [class*='text-[22px]'] {
+    font-size: var(--fontSizeBase500) !important;
+    line-height: var(--lineHeightBase500) !important;
+  }
+
+  [class*='text-[24px]'],
+  [class*='text-[26px]'] {
+    font-size: var(--fontSizeBase600) !important;
+    line-height: var(--lineHeightBase600) !important;
+  }
+
+  [class*='text-[28px]'],
+  [class*='text-[30px]'],
+  [class*='text-[32px]'],
+  [class*='text-[36px]'] {
+    font-size: var(--fontSizeHero700) !important;
+    line-height: var(--lineHeightHero700) !important;
+  }
+
+  [class*='text-[40px]'],
+  [class*='text-[48px]'],
+  [class*='text-[56px]'],
+  [class*='text-[64px]'],
+  [class*='text-[72px]'],
+  [class*='text-[96px]'],
+  [class*='text-[128px]'],
+  [class*='text-[150px]'] {
+    font-size: var(--fontSizeHero1000) !important;
+    line-height: var(--lineHeightHero1000) !important;
+  }
+
   .text-gradient {
     color: rgb(var(--p-500));
   }
@@ -477,7 +615,9 @@
   background: white !important;
   border-color: #e2e8f0 !important;
   border-radius: 0.75rem !important;
-  font-size: 0.75rem !important;
+  font-family: var(--fontFamilyBase) !important;
+  font-size: var(--fontSizeBase200) !important;
+  line-height: var(--lineHeightBase200) !important;
 }
 
 /* Calendar styles */

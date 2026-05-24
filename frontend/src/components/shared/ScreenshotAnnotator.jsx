@@ -104,7 +104,7 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
         top: pt.y,
         fontSize: 22,
         fill: color,
-        fontFamily: 'sans-serif',
+        fontFamily: 'var(--fontFamilyBase)',
         fontWeight: 'bold',
       })
       fc.add(text)

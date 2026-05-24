@@ -28,7 +28,28 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['var(--fontFamilyBase)'],
+        mono: ['var(--fontFamilyMonospace)'],
+        serif: ['var(--fontFamilyBase)'],
+      },
+      fontSize: {
+        '2xs': ['var(--fontSizeBase100)', { lineHeight: 'var(--lineHeightBase100)' }],
+        xs: ['var(--fontSizeBase200)', { lineHeight: 'var(--lineHeightBase200)' }],
+        sm: ['var(--fontSizeBase300)', { lineHeight: 'var(--lineHeightBase300)' }],
+        base: ['var(--fontSizeBase300)', { lineHeight: 'var(--lineHeightBase300)' }],
+        lg: ['var(--fontSizeBase400)', { lineHeight: 'var(--lineHeightBase400)' }],
+        xl: ['var(--fontSizeBase500)', { lineHeight: 'var(--lineHeightBase500)' }],
+        '2xl': ['var(--fontSizeBase600)', { lineHeight: 'var(--lineHeightBase600)' }],
+        '3xl': ['var(--fontSizeHero700)', { lineHeight: 'var(--lineHeightHero700)' }],
+        '4xl': ['var(--fontSizeHero800)', { lineHeight: 'var(--lineHeightHero800)' }],
+        '5xl': ['var(--fontSizeHero900)', { lineHeight: 'var(--lineHeightHero900)' }],
+        '6xl': ['var(--fontSizeHero1000)', { lineHeight: 'var(--lineHeightHero1000)' }],
+      },
+      fontWeight: {
+        normal: 'var(--fontWeightRegular)',
+        medium: 'var(--fontWeightMedium)',
+        semibold: 'var(--fontWeightSemibold)',
+        bold: 'var(--fontWeightBold)',
       },
       boxShadow: {
         'card': '0 1px 3px 0 rgba(0,0,0,0.10), 0 1px 2px -1px rgba(0,0,0,0.06)',

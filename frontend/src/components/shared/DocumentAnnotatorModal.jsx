@@ -252,7 +252,7 @@ export default function DocumentAnnotatorModal({ document: doc, submissionId, on
     if (tool === 'text') {
       const txt = new IText('Type here', {
         left: pt.x, top: pt.y, fontSize: 20, fill: color,
-        fontFamily: 'sans-serif', fontWeight: 'bold',
+        fontFamily: 'var(--fontFamilyBase)', fontWeight: 'bold',
       })
       fc.add(txt)
       fc.setActiveObject(txt)

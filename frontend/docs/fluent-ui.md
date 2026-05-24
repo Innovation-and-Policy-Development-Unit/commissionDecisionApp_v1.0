@@ -11,6 +11,16 @@ The app keeps the **liner-admin** layout (sidebar, header, Tailwind pages) and u
 | Icons (Fluent) | `@fluentui/react-icons` |
 | Icons (legacy) | `lucide-react` on older pages |
 
+## Typography
+
+The app uses **Fluent UI v9 typography tokens only** (no Inter, Georgia, or other web fonts).
+
+- `initFluentTypography()` runs before first paint (`main.jsx`) so `:root` has Fluent `fontFamily*` / `fontSize*` before CSS loads.
+- `FluentThemeProvider` re-syncs tokens on theme / color-preset change via `syncTypographyToDocument.js`.
+- Tailwind `font-sans`, `font-mono`, and `text-sm` / `text-lg` map to `var(--fontFamilyBase)`, `var(--fontFamilyMonospace)`, and Fluent `fontSize*` steps.
+- Legacy `text-[10px]`-style utilities are remapped to the nearest Fluent step in `index.css`.
+- Default UI font: **Segoe UI** stack (Fluent standard on Windows; system fallbacks elsewhere).
+
 ## Provider
 
 `FluentThemeProvider` in `main.jsx` (inside `ThemeProvider`):

@@ -1,4 +1,5 @@
 import { Printer } from 'lucide-react'
+import { FLUENT_FONT_FALLBACK } from '../../fluent/syncTypographyToDocument'
 
 const val = (values, key, fallback = '') =>
   (values?.[key] !== undefined && values[key] !== null && values[key] !== '')
@@ -44,7 +45,7 @@ export default function PSCForm22Preview({ values = {}, submissionRef = '', onPr
       <title>PSC Form 2-2${submissionRef ? ' — ' + submissionRef : ''}</title>
       <style>
         * { box-sizing: border-box; }
-        body { font-family: Georgia, serif; margin: 0; padding: 24px 40px; color: #1e293b; }
+        body { font-family: ${FLUENT_FONT_FALLBACK}; margin: 0; padding: 24px 40px; color: #1e293b; }
         table { width: 100%; border-collapse: collapse; }
         td { padding: 6px 8px; vertical-align: top; font-size: 11.5px; border-bottom: 1px solid #e2e8f0; }
         td:first-child { width: 220px; font-weight: 600; color: #475569; white-space: nowrap; padding-right: 12px; }
@@ -79,7 +80,7 @@ export default function PSCForm22Preview({ values = {}, submissionRef = '', onPr
 
       {/* Scrollable preview area */}
       <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900" id="psc-form-preview">
-        <div id="psc-form-preview-content" className="psc-form-paper mx-auto" style={{ maxWidth: 680, padding: '28px 32px', fontFamily: 'Georgia, serif' }}>
+        <div id="psc-form-preview-content" className="psc-form-paper mx-auto font-sans" style={{ maxWidth: 680, padding: '28px 32px' }}>
 
           {/* ── Official Header ── */}
           <div className="text-center mb-6 pb-4 border-b-2 border-slate-800">

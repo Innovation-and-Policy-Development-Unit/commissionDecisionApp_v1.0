@@ -981,7 +981,7 @@ function CreditCardForm() {
           </div>
           <div className="text-right">
             {cardType === 'visa' && (
-              <span className="text-white font-black text-2xl italic tracking-tight" style={{ fontFamily: 'serif' }}>VISA</span>
+              <span className="text-white font-black text-2xl italic tracking-tight font-sans">VISA</span>
             )}
             {cardType === 'mastercard' && (
               <div className="flex -space-x-2">

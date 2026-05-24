@@ -56,22 +56,6 @@ export default defineConfig({
               url.hostname === 'scdms-api.onrender.com' && url.pathname.startsWith('/api'),
             handler: 'NetworkOnly',
           },
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'scdms-google-fonts-stylesheets',
-              expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'scdms-google-fonts-webfonts',
-              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
         ],
       },
       devOptions: {
