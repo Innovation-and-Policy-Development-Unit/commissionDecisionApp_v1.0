@@ -1347,9 +1347,13 @@ export function SettingsTab({ settings, onRefresh }) {
       setSuccess(msg)
       toast.success(msg)
     } catch (err) {
-      const msg = err.response?.data?.detail ?? 'Failed to send test email.'
+      const data = err.response?.data
+      let msg = data?.detail ?? 'Failed to send test email.'
+      if (data?.smtp && !data.password_configured) {
+        msg += ' (No password is stored — re-enter the App Password and send again.)'
+      }
       setError(msg)
-      toast.error(msg)
+      toast.error(typeof msg === 'string' ? msg : 'Failed to send test email.')
     } finally {
       setTestEmailLoading(false)
     }
@@ -1508,7 +1512,10 @@ export function SettingsTab({ settings, onRefresh }) {
           </div>
           <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 space-y-3">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Saves SMTP fields above, then sends a test message. If <code className="text-[11px]">SMTP_HOST</code> is set in <code className="text-[11px]">.env</code>, that server is used instead (e.g. Mailpit on port 1025).
+              Gmail: <code className="text-[11px]">smtp.gmail.com</code>, port <code className="text-[11px]">587</code>, TLS on, SSL off.
+              SMTP User = the Google account that owns the App Password. Paste the 16-character App Password
+              (spaces are fine). Default From should use the same address. On Render, leave{' '}
+              <code className="text-[11px]">SMTP_PASSWORD</code> empty in Environment if you save it here only.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
               <div className="flex-1 space-y-1">

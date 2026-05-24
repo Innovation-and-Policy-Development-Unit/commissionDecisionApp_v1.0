@@ -665,16 +665,27 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-        # ── Checklist gate: all required documents must be present ──────────────
-        if prev == WorkflowStage.MANAGER_CHECKLIST_REVIEW and target == WorkflowStage.UNDER_ASSESSMENT:
-            items = SubmissionChecklistItem.objects.filter(submission=submission)
-            if items.exists():
-                unchecked = items.filter(is_present=False).count()
-                if unchecked > 0:
-                    return Response(
-                        {"detail": f"Cannot proceed: {unchecked} required document(s) not confirmed as present. Please complete the checklist first."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+        # ── Mandatory Checklist/Task Gate ───────────────────────────────────────
+        # Block transition if there are incomplete items mandatory for the current stage.
+        # We allow returning for clarification or rejection even if tasks are incomplete.
+        _allowed_targets_with_gaps = {
+            WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            WorkflowStage.REJECTED,
+            WorkflowStage.RETURNED,
+            WorkflowStage.DEFERRED_BACK_TO_HR,
+        }
+        if target not in _allowed_targets_with_gaps:
+            unchecked_mandatory = submission.checklist_items.filter(
+                document__mandatory_for_stage=prev,
+                is_present=False,
+                document__is_active=True
+            ).count()
+            
+            if unchecked_mandatory > 0:
+                return Response(
+                    {"detail": f"Cannot proceed: {unchecked_mandatory} mandatory task(s) or document(s) for the current stage '{prev}' are incomplete. Please complete all assessment milestones before advancing."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         from .decision_proof import create_decision_proof, is_decision_stage
 
@@ -4139,6 +4150,13 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
              extra_data={"keys": list(settings_dict.keys())})
         return Response(updated)
 
+    @action(detail=False, methods=["get"], url_path="smtp-status")
+    def smtp_status(self, request):
+        """Non-secret SMTP config summary for troubleshooting."""
+        from .email_backend import smtp_config_diagnostics
+
+        return Response(smtp_config_diagnostics())
+
     @action(detail=False, methods=["post"], url_path="test-email")
     def test_email(self, request):
         """Send a test message using the configured SMTP backend (env or SystemSetting)."""
@@ -4155,39 +4173,19 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
         except ValidationError:
             return Response({"detail": "Invalid email address."}, status=400)
 
-        from .email_backend import resolve_smtp_config, smtp_config_diagnostics
+        from .email_backend import resolve_smtp_config
 
         cfg = resolve_smtp_config()
-        diag = smtp_config_diagnostics()
-        smtp_label = f"{cfg['host']}:{cfg['port']} ({diag['source']})"
+        smtp_label = f"{cfg['host']}:{cfg['port']}"
         if not cfg.get("username"):
             return Response(
                 {
                     "detail": (
                         "SMTP username is missing. For Gmail use your full email as SMTP User "
-                        "and a Google App Password (not your login password)."
-                    ),
-                    "smtp": diag,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not cfg.get("password"):
-            return Response(
-                {
-                    "detail": (
-                        "SMTP password is missing. Paste a Google App Password in SMTP Password "
-                        "and click Send test email again (spaces are removed automatically). "
-                        "On Render, remove empty SMTP_PASSWORD from Environment if you use Admin only."
-                    ),
-                    "smtp": diag,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if cfg.get("use_tls") and cfg.get("use_ssl"):
-            return Response(
-                {
-                    "detail": "Enable only TLS or SSL, not both. Gmail uses port 587 with TLS on, SSL off.",
-                    "smtp": diag,
+                        "and a Google App Password (not your login password). "
+                        "If .env sets SMTP_HOST with empty SMTP_USER, either fill credentials in "
+                        "Admin or remove SMTP_HOST from .env so Admin settings apply."
+                    )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -4217,7 +4215,7 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
                     "Clear SMTP_HOST from .env if you only configure mail in Admin."
                 )
             return Response(
-                {"detail": f"Failed to send test email: {err}.{hint}"},
+                {"detail": f"Failed to send test email: {err}.{hint}", "smtp": diag},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 

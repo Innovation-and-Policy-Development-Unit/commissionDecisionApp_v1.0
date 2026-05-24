@@ -1407,13 +1407,17 @@ class DocumentAnnotation(models.Model):
 
 
 class RequiredDocument(models.Model):
-    """A document that must be present before a submission can pass checklist review.
+    """A document or procedural task that must be completed/present.
 
     Scoping rules (evaluated in order — most specific wins):
       form_type set   → applies only to submissions of that exact form type
       form_category set (form_type null) → applies to all submissions in that category
       both null       → applies to every submission
     """
+    class ItemType(models.TextChoices):
+        DOCUMENT   = "document",   "Required Document"
+        PROCEDURAL = "procedural", "Procedural Task / Milestone"
+
     form_category = models.ForeignKey(
         FormCategory, null=True, blank=True,
         on_delete=models.CASCADE, related_name='required_documents',
@@ -1422,17 +1426,24 @@ class RequiredDocument(models.Model):
     form_type = models.ForeignKey(
         'PSCFormType', null=True, blank=True,
         on_delete=models.CASCADE, related_name='required_documents',
-        help_text="When set, applies only to submissions of this specific form type (overrides form_category).",
+        help_text="When set, applies only to submissions of this specific form type.",
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    item_type = models.CharField(
+        max_length=20, choices=ItemType.choices, default=ItemType.DOCUMENT
+    )
+    mandatory_for_stage = models.CharField(
+        max_length=50, choices=WorkflowStage.choices, null=True, blank=True,
+        help_text="Block transition FROM this stage if this item is incomplete."
+    )
     order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['form_category', 'form_type', 'order', 'name']
-        verbose_name = "Required Document"
-        verbose_name_plural = "Required Documents"
+        verbose_name = "Required Document / Task"
+        verbose_name_plural = "Required Documents & Tasks"
 
     def __str__(self):
         if self.form_type_id:
