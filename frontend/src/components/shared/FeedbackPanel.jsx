@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas'
 import api from '../../api/client'
 import clsx from 'clsx'
 import ScreenshotAnnotator from './ScreenshotAnnotator'
+import LiveRegion from './LiveRegion'
 
 export default function FeedbackPanel({ open, onClose }) {
   const [loading,  setLoading]  = useState(false)
@@ -163,8 +164,20 @@ export default function FeedbackPanel({ open, onClose }) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          <LiveRegion
+            message={
+              success
+                ? 'Thank you. Your feedback has been submitted and will be reviewed by our team.'
+                : error || ''
+            }
+            politeness={error ? 'assertive' : 'polite'}
+          />
           {success ? (
-            <div className="h-full flex flex-col items-center justify-center text-center animate-scale-in">
+            <div
+              className="h-full flex flex-col items-center justify-center text-center animate-scale-in"
+              role="status"
+              aria-live="polite"
+            >
               <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-6">
                 <CheckCircle2 size={40} />
               </div>
@@ -176,8 +189,12 @@ export default function FeedbackPanel({ open, onClose }) {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               {error && (
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl flex gap-3 text-red-700 dark:text-red-400 text-sm">
-                  <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl flex gap-3 text-red-700 dark:text-red-400 text-sm"
+                >
+                  <AlertCircle size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
                   <p>{error}</p>
                 </div>
               )}

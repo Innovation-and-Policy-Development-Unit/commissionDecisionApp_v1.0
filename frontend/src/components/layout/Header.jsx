@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import BrandLogo from '../shared/BrandLogo'
 import LanguageSwitcher from '../shared/LanguageSwitcher'
+import LiveRegion from '../shared/LiveRegion'
 import DesktopNotificationSettings from '../notifications/DesktopNotificationSettings'
 import { useNotifications } from '../../hooks/useNotifications'
 
@@ -312,6 +313,19 @@ export default function Header({ onMenuClick }) {
     setUserOpen(false)
   }, [navigate])
 
+  const notificationLiveMessage = useMemo(() => {
+    if (!notifOpen) return ''
+    if (notifLoading && notifications.length === 0) return t('notifications.loading')
+    if (notifError && notifications.length === 0) return t('notifications.load_error')
+    if (!notifLoading && !notifError && notifications.length === 0) {
+      return t('notifications.empty')
+    }
+    if (unreadCount > 0) {
+      return t('header.notifications_new', { count: unreadCount })
+    }
+    return t('header.notifications')
+  }, [notifOpen, notifLoading, notifError, notifications.length, unreadCount, t])
+
   return (
     <header className={clsx(
       'fixed top-0 end-0 start-0 h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 z-30 flex items-center px-4 gap-3 sidebar-transition',
@@ -578,6 +592,7 @@ export default function Header({ onMenuClick }) {
 
       {/* Notifications */}
       <div className="relative" ref={notifRef}>
+        <LiveRegion message={notificationLiveMessage} politeness="polite" />
         <button
           ref={notifButtonRef}
           type="button"
@@ -612,15 +627,25 @@ export default function Header({ onMenuClick }) {
               )}
             </div>
             <DesktopNotificationSettings compact />
-            <div className="max-h-72 overflow-y-auto custom-scrollbar">
+            <div
+              className="max-h-72 overflow-y-auto custom-scrollbar"
+              aria-live="polite"
+              aria-relevant="additions text"
+            >
               {notifLoading && notifications.length === 0 && (
-                <p className="px-4 py-6 text-sm text-slate-400 text-center">{t('notifications.loading')}</p>
+                <p className="px-4 py-6 text-sm text-slate-400 text-center" role="status">
+                  {t('notifications.loading')}
+                </p>
               )}
               {notifError && notifications.length === 0 && (
-                <p className="px-4 py-6 text-sm text-red-500 text-center">{t('notifications.load_error')}</p>
+                <p className="px-4 py-6 text-sm text-red-500 text-center" role="alert">
+                  {t('notifications.load_error')}
+                </p>
               )}
               {!notifLoading && !notifError && notifications.length === 0 && (
-                <p className="px-4 py-6 text-sm text-slate-400 text-center">{t('notifications.empty')}</p>
+                <p className="px-4 py-6 text-sm text-slate-400 text-center" role="status">
+                  {t('notifications.empty')}
+                </p>
               )}
               {notifications.map(notif => (
                 <button

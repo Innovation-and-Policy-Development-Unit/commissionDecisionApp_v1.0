@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react'
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react'
+import LiveRegion from '../components/shared/LiveRegion'
 
 const ToastContext = createContext(null)
 
@@ -24,15 +25,24 @@ const ICON_STYLES = {
   info:    'text-blue-500',
 }
 
+const TYPE_LABELS = {
+  success: 'Success',
+  error: 'Error',
+  warning: 'Warning',
+  info: 'Information',
+}
+
 function ToastItem({ toast, onRemove }) {
   const Icon = ICONS[toast.type] || Info
 
   return (
     <div
+      role="status"
+      aria-live="off"
       className={`flex items-start gap-3 w-80 rounded-xl border px-4 py-3 shadow-lg
         animate-slide-in-right pointer-events-auto ${STYLES[toast.type]}`}
     >
-      <Icon size={18} className={`shrink-0 mt-0.5 ${ICON_STYLES[toast.type]}`} />
+      <Icon size={18} className={`shrink-0 mt-0.5 ${ICON_STYLES[toast.type]}`} aria-hidden="true" />
       <div className="flex-1 min-w-0">
         {toast.title && (
           <p className="text-sm font-semibold leading-snug">{toast.title}</p>
@@ -40,10 +50,12 @@ function ToastItem({ toast, onRemove }) {
         <p className="text-sm leading-snug opacity-90">{toast.message}</p>
       </div>
       <button
+        type="button"
         onClick={() => onRemove(toast.id)}
-        className="shrink-0 rounded-md p-0.5 opacity-60 hover:opacity-100 transition-opacity"
+        aria-label="Dismiss notification"
+        className="shrink-0 rounded-md p-0.5 opacity-60 hover:opacity-100 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
-        <X size={14} />
+        <X size={14} aria-hidden="true" />
       </button>
     </div>
   )
@@ -51,6 +63,7 @@ function ToastItem({ toast, onRemove }) {
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
+  const [liveMessage, setLiveMessage] = useState('')
   const counterRef = useRef(0)
 
   const remove = useCallback((id) => {
@@ -60,6 +73,9 @@ export function ToastProvider({ children }) {
   const add = useCallback((type, message, title, duration = 4000) => {
     const id = ++counterRef.current
     setToasts(prev => [...prev, { id, type, message, title }])
+    const prefix = TYPE_LABELS[type] || 'Notice'
+    const text = title ? `${prefix}: ${title}. ${message}` : `${prefix}: ${message}`
+    setLiveMessage(text)
     if (duration > 0) setTimeout(() => remove(id), duration)
   }, [remove])
 
@@ -73,8 +89,11 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      {/* Toast stack — bottom-right */}
-      <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-2 pointer-events-none">
+      <LiveRegion message={liveMessage} politeness="polite" />
+      <div
+        className="fixed bottom-6 right-6 z-[200] flex flex-col gap-2 pointer-events-none"
+        aria-label="Notifications"
+      >
         {toasts.map(t => (
           <ToastItem key={t.id} toast={t} onRemove={remove} />
         ))}
