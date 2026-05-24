@@ -28,13 +28,18 @@ export default function Layout() {
     toggleFeedbackPanel,
     feedbackEnabled
   } = useTheme()
-  const { isLocked } = useAuth()
+  const { isLocked, user } = useAuth()
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [staffChatOpen, setStaffChatOpen] = useState(false)
+  const [statusChatOpen, setStatusChatOpen] = useState(false)
 
+  const ministryStatusRoles = ['ministry_hr', 'dept_admin', 'head_of_agency']
+  const isMinistryStatusUser = user && ministryStatusRoles.includes(user.role)
   const onAssistantPage = location.pathname === '/assistant'
-  const hideStaffChatFab = onAssistantPage
+  const onStatusPage = location.pathname === '/status-assistant'
+  const hideStaffChatFab = onAssistantPage || isMinistryStatusUser
+  const hideStatusChatFab = onStatusPage || !isMinistryStatusUser
 
   const handleMenuClick = () => {
     if (window.innerWidth < 1024) {
