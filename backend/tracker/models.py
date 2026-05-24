@@ -2096,12 +2096,22 @@ class ODURestructureChecklist(models.Model):
 
 
 class StaffChatSession(models.Model):
-    """Per-user conversation thread for the PSC Staff Assistant."""
+    """Per-user conversation thread for Staff Assistant or Status Assistant."""
+
+    class Purpose(models.TextChoices):
+        STAFF = "staff", "Staff Assistant"
+        STATUS = "status", "Status Assistant"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="staff_chat_sessions",
+    )
+    purpose = models.CharField(
+        max_length=16,
+        choices=Purpose.choices,
+        default=Purpose.STAFF,
+        db_index=True,
     )
     title = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

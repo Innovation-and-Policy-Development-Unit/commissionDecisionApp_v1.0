@@ -216,6 +216,7 @@ REST_FRAMEWORK = {
         'submission_create': '10/hour',
         'feedback_create':   '5/hour',
         'staff_chat':        '30/hour',
+        'status_chat':       '60/hour',
         'session_pin_verify': '5/min',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',

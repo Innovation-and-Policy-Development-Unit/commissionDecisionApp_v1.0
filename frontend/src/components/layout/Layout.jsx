@@ -11,6 +11,8 @@ import SecurityNoticesBanner from '../shared/SecurityNoticesBanner'
 import FeedbackPanel from '../shared/FeedbackPanel'
 import StaffChatPanel from '../assistant/StaffChatPanel'
 import StaffChatFab from '../assistant/StaffChatFab'
+import StatusChatPanel from '../assistant/StatusChatPanel'
+import StatusChatFab from '../assistant/StatusChatFab'
 import LockOverlay from '../auth/LockOverlay'
 import { MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
@@ -106,6 +108,16 @@ export default function Layout() {
         open={staffChatOpen}
         onClick={() => setStaffChatOpen((o) => !o)}
         hidden={hideStaffChatFab}
+      />
+
+      <StatusChatPanel
+        open={statusChatOpen}
+        onClose={() => setStatusChatOpen(false)}
+      />
+      <StatusChatFab
+        open={statusChatOpen}
+        onClick={() => setStatusChatOpen((o) => !o)}
+        hidden={hideStatusChatFab}
       />
 
       {/* Floating Feedback Tab */}

@@ -43,3 +43,8 @@ class SessionPinVerifyThrottle(AnonRateThrottle):
 class StaffChatThrottle(UserRateThrottle):
     """Limit Staff Assistant messages per user — controls Claude API cost."""
     scope = 'staff_chat'
+
+
+class StatusChatThrottle(UserRateThrottle):
+    """Limit Status Assistant queries per user."""
+    scope = 'status_chat'

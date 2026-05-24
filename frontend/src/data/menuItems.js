@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, ScrollText, Bell, ListTodo,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
-  Headphones, Mail, FolderOpen, ExternalLink, Bot,
+  Headphones, Mail, FolderOpen, ExternalLink, Bot, MessageCircle,
 } from 'lucide-react'
 import { CMS_PORTAL_URL } from '../constants/compliance'
 import {
@@ -39,6 +39,7 @@ const menuItems = [
         path: '/submissions',
       },
       { label: 'Dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard, path: '/' },
+      { label: 'Case Status', labelKey: 'nav.status_assistant', icon: MessageCircle, path: '/status-assistant', audience: 'all' },
       { label: 'Staff Assistant', labelKey: 'nav.staff_assistant', icon: Bot, path: '/assistant', audience: 'all' },
     ],
   },
@@ -50,6 +51,7 @@ const menuItems = [
     items: [
       { label: 'Dashboard',   labelKey: 'nav.dashboard',   icon: LayoutDashboard, path: '/' },
       { label: 'Submissions', labelKey: 'nav.submissions', icon: FileText,        path: '/submissions' },
+      { label: 'Case Status', labelKey: 'nav.status_assistant', icon: MessageCircle, path: '/status-assistant', audience: 'all' },
       { label: 'Reports',     labelKey: 'nav.reports',     icon: BarChart3,       path: '/reports', audience: 'exclude_compliance' },
       { label: 'Staff Assistant', labelKey: 'nav.staff_assistant', icon: Bot, path: '/assistant', audience: 'all' },
     ],
