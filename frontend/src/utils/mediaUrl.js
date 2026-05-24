@@ -4,19 +4,31 @@
  */
 export function resolveMediaUrl(url) {
   if (!url || typeof url !== 'string') return url
-  if (/^https?:\/\//i.test(url)) return url
 
   const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-  if (!url.startsWith('/') || !/^https?:\/\//i.test(apiBase)) {
-    return url
+  const sameOriginApi = !apiBase || apiBase.startsWith('/')
+
+  // Docker/single-host: API may return http://backend:8000 or :8000/media — browser uses nginx :8080
+  if (/^https?:\/\//i.test(url) && sameOriginApi && url.includes('/media/')) {
+    try {
+      return new URL(url).pathname
+    } catch {
+      /* keep original */
+    }
   }
 
-  try {
-    const origin = new URL(apiBase).origin
-    return `${origin}${url}`
-  } catch {
-    return url
+  if (/^https?:\/\//i.test(url)) return url
+
+  if (url.startsWith('/') && /^https?:\/\//i.test(apiBase)) {
+    try {
+      const origin = new URL(apiBase).origin
+      return `${origin}${url}`
+    } catch {
+      return url
+    }
   }
+
+  return url
 }
 
 export function normalizeUserMedia(user) {
