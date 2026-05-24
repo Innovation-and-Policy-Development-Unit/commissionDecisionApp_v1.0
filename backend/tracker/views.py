@@ -5301,9 +5301,11 @@ class MySignatureView(APIView):
     def get(self, request):
         try:
             sig = request.user.stored_signature
-            return Response(UserSignatureSerializer(sig).data)
+            return Response(
+                UserSignatureSerializer(sig, context={"request": request}).data
+            )
         except UserSignature.DoesNotExist:
-            return Response(None, status=status.HTTP_404_NOT_FOUND)
+            return Response({"id": None, "image_url": None}, status=status.HTTP_200_OK)
 
     def post(self, request):
         image = request.FILES.get('image')
@@ -5314,7 +5316,9 @@ class MySignatureView(APIView):
             sig.image.delete(save=False)
         sig.image = image
         sig.save()
-        return Response(UserSignatureSerializer(sig).data)
+        return Response(
+            UserSignatureSerializer(sig, context={"request": request}).data
+        )
 
     def delete(self, request):
         try:
@@ -5323,7 +5327,7 @@ class MySignatureView(APIView):
             sig.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except UserSignature.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class VerifyPinView(APIView):

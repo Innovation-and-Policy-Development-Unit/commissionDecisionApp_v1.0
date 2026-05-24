@@ -155,26 +155,14 @@ class MeSerializer(serializers.ModelSerializer):
         return bool(obj.session_pin)
 
     def get_signature(self, obj):
-        if not obj.signature:
-            return None
-        raw = obj.signature.url
-        if raw.startswith(("http://", "https://")):
-            return raw
-        from urllib.parse import urlparse
-        parsed = urlparse(raw)
-        return parsed.path or raw
+        from .media_urls import public_media_url
+
+        return public_media_url(obj.signature, self.context.get("request"))
 
     def get_profile_picture(self, obj):
-        """Root-relative URL so the SPA loads images from its own origin (/media → nginx/vite → Django)."""
-        if not obj.profile_picture:
-            return None
-        raw = obj.profile_picture.url
-        if raw.startswith(("http://", "https://")):
-            path = urlparse(raw).path
-            return path if path.startswith("/") else f"/{path.lstrip('/')}"
-        if raw.startswith("/"):
-            return raw
-        return f"/{raw.lstrip('/')}"
+        from .media_urls import public_media_url
+
+        return public_media_url(obj.profile_picture, self.context.get("request"))
 
     def get_can_manage_users(self, obj):
         return rbac_user_can_manage_users(obj.user)
@@ -718,7 +706,9 @@ class UserSignatureSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
 
     def get_image_url(self, obj):
-        return obj.image.url if obj.image else None
+        from .media_urls import public_media_url
+
+        return public_media_url(obj.image, self.context.get("request"))
 
     class Meta:
         model = UserSignature

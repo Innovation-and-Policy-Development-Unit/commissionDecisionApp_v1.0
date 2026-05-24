@@ -51,7 +51,7 @@ const BaseTextarea = forwardRef(function BaseTextarea(
         id={id}
         required={required}
         rows={rows}
-        className={inputClassName}
+        className={clsx('w-full min-w-0', inputClassName)}
         {...props}
       />
     </Field>

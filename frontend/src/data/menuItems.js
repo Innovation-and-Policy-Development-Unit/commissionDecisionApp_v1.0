@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, ScrollText, Bell, ListTodo,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
-  Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen, Languages,
+  Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen, Languages, Sparkles,
 } from 'lucide-react'
 import { CMS_PORTAL_URL } from '../constants/compliance'
 import {
@@ -51,8 +51,16 @@ const menuItems = [
     items: [
       { label: 'Dashboard',   labelKey: 'nav.dashboard',   icon: LayoutDashboard, path: '/' },
       { label: 'Submissions', labelKey: 'nav.submissions', icon: FileText,        path: '/submissions' },
-      { label: 'Reports',     labelKey: 'nav.reports',     icon: BarChart3,       path: '/reports', audience: 'exclude_compliance' },
-      { label: 'Staff Assistant', labelKey: 'nav.staff_assistant', icon: Bot, path: '/assistant', audience: 'all' },
+    ],
+  },
+  {
+    group: 'Intelligence',
+    groupKey: 'nav.group_intelligence',
+    groupIcon: Sparkles,
+    audience: 'all',
+    items: [
+      { label: 'Smart Report (AI)', labelKey: 'nav.smart_reports', icon: Sparkles, path: '/reports' },
+      { label: 'Staff Assistant', labelKey: 'nav.staff_assistant', icon: Bot, path: '/assistant' },
     ],
   },
   {

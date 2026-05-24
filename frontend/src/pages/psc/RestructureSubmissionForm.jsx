@@ -20,6 +20,8 @@ import {
 } from 'lucide-react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseTextarea from '../../components/shared/BaseTextarea'
 
 // ── Empty costing row ─────────────────────────────────────────────────────────
 const EMPTY_ROW = {
@@ -331,31 +333,36 @@ export default function RestructureSubmissionForm({ submissionId, submission, ca
     )
   }
 
-  const F = ({ field, placeholder, multiline = false, rows = 4 }) => {
+  const F = ({ field, placeholder, multiline = false, rows = 5, label }) => {
     if (!canEdit) {
       return (
-        <div className={`text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2 ${!form[field] ? 'text-slate-400 dark:text-slate-500 italic' : ''}`}>
+        <div className={`text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 w-full ${!form[field] ? 'text-slate-400 dark:text-slate-500 italic' : ''}`}>
           {form[field] || 'Not provided.'}
         </div>
       )
     }
     if (multiline) {
       return (
-        <textarea
-          className="form-input resize-y"
+        <BaseTextarea
+          className="w-full"
+          inputClassName="w-full"
+          hideLabel={!label}
+          label={label}
           rows={rows}
           value={form[field] || ''}
-          onChange={e => set(field, e.target.value)}
+          onChange={(e) => set(field, e.target.value)}
           placeholder={placeholder}
         />
       )
     }
     return (
-      <input
-        type="text"
-        className="form-input"
+      <BaseInput
+        className="w-full"
+        inputClassName="w-full"
+        hideLabel={!label}
+        label={label}
         value={form[field] || ''}
-        onChange={e => set(field, e.target.value)}
+        onChange={(e) => set(field, e.target.value)}
         placeholder={placeholder}
       />
     )
@@ -492,28 +499,26 @@ export default function RestructureSubmissionForm({ submissionId, submission, ca
         <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">
           Director's Sign-off
         </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Director's Name</label>
-            <F field="director_name" placeholder="Full name and title" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Date</label>
-            {canEdit ? (
-              <input
-                type="date"
-                className="form-input"
-                value={form.director_date || ''}
-                onChange={e => set('director_date', e.target.value)}
-              />
-            ) : (
-              <p className="text-sm text-slate-800 dark:text-slate-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+          <F field="director_name" label="Director's Name" placeholder="Full name and title" />
+          {canEdit ? (
+            <BaseInput
+              className="w-full"
+              label="Date"
+              type="date"
+              value={form.director_date || ''}
+              onChange={(e) => set('director_date', e.target.value)}
+            />
+          ) : (
+            <div>
+              <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Date</p>
+              <p className="text-sm text-slate-800 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5">
                 {form.director_date
                   ? new Date(form.director_date).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
                   : '—'}
               </p>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

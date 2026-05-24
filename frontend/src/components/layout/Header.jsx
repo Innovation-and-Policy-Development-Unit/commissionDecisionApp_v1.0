@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, Fragment, memo } fro
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../../api/client'
+import { resolveMediaUrl } from '../../utils/mediaUrl'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import clsx from 'clsx'

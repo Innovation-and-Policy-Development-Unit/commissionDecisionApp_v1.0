@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api/client'
+import { normalizeUserMedia } from '../utils/mediaUrl'
 import { getInactivityLockMs, INACTIVITY_LOCK_SETTINGS_EVENT } from '../utils/inactivityLock'
 
 const AuthContext = createContext(null)
@@ -67,7 +68,7 @@ export function AuthProvider({ children }) {
       setPin('')
       try {
         const me = await api.get('/me/')
-        setUser(me.data)
+        setUser(normalizeUserMedia(me.data))
       } catch {
         setUser(null)
       }
@@ -125,7 +126,7 @@ export function AuthProvider({ children }) {
     }
     try {
       const { data } = await api.get('/me/')
-      setUser(data)
+      setUser(normalizeUserMedia(data))
     } catch {
       /* Any /me/ failure means no usable session — clear tokens so dashboard stays gated. */
       setUser(null)
@@ -184,7 +185,7 @@ export function AuthProvider({ children }) {
     setTokens(data.access, data.refresh)
     try {
       const me = await api.get('/me/')
-      setUser(me.data)
+      setUser(normalizeUserMedia(me.data))
     } catch (err) {
       localStorage.removeItem('psc_access')
       localStorage.removeItem('psc_refresh')

@@ -13,7 +13,7 @@ import PscDashboard from '../pages/psc/PscDashboard'
 import SubmissionLog from '../pages/psc/SubmissionLog'
 import SubmissionDetail from '../pages/psc/SubmissionDetail'
 import SubmissionForm from '../pages/psc/SubmissionForm'
-import Reports from '../pages/psc/Reports'
+import SmartReports from '../pages/psc/SmartReports'
 import MeetingCapture from '../pages/psc/MeetingCapture'
 import AdminPanel from '../pages/admin/AdminPanel'
 import MinistriesDepartments from '../pages/admin/MinistriesDepartments'
@@ -59,7 +59,7 @@ export default function AppRouter() {
           <Route path="/submissions" element={<SubmissionLog />} />
           <Route path="/submissions/new" element={<SubmissionForm />} />
           <Route path="/submissions/:id" element={<SubmissionDetail />} />
-          <Route path="/reports" element={<Reports />} />
+          <Route path="/reports" element={<SmartReports />} />
           <Route path="/assistant" element={<StaffChatbot />} />
           <Route path="/status-assistant" element={<Navigate to="/assistant" replace />} />
           <Route path="/meetings/capture" element={<MeetingCapture />} />

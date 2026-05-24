@@ -52,7 +52,7 @@ const BaseInput = forwardRef(function BaseInput(
         ref={ref}
         id={id}
         required={required}
-        className={inputClassName}
+        className={clsx('w-full min-w-0', inputClassName)}
         {...props}
       />
     </Field>

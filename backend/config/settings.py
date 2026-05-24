@@ -148,11 +148,6 @@ if _BEHIND_PROXY:
         SESSION_COOKIE_SECURE = True
         CSRF_COOKIE_SECURE = True
 
-_cdp_public = os.getenv("CDP_BASE_URL", "").strip().rstrip("/")
-if _cdp_public and not DEBUG:
-    MEDIA_URL = f"{_cdp_public}/media/"
-
-
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
@@ -190,9 +185,13 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Leading slash so browser resolves from site root (not relative to /pages/account etc.)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.environ.get('MEDIA_ROOT', str(BASE_DIR / 'media'))
+# Leading slash for same-origin Docker/nginx; full API URL on Render (SPA on another host).
+MEDIA_ROOT = os.environ.get("MEDIA_ROOT", str(BASE_DIR / "media"))
+_cdp_public = os.getenv("CDP_BASE_URL", "").strip().rstrip("/")
+if _cdp_public and not DEBUG:
+    MEDIA_URL = f"{_cdp_public}/media/"
+else:
+    MEDIA_URL = "/media/"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

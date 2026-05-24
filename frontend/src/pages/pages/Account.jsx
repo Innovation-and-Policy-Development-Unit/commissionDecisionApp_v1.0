@@ -28,6 +28,7 @@ import { useConfirm } from '../../context/ConfirmContext'
 import LockPopover from '../../components/shared/LockPopover'
 import SignaturePad from '../../components/shared/SignaturePad'
 import api from '../../api/client'
+import { resolveMediaUrl } from '../../utils/mediaUrl'
 import DesktopNotificationSettings from '../../components/notifications/DesktopNotificationSettings'
 import {
   getInactivityLockMinutes,
@@ -240,7 +241,16 @@ export default function Account() {
   const [pendingUpload, setPendingUpload] = useState(null)   // File waiting after lock
 
   useEffect(() => {
-    api.get('/my-signature/').then(r => setStoredSig(r.data)).catch(() => setStoredSig(null))
+    api.get('/my-signature/')
+      .then((r) => {
+        const data = r.data
+        if (!data?.image_url) {
+          setStoredSig(null)
+          return
+        }
+        setStoredSig({ ...data, image_url: resolveMediaUrl(data.image_url) })
+      })
+      .catch(() => setStoredSig(null))
   }, [])
 
   const uploadSignatureBlob = async (blob, filename = 'signature.png') => {
@@ -249,7 +259,8 @@ export default function Account() {
       const fd = new FormData()
       fd.append('image', blob instanceof File ? blob : new File([blob], filename, { type: 'image/png' }))
       const r = await api.post('/my-signature/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      setStoredSig(r.data)
+      const data = r.data
+      setStoredSig(data?.image_url ? { ...data, image_url: resolveMediaUrl(data.image_url) } : data)
       toast.success('Signature saved.')
     } catch {
       toast.error('Failed to save signature.')
