@@ -1,9 +1,31 @@
 """Compliance unit submission types, digitized forms, and compliance_senior role."""
 
-from django.db import migrations
+from django.db import migrations, models
+
+from tracker.migration_utils import add_fields_if_missing
+
+
+def add_start_new_page_column(apps, schema_editor):
+    add_fields_if_missing(
+        apps,
+        schema_editor,
+        "tracker",
+        "PSCFormField",
+        [
+            (
+                "start_new_page",
+                models.BooleanField(
+                    default=False,
+                    help_text="Start this field on a new page when rendering the PDF.",
+                ),
+            ),
+        ],
+    )
 
 
 def seed_forward(apps, schema_editor):
+    add_start_new_page_column(apps, schema_editor)
+
     from tracker.compliance_forms import seed_compliance_form_types
 
     seed_compliance_form_types(apps)
@@ -47,13 +69,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # 0042 recorded start_new_page in migration state only; add DB column if missing.
-        migrations.RunSQL(
-            sql=(
-                "ALTER TABLE tracker_pscformfield "
-                "ADD COLUMN IF NOT EXISTS start_new_page boolean NOT NULL DEFAULT false;"
-            ),
-            reverse_sql=migrations.RunSQL.noop,
-        ),
         migrations.RunPython(seed_forward, seed_reverse),
     ]

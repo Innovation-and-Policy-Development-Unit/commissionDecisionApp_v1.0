@@ -4,6 +4,35 @@ import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 
+from tracker.migration_utils import add_fields_if_missing
+
+
+def add_minutes_timestamp_columns(apps, schema_editor):
+    add_fields_if_missing(
+        apps,
+        schema_editor,
+        "tracker",
+        "Minutes",
+        [
+            (
+                "circulated_at",
+                models.DateTimeField(
+                    blank=True,
+                    null=True,
+                    help_text="When signed minutes were circulated to managers for task allocation.",
+                ),
+            ),
+            (
+                "minutes_due_at",
+                models.DateTimeField(
+                    blank=True,
+                    null=True,
+                    help_text="SLA: minutes must be finalised within 3 days of the meeting.",
+                ),
+            ),
+        ],
+    )
+
 
 class Migration(migrations.Migration):
 
@@ -13,28 +42,26 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # These columns may already exist if the model was deployed before this migration
-        # was recorded — use IF NOT EXISTS to make the operation idempotent.
-        migrations.RunSQL(
-            "ALTER TABLE tracker_minutes ADD COLUMN IF NOT EXISTS circulated_at TIMESTAMPTZ NULL",
-            migrations.RunSQL.noop,
-        ),
-        migrations.RunSQL(
-            "ALTER TABLE tracker_minutes ADD COLUMN IF NOT EXISTS minutes_due_at TIMESTAMPTZ NULL",
-            migrations.RunSQL.noop,
-        ),
-        # Keep Django's state in sync even though the SQL above handles the real columns.
+        migrations.RunPython(add_minutes_timestamp_columns, migrations.RunPython.noop),
         migrations.SeparateDatabaseAndState(
             state_operations=[
                 migrations.AddField(
                     model_name='minutes',
                     name='circulated_at',
-                    field=models.DateTimeField(blank=True, help_text='When signed minutes were circulated to managers for task allocation.', null=True),
+                    field=models.DateTimeField(
+                        blank=True,
+                        null=True,
+                        help_text='When signed minutes were circulated to managers for task allocation.',
+                    ),
                 ),
                 migrations.AddField(
                     model_name='minutes',
                     name='minutes_due_at',
-                    field=models.DateTimeField(blank=True, help_text='SLA: minutes must be finalised within 3 days of the meeting.', null=True),
+                    field=models.DateTimeField(
+                        blank=True,
+                        null=True,
+                        help_text='SLA: minutes must be finalised within 3 days of the meeting.',
+                    ),
                 ),
             ],
             database_operations=[],

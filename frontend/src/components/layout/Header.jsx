@@ -332,7 +332,7 @@ export default function Header({ onMenuClick }) {
 
   return (
     <header className={clsx(
-      'fixed top-10 end-0 start-0 h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 z-30 flex items-center px-4 gap-3 sidebar-transition',
+      'fixed top-0 end-0 start-0 h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 z-30 flex items-center px-4 gap-3 sidebar-transition',
       startOffset
     )}>
       {/* Mobile logo + menu button */}

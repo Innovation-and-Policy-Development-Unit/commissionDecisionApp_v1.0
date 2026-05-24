@@ -108,6 +108,7 @@ urlpatterns = [
     path("auth/password-policy/", password_policy_view),
     path("dashboard/", dashboard_view),
     path("reports/stats/", reports_view),
+    path("reports/ai-smart-query/", ai_smart_report_view),
     path("register/", RegisterView.as_view()),
     # Two-factor authentication (TOTP / Microsoft Authenticator)
     path("auth/totp/setup/", TOTPSetupView.as_view(), name="totp-setup"),

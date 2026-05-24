@@ -5,7 +5,6 @@ import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import Sidebar from './Sidebar'
 import Header from './Header'
-import BetaTestBanner from './BetaTestBanner'
 import HorizontalMenu from './HorizontalMenu'
 import SettingsPanel from './SettingsPanel'
 import SecurityNoticesBanner from '../shared/SecurityNoticesBanner'
@@ -84,7 +83,7 @@ export default function Layout() {
       ? 'lg:ms-[5.5rem]'
       : 'lg:ms-64'
 
-  const mainTopOffset = isHorizontal ? 'mt-[152px] lg:mt-[152px]' : 'mt-[104px]'
+  const mainTopOffset = isHorizontal ? 'mt-28 lg:mt-28' : 'mt-16'
 
   // If locked, only render the LockOverlay to prevent DOM inspection bypass
   if (isLocked) {
@@ -109,7 +108,6 @@ export default function Layout() {
           onMobileClose={() => setMobileMenuOpen(false)}
         />
       )}
-      <BetaTestBanner />
       <Header onMenuClick={handleMenuClick} />
       {isHorizontal && (
         <HorizontalMenu
