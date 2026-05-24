@@ -52,6 +52,7 @@ from .views import (
     FeedbackStatusView,
     dashboard_view,
     reports_view,
+    ai_smart_report_view,
     me_view,
     change_password_view,
     password_policy_view,
