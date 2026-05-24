@@ -95,6 +95,10 @@ export default function SubmissionDetail() {
   const confirm = useConfirm()
   const [submission, setSubmission] = useState(null)
   const [auditStationFilter, setAuditStationFilter] = useState(null)
+
+  useEffect(() => {
+    setAuditStationFilter(null)
+  }, [id])
   const [allowed, setAllowed]       = useState([])
   const [transitionGuidance, setTransitionGuidance] = useState(null)
   const [guidancePending, setGuidancePending] = useState(false)
@@ -1161,6 +1165,7 @@ const stageDescriptions = {
               submissionId={id}
               stageFilter={auditStationFilter?.stages}
               filterLabel={auditStationFilter?.label}
+              onClearFilter={() => setAuditStationFilter(null)}
             />
           </div>
         </div>

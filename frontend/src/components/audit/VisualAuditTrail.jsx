@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   Text,
   Badge,
+  Button,
   Skeleton,
   SkeletonItem,
   tokens,
@@ -54,6 +55,7 @@ export default function VisualAuditTrail({
   className,
   stageFilter = null,
   filterLabel = '',
+  onClearFilter,
 }) {
   const { t } = useTranslation()
   const [entries, setEntries] = useState([])
@@ -127,6 +129,11 @@ export default function VisualAuditTrail({
         <Badge appearance="outline" color="brand" size="small">
           {t('subway.trail_filter_active', { station: filterLabel })}
         </Badge>
+        {onClearFilter && (
+          <Button appearance="subtle" size="small" onClick={onClearFilter}>
+            {t('subway.trail_clear_filter')}
+          </Button>
+        )}
       </div>
     )}
     <ol className={clsx('relative', className)} aria-label={t('decision_proof.trail_aria')}>

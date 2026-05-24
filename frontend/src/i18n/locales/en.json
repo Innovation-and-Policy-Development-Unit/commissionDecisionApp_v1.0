@@ -623,6 +623,7 @@
     "station_detail": "Stages at {{station}}",
     "trail_filter_active": "Showing logs: {{station}}",
     "trail_filter_empty": "No audit entries for {{station}} yet.",
+    "trail_clear_filter": "Show all logs",
     "station_fallback": "this station",
     "intake": "Intake",
     "assessment": "Assessment",
