@@ -50,6 +50,8 @@ from .models import (
     StaffChatMessage,
     StaffChatSession,
     UiTranslation,
+    KnowledgeCategory,
+    KnowledgeArticle,
 )
 from .rbac import (
     rbac_can_access_admin_panel,
@@ -58,6 +60,28 @@ from .rbac import (
     rbac_user_can_manage_users,
     rbac_user_can_view_audit_log,
 )
+
+
+class KnowledgeCategorySerializer(serializers.ModelSerializer):
+    article_count = serializers.IntegerField(source="articles.count", read_only=True)
+
+    class Meta:
+        model = KnowledgeCategory
+        fields = ("id", "title", "description", "icon_name", "display_order", "article_count")
+
+
+class KnowledgeArticleSerializer(serializers.ModelSerializer):
+    category_title = serializers.CharField(source="category.title", read_only=True)
+    author_username = serializers.CharField(source="created_by.username", read_only=True)
+
+    class Meta:
+        model = KnowledgeArticle
+        fields = (
+            "id", "category", "category_title", "title", "slug", "content",
+            "is_published", "is_internal", "created_at", "updated_at",
+            "created_by", "author_username"
+        )
+        read_only_fields = ("created_at", "updated_at", "created_by")
 
 
 class MinistrySerializer(serializers.ModelSerializer):

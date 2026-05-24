@@ -908,6 +908,43 @@ class SecurityNotice(models.Model):
         return True
 
 
+class KnowledgeCategory(models.Model):
+    """Groups for Knowledge Base articles (e.g. SOPs, Circulars)."""
+    title = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    icon_name = models.CharField(max_length=50, blank=True, help_text="Lucide or Fluent icon name")
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        verbose_name_plural = "Knowledge Categories"
+        ordering = ["display_order", "title"]
+
+    def __str__(self):
+        return self.title
+
+
+class KnowledgeArticle(models.Model):
+    """Individual documents/articles within the OPSC Knowledge Base."""
+    category = models.ForeignKey(KnowledgeCategory, on_delete=models.CASCADE, related_name="articles")
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True)
+    content = models.TextField(help_text="Markdown content for the article.")
+    is_published = models.BooleanField(default=False, db_index=True)
+    is_internal = models.BooleanField(default=True, help_text="If true, only PSC staff can see this.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="knowledge_articles"
+    )
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.title
+
+
 class Submission(models.Model):
     reference_number = models.CharField(max_length=32, unique=True, editable=False)
     title = models.CharField(max_length=512)
