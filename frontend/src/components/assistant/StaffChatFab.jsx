@@ -2,8 +2,9 @@ import { Bot, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 
-export default function StaffChatFab({ open, onClick, hidden }) {
+export default function StaffChatFab({ open, onClick, hidden, label }) {
   const { t } = useTranslation()
+  const resolvedLabel = label || t('staff_chat.open_fab')
 
   if (hidden) return null
 
@@ -11,8 +12,8 @@ export default function StaffChatFab({ open, onClick, hidden }) {
     <button
       type="button"
       onClick={onClick}
-      aria-label={open ? t('staff_chat.close') : t('staff_chat.open_fab')}
-      title={open ? t('staff_chat.close') : t('staff_chat.open_fab')}
+      aria-label={open ? t('staff_chat.close') : resolvedLabel}
+      title={open ? t('staff_chat.close') : resolvedLabel}
       className={clsx(
         'fixed flex items-center justify-center rounded-full shadow-2xl',
         'transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2',
