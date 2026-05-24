@@ -9,7 +9,7 @@ from tracker.decision_proof import (
     hash_proof_payload,
     verify_stored_proof,
 )
-from tracker.models import Profile, Role, Submission, WorkflowEvent, WorkflowStage
+from tracker.models import Ministry, Profile, Role, Submission, WorkflowEvent, WorkflowStage
 
 
 class DecisionProofTests(TestCase):
@@ -18,8 +18,10 @@ class DecisionProofTests(TestCase):
         Profile.objects.create(user=self.user, role=Role.PSC_SECRETARY)
         from django.utils import timezone
 
+        self.ministry = Ministry.objects.create(code="TST", name="Test Ministry")
         self.submission = Submission.objects.create(
             title="Test matter",
+            ministry=self.ministry,
             current_stage=WorkflowStage.COMMISSION_SITTING,
             received_at=timezone.now(),
             created_by=self.user,

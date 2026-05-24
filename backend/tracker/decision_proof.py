@@ -39,7 +39,7 @@ def _document_fingerprint(submission) -> str:
     names = list(
         SubmissionDocument.objects.filter(submission=submission)
         .order_by("id")
-        .values_list("original_filename", "file_size", "uploaded_at")
+        .values_list("original_name", "uploaded_at")
     )
     parts = [
         str(stats["n"] or 0),
@@ -55,7 +55,7 @@ def _checklist_fingerprint(submission) -> str:
     rows = list(
         SubmissionChecklistItem.objects.filter(submission=submission)
         .order_by("id")
-        .values_list("required_document_id", "is_present", "notes")
+        .values_list("document_id", "is_present", "notes")
     )
     return hashlib.sha256(json.dumps(rows, sort_keys=True, default=str).encode()).hexdigest()[:32]
 
