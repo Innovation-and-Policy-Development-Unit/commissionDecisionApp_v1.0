@@ -55,19 +55,6 @@ const menuItems = [
     ],
   },
   {
-    group: 'Intelligence',
-    groupKey: 'nav.group_intelligence',
-    groupIcon: Sparkles,
-    audience: 'all',
-    items: [
-      { label: 'Smart Report (AI)', labelKey: 'nav.smart_reports', icon: Sparkles, path: '/reports' },
-      { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
-      { label: 'Staff Assistant',   labelKey: 'nav.staff_assistant', icon: Bot,   path: '/assistant' },
-      { label: 'Analytics',         labelKey: 'nav.analytics',     icon: BarChart2, path: '/analytics',
-        audience: 'exclude_compliance' },
-    ],
-  },
-  {
     group: 'Operations',
     groupKey: 'nav.group_operations',
     groupIcon: TrendingUp,
@@ -99,6 +86,19 @@ const menuItems = [
         path: '/secretariat/tasks',
       },
       { label: 'Notifications',   labelKey: 'nav.notifications', icon: Bell,         path: '/secretariat/notifications' },
+    ],
+  },
+  {
+    group: 'Intelligence',
+    groupKey: 'nav.group_intelligence',
+    groupIcon: Sparkles,
+    audience: 'all',
+    items: [
+      { label: 'Smart Report (AI)', labelKey: 'nav.smart_reports', icon: Sparkles, path: '/reports' },
+      { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
+      { label: 'Staff Assistant',   labelKey: 'nav.staff_assistant', icon: Bot,   path: '/assistant' },
+      { label: 'Analytics',         labelKey: 'nav.analytics',     icon: BarChart2, path: '/analytics',
+        audience: 'exclude_compliance' },
     ],
   },
   {
