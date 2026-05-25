@@ -4,37 +4,16 @@ import PageHeader from '../../components/shared/PageHeader'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import PSCForm37Fields from './PSCForm37Fields'
 import ComplianceCmsGuidance from './ComplianceCmsGuidance'
 import { isComplianceRole } from '../../constants/compliance'
 import { ENDORSER_SLOTS, isTravelFormCode, TRAVEL_CATEGORY_CODE } from '../../constants/travel'
+import { filterCommissionFormTypes, filterSecretaryFormTypes } from '../../constants/submissionCreate'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FALLBACK_FORM_TYPES = []
-
-const EMPTY_FORM37 = {
-  proposed_employee_name: '',
-  is_established_post: false,
-  post_title: '',
-  post_number: '',
-  post_level: '',
-  reasons_for_employment: '',
-  how_selected: '',
-  employment_type: '',
-  period_from: '',
-  period_to: '',
-  salary_vt: '',
-  salary_scale: '',
-  director_name: '',
-  director_department: '',
-  director_date: '',
-  dg_name: '',
-  dg_ministry: '',
-  dg_date: '',
-}
 
 /** Roles that submit OPSC-internal submissions (no checklist, straight to Secretary). */
 const INTERNAL_ROLES = ['csu_manager', 'odu_manager', 'odu_principal']
@@ -283,10 +262,14 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     <div>
       {!modal && (
         <PageHeader
-          title="New travel request"
-          subtitle="PSC Forms 4.4–4.6 route to the Secretary only — not the Commission."
+          title="Secretary approval"
+          subtitle="PSC Forms 4.4–4.6 — Secretary only, not the Commission."
         />
       )}
+      <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100">
+        <strong>Secretary approval only.</strong> Collect ministry endorsements on the form, then submit to PSC.
+        This matter is <strong>not</strong> listed for a Commission sitting.
+      </div>
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
@@ -330,7 +313,229 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
           <label className="block text-sm font-medium mb-1">Notes</label>
           <textarea className="input" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
         </div>
-        <button type="submit" className="btn-primary px-6 py-2.5" disabled={busy}>{busy ? 'Saving…' : 'Create travel request'}</button>
+        <div className="flex items-center gap-3 pt-2">
+          <button type="submit" className="btn-primary px-6 py-2.5" disabled={busy}>
+            {busy ? 'Saving…' : modal ? 'Create request' : 'Create travel request'}
+          </button>
+          {modal && onClose && (
+            <button type="button" className="btn-secondary px-6 py-2.5" onClick={onClose}>Cancel</button>
+          )}
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Commission submission (ministry / PSC — full assessment → Commission)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CommissionSubmissionForm({
+  modal, onClose, onSuccess, formTypes, categories, ministries, departments, isMinistryUser,
+}) {
+  const navigate = useNavigate()
+  const toast = useToast()
+  const [form, setForm] = useState({
+    title: '',
+    form_type_code: '',
+    form_category: '',
+    ministry: '',
+    department: '',
+    notes: '',
+  })
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const hasFormTypes = formTypes.length > 0
+
+  useEffect(() => {
+    if (ministries.length === 1 && !form.ministry) {
+      setForm(f => ({ ...f, ministry: String(ministries[0].id) }))
+    }
+  }, [ministries, form.ministry])
+
+  const onFormTypeChange = code => {
+    const ft = formTypes.find(t => t.code === code)
+    setForm(f => ({
+      ...f,
+      form_type_code: code,
+      form_category: ft?.form_category ? String(ft.form_category) : f.form_category,
+    }))
+  }
+
+  const submit = async e => {
+    e.preventDefault()
+    if (hasFormTypes && !form.form_type_code) {
+      setError('Please select a PSC form type.')
+      return
+    }
+    if (!form.title.trim()) {
+      setError('Please enter a title / subject.')
+      return
+    }
+    if (!hasFormTypes && !form.form_category) {
+      setError('Please select a submission category.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      const payload = {
+        title: form.title.trim(),
+        received_at: new Date().toISOString(),
+        notes: form.notes,
+      }
+      if (form.form_type_code) payload.form_type_code = form.form_type_code
+      if (form.form_category) payload.form_category = Number(form.form_category)
+      if (!isMinistryUser && form.ministry) payload.ministry = Number(form.ministry)
+      if (form.department) payload.department = Number(form.department)
+
+      const { data: submission } = await api.post('/submissions/', payload)
+      toast.success('Submission created. Complete documents and submit when ready.')
+      if (onSuccess) onSuccess(submission.id)
+      else navigate(`/submissions/${submission.id}`)
+    } catch (err) {
+      const detail = err.response?.data
+      const msg = typeof detail === 'object'
+        ? (detail.detail || JSON.stringify(detail))
+        : 'Could not create submission.'
+      setError(String(msg))
+      toast.error(String(msg))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-100">
+        This matter goes through <strong>PSC unit assessment</strong> and may be listed for a <strong>Commission sitting</strong>.
+        For travel forms (4.4–4.6), use <strong>Secretary approval</strong> instead.
+      </div>
+
+      <DeadlineBanner />
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={submit} className={modal ? 'space-y-4' : 'card p-6 space-y-4 max-w-3xl'}>
+        {hasFormTypes ? (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              PSC form type <span className="text-red-500">*</span>
+            </label>
+            <select
+              className="input"
+              required
+              value={form.form_type_code}
+              onChange={e => onFormTypeChange(e.target.value)}
+            >
+              <option value="">— Select form —</option>
+              {formTypes.map(ft => (
+                <option key={ft.id} value={ft.code}>{ft.code} — {ft.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Submission category <span className="text-red-500">*</span>
+            </label>
+            <select
+              className="input"
+              required
+              value={form.form_category}
+              onChange={e => setForm(f => ({ ...f, form_category: e.target.value }))}
+            >
+              <option value="">— Select category —</option>
+              {categories
+                .filter(c => c.name !== 'Internal Submissions' && c.code !== TRAVEL_CATEGORY_CODE && c.code !== 'COMPLIANCE')
+                .map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+            </select>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            Title / subject <span className="text-red-500">*</span>
+          </label>
+          <input
+            className="input"
+            required
+            placeholder="e.g. Appointment of Director Finance & Administration"
+            value={form.title}
+            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          />
+        </div>
+
+        {isMinistryUser ? (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department</label>
+            <select
+              className="input"
+              value={form.department}
+              onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
+            >
+              <option value="">— Select department —</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ministry</label>
+              <select
+                className="input"
+                required
+                disabled={ministries.length === 1}
+                value={form.ministry}
+                onChange={e => setForm(f => ({ ...f, ministry: e.target.value, department: '' }))}
+              >
+                {ministries.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department (optional)</label>
+              <select
+                className="input"
+                value={form.department}
+                onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
+              >
+                <option value="">—</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes</label>
+          <textarea
+            className="input min-h-[80px]"
+            value={form.notes}
+            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+          />
+        </div>
+
+        <div className="flex items-center gap-3 pt-2">
+          <button type="submit" className="btn-primary px-6 py-2.5" disabled={busy}>
+            {busy ? 'Saving…' : 'Create submission'}
+          </button>
+          {modal && onClose && (
+            <button type="button" className="btn-secondary px-6 py-2.5" onClick={onClose}>Cancel</button>
+          )}
+        </div>
       </form>
     </div>
   )
@@ -487,34 +692,14 @@ function InternalSubmissionForm({ modal, onClose, onSuccess, internalFormTypes }
 // Main export — standard external form + internal branch
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
-  const navigate = useNavigate()
+/** @param {'commission'|'secretary'|null} createMode — entry path from Submission log buttons */
+export default function SubmissionForm({ modal = false, onClose, onSuccess, createMode = null }) {
   const { user } = useAuth()
-  const toast = useToast()
 
   const [ministries, setMinistries] = useState([])
   const [departments, setDepartments] = useState([])
   const [categories, setCategories] = useState([])
   const [formTypes, setFormTypes] = useState(FALLBACK_FORM_TYPES)
-  // PSC 2-2 attachment search
-  const [parentSearch, setParentSearch] = useState('')
-  const [parentResults, setParentResults] = useState([])
-  const [parentSearching, setParentSearching] = useState(false)
-
-  const [form, setForm] = useState({
-    title: '',
-    form_category: '',
-    form_type_code: '',
-    form_type_other: '',
-    ministry: '',
-    department: '',
-    notes: '',
-    psc22Mode: '',
-    parent_submission: '',
-  })
-  const [form37, setForm37] = useState(EMPTY_FORM37)
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
 
   const isInternalUser = user && INTERNAL_ROLES.includes(user.role)
   const isComplianceUser = user && isComplianceRole(user.role)
@@ -538,19 +723,19 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
       setMinistries(m.data)
       setCategories(c.data)
       setFormTypes(ft.data)
-      setForm(f => ({
-        ...f,
-        ministry: m.data[0]?.id?.toString() || '',
-        form_category: c.data[0]?.id?.toString() || '',
-      }))
     })
   }, [])
 
   useEffect(() => {
-    const mid = form.ministry
-    if (!mid) { setDepartments([]); return }
+    const mid = (isMinistryUser && user?.ministry_id)
+      ? user.ministry_id
+      : ministries[0]?.id
+    if (!mid) {
+      setDepartments([])
+      return
+    }
     api.get('/departments/', { params: { ministry: mid } }).then(res => setDepartments(res.data))
-  }, [form.ministry])
+  }, [ministries, isMinistryUser, user?.ministry_id])
 
   if (!user) {
     return modal
@@ -578,21 +763,6 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
     )
   }
 
-  // ── Route travellers to travel-only form (PSC 4.4–4.6) ─────────────────
-  if (user?.role === 'traveller') {
-    return (
-      <TravelSubmissionForm
-        modal={modal}
-        onClose={onClose}
-        onSuccess={onSuccess}
-        formTypes={formTypes.filter(ft => isTravelFormCode(ft.code))}
-        categories={categories.filter(c => c.code === TRAVEL_CATEGORY_CODE)}
-        ministries={ministries}
-        departments={departments}
-      />
-    )
-  }
-
   // ── Route internal users to their own simplified form ───────────────────
   if (isInternalUser) {
     return (
@@ -605,163 +775,45 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess }) {
     )
   }
 
-  // ── Standard external submission form ────────────────────────────────────
+  const effectiveMode = createMode || (user?.role === 'traveller' ? 'secretary' : 'commission')
+  const commissionFormTypes = filterCommissionFormTypes(formTypes, categories)
+  const secretaryFormTypes = filterSecretaryFormTypes(formTypes, categories)
+  const travelFormTypes = secretaryFormTypes.length
+    ? secretaryFormTypes
+    : formTypes.filter(ft => isTravelFormCode(ft.code))
 
-  const submit = async e => {
-    e.preventDefault()
-    setBusy(true)
-    setError('')
-
-    try {
-      const payload = {
-        title: form.title,
-        form_category: Number(form.form_category),
-        ministry: Number(form.ministry),
-        received_at: new Date().toISOString(),
-        notes: form.notes,
-      }
-      if (form.department) payload.department = Number(form.department)
-
-      const { data: submission } = await api.post('/submissions/', payload)
-
-      toast.success('Submission created successfully.')
-      if (onSuccess) onSuccess(submission.id)
-      else navigate(`/submissions/${submission.id}`)
-    } catch (err) {
-      const detail = err.response?.data
-      const msg = typeof detail === 'object' ? JSON.stringify(detail) : 'Could not create submission.'
-      setError(msg)
-      toast.error(msg)
-    } finally {
-      setBusy(false)
-    }
+  if (effectiveMode === 'secretary') {
+    return (
+      <TravelSubmissionForm
+        modal={modal}
+        onClose={onClose}
+        onSuccess={onSuccess}
+        formTypes={travelFormTypes}
+        categories={categories.filter(c => c.code === TRAVEL_CATEGORY_CODE)}
+        ministries={ministries}
+        departments={departments}
+      />
+    )
   }
 
   return (
     <div>
       {!modal && (
         <PageHeader
-          title="Log new submission"
-          subtitle="Tracking begins when PSC logs receipt — reference PSC-YYYY-##### is assigned automatically."
+          title="Submit for Commission"
+          subtitle="Reference PSC-YYYY-##### is assigned automatically on save."
         />
       )}
-
-      <DeadlineBanner />
-
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={submit} className={modal ? 'space-y-4' : 'card p-6 space-y-4 max-w-3xl'}>
-
-        {/* ── Submission Category ──────────────────────────────── */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            Submission Category <span className="text-red-500">*</span>
-          </label>
-          <select
-            className="input"
-            required
-            value={form.form_category}
-            onChange={e => setForm({ ...form, form_category: e.target.value })}
-          >
-            <option value="">— Select category —</option>
-            {categories
-              .filter(c => c.name !== 'Internal Submissions')
-              .map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-          </select>
-        </div>
-
-        {/* ── Title / Subject ──────────────────────────────────── */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            Title / subject <span className="text-red-500">*</span>
-          </label>
-          <input
-            className="input"
-            required
-            placeholder="e.g. Appointment of potential candidate as Director Finance & Administration"
-            value={form.title}
-            onChange={e => setForm({ ...form, title: e.target.value })}
-          />
-        </div>
-
-        {/* ── Ministry & Department ─────────────────────────────── */}
-        {isMinistryUser ? (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department</label>
-            <select
-              className="input"
-              value={form.department}
-              onChange={e => setForm({ ...form, department: e.target.value })}
-            >
-              <option value="">— Select department —</option>
-              {departments.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ministry</label>
-              <select
-                className="input disabled:bg-slate-50 disabled:text-slate-500"
-                required
-                disabled={ministries.length === 1}
-                value={form.ministry}
-                onChange={e => setForm({ ...form, ministry: e.target.value, department: '' })}
-              >
-                {ministries.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
-              {ministries.length === 1 && (
-                <p className="mt-1 text-xs text-slate-500">Your account is restricted to {ministries[0].name}.</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department (optional)</label>
-              <select
-                className="input"
-                value={form.department}
-                onChange={e => setForm({ ...form, department: e.target.value })}
-              >
-                <option value="">—</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {/* ── Notes ─────────────────────────────────────────────── */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes</label>
-          <textarea
-            className="input min-h-[100px]"
-            placeholder="Any additional context for this submission…"
-            value={form.notes}
-            onChange={e => setForm({ ...form, notes: e.target.value })}
-          />
-        </div>
-
-        <div className="flex items-center gap-3 pt-2">
-          <button type="submit" className="btn-primary px-6 py-2.5" disabled={busy}>
-            {busy ? 'Saving…' : modal ? 'Log Submission' : 'Create Submission'}
-          </button>
-          {modal && (
-            <button type="button" className="btn-secondary px-6 py-2.5" onClick={onClose}>
-              Cancel
-            </button>
-          )}
-        </div>
-      </form>
+      <CommissionSubmissionForm
+        modal={modal}
+        onClose={onClose}
+        onSuccess={onSuccess}
+        formTypes={commissionFormTypes}
+        categories={categories}
+        ministries={ministries}
+        departments={departments}
+        isMinistryUser={isMinistryUser}
+      />
     </div>
   )
 }

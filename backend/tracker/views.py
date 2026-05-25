@@ -472,8 +472,17 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         profile = _profile(self.request.user)
 
         if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
-            # External ministry submission — standard workflow
+            from .travel_forms import is_travel_form_code, requires_approval_letter
+
+            form_code = self.request.data.get("form_type_code") or ""
             kwargs = {"current_stage": WorkflowStage.DRAFT, "is_internal": False}
+            if is_travel_form_code(form_code):
+                endorsers = self.request.data.get("travel_endorsers") or {}
+                kwargs.update(
+                    secretary_only=True,
+                    requires_travel_letter=requires_approval_letter(form_code),
+                    travel_endorsers=endorsers if isinstance(endorsers, dict) else {},
+                )
             if profile.ministry_id:
                 kwargs["ministry_id"] = profile.ministry_id
             if profile.department_id:
@@ -533,7 +542,18 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(CMS_ORIGIN_MESSAGE)
 
         elif profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY}:
-            submission = serializer.save()
+            from .travel_forms import is_travel_form_code, requires_approval_letter
+
+            form_code = self.request.data.get("form_type_code") or ""
+            kwargs = {}
+            if is_travel_form_code(form_code):
+                endorsers = self.request.data.get("travel_endorsers") or {}
+                kwargs = {
+                    "secretary_only": True,
+                    "requires_travel_letter": requires_approval_letter(form_code),
+                    "travel_endorsers": endorsers if isinstance(endorsers, dict) else {},
+                }
+            submission = serializer.save(**kwargs)
         else:
             raise PermissionDenied(
                 "Only PSC Officers, Admins, Secretaries, Ministry staff, Travellers, OPSC unit staff, "

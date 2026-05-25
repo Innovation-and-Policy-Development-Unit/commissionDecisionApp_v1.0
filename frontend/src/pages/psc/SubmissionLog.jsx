@@ -7,7 +7,7 @@ import Badge from '../../components/shared/Badge'
 import api from '../../api/client'
 import { stageLabel, stageBadgeClass, STAGE_META } from '../../constants/stages'
 import SubmissionProgressBar from '../../components/shared/SubmissionProgressBar'
-import { PlusCircle, RefreshCw, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2, LayoutList, Columns3 } from 'lucide-react'
+import { PlusCircle, RefreshCw, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2, LayoutList, Columns3, Stamp } from 'lucide-react'
 import SubmissionKanbanBoard from '../../components/submissions/SubmissionKanbanBoard'
 import SubmissionForm from './SubmissionForm'
 import { useAuth } from '../../context/AuthContext'
@@ -55,6 +55,8 @@ export default function SubmissionLog() {
   const [ministryFilter, setMinistryFilter] = useState('')
   const [page, setPage]           = useState(1)
   const [modalOpen, setModalOpen] = useState(false)
+  /** @type {'commission'|'secretary'|null} */
+  const [modalCreateMode, setModalCreateMode] = useState(null)
   const [selected, setSelected]   = useState(new Set())
   const [nlQuery, setNlQuery]     = useState('')
   const [nlBusy, setNlBusy]       = useState(false)
@@ -65,6 +67,20 @@ export default function SubmissionLog() {
   const isAdmin = user?.role === 'psc_admin'
   const isComplianceUser = user && isComplianceRole(user.role)
   const canCreateSubmission = user && !isComplianceUser
+  const isTraveller = user?.role === 'traveller'
+  const isInternalCreate = user && ['csu_manager', 'odu_manager'].includes(user.role)
+  const showCommissionCreate = canCreateSubmission && !isTraveller && !isInternalCreate
+  const showSecretaryCreate = canCreateSubmission && !isInternalCreate
+  const showInternalCreate = canCreateSubmission && isInternalCreate
+
+  const openCreateModal = mode => {
+    setModalCreateMode(mode)
+    setModalOpen(true)
+  }
+  const closeCreateModal = () => {
+    setModalOpen(false)
+    setModalCreateMode(null)
+  }
   const showQualityColumn = user && [
     'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_manager',
     'odu_manager', 'hr_unit_manager', 'vipam_manager', 'compliance_manager',
@@ -222,10 +238,38 @@ export default function SubmissionLog() {
         subtitle={t('submission.list_subtitle')}
         action={
           canCreateSubmission ? (
-            <button onClick={() => setModalOpen(true)} className="btn-primary flex items-center gap-2">
-              <PlusCircle size={16} />
-              {t('submission.new_submission')}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {showCommissionCreate && (
+                <button
+                  type="button"
+                  onClick={() => openCreateModal('commission')}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <PlusCircle size={16} />
+                  {t('submission.submit_for_commission')}
+                </button>
+              )}
+              {showSecretaryCreate && (
+                <button
+                  type="button"
+                  onClick={() => openCreateModal('secretary')}
+                  className="btn-secondary flex items-center gap-2 border-sky-300 text-sky-800 hover:bg-sky-50 dark:border-sky-700 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                >
+                  <Stamp size={16} />
+                  {t('submission.secretary_approval')}
+                </button>
+              )}
+              {showInternalCreate && (
+                <button
+                  type="button"
+                  onClick={() => openCreateModal(null)}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <PlusCircle size={16} />
+                  {t('submission.internal_submission')}
+                </button>
+              )}
+            </div>
           ) : null
         }
       />
@@ -629,15 +673,28 @@ export default function SubmissionLog() {
       {/* ── New Submission modal ── */}
       <Modal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={t('submission.new_submission')}
-        subtitle={t('submission.new_submission_hint')}
+        onClose={closeCreateModal}
+        title={
+          modalCreateMode === 'secretary'
+            ? t('submission.secretary_approval')
+            : modalCreateMode === 'commission'
+              ? t('submission.submit_for_commission')
+              : t('submission.internal_submission')
+        }
+        subtitle={
+          modalCreateMode === 'secretary'
+            ? t('submission.secretary_approval_hint')
+            : modalCreateMode === 'commission'
+              ? t('submission.submit_for_commission_hint')
+              : t('submission.internal_submission_hint')
+        }
         size="lg"
       >
         <SubmissionForm
           modal
-          onClose={() => setModalOpen(false)}
-          onSuccess={id => { setModalOpen(false); navigate(`/submissions/${id}`) }}
+          createMode={modalCreateMode}
+          onClose={closeCreateModal}
+          onSuccess={id => { closeCreateModal(); navigate(`/submissions/${id}`) }}
         />
       </Modal>
     </div>
