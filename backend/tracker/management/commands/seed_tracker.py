@@ -507,8 +507,18 @@ class Command(BaseCommand):
             action="store_true",
             help="Create the full dummy submission set even if submissions already exist (dev only).",
         )
+        parser.add_argument(
+            "--minute-intake",
+            action="store_true",
+            help="Only seed Minute intake demo sittings (approved/circulated agendas + items).",
+        )
 
     def handle(self, *args, **options):
+        if options["minute_intake"]:
+            from django.core.management import call_command
+            call_command("seed_minute_intake", "--with-sample-notes")
+            return
+
         if options["clear"]:
             self._clear()
 
@@ -528,6 +538,7 @@ class Command(BaseCommand):
             self._seed_submissions(force=bool(options["force_submissions"]))
             self._seed_agenda_items()
             self._seed_commission_tasks()
+            self._seed_minute_intake()
 
         self._seed_ui_translations()
 
@@ -951,6 +962,11 @@ class Command(BaseCommand):
                 created += 1
 
         self.stdout.write(f"  [OK] {created} agenda items seeded on {meeting.reference_number}")
+
+    def _seed_minute_intake(self):
+        """Eligible sittings for Minute intake (circulated / chairman-approved agendas)."""
+        from django.core.management import call_command
+        call_command("seed_minute_intake", "--with-sample-notes")
 
     # ── Commission tasks (Decision Register) ──────────────────────────────────
 
