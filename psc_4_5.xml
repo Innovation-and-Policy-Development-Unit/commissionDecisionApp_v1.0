@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Individual Overseas Travel Approval (Form 4.5) (PSC 4.5)
+  Secretary-only travel approval — no Commission sitting, no separate submission paper.
+  Import: Admin → Form Types → open "PSC 4.5" → Import (.xml) → Replace fields
+  Source PDF: 4.5.pdf
+  Suggested digitized_form_key: psc_4_5
+  Form category: TRAVEL (Travel & allowances)
+-->
+<fields>
+
+  <field>
+    <label>Workflow (read only)</label>
+    <field_key>workflow_notice</field_key>
+    <field_type>textarea</field_type>
+    <help_text>Secretary-only. Endorsements: applicant, director, DG, minister (optional). PSC Secretary issues approval letter after sign-off.</help_text>
+    <is_required>false</is_required>
+    <display_order>5</display_order>
+  </field>
+  <field>
+    <label>Applicant information</label>
+    <field_key>section_10</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+  <field>
+    <label>Name</label>
+    <field_key>applicant_name</field_key>
+    <field_type>text</field_type>
+    <is_required>true</is_required>
+    <display_order>20</display_order>
+  </field>
+  <field>
+    <label>Payroll number</label>
+    <field_key>payroll_number</field_key>
+    <field_type>text</field_type>
+    <is_required>true</is_required>
+    <display_order>30</display_order>
+  </field>
+  <field>
+    <label>Post title</label>
+    <field_key>post_title</field_key>
+    <field_type>text</field_type>
+    <is_required>true</is_required>
+    <display_order>40</display_order>
+  </field>
+  <field>
+    <label>Post number</label>
+    <field_key>post_number</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>50</display_order>
+  </field>
+  <field>
+    <label>Department</label>
+    <field_key>department_name</field_key>
+    <field_type>text</field_type>
+    <is_required>true</is_required>
+    <display_order>60</display_order>
+  </field>
+  <field>
+    <label>Ministry</label>
+    <field_key>ministry_name</field_key>
+    <field_type>text</field_type>
+    <is_required>true</is_required>
+    <display_order>70</display_order>
+  </field>
+  <field>
+    <label>Previous overseas official travel</label>
+    <field_key>previous_overseas_travel</field_key>
+    <field_type>radio</field_type>
+    <choices>Yes
+No</choices>
+    <is_required>false</is_required>
+    <display_order>80</display_order>
+  </field>
+  <field>
+    <label>Justification and duration</label>
+    <field_key>section_100</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>110</display_order>
+  </field>
+  <field>
+    <label>Purpose of travel</label>
+    <field_key>travel_purpose</field_key>
+    <field_type>textarea</field_type>
+    <is_required>true</is_required>
+    <display_order>120</display_order>
+  </field>
+  <field>
+    <label>Duration from</label>
+    <field_key>duration_from</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>130</display_order>
+  </field>
+  <field>
+    <label>Duration to</label>
+    <field_key>duration_to</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>140</display_order>
+  </field>
+  <field>
+    <label>Benefit to Vanuatu</label>
+    <field_key>benefit_to_vanuatu</field_key>
+    <field_type>textarea</field_type>
+    <is_required>true</is_required>
+    <display_order>150</display_order>
+  </field>
+  <field>
+    <label>Places to visit</label>
+    <field_key>section_200</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>210</display_order>
+  </field>
+  <field>
+    <label>Itinerary / places</label>
+    <field_key>places_itinerary</field_key>
+    <field_type>textarea</field_type>
+    <is_required>true</is_required>
+    <display_order>220</display_order>
+  </field>
+  <field>
+    <label>Acting arrangements</label>
+    <field_key>section_300</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>310</display_order>
+  </field>
+  <field>
+    <label>Acting officer name</label>
+    <field_key>acting_name</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>320</display_order>
+  </field>
+  <field>
+    <label>Acting post title</label>
+    <field_key>acting_post_title</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>330</display_order>
+  </field>
+  <field>
+    <label>Acting post number</label>
+    <field_key>acting_post_number</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>340</display_order>
+  </field>
+  <field>
+    <label>Acting salary (VT)</label>
+    <field_key>acting_salary_vt</field_key>
+    <field_type>number</field_type>
+    <is_required>false</is_required>
+    <display_order>350</display_order>
+  </field>
+  <field>
+    <label>Cost of proposed travel</label>
+    <field_key>section_400</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>410</display_order>
+    <start_new_page>true</start_new_page>
+  </field>
+  <field>
+    <label>Funding source</label>
+    <field_key>funding_source</field_key>
+    <field_type>textarea</field_type>
+    <is_required>true</is_required>
+    <display_order>420</display_order>
+  </field>
+  <field>
+    <label>Total estimated travel cost (VT)</label>
+    <field_key>estimated_cost_vt</field_key>
+    <field_type>number</field_type>
+    <is_required>true</is_required>
+    <display_order>430</display_order>
+  </field>
+  <field>
+    <label>Total acting allowance (VT)</label>
+    <field_key>acting_allowance_vt</field_key>
+    <field_type>number</field_type>
+    <is_required>false</is_required>
+    <display_order>440</display_order>
+  </field>
+  <field>
+    <label>Travelling with imprest?</label>
+    <field_key>with_imprest</field_key>
+    <field_type>radio</field_type>
+    <choices>Yes
+No</choices>
+    <is_required>false</is_required>
+    <display_order>450</display_order>
+  </field>
+  <field>
+    <label>Government imprest amount (VT)</label>
+    <field_key>imprest_amount_vt</field_key>
+    <field_type>number</field_type>
+    <is_required>false</is_required>
+    <display_order>460</display_order>
+  </field>
+  <field>
+    <label>DG is the applicant (Minister approval required)</label>
+    <field_key>dg_is_applicant</field_key>
+    <field_type>checkbox</field_type>
+    <is_required>false</is_required>
+    <display_order>470</display_order>
+  </field>
+</fields>

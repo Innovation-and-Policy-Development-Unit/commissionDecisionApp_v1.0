@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Domestic Travel Allowance (Form 4.4) (PSC 4.4)
+  Secretary-only travel approval — no Commission sitting, no separate submission paper.
+  Import: Admin → Form Types → open "PSC 4.4" → Import (.xml) → Replace fields
+  Source PDF: 4.4.pdf
+  Suggested digitized_form_key: psc_4_4
+  Form category: TRAVEL (Travel & allowances)
+-->
+<fields>
+
+  <field>
+    <label>Workflow (read only)</label>
+    <field_key>workflow_notice</field_key>
+    <field_type>textarea</field_type>
+    <help_text>Secretary-only — not Commission. No separate submission paper. Ministry endorsements (claimant + HOD) are digital signatures before submit.</help_text>
+    <is_required>false</is_required>
+    <display_order>5</display_order>
+  </field>
+  <field>
+    <label>Claimant details</label>
+    <field_key>section_10</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+  <field>
+    <label>Name of claimant</label>
+    <field_key>claimant_name</field_key>
+    <field_type>text</field_type>
+    <is_required>true</is_required>
+    <display_order>20</display_order>
+  </field>
+  <field>
+    <label>Payroll number</label>
+    <field_key>payroll_number</field_key>
+    <field_type>text</field_type>
+    <is_required>true</is_required>
+    <display_order>30</display_order>
+  </field>
+  <field>
+    <label>Post title</label>
+    <field_key>post_title</field_key>
+    <field_type>text</field_type>
+    <is_required>true</is_required>
+    <display_order>40</display_order>
+  </field>
+  <field>
+    <label>Post number</label>
+    <field_key>post_number</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>50</display_order>
+  </field>
+  <field>
+    <label>Employment status</label>
+    <field_key>employment_status</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>60</display_order>
+  </field>
+  <field>
+    <label>Normal work location</label>
+    <field_key>normal_work_location</field_key>
+    <field_type>text</field_type>
+    <is_required>true</is_required>
+    <display_order>70</display_order>
+  </field>
+  <field>
+    <label>Purpose of travel</label>
+    <field_key>section_100</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>110</display_order>
+  </field>
+  <field>
+    <label>Purpose</label>
+    <field_key>travel_purpose</field_key>
+    <field_type>radio</field_type>
+    <choices>Duty Travel
+Workshop/Training
+Temporary Transfer
+Others</choices>
+    <is_required>true</is_required>
+    <display_order>120</display_order>
+  </field>
+  <field>
+    <label>Other purpose (specify)</label>
+    <field_key>travel_purpose_other</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>130</display_order>
+  </field>
+  <field>
+    <label>Itinerary &amp; accommodation</label>
+    <field_key>section_200</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>210</display_order>
+    <start_new_page>true</start_new_page>
+  </field>
+  <field>
+    <label>Itinerary details</label>
+    <field_key>itinerary_details</field_key>
+    <field_type>textarea</field_type>
+    <help_text>Place(s), arrival/departure dates and times, accommodation type and cost.</help_text>
+    <is_required>true</is_required>
+    <display_order>220</display_order>
+  </field>
+  <field>
+    <label>Total amount (VT)</label>
+    <field_key>total_amount_vt</field_key>
+    <field_type>number</field_type>
+    <is_required>true</is_required>
+    <display_order>230</display_order>
+  </field>
+</fields>

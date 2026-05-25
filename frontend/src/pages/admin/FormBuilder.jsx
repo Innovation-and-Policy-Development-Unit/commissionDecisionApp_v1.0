@@ -62,6 +62,7 @@ function normalizeField(raw, idx) {
     choices: String(raw.choices ?? '').trim(),
     is_required: raw.is_required === true || String(raw.is_required).toLowerCase() === 'true',
     display_order: Number(raw.display_order ?? (idx + 1) * 10) || (idx + 1) * 10,
+    start_new_page: raw.start_new_page === true || String(raw.start_new_page).toLowerCase() === 'true',
   }
 }
 
@@ -88,6 +89,7 @@ function parseImportFile(text, filename) {
       choices:       node.querySelector('choices')?.textContent ?? '',
       is_required:   node.querySelector('is_required')?.textContent ?? 'false',
       display_order: node.querySelector('display_order')?.textContent ?? String((idx + 1) * 10),
+      start_new_page: node.querySelector('start_new_page')?.textContent ?? 'false',
     }, idx))
   }
   throw new Error('Unsupported file type. Upload a .json or .xml file.')

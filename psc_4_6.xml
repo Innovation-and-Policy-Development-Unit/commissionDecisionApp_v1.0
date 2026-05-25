@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mission Group Overseas Travel Approval (Form 4.6) (PSC 4.6)
+  Secretary-only travel approval — no Commission sitting, no separate submission paper.
+  Import: Admin → Form Types → open "PSC 4.6" → Import (.xml) → Replace fields
+  Source PDF: 4.6.pdf
+  Suggested digitized_form_key: psc_4_6
+  Form category: TRAVEL (Travel & allowances)
+-->
+<fields>
+
+  <field>
+    <label>Workflow (read only)</label>
+    <field_key>workflow_notice</field_key>
+    <field_type>textarea</field_type>
+    <help_text>Secretary-only. Endorsements: mission leader, director, DG, minister/PM. PSC Secretary issues approval letter after sign-off.</help_text>
+    <is_required>false</is_required>
+    <display_order>5</display_order>
+  </field>
+  <field>
+    <label>Mission description</label>
+    <field_key>section_10</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+  <field>
+    <label>Purpose of mission</label>
+    <field_key>mission_purpose</field_key>
+    <field_type>textarea</field_type>
+    <is_required>true</is_required>
+    <display_order>20</display_order>
+  </field>
+  <field>
+    <label>Benefits to Vanuatu</label>
+    <field_key>benefits_to_vanuatu</field_key>
+    <field_type>textarea</field_type>
+    <is_required>true</is_required>
+    <display_order>30</display_order>
+  </field>
+  <field>
+    <label>Mission members</label>
+    <field_key>section_100</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>110</display_order>
+  </field>
+  <field>
+    <label>Mission group members</label>
+    <field_key>mission_members</field_key>
+    <field_type>textarea</field_type>
+    <help_text>Name, post title, and justification for each member.</help_text>
+    <is_required>true</is_required>
+    <display_order>120</display_order>
+  </field>
+  <field>
+    <label>Acting arrangements</label>
+    <field_key>acting_arrangements</field_key>
+    <field_type>textarea</field_type>
+    <is_required>false</is_required>
+    <display_order>130</display_order>
+  </field>
+  <field>
+    <label>Places and dates</label>
+    <field_key>section_200</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>210</display_order>
+  </field>
+  <field>
+    <label>Places / organizations / dates</label>
+    <field_key>places_and_dates</field_key>
+    <field_type>textarea</field_type>
+    <is_required>true</is_required>
+    <display_order>220</display_order>
+  </field>
+  <field>
+    <label>Cost of mission</label>
+    <field_key>section_300</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>310</display_order>
+    <start_new_page>true</start_new_page>
+  </field>
+  <field>
+    <label>Funding source</label>
+    <field_key>funding_source</field_key>
+    <field_type>textarea</field_type>
+    <is_required>true</is_required>
+    <display_order>320</display_order>
+  </field>
+  <field>
+    <label>Total estimated travel costs (VT)</label>
+    <field_key>estimated_cost_vt</field_key>
+    <field_type>number</field_type>
+    <is_required>true</is_required>
+    <display_order>330</display_order>
+  </field>
+  <field>
+    <label>Total acting allowances (VT)</label>
+    <field_key>acting_allowance_vt</field_key>
+    <field_type>number</field_type>
+    <is_required>false</is_required>
+    <display_order>340</display_order>
+  </field>
+</fields>
