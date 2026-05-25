@@ -431,10 +431,10 @@
     @apply px-8 py-4 text-lg;
   }
 
-  /* Input styles */
+  /* Input styles — slate-400 border in light mode for visible edges on white cards */
   .input,
   .form-input {
-    @apply w-full px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500;
+    @apply w-full px-3.5 py-2.5 rounded-lg border border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500 text-sm shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary-500/35 focus:border-primary-600 dark:focus:border-primary-500;
   }
 
   textarea.form-input {

@@ -47,7 +47,7 @@ function IntakeItemCard({
         )}
       </button>
       {expanded && (
-        <div className="p-4 space-y-4 border-t border-slate-100 dark:border-slate-700">
+        <div className="p-4 space-y-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/20">
           <div>
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
               {t('minute_intake.agenda_title')}
@@ -65,33 +65,33 @@ function IntakeItemCard({
             </div>
           )}
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+            <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">
               {t('minute_intake.discussion_notes')}
             </label>
             <textarea
-              className="input min-h-[80px] resize-y text-sm"
+              className="input min-h-[80px] resize-y text-sm bg-white"
               value={item.discussion_notes || ''}
               onChange={e => onChange(item.agenda_item_id, 'discussion_notes', e.target.value)}
               placeholder={t('minute_intake.discussion_placeholder')}
             />
           </div>
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+            <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">
               {t('minute_intake.decision_text')}
             </label>
             <textarea
-              className="input min-h-[60px] resize-y text-sm"
+              className="input min-h-[60px] resize-y text-sm bg-white"
               value={item.decision_text || ''}
               onChange={e => onChange(item.agenda_item_id, 'decision_text', e.target.value)}
               placeholder={t('minute_intake.decision_placeholder')}
             />
           </div>
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+            <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">
               {t('minute_intake.action_officer')}
             </label>
             <input
-              className="input text-sm"
+              className="input text-sm bg-white"
               value={item.action_officer || ''}
               onChange={e => onChange(item.agenda_item_id, 'action_officer', e.target.value)}
               placeholder={t('minute_intake.action_officer_placeholder')}
@@ -109,7 +109,7 @@ function IntakeItemCard({
             {t('minute_intake.format_item')}
           </button>
           {item.has_formatted && (
-            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 p-4 space-y-3">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 {t('minute_intake.preview_title')}
               </p>
