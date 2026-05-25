@@ -173,7 +173,8 @@ If you deployed before this fix, add **`INTERNAL_MEDIA_TOKEN`** (same random val
 
 | Symptom | Check |
 |---------|--------|
-| `lstat .../backend/backend: no such file or directory` | **Wrong Docker paths.** Root Directory must be **empty** (repo root), Dockerfile Path `./backend/Dockerfile.render`, build context `.`. Do **not** set Root Directory to `backend` **and** Dockerfile to `./backend/Dockerfile.render` (doubles the path). |
+| `lstat .../backend/backend: no such file or directory` | **Wrong Docker paths.** With Root Directory `backend`, use Dockerfile `./Dockerfile.render` only — not `./backend/Dockerfile.render`. |
+| `frontend/src/i18n/locales: not found` | Build context is `backend/` only; use `backend/Dockerfile.render` (bundled `locale_bundles/`) or repo-root `./Dockerfile.render` + empty Root Directory. |
 | `open Dockerfile: no such file or directory` | Use repo root + `./backend/Dockerfile.render`, or root `Dockerfile` at repo root |
 | `NameError: MinuteAgendaIntake is not defined` | Deploy latest `main` (import fix in `serializers.py`); redeploy API + Celery after pull |
 | Frontend build: `TaskListRegular` not exported | Deploy latest `main` (`CommissionCalendar.jsx` uses `TaskListLtrRegular`) |
@@ -206,10 +207,17 @@ For **scdms-api**, **scdms-celery-worker**, and **scdms-celery-beat** (must matc
 |---------|--------|
 | Environment | Docker |
 | **Root Directory** | *(leave empty — repository root)* |
-| **Dockerfile Path** | `./backend/Dockerfile.render` |
+| **Dockerfile Path** | `./Dockerfile.render` |
 | **Docker Build Context** | `.` |
 | **Docker Command** | *(empty — uses image entrypoint)* |
 
-`backend/Dockerfile.render` copies `COPY backend/ .` and expects the **repo root** as build context. Setting Root Directory to `backend` **and** Dockerfile to `./backend/Dockerfile.render` breaks the build (`backend/backend` not found).
+**If Root Directory = `backend`** (alternate manual setup):
 
-Alternatively, leave Root Directory empty and use the repo-root **`Dockerfile`** (wrapper around the same image).
+| **Dockerfile Path** | `./Dockerfile.render` |
+| **Docker Build Context** | `.` |
+
+Uses `backend/Dockerfile.render`, which copies `locale_bundles/` from inside `backend/` (run `scripts/sync-locale-bundles.sh` after editing frontend translations).
+
+Do **not** use `./backend/Dockerfile.render` as the path when Root Directory is already `backend` (that resolves to `backend/backend/...`).
+
+Blueprint `render.yaml` uses repo-root `./Dockerfile.render` + context `.`.
