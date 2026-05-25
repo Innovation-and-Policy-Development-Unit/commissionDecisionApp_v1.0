@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo,
+  LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo, PenLine,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, BarChart2, CalendarCheck,
@@ -90,6 +90,7 @@ const menuItems = [
       { label: 'Meetings',        labelKey: 'nav.meetings',      icon: CalendarDays, path: '/secretariat/meetings' },
       { label: 'Agenda',          labelKey: 'nav.agenda',        icon: ScrollText,   path: '/secretariat/agenda' },
       { label: 'Minutes',         labelKey: 'nav.minutes',       icon: FileText,     path: '/secretariat/minutes' },
+      { label: 'Minute intake',   labelKey: 'nav.minute_intake', icon: PenLine,      path: '/secretariat/minute-intake' },
       { label: 'Decisions',       labelKey: 'nav.decisions',     icon: Gavel,        path: '/secretariat/decisions' },
       {
         label: 'Minutes decision tasks',

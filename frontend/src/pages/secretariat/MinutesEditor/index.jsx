@@ -396,10 +396,17 @@ export default function MinutesEditor() {
 
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between gap-4 flex-wrap">
         <button onClick={() => navigate('/secretariat/meetings')} className="flex items-center gap-1.5 text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
           <ArrowLeft size={16} /> Back to Sittings
         </button>
+        <Link
+          to={`/secretariat/minute-intake/${meetingId}`}
+          className="flex items-center gap-1.5 text-sm font-bold text-primary-600 hover:underline"
+        >
+          <PenSquare size={14} />
+          {t('minute_intake.link_from_minutes')}
+        </Link>
       </div>
 
       <PageHeader

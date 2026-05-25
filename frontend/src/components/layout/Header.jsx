@@ -119,6 +119,7 @@ const BREADCRUMB_MAP = {
   '/secretariat/agenda':            ['nav.group_commission',  'breadcrumb.agenda'],
   '/secretariat/agenda/sitting-pack': ['nav.group_commission', 'breadcrumb.agenda', 'sitting_pack.title'],
   '/secretariat/minutes':           ['nav.group_commission',  'breadcrumb.minutes'],
+  '/secretariat/minute-intake':     ['nav.group_commission',  'breadcrumb.minute_intake'],
   '/secretariat/decisions':         ['nav.group_commission',  'breadcrumb.decisions'],
   '/secretariat/tasks':             ['nav.group_commission',  'breadcrumb.tasks'],
   '/secretariat/notifications':     ['nav.group_commission',  'breadcrumb.notifications'],
@@ -196,6 +197,9 @@ export default function Header({ onMenuClick }) {
     }
     if (location.pathname.startsWith('/secretariat/meetings/')) {
       return [t('nav.group_commission'), t('breadcrumb.meeting_minutes')]
+    }
+    if (location.pathname.startsWith('/secretariat/minute-intake/')) {
+      return [t('nav.group_commission'), t('breadcrumb.minute_intake')]
     }
     return [t('app.title')]
   }, [location.pathname, t])
