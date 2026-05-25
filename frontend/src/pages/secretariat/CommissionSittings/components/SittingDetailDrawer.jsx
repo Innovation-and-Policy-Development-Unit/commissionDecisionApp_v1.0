@@ -1,11 +1,13 @@
 import { Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Dialog, Transition } from '@headlessui/react'
-import { X, Calendar, Clock, MapPin, ListChecks, FileText, CheckSquare, Users, Trash2, Edit3, ChevronRight, AlertCircle, Mic, FileSignature } from 'lucide-react'
+import { X, Calendar, Clock, MapPin, ListChecks, FileText, CheckSquare, Users, Trash2, Edit3, ChevronRight, AlertCircle, Mic, FileSignature, PenLine } from 'lucide-react'
 import { SITTING_STATUSES } from '../constants'
 import clsx from 'clsx'
 
 export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapacity, onOpenLogitechGuide }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   if (!sitting) return null
 
@@ -192,16 +194,30 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                             <h3 className="font-bold text-slate-900 dark:text-slate-100 uppercase text-xs tracking-wider">Minutes</h3>
                           </div>
                         </div>
-                        <button
-                          onClick={() => {
-                            onClose()
-                            navigate(`/secretariat/meetings/${sitting.id}/minutes`)
-                          }}
-                          className="w-full flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-dashed border-emerald-300 dark:border-emerald-700 rounded-xl p-4 text-emerald-700 dark:text-emerald-300 font-semibold text-sm transition-colors"
-                        >
-                          <FileSignature size={18} />
-                          Manage Minutes & AI Tools
-                        </button>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose()
+                              navigate(`/secretariat/minute-intake/${sitting.id}`)
+                            }}
+                            className="w-full flex items-center justify-center gap-2 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 border border-dashed border-primary-300 dark:border-primary-700 rounded-xl p-4 text-primary-700 dark:text-primary-300 font-semibold text-sm transition-colors"
+                          >
+                            <PenLine size={18} />
+                            {t('nav.minute_intake')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose()
+                              navigate(`/secretariat/meetings/${sitting.id}/minutes`)
+                            }}
+                            className="w-full flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-dashed border-emerald-300 dark:border-emerald-700 rounded-xl p-4 text-emerald-700 dark:text-emerald-300 font-semibold text-sm transition-colors"
+                          >
+                            <FileSignature size={18} />
+                            Manage Minutes & AI Tools
+                          </button>
+                        </div>
                       </section>
                     </div>
 
