@@ -55,19 +55,6 @@ const menuItems = [
     ],
   },
   {
-    group: 'Operations',
-    groupKey: 'nav.group_operations',
-    groupIcon: TrendingUp,
-    audience: 'secretariat',
-    opsAccess: true,
-    items: [
-      { label: 'Executive Dashboard', labelKey: 'nav.executive_dashboard', icon: LayoutDashboard, path: '/executive-dashboard', visibility: 'ops' },
-      { label: 'Commission Calendar', labelKey: 'nav.calendar',            icon: CalendarCheck,   path: '/calendar',           visibility: 'ops' },
-      { label: 'Workload',            labelKey: 'nav.workload',            icon: Users,           path: '/workload',           visibility: 'ops' },
-      { label: 'Audit Trail',         labelKey: 'nav.audit_trail',         icon: History,         path: '/audit-trail',        visibility: 'audit' },
-    ],
-  },
-  {
     group: 'Commission Decision',
     groupKey: 'nav.group_commission',
     groupIcon: Gavel,
@@ -86,6 +73,19 @@ const menuItems = [
         path: '/secretariat/tasks',
       },
       { label: 'Notifications',   labelKey: 'nav.notifications', icon: Bell,         path: '/secretariat/notifications' },
+    ],
+  },
+  {
+    group: 'Operations',
+    groupKey: 'nav.group_operations',
+    groupIcon: TrendingUp,
+    audience: 'secretariat',
+    opsAccess: true,
+    items: [
+      { label: 'Executive Dashboard', labelKey: 'nav.executive_dashboard', icon: LayoutDashboard, path: '/executive-dashboard', visibility: 'ops' },
+      { label: 'Commission Calendar', labelKey: 'nav.calendar',            icon: CalendarCheck,   path: '/calendar',           visibility: 'ops' },
+      { label: 'Workload',            labelKey: 'nav.workload',            icon: Users,           path: '/workload',           visibility: 'ops' },
+      { label: 'Audit Trail',         labelKey: 'nav.audit_trail',         icon: History,         path: '/audit-trail',        visibility: 'audit' },
     ],
   },
   {
