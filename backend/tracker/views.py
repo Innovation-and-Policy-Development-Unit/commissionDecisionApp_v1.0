@@ -2782,6 +2782,45 @@ def api_inventory_view(request):
     return Response({"count": len(endpoints), "endpoints": endpoints})
 
 
+def _reports_snapshot_for_user(user):
+    """Compact, role-scoped submission stats for NL smart reports."""
+    qs = _submission_queryset_for(user)
+    active_stages = [
+        WorkflowStage.RECEIVED_BY_PSC,
+        WorkflowStage.REGISTERED_ROUTED,
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+        WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.DEFERRED,
+        WorkflowStage.RESUBMITTED,
+        WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.COMMISSION_SITTING,
+    ]
+    terminal_stages = [WorkflowStage.APPROVED, WorkflowStage.REJECTED, WorkflowStage.RETURNED]
+    return {
+        "total_submissions": qs.count(),
+        "active_submissions": qs.filter(current_stage__in=active_stages).count(),
+        "overdue_assessments": qs.filter(
+            current_stage=WorkflowStage.UNDER_ASSESSMENT,
+            assessment_deadline_at__isnull=False,
+            assessment_deadline_at__lt=timezone.now(),
+        ).count(),
+        "by_stage": list(
+            qs.values("current_stage").annotate(count=Count("id")).order_by("-count")[:15]
+        ),
+        "by_ministry": list(
+            qs.values("ministry__name").annotate(count=Count("id")).order_by("-count")[:12]
+        ),
+        "by_category": list(
+            qs.values("form_category__name").annotate(count=Count("id")).order_by("-count")[:12]
+        ),
+        "by_resolution": list(
+            qs.filter(current_stage__in=terminal_stages)
+            .values("current_stage")
+            .annotate(count=Count("id"))
+        ),
+    }
+
+
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated, HasProfilePermission])
 def reports_view(request):
@@ -2902,43 +2941,59 @@ def ai_smart_report_view(request):
     """POST /reports/ai-smart-query/ — natural language report query via Claude."""
     import json
 
-    from .ai.claude_client import call_claude
+    from .ai.claude_client import ai_enabled, complete_json_with_error
 
-    query = request.data.get("query", "")
+    query = (request.data.get("query") or "").strip()
     if not query:
         return Response({"detail": "Query is required."}, status=400)
 
-    profile = _profile(request.user)
-    system_prompt = f"""
-    You are the SCDMS Intelligence Analyst for the Vanuatu Public Service Commission.
-    Translate the user's query into structured report JSON.
-
-    Role of user: {profile.role}
-    Current Time: {timezone.now().isoformat()}
-
-    Return ONLY JSON:
-    {{
-      "summary": "Two sentence executive summary.",
-      "chartTitle": "Chart title",
-      "chartType": "bar" | "line",
-      "chartData": [ {{ "name": "Label", "value": 123 }} ],
-      "kpis": [ {{ "label": "Total Cases", "value": 45 }} ]
-    }}
-    """
-    try:
-        response_text = call_claude(prompt=query, system_prompt=system_prompt)
-        json_start = response_text.find("{")
-        json_end = response_text.rfind("}") + 1
-        data = json.loads(response_text[json_start:json_end])
-        return Response(data)
-    except Exception as e:
+    if not ai_enabled():
         return Response(
             {
-                "summary": "I encountered an error while analyzing the data.",
-                "error": str(e),
+                "detail": "AI reporting is not configured. Set ANTHROPIC_API_KEY on the API service.",
             },
-            status=500,
+            status=503,
         )
+
+    profile = _profile(request.user)
+    snapshot = _reports_snapshot_for_user(request.user)
+    system_prompt = (
+        "You are the SCDMS Intelligence Analyst for the Vanuatu Public Service Commission. "
+        "The user asks for a report visualization. Use ONLY the provided SCDMS data snapshot "
+        "to compute chart values and KPIs — do not invent counts. "
+        "If the question cannot be answered from the snapshot, say so in the summary and "
+        "use the closest available breakdown (by_stage, by_ministry, or by_category).\n\n"
+        f"Role of user: {profile.role}\n"
+        f"Current time (UTC): {timezone.now().isoformat()}\n\n"
+        "Return JSON with keys: summary (string), chartTitle (string), "
+        'chartType ("bar" or "line"), chartData (array of {name, value}), '
+        "kpis (array of {label, value})."
+    )
+    user_prompt = (
+        f"User question: {query}\n\n"
+        f"SCDMS data snapshot:\n{json.dumps(snapshot, default=str)}"
+    )
+
+    data, err = complete_json_with_error(
+        system=system_prompt,
+        user=user_prompt,
+        tier="sonnet",
+        max_tokens=4096,
+    )
+    if err:
+        return Response(
+            {
+                "summary": "I could not run the AI report right now. Please try again later.",
+                "detail": err,
+            },
+            status=502,
+        )
+    if not isinstance(data, dict):
+        return Response(
+            {"detail": "Unexpected AI response format."},
+            status=502,
+        )
+    return Response(data)
 
 
 @api_view(["GET"])

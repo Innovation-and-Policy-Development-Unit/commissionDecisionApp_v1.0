@@ -67,15 +67,28 @@ export default function SmartReports() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const handleAskAI = useCallback(async () => {
     if (!query.trim()) return;
     setLoading(true);
+    setErrorMessage(null);
     try {
-      // Endpoint that uses Claude to parse NL and return structured data
       const { data } = await api.post('/reports/ai-smart-query/', { query });
+      if (data?.detail && !data?.chartData && !data?.kpis) {
+        setErrorMessage(data.detail);
+        setReportData(null);
+        return;
+      }
       setReportData(data);
     } catch (error) {
+      const detail =
+        error.response?.data?.detail ||
+        error.response?.data?.error ||
+        error.message ||
+        'Smart report request failed.';
+      setErrorMessage(detail);
+      setReportData(null);
       console.error('Smart Report Error:', error);
     } finally {
       setLoading(false);
@@ -118,6 +131,12 @@ export default function SmartReports() {
         <div className="flex gap-4 mt-2">
           <Text size={200} className="text-slate-400 italic">Try: "Compare training requests by ministry" or "What is our average turnaround time this year?"</Text>
         </div>
+        {errorMessage && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+            <InfoRegular className="shrink-0 mt-0.5" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
       </div>
 
       {reportData && (
