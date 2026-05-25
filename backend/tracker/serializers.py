@@ -13,6 +13,7 @@ from .models import (
     FormCategory,
     Meeting,
     MeetingBriefingPack,
+    MinuteAgendaIntake,
     MeetingTranscript,
     MeetingType,
     RecordingAudioSource,

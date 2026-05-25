@@ -4,7 +4,7 @@ import {
   makeStyles, shorthands, tokens,
 } from '@fluentui/react-components'
 import {
-  CalendarRegular, AlertRegular, TaskListRegular, WarningRegular,
+  CalendarRegular, AlertRegular, TaskListLtrRegular, WarningRegular,
 } from '@fluentui/react-icons'
 import { useNavigate } from 'react-router-dom'
 import api from '../../api/client'
@@ -42,7 +42,7 @@ const useStyles = makeStyles({
 
 const TYPE_CONFIG = {
   meeting: { color: 'brand', label: 'Meeting', icon: <CalendarRegular /> },
-  task_deadline: { color: 'warning', label: 'Task Deadline', icon: <TaskListRegular /> },
+  task_deadline: { color: 'warning', label: 'Task Deadline', icon: <TaskListLtrRegular /> },
   sla_warning: { color: 'danger', label: 'SLA Warning', icon: <WarningRegular /> },
 }
 

@@ -173,7 +173,11 @@ If you deployed before this fix, add **`INTERNAL_MEDIA_TOKEN`** (same random val
 
 | Symptom | Check |
 |---------|--------|
-| `open Dockerfile: no such file or directory` | Push latest `main` (includes root `Dockerfile`), **or** in each Docker service set **Root Directory** / context to `backend` and **Dockerfile Path** to `Dockerfile.render` |
+| `lstat .../backend/backend: no such file or directory` | **Wrong Docker paths.** Root Directory must be **empty** (repo root), Dockerfile Path `./backend/Dockerfile.render`, build context `.`. Do **not** set Root Directory to `backend` **and** Dockerfile to `./backend/Dockerfile.render` (doubles the path). |
+| `open Dockerfile: no such file or directory` | Use repo root + `./backend/Dockerfile.render`, or root `Dockerfile` at repo root |
+| `NameError: MinuteAgendaIntake is not defined` | Deploy latest `main` (import fix in `serializers.py`); redeploy API + Celery after pull |
+| Frontend build: `TaskListRegular` not exported | Deploy latest `main` (`CommissionCalendar.jsx` uses `TaskListLtrRegular`) |
+| `/secretariat/minute-intake` → app 404 | `scdms-web` deploy failed or old bundle — fix web build, redeploy static site |
 | 502 on API | Deploy logs; `migrate` errors; invalid `DATABASE_URL` |
 | CORS errors in browser | `CORS_ALLOWED_ORIGINS` must exactly match frontend origin (scheme + host, no trailing slash) |
 | Login works locally on Render but API 400 | `DJANGO_ALLOWED_HOSTS` must include API hostname |
@@ -196,12 +200,16 @@ Link `DATABASE_URL` and Redis connection strings from managed instances in the R
 
 ### Docker settings per service (if not using Blueprint)
 
-For **scdms-api**, **scdms-celery-worker**, and **scdms-celery-beat**:
+For **scdms-api**, **scdms-celery-worker**, and **scdms-celery-beat** (must match `render.yaml`):
 
 | Setting | Value |
 |---------|--------|
 | Environment | Docker |
-| Root Directory | `backend` |
-| Dockerfile Path | `Dockerfile.render` |
+| **Root Directory** | *(leave empty — repository root)* |
+| **Dockerfile Path** | `./backend/Dockerfile.render` |
+| **Docker Build Context** | `.` |
+| **Docker Command** | *(empty — uses image entrypoint)* |
 
-Alternatively, leave Root Directory empty and use the repo-root **`Dockerfile`** (same production image).
+`backend/Dockerfile.render` copies `COPY backend/ .` and expects the **repo root** as build context. Setting Root Directory to `backend` **and** Dockerfile to `./backend/Dockerfile.render` breaks the build (`backend/backend` not found).
+
+Alternatively, leave Root Directory empty and use the repo-root **`Dockerfile`** (wrapper around the same image).
