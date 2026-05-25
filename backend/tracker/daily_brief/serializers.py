@@ -101,9 +101,12 @@ class DailyBriefDeliveryLogSerializer(serializers.ModelSerializer):
         )
 
     def get_username(self, obj):
-        if obj.user_id is None:
+        if not obj.user_id:
             return None
-        return obj.user.username
+        user = getattr(obj, "user", None)
+        if user is None:
+            return None
+        return user.username
 
 
 class DailyBriefPreferenceBulkSerializer(serializers.Serializer):

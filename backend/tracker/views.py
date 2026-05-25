@@ -546,7 +546,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
         profile = _profile(self.request.user)
-        if profile.role not in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
+        submission = self.get_object()
+        if profile.role == Role.TRAVELLER and submission.created_by_id != self.request.user.id:
+            raise PermissionDenied("You can only edit your own travel requests.")
+        if profile.role == Role.TRAVELLER and submission.current_stage not in {
+            WorkflowStage.DRAFT,
+            WorkflowStage.RETURNED_FOR_CLARIFICATION,
+        }:
+            raise PermissionDenied("Travel requests can only be edited while in draft or returned for clarification.")
+        if profile.role not in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.TRAVELLER}:
             raise PermissionDenied("Only PSC staff or Ministry users can edit submissions.")
         submission = serializer.save()
         _log(self.request, _AL.Action.UPDATE,
@@ -1392,7 +1400,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         """
         submission = self.get_object()
 
-        if submission.is_attachment or submission.is_internal:
+        if (
+            submission.is_attachment
+            or submission.is_internal
+            or getattr(submission, "secretary_only", False)
+        ):
             return Response([])
 
         from .submission_checklist import ensure_submission_checklist_items
@@ -4393,7 +4405,7 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
                     "Clear SMTP_HOST from .env if you only configure mail in Admin."
                 )
             return Response(
-                {"detail": f"Failed to send test email: {err}.{hint}", "smtp": diag},
+                {"detail": f"Failed to send test email: {err}.{hint}", "smtp": smtp_label},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -5800,3 +5812,539 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
             checklist.manager_verifier_date = timezone.now().date()
         checklist.save(update_fields=["status", "manager_verifier_name", "manager_verifier_date"])
         return Response(ODUChecklistSerializer(checklist).data)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ── P1–P4 New Views ───────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Dashboard Stats (enhanced KPI) ────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def dashboard_stats_view(request):
+    """Enhanced dashboard KPIs: submission counts, SLA health, stage breakdown."""
+    from django.db.models import Count, Q
+    profile = _profile(request.user)
+    qs = Submission.objects.all()
+    if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
+        if profile.ministry:
+            qs = qs.filter(ministry=profile.ministry)
+
+    now = timezone.now()
+    today = now.date()
+    thirty_days_ago = today - timedelta(days=30)
+    seven_days_ago = today - timedelta(days=7)
+    total = qs.count()
+    submitted_this_month = qs.filter(submitted_at__date__gte=thirty_days_ago).count()
+    submitted_this_week = qs.filter(submitted_at__date__gte=seven_days_ago).count()
+    stage_counts = dict(qs.values("current_stage").annotate(n=Count("id")).values_list("current_stage", "n"))
+
+    active_stages = [
+        WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.FORWARDED_TO_COMMISSION,
+    ]
+    overdue = qs.filter(current_stage__in=active_stages, submitted_at__date__lt=thirty_days_ago).count()
+    pending_active = qs.filter(current_stage__in=active_stages).count()
+    sla_pct = round((1 - overdue / pending_active) * 100) if pending_active else 100
+
+    ministry_breakdown = []
+    if request.user.is_staff or profile.role in {Role.PSC_SECRETARY, Role.PSC_OFFICER, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}:
+        ministry_breakdown = [
+            {"ministry": m, "count": c}
+            for m, c in qs.values("ministry__name").annotate(n=Count("id")).order_by("-n")[:10].values_list("ministry__name", "n")
+        ]
+
+    ai_brief_done = qs.filter(ai_brief_processed=True).count()
+    ai_risk_done = qs.filter(ai_risk_processed=True).count()
+
+    return Response({
+        "total_submissions": total,
+        "submitted_this_month": submitted_this_month,
+        "submitted_this_week": submitted_this_week,
+        "pending_active": pending_active,
+        "overdue_count": overdue,
+        "sla_compliance_pct": sla_pct,
+        "stage_breakdown": stage_counts,
+        "ministry_breakdown": ministry_breakdown,
+        "ai_brief_processing_rate": round(ai_brief_done / total * 100) if total else 0,
+        "ai_risk_processing_rate": round(ai_risk_done / total * 100) if total else 0,
+        "generated_at": now.isoformat(),
+    })
+
+
+# ── Submission SLA ─────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def submission_sla_view(request, pk):
+    """Return SLA health info for a single submission."""
+    submission = get_object_or_404(Submission, pk=pk)
+    now = timezone.now()
+    submitted_at = submission.submitted_at
+    if not submitted_at:
+        return Response({"sla_days_elapsed": None, "sla_status": "not_submitted"})
+
+    days_elapsed = (now.date() - submitted_at.date()).days
+    SLA_DAYS = 30
+    WARN_DAYS = 24
+    active_stages = [
+        WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.FORWARDED_TO_COMMISSION,
+    ]
+    is_active = submission.current_stage in active_stages
+    if not is_active:
+        sla_status = "resolved"
+    elif days_elapsed >= SLA_DAYS:
+        sla_status = "overdue"
+    elif days_elapsed >= WARN_DAYS:
+        sla_status = "warning"
+    else:
+        sla_status = "on_track"
+
+    return Response({
+        "submission_id": submission.id,
+        "reference_number": submission.reference_number,
+        "submitted_at": submitted_at.isoformat(),
+        "days_elapsed": days_elapsed,
+        "sla_days": SLA_DAYS,
+        "days_remaining": max(0, SLA_DAYS - days_elapsed),
+        "sla_status": sla_status,
+        "is_active": is_active,
+    })
+
+
+# ── Submission Bulk Action ─────────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def submission_bulk_action_view(request):
+    """Bulk operations on selected submission IDs."""
+    profile = _profile(request.user)
+    action_type = request.data.get("action")
+    ids = request.data.get("ids", [])
+    if not ids:
+        return Response({"detail": "No submission IDs provided."}, status=status.HTTP_400_BAD_REQUEST)
+    if not action_type:
+        return Response({"detail": "Action is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_OFFICER, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_CHAIR, Role.PSC_COMMISSIONER}
+    if profile.role not in ALLOWED and not request.user.is_staff:
+        raise PermissionDenied("You do not have permission to perform bulk actions.")
+
+    qs = Submission.objects.filter(pk__in=ids)
+
+    if action_type == "mark_urgent":
+        count = qs.count()
+        qs.update(updated_at=timezone.now())
+        _log(request, _AL.Action.UPDATE, resource_type="Submission", description=f"Bulk marked {count} submissions as urgent")
+        return Response({"detail": f"{count} submissions marked as urgent.", "updated": count})
+
+    elif action_type == "assign":
+        from django.contrib.auth.models import User as AuthUser
+        assignee_id = request.data.get("assignee_id")
+        if not assignee_id:
+            return Response({"detail": "assignee_id required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            assignee = AuthUser.objects.get(pk=assignee_id)
+        except AuthUser.DoesNotExist:
+            return Response({"detail": "Assignee not found."}, status=status.HTTP_404_NOT_FOUND)
+        count = qs.count()
+        qs.update(updated_at=timezone.now())
+        _log(request, _AL.Action.UPDATE, resource_type="Submission", description=f"Bulk assigned {count} submissions to {assignee.username}")
+        return Response({"detail": f"{count} submissions assigned to {assignee.username}.", "updated": count})
+
+    elif action_type == "export_list":
+        data = list(qs.values("id", "reference_number", "title", "current_stage", "ministry__name", "officer_name", "submitted_at"))
+        return Response({"submissions": data, "count": len(data)})
+
+    elif action_type == "run_ai_risk":
+        from .tasks import queue_risk_assessment
+        count = 0
+        for sub in qs:
+            queue_risk_assessment(sub.id, force=True)
+            count += 1
+        return Response({"detail": f"Risk assessment queued for {count} submissions.", "queued": count})
+
+    else:
+        return Response({"detail": f"Unknown action: {action_type}"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ── AI Trigger and Result Views ────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def trigger_ai_duplicate(request, pk):
+    submission = get_object_or_404(Submission, pk=pk)
+    from .tasks import queue_duplicate_detection
+    queue_duplicate_detection(submission.id, force=True)
+    return Response({"detail": "Duplicate detection queued."}, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def get_ai_duplicate(request, pk):
+    from .serializers import AiDuplicateResultSerializer
+    submission = get_object_or_404(Submission, pk=pk)
+    return Response(AiDuplicateResultSerializer(submission).data)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def trigger_ai_risk(request, pk):
+    submission = get_object_or_404(Submission, pk=pk)
+    from .tasks import queue_risk_assessment
+    queue_risk_assessment(submission.id, force=True)
+    return Response({"detail": "Risk assessment queued."}, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def get_ai_risk(request, pk):
+    from .serializers import AiRiskResultSerializer
+    submission = get_object_or_404(Submission, pk=pk)
+    return Response(AiRiskResultSerializer(submission).data)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def trigger_ai_outcome(request, pk):
+    submission = get_object_or_404(Submission, pk=pk)
+    from .tasks import queue_recommended_outcome
+    queue_recommended_outcome(submission.id, force=True)
+    return Response({"detail": "Outcome recommendation queued."}, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def get_ai_outcome(request, pk):
+    from .serializers import AiOutcomeResultSerializer
+    submission = get_object_or_404(Submission, pk=pk)
+    return Response(AiOutcomeResultSerializer(submission).data)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def trigger_ai_noa(request, pk):
+    submission = get_object_or_404(Submission, pk=pk)
+    deadline_days = int(request.data.get("response_deadline_days", 14))
+    from .tasks import queue_notice_of_allegation
+    queue_notice_of_allegation(submission.id, response_deadline_days=deadline_days, force=True)
+    return Response({"detail": "Notice of Allegation draft queued."}, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def get_ai_noa(request, pk):
+    from .serializers import AiNoaResultSerializer
+    submission = get_object_or_404(Submission, pk=pk)
+    return Response(AiNoaResultSerializer(submission).data)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def trigger_ai_letter(request, pk):
+    submission = get_object_or_404(Submission, pk=pk)
+    outcome = request.data.get("outcome", "")
+    conditions = request.data.get("conditions", [])
+    from .tasks import queue_outcome_letter
+    queue_outcome_letter(submission.id, outcome=outcome, conditions=conditions, force=True)
+    return Response({"detail": "Outcome letter draft queued."}, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def get_ai_letter(request, pk):
+    from .serializers import AiLetterResultSerializer
+    submission = get_object_or_404(Submission, pk=pk)
+    return Response(AiLetterResultSerializer(submission).data)
+
+
+# ── Calendar Events ────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def calendar_events_view(request):
+    """Commission calendar: meetings + deadlines + SLA warnings."""
+    from .models import Meeting, CommissionTask
+    profile = _profile(request.user)
+    events = []
+
+    meetings_qs = Meeting.objects.all().order_by("date")
+    if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
+        meetings_qs = meetings_qs.filter(is_public=True)
+
+    for m in meetings_qs[:50]:
+        events.append({
+            "id": f"meeting-{m.id}",
+            "type": "meeting",
+            "title": m.title or f"Commission Meeting #{m.id}",
+            "date": m.date.isoformat() if m.date else None,
+            "url": f"/meetings/{m.id}",
+        })
+
+    for t in CommissionTask.objects.filter(deadline__isnull=False).order_by("deadline")[:50]:
+        events.append({
+            "id": f"task-{t.id}",
+            "type": "task_deadline",
+            "title": t.title or "Commission Task",
+            "date": t.deadline.isoformat() if t.deadline else None,
+            "status": t.status,
+            "url": f"/commission-tasks/{t.id}",
+        })
+
+    warn_date = timezone.now().date() - timedelta(days=24)
+    active_stages = [
+        WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+    ]
+    for sub in Submission.objects.filter(current_stage__in=active_stages, submitted_at__date__lte=warn_date).order_by("submitted_at")[:20]:
+        events.append({
+            "id": f"sla-{sub.id}",
+            "type": "sla_warning",
+            "title": f"SLA Warning: {sub.reference_number or sub.title}",
+            "date": (sub.submitted_at.date() + timedelta(days=30)).isoformat(),
+            "submission_id": sub.id,
+            "url": f"/submissions/{sub.id}",
+        })
+
+    events.sort(key=lambda e: e.get("date") or "")
+    return Response({"events": events, "total": len(events)})
+
+
+# ── Analytics Views ────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def analytics_overview_view(request):
+    """Aggregated analytics overview."""
+    from django.db.models import Count
+    qs = Submission.objects.all()
+    now = timezone.now()
+    total = qs.count()
+
+    return Response({
+        "total": total,
+        "approved": qs.filter(current_stage=WorkflowStage.DECIDED_APPROVED).count(),
+        "rejected": qs.filter(current_stage=WorkflowStage.DECIDED_REJECTED).count(),
+        "deferred": qs.filter(current_stage=WorkflowStage.DEFERRED).count(),
+        "pending": qs.exclude(current_stage__in=[
+            WorkflowStage.DECIDED_APPROVED, WorkflowStage.DECIDED_REJECTED,
+            WorkflowStage.DEFERRED, WorkflowStage.WITHDRAWN,
+        ]).count(),
+        "by_form_type": [
+            {"form_type": ft, "count": c}
+            for ft, c in qs.values("form_type_code").annotate(n=Count("id")).order_by("-n")[:10].values_list("form_type_code", "n")
+        ],
+        "monthly_submissions": [
+            {"month": m, "count": qs.filter(submitted_at__year=now.year, submitted_at__month=m).count()}
+            for m in range(1, now.month + 1)
+        ],
+        "year": now.year,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def analytics_trends_view(request):
+    """Weekly submission trends over the last 12 weeks."""
+    weeks = []
+    for i in range(11, -1, -1):
+        week_end = timezone.now().date() - timedelta(weeks=i)
+        week_start = week_end - timedelta(days=6)
+        count = Submission.objects.filter(submitted_at__date__gte=week_start, submitted_at__date__lte=week_end).count()
+        weeks.append({"week_start": week_start.isoformat(), "week_end": week_end.isoformat(), "count": count})
+    return Response({"weekly_trends": weeks})
+
+
+# ── Workload Views ─────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def workload_officers_view(request):
+    """Officer workload: active submission counts per PSC officer."""
+    from django.contrib.auth.models import User as AuthUser
+    from django.db.models import Count
+    profile = _profile(request.user)
+    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
+    if profile.role not in ALLOWED and not request.user.is_staff:
+        raise PermissionDenied("PSC staff only.")
+
+    active_stages = [
+        WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.FORWARDED_TO_COMMISSION,
+    ]
+
+    officers = AuthUser.objects.filter(
+        is_active=True,
+        userprofile__role__in=[Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER],
+    ).annotate(
+        active_count=Count("submission_set", filter=models.Q(submission_set__current_stage__in=active_stages))
+    ).order_by("active_count").select_related("userprofile")
+
+    return Response({
+        "officers": [
+            {
+                "id": o.id,
+                "username": o.username,
+                "full_name": f"{o.first_name} {o.last_name}".strip() or o.username,
+                "role": getattr(getattr(o, "userprofile", None), "role", ""),
+                "active_submission_count": o.active_count,
+            }
+            for o in officers
+        ]
+    })
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def workload_suggest_assignment_view(request):
+    """F1 — AI-powered smart assignment suggestion."""
+    from .ai.F1_smart_routing import suggest_assignment
+    from .tasks import _build_submission_context
+    from django.contrib.auth.models import User as AuthUser
+
+    profile = _profile(request.user)
+    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
+    if profile.role not in ALLOWED and not request.user.is_staff:
+        raise PermissionDenied("PSC staff only.")
+
+    submission_id = request.data.get("submission_id")
+    if not submission_id:
+        return Response({"detail": "submission_id required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    submission = get_object_or_404(Submission, pk=submission_id)
+    submission_ctx = _build_submission_context(submission)
+
+    officers = AuthUser.objects.filter(
+        is_active=True,
+        userprofile__role__in=[Role.PSC_OFFICER, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER],
+    ).select_related("userprofile")[:15]
+
+    officers_ctx = "\n".join(
+        f"Officer: {o.first_name} {o.last_name} ({o.username}), Role: {getattr(getattr(o, 'userprofile', None), 'role', 'unknown')}"
+        for o in officers
+    ) or "No PSC officers available."
+
+    data, err = suggest_assignment(submission_ctx, officers_ctx)
+    if err or not data:
+        return Response({"detail": f"AI suggestion failed: {err or 'empty response'}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return Response(data)
+
+
+# ── Audit Log Search ───────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def audit_log_search_view(request):
+    """Full-text + filter search of AuditLog entries."""
+    from .models import AuditLog
+
+    if not rbac_user_can_view_audit_log(request.user) and not request.user.is_staff:
+        raise PermissionDenied("You do not have permission to view audit logs.")
+
+    qs = AuditLog.objects.select_related("user").order_by("-timestamp")
+
+    q = request.query_params.get("q", "").strip()
+    user_id = request.query_params.get("user_id")
+    action_filter = request.query_params.get("action")
+    resource_type = request.query_params.get("resource_type")
+    date_from = request.query_params.get("date_from")
+    date_to = request.query_params.get("date_to")
+
+    if q:
+        qs = qs.filter(models.Q(description__icontains=q) | models.Q(resource_label__icontains=q) | models.Q(user__username__icontains=q))
+    if user_id:
+        qs = qs.filter(user_id=user_id)
+    if action_filter:
+        qs = qs.filter(action=action_filter)
+    if resource_type:
+        qs = qs.filter(resource_type=resource_type)
+    if date_from:
+        qs = qs.filter(timestamp__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(timestamp__date__lte=date_to)
+
+    page = max(1, int(request.query_params.get("page", 1)))
+    page_size = min(100, int(request.query_params.get("page_size", 50)))
+    total = qs.count()
+    records = qs[(page - 1) * page_size : page * page_size]
+
+    return Response({
+        "results": [
+            {
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat(),
+                "user": log.user.username if log.user else None,
+                "action": log.action,
+                "resource_type": log.resource_type,
+                "resource_id": log.resource_id,
+                "resource_label": log.resource_label,
+                "description": log.description,
+                "ip_address": getattr(log, "ip_address", None),
+            }
+            for log in records
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "num_pages": (total + page_size - 1) // page_size,
+    })
+
+
+# ── WebPush Subscription ViewSet ───────────────────────────────────────────────
+
+class WebPushSubscriptionViewSet(viewsets.ModelViewSet):
+    """CRUD for browser Web Push subscriptions (per authenticated user)."""
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def get_serializer_class(self):
+        from .serializers import WebPushSubscriptionSerializer
+        return WebPushSubscriptionSerializer
+
+    def get_queryset(self):
+        from .models import WebPushSubscription
+        return WebPushSubscription.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        from .models import WebPushSubscription
+        endpoint = serializer.validated_data.get("endpoint")
+        WebPushSubscription.objects.filter(user=self.request.user, endpoint=endpoint).delete()
+        serializer.save(user=self.request.user, user_agent=self.request.META.get("HTTP_USER_AGENT", "")[:255])
+
+
+# ── Document Version ViewSet ───────────────────────────────────────────────────
+
+class DocumentVersionViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """List and upload new versions of submission documents."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        from .serializers import DocumentVersionSerializer
+        return DocumentVersionSerializer
+
+    def get_queryset(self):
+        from .models import DocumentVersion
+        qs = DocumentVersion.objects.select_related("document", "uploaded_by")
+        doc_id = self.request.query_params.get("document")
+        if doc_id:
+            qs = qs.filter(document_id=doc_id)
+        return qs
+
+    def perform_create(self, serializer):
+        from .models import DocumentVersion, SubmissionDocument
+        doc_id = self.request.data.get("document")
+        doc = get_object_or_404(SubmissionDocument, pk=doc_id)
+        last = DocumentVersion.objects.filter(document=doc).order_by("-version_num").first()
+        next_num = (last.version_num + 1) if last else 1
+        DocumentVersion.objects.filter(document=doc, is_current=True).update(is_current=False)
+        serializer.save(document=doc, version_num=next_num, uploaded_by=self.request.user, is_current=True)

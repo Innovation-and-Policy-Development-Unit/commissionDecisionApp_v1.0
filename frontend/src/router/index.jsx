@@ -47,6 +47,13 @@ import HrManagerGuide from '../pages/guide/HrManagerGuide'
 import UnitManagerGuide from '../pages/guide/UnitManagerGuide'
 import SecretaryGuide from '../pages/guide/SecretaryGuide'
 
+// ── P1–P4 New Pages ──────────────────────────────────────────────────────────
+import ExecutiveDashboard from '../pages/psc/ExecutiveDashboard'
+import CommissionCalendar from '../pages/psc/CommissionCalendar'
+import AuditTrailExplorer from '../pages/psc/AuditTrailExplorer'
+import AnalyticsDashboard from '../pages/psc/AnalyticsDashboard'
+import WorkloadDashboard from '../pages/psc/WorkloadDashboard'
+
 export default function AppRouter() {
   return (
     <Routes>
@@ -70,6 +77,15 @@ export default function AppRouter() {
           <Route path="/assistant" element={<StaffChatbot />} />
           <Route path="/status-assistant" element={<Navigate to="/assistant" replace />} />
           <Route path="/meetings/capture" element={<MeetingCapture />} />
+
+          {/* ── P1–P4 New Routes ── */}
+          <Route path="/executive-dashboard"  element={<ExecutiveDashboard />} />
+          <Route path="/calendar"             element={<CommissionCalendar />} />
+          <Route path="/audit-trail"          element={<AuditTrailExplorer />} />
+          <Route path="/analytics"            element={<AnalyticsDashboard />} />
+          <Route path="/workload"             element={<WorkloadDashboard />} />
+
+          {/* ── Admin ── */}
           <Route path="/admin/roles-permissions" element={<AdminPanel />} />
           <Route path="/admin/ministries-departments" element={<MinistriesDepartments />} />
           <Route path="/admin/api-keys" element={<AdminApiKeysPage />} />
@@ -86,6 +102,8 @@ export default function AppRouter() {
           <Route path="/admin/knowledge-base/edit/:slug" element={<KnowledgeArticleEditor />} />
           <Route path="/admin/backup-restore" element={<AdminBackupRestorePage />} />
           <Route path="/admin-panel" element={<Navigate to="/admin/roles-permissions?tab=users" replace />} />
+
+          {/* ── Secretariat ── */}
           <Route path="/secretariat/meeting-room" element={<MeetingRoomHub />} />
           <Route path="/secretariat/meeting-room/logitech-guide" element={<Navigate to="/secretariat/meeting-room" state={{ openLogitechGuide: true }} replace />} />
           <Route path="/secretariat/meeting-room/minutes-pipeline" element={<MinutesPipelineBrief />} />
@@ -96,9 +114,12 @@ export default function AppRouter() {
           <Route path="/secretariat/decisions" element={<Decisions />} />
           <Route path="/secretariat/tasks" element={<TaskManagement />} />
           <Route path="/secretariat/notifications" element={<Notifications />} />
+
+          {/* ── Guides ── */}
           <Route path="/guide/hr-manager" element={<HrManagerGuide />} />
           <Route path="/guide/unit-manager" element={<UnitManagerGuide />} />
           <Route path="/guide/secretary" element={<SecretaryGuide />} />
+
           <Route path="/pages/account" element={<Account />} />
           <Route path="/404" element={<Error404 />} />
           <Route path="*" element={<Navigate to="/404" replace />} />

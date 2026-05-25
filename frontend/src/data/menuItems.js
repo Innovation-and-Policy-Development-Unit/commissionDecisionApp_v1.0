@@ -2,6 +2,7 @@ import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen, Languages, Sparkles,
+  TrendingUp, Users, History, BarChart2, CalendarCheck,
 } from 'lucide-react'
 import { CMS_PORTAL_URL } from '../constants/compliance'
 import {
@@ -61,7 +62,22 @@ const menuItems = [
     items: [
       { label: 'Smart Report (AI)', labelKey: 'nav.smart_reports', icon: Sparkles, path: '/reports' },
       { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
-      { label: 'Staff Assistant', labelKey: 'nav.staff_assistant', icon: Bot, path: '/assistant' },
+      { label: 'Staff Assistant',   labelKey: 'nav.staff_assistant', icon: Bot,   path: '/assistant' },
+      { label: 'Analytics',         labelKey: 'nav.analytics',     icon: BarChart2, path: '/analytics',
+        audience: 'exclude_compliance' },
+    ],
+  },
+  {
+    group: 'Operations',
+    groupKey: 'nav.group_operations',
+    groupIcon: TrendingUp,
+    audience: 'secretariat',
+    opsAccess: true,
+    items: [
+      { label: 'Executive Dashboard', labelKey: 'nav.executive_dashboard', icon: LayoutDashboard, path: '/executive-dashboard', visibility: 'ops' },
+      { label: 'Commission Calendar', labelKey: 'nav.calendar',            icon: CalendarCheck,   path: '/calendar',           visibility: 'ops' },
+      { label: 'Workload',            labelKey: 'nav.workload',            icon: Users,           path: '/workload',           visibility: 'ops' },
+      { label: 'Audit Trail',         labelKey: 'nav.audit_trail',         icon: History,         path: '/audit-trail',        visibility: 'audit' },
     ],
   },
   {
@@ -176,6 +192,19 @@ export function getVisibleMenuForUser(user, feedbackEnabled = true) {
     .map((group) => {
       if (!menuItemVisibleForUser({ audience: group.audience ?? 'all' }, user)) {
         return null
+      }
+
+      if (group.opsAccess) {
+        if (!user) return null
+        const items = group.items.filter((item) => {
+          if (!menuItemVisibleForUser(item, user)) return false
+          const vis = item.visibility ?? 'ops'
+          if (vis === 'ops') return true  // visible to all secretariat users
+          if (vis === 'audit') return userCanViewAuditLog(user)
+          return true
+        })
+        if (items.length === 0) return null
+        return { ...group, items }
       }
 
       if (group.adminAccess) {

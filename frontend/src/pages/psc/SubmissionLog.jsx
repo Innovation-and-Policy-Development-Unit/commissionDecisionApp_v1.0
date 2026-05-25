@@ -13,6 +13,8 @@ import SubmissionForm from './SubmissionForm'
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { isComplianceRole } from '../../constants/compliance'
+import BulkOperationsBar from '../../components/shared/BulkOperationsBar'
+import { useToast } from '../../context/ToastContext'
 import { QualityScoreBadge } from '../../components/submissions/SubmissionQualityScore'
 
 const PER_PAGE = 15
@@ -43,6 +45,7 @@ export default function SubmissionLog() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const confirm = useConfirm()
+  const toast = useToast()
 
   const [rows, setRows]           = useState([])
   const [loading, setLoading]     = useState(true)
@@ -180,6 +183,23 @@ export default function SubmissionLog() {
     setSelected(new Set())
   }
 
+  const handleBulkAction = async (action, extra = {}) => {
+    const ids = [...selected]
+    try {
+      const res = await api.post('/submissions/bulk-action/', { action, ids, ...extra })
+      toast.success(res.data?.detail || 'Bulk action completed.')
+      if (action === 'export_list' && res.data?.submissions) {
+        const blob = new Blob([JSON.stringify(res.data.submissions, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = 'submissions-export.json'; a.click()
+        URL.revokeObjectURL(url)
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Bulk action failed.')
+    }
+  }
+
   const handleDelete = async (row) => {
     const ok = await confirm({
       title: 'Delete Submission',
@@ -289,14 +309,16 @@ export default function SubmissionLog() {
             ))}
           </select>
           {isAdmin && selected.size > 0 && (
-            <button
-              type="button"
-              onClick={handleBulkDelete}
-              className="btn-danger text-sm inline-flex items-center gap-2 py-2 px-3 whitespace-nowrap"
-            >
-              <Trash2 size={14} />
-              Delete {selected.size}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                className="btn-danger text-sm inline-flex items-center gap-2 py-2 px-3 whitespace-nowrap"
+              >
+                <Trash2 size={14} />
+                Delete {selected.size}
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -364,6 +386,16 @@ export default function SubmissionLog() {
 
         {viewMode === 'list' && (
         <>
+        {/* ── Bulk Operations Bar ── */}
+        {isAdmin && selected.size > 0 && (
+          <div className="p-4 pb-0">
+            <BulkOperationsBar
+              selectedIds={[...selected]}
+              onClear={() => setSelected(new Set())}
+              onBulkAction={handleBulkAction}
+            />
+          </div>
+        )}
         {/* ── Table ── */}
         <div className="table-wrapper">
           <table className="table">

@@ -7,7 +7,6 @@ from django.core.files.base import ContentFile
 from .models import FormSectionSignature, Notification
 from .travel_forms import (
     endorsement_sections,
-    missing_endorsements,
     secretary_decision_section,
     user_may_sign_section,
 )

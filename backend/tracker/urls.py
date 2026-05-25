@@ -62,6 +62,28 @@ from .views import (
     security_audit_view,
     api_inventory_view,
     global_search_view,
+    # ── P1–P4 New Views ─────────────────────────────────────────────────────
+    dashboard_stats_view,
+    submission_sla_view,
+    submission_bulk_action_view,
+    trigger_ai_duplicate,
+    get_ai_duplicate,
+    trigger_ai_risk,
+    get_ai_risk,
+    trigger_ai_outcome,
+    get_ai_outcome,
+    trigger_ai_noa,
+    get_ai_noa,
+    trigger_ai_letter,
+    get_ai_letter,
+    calendar_events_view,
+    analytics_overview_view,
+    analytics_trends_view,
+    workload_officers_view,
+    workload_suggest_assignment_view,
+    audit_log_search_view,
+    WebPushSubscriptionViewSet,
+    DocumentVersionViewSet,
 )
 
 router = DefaultRouter()
@@ -104,6 +126,9 @@ router.register(
 )
 router.register(r"ui-translations", UiTranslationViewSet, basename="ui-translation")
 router.register(r"daily-brief", DailyBriefViewSet, basename="daily-brief")
+# ── P1–P4 New ViewSet Registrations ──────────────────────────────────────────
+router.register(r"push-subscriptions", WebPushSubscriptionViewSet, basename="push-subscription")
+router.register(r"document-versions",  DocumentVersionViewSet,     basename="document-version")
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -137,4 +162,29 @@ urlpatterns = [
     # ── Inbound webhooks from external systems ───────────────────────────────
     path("webhooks/cms-signoff/", cms_signoff_callback, name="cms-signoff-callback"),
     path("webhooks/cms-register/", cms_register_submission, name="cms-register-submission"),
+    # ── P1–P4 New Endpoints ───────────────────────────────────────────────────
+    path("dashboard/stats/",                dashboard_stats_view,               name="dashboard-stats"),
+    path("submissions/<int:pk>/sla/",       submission_sla_view,                name="submission-sla"),
+    path("submissions/bulk-action/",        submission_bulk_action_view,        name="submission-bulk-action"),
+    # AI triggers + result getters
+    path("submissions/<int:pk>/trigger-ai-duplicate/", trigger_ai_duplicate,   name="trigger-ai-duplicate"),
+    path("submissions/<int:pk>/ai-duplicate/",         get_ai_duplicate,       name="get-ai-duplicate"),
+    path("submissions/<int:pk>/trigger-ai-risk/",      trigger_ai_risk,        name="trigger-ai-risk"),
+    path("submissions/<int:pk>/ai-risk/",              get_ai_risk,            name="get-ai-risk"),
+    path("submissions/<int:pk>/trigger-ai-outcome/",   trigger_ai_outcome,     name="trigger-ai-outcome"),
+    path("submissions/<int:pk>/ai-outcome/",           get_ai_outcome,         name="get-ai-outcome"),
+    path("submissions/<int:pk>/trigger-ai-noa/",       trigger_ai_noa,         name="trigger-ai-noa"),
+    path("submissions/<int:pk>/ai-noa/",               get_ai_noa,             name="get-ai-noa"),
+    path("submissions/<int:pk>/trigger-ai-letter/",    trigger_ai_letter,      name="trigger-ai-letter"),
+    path("submissions/<int:pk>/ai-letter/",            get_ai_letter,          name="get-ai-letter"),
+    # Calendar
+    path("calendar/events/",               calendar_events_view,               name="calendar-events"),
+    # Analytics
+    path("analytics/overview/",            analytics_overview_view,            name="analytics-overview"),
+    path("analytics/trends/",              analytics_trends_view,              name="analytics-trends"),
+    # Workload
+    path("workload/officers/",             workload_officers_view,             name="workload-officers"),
+    path("workload/suggest-assignment/",   workload_suggest_assignment_view,   name="workload-suggest-assignment"),
+    # Audit log search
+    path("audit-logs/search/",             audit_log_search_view,              name="audit-log-search"),
 ]

@@ -17,6 +17,7 @@ import {
 } from '../../constants/stages'
 import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Sparkles, Loader2 } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
+import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
 import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
 import SubmissionQualityScore from '../../components/submissions/SubmissionQualityScore'
@@ -225,6 +226,10 @@ export default function SubmissionDetail() {
   // Fetch checklist for all stages — required docs are always relevant
   const fetchChecklist = useCallback(async () => {
     if (!submission) return
+    if (submission.is_attachment || submission.is_internal || submission.secretary_only) {
+      setChecklist([])
+      return
+    }
     try {
       const r = await api.get(`/submissions/${id}/checklist/`)
       setChecklist(r.data)
@@ -790,7 +795,7 @@ const stageDescriptions = {
                 </p>
               </div>
             )}
-          </motion.div>
+          </div>
 
           {submission.secretary_only && (
             <TravelEndorsementPanel
@@ -1336,6 +1341,29 @@ const stageDescriptions = {
         </div>
       </div>
     </div>
+
+    {/* ── AI Analysis Section (PSC staff only) ─────────────────────────── */}
+    {submission && !isComplianceRole(profile?.role) && (
+      <div style={{ marginTop: '32px' }}>
+        <details>
+          <summary style={{ cursor: 'pointer', userSelect: 'none', marginBottom: '16px' }}>
+            <span style={{ fontWeight: 600, fontSize: '1rem' }}>
+              🤖 AI Analysis Tools
+            </span>
+            <span style={{ color: 'var(--colorNeutralForeground3)', fontSize: '0.85rem', marginLeft: '8px' }}>
+              (duplicate detection, risk assessment, outcome recommendation, letters)
+            </span>
+          </summary>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))', gap: '16px', marginTop: '8px' }}>
+            <AiDuplicatePanel submissionId={id} />
+            <AiRiskPanel submissionId={id} />
+            <AiOutcomePanel submissionId={id} />
+            <AiNoaPanel submissionId={id} />
+            <AiLetterPanel submissionId={id} suggestedOutcome={submission.ai_outcome_recommendation || ''} />
+          </div>
+        </details>
+      </div>
+    )}
 
     {annotatorDoc && (
       <DocumentAnnotatorModal
