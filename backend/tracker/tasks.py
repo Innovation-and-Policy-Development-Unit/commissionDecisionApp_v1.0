@@ -770,6 +770,20 @@ def extract_decisions_from_minutes(meeting_id: int):
         app_log.error("DECISION_EXTRACT_FAIL | Meeting %s | %s", meeting_id, exc)
 
 
+# ── Scheduled email dispatch (SystemSetting cron) ─────────────────────────────
+
+
+@shared_task
+def send_scheduled_emails():
+    """Celery Beat: flush queued notification emails via Django SMTP."""
+    from .email_dispatch import dispatch_pending_emails
+
+    log.info("EMAIL_CRON | starting scheduled email dispatch")
+    stats = dispatch_pending_emails()
+    log.info("EMAIL_CRON | finished | %s", stats)
+    return stats
+
+
 # ── Due-date notifications ────────────────────────────────────────────────────
 
 

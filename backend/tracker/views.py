@@ -4737,7 +4737,77 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
              resource_type="SystemSetting",
              description=f"Settings updated: {', '.join(settings_dict.keys())}",
              extra_data={"keys": list(settings_dict.keys()), "smtp_password_saved": smtp_password_saved})
+
+        if {"EMAIL_CRON_ENABLED", "EMAIL_CRON_SCHEDULE"} & set(settings_dict.keys()):
+            try:
+                from .email_scheduler import start_email_scheduler
+                start_email_scheduler()
+            except Exception:
+                pass
+
         return Response(updated)
+
+    @action(detail=False, methods=["get", "post"], url_path="email-schedule")
+    def email_schedule(self, request):
+        """
+        GET  /settings/email-schedule/ — cron + enabled flag + next run.
+        POST /settings/email-schedule/ — { cron_expr, enabled }.
+        """
+        from .email_scheduler import get_email_next_run, update_email_schedule
+
+        if request.method == "GET":
+            enabled = SystemSetting.get_bool("EMAIL_CRON_ENABLED", default=True)
+            cron_expr = SystemSetting.get_val("EMAIL_CRON_SCHEDULE") or "0 8 * * *"
+            return Response({
+                "enabled": enabled,
+                "cron_expr": cron_expr,
+                "next_run": get_email_next_run(),
+            })
+
+        cron_expr = (request.data.get("cron_expr") or "").strip()
+        enabled = request.data.get("enabled", True)
+        if isinstance(enabled, str):
+            enabled = enabled.lower() in ("true", "1", "yes", "on")
+
+        if enabled and cron_expr:
+            parts = cron_expr.split()
+            if len(parts) != 5:
+                return Response(
+                    {"detail": "cron_expr must have exactly 5 fields (min hour day month weekday)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        for key, val in [
+            ("EMAIL_CRON_ENABLED", "true" if enabled else "false"),
+            ("EMAIL_CRON_SCHEDULE", cron_expr if enabled else (cron_expr or "")),
+        ]:
+            setting, _ = SystemSetting.objects.get_or_create(key=key)
+            setting.value = val
+            setting.save()
+
+        try:
+            update_email_schedule(cron_expr=cron_expr if enabled else None, enabled=enabled)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "detail": "Email schedule updated.",
+            "enabled": enabled,
+            "cron_expr": cron_expr,
+            "next_run": get_email_next_run(),
+        })
+
+    @action(detail=False, methods=["post"], url_path="run-email-dispatch")
+    def run_email_dispatch(self, request):
+        """Run the email outbox dispatch immediately (uses Django SMTP backend)."""
+        from .email_dispatch import dispatch_pending_emails
+
+        stats = dispatch_pending_emails()
+        sent = stats.get("sent", 0)
+        failed = stats.get("failed", 0)
+        skipped = stats.get("skipped", 0)
+        detail = f"Email dispatch complete: {sent} sent, {failed} failed, {skipped} skipped."
+        return Response({"detail": detail, **stats})
 
     @action(detail=False, methods=["get"], url_path="smtp-status")
     def smtp_status(self, request):

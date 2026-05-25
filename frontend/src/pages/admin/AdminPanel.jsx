@@ -1208,6 +1208,20 @@ export function APIKeysTab({ apiKeys, users, onRefresh }) {
   )
 }
 
+// ── Cron schedule presets (backup + email dispatch) ───────────────────────────
+const SCHEDULE_PRESETS = [
+  { label: 'Disabled', value: '' },
+  { label: 'Every hour', value: '0 * * * *' },
+  { label: 'Daily at midnight', value: '0 0 * * *' },
+  { label: 'Daily at 6:00 AM', value: '0 6 * * *' },
+  { label: 'Daily at 8:00 AM', value: '0 8 * * *' },
+  { label: 'Daily at 11:00 PM', value: '0 23 * * *' },
+  { label: 'Weekly — Sunday midnight', value: '0 0 * * 0' },
+  { label: 'Weekly — Friday 6 PM', value: '0 18 * * 5' },
+  { label: 'Monthly — 1st at midnight', value: '0 0 1 * *' },
+  { label: 'Custom', value: '__custom__' },
+]
+
 export function SettingsTab({ settings, onRefresh }) {
   const toast = useToast()
   const confirm = useConfirm()
@@ -1224,6 +1238,34 @@ export function SettingsTab({ settings, onRefresh }) {
   const [testEmailLoading, setTestEmailLoading] = useState(false)
   const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false)
   const smtpPasswordRef = useRef(null)
+  const [emailSchedule, setEmailSchedule] = useState({
+    enabled: true,
+    cron_expr: '0 8 * * *',
+    next_run: null,
+  })
+  const [emailSchedulePreset, setEmailSchedulePreset] = useState('0 8 * * *')
+  const [emailCustomCron, setEmailCustomCron] = useState('')
+  const [emailScheduleLoading, setEmailScheduleLoading] = useState(false)
+  const [emailDispatchLoading, setEmailDispatchLoading] = useState(false)
+
+  const fetchEmailSchedule = useCallback(async () => {
+    try {
+      const res = await api.get('/settings/email-schedule/')
+      const s = res.data
+      setEmailSchedule(s)
+      const preset = SCHEDULE_PRESETS.find(
+        p => p.value === s.cron_expr && p.value !== '__custom__'
+      )
+      setEmailSchedulePreset(
+        s.enabled
+          ? (preset ? preset.value : (s.cron_expr ? '__custom__' : ''))
+          : ''
+      )
+      setEmailCustomCron(s.cron_expr || '')
+    } catch {
+      /* best-effort */
+    }
+  }, [])
 
   const fetchSmtpStatus = useCallback(async () => {
     try {
@@ -1256,7 +1298,8 @@ export function SettingsTab({ settings, onRefresh }) {
   useEffect(() => {
     fetchLockoutStats()
     fetchSmtpStatus()
-  }, [fetchLockoutStats, fetchSmtpStatus])
+    fetchEmailSchedule()
+  }, [fetchLockoutStats, fetchSmtpStatus, fetchEmailSchedule])
 
   useEffect(() => {
     if (user?.email && !testEmailTo) setTestEmailTo(user.email)
@@ -1403,6 +1446,48 @@ export function SettingsTab({ settings, onRefresh }) {
       toast.error(typeof msg === 'string' ? msg : 'Failed to send test email.')
     } finally {
       setTestEmailLoading(false)
+    }
+  }
+
+  const saveEmailSchedule = async () => {
+    setEmailScheduleLoading(true)
+    setError('')
+    try {
+      const cron =
+        emailSchedulePreset === '__custom__'
+          ? emailCustomCron.trim()
+          : emailSchedulePreset
+      const enabled = emailSchedule.enabled && Boolean(cron)
+      const res = await api.post('/settings/email-schedule/', {
+        cron_expr: cron || emailSchedule.cron_expr || '0 8 * * *',
+        enabled,
+      })
+      setEmailSchedule(res.data)
+      toast.success(res.data.detail ?? 'Email schedule saved.')
+      setSuccess(res.data.detail ?? 'Email schedule saved.')
+    } catch (err) {
+      const msg = err.response?.data?.detail ?? 'Failed to save email schedule.'
+      setError(msg)
+      toast.error(msg)
+    } finally {
+      setEmailScheduleLoading(false)
+    }
+  }
+
+  const runEmailDispatchNow = async () => {
+    setEmailDispatchLoading(true)
+    setError('')
+    try {
+      const res = await api.post('/settings/run-email-dispatch/')
+      const msg = res.data.detail ?? 'Email dispatch finished.'
+      setSuccess(msg)
+      toast.success(msg)
+    } catch (err) {
+      const msg = err.response?.data?.detail ?? 'Email dispatch failed.'
+      setError(msg)
+      toast.error(msg)
+    } finally {
+      setEmailDispatchLoading(false)
     }
   }
 
@@ -1615,6 +1700,91 @@ export function SettingsTab({ settings, onRefresh }) {
             </p>
           </div>
         </section>
+
+        {/* ── Scheduled email dispatch ── */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-medium border-b pb-2">
+            <Clock size={18} className="text-primary-500" />
+            <h3>Scheduled email dispatch</h3>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Sends queued notification emails (channel Email or Both) using Django SMTP and your
+            settings above. Requires <strong className="font-medium">scdms-celery-beat</strong> and{' '}
+            <strong className="font-medium">scdms-celery-worker</strong> on Render.
+          </p>
+          <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-slate-800/40">
+            <div>
+              <p className="text-sm font-medium">Enable scheduled dispatch</p>
+              <p className="text-xs text-slate-500">
+                {emailSchedule.next_run
+                  ? `Next run (approx.): ${new Date(emailSchedule.next_run).toLocaleString()}`
+                  : 'No upcoming run — choose a schedule or run manually.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !emailSchedule.enabled
+                setEmailSchedule(s => ({ ...s, enabled: next }))
+                if (!next) setEmailSchedulePreset('')
+              }}
+            >
+              {emailSchedule.enabled ? (
+                <ToggleRight size={32} className="text-emerald-500" />
+              ) : (
+                <ToggleLeft size={32} className="text-slate-300" />
+              )}
+            </button>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-500">Schedule</label>
+              <select
+                className="input text-sm"
+                value={emailSchedulePreset}
+                onChange={e => setEmailSchedulePreset(e.target.value)}
+                disabled={!emailSchedule.enabled}
+              >
+                {SCHEDULE_PRESETS.map(p => (
+                  <option key={p.label} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+            </div>
+            {emailSchedulePreset === '__custom__' && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-500">Custom cron (5 fields)</label>
+                <input
+                  className="input text-sm font-mono"
+                  placeholder="0 8 * * *"
+                  value={emailCustomCron}
+                  onChange={e => setEmailCustomCron(e.target.value)}
+                  disabled={!emailSchedule.enabled}
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={saveEmailSchedule}
+              disabled={emailScheduleLoading}
+              className="inline-flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-medium bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60"
+            >
+              {emailScheduleLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+              Save email schedule
+            </button>
+            <button
+              type="button"
+              onClick={runEmailDispatchNow}
+              disabled={emailDispatchLoading}
+              className="inline-flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
+            >
+              {emailDispatchLoading ? <RefreshCw size={14} className="animate-spin" /> : <Mail size={14} />}
+              Run dispatch now
+            </button>
+          </div>
+        </section>
+
         {/* ── Password Policy ── */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-medium border-b pb-2">
@@ -1674,19 +1844,6 @@ export function SettingsTab({ settings, onRefresh }) {
     </div>
   )
 }
-
-// ── Cron schedule presets ─────────────────────────────────────────────────────
-const SCHEDULE_PRESETS = [
-  { label: 'Disabled', value: '' },
-  { label: 'Every hour', value: '0 * * * *' },
-  { label: 'Daily at midnight', value: '0 0 * * *' },
-  { label: 'Daily at 6:00 AM', value: '0 6 * * *' },
-  { label: 'Daily at 11:00 PM', value: '0 23 * * *' },
-  { label: 'Weekly — Sunday midnight', value: '0 0 * * 0' },
-  { label: 'Weekly — Friday 6 PM', value: '0 18 * * 5' },
-  { label: 'Monthly — 1st at midnight', value: '0 0 1 * *' },
-  { label: 'Custom', value: '__custom__' },
-]
 
 function formatBytes(kb) {
   if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`

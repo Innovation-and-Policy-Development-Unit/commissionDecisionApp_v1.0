@@ -45,6 +45,15 @@ class TrackerConfig(AppConfig):
                 "Daily brief schedule could not be synced: %s", exc
             )
 
+        try:
+            from .email_scheduler import start_email_scheduler
+            start_email_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger("scdms.security").warning(
+                "Email dispatch schedule could not be synced: %s", exc
+            )
+
         # Wire up signal handlers for AI feedback analysis
         try:
             import tracker.signals  # noqa: F401
