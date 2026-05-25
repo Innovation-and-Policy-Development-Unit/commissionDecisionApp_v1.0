@@ -12,6 +12,7 @@ const solidColors = {
 
 export default function StatCard({
   title,
+  label,
   value,
   icon: Icon,
   change,
@@ -20,8 +21,14 @@ export default function StatCard({
   suffix = '',
   prefix = '',
 }) {
+  const heading = title || label
   const isPositive = change >= 0
   const solidColor = solidColors[color] || solidColors.purple
+  const iconNode = Icon
+    ? (typeof Icon === 'function'
+      ? <Icon size={20} className="text-white" />
+      : Icon)
+    : null
 
   return (
     <div className={clsx(
@@ -40,31 +47,35 @@ export default function StatCard({
         {/* Icon and title */}
         <div className="flex items-start justify-between mb-4">
           <div>
-            <p className="text-white/70 text-xs font-semibold uppercase tracking-wider">{title}</p>
+            <p className="text-white/70 text-xs font-semibold uppercase tracking-wider">{heading}</p>
           </div>
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-            {Icon && <Icon size={20} className="text-white" />}
-          </div>
+          {iconNode && (
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              {iconNode}
+            </div>
+          )}
         </div>
 
         {/* Value */}
-        <div className="mb-3">
+        <div className={change != null && !Number.isNaN(change) ? 'mb-3' : ''}>
           <p className="text-3xl font-bold tracking-tight">
             {prefix}{value}{suffix}
           </p>
         </div>
 
         {/* Change indicator */}
-        <div className="flex items-center gap-1.5">
-          <div className={clsx(
-            'flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full',
-            isPositive ? 'bg-white/20 text-white' : 'bg-white/20 text-white'
-          )}>
-            {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-            <span>{isPositive ? '+' : ''}{change}%</span>
+        {change != null && !Number.isNaN(change) && (
+          <div className="flex items-center gap-1.5">
+            <div className={clsx(
+              'flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full',
+              isPositive ? 'bg-white/20 text-white' : 'bg-white/20 text-white'
+            )}>
+              {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+              <span>{isPositive ? '+' : ''}{change}%</span>
+            </div>
+            <span className="text-white/60 text-xs">{changeLabel || 'vs last month'}</span>
           </div>
-          <span className="text-white/60 text-xs">{changeLabel || 'vs last month'}</span>
-        </div>
+        )}
       </div>
     </div>
   )

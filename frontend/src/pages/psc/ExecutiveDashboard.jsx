@@ -118,33 +118,34 @@ export default function ExecutiveDashboard() {
       {/* KPI Row */}
       <div className={styles.kpiGrid}>
         <StatCard
-          label="Total Submissions"
+          title="Total Submissions"
           value={stats?.total_submissions ?? 0}
-          icon={<DocumentRegular fontSize={24} />}
-          color="brand"
+          icon={DocumentRegular}
+          color="blue"
         />
         <StatCard
-          label="Active / Pending"
+          title="Active / Pending"
           value={stats?.pending_active ?? 0}
-          icon={<ClockRegular fontSize={24} />}
-          color="warning"
+          icon={ClockRegular}
+          color="amber"
         />
         <StatCard
-          label="Submitted This Week"
+          title="Submitted This Week"
           value={stats?.submitted_this_week ?? 0}
-          icon={<DataBarVerticalRegular fontSize={24} />}
-          color="success"
+          icon={DataBarVerticalRegular}
+          color="emerald"
         />
         <StatCard
-          label="Submitted This Month"
+          title="Submitted This Month"
           value={stats?.submitted_this_month ?? 0}
-          icon={<DataBarVerticalRegular fontSize={24} />}
+          icon={DataBarVerticalRegular}
+          color="cyan"
         />
         <StatCard
-          label="Overdue (>30 days)"
+          title="Overdue (>30 days)"
           value={stats?.overdue_count ?? 0}
-          icon={<AlertUrgentRegular fontSize={24} />}
-          color={stats?.overdue_count > 0 ? 'danger' : 'success'}
+          icon={AlertUrgentRegular}
+          color={stats?.overdue_count > 0 ? 'red' : 'emerald'}
         />
         <Card style={{ padding: '16px' }}>
           <Text weight="semibold" size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>

@@ -83,11 +83,11 @@ export default function AnalyticsDashboard() {
 
       {/* KPI Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '16px' }}>
-        <StatCard label="Total" value={overview?.total ?? 0} color="brand" />
-        <StatCard label="Approved" value={overview?.approved ?? 0} color="success" />
-        <StatCard label="Rejected" value={overview?.rejected ?? 0} color="danger" />
-        <StatCard label="Deferred" value={overview?.deferred ?? 0} color="warning" />
-        <StatCard label="Pending" value={overview?.pending ?? 0} />
+        <StatCard title="Total" value={overview?.total ?? 0} color="blue" />
+        <StatCard title="Approved" value={overview?.approved ?? 0} color="emerald" />
+        <StatCard title="Rejected" value={overview?.rejected ?? 0} color="red" />
+        <StatCard title="Deferred" value={overview?.deferred ?? 0} color="amber" />
+        <StatCard title="Pending" value={overview?.pending ?? 0} color="purple" />
       </div>
 
       <div className={styles.twoCol}>
