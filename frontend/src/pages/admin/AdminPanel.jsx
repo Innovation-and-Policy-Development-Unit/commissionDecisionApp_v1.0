@@ -1375,17 +1375,17 @@ export function SettingsTab({ settings, onRefresh }) {
     setError('')
     try {
       const pwd = readSmtpPasswordInput()
-      if (!pwd && !smtpPasswordConfigured) {
-        toast.error('Enter your SMTP password, then send the test again.')
+      if (!pwd) {
+        toast.error('Paste your SMTP password in the field above, then send the test.')
         setTestEmailLoading(false)
         return
       }
       const smtpPayload = {}
       SMTP_SETTING_KEYS.forEach(k => { smtpPayload[k] = form[k] ?? '' })
-      if (pwd) smtpPayload.SMTP_PASSWORD = pwd
+      smtpPayload.SMTP_PASSWORD = pwd
       await api.post('/settings/batch-update/', smtpPayload)
       await fetchSmtpStatus()
-      const res = await api.post('/settings/test-email/', { to })
+      const res = await api.post('/settings/test-email/', { to, smtp_password: pwd })
       if (pwd) {
         setForm(f => ({ ...f, SMTP_PASSWORD: '' }))
         if (smtpPasswordRef.current) smtpPasswordRef.current.value = ''
@@ -1610,6 +1610,9 @@ export function SettingsTab({ settings, onRefresh }) {
                 {testEmailLoading ? 'Sending…' : 'Send test email'}
               </button>
             </div>
+            <p className="text-[11px] text-slate-400">
+              Paste the SMTP password above before each test (it is not shown after save).
+            </p>
           </div>
         </section>
         {/* ── Password Policy ── */}

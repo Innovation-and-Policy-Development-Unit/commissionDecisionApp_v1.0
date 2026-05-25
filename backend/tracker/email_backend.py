@@ -100,6 +100,76 @@ def resolve_smtp_config():
     return merged
 
 
+def format_smtp_error(exc: Exception) -> str:
+    """Human-readable SMTP failure (avoids raw dict dumps in API responses)."""
+    import smtplib
+
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        code = getattr(exc, "smtp_code", None)
+        msg = getattr(exc, "smtp_error", b"")
+        if isinstance(msg, bytes):
+            msg = msg.decode("utf-8", errors="replace")
+        return f"SMTP login failed ({code}): {msg or exc}".strip()
+
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        parts = []
+        for addr, detail in exc.recipients.items():
+            if isinstance(detail, tuple) and len(detail) >= 2:
+                code, msg = detail[0], detail[1]
+                if isinstance(msg, bytes):
+                    msg = msg.decode("utf-8", errors="replace")
+                parts.append(f"{addr}: {code} {msg}")
+            else:
+                parts.append(f"{addr}: {detail}")
+        return "; ".join(parts) or str(exc)
+
+    return str(exc)
+
+
+def send_smtp_message(
+    *,
+    cfg: dict,
+    from_email: str,
+    recipients: list[str],
+    subject: str,
+    body: str,
+) -> None:
+    """Send one plain-text message with explicit TLS + login (used by SMTP test)."""
+    import smtplib
+    from email.message import EmailMessage
+
+    cfg = _normalize_cfg(cfg)
+    if not cfg.get("username") or not cfg.get("password"):
+        raise ValueError("SMTP username and password are required.")
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = ", ".join(recipients)
+    msg.set_content(body)
+
+    timeout = 30
+    if cfg["use_ssl"]:
+        server = smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=timeout)
+    else:
+        server = smtplib.SMTP(cfg["host"], cfg["port"], timeout=timeout)
+
+    try:
+        server.ehlo()
+        if cfg["use_tls"] and not cfg["use_ssl"]:
+            server.starttls()
+            server.ehlo()
+        server.login(cfg["username"], cfg["password"])
+        refused = server.send_message(msg)
+        if refused:
+            raise smtplib.SMTPRecipientsRefused(refused)
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
+
+
 def smtp_config_diagnostics() -> dict:
     """Non-secret summary for admin troubleshooting."""
     db_cfg = _smtp_config_from_settings()
@@ -134,12 +204,22 @@ class DynamicEmailBackend(SMTPEmailBackend):
 
     def __init__(self, **kwargs):
         cfg = resolve_smtp_config()
-
         kwargs.setdefault("host", cfg["host"])
         kwargs.setdefault("port", cfg["port"])
         kwargs.setdefault("username", cfg["username"])
         kwargs.setdefault("password", cfg["password"])
         kwargs.setdefault("use_tls", cfg["use_tls"])
         kwargs.setdefault("use_ssl", cfg["use_ssl"])
-
         super().__init__(**kwargs)
+
+    def open(self):
+        if self.connection:
+            return False
+        cfg = resolve_smtp_config()
+        self.host = cfg["host"]
+        self.port = cfg["port"]
+        self.username = cfg["username"]
+        self.password = cfg["password"]
+        self.use_tls = cfg["use_tls"]
+        self.use_ssl = cfg["use_ssl"]
+        return super().open()

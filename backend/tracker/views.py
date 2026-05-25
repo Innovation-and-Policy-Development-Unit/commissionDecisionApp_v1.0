@@ -4751,7 +4751,6 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
         """Send a test message using the configured SMTP backend (env or SystemSetting)."""
         from django.conf import settings as django_settings
         from django.core.exceptions import ValidationError
-        from django.core.mail import send_mail
         from django.core.validators import validate_email
 
         to = (request.data.get("to") or "").strip()
@@ -4762,10 +4761,29 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
         except ValidationError:
             return Response({"detail": "Invalid email address."}, status=400)
 
-        from .email_backend import resolve_smtp_config, smtp_config_diagnostics
+        from .email_backend import (
+            _normalize_password,
+            format_smtp_error,
+            resolve_smtp_config,
+            send_smtp_message,
+            smtp_config_diagnostics,
+        )
 
         diag = smtp_config_diagnostics()
         cfg = resolve_smtp_config()
+
+        # Use password from this request first (Admin test form), then stored settings.
+        inline_password = _normalize_password(
+            str(request.data.get("smtp_password") or request.data.get("password") or "")
+        )
+        if inline_password:
+            setting, _ = SystemSetting.objects.get_or_create(key="SMTP_PASSWORD")
+            setting.value = inline_password
+            setting.save(update_fields=["value", "updated_at"])
+            cfg = resolve_smtp_config()
+            cfg["password"] = inline_password
+            diag = smtp_config_diagnostics()
+
         smtp_label = f"{cfg['host']}:{cfg['port']}"
         if not cfg.get("username"):
             return Response(
@@ -4785,9 +4803,8 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "detail": (
-                        "SMTP password is not configured. For Gmail paste a 16-character App Password "
-                        "(https://myaccount.google.com/apppasswords), not your normal Google password. "
-                        "Re-enter it in SMTP Password, then send the test again."
+                        "SMTP password is not configured. Paste your SMTP2GO (or provider) password "
+                        "in SMTP Password, click Save Changes, then send the test again."
                     ),
                     **diag,
                 },
@@ -4825,16 +4842,30 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
             f"From: {from_email}\n"
         )
         try:
-            send_mail(subject, message, from_email, [to], fail_silently=False)
+            send_smtp_message(
+                cfg=cfg,
+                from_email=from_email,
+                recipients=[to],
+                subject=subject,
+                body=message,
+            )
         except Exception as exc:
-            err = str(exc)
+            err = format_smtp_error(exc)
             hint = ""
-            if "530" in err or "Authentication Required" in err or "gsmtp" in err.lower():
+            err_l = err.lower()
+            if (
+                "530" in err
+                or "550" in err
+                or "authentication" in err_l
+                or "authenticate" in err_l
+                or "relay access denied" in err_l
+                or "gsmtp" in err_l
+            ):
                 hint = (
-                    " Gmail/Google: use smtp.gmail.com, port 587, TLS on, SSL off, "
-                    "SMTP User = full email, SMTP Password = 16-character App Password "
-                    "(https://myaccount.google.com/apppasswords). "
-                    "Clear SMTP_HOST from .env if you only configure mail in Admin."
+                    " The server rejected SMTP login. Re-enter your SMTP password in Admin "
+                    "(SMTP2GO: use the SMTP Users password from your SMTP2GO dashboard). "
+                    "If Render Environment has SMTP_HOST/SMTP_USER set, either set SMTP_PASSWORD "
+                    "there too or remove those vars so Admin settings apply."
                 )
             return Response(
                 {
