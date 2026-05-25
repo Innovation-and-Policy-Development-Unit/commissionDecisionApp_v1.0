@@ -1554,6 +1554,68 @@ class MinutesSerializer(serializers.ModelSerializer):
         return obj.signed_by.username if obj.signed_by else None
 
 
+class MinuteAgendaIntakeSerializer(serializers.ModelSerializer):
+    agenda_item_id = serializers.IntegerField(source="agenda_item.id", read_only=True)
+    sequence = serializers.IntegerField(source="agenda_item.sequence", read_only=True)
+    category = serializers.CharField(source="agenda_item.category", read_only=True)
+    category_display = serializers.CharField(
+        source="agenda_item.get_category_display", read_only=True,
+    )
+    submission_ref = serializers.SerializerMethodField()
+    has_formatted = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MinuteAgendaIntake
+        fields = (
+            "id",
+            "agenda_item_id",
+            "sequence",
+            "category",
+            "category_display",
+            "submission_ref",
+            "agenda_title",
+            "agenda_description",
+            "discussion_notes",
+            "decision_text",
+            "action_officer",
+            "formatted_discussion",
+            "formatted_decision",
+            "formatted_decision_type",
+            "formatted_action_items",
+            "formatted_at",
+            "has_formatted",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "formatted_discussion",
+            "formatted_decision",
+            "formatted_decision_type",
+            "formatted_action_items",
+            "formatted_at",
+            "has_formatted",
+            "updated_at",
+        )
+
+    def get_submission_ref(self, obj):
+        sub = obj.agenda_item.submission
+        return getattr(sub, "reference_number", "") if sub else ""
+
+    def get_has_formatted(self, obj):
+        return bool(obj.formatted_at and (obj.formatted_discussion or obj.formatted_decision))
+
+
+class MinuteAgendaIntakeWriteSerializer(serializers.Serializer):
+    agenda_item_id = serializers.IntegerField()
+    discussion_notes = serializers.CharField(required=False, allow_blank=True)
+    decision_text = serializers.CharField(required=False, allow_blank=True)
+    action_officer = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+
+class MinuteAgendaIntakeBulkSerializer(serializers.Serializer):
+    items = MinuteAgendaIntakeWriteSerializer(many=True)
+
+
 class FlyingMinuteSignatureSerializer(serializers.ModelSerializer):
     member_name = serializers.CharField(source="member.username", read_only=True)
 

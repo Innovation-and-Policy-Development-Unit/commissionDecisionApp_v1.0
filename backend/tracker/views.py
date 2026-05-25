@@ -99,6 +99,8 @@ from .serializers import (
     FeedbackCommentSerializer,
     NotificationSerializer,
     MinutesSerializer,
+    MinuteAgendaIntakeSerializer,
+    MinuteAgendaIntakeBulkSerializer,
     MeetingTranscriptSerializer,
     MinutesGenerateSerializer,
     TranscriptGenerateSerializer,
@@ -4057,6 +4059,230 @@ class MeetingViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_202_ACCEPTED,
         )
+
+    _MINUTE_INTAKE_ROLES = {
+        Role.PSC_SECRETARY,
+        Role.SENIOR_ADMIN_OFFICER,
+        Role.PSC_ADMIN,
+        Role.PSC_COMMISSIONER,
+    }
+
+    def _minute_intake_permission(self, request):
+        profile = _profile(request.user)
+        if profile.role not in self._MINUTE_INTAKE_ROLES:
+            raise PermissionDenied(
+                "Only Secretariat or Commissioners can use minute intake."
+            )
+        return profile
+
+    def _minute_intake_gate(self, meeting):
+        from .minute_intake import meeting_allows_minute_intake
+
+        if not meeting_allows_minute_intake(meeting):
+            return Response(
+                {
+                    "detail": (
+                        "Minute intake is only available after the agenda is "
+                        "Secretary-approved or circulated."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    @action(detail=True, methods=["get", "patch"], url_path="minute-intake")
+    def minute_intake(self, request, pk=None):
+        """Load or save per-agenda minute-taker notes (pre-format)."""
+        from .minute_intake import ensure_intake_rows, meeting_allows_minute_intake
+        from .models import MinuteAgendaIntake
+
+        meeting = self.get_object()
+        self._minute_intake_permission(request)
+        blocked = self._minute_intake_gate(meeting)
+        if blocked is not None:
+            return blocked
+
+        if request.method == "GET":
+            rows = ensure_intake_rows(meeting)
+            return Response(
+                {
+                    "meeting_id": meeting.id,
+                    "agenda_status": meeting.agenda_status,
+                    "allowed": meeting_allows_minute_intake(meeting),
+                    "items": MinuteAgendaIntakeSerializer(rows, many=True).data,
+                }
+            )
+
+        bulk = MinuteAgendaIntakeBulkSerializer(data=request.data)
+        bulk.is_valid(raise_exception=True)
+        for entry in bulk.validated_data["items"]:
+            row = MinuteAgendaIntake.objects.filter(
+                meeting=meeting,
+                agenda_item_id=entry["agenda_item_id"],
+            ).first()
+            if not row:
+                return Response(
+                    {
+                        "detail": (
+                            f"No intake row for agenda item {entry['agenda_item_id']}."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            update_fields = ["updated_at"]
+            for field in ("discussion_notes", "decision_text", "action_officer"):
+                if field in entry:
+                    setattr(row, field, entry[field])
+                    update_fields.append(field)
+            row.save(update_fields=update_fields)
+
+        rows = ensure_intake_rows(meeting)
+        return Response(
+            {
+                "meeting_id": meeting.id,
+                "agenda_status": meeting.agenda_status,
+                "allowed": True,
+                "items": MinuteAgendaIntakeSerializer(rows, many=True).data,
+            }
+        )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"minute-intake/(?P<agenda_item_id>[^/.]+)/format",
+    )
+    def minute_intake_format_item(self, request, pk=None, agenda_item_id=None):
+        """Claude-format one agenda item's raw notes."""
+        from .ai.minute_intake_format import format_minute_intake_item
+        from .minute_intake import (
+            ensure_intake_rows,
+            meeting_info_block,
+            store_formatted_result,
+        )
+        from .models import MinuteAgendaIntake
+
+        meeting = self.get_object()
+        self._minute_intake_permission(request)
+        blocked = self._minute_intake_gate(meeting)
+        if blocked is not None:
+            return blocked
+
+        ensure_intake_rows(meeting)
+        row = get_object_or_404(
+            MinuteAgendaIntake.objects.select_related(
+                "agenda_item", "agenda_item__submission",
+            ),
+            meeting=meeting,
+            agenda_item_id=agenda_item_id,
+        )
+        if not (row.discussion_notes or "").strip() and not (row.decision_text or "").strip():
+            return Response(
+                {"detail": "Add discussion or decision notes before formatting."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sub = row.agenda_item.submission
+        ref = getattr(sub, "reference_number", "") if sub else ""
+        formatted, err = format_minute_intake_item(
+            meeting_info=meeting_info_block(meeting),
+            agenda_title=row.agenda_title,
+            agenda_description=row.agenda_description,
+            submission_ref=ref,
+            category_display=row.agenda_item.get_category_display(),
+            discussion_notes=row.discussion_notes,
+            decision_text=row.decision_text,
+            action_officer=row.action_officer,
+        )
+        if err or not formatted:
+            return Response(
+                {"detail": err or "Formatting failed."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        store_formatted_result(row, formatted)
+        row.refresh_from_db()
+        return Response(MinuteAgendaIntakeSerializer(row).data)
+
+    @action(detail=True, methods=["post"], url_path="minute-intake/format-all")
+    def minute_intake_format_all(self, request, pk=None):
+        """Claude-format all intake rows that have raw notes."""
+        from .ai.minute_intake_format import format_minute_intake_item
+        from .minute_intake import (
+            ensure_intake_rows,
+            meeting_info_block,
+            store_formatted_result,
+        )
+        from .models import MinuteAgendaIntake
+        from django.db.models import Q
+
+        meeting = self.get_object()
+        self._minute_intake_permission(request)
+        blocked = self._minute_intake_gate(meeting)
+        if blocked is not None:
+            return blocked
+
+        ensure_intake_rows(meeting)
+        rows = (
+            MinuteAgendaIntake.objects.filter(meeting=meeting)
+            .select_related("agenda_item", "agenda_item__submission")
+            .filter(
+                Q(discussion_notes__gt="") | Q(decision_text__gt=""),
+            )
+        )
+        if not rows.exists():
+            return Response(
+                {"detail": "No items with discussion or decision notes to format."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        info = meeting_info_block(meeting)
+        formatted_items = []
+        errors = []
+        for row in rows:
+            if not (row.discussion_notes or "").strip() and not (row.decision_text or "").strip():
+                continue
+            sub = row.agenda_item.submission
+            ref = getattr(sub, "reference_number", "") if sub else ""
+            data, err = format_minute_intake_item(
+                meeting_info=info,
+                agenda_title=row.agenda_title,
+                agenda_description=row.agenda_description,
+                submission_ref=ref,
+                category_display=row.agenda_item.get_category_display(),
+                discussion_notes=row.discussion_notes,
+                decision_text=row.decision_text,
+                action_officer=row.action_officer,
+            )
+            if err or not data:
+                errors.append({"agenda_item_id": row.agenda_item_id, "error": err or "Failed"})
+                continue
+            store_formatted_result(row, data)
+            row.refresh_from_db()
+            formatted_items.append(MinuteAgendaIntakeSerializer(row).data)
+
+        payload = {
+            "formatted_count": len(formatted_items),
+            "items": formatted_items,
+        }
+        if errors:
+            payload["errors"] = errors
+        if not formatted_items and errors:
+            return Response(payload, status=status.HTTP_502_BAD_GATEWAY)
+        return Response(payload)
+
+    @action(detail=True, methods=["post"], url_path="minute-intake/apply-to-minutes")
+    def minute_intake_apply_to_minutes(self, request, pk=None):
+        """Merge formatted intake into the meeting Minutes document."""
+        from .minute_intake import apply_intake_to_minutes, ensure_intake_rows
+
+        meeting = self.get_object()
+        self._minute_intake_permission(request)
+        blocked = self._minute_intake_gate(meeting)
+        if blocked is not None:
+            return blocked
+
+        ensure_intake_rows(meeting)
+        minutes = apply_intake_to_minutes(meeting, request.user)
+        return Response(MinutesSerializer(minutes).data)
 
     @action(detail=True, methods=["post"], url_path="submit-agenda")
     def submit_agenda_to_chairman(self, request, pk=None):

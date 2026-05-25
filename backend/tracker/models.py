@@ -2352,6 +2352,54 @@ class Minutes(models.Model):
         return f"Minutes — {self.meeting.reference_number} ({self.get_status_display()})"
 
 
+class MinuteAgendaIntake(models.Model):
+    """
+    Per-agenda-item minute capture during/after a sitting.
+    Claude formats plain-English notes into PSC-style minute blocks.
+    """
+
+    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name="minute_intakes")
+    agenda_item = models.ForeignKey(
+        AgendaItem, on_delete=models.CASCADE, related_name="minute_intake",
+    )
+    agenda_title = models.CharField(max_length=512)
+    agenda_description = models.TextField(
+        blank=True,
+        help_text="From approved agenda (blurb / submission summary).",
+    )
+    discussion_notes = models.TextField(
+        blank=True,
+        help_text="Plain English discussion notes from the minute-taker.",
+    )
+    decision_text = models.TextField(
+        blank=True,
+        help_text="Free-text decision notes from the minute-taker.",
+    )
+    action_officer = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Officer or unit responsible for follow-up.",
+    )
+    formatted_discussion = models.TextField(blank=True)
+    formatted_decision = models.TextField(blank=True)
+    formatted_decision_type = models.CharField(max_length=32, blank=True)
+    formatted_action_items = models.JSONField(default=list, blank=True)
+    formatted_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["agenda_item__sequence", "agenda_item__id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["meeting", "agenda_item"],
+                name="uniq_minute_intake_per_agenda_item",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Intake — {self.meeting.reference_number} / {self.agenda_title[:40]}"
+
+
 class MeetingTranscript(models.Model):
     """AI-generated transcript and structured analysis of a meeting recording."""
 
