@@ -1339,6 +1339,14 @@ export function SettingsTab({ settings, onRefresh }) {
     setSuccess('')
     setError('')
     try {
+      if (!(form.SMTP_PASSWORD || '').trim()) {
+        const statusRes = await api.get('/settings/smtp-status/')
+        if (!statusRes.data?.password_configured) {
+          toast.error('Enter your Gmail App Password in SMTP Password, then send the test again.')
+          setTestEmailLoading(false)
+          return
+        }
+      }
       const smtpPayload = {}
       SMTP_SETTING_KEYS.forEach(k => { smtpPayload[k] = form[k] ?? '' })
       await api.post('/settings/batch-update/', smtpPayload)
@@ -1503,7 +1511,18 @@ export function SettingsTab({ settings, onRefresh }) {
             <div className="space-y-1"><label className="text-xs font-medium text-slate-500">SMTP Host</label><input className="input text-sm" value={form.SMTP_HOST || ''} onChange={e => setForm({...form, SMTP_HOST: e.target.value})} /></div>
             <div className="space-y-1"><label className="text-xs font-medium text-slate-500">SMTP Port</label><input type="number" className="input text-sm" value={form.SMTP_PORT || ''} onChange={e => setForm({...form, SMTP_PORT: e.target.value})} /></div>
             <div className="space-y-1"><label className="text-xs font-medium text-slate-500">SMTP User</label><input className="input text-sm" value={form.SMTP_USER || ''} onChange={e => setForm({...form, SMTP_USER: e.target.value})} /></div>
-            <div className="space-y-1"><label className="text-xs font-medium text-slate-500">SMTP Password</label><input type="password" title="SMTP Password" name="smtp_password" className="input text-sm" value={form.SMTP_PASSWORD || ''} onChange={e => setForm({...form, SMTP_PASSWORD: e.target.value})} /></div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-500">SMTP Password</label>
+              <input
+                type="password"
+                title="SMTP Password"
+                name="smtp_password"
+                className="input text-sm"
+                placeholder={settings?.some(s => s.key === 'SMTP_PASSWORD' && (s.configured || s.value)) ? 'Saved — paste again to change' : '16-character Gmail App Password'}
+                value={form.SMTP_PASSWORD || ''}
+                onChange={e => setForm({...form, SMTP_PASSWORD: e.target.value})}
+              />
+            </div>
             <div className="space-y-1 md:col-span-2"><label className="text-xs font-medium text-slate-500">Default From Email</label><input className="input text-sm" value={form.DEFAULT_FROM_EMAIL || ''} onChange={e => setForm({...form, DEFAULT_FROM_EMAIL: e.target.value})} /></div>
           </div>
           <div className="flex gap-6">

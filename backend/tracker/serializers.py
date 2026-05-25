@@ -1375,6 +1375,13 @@ class SystemSettingSerializer(serializers.ModelSerializer):
         fields = ("id", "key", "value", "description", "updated_at")
         read_only_fields = ("updated_at",)
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.key == "SMTP_PASSWORD" and (data.get("value") or "").strip():
+            data["value"] = ""
+            data["configured"] = True
+        return data
+
 
 class EmailTemplateSerializer(serializers.ModelSerializer):
     category_label = serializers.CharField(source="get_category_display", read_only=True)

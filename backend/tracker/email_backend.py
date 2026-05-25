@@ -77,16 +77,27 @@ def resolve_smtp_config():
     if not env_cfg["username"] and db_cfg.get("username"):
         return db_cfg
 
-    return _normalize_cfg(
+    merged = _normalize_cfg(
         {
-            "host": env_cfg["host"],
-            "port": env_cfg["port"],
+            "host": env_cfg["host"] or db_cfg.get("host"),
+            "port": env_cfg["port"] or db_cfg.get("port"),
             "username": env_cfg["username"] or db_cfg["username"],
             "password": env_cfg["password"] or db_cfg["password"],
-            "use_tls": env_cfg["use_tls"],
-            "use_ssl": env_cfg["use_ssl"],
+            "use_tls": env_cfg["use_tls"] if env_cfg.get("host") else db_cfg["use_tls"],
+            "use_ssl": env_cfg["use_ssl"] if env_cfg.get("host") else db_cfg["use_ssl"],
         }
     )
+    # Render often sets SMTP_HOST in env while the App Password lives in Admin only.
+    if not env_cfg.get("password") and db_cfg.get("password"):
+        merged["password"] = db_cfg["password"]
+        if db_cfg.get("username"):
+            merged["username"] = db_cfg["username"]
+        if db_cfg.get("host"):
+            merged["host"] = db_cfg["host"]
+        merged["port"] = db_cfg["port"]
+        merged["use_tls"] = db_cfg["use_tls"]
+        merged["use_ssl"] = db_cfg["use_ssl"]
+    return merged
 
 
 def smtp_config_diagnostics() -> dict:

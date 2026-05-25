@@ -4760,8 +4760,9 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
         except ValidationError:
             return Response({"detail": "Invalid email address."}, status=400)
 
-        from .email_backend import resolve_smtp_config
+        from .email_backend import resolve_smtp_config, smtp_config_diagnostics
 
+        diag = smtp_config_diagnostics()
         cfg = resolve_smtp_config()
         smtp_label = f"{cfg['host']}:{cfg['port']}"
         if not cfg.get("username"):
@@ -4772,7 +4773,35 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
                         "and a Google App Password (not your login password). "
                         "If .env sets SMTP_HOST with empty SMTP_USER, either fill credentials in "
                         "Admin or remove SMTP_HOST from .env so Admin settings apply."
-                    )
+                    ),
+                    **diag,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not cfg.get("password"):
+            return Response(
+                {
+                    "detail": (
+                        "SMTP password is not configured. For Gmail paste a 16-character App Password "
+                        "(https://myaccount.google.com/apppasswords), not your normal Google password. "
+                        "Re-enter it in SMTP Password, then send the test again."
+                    ),
+                    **diag,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        host_l = (cfg.get("host") or "").lower()
+        pw = cfg.get("password") or ""
+        if "gmail" in host_l and len(pw) != 16:
+            return Response(
+                {
+                    "detail": (
+                        f"Gmail App Passwords are 16 characters (got {len(pw)} after removing spaces). "
+                        "Create one at https://myaccount.google.com/apppasswords — 2-Step Verification must be on."
+                    ),
+                    **diag,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -4782,6 +4811,10 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
             or SystemSetting.get_val("DEFAULT_FROM_EMAIL")
             or django_settings.DEFAULT_FROM_EMAIL
         )
+        if "gmail" in host_l:
+            from_email = (from_email or "").strip() or cfg["username"]
+            if from_email.lower() != cfg["username"].lower():
+                from_email = cfg["username"]
 
         subject = "Commission Decision App — SMTP test"
         message = (
@@ -4802,7 +4835,11 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
                     "Clear SMTP_HOST from .env if you only configure mail in Admin."
                 )
             return Response(
-                {"detail": f"Failed to send test email: {err}.{hint}", "smtp": smtp_label},
+                {
+                    "detail": f"Failed to send test email: {err}.{hint}",
+                    "smtp": smtp_label,
+                    **diag,
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
