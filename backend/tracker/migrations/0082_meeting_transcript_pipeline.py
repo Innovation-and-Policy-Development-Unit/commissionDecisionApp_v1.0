@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("tracker", "0080_travel_forms"),
+        ("tracker", "0081_merge_0080_branches"),
     ]
 
     operations = [
