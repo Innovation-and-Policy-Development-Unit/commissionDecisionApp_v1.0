@@ -4718,6 +4718,7 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
 
         skip_if_blank = {"SMTP_PASSWORD"}
         updated = []
+        smtp_password_saved = False
         for key, value in settings_dict.items():
             if key in skip_if_blank and not str(value).strip():
                 continue
@@ -4727,6 +4728,7 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
                 from .email_backend import _normalize_password
 
                 raw = _normalize_password(raw)
+                smtp_password_saved = bool(raw)
             setting.value = raw
             setting.save()
             updated.append(SystemSettingSerializer(setting).data)
@@ -4734,7 +4736,7 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
         _log(request, _AL.Action.SETTINGS,
              resource_type="SystemSetting",
              description=f"Settings updated: {', '.join(settings_dict.keys())}",
-             extra_data={"keys": list(settings_dict.keys())})
+             extra_data={"keys": list(settings_dict.keys()), "smtp_password_saved": smtp_password_saved})
         return Response(updated)
 
     @action(detail=False, methods=["get"], url_path="smtp-status")

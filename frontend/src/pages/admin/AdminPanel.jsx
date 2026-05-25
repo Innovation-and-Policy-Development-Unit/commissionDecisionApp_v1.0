@@ -1222,6 +1222,27 @@ export function SettingsTab({ settings, onRefresh }) {
   const [resetLoading, setResetLoading] = useState(false)
   const [testEmailTo, setTestEmailTo] = useState('')
   const [testEmailLoading, setTestEmailLoading] = useState(false)
+  const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false)
+  const smtpPasswordRef = useRef(null)
+
+  const fetchSmtpStatus = useCallback(async () => {
+    try {
+      const res = await api.get('/settings/smtp-status/')
+      setSmtpPasswordConfigured(Boolean(res.data?.password_configured))
+    } catch {
+      /* best-effort */
+    }
+  }, [])
+
+  const readSmtpPasswordInput = () =>
+    (smtpPasswordRef.current?.value || form.SMTP_PASSWORD || '').trim()
+
+  const buildSavePayload = () => {
+    const payload = { ...form }
+    const pwd = readSmtpPasswordInput()
+    if (pwd) payload.SMTP_PASSWORD = pwd
+    return payload
+  }
 
   const fetchLockoutStats = useCallback(async () => {
     try {
@@ -1234,7 +1255,8 @@ export function SettingsTab({ settings, onRefresh }) {
 
   useEffect(() => {
     fetchLockoutStats()
-  }, [fetchLockoutStats])
+    fetchSmtpStatus()
+  }, [fetchLockoutStats, fetchSmtpStatus])
 
   useEffect(() => {
     if (user?.email && !testEmailTo) setTestEmailTo(user.email)
@@ -1248,24 +1270,37 @@ export function SettingsTab({ settings, onRefresh }) {
     if (s.ENABLE_USER_FEEDBACK === '') s.ENABLE_USER_FEEDBACK = 'true'
     if (!s.PASSWORD_MIN_LENGTH)    s.PASSWORD_MIN_LENGTH    = '8'
     if (!s.PASSWORD_HISTORY_COUNT) s.PASSWORD_HISTORY_COUNT = '5'
-    // Seed from live stats if not in DB settings yet
-    if (!s.AXES_FAILURE_LIMIT) s.AXES_FAILURE_LIMIT = String(lockoutStats.failure_limit)
-    if (!s.AXES_COOLOFF_HOURS) s.AXES_COOLOFF_HOURS = String(lockoutStats.cooloff_hours)
-    setForm(s)
-  }, [settings, lockoutStats])
+    if (!s.AXES_FAILURE_LIMIT) s.AXES_FAILURE_LIMIT = '5'
+    if (!s.AXES_COOLOFF_HOURS) s.AXES_COOLOFF_HOURS = '1'
+    setForm(prev => ({
+      ...s,
+      // Never repopulate the secret from the API; keep what the user is typing.
+      SMTP_PASSWORD: prev.SMTP_PASSWORD || '',
+    }))
+  }, [settings])
 
   const save = async e => {
     e.preventDefault()
     setLoading(true)
     setSuccess('')
     setError('')
+    const pwd = readSmtpPasswordInput()
     try {
-      await api.post('/settings/batch-update/', form)
-      setSuccess('Settings updated successfully.')
-      toast.success('Settings updated successfully.')
+      await api.post('/settings/batch-update/', buildSavePayload())
       await onRefresh()
+      await fetchSmtpStatus()
       await fetchLockoutStats()
       if (refreshFeedbackStatus) await refreshFeedbackStatus()
+      if (pwd) {
+        setForm(f => ({ ...f, SMTP_PASSWORD: '' }))
+        if (smtpPasswordRef.current) smtpPasswordRef.current.value = ''
+        const msg = 'Settings saved. SMTP password is stored securely (the field stays blank).'
+        setSuccess(msg)
+        toast.success(msg)
+      } else {
+        setSuccess('Settings updated successfully.')
+        toast.success('Settings updated successfully.')
+      }
     } catch {
       setError('Failed to update settings.')
       toast.error('Failed to update settings.')
@@ -1339,18 +1374,22 @@ export function SettingsTab({ settings, onRefresh }) {
     setSuccess('')
     setError('')
     try {
-      if (!(form.SMTP_PASSWORD || '').trim()) {
-        const statusRes = await api.get('/settings/smtp-status/')
-        if (!statusRes.data?.password_configured) {
-          toast.error('Enter your Gmail App Password in SMTP Password, then send the test again.')
-          setTestEmailLoading(false)
-          return
-        }
+      const pwd = readSmtpPasswordInput()
+      if (!pwd && !smtpPasswordConfigured) {
+        toast.error('Enter your SMTP password, then send the test again.')
+        setTestEmailLoading(false)
+        return
       }
       const smtpPayload = {}
       SMTP_SETTING_KEYS.forEach(k => { smtpPayload[k] = form[k] ?? '' })
+      if (pwd) smtpPayload.SMTP_PASSWORD = pwd
       await api.post('/settings/batch-update/', smtpPayload)
+      await fetchSmtpStatus()
       const res = await api.post('/settings/test-email/', { to })
+      if (pwd) {
+        setForm(f => ({ ...f, SMTP_PASSWORD: '' }))
+        if (smtpPasswordRef.current) smtpPasswordRef.current.value = ''
+      }
       const msg = res.data.detail ?? `Test email sent to ${to}.`
       setSuccess(msg)
       toast.success(msg)
@@ -1506,6 +1545,11 @@ export function SettingsTab({ settings, onRefresh }) {
           <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-medium border-b pb-2">
             <Mail size={18} className="text-primary-500" />
             <h3>Email Server (SMTP)</h3>
+            {smtpPasswordConfigured && (
+              <span className="ml-auto text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                Password saved
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1"><label className="text-xs font-medium text-slate-500">SMTP Host</label><input className="input text-sm" value={form.SMTP_HOST || ''} onChange={e => setForm({...form, SMTP_HOST: e.target.value})} /></div>
@@ -1514,11 +1558,17 @@ export function SettingsTab({ settings, onRefresh }) {
             <div className="space-y-1">
               <label className="text-xs font-medium text-slate-500">SMTP Password</label>
               <input
+                ref={smtpPasswordRef}
                 type="password"
                 title="SMTP Password"
                 name="smtp_password"
+                autoComplete="new-password"
                 className="input text-sm"
-                placeholder={settings?.some(s => s.key === 'SMTP_PASSWORD' && (s.configured || s.value)) ? 'Saved — paste again to change' : '16-character Gmail App Password'}
+                placeholder={
+                  smtpPasswordConfigured
+                    ? 'Saved — paste again to change'
+                    : 'SMTP password or App Password'
+                }
                 value={form.SMTP_PASSWORD || ''}
                 onChange={e => setForm({...form, SMTP_PASSWORD: e.target.value})}
               />
@@ -1531,10 +1581,13 @@ export function SettingsTab({ settings, onRefresh }) {
           </div>
           <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 space-y-3">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Gmail: <code className="text-[11px]">smtp.gmail.com</code>, port <code className="text-[11px]">587</code>, TLS on, SSL off.
-              SMTP User = the Google account that owns the App Password. Paste the 16-character App Password
-              (spaces are fine). Default From should use the same address. On Render, leave{' '}
-              <code className="text-[11px]">SMTP_PASSWORD</code> empty in Environment if you save it here only.
+              The password field stays blank after save for security. When{' '}
+              <strong className="font-medium">Password saved</strong> appears above, the server has your
+              credential. SMTP2GO: use your SMTP username and password from the SMTP2GO dashboard.
+              Gmail: App Password at{' '}
+              <code className="text-[11px]">myaccount.google.com/apppasswords</code>.
+              On Render, leave <code className="text-[11px]">SMTP_PASSWORD</code> empty in Environment
+              if you store it here only.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
               <div className="flex-1 space-y-1">

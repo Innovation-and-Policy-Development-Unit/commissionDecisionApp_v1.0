@@ -16,7 +16,8 @@ export default function AdminSystemConfigPage() {
     setLoadingData(true)
     try {
       const res = await api.get('/settings/')
-      setSettings(Array.isArray(res.data) ? res.data : [])
+      const rows = Array.isArray(res.data) ? res.data : (res.data?.results ?? [])
+      setSettings(rows)
     } catch {
       setSettings([])
     } finally {
