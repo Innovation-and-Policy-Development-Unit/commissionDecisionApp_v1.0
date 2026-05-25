@@ -101,39 +101,6 @@ const menuItems = [
     ],
   },
   {
-    group: 'Help & Resources',
-    groupKey: 'nav.group_help',
-    groupIcon: BookOpen,
-    audience: 'all',
-    items: [
-      {
-        label: 'HR Manager Guide',
-        labelKey: 'nav.guide_hr_manager',
-        icon: BookOpen,
-        path: '/guide/hr-manager',
-        roles: ['ministry_hr', 'dept_admin', 'head_of_agency'],
-      },
-      {
-        label: 'Unit Manager Guide',
-        labelKey: 'nav.guide_unit_manager',
-        icon: BookOpen,
-        path: '/guide/unit-manager',
-        roles: [
-          'hr_unit_manager', 'hr_unit_principal',
-          'vipam_manager', 'vipam_principal',
-          'odu_manager', 'senior_admin_officer',
-        ],
-      },
-      {
-        label: 'Secretary Guide',
-        labelKey: 'nav.guide_secretary',
-        icon: BookOpen,
-        path: '/guide/secretary',
-        roles: ['psc_secretary', 'senior_admin_officer', 'psc_admin'],
-      },
-    ],
-  },
-  {
     group: 'Administration',
     groupKey: 'nav.group_admin',
     groupIcon: Shield,

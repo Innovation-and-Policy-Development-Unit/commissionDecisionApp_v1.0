@@ -65,11 +65,14 @@ from .rbac import (
 
 
 class KnowledgeCategorySerializer(serializers.ModelSerializer):
-    article_count = serializers.IntegerField(source="articles.count", read_only=True)
+    article_count = serializers.SerializerMethodField()
 
     class Meta:
         model = KnowledgeCategory
         fields = ("id", "title", "description", "icon_name", "display_order", "article_count")
+
+    def get_article_count(self, obj):
+        return obj.articles.count()
 
 
 class KnowledgeArticleSerializer(serializers.ModelSerializer):
@@ -79,9 +82,21 @@ class KnowledgeArticleSerializer(serializers.ModelSerializer):
     class Meta:
         model = KnowledgeArticle
         fields = (
-            "id", "category", "category_title", "title", "slug", "content",
-            "is_published", "is_internal", "created_at", "updated_at",
-            "created_by", "author_username"
+            "id",
+            "category",
+            "category_title",
+            "title",
+            "slug",
+            "content",
+            "content_type",
+            "html_asset",
+            "allowed_roles",
+            "is_published",
+            "is_internal",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "author_username",
         )
         read_only_fields = ("created_at", "updated_at", "created_by")
 
@@ -1112,7 +1127,7 @@ class AgendaItemSerializer(serializers.ModelSerializer):
 
 class MeetingSerializer(serializers.ModelSerializer):
     agenda_items = AgendaItemSerializer(many=True, read_only=True)
-    agenda_count = serializers.IntegerField(source="agenda_items.count", read_only=True)
+    agenda_count = serializers.SerializerMethodField()
     decisions_count = serializers.SerializerMethodField()
     agenda_approved_by_name = serializers.SerializerMethodField()
     flying_minute_signatures = serializers.SerializerMethodField()
@@ -1121,6 +1136,9 @@ class MeetingSerializer(serializers.ModelSerializer):
 
     def get_agenda_approved_by_name(self, obj):
         return obj.agenda_approved_by.username if obj.agenda_approved_by else None
+
+    def get_agenda_count(self, obj):
+        return obj.agenda_items.count()
 
     def get_flying_minute_signatures(self, obj):
         if obj.type != MeetingType.FLYING_MINUTE:

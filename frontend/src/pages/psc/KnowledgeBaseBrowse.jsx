@@ -110,7 +110,7 @@ export default function KnowledgeBaseBrowse() {
       <div className={styles.container}>
         <PageHeader
           title="OPSC Wiki & Knowledge Base"
-          subtitle="Access official Standard Operating Procedures, Public Service Acts, and Circulars."
+          subtitle="Policies, circulars, and role-based user guides (HR Manager, Unit Manager, Secretary)."
         />
         <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--colorNeutralForeground3)' }}>
           <BookOpenRegular fontSize={48} style={{ opacity: 0.3 }} />
@@ -127,7 +127,7 @@ export default function KnowledgeBaseBrowse() {
     <div className={styles.container}>
       <PageHeader
         title="OPSC Wiki & Knowledge Base"
-        subtitle="Access official Standard Operating Procedures, Public Service Acts, and Circulars."
+        subtitle="Policies, circulars, and role-based user guides (HR Manager, Unit Manager, Secretary)."
       />
 
       <div className={styles.searchBox}>

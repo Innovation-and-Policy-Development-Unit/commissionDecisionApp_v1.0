@@ -18,11 +18,12 @@ import {
   LockClosedRegular,
   FolderRegular,
   PrintRegular,
-  SparkleRegular
 } from '@fluentui/react-icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { userIsAdmin } from '../../utils/adminAccess';
+import { formatApiError } from '../../utils/apiError';
 import ReactMarkdown from 'react-markdown';
 
 const useStyles = makeStyles({
@@ -33,6 +34,14 @@ const useStyles = makeStyles({
     maxWidth: '900px',
     ...shorthands.margin('0', 'auto'),
     paddingBottom: '80px',
+  },
+  guideFrameWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: 'calc(100vh - 8rem)',
+    maxWidth: 'none',
+    width: '100%',
+    ...shorthands.margin('0', 'auto'),
   },
   articleCard: {
     ...shorthands.padding('40px'),
@@ -75,15 +84,22 @@ export default function ArticleViewer() {
   const { user } = useAuth();
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState('');
+  const [htmlAvailable, setHtmlAvailable] = useState(null);
 
   const loadArticle = useCallback(async () => {
     setLoading(true);
+    setAccessError('');
     try {
       const { data } = await api.get(`/knowledge/articles/${slug}/`);
       setArticle(data);
     } catch (error) {
       console.error('KB Load Error:', error);
-      navigate('/wiki');
+      if (error?.response?.status === 403) {
+        setAccessError(formatApiError(error, 'You do not have access to this guide.'));
+      } else {
+        navigate('/wiki');
+      }
     } finally {
       setLoading(false);
     }
@@ -93,6 +109,16 @@ export default function ArticleViewer() {
     loadArticle();
   }, [loadArticle]);
 
+  useEffect(() => {
+    if (!article || article.content_type !== 'html_iframe' || !article.html_asset) {
+      setHtmlAvailable(null);
+      return;
+    }
+    fetch(`/guides/${article.html_asset}`, { method: 'HEAD' })
+      .then((r) => setHtmlAvailable(r.ok))
+      .catch(() => setHtmlAvailable(false));
+  }, [article]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
@@ -101,7 +127,63 @@ export default function ArticleViewer() {
     );
   }
 
-  const canEdit = user && (user.role === 'psc_admin' || user.is_staff);
+  if (accessError) {
+    return (
+      <div className={styles.container}>
+        <Button icon={<ArrowLeftRegular />} onClick={() => navigate('/wiki')}>
+          Back to Wiki
+        </Button>
+        <Card className={styles.articleCard}>
+          <Text weight="semibold" size={500}>Access restricted</Text>
+          <Text className="mt-2">{accessError}</Text>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!article) return null;
+
+  const canEdit = user && (userIsAdmin(user) || user.role === 'psc_admin' || user.is_staff);
+  const isHtmlGuide = article.content_type === 'html_iframe' && article.html_asset;
+
+  if (isHtmlGuide) {
+    return (
+      <div className={styles.guideFrameWrap}>
+        <div className="shrink-0 flex items-center justify-between gap-2 px-1 py-2 no-print">
+          <Button icon={<ArrowLeftRegular />} onClick={() => navigate('/wiki')}>
+            Back to Wiki
+          </Button>
+          {canEdit && (
+            <Button
+              appearance="primary"
+              icon={<EditRegular />}
+              onClick={() => navigate(`/admin/knowledge-base/edit/${slug}`)}
+            >
+              Edit
+            </Button>
+          )}
+        </div>
+        {htmlAvailable === false ? (
+          <Card className="flex-1 flex items-center justify-center p-8">
+            <Text>
+              Guide HTML is not deployed yet. Render the Quarto source into{' '}
+              <code>frontend/public/guides/{article.html_asset}</code> and redeploy the web app.
+            </Text>
+          </Card>
+        ) : htmlAvailable === true ? (
+          <iframe
+            src={`/guides/${article.html_asset}`}
+            className="flex-1 w-full border-0 rounded-lg border border-slate-200 dark:border-slate-700"
+            title={article.title}
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <Spinner size="medium" label="Loading guide..." />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
@@ -153,19 +235,6 @@ export default function ArticleViewer() {
           <div className={styles.markdownContent}>
             <ReactMarkdown>{article.content}</ReactMarkdown>
           </div>
-        </div>
-      </Card>
-
-      {/* Internal Feedback Card */}
-      <Card appearance="subtle" className="bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 no-print">
-        <div className="flex items-center justify-between gap-4 p-4">
-          <div className="flex items-center gap-3">
-            <InfoRegular className="text-slate-400" />
-            <Text size={200} className="text-slate-500 italic">
-              Was this article helpful? If you found an error, please contact the OPSC Secretariat.
-            </Text>
-          </div>
-          <Button appearance="subtle" size="small">Report Issue</Button>
         </div>
       </Card>
     </div>

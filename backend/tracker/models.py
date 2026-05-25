@@ -990,12 +990,35 @@ class KnowledgeCategory(models.Model):
         return self.title
 
 
+class KnowledgeArticleContentType(models.TextChoices):
+    MARKDOWN = "markdown", "Markdown"
+    HTML_IFRAME = "html_iframe", "Embedded HTML guide"
+
+
 class KnowledgeArticle(models.Model):
     """Individual documents/articles within the OPSC Knowledge Base."""
     category = models.ForeignKey(KnowledgeCategory, on_delete=models.CASCADE, related_name="articles")
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True)
-    content = models.TextField(help_text="Markdown content for the article.")
+    content = models.TextField(
+        blank=True,
+        help_text="Markdown body, or short summary when content_type is html_iframe.",
+    )
+    content_type = models.CharField(
+        max_length=16,
+        choices=KnowledgeArticleContentType.choices,
+        default=KnowledgeArticleContentType.MARKDOWN,
+    )
+    html_asset = models.CharField(
+        max_length=128,
+        blank=True,
+        help_text="Filename under frontend public/guides/ for html_iframe articles.",
+    )
+    allowed_roles = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="PSC profile roles allowed to view; empty list = all authenticated users.",
+    )
     is_published = models.BooleanField(default=False, db_index=True)
     is_internal = models.BooleanField(default=True, help_text="If true, only PSC staff can see this.")
     created_at = models.DateTimeField(auto_now_add=True)

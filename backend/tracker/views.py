@@ -3814,7 +3814,11 @@ Output structured minutes in clear formal English with sections: Opening, Confir
 
 class MeetingViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
-    queryset = Meeting.objects.prefetch_related("agenda_items__submission").all()
+    queryset = Meeting.objects.prefetch_related(
+        "agenda_items__submission",
+        "agenda_items__submission__ministry",
+        "flying_minute_signatures__member",
+    ).all()
     serializer_class = MeetingSerializer
 
     def get_queryset(self):
@@ -3827,6 +3831,36 @@ class MeetingViewSet(viewsets.ModelViewSet):
             # Support simple field ordering via query param (e.g. 'date' or '-date')
             qs = qs.order_by(ordering)
         return qs
+
+    def _db_unavailable_response(self, exc, *, action: str):
+        import logging
+
+        logging.getLogger(__name__).exception("Meetings %s unavailable (database): %s", action, exc)
+        return Response(
+            {
+                "detail": (
+                    "Meetings data is temporarily unavailable. "
+                    "The database may need migrations — contact an administrator or redeploy the API."
+                ),
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    def list(self, request, *args, **kwargs):
+        from django.db.utils import OperationalError, ProgrammingError
+
+        try:
+            return super().list(request, *args, **kwargs)
+        except (ProgrammingError, OperationalError) as exc:
+            return self._db_unavailable_response(exc, action="list")
+
+    def retrieve(self, request, *args, **kwargs):
+        from django.db.utils import OperationalError, ProgrammingError
+
+        try:
+            return super().retrieve(request, *args, **kwargs)
+        except (ProgrammingError, OperationalError) as exc:
+            return self._db_unavailable_response(exc, action="retrieve")
 
     def perform_create(self, serializer):
         profile = _profile(self.request.user)
@@ -5144,6 +5178,23 @@ class KnowledgeCategoryViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+def _user_psc_role(user) -> str | None:
+    try:
+        return user.psc_profile.role
+    except Exception:
+        return None
+
+
+def _knowledge_article_visible_to_user(article, user, *, is_editor: bool) -> bool:
+    if is_editor or user.is_superuser or user.is_staff:
+        return True
+    roles = article.allowed_roles or []
+    if not roles:
+        return True
+    role = _user_psc_role(user)
+    return bool(role and role in roles)
+
+
 class KnowledgeArticleViewSet(viewsets.ModelViewSet):
     """Knowledge base articles — slug lookup; published-only for general staff."""
 
@@ -5165,10 +5216,30 @@ class KnowledgeArticleViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only administrators can manage knowledge base articles.")
 
     def get_queryset(self):
+        from django.db.models import Q
+
         qs = KnowledgeArticle.objects.select_related("category", "created_by")
         if self._is_kb_editor():
             return qs
-        return qs.filter(is_published=True)
+        qs = qs.filter(is_published=True)
+        role = _user_psc_role(self.request.user)
+        if role:
+            qs = qs.filter(
+                Q(allowed_roles=[])
+                | Q(allowed_roles__isnull=True)
+                | Q(allowed_roles__contains=role)
+            )
+        else:
+            qs = qs.filter(Q(allowed_roles=[]) | Q(allowed_roles__isnull=True))
+        return qs
+
+    def get_object(self):
+        obj = super().get_object()
+        if not _knowledge_article_visible_to_user(
+            obj, self.request.user, is_editor=self._is_kb_editor()
+        ):
+            raise PermissionDenied("You do not have access to this guide.")
+        return obj
 
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS:

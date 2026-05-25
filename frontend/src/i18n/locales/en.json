@@ -40,10 +40,8 @@
     "backup_restore": "Backup & Restore",
     "account": "Account",
     "logout": "Logout",
-    "group_help": "Help & Resources",
-    "guide_hr_manager": "HR Manager Guide",
-    "guide_unit_manager": "Unit Manager Guide",
-    "guide_secretary": "Secretary Guide"
+    "wiki": "OPSC Wiki",
+    "knowledge_base": "Knowledge Base"
   },
   "breadcrumb": {
     "dashboard": "Dashboard",

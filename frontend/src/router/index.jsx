@@ -43,10 +43,6 @@ import Account from '../pages/pages/Account'
 import StaffChatbot from '../pages/assistant/StaffChatbot'
 import KnowledgeBaseBrowse from '../pages/psc/KnowledgeBaseBrowse'
 import ArticleViewer from '../pages/psc/ArticleViewer'
-import HrManagerGuide from '../pages/guide/HrManagerGuide'
-import UnitManagerGuide from '../pages/guide/UnitManagerGuide'
-import SecretaryGuide from '../pages/guide/SecretaryGuide'
-
 // ── P1–P4 New Pages ──────────────────────────────────────────────────────────
 import ExecutiveDashboard from '../pages/psc/ExecutiveDashboard'
 import CommissionCalendar from '../pages/psc/CommissionCalendar'
@@ -115,10 +111,9 @@ export default function AppRouter() {
           <Route path="/secretariat/tasks" element={<TaskManagement />} />
           <Route path="/secretariat/notifications" element={<Notifications />} />
 
-          {/* ── Guides ── */}
-          <Route path="/guide/hr-manager" element={<HrManagerGuide />} />
-          <Route path="/guide/unit-manager" element={<UnitManagerGuide />} />
-          <Route path="/guide/secretary" element={<SecretaryGuide />} />
+          <Route path="/guide/hr-manager" element={<Navigate to="/wiki/hr-manager-guide" replace />} />
+          <Route path="/guide/unit-manager" element={<Navigate to="/wiki/unit-manager-guide" replace />} />
+          <Route path="/guide/secretary" element={<Navigate to="/wiki/secretary-guide" replace />} />
 
           <Route path="/pages/account" element={<Account />} />
           <Route path="/404" element={<Error404 />} />

@@ -69,7 +69,7 @@ def unseed_travel_forms(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("tracker", "0079_daily_brief"),
+        ("tracker", "0080_ai_analysis_webpush_docversion"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
