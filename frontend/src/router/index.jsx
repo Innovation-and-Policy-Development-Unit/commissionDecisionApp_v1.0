@@ -14,7 +14,7 @@ import SubmissionLog from '../pages/psc/SubmissionLog'
 import SubmissionDetail from '../pages/psc/SubmissionDetail'
 import SubmissionForm from '../pages/psc/SubmissionForm'
 import SmartReports from '../pages/psc/SmartReports'
-import MeetingCapture from '../pages/psc/MeetingCapture'
+import RedirectToMinuteIntake from '../pages/meeting/RedirectToMinuteIntake'
 import AdminPanel from '../pages/admin/AdminPanel'
 import MinistriesDepartments from '../pages/admin/MinistriesDepartments'
 import AdminApiKeysPage from '../pages/admin/AdminApiKeysPage'
@@ -32,7 +32,6 @@ import KnowledgeArticleEditor from '../pages/admin/KnowledgeArticleEditor'
 import CommissionSittings from '../pages/secretariat/CommissionSittings'
 import MinutesEditor from '../pages/secretariat/MinutesEditor'
 import MeetingRoomHub from '../pages/meeting/MeetingRoomHub'
-import MinutesPipelineBrief from '../pages/meeting/MinutesPipelineBrief'
 import Agenda from '../pages/secretariat/Agenda'
 import AgendaSittingPack from '../pages/secretariat/AgendaSittingPack'
 import Decisions from '../pages/secretariat/Decisions'
@@ -73,7 +72,7 @@ export default function AppRouter() {
           <Route path="/wiki/:slug" element={<ArticleViewer />} />
           <Route path="/assistant" element={<StaffChatbot />} />
           <Route path="/status-assistant" element={<Navigate to="/assistant" replace />} />
-          <Route path="/meetings/capture" element={<MeetingCapture />} />
+          <Route path="/meetings/capture" element={<RedirectToMinuteIntake />} />
 
           {/* ── P1–P4 New Routes ── */}
           <Route path="/executive-dashboard"  element={<ExecutiveDashboard />} />
@@ -103,7 +102,7 @@ export default function AppRouter() {
           {/* ── Secretariat ── */}
           <Route path="/secretariat/meeting-room" element={<MeetingRoomHub />} />
           <Route path="/secretariat/meeting-room/logitech-guide" element={<Navigate to="/secretariat/meeting-room" state={{ openLogitechGuide: true }} replace />} />
-          <Route path="/secretariat/meeting-room/minutes-pipeline" element={<MinutesPipelineBrief />} />
+          <Route path="/secretariat/meeting-room/minutes-pipeline" element={<RedirectToMinuteIntake />} />
           <Route path="/secretariat/meetings" element={<CommissionSittings />} />
           <Route path="/secretariat/meetings/:meetingId/minutes" element={<MinutesEditor />} />
           <Route path="/secretariat/agenda" element={<Agenda />} />

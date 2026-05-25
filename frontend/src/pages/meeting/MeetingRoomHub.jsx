@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useSearchParams, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  Mic, Upload, CalendarDays, Headphones, Workflow,
+  PenLine, CalendarDays, Headphones,
 } from 'lucide-react'
 import PageHeader from '../../components/shared/PageHeader'
 import LogitechGroupGuideDialog from '../../components/meeting/LogitechGroupGuideDialog'
@@ -15,18 +15,12 @@ const CARDS = [
     opensGuide: true,
   },
   {
-    key: 'pipeline',
-    icon: Workflow,
-    path: '/secretariat/meeting-room/minutes-pipeline',
-    color: 'from-purple-500 to-violet-600',
-    queryMeeting: true,
-  },
-  {
-    key: 'capture',
-    icon: Upload,
-    path: '/meetings/capture',
+    key: 'minute_intake',
+    icon: PenLine,
+    path: '/secretariat/minute-intake',
     color: 'from-primary-500 to-blue-700',
     queryMeeting: true,
+    meetingPathSuffix: true,
   },
   {
     key: 'meetings',
@@ -103,7 +97,11 @@ export default function MeetingRoomHub() {
             )
           }
 
-          const href = card.queryMeeting ? `${card.path}${q}` : card.path
+          const href = card.meetingPathSuffix && meetingId
+            ? `${card.path}/${meetingId}`
+            : card.queryMeeting
+              ? `${card.path}${q}`
+              : card.path
           return (
             <Link
               key={card.key}
@@ -116,15 +114,15 @@ export default function MeetingRoomHub() {
         })}
       </div>
 
-      <div className="mt-8 card p-5 border-dashed">
+      <div className="mt-8 card p-5 border-dashed border-primary-200 dark:border-primary-800">
         <div className="flex items-start gap-3">
-          <Mic size={20} className="text-amber-500 shrink-0 mt-0.5" />
+          <PenLine size={20} className="text-primary-600 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-              {t('meeting_room.hub_test_note_title')}
+              {t('meeting_room.hub_minute_intake_note_title')}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {t('meeting_room.hub_test_note_body')}
+              {t('meeting_room.hub_minute_intake_note_body')}
             </p>
           </div>
         </div>

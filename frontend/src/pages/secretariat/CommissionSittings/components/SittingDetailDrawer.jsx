@@ -2,7 +2,7 @@ import { Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Dialog, Transition } from '@headlessui/react'
-import { X, Calendar, Clock, MapPin, ListChecks, FileText, CheckSquare, Users, Trash2, Edit3, ChevronRight, AlertCircle, Mic, FileSignature, PenLine } from 'lucide-react'
+import { X, Calendar, Clock, MapPin, ListChecks, FileText, CheckSquare, Users, Trash2, Edit3, ChevronRight, AlertCircle, FileSignature, PenLine } from 'lucide-react'
 import { SITTING_STATUSES } from '../constants'
 import clsx from 'clsx'
 
@@ -154,38 +154,6 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                         </div>
                       </section>
 
-                      {/* Recording Section */}
-                      <section>
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-2">
-                            <Mic size={18} className="text-slate-400" />
-                            <h3 className="font-bold text-slate-900 dark:text-slate-100 uppercase text-xs tracking-wider">Meeting Recording</h3>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <button
-                            onClick={() => {
-                              onClose()
-                              navigate(`/meetings/capture?meetingId=${sitting.id}`)
-                            }}
-                            className="w-full flex items-center justify-center gap-2 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 border border-dashed border-primary-300 dark:border-primary-700 rounded-xl p-4 text-primary-700 dark:text-primary-300 font-semibold text-sm transition-colors"
-                          >
-                            <Mic size={18} />
-                            Upload / record
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onClose()
-                              onOpenLogitechGuide?.()
-                            }}
-                            className="w-full text-xs font-bold text-primary-600 hover:underline"
-                          >
-                            Logitech GROUP setup guide
-                          </button>
-                        </div>
-                      </section>
-
                       {/* Minutes Section */}
                       <section>
                         <div className="flex items-center justify-between mb-4">
@@ -215,7 +183,7 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                             className="w-full flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-dashed border-emerald-300 dark:border-emerald-700 rounded-xl p-4 text-emerald-700 dark:text-emerald-300 font-semibold text-sm transition-colors"
                           >
                             <FileSignature size={18} />
-                            Manage Minutes & AI Tools
+                            {t('meeting_room.minutes_edit_sign')}
                           </button>
                         </div>
                       </section>

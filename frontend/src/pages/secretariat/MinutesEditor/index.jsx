@@ -1,28 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  FileText, Save, CheckCircle2, AlertCircle, ArrowLeft,
-  Sparkles, Mic, Brain, Download, ChevronDown, ChevronRight,
-  Plus, Trash2, Loader2, PenSquare, Copy, Upload, AlertTriangle, ExternalLink,
-  ListTodo,
+  Save, CheckCircle2, AlertCircle, ArrowLeft,
+  ChevronDown, ChevronRight, Plus, Trash2, Loader2, PenSquare, Download,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../../components/shared/PageHeader'
 import api from '../../../api/client'
-import { formatApiError } from '../../../utils/apiError'
 import { useAuth } from '../../../context/AuthContext'
 import clsx from 'clsx'
-
-const TRANSCRIPTION_ACTIVE = new Set(['pending', 'transcribing', 'refining'])
-
-const TRANSCRIPTION_STATUS_LABEL = {
-  pending: 'Queued for transcription…',
-  transcribing: 'Transcribing with Whisper…',
-  refining: 'Improving transcript with Claude…',
-  ready: 'Transcript ready for review',
-  failed: 'Transcription failed',
-}
 
 const MINUTES_STATUS = {
   draft:    { label: 'Draft',    bg: 'bg-amber-100 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
@@ -147,16 +133,10 @@ export default function MinutesEditor() {
 
   const [meeting, setMeeting] = useState(null)
   const [minutes, setMinutes] = useState(null)
-  const [transcript, setTranscript] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [aiBusy, setAiBusy] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [pasteText, setPasteText] = useState('')
-  const [savingTranscript, setSavingTranscript] = useState(false)
-  const [copiedPrompt, setCopiedPrompt] = useState(false)
-  const [actionPasteText, setActionPasteText] = useState('')
 
   const [content, setContent] = useState({
     opening: '',
@@ -167,28 +147,12 @@ export default function MinutesEditor() {
     next_meeting_date: '',
   })
 
-  const applyTranscript = useCallback((tr) => {
-    if (!tr) return
-    setTranscript(tr)
-    setPasteText(tr.raw_text || '')
-  }, [])
-
-  const fetchTranscript = useCallback(async () => {
-    try {
-      const tRes = await api.get(`/transcripts/?meeting=${meetingId}`)
-      if (tRes.data?.length > 0) applyTranscript(tRes.data[0])
-    } catch {
-      // ignore poll errors
-    }
-  }, [meetingId, applyTranscript])
-
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [mRes, minsRes, tRes] = await Promise.allSettled([
+      const [mRes, minsRes] = await Promise.allSettled([
         api.get(`/meetings/${meetingId}/`),
         api.get(`/minutes/?meeting=${meetingId}`),
-        api.get(`/transcripts/?meeting=${meetingId}`),
       ])
 
       if (mRes.status === 'fulfilled') setMeeting(mRes.value.data)
@@ -197,46 +161,16 @@ export default function MinutesEditor() {
         setMinutes(m)
         if (m.content && typeof m.content === 'object') {
           setContent(m.content)
-          if (m.content.action_register?.summary) {
-            setActionPasteText('')
-          }
         }
       }
-      if (tRes.status === 'fulfilled' && tRes.value.data.length > 0) {
-        applyTranscript(tRes.value.data[0])
-      }
-    } catch (err) {
+    } catch {
       setError('Failed to load meeting data.')
     } finally {
       setLoading(false)
     }
-  }, [meetingId, applyTranscript])
+  }, [meetingId])
 
   useEffect(() => { load() }, [load])
-
-  useEffect(() => {
-    const status = transcript?.transcription_status
-    if (!status || !TRANSCRIPTION_ACTIVE.has(status)) return undefined
-
-    const poll = async () => {
-      await fetchTranscript()
-    }
-    poll()
-    const id = setInterval(poll, 4000)
-    return () => clearInterval(id)
-  }, [transcript?.transcription_status, fetchTranscript])
-
-  useEffect(() => {
-    const status = transcript?.transcription_status
-    if (status === 'ready' && aiBusy === 'transcribe') {
-      setAiBusy(null)
-      setSuccess(t('meeting_room.minutes_transcribe_ready'))
-    }
-    if (status === 'failed' && aiBusy === 'transcribe') {
-      setAiBusy(null)
-      setError(transcript?.transcription_error || t('meeting_room.minutes_transcribe_failed'))
-    }
-  }, [transcript?.transcription_status, transcript?.transcription_error, aiBusy, t])
 
   const handleAgendaChange = (index, field, value) => {
     setContent(prev => {
@@ -268,35 +202,6 @@ export default function MinutesEditor() {
       setError(err.response?.data?.detail || 'Failed to save minutes.')
     } finally {
       setSaving(false)
-    }
-  }
-
-  const runTranscribePipeline = async () => {
-    setAiBusy('transcribe')
-    setError('')
-    setSuccess('')
-    try {
-      const res = await api.post(`/meetings/${meetingId}/transcribe/`)
-      setSuccess(res.data.detail || t('meeting_room.minutes_transcribe_started'))
-      await fetchTranscript()
-    } catch (err) {
-      setError(formatApiError(err, t('meeting_room.minutes_transcribe_failed')))
-      setAiBusy(null)
-    }
-  }
-
-  const runAiAction = async (action, endpoint, body) => {
-    setAiBusy(action)
-    setError('')
-    setSuccess('')
-    try {
-      const res = await api.post(endpoint, body)
-      setSuccess(res.data.detail)
-      setTimeout(load, 2000)
-    } catch (err) {
-      setError(err.response?.data?.detail || `AI action failed: ${action}`)
-    } finally {
-      setAiBusy(null)
     }
   }
 
@@ -337,37 +242,6 @@ export default function MinutesEditor() {
     await changeStatus('sign', pinInput)
   }
 
-  const saveTranscriptPaste = async () => {
-    setSavingTranscript(true)
-    setError('')
-    setSuccess('')
-    try {
-      const res = await api.patch(`/meetings/${meetingId}/transcript/`, {
-        raw_text: pasteText,
-        source: 'manual_paste',
-      })
-      setTranscript(res.data)
-      setSuccess(t('meeting_room.minutes_transcript_saved'))
-    } catch (err) {
-      setError(err.response?.data?.detail || t('meeting_room.minutes_transcript_save_failed'))
-    } finally {
-      setSavingTranscript(false)
-    }
-  }
-
-  const copyClaudePrompt = async () => {
-    setError('')
-    try {
-      const res = await api.get(`/meetings/${meetingId}/claude-prompt/`)
-      await navigator.clipboard.writeText(res.data.prompt || '')
-      setCopiedPrompt(true)
-      setSuccess(t('meeting_room.copied'))
-      setTimeout(() => setCopiedPrompt(false), 2500)
-    } catch (err) {
-      setError(err.response?.data?.detail || t('meeting_room.minutes_copy_failed'))
-    }
-  }
-
   const downloadPdf = async () => {
     setError('')
     setSuccess('')
@@ -379,7 +253,7 @@ export default function MinutesEditor() {
       a.download = `minutes_${meeting?.reference_number || meetingId}.pdf`
       a.click()
       URL.revokeObjectURL(url)
-    } catch (err) {
+    } catch {
       setError('PDF generation not available yet.')
     }
   }
@@ -402,10 +276,10 @@ export default function MinutesEditor() {
         </button>
         <Link
           to={`/secretariat/minute-intake/${meetingId}`}
-          className="flex items-center gap-1.5 text-sm font-bold text-primary-600 hover:underline"
+          className="btn-primary btn-sm inline-flex items-center gap-1.5"
         >
           <PenSquare size={14} />
-          {t('minute_intake.link_from_minutes')}
+          {t('nav.minute_intake')}
         </Link>
       </div>
 
@@ -438,194 +312,23 @@ export default function MinutesEditor() {
         </div>
       )}
 
-      {/* Transcript workflow */}
-      <div className="card card-compact mb-6">
-        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
-          {t('meeting_room.minutes_workflow_title')}
+      <div className="card card-compact mb-6 border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-900/10">
+        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
+          <PenSquare size={18} className="text-primary-600" />
+          {t('meeting_room.minutes_intake_banner_title')}
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-          {t('meeting_room.minutes_workflow_desc')}
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+          {t('meeting_room.minutes_intake_banner_desc')}
         </p>
-
-        <ol className="list-decimal list-inside text-sm text-slate-600 dark:text-slate-400 space-y-1 mb-4">
-          <li>
-            <Link to={`/meetings/capture?meetingId=${meetingId}`} className="text-primary-600 font-semibold hover:underline inline-flex items-center gap-1">
-              {t('meeting_room.minutes_step_upload')} <ExternalLink size={12} />
-            </Link>
-          </li>
-          <li>{t('meeting_room.minutes_step_paste')}</li>
-          <li>{t('meeting_room.minutes_step_claude')}</li>
-          <li>{t('meeting_room.minutes_step_ai')}</li>
-        </ol>
-
-        {(transcript?.raw_text || pasteText) && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200 flex items-start gap-2">
-            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-            {t('meeting_room.minutes_bislama_warning')}
-          </div>
-        )}
-
-        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-          {t('meeting_room.minutes_transcript_label')}
-        </label>
-        <textarea
-          className="input min-h-[120px] resize-y font-mono text-xs mb-3"
-          value={pasteText}
-          onChange={e => setPasteText(e.target.value)}
-          placeholder={t('meeting_room.minutes_transcript_placeholder')}
-        />
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            type="button"
-            onClick={saveTranscriptPaste}
-            disabled={savingTranscript || !pasteText.trim()}
-            className="btn-secondary btn-sm disabled:opacity-50"
-          >
-            {savingTranscript ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            {t('meeting_room.minutes_save_transcript')}
-          </button>
-          <button type="button" onClick={copyClaudePrompt} className="btn-secondary btn-sm">
-            {copiedPrompt ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-            {t('meeting_room.copy_prompt')}
-          </button>
-          <Link
-            to={`/secretariat/meeting-room/minutes-pipeline?meetingId=${meetingId}`}
-            className="btn-outline btn-sm inline-flex items-center gap-1"
-          >
-            {t('meeting_room.pipeline_title')}
-          </Link>
-        </div>
-
-        {transcript?.transcription_status && TRANSCRIPTION_STATUS_LABEL[transcript.transcription_status] && (
-          <p className={clsx(
-            'text-xs font-semibold mb-3',
-            transcript.transcription_status === 'failed'
-              ? 'text-red-600 dark:text-red-400'
-              : 'text-indigo-600 dark:text-indigo-400',
-          )}>
-            {TRANSCRIPTION_ACTIVE.has(transcript.transcription_status) && (
-              <Loader2 size={12} className="inline animate-spin mr-1" />
-            )}
-            {TRANSCRIPTION_STATUS_LABEL[transcript.transcription_status]}
-          </p>
-        )}
-
-        <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-          <button
-            type="button"
-            onClick={runTranscribePipeline}
-            disabled={
-              aiBusy !== null
-              || !transcript?.audio_file
-              || TRANSCRIPTION_ACTIVE.has(transcript?.transcription_status)
-            }
-            title={!transcript?.audio_file ? t('meeting_room.minutes_transcribe_no_audio') : undefined}
-            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 rounded-xl text-indigo-700 dark:text-indigo-300 font-bold text-xs disabled:opacity-50"
-          >
-            {aiBusy === 'transcribe' || TRANSCRIPTION_ACTIVE.has(transcript?.transcription_status)
-              ? <Loader2 size={14} className="animate-spin" />
-              : <Mic size={14} />}
-            {t('meeting_room.minutes_run_transcribe')}
-          </button>
-          <button
-            type="button"
-            onClick={() => runAiAction('draft', '/minutes/generate-from-transcript/', { meeting_id: parseInt(meetingId) })}
-            disabled={aiBusy !== null}
-            className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 border border-purple-200 dark:border-purple-800 rounded-xl text-purple-700 dark:text-purple-300 font-bold text-xs disabled:opacity-50"
-          >
-            {aiBusy === 'draft' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            {t('meeting_room.minutes_generate')}
-          </button>
-          <button
-            type="button"
-            onClick={() => runAiAction('extract', '/minutes/extract-decisions/', { meeting_id: parseInt(meetingId) })}
-            disabled={aiBusy !== null}
-            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-100 border border-cyan-200 dark:border-cyan-800 rounded-xl text-cyan-700 dark:text-cyan-300 font-bold text-xs disabled:opacity-50"
-          >
-            {aiBusy === 'extract' ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
-            {t('meeting_room.minutes_extract')}
-          </button>
-          <button
-            type="button"
-            onClick={() => runAiAction(
-              'actions',
-              '/minutes/extract-action-items/',
-              {
-                meeting_id: parseInt(meetingId),
-                minutes_text: actionPasteText.trim() || pasteText.trim(),
-              },
-            )}
-            disabled={aiBusy !== null || (!actionPasteText.trim() && !pasteText.trim() && !(content.agenda_items?.length))}
-            className="flex items-center gap-2 px-4 py-2.5 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-100 border border-teal-200 dark:border-teal-800 rounded-xl text-teal-700 dark:text-teal-300 font-bold text-xs disabled:opacity-50"
-          >
-            {aiBusy === 'actions' ? <Loader2 size={14} className="animate-spin" /> : <ListTodo size={14} />}
-            Extract action register
-          </button>
-        </div>
-
-        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700">
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
-            Paste minutes for action-item extraction (optional)
-          </label>
-          <textarea
-            className="input min-h-[80px] resize-y text-xs font-mono mb-1"
-            value={actionPasteText}
-            onChange={e => setActionPasteText(e.target.value)}
-            placeholder="Paste full minutes here, or leave blank to use saved minutes / transcript above."
-          />
-        </div>
-
-        {transcript?.source && (
-          <p className="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">
-            {t('meeting_room.minutes_source')}: {transcript.source}
-            {transcript.ai_processed && ` · ${t('meeting_room.minutes_ai_processed')}`}
-          </p>
-        )}
+        <Link
+          to={`/secretariat/minute-intake/${meetingId}`}
+          className="btn-primary inline-flex items-center gap-2"
+        >
+          <PenSquare size={16} />
+          {t('meeting_room.minutes_open_intake')}
+        </Link>
       </div>
 
-      {content.action_register && (
-        <div className="card card-compact mb-6 border-teal-200 dark:border-teal-800">
-          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
-            <ListTodo size={18} className="text-teal-600" />
-            AI action register
-          </h2>
-          {content.action_register.summary && (
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{content.action_register.summary}</p>
-          )}
-          {(content.action_register.action_items || []).length > 0 && (
-            <div className="mb-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Action items</p>
-              <ul className="space-y-2">
-                {content.action_register.action_items.map((ai, idx) => (
-                  <li key={idx} className="text-sm rounded-lg bg-slate-50 dark:bg-slate-800/50 px-3 py-2 border border-slate-100 dark:border-slate-700">
-                    <span className="font-medium text-slate-800 dark:text-slate-100">{ai.action}</span>
-                    <span className="text-slate-500 dark:text-slate-400"> — {ai.owner || 'TBC'}</span>
-                    {ai.deadline && <span className="text-xs text-amber-600 dark:text-amber-400"> · due {ai.deadline}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {(content.action_register.deferred_matters || []).length > 0 && (
-            <div className="mb-4 text-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Deferred</p>
-              {content.action_register.deferred_matters.map((d, i) => (
-                <p key={i} className="text-slate-600 dark:text-slate-400 mb-1">{d.matter} — {d.next_step}</p>
-              ))}
-            </div>
-          )}
-          {(content.action_register.follow_up_questions || []).length > 0 && (
-            <div className="text-sm">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Follow-up questions</p>
-              {content.action_register.follow_up_questions.map((q, i) => (
-                <p key={i} className="text-slate-600 dark:text-slate-400 mb-1">{q.question} → {q.directed_to}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Minutes Editor */}
       <div className="space-y-4">
         <SectionEditor label="Opening" value={content.opening} placeholder="e.g. The meeting opened at 9:30 AM with a prayer led by..." onChange={v => setContent(prev => ({ ...prev, opening: v }))} />
         <SectionEditor label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} placeholder="e.g. The minutes of the previous sitting were confirmed as a true record..." onChange={v => setContent(prev => ({ ...prev, confirmation_previous_minutes: v }))} />
@@ -655,7 +358,6 @@ export default function MinutesEditor() {
         </div>
       </div>
 
-      {/* Action Buttons */}
       <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
         <div className="flex items-center gap-3">
           <button
@@ -699,7 +401,6 @@ export default function MinutesEditor() {
         )}
       </div>
 
-      {/* PIN confirmation modal */}
       {showPinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowPinModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
