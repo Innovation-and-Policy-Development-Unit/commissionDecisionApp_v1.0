@@ -434,6 +434,8 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # ── AI / Claude API (replaces former Gemini integration) ─────────────────────
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'whisper-1')
 
 # Quarto CLI (Commission Decision Register AI reports)
 QUARTO_BIN = os.getenv('QUARTO_BIN', 'quarto')

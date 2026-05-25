@@ -10,8 +10,19 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../../components/shared/PageHeader'
 import api from '../../../api/client'
+import { formatApiError } from '../../../utils/apiError'
 import { useAuth } from '../../../context/AuthContext'
 import clsx from 'clsx'
+
+const TRANSCRIPTION_ACTIVE = new Set(['pending', 'transcribing', 'refining'])
+
+const TRANSCRIPTION_STATUS_LABEL = {
+  pending: 'Queued for transcription…',
+  transcribing: 'Transcribing with Whisper…',
+  refining: 'Improving transcript with Claude…',
+  ready: 'Transcript ready for review',
+  failed: 'Transcription failed',
+}
 
 const MINUTES_STATUS = {
   draft:    { label: 'Draft',    bg: 'bg-amber-100 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
@@ -156,6 +167,21 @@ export default function MinutesEditor() {
     next_meeting_date: '',
   })
 
+  const applyTranscript = useCallback((tr) => {
+    if (!tr) return
+    setTranscript(tr)
+    setPasteText(tr.raw_text || '')
+  }, [])
+
+  const fetchTranscript = useCallback(async () => {
+    try {
+      const tRes = await api.get(`/transcripts/?meeting=${meetingId}`)
+      if (tRes.data?.length > 0) applyTranscript(tRes.data[0])
+    } catch {
+      // ignore poll errors
+    }
+  }, [meetingId, applyTranscript])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -177,18 +203,40 @@ export default function MinutesEditor() {
         }
       }
       if (tRes.status === 'fulfilled' && tRes.value.data.length > 0) {
-        const tr = tRes.value.data[0]
-        setTranscript(tr)
-        setPasteText(tr.raw_text || '')
+        applyTranscript(tRes.value.data[0])
       }
     } catch (err) {
       setError('Failed to load meeting data.')
     } finally {
       setLoading(false)
     }
-  }, [meetingId])
+  }, [meetingId, applyTranscript])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const status = transcript?.transcription_status
+    if (!status || !TRANSCRIPTION_ACTIVE.has(status)) return undefined
+
+    const poll = async () => {
+      await fetchTranscript()
+    }
+    poll()
+    const id = setInterval(poll, 4000)
+    return () => clearInterval(id)
+  }, [transcript?.transcription_status, fetchTranscript])
+
+  useEffect(() => {
+    const status = transcript?.transcription_status
+    if (status === 'ready' && aiBusy === 'transcribe') {
+      setAiBusy(null)
+      setSuccess(t('meeting_room.minutes_transcribe_ready'))
+    }
+    if (status === 'failed' && aiBusy === 'transcribe') {
+      setAiBusy(null)
+      setError(transcript?.transcription_error || t('meeting_room.minutes_transcribe_failed'))
+    }
+  }, [transcript?.transcription_status, transcript?.transcription_error, aiBusy, t])
 
   const handleAgendaChange = (index, field, value) => {
     setContent(prev => {
@@ -220,6 +268,20 @@ export default function MinutesEditor() {
       setError(err.response?.data?.detail || 'Failed to save minutes.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const runTranscribePipeline = async () => {
+    setAiBusy('transcribe')
+    setError('')
+    setSuccess('')
+    try {
+      const res = await api.post(`/meetings/${meetingId}/transcribe/`)
+      setSuccess(res.data.detail || t('meeting_room.minutes_transcribe_started'))
+      await fetchTranscript()
+    } catch (err) {
+      setError(formatApiError(err, t('meeting_room.minutes_transcribe_failed')))
+      setAiBusy(null)
     }
   }
 
@@ -427,14 +489,35 @@ export default function MinutesEditor() {
           </Link>
         </div>
 
+        {transcript?.transcription_status && TRANSCRIPTION_STATUS_LABEL[transcript.transcription_status] && (
+          <p className={clsx(
+            'text-xs font-semibold mb-3',
+            transcript.transcription_status === 'failed'
+              ? 'text-red-600 dark:text-red-400'
+              : 'text-indigo-600 dark:text-indigo-400',
+          )}>
+            {TRANSCRIPTION_ACTIVE.has(transcript.transcription_status) && (
+              <Loader2 size={12} className="inline animate-spin mr-1" />
+            )}
+            {TRANSCRIPTION_STATUS_LABEL[transcript.transcription_status]}
+          </p>
+        )}
+
         <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-100 dark:border-slate-700">
           <button
             type="button"
-            onClick={() => runAiAction('transcribe', '/minutes/transcribe/', { meeting_id: parseInt(meetingId) })}
-            disabled={aiBusy !== null}
+            onClick={runTranscribePipeline}
+            disabled={
+              aiBusy !== null
+              || !transcript?.audio_file
+              || TRANSCRIPTION_ACTIVE.has(transcript?.transcription_status)
+            }
+            title={!transcript?.audio_file ? t('meeting_room.minutes_transcribe_no_audio') : undefined}
             className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 rounded-xl text-indigo-700 dark:text-indigo-300 font-bold text-xs disabled:opacity-50"
           >
-            {aiBusy === 'transcribe' ? <Loader2 size={14} className="animate-spin" /> : <Mic size={14} />}
+            {aiBusy === 'transcribe' || TRANSCRIPTION_ACTIVE.has(transcript?.transcription_status)
+              ? <Loader2 size={14} className="animate-spin" />
+              : <Mic size={14} />}
             {t('meeting_room.minutes_run_transcribe')}
           </button>
           <button

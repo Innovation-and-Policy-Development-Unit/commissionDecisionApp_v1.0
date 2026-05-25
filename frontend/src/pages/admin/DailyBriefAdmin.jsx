@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, RefreshCw, Send, Trash2 } from 'lucide-react'
 import api from '../../api/client'
+import { formatApiError } from '../../utils/apiError'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
@@ -69,11 +70,8 @@ export default function DailyBriefAdmin() {
       setDashboard(res.data)
     } catch (err) {
       setDashboard(null)
-      const detail = err.response?.data?.detail
       setDashboardError(
-        typeof detail === 'string'
-          ? detail
-          : 'Daily Brief dashboard is unavailable. Check that API migrations have run.',
+        formatApiError(err, 'Daily Brief dashboard is unavailable. Check that API migrations have run.'),
       )
       throw err
     }
@@ -149,7 +147,7 @@ export default function DailyBriefAdmin() {
       await fetchDashboard()
       toast.success('Settings saved.')
     } catch (err) {
-      toast.error(err.response?.data?.detail ?? 'Failed to save settings.')
+      toast.error(formatApiError(err, 'Failed to save settings.'))
     } finally {
       setSavingSettings(false)
     }
@@ -165,7 +163,7 @@ export default function DailyBriefAdmin() {
       await fetchDashboard()
       toast.success(next.enabled ? 'Daily brief enabled.' : 'Daily brief paused.')
     } catch (err) {
-      toast.error(err.response?.data?.detail ?? 'Failed to update status.')
+      toast.error(formatApiError(err, 'Failed to update status.'))
     } finally {
       setSavingSettings(false)
     }
@@ -181,7 +179,7 @@ export default function DailyBriefAdmin() {
       toast.success('Test brief sent (check delivery logs).')
       await fetchLogs()
     } catch (err) {
-      toast.error(err.response?.data?.detail ?? 'Test send failed.')
+      toast.error(formatApiError(err, 'Test send failed.'))
     } finally {
       setTestSending(false)
     }

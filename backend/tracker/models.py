@@ -347,8 +347,17 @@ class RecordingAudioSource(models.TextChoices):
 
 class TranscriptSource(models.TextChoices):
     ZOOM_ASR = "zoom_asr", "Zoom/Teams ASR"
-    AI_WHISPER = "ai_whisper", "AI-assisted transcript (text via Claude)"
+    AI_WHISPER = "ai_whisper", "Whisper + Claude refine"
     MANUAL_PASTE = "manual_paste", "Manual paste"
+
+
+class TranscriptionStatus(models.TextChoices):
+    IDLE = "idle", "Idle"
+    PENDING = "pending", "Queued"
+    TRANSCRIBING = "transcribing", "Transcribing (Whisper)"
+    REFINING = "refining", "Refining (Claude)"
+    READY = "ready", "Ready for review"
+    FAILED = "failed", "Failed"
 
 
 class Meeting(models.Model):
@@ -2343,6 +2352,16 @@ class MeetingTranscript(models.Model):
     )
     ai_processed = models.BooleanField(
         default=False, help_text="True once transcription is complete.",
+    )
+    transcription_status = models.CharField(
+        max_length=16,
+        choices=TranscriptionStatus.choices,
+        default=TranscriptionStatus.IDLE,
+        blank=True,
+    )
+    transcription_error = models.TextField(
+        blank=True,
+        help_text="Last pipeline error message when transcription_status is failed.",
     )
     processed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

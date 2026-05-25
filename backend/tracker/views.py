@@ -3915,7 +3915,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="transcript")
     def update_transcript(self, request, pk=None):
         """Save a manually pasted Zoom/Teams transcript for secretariat review."""
-        from .models import MeetingTranscript, TranscriptSource
+        from .models import MeetingTranscript, TranscriptSource, TranscriptionStatus
         from .serializers import MeetingTranscriptPatchSerializer
 
         meeting = self.get_object()
@@ -3929,10 +3929,31 @@ class MeetingViewSet(viewsets.ModelViewSet):
         if len(raw.strip()) >= 50:
             transcript_obj.ai_processed = True
             transcript_obj.processed_at = timezone.now()
-            transcript_obj.save(update_fields=["raw_text", "source", "ai_processed", "processed_at"])
+            transcript_obj.transcription_status = TranscriptionStatus.READY
+            transcript_obj.transcription_error = ""
+            transcript_obj.save(
+                update_fields=[
+                    "raw_text",
+                    "source",
+                    "ai_processed",
+                    "processed_at",
+                    "transcription_status",
+                    "transcription_error",
+                ]
+            )
         else:
             transcript_obj.ai_processed = False
-            transcript_obj.save(update_fields=["raw_text", "source", "ai_processed"])
+            transcript_obj.transcription_status = TranscriptionStatus.IDLE
+            transcript_obj.transcription_error = ""
+            transcript_obj.save(
+                update_fields=[
+                    "raw_text",
+                    "source",
+                    "ai_processed",
+                    "transcription_status",
+                    "transcription_error",
+                ]
+            )
         return Response(MeetingTranscriptSerializer(transcript_obj).data)
 
     @action(detail=True, methods=["get"], url_path="claude-prompt")
@@ -3941,6 +3962,67 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting = self.get_object()
         prompt = _build_claude_minutes_prompt(meeting)
         return Response({"prompt": prompt})
+
+    @action(detail=True, methods=["post"], url_path="transcribe")
+    def transcribe_recording(self, request, pk=None):
+        """Whisper transcription + Claude refine (async Celery pipeline)."""
+        from .models import MeetingTranscript, TranscriptionStatus
+        from .tasks import run_meeting_transcription_pipeline
+
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {
+            Role.PSC_SECRETARY,
+            Role.SENIOR_ADMIN_OFFICER,
+            Role.PSC_ADMIN,
+            Role.PSC_COMMISSIONER,
+        }:
+            raise PermissionDenied(
+                "Only Secretariat or Commissioners can run AI transcription."
+            )
+
+        transcript, _ = MeetingTranscript.objects.get_or_create(meeting=meeting)
+        if not (transcript.audio_file or "").strip():
+            return Response(
+                {
+                    "detail": (
+                        "No recording is linked to this meeting. "
+                        "Upload audio on Meeting Capture first."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        active = {
+            TranscriptionStatus.PENDING,
+            TranscriptionStatus.TRANSCRIBING,
+            TranscriptionStatus.REFINING,
+        }
+        if transcript.transcription_status in active:
+            return Response(
+                {
+                    "detail": "Transcription is already in progress.",
+                    "transcription_status": transcript.transcription_status,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        transcript.transcription_status = TranscriptionStatus.PENDING
+        transcript.transcription_error = ""
+        transcript.save(update_fields=["transcription_status", "transcription_error"])
+
+        run_meeting_transcription_pipeline.delay(meeting.id)
+
+        return Response(
+            {
+                "detail": (
+                    "Transcription started (Whisper, then Claude cleanup). "
+                    "Refresh this page in a few minutes."
+                ),
+                "transcription_status": TranscriptionStatus.PENDING,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
 
     @action(detail=True, methods=["post"], url_path="submit-agenda")
     def submit_agenda_to_chairman(self, request, pk=None):
@@ -5362,24 +5444,61 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="transcribe")
     def transcribe(self, request):
-        """Recording is stored; paste ASR text manually (Claude API does not accept audio)."""
+        """Legacy alias — POST /meetings/{id}/transcribe/ is preferred."""
+        from .models import MeetingTranscript, TranscriptionStatus
+        from .tasks import run_meeting_transcription_pipeline
+
         serializer = TranscriptGenerateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         meeting_id = serializer.validated_data["meeting_id"]
         try:
-            Meeting.objects.get(id=meeting_id)
+            meeting = Meeting.objects.get(id=meeting_id)
         except Meeting.DoesNotExist:
             return Response({"detail": "Meeting not found."}, status=404)
+
+        profile = _profile(request.user)
+        if profile.role not in {
+            Role.PSC_SECRETARY,
+            Role.SENIOR_ADMIN_OFFICER,
+            Role.PSC_ADMIN,
+            Role.PSC_COMMISSIONER,
+        }:
+            raise PermissionDenied(
+                "Only Secretariat or Commissioners can run AI transcription."
+            )
+
+        transcript, _ = MeetingTranscript.objects.get_or_create(meeting=meeting)
+        if not (transcript.audio_file or "").strip():
+            return Response(
+                {"detail": "Upload a meeting recording before running AI transcribe."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        active = {
+            TranscriptionStatus.PENDING,
+            TranscriptionStatus.TRANSCRIBING,
+            TranscriptionStatus.REFINING,
+        }
+        if transcript.transcription_status in active:
+            return Response(
+                {"detail": "Transcription is already in progress."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        transcript.transcription_status = TranscriptionStatus.PENDING
+        transcript.transcription_error = ""
+        transcript.save(update_fields=["transcription_status", "transcription_error"])
+        run_meeting_transcription_pipeline.delay(meeting_id)
 
         return Response(
             {
                 "detail": (
-                    "Automatic audio transcription is not available via the Claude API. "
-                    "Upload your Zoom ASR transcript with PATCH /meetings/{id}/transcript/, "
-                    "then use Generate minutes or the Claude repair prompt."
+                    "Transcription started (Whisper, then Claude cleanup). "
+                    "Refresh the minutes editor shortly."
                 ),
+                "transcription_status": TranscriptionStatus.PENDING,
             },
-            status=501,
+            status=status.HTTP_202_ACCEPTED,
         )
 
     @action(detail=False, methods=["post"], url_path="extract-decisions")

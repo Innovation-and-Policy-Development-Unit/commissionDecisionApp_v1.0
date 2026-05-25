@@ -1,56 +1,52 @@
-# AI features — Anthropic Claude API
+# AI features — Claude + Whisper
 
-All server-side AI in the Commission Decision App uses the **Anthropic Messages API** (not Google Gemini).
+Server-side AI uses **Anthropic Claude** for text/reasoning and **OpenAI Whisper** for meeting audio transcription.
 
 ## Configuration
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
-CLAUDE_MODEL_HAIKU=claude-3-5-haiku-20241022   # fast / cheap
-CLAUDE_MODEL_SONNET=claude-sonnet-4-20250514  # drafting / reasoning
+CLAUDE_MODEL_HAIKU=claude-haiku-4-5-20251001
+CLAUDE_MODEL_SONNET=claude-sonnet-4-6
+
+OPENAI_API_KEY=sk-...
+WHISPER_MODEL=whisper-1
 ```
 
-Install: `pip install anthropic` (listed in `backend/requirements.txt`).
+Install: `pip install anthropic openai` (see `backend/requirements.txt`).
 
-Code entry point: `backend/tracker/ai/claude_client.py`  
-Roadmap model tiers (24 features): `backend/tracker/ai/feature_registry.py`  
-Product spec: `AI_Features_List.txt` (repo root)
+Code: `backend/tracker/ai/claude_client.py`, `backend/tracker/ai/whisper_client.py`  
+Model tiers: `backend/tracker/ai/feature_registry.py`
 
 ## Implemented today (Celery)
 
-| Feature | Task | Model tier |
-|---------|------|------------|
+| Feature | Task | Model |
+|---------|------|-------|
 | Feedback triage | `process_feedback_with_ai` | Haiku |
 | Secretary executive brief | `generate_submission_brief` | Sonnet |
-| **OCR + key facts (E1)** | `extract_document_facts` (on upload) | Sonnet (+ vision for scans) |
-| **Deadline reminder drafts (F2)** | `draft_submission_deadline_reminders` (daily beat) | Haiku |
+| OCR + key facts (E1) | `extract_document_facts` | Sonnet |
+| Deadline reminder drafts (F2) | `draft_submission_deadline_reminders` | Haiku |
+| **Meeting transcribe + refine** | `run_meeting_transcription_pipeline` | Whisper → Haiku |
 | Minutes draft from transcript | `draft_minutes_from_transcript` | Sonnet |
 | Decision extraction | `extract_decisions_from_minutes` | Haiku |
-| **Action register (C4)** | `extract_action_items_from_minutes` | Haiku |
-| Staff Assistant | sync API (`staff_chat_views`) | Sonnet |
-| **Submission status (D2)** | Staff Assistant (`staff_chat` + live case data) | Haiku when status-focused |
+| Action register (C4) | `extract_action_items_from_minutes` | Haiku |
+| Staff Assistant | `staff_chat_views` | Sonnet |
 
-## Meeting audio
+## Meeting audio pipeline
 
-**Claude does not accept raw audio** on the Messages API. The workflow is:
+1. Upload recording (`POST /meetings/upload/` with `meeting_id`).
+2. **One button:** `POST /meetings/{id}/transcribe/` → Celery `run_meeting_transcription_pipeline`:
+   - **Whisper** → `structured_data.whisper_verbatim`
+   - **Claude Haiku** cleanup → `raw_text` (Bislama/ASR repair)
+3. Secretariat reviews transcript in Minutes Editor.
+4. **Generate minutes** → `draft_minutes_from_transcript` (Sonnet).
 
-1. Record / upload audio (archival).
-2. Run **Zoom ASR** (or other ASR) → paste transcript.
-3. Optional: **Copy Claude prompt** (`GET /meetings/{id}/claude-prompt/`) for Bislama → English repair in Claude.ai or via future in-app call.
-4. **Generate minutes** from pasted text (`draft_minutes_from_transcript`).
+Requires **Celery worker** + `OPENAI_API_KEY` + `ANTHROPIC_API_KEY`. Recordings over **25 MB** must be compressed before upload (Whisper API limit).
 
-`transcribe_meeting_recording` no longer calls an external ASR API; it logs a skip message.
+Legacy: `POST /minutes/transcribe/` triggers the same pipeline. `GET /meetings/{id}/claude-prompt/` remains for manual copy-out.
 
-## Adding a roadmap feature (A1–F4)
+## Adding a roadmap feature
 
-1. Add prompt + JSON schema in a new task or view.
-2. Call `complete_json(..., tier=FEATURE_MODEL_TIER["A1_auto_fill_checklist"])`.
-3. Persist results on the relevant model.
-4. Gate with `ai_enabled()` and staff permissions.
-
-## Cost guidance (from product spec)
-
-- **Haiku** — checklist fill, classification, missing-info, feedback, due-date drafts.
-- **Sonnet** — briefs, minutes, duplicate detection, risk, chatbots, policy Q&A.
-
-Use Sonnet only where reasoning quality justifies the higher token rate.
+1. Add prompt + schema in a task or view.
+2. Call `complete_json(..., tier=get_model_tier("slug"))`.
+3. Persist on models; gate with `ai_enabled()` / permissions.

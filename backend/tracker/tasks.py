@@ -419,22 +419,142 @@ def generate_submission_brief(submission_id: int, force: bool = False):
         app_log.error("BRIEF_FAIL | Submission %s | %s", submission_id, exc)
 
 
-# ── Meeting transcription ────────────────────────────────────────────────────
+# ── Meeting transcription (Whisper → Claude refine) ────────────────────────────
+
+
+def _meeting_agenda_block(meeting) -> str:
+    lines = []
+    for item in meeting.agenda_items.select_related("submission").order_by("sequence"):
+        sub = item.submission
+        ref = getattr(sub, "reference_number", "") if sub else ""
+        title = getattr(sub, "title", "") if sub else ""
+        lines.append(f"- {item.sequence}. {ref} — {title}")
+    return "\n".join(lines) if lines else "(No agenda items on record)"
+
+
+def _meeting_info_block(meeting) -> str:
+    return (
+        f"Reference: {meeting.reference_number}\n"
+        f"Title: {meeting.title}\n"
+        f"Date: {meeting.date} at {meeting.time}\n"
+        f"Venue: {meeting.venue}\n"
+        f"Type: {meeting.get_type_display()}"
+    )
+
+
+@shared_task(bind=True)
+def run_meeting_transcription_pipeline(self, meeting_id: int):
+    """
+    Whisper transcription of meeting recording, then Claude cleanup for Bislama/ASR errors.
+    """
+    from django.utils import timezone
+
+    from .ai.transcript_refine import refine_transcript_text
+    from .ai.whisper_client import transcribe_audio_file, whisper_enabled
+    from .models import Meeting, MeetingTranscript, TranscriptSource, TranscriptionStatus
+
+    try:
+        meeting = Meeting.objects.prefetch_related("agenda_items__submission").get(id=meeting_id)
+    except Meeting.DoesNotExist:
+        app_log.warning("TRANSCRIBE_FAIL | Meeting %s not found", meeting_id)
+        return
+
+    transcript, _ = MeetingTranscript.objects.get_or_create(meeting=meeting)
+
+    def _save_status(status: str, *, error: str = "", extra_fields=None):
+        transcript.transcription_status = status
+        transcript.transcription_error = (error or "")[:2000]
+        fields = ["transcription_status", "transcription_error"]
+        if extra_fields:
+            fields.extend(extra_fields)
+        transcript.save(update_fields=fields)
+
+    audio_name = (transcript.audio_file or "").strip()
+    if not audio_name:
+        _save_status(TranscriptionStatus.FAILED, error="No recording linked. Upload audio on Meeting Capture first.")
+        return
+
+    audio_path = os.path.join(settings.MEDIA_ROOT, "recordings", audio_name)
+    if not os.path.isfile(audio_path):
+        _save_status(
+            TranscriptionStatus.FAILED,
+            error=f"Recording file missing on server: {audio_name}",
+        )
+        return
+
+    if not whisper_enabled():
+        _save_status(
+            TranscriptionStatus.FAILED,
+            error="OPENAI_API_KEY is not configured on the API server.",
+        )
+        return
+
+    _save_status(TranscriptionStatus.TRANSCRIBING)
+    app_log.info("TRANSCRIBE_START | meeting=%s file=%s", meeting_id, audio_name)
+
+    whisper_text, whisper_err = transcribe_audio_file(audio_path)
+    if whisper_err or not whisper_text:
+        _save_status(
+            TranscriptionStatus.FAILED,
+            error=whisper_err or "Whisper returned empty text.",
+        )
+        app_log.error("TRANSCRIBE_WHISPER_FAIL | meeting=%s | %s", meeting_id, whisper_err)
+        return
+
+    structured = dict(transcript.structured_data or {})
+    structured["whisper_verbatim"] = whisper_text
+    structured["whisper_at"] = timezone.now().isoformat()
+    transcript.structured_data = structured
+    transcript.save(update_fields=["structured_data"])
+
+    _save_status(TranscriptionStatus.REFINING)
+    refined, refine_err = refine_transcript_text(
+        meeting_info=_meeting_info_block(meeting),
+        agenda_block=_meeting_agenda_block(meeting),
+        whisper_text=whisper_text,
+    )
+
+    if refine_err or not (refined or "").strip():
+        app_log.warning(
+            "TRANSCRIBE_REFINE_FALLBACK | meeting=%s | %s",
+            meeting_id,
+            refine_err or "empty Claude response",
+        )
+        transcript.raw_text = whisper_text
+        structured["claude_refine_error"] = refine_err or "empty response"
+    else:
+        transcript.raw_text = refined.strip()
+        structured["claude_refined_at"] = timezone.now().isoformat()
+        structured.pop("claude_refine_error", None)
+
+    transcript.structured_data = structured
+    transcript.source = TranscriptSource.AI_WHISPER
+    transcript.ai_processed = True
+    transcript.processed_at = timezone.now()
+    transcript.transcription_status = TranscriptionStatus.READY
+    transcript.transcription_error = ""
+    transcript.save(
+        update_fields=[
+            "raw_text",
+            "structured_data",
+            "source",
+            "ai_processed",
+            "processed_at",
+            "transcription_status",
+            "transcription_error",
+        ]
+    )
+    app_log.info(
+        "TRANSCRIBE_OK | meeting=%s chars=%s",
+        meeting_id,
+        len(transcript.raw_text or ""),
+    )
 
 
 @shared_task
-def transcribe_meeting_recording(meeting_id: int, audio_path: str):
-    """Audio file is stored; transcription is not done via Claude API.
-
-    Use Zoom/local ASR, paste text into the transcript editor, then Claude prompt
-  repair (GET /meetings/{id}/claude-prompt/) or draft_minutes_from_transcript.
-    """
-    app_log.warning(
-        "TRANSCRIBE_SKIP | Claude API does not accept audio uploads. "
-        "Meeting %s file=%s — paste ASR transcript manually.",
-        meeting_id,
-        os.path.basename(audio_path) if audio_path else "",
-    )
+def transcribe_meeting_recording(meeting_id: int, audio_path: str = ""):
+    """Legacy entry point — runs Whisper + Claude refine pipeline."""
+    run_meeting_transcription_pipeline.delay(meeting_id)
 
 
 # ── Minutes drafting from transcript ─────────────────────────────────────────

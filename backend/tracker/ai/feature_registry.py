@@ -61,6 +61,7 @@ FEATURE_MODEL_TIER: dict[str, ModelTier] = {
     "feedback_triage": "haiku",
     "submission_executive_brief": "sonnet",
     "minutes_draft": "sonnet",
+    "transcript_refine": "haiku",
     "decision_extract": "haiku",
     # Batch 8 — workflow & documents
     "transition_guidance": "haiku",

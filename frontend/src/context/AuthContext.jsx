@@ -142,7 +142,7 @@ export function AuthProvider({ children }) {
     setAccessToken(localStorage.getItem('psc_access'))
   }, [])
 
-  // Listen for cross-tab clear events
+  // Listen for cross-tab clear / silent token refresh
   useEffect(() => {
     const onCleared = () => {
       setAccessToken(null)
@@ -151,9 +151,15 @@ export function AuthProvider({ children }) {
       setIsLocked(false)
       setPin('')
     }
+    const onRefreshed = (e) => {
+      const access = e.detail?.access
+      if (access) setAccessToken(access)
+    }
     window.addEventListener('psc-auth:cleared', onCleared)
+    window.addEventListener('psc-auth:refreshed', onRefreshed)
     return () => {
       window.removeEventListener('psc-auth:cleared', onCleared)
+      window.removeEventListener('psc-auth:refreshed', onRefreshed)
     }
   }, [])
 

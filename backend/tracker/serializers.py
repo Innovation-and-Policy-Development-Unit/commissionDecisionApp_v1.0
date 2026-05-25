@@ -1549,10 +1549,26 @@ class MeetingTranscriptSerializer(serializers.ModelSerializer):
     class Meta:
         model = MeetingTranscript
         fields = (
-            "id", "meeting", "source", "raw_text", "structured_data",
-            "audio_file", "ai_processed", "processed_at", "created_at",
+            "id",
+            "meeting",
+            "source",
+            "raw_text",
+            "structured_data",
+            "audio_file",
+            "ai_processed",
+            "transcription_status",
+            "transcription_error",
+            "processed_at",
+            "created_at",
         )
-        read_only_fields = ("id", "created_at", "processed_at", "ai_processed")
+        read_only_fields = (
+            "id",
+            "created_at",
+            "processed_at",
+            "ai_processed",
+            "transcription_status",
+            "transcription_error",
+        )
 
 
 class MeetingTranscriptPatchSerializer(serializers.Serializer):
