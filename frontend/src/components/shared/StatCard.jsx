@@ -1,3 +1,4 @@
+import React from 'react'
 import clsx from 'clsx'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 
@@ -8,6 +9,13 @@ const solidColors = {
   amber: 'bg-amber-500',
   red: 'bg-red-500',
   blue: 'bg-blue-500',
+}
+
+function renderStatIcon(Icon) {
+  if (!Icon) return null
+  if (React.isValidElement(Icon)) return Icon
+  const Component = Icon
+  return <Component size={20} fontSize={20} className="text-white" />
 }
 
 export default function StatCard({
@@ -24,11 +32,7 @@ export default function StatCard({
   const heading = title || label
   const isPositive = change >= 0
   const solidColor = solidColors[color] || solidColors.purple
-  const iconNode = Icon
-    ? (typeof Icon === 'function'
-      ? <Icon size={20} className="text-white" />
-      : Icon)
-    : null
+  const iconNode = renderStatIcon(Icon)
 
   return (
     <div className={clsx(
