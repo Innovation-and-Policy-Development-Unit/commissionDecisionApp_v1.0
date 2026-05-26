@@ -52,8 +52,8 @@ const MOCK_NOTIFICATIONS = [
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }) {
-  const m = STATUS_META[status] || { label: status, cls: 'bg-slate-100 text-slate-600', icon: FileText }
+function StatusBadge({ status, statusMeta }) {
+  const m = statusMeta[status] || { label: status, cls: 'bg-slate-100 text-slate-600', icon: FileText }
   const Icon = m.icon
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${m.cls}`}>
@@ -63,12 +63,12 @@ function StatusBadge({ status }) {
   )
 }
 
-function OutcomeText({ outcome }) {
-  const m = DECISION_OUTCOMES[outcome] || { label: outcome, cls: 'text-slate-500' }
+function OutcomeText({ outcome, decisionOutcomes }) {
+  const m = decisionOutcomes[outcome] || { label: outcome, cls: 'text-slate-500' }
   return <span className={`text-xs font-medium ${m.cls}`}>{m.label}</span>
 }
 
-function SummaryBar({ notifications }) {
+function SummaryBar({ notifications, statusMeta }) {
   const counts = {
     draft:        notifications.filter(n => n.status === 'draft').length,
     pending:      notifications.filter(n => n.status === 'pending').length,
@@ -77,7 +77,7 @@ function SummaryBar({ notifications }) {
   }
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-      {Object.entries(STATUS_META).map(([k, meta]) => {
+      {Object.entries(statusMeta).map(([k, meta]) => {
         const Icon = meta.icon
         return (
           <div key={k} className="card px-3 py-2.5 flex items-center gap-3">
@@ -96,6 +96,11 @@ function SummaryBar({ notifications }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function Notifications() {
+  const { t } = useTranslation()
+  const STATUS_META = useStatusMeta(t)
+  const CHANNEL_OPTIONS = useChannelOptions(t)
+  const DECISION_OUTCOMES = useDecisionOutcomes(t)
+
   const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS)
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -171,7 +176,7 @@ export default function Notifications() {
         }
       />
 
-      <SummaryBar notifications={notifications} />
+      <SummaryBar notifications={notifications} statusMeta={STATUS_META} />
 
       {/* Filters */}
       <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -222,7 +227,7 @@ export default function Notifications() {
                     <p className="text-xs text-slate-700 dark:text-slate-300 leading-snug truncate">{n.title}</p>
                   </td>
                   <td className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{n.ministry}</td>
-                  <td><OutcomeText outcome={n.outcome} /></td>
+                  <td><OutcomeText outcome={n.outcome} decisionOutcomes={DECISION_OUTCOMES} /></td>
                   <td>
                     {(() => {
                       const ch = CHANNEL_OPTIONS.find(c => c.value === n.channel)
@@ -236,7 +241,7 @@ export default function Notifications() {
                       )
                     })()}
                   </td>
-                  <td><StatusBadge status={n.status} /></td>
+                  <td><StatusBadge status={n.status} statusMeta={STATUS_META} /></td>
                   <td className="text-xs text-slate-400 whitespace-nowrap">
                     {n.issued_date
                       ? new Date(n.issued_date + 'T00:00').toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -364,7 +369,7 @@ export default function Notifications() {
               </div>
               <div>
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Status</p>
-                <StatusBadge status={viewTarget.status} />
+                <StatusBadge status={viewTarget.status} statusMeta={STATUS_META} />
               </div>
             </div>
             <div>
@@ -378,7 +383,7 @@ export default function Notifications() {
               </div>
               <div>
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Outcome</p>
-                <OutcomeText outcome={viewTarget.outcome} />
+                <OutcomeText outcome={viewTarget.outcome} decisionOutcomes={DECISION_OUTCOMES} />
               </div>
             </div>
             <div>
