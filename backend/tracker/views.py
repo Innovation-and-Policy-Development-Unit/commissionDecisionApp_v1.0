@@ -1819,16 +1819,38 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         data_payload = request.data.get('data', {})
 
         if instance:
+            resolved_form_type = instance.form_type
+        elif form_type_id:
+            resolved_form_type = PSCFormType.objects.filter(pk=form_type_id).first()
+        elif submission.form_type_code:
+            resolved_form_type = PSCFormType.objects.filter(
+                code=submission.form_type_code, is_active=True
+            ).first()
+        else:
+            resolved_form_type = None
+
+        if not resolved_form_type:
+            return Response({'detail': 'form_type is required.'}, status=400)
+
+        from .dynamic_form_validation import validate_dynamic_form_data
+
+        validation_errors = validate_dynamic_form_data(resolved_form_type, data_payload)
+        if validation_errors:
+            return Response(
+                {"dynamic_form": validation_errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if instance:
             instance.data = data_payload
             instance.save()
             resp = instance
         else:
-            try:
-                form_type = PSCFormType.objects.get(pk=form_type_id)
-            except (PSCFormType.DoesNotExist, TypeError):
-                return Response({'detail': 'form_type is required.'}, status=400)
             resp = PSCFormResponse.objects.create(
-                submission=submission, form_type=form_type, data=data_payload)
+                submission=submission,
+                form_type=resolved_form_type,
+                data=data_payload,
+            )
 
         if submission.current_stage == WorkflowStage.DRAFT:
             from .ai.policy_guardrail import policy_guardrail_applies

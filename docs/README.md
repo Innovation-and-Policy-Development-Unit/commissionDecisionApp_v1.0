@@ -2,6 +2,9 @@
 
 | Folder / file | Contents |
 |---------------|----------|
+| [SCDMS_API_DOCUMENTATION.md](SCDMS_API_DOCUMENTATION.md) | REST API guide for partners (HRMIS, CMS) — auth, submissions, proposed HRMIS contract |
+| [SCDMS_SYSTEM_SCOPE_FOR_PARTNER_UNITS.md](SCDMS_SYSTEM_SCOPE_FOR_PARTNER_UNITS.md) | Functional scope — what SCDMS owns vs HRMIS |
+| [email-to-hrmis-manager-scope.md](email-to-hrmis-manager-scope.md) | Draft outreach email to HRMIS |
 | [deployment-tls.md](deployment-tls.md) | Production HTTPS — Caddy, host Nginx, or Certbot overlay |
 | [deployment-render.md](deployment-render.md) | Hosting on Render.com (Blueprint, env vars, Celery) |
 | [ai-claude.md](ai-claude.md) | Anthropic Claude API — env, implemented tasks, roadmap |
