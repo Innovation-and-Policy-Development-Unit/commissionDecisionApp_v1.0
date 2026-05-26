@@ -31,15 +31,20 @@ export default function TravelEndorsementPanel({ submissionId, submission, onSig
       const creatorId = submission.created_by?.id ?? submission.created_by
       return Number(creatorId) === user.id
     }
-    const uid = data.travel_endorsers?.[section.signer] || data.travel_endorsers?.[`${section.signer}_id`]
-    if (uid && Number(uid) === user.id) return true
-    if (section.signer === 'secretary' && ['psc_secretary', 'psc_admin'].includes(user.role)) return true
+    if (section.signer === 'secretary' && ['psc_secretary', 'psc_admin', 'senior_admin_officer'].includes(user.role)) {
+      return true
+    }
+    const subDept = submission.department?.id ?? submission.department_id
+    const subMinistry = submission.ministry?.id ?? submission.ministry_id
     if (section.signer === 'director' && user.role === 'head_of_agency') {
-      const subDept = submission.department?.id ?? submission.department_id
       return subDept && user.department_id && Number(subDept) === Number(user.department_id)
     }
-    if (section.signer === 'director' && user.role === 'dept_admin') return true
-    if (section.signer === 'dg' && user.role === 'head_of_agency') return true
+    if (section.signer === 'director' && user.role === 'dept_admin') {
+      return subDept && user.department_id && Number(subDept) === Number(user.department_id)
+    }
+    if (section.signer === 'dg' && user.role === 'head_of_agency' && !user.department_id) {
+      return subMinistry && user.ministry_id && Number(subMinistry) === Number(user.ministry_id)
+    }
     return false
   }
 
@@ -69,9 +74,8 @@ export default function TravelEndorsementPanel({ submissionId, submission, onSig
       <div>
         <h3 className="text-sm font-semibold text-sky-900 dark:text-sky-100">Travel endorsements</h3>
         <p className="text-xs text-sky-800/80 dark:text-sky-200/80 mt-0.5">
-          Endorsements depend on who lodged the form (4.4: department head or DG only;
-          4.5/4.6: department head and/or DG). Then ODU Manager review and Secretary decision.
-          Forms 4.5 &amp; 4.6 receive an official letter after Secretary approval.
+          Sign in order shown below (matched to your role and department). Then ODU Manager
+          review and Secretary decision. Forms 4.5 &amp; 4.6 receive an official letter after approval.
         </p>
       </div>
       <ul className="space-y-2">

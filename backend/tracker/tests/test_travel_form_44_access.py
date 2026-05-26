@@ -74,30 +74,26 @@ class TravelForm44AccessTests(TestCase):
             **extra,
         )
 
-    def test_traveller_can_create_form_44(self):
+    def test_traveller_cannot_create_form_44(self):
         resp = self._post_travel(self.traveller, "PSC 4.4")
-        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.status_code, 403)
 
-    def test_traveller_can_create_form_45(self):
+    def test_traveller_cannot_create_form_45(self):
         resp = self._post_travel(self.traveller, "PSC 4.5")
-        self.assertEqual(resp.status_code, 201, resp.content)
-        self.assertTrue(resp.json().get("secretary_only"))
+        self.assertEqual(resp.status_code, 403)
 
-    def test_csu_hr_can_create_form_44(self):
+    def test_ministry_hr_can_create_form_44(self):
         resp = self._post_travel(self.hr_csu, "PSC 4.4")
         self.assertEqual(resp.status_code, 201, resp.content)
-
-    def test_dept_director_can_create_form_44(self):
-        resp = self._post_travel(self.director, "PSC4.4", department=self.department.id)
-        self.assertEqual(resp.status_code, 201, resp.content)
-        data = resp.json()
-        self.assertTrue(data.get("secretary_only"))
-        self.assertEqual(data.get("form_type_code"), "PSC 4.4")
-
-    def test_ministry_dg_can_create_form_44(self):
-        resp = self._post_travel(self.dg, "PSC 4.4")
-        self.assertEqual(resp.status_code, 201, resp.content)
         self.assertTrue(resp.json().get("secretary_only"))
+
+    def test_dept_director_cannot_create_form_44(self):
+        resp = self._post_travel(self.director, "PSC4.4", department=self.department.id)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_ministry_dg_cannot_create_form_44(self):
+        resp = self._post_travel(self.dg, "PSC 4.4")
+        self.assertEqual(resp.status_code, 403)
 
     def test_44_dept_staff_needs_director_only(self):
         sub = self._submission(self.traveller, department=self.department)

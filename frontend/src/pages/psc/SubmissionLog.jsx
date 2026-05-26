@@ -10,6 +10,7 @@ import SubmissionProgressBar from '../../components/shared/SubmissionProgressBar
 import { PlusCircle, RefreshCw, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2, LayoutList, Columns3, Stamp } from 'lucide-react'
 import SubmissionKanbanBoard from '../../components/submissions/SubmissionKanbanBoard'
 import SubmissionForm from './SubmissionForm'
+import { canCreateSecretaryTravel, canViewSecretaryTravelList } from '../../constants/submissionCreate'
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { isComplianceRole } from '../../constants/compliance'
@@ -63,6 +64,7 @@ export default function SubmissionLog() {
   const [nlMeta, setNlMeta]       = useState(null)
   const [nlIdSet, setNlIdSet]     = useState(null)
   const [viewMode, setViewMode]   = useState('list')
+  const [secretaryOnlyFilter, setSecretaryOnlyFilter] = useState(false)
 
   const isAdmin = user?.role === 'psc_admin'
   const isComplianceUser = user && isComplianceRole(user.role)
@@ -70,8 +72,13 @@ export default function SubmissionLog() {
   const isTraveller = user?.role === 'traveller'
   const isInternalCreate = user && ['csu_manager', 'odu_manager'].includes(user.role)
   const showCommissionCreate = canCreateSubmission && !isTraveller && !isInternalCreate
-  const showSecretaryCreate = canCreateSubmission && !isInternalCreate
+  const showSecretaryCreate = canCreateSecretaryTravel(user) && !isInternalCreate
+  const showSecretaryView = canViewSecretaryTravelList(user) && !isInternalCreate
   const showInternalCreate = canCreateSubmission && isInternalCreate
+
+  useEffect(() => {
+    if (isTraveller) setSecretaryOnlyFilter(true)
+  }, [isTraveller])
 
   const openCreateModal = mode => {
     setModalCreateMode(mode)
@@ -159,6 +166,7 @@ export default function SubmissionLog() {
       if (nlIdSet && !nlIdSet.has(r.id)) return false
       if (stageFilter && r.current_stage !== stageFilter) return false
       if (ministryFilter && r.ministry_name !== ministryFilter) return false
+      if (secretaryOnlyFilter && !r.secretary_only) return false
       if (s && !(
         (r.reference_number && r.reference_number.toLowerCase().includes(s)) ||
         (r.title && r.title.toLowerCase().includes(s)) ||
@@ -166,7 +174,7 @@ export default function SubmissionLog() {
       )) return false
       return true
     })
-  }, [rows, q, stageFilter, ministryFilter, nlIdSet])
+  }, [rows, q, stageFilter, ministryFilter, secretaryOnlyFilter, nlIdSet])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const safePage   = Math.min(page, totalPages)
@@ -259,6 +267,17 @@ export default function SubmissionLog() {
                   {t('submission.secretary_approval')}
                 </button>
               )}
+              {showSecretaryView && (
+                <button
+                  type="button"
+                  onClick={() => { setSecretaryOnlyFilter(true); setPage(1) }}
+                  className="btn-secondary flex items-center gap-2 border-sky-300 text-sky-800 hover:bg-sky-50 dark:border-sky-700 dark:text-sky-200 dark:hover:bg-sky-950/40"
+                  title={t('submission.secretary_approval_view_hint')}
+                >
+                  <Stamp size={16} />
+                  {t('submission.secretary_approval')}
+                </button>
+              )}
               {showInternalCreate && (
                 <button
                   type="button"
@@ -273,6 +292,12 @@ export default function SubmissionLog() {
           ) : null
         }
       />
+
+      {isTraveller && secretaryOnlyFilter && (
+        <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100">
+          {t('submission.secretary_traveller_list_banner')}
+        </div>
+      )}
 
       {isComplianceUser && (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-100">

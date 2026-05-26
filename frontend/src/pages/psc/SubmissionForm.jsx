@@ -7,8 +7,8 @@ import { useToast } from '../../context/ToastContext'
 import ComplianceCmsGuidance from './ComplianceCmsGuidance'
 import { isComplianceRole } from '../../constants/compliance'
 import {
-  endorserSlotsForTravelForm,
   isForm44Code,
+  travelApprovalRoute,
   travelWorkflowHint,
   isTravelFormCode,
   TRAVEL_CATEGORY_CODE,
@@ -236,23 +236,13 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     setBusy(true)
     setError('')
     try {
-      const dept = departments.find(d => String(d.id) === String(form.department)) || null
-      const travel_endorsers = {}
-      endorserSlotsForTravelForm(form.form_type_code, user, {
-        department: dept,
-        ministries,
-        departmentId: form.department,
-      }).forEach(slot => {
-        const raw = form[slot.key]
-        if (raw) travel_endorsers[slot.key] = Number(raw)
-      })
       const payload = {
         title: form.title.trim(),
         form_type_code: form.form_type_code,
         ...(categoryId ? { form_category: categoryId } : {}),
         notes: form.notes,
         received_at: new Date().toISOString(),
-        travel_endorsers,
+        travel_endorsers: {},
       }
       if (form.department) payload.department = Number(form.department)
       const { data: submission } = await api.post('/submissions/', payload)
@@ -269,7 +259,7 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
   }
 
   const selectedDepartment = departments.find(d => String(d.id) === String(form.department)) || null
-  const endorserSlots = endorserSlotsForTravelForm(form.form_type_code, user, {
+  const approvalRoute = travelApprovalRoute(form.form_type_code, user, {
     department: selectedDepartment,
     ministries,
     departmentId: form.department,
@@ -312,25 +302,20 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
             </select>
           </div>
         )}
-        {endorserSlots.length > 0 && (
-          <div className="rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/20 p-4 space-y-3">
-            <p className="text-sm font-medium text-sky-900 dark:text-sky-100">Ministry endorsers</p>
-            <p className="text-xs text-sky-800/80">
-              Nominate who will digitally sign before the Secretary (profile signature required).
+        {approvalRoute.length > 0 && (
+          <div className="rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/20 p-4 space-y-2">
+            <p className="text-sm font-medium text-sky-900 dark:text-sky-100">Approval route</p>
+            <p className="text-xs text-sky-800/80 dark:text-sky-200/80">
+              The system notifies the correct officials automatically. They sign on the submission
+              page with their profile signature before it goes to ODU Manager, then the Secretary.
             </p>
-            {endorserSlots.map(slot => (
-              <div key={slot.key}>
-                <label className="block text-xs font-medium mb-1">{slot.label}</label>
-                <input
-                  className="input text-sm"
-                  type="number"
-                  min="1"
-                  placeholder="User ID of endorser"
-                  value={form[slot.key] || ''}
-                  onChange={e => setForm(f => ({ ...f, [slot.key]: e.target.value }))}
-                />
-              </div>
-            ))}
+            <ol className="list-decimal list-inside text-sm text-sky-900 dark:text-sky-100 space-y-0.5">
+              {approvalRoute.map((step, i) => (
+                <li key={i}>{step}</li>
+              ))}
+              <li>ODU Manager review</li>
+              <li>PSC Secretary decision</li>
+            </ol>
           </div>
         )}
         <div>
@@ -736,7 +721,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
 
   const allowed =
     user && ['psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
-              'traveller', ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager'].includes(user.role)
+              ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager'].includes(user.role)
 
   useEffect(() => {
     Promise.all([
@@ -799,7 +784,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
     )
   }
 
-  const effectiveMode = createMode || (user?.role === 'traveller' ? 'secretary' : 'commission')
+  const effectiveMode = createMode || 'commission'
   const commissionFormTypes = filterCommissionFormTypes(formTypes, categories)
   const secretaryFormTypes = filterSecretaryFormTypes(formTypes, categories, user)
   const travelFormTypes = secretaryFormTypes.length

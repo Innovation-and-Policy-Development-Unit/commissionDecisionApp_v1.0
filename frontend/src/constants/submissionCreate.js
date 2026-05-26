@@ -1,7 +1,6 @@
 import {
   isTravelFormCode,
   isForm44Code,
-  canCreateForm44,
   normalizeTravelFormCode,
   TRAVEL_CATEGORY_CODE,
 } from './travel'
@@ -13,19 +12,27 @@ export function categoryById(categories) {
   return Object.fromEntries((categories || []).map(c => [String(c.id), c]))
 }
 
-/** Secretary path: travel forms 4.4–4.6 (role-dependent). */
+/** Ministry HR (and PSC desk) lodge secretary travel 4.4–4.6. */
+export function canCreateSecretaryTravel(user) {
+  if (!user) return false
+  return ['ministry_hr', 'psc_officer', 'psc_admin', 'psc_secretary'].includes(user.role)
+}
+
+/** Public servants browse secretary travel in their ministry (read-only). */
+export function canViewSecretaryTravelList(user) {
+  if (!user) return false
+  return user.role === 'traveller'
+}
+
+/** Secretary path: travel forms 4.4–4.6 when user may lodge them. */
 export function filterSecretaryFormTypes(formTypes, categories, user) {
+  if (!canCreateSecretaryTravel(user)) return []
   const cats = categoryById(categories)
   return (formTypes || []).filter(ft => {
     const code = normalizeTravelFormCode(ft.code)
-    if (isForm44Code(code)) {
-      return canCreateForm44(user)
-    }
-    if (isTravelFormCode(code) && !isForm44Code(code)) {
-      return true
-    }
+    if (!isTravelFormCode(code)) return false
     const cat = cats[String(ft.form_category)]
-    return cat?.code === TRAVEL_CATEGORY_CODE && !isForm44Code(code)
+    return cat?.code === TRAVEL_CATEGORY_CODE || isTravelFormCode(code)
   })
 }
 

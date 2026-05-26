@@ -16,6 +16,14 @@ TRAVELLER_SUBMITTER_ROLES = {
     Role.TRAVELLER,
 }
 
+# Secretary-only travel (4.4–4.6): lodged by ministry HR, not public servants.
+SECRETARY_TRAVEL_SUBMITTER_ROLES = {
+    Role.MINISTRY_HR,
+    Role.PSC_OFFICER,
+    Role.PSC_ADMIN,
+    Role.PSC_SECRETARY,
+}
+
 _COMPLIANCE_SUBMITTER_ROLES = {
     Role.COMPLIANCE_SENIOR,
     Role.COMPLIANCE_PRINCIPAL,
@@ -282,14 +290,16 @@ def assert_transition_allowed(
         if target_stage not in allowed_targets and role != Role.PSC_ADMIN:
             raise PermissionDenied("That transition is not allowed in the travel submission workflow.")
 
-        if role in TRAVELLER_SUBMITTER_ROLES:
+        if role in SECRETARY_TRAVEL_SUBMITTER_ROLES:
             allowed_pairs = {
                 (WorkflowStage.DRAFT, WorkflowStage.SUBMITTED),
                 (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
                 (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
             }
             if (current_stage, target_stage) not in allowed_pairs:
-                raise PermissionDenied("Travellers can submit or respond to clarification requests.")
+                raise PermissionDenied(
+                    "Ministry HR can submit travel requests or respond to clarification requests."
+                )
             return
 
         if role in {Role.ODU_MANAGER}:
@@ -319,7 +329,9 @@ def assert_transition_allowed(
         if role == Role.PSC_ADMIN:
             return
 
-        raise PermissionDenied("Only the traveller, PSC Officer, or Secretary may act on travel submissions.")
+        raise PermissionDenied(
+            "Only ministry HR, PSC Officers, or the Secretary may act on travel submissions."
+        )
 
     # ── Internal submission workflow ─────────────────────────────────────────
     if is_internal:
@@ -460,7 +472,7 @@ def iter_allowed_targets(
     if secretary_only:
         if role == Role.PSC_ADMIN:
             return list(_SECRETARY_ONLY_STAGE_GRAPH.get(current_stage, []))
-        if role in TRAVELLER_SUBMITTER_ROLES:
+        if role in SECRETARY_TRAVEL_SUBMITTER_ROLES:
             if current_stage == WorkflowStage.DRAFT:
                 return [WorkflowStage.SUBMITTED]
             if current_stage == WorkflowStage.RETURNED_FOR_CLARIFICATION:

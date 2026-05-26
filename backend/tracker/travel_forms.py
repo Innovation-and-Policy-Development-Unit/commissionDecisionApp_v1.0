@@ -31,14 +31,19 @@ TRAVEL_FORM_CODES = frozenset({TRAVEL_FORM_44, TRAVEL_FORM_45, TRAVEL_FORM_46})
 TRAVELLER_SECRETARY_FORM_CODES = frozenset({TRAVEL_FORM_45, TRAVEL_FORM_46})
 TRAVEL_LETTER_FORM_CODES = frozenset({TRAVEL_FORM_45, TRAVEL_FORM_46})
 
+# Only ministry HR managers lodge secretary travel; public servants (traveller) view only.
 SECRETARY_TRAVEL_CREATOR_ROLES = frozenset({
-    Role.TRAVELLER,
     Role.MINISTRY_HR,
-    Role.DEPT_ADMIN,
-    Role.HEAD_OF_AGENCY,
     Role.PSC_OFFICER,
     Role.PSC_ADMIN,
     Role.PSC_SECRETARY,
+})
+
+SECRETARY_TRAVEL_VIEW_ROLES = frozenset({
+    Role.TRAVELLER,
+    *SECRETARY_TRAVEL_CREATOR_ROLES,
+    Role.DEPT_ADMIN,
+    Role.HEAD_OF_AGENCY,
 })
 
 # Signer role hints used by the sign-section API

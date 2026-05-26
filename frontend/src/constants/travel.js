@@ -31,9 +31,13 @@ export function requiresTravelLetter(code) {
   return TRAVEL_LETTER_FORM_CODES.includes(normalizeTravelFormCode(code))
 }
 
-export function canCreateForm44(user) {
+export function canCreateSecretaryTravel(user) {
   if (!user?.role) return false
-  return STAFF_CREATE_ROLES.includes(user.role) || PSC_CREATE_ROLES.includes(user.role)
+  return user.role === 'ministry_hr' || PSC_CREATE_ROLES.includes(user.role)
+}
+
+export function canCreateForm44(user) {
+  return canCreateSecretaryTravel(user)
 }
 
 function resolveDepartmentContext(departmentContext) {
@@ -107,7 +111,12 @@ export function isMinistryDgInitiator(user) {
   return user?.role === 'head_of_agency' && !user?.department_id
 }
 
-/** Endorser pick-list when creating a travel request (matches backend endorsement_sections). */
+/** Ordered ministry approval steps (labels only; routing is automatic). */
+export function travelApprovalRoute(formTypeCode, user, departmentContext = '') {
+  return endorserSlotsForTravelForm(formTypeCode, user, departmentContext).map(s => s.label)
+}
+
+/** Internal: endorsement slots (matches backend endorsement_sections). */
 export function endorserSlotsForTravelForm(formTypeCode, user, departmentContext = '') {
   const code = normalizeTravelFormCode(formTypeCode)
   if (!isTravelFormCode(code)) return []

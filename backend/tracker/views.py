@@ -208,7 +208,12 @@ def _submission_queryset_for(user):
             return qs.none()
         return qs.filter(ministry_id=profile.ministry_id)
     if role == Role.TRAVELLER:
-        return qs.filter(created_by=user)
+        if not profile.ministry_id:
+            return qs.filter(created_by=user)
+        return qs.filter(
+            models.Q(created_by=user)
+            | models.Q(secretary_only=True, ministry_id=profile.ministry_id)
+        )
     if role == Role.DEPT_ADMIN:
         if not profile.department_id:
             return qs.none()
@@ -498,35 +503,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission = serializer.save(**kwargs)
 
         elif profile.role == Role.TRAVELLER:
-            from .travel_forms import (
-                assert_may_create_secretary_travel_form,
-                is_travel_form_code,
-                normalize_form_type_code,
-                requires_approval_letter,
-                TRAVELLER_SECRETARY_FORM_CODES,
+            raise PermissionDenied(
+                "Public servants cannot create submissions. "
+                "Ask your ministry HR manager to lodge Secretary approval travel requests (Forms 4.4–4.6)."
             )
-
-            form_code = normalize_form_type_code(self.request.data.get("form_type_code"))
-            if not is_travel_form_code(form_code):
-                raise PermissionDenied(
-                    "Travellers may only create PSC travel forms 4.4, 4.5, and 4.6."
-                )
-            assert_may_create_secretary_travel_form(profile, form_code)
-            endorsers = self.request.data.get("travel_endorsers") or {}
-            kwargs = {
-                "current_stage": WorkflowStage.DRAFT,
-                "is_internal": False,
-                "form_type_code": form_code,
-                "secretary_only": True,
-                "requires_travel_letter": requires_approval_letter(form_code),
-                "travel_endorsers": endorsers if isinstance(endorsers, dict) else {},
-                "routed_unit": RoutedUnit.ODU,
-            }
-            if profile.ministry_id:
-                kwargs["ministry_id"] = profile.ministry_id
-            if profile.department_id:
-                kwargs["department_id"] = profile.department_id
-            submission = serializer.save(**kwargs)
 
         elif profile.role == Role.HEAD_OF_AGENCY:
             from .travel_forms import (
@@ -633,14 +613,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .models import AuditLog as _AL
         profile = _profile(self.request.user)
         submission = self.get_object()
-        if profile.role == Role.TRAVELLER and submission.created_by_id != self.request.user.id:
-            raise PermissionDenied("You can only edit your own travel requests.")
-        if profile.role == Role.TRAVELLER and submission.current_stage not in {
-            WorkflowStage.DRAFT,
-            WorkflowStage.RETURNED_FOR_CLARIFICATION,
-        }:
-            raise PermissionDenied("Travel requests can only be edited while in draft or returned for clarification.")
-        if profile.role not in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.TRAVELLER}:
+        if profile.role == Role.TRAVELLER:
+            raise PermissionDenied(
+                "Public servants have read-only access. Contact ministry HR to update a submission."
+            )
+        if profile.role not in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
             raise PermissionDenied("Only PSC staff or Ministry users can edit submissions.")
         submission = serializer.save()
         if submission.secretary_only:
