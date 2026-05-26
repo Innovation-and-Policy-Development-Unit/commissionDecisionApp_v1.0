@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
+import { normalizeListPayload } from '../../utils/listPayload'
 
 const STATUS_META = {
   draft: {
@@ -81,7 +82,7 @@ export default function MinutesIndex() {
     setError('')
     try {
       const { data } = await api.get('/minutes/')
-      setMinutes(Array.isArray(data) ? data : data.results || [])
+      setMinutes(normalizeListPayload(data))
     } catch (err) {
       setError(err.response?.data?.detail || t('secretariat.minutes_load_failed'))
       setMinutes([])

@@ -34,8 +34,9 @@ export default function CommissionSittings() {
   })
 
   const filteredMeetings = useMemo(() => {
+    const list = Array.isArray(meetings) ? meetings : []
     const s = q.trim().toLowerCase()
-    return meetings.filter(m => {
+    return list.filter(m => {
       if (statusFilter && m.status !== statusFilter) return false
       if (typeFilter && m.type !== typeFilter) return false
       if (s && !m.reference_number.toLowerCase().includes(s) && !m.title.toLowerCase().includes(s) && !m.venue.toLowerCase().includes(s)) return false

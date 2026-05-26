@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../api/client'
+import { normalizeListPayload, normalizeFieldPayload } from '../utils/listPayload'
 
 export const STAFF_CHAT_SUGGESTIONS = [
   'What is the status of case PSC-2026-00042?',
@@ -24,7 +25,7 @@ export function useStaffChat({ enabled = true } = {}) {
     setLoadingSessions(true)
     try {
       const res = await api.get('/staff-chat/sessions/')
-      setSessions(res.data.results ?? res.data ?? [])
+      setSessions(normalizeListPayload(res.data))
     } catch {
       setSessions([])
     } finally {
@@ -40,7 +41,7 @@ export function useStaffChat({ enabled = true } = {}) {
     }
     try {
       const res = await api.get(`/staff-chat/sessions/${id}/`)
-      setMessages(res.data.messages ?? [])
+      setMessages(normalizeFieldPayload(res.data, 'messages'))
       setActiveId(id)
     } catch {
       setMessages([])
@@ -85,7 +86,7 @@ export function useStaffChat({ enabled = true } = {}) {
         setActiveId(data.session_id)
         loadSessions()
       }
-      setMessages(data.messages ?? [])
+      setMessages(normalizeFieldPayload(data, 'messages'))
     } catch (err) {
       const detail = err.response?.data?.detail
       const errText =

@@ -17,6 +17,7 @@ import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
 import api from '../../api/client'
+import { normalizeListPayload, normalizeFieldPayload } from '../../utils/listPayload'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
@@ -126,7 +127,7 @@ export default function Agenda() {
     setLoading(true)
     try {
       const r = await api.get('/meetings/')
-      const data = r.data.results ?? r.data
+      const data = normalizeListPayload(r.data)
       setMeetings(data)
       if (data.length > 0 && !selectedId) setSelectedId(String(data[0].id))
     } catch { /* handled below */ }
@@ -137,7 +138,7 @@ export default function Agenda() {
     if (!id) return
     try {
       const r = await api.get(`/agenda-items/?meeting=${id}`)
-      setItems(r.data.results ?? r.data)
+      setItems(normalizeListPayload(r.data))
     } catch { toast.error('Failed to load agenda items.') }
   }
 
@@ -153,7 +154,7 @@ export default function Agenda() {
     setLoadingSubs(true)
     try {
       const r = await api.get('/submissions/?page_size=500')
-      const all = r.data.results ?? r.data
+      const all = normalizeListPayload(r.data)
       // Eligible: forwarded_to_commission, commission_sitting, matters_arising, or tabled
       const eligible = all.filter(s => [
         'forwarded_to_commission', 'commission_sitting',

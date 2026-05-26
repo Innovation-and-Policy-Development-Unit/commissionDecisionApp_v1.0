@@ -9,6 +9,7 @@ import clsx from 'clsx'
 import PageHeader from '../../components/shared/PageHeader'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
+import { normalizeListPayload, normalizeFieldPayload } from '../../utils/listPayload'
 
 const INTAKE_AGENDA_STATUSES = new Set(['chairman_approved', 'circulated'])
 
@@ -182,7 +183,7 @@ export default function MinuteIntake() {
     setLoadingMeetings(true)
     try {
       const { data } = await api.get('/meetings/')
-      const list = data.results ?? data
+      const list = normalizeListPayload(data)
       setMeetings(list)
       if (!meetingId && list.length > 0) {
         const first = list.find(m => INTAKE_AGENDA_STATUSES.has(m.agenda_status))
@@ -202,7 +203,7 @@ export default function MinuteIntake() {
     try {
       const { data } = await api.get(`/meetings/${id}/minute-intake/`)
       setPayload(data)
-      setItems(data.items || [])
+      setItems(normalizeFieldPayload(data, 'items'))
       const exp = {}
       for (const it of data.items || []) {
         exp[it.agenda_item_id] = true
@@ -239,7 +240,7 @@ export default function MinuteIntake() {
       })),
     })
     setPayload(data)
-    setItems(data.items || [])
+    setItems(normalizeFieldPayload(data, 'items'))
     return data
   }, [activeMeetingId, items])
 

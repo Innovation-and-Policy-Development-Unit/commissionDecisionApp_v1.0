@@ -16,6 +16,7 @@ import {
 } from '@fluentui/react-icons'
 import clsx from 'clsx'
 import api from '../../api/client'
+import { normalizeFieldPayload } from '../../utils/listPayload'
 import { stageLabel } from '../../constants/stages'
 import VerificationBadge from './VerificationBadge'
 
@@ -70,7 +71,7 @@ export default function VisualAuditTrail({
     api
       .get(`/submissions/${submissionId}/visual-audit-trail/`)
       .then((res) => {
-        if (!cancelled) setEntries(res.data.entries || [])
+        if (!cancelled) setEntries(normalizeFieldPayload(res.data, 'entries'))
       })
       .catch(() => {
         if (!cancelled) {

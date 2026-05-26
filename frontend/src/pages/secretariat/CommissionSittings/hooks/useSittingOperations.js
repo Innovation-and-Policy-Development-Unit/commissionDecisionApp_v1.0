@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import api from '../../../../api/client'
+import { normalizeListPayload } from '../../../../utils/listPayload'
 import { startOfDay, endOfDay, isWithinInterval, parseISO } from 'date-fns'
 
 export function useSittingOperations() {
@@ -12,8 +13,9 @@ export function useSittingOperations() {
     setError('')
     try {
       const res = await api.get('/meetings/')
-      setMeetings(res.data.results ?? res.data)
+      setMeetings(normalizeListPayload(res.data))
     } catch (err) {
+      setMeetings([])
       setError('Failed to load commission sittings.')
     } finally {
       setLoading(false)

@@ -17,14 +17,9 @@ import { isComplianceRole } from '../../constants/compliance'
 import BulkOperationsBar from '../../components/shared/BulkOperationsBar'
 import { useToast } from '../../context/ToastContext'
 import { QualityScoreBadge } from '../../components/submissions/SubmissionQualityScore'
+import { normalizeListPayload } from '../../utils/listPayload'
 
 const PER_PAGE = 15
-
-function normalizeSubmissionsPayload(data) {
-  if (Array.isArray(data)) return data
-  if (data && Array.isArray(data.results)) return data.results
-  return []
-}
 
 // Map workflow stages to Badge variants
 const STAGE_VARIANT = {
@@ -103,7 +98,7 @@ export default function SubmissionLog() {
     setLoading(true)
     setLoadError('')
     return api.get('/submissions/')
-      .then(res => setRows(normalizeSubmissionsPayload(res.data)))
+      .then(res => setRows(normalizeListPayload(res.data)))
       .catch(err => {
         const d = err.response?.data
         const msg = typeof d?.detail === 'string' ? d.detail : err.message || t('submission.load_error_default')

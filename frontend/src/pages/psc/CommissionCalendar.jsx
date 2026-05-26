@@ -8,6 +8,7 @@ import {
 } from '@fluentui/react-icons'
 import { useNavigate } from 'react-router-dom'
 import api from '../../api/client'
+import { normalizeFieldPayload } from '../../utils/listPayload'
 import PageHeader from '../../components/shared/PageHeader'
 
 const useStyles = makeStyles({
@@ -70,7 +71,7 @@ export default function CommissionCalendar() {
   const loadEvents = useCallback(async () => {
     try {
       const res = await api.get('/calendar/events/')
-      setEvents(res.data.events || [])
+      setEvents(normalizeFieldPayload(res.data, 'events'))
     } catch (e) {
       console.error('Calendar error', e)
     } finally {

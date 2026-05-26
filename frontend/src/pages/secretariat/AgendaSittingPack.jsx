@@ -17,6 +17,7 @@ import {
   TabletRegular,
 } from '@fluentui/react-icons'
 import api from '../../api/client'
+import { normalizeListPayload } from '../../utils/listPayload'
 import { useAuth } from '../../context/AuthContext'
 import { buildSittingPackRows } from '../../utils/agendaGrouping'
 import DigitalSealOverlay from '../../components/sitting-pack/DigitalSealOverlay'
@@ -142,7 +143,7 @@ export default function AgendaSittingPack() {
         api.get(`/agenda-items/?meeting=${meetingId}`),
       ])
       setMeeting(mRes.data)
-      const list = iRes.data.results ?? iRes.data
+      const list = normalizeListPayload(iRes.data)
       setItems(list)
       const firstItem = buildSittingPackRows(list).find((r) => r.type === 'item')
       if (firstItem) setSelectedItemId(firstItem.id)
@@ -198,7 +199,7 @@ export default function AgendaSittingPack() {
     if (!meetingId || !hasPendingBlurbs) return undefined
     const t = setInterval(() => {
       api.get(`/agenda-items/?meeting=${meetingId}`).then((r) => {
-        setItems(r.data.results ?? r.data)
+        setItems(normalizeListPayload(r.data))
       }).catch(() => {})
     }, 5000)
     return () => clearInterval(t)
