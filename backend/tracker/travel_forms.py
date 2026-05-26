@@ -4,9 +4,9 @@ PSC Forms 4.4 / 4.5 / 4.6 — travel workflows.
 Workflow (v1.0 behaviour aligned with current policy):
 - 4.4: Department Director / Ministry DG only. No ministry endorsements captured in SCDMS.
   Routed to ODU Manager review, then Secretary approval.
-- 4.5 / 4.6: Similar routing (ODU Manager → Secretary). If created by department staff,
-  Director then DG endorsement is required before submit. (DG can nominate Officer-in-Charge
-  or Acting DG depending on leave duration; still satisfies the DG sign-off slot.)
+- 4.5 / 4.6: ODU Manager → Secretary. Department staff: Director → DG before submit.
+  Ministry CSU staff (ministry HR without a department): DG only before submit.
+  DG may delegate to Officer-in-Charge (< 5 days leave) or Acting DG (≥ 5 days).
 """
 
 from __future__ import annotations
@@ -108,6 +108,60 @@ def is_ministry_dg_submission(submission) -> bool:
     return not (prof.department_id or getattr(submission, "department_id", None))
 
 
+def _submission_department_id(submission) -> int | None:
+    if not submission:
+        return None
+    return getattr(submission, "department_id", None) or None
+
+
+def is_ministry_csu_initiator(submission) -> bool:
+    """
+    Ministry central / CSU staff: ministry_hr with no department on profile or submission.
+    They need DG endorsement only (not the department director).
+    """
+    prof = _creator_profile(submission)
+    if not prof or prof.role != Role.MINISTRY_HR:
+        return False
+    if prof.department_id or _submission_department_id(submission):
+        return False
+    return True
+
+
+def needs_department_director_endorsement(submission) -> bool:
+    """Department staff path for 4.5 / 4.6: Director then DG."""
+    prof = _creator_profile(submission)
+    if not prof:
+        return True
+    if prof.role == Role.HEAD_OF_AGENCY:
+        return False
+    if is_ministry_csu_initiator(submission):
+        return False
+    return True
+
+
+def _endorsement_sections_45_46(submission) -> list[dict]:
+    prof = _creator_profile(submission)
+    if prof and prof.role == Role.HEAD_OF_AGENCY:
+        return []
+    sections: list[dict] = []
+    if needs_department_director_endorsement(submission):
+        sections.append(
+            {
+                "key": "director_signature",
+                "label": "Department Director",
+                "signer": SIGNER_DIRECTOR,
+            }
+        )
+    sections.append(
+        {
+            "key": "dg_signature",
+            "label": "Director-General (or Officer-in-Charge / Acting DG)",
+            "signer": SIGNER_DG,
+        }
+    )
+    return sections
+
+
 def assert_may_create_secretary_travel_form(profile, form_code: str | None) -> None:
     code = normalize_form_type_code(form_code)
     if not code or code not in TRAVEL_FORM_CODES:
@@ -135,23 +189,8 @@ def endorsement_sections(form_type_code: str, submission=None) -> list[dict]:
     if code == TRAVEL_FORM_44:
         # 4.4 goes directly to ODU Manager review; no ministry endorsement slots.
         return []
-    if code == TRAVEL_FORM_45:
-        # Staff chain (if not created by Head of Agency): Director → DG.
-        creator = _creator_profile(submission) if submission else None
-        if creator and creator.role == Role.HEAD_OF_AGENCY:
-            return []
-        return [
-            {"key": "director_signature", "label": "Director", "signer": SIGNER_DIRECTOR},
-            {"key": "dg_signature", "label": "Director-General", "signer": SIGNER_DG},
-        ]
-    if code == TRAVEL_FORM_46:
-        creator = _creator_profile(submission) if submission else None
-        if creator and creator.role == Role.HEAD_OF_AGENCY:
-            return []
-        return [
-            {"key": "director_signature", "label": "Director", "signer": SIGNER_DIRECTOR},
-            {"key": "dg_signature", "label": "Director-General", "signer": SIGNER_DG},
-        ]
+    if code in {TRAVEL_FORM_45, TRAVEL_FORM_46}:
+        return _endorsement_sections_45_46(submission)
     return []
 
 
@@ -205,6 +244,9 @@ def user_may_sign_section(
     except Exception:
         return False
 
+    if signer == SIGNER_DIRECTOR and role == Role.HEAD_OF_AGENCY:
+        if submission.department_id and prof.department_id == submission.department_id:
+            return True
     if signer == SIGNER_DIRECTOR and role == Role.DEPT_ADMIN:
         if submission.department_id and prof.department_id == submission.department_id:
             return True

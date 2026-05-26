@@ -309,7 +309,15 @@ Response sets `secretary_only: true`, `requires_travel_letter` (true for 4.5 and
 
 **Form 4.4** — domestic travel allowance: **only `head_of_agency`** (department director or ministry DG). Staff 4.4 is **not** accepted via API. **No ministry endorser slots are captured in SCDMS for 4.4**; travel requests route **Submitted → ODU Manager review → Secretary approval**.
 
-**Forms 4.5 / 4.6** — overseas travel: route **Submitted → ODU Manager review → Secretary approval**. If created by department staff, Director then DG endorsement is required before submit. If the DG is on leave, the DG may nominate an **Officer-in-Charge** (< 5 days) or an **Acting DG** (≥ 5 days) to sign the DG slot.
+**Forms 4.5 / 4.6** — overseas travel: route **Submitted → ODU Manager review → Secretary approval**.
+
+| Initiator | Endorsements before submit (in SCDMS) | Then |
+|-----------|----------------------------------------|------|
+| Department staff (`traveller`, `dept_admin`, or `ministry_hr` with a department) | Department Director → DG | ODU Manager → Secretary |
+| Ministry CSU staff (`ministry_hr` with no department on profile or submission) | DG only | ODU Manager → Secretary |
+| Director-General / department director (`head_of_agency`) | None | ODU Manager → Secretary |
+
+If the DG is on leave, an **Officer-in-Charge** (< 5 days) or **Acting DG** (≥ 5 days) may sign the DG slot.
 
 #### Workflow transition
 
@@ -324,7 +332,7 @@ POST /api/submissions/{id}/transition/
 
 Allowed `new_stage` values depend on **current stage**, **role**, `is_internal`, and `secretary_only`. See §8.
 
-Travel submissions in `draft` → `submitted` require any **required endorsements** signed via `/api/submissions/{id}/sign-travel-section/` (4.4 has none; 4.5/4.6 may require Director and DG depending on who created the request).
+Travel submissions in `draft` → `submitted` require any **required endorsements** signed via `/api/submissions/{id}/sign-travel-section/` (4.4: none; 4.5/4.6: DG only for ministry CSU initiators, Director + DG for department staff).
 
 #### Key read-only fields on detail
 

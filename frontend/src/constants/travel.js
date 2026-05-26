@@ -33,27 +33,45 @@ export function canCreateForm44(user) {
   return user?.role === 'head_of_agency'
 }
 
-export const ENDORSER_SLOTS_45_46 = [
-  { key: 'director', label: 'Director' },
-  { key: 'dg', label: 'Director-General (or Officer-in-Charge / Acting DG)' },
+const DG_ENDORSER_SLOT = {
+  key: 'dg',
+  label: 'Director-General (or Officer-in-Charge / Acting DG)',
+}
+
+const DEPT_ENDORSER_SLOTS = [
+  { key: 'director', label: 'Department Director' },
+  DG_ENDORSER_SLOT,
 ]
 
+/**
+ * Ministry CSU / central ministry HR (no department on profile or form).
+ * 4.5/4.6: DG only → ODU Manager → Secretary.
+ */
+export function isMinistryCsuInitiator(user, departmentIdOnForm = '') {
+  if (!user || user.role === 'head_of_agency') return false
+  if (user.role !== 'ministry_hr') return false
+  const deptId = departmentIdOnForm || user.department_id
+  return !deptId
+}
+
+/** Department staff (traveller, dept admin, or ministry HR tied to a department). */
+export function isDepartmentStaffInitiator(user, departmentIdOnForm = '') {
+  if (!user || user.role === 'head_of_agency') return false
+  if (isMinistryCsuInitiator(user, departmentIdOnForm)) return false
+  if (user.role === 'traveller' || user.role === 'dept_admin') return true
+  if (user.role === 'ministry_hr' && (user.department_id || departmentIdOnForm)) return true
+  return false
+}
+
 /** Endorser fields shown when creating a secretary travel request. */
-export function endorserSlotsForTravelForm(formTypeCode, user) {
+export function endorserSlotsForTravelForm(formTypeCode, user, departmentIdOnForm = '') {
   const code = normalizeTravelFormCode(formTypeCode)
-  if (isForm44Code(code)) {
-    return []
-  }
-  if (code === 'PSC 4.5') {
-    if (user?.role === 'head_of_agency') return []
-    return ENDORSER_SLOTS_45_46
-  }
-  if (code === 'PSC 4.6') {
-    if (user?.role === 'head_of_agency') return []
-    return ENDORSER_SLOTS_45_46
-  }
+  if (isForm44Code(code)) return []
+  if (!TRAVELLER_SECRETARY_FORM_CODES.includes(code)) return []
   if (user?.role === 'head_of_agency') return []
-  return ENDORSER_SLOTS_45_46
+  if (isMinistryCsuInitiator(user, departmentIdOnForm)) return [DG_ENDORSER_SLOT]
+  if (isDepartmentStaffInitiator(user, departmentIdOnForm)) return DEPT_ENDORSER_SLOTS
+  return DEPT_ENDORSER_SLOTS
 }
 
 export function isTravellerRole(user) {

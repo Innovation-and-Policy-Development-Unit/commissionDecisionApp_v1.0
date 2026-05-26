@@ -9,6 +9,7 @@ import { isComplianceRole } from '../../constants/compliance'
 import {
   endorserSlotsForTravelForm,
   isForm44Code,
+  isMinistryCsuInitiator,
   isTravelFormCode,
   TRAVEL_CATEGORY_CODE,
   FORM_44_CODE,
@@ -265,8 +266,9 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     }
   }
 
-  const endorserSlots = endorserSlotsForTravelForm(form.form_type_code, user)
+  const endorserSlots = endorserSlotsForTravelForm(form.form_type_code, user, form.department)
   const isForm44 = isForm44Code(form.form_type_code)
+  const ministryCsuPath = isMinistryCsuInitiator(user, form.department)
 
   return (
     <div>
@@ -284,9 +286,13 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
             After submission, ODU Manager reviews, then the Secretary approves.
             Staff domestic travel is handled within your ministry and is not lodged here.
           </>
+        ) : ministryCsuPath ? (
+          <>
+            {' '}Ministry CSU requests need DG endorsement, then ODU Manager review and Secretary approval.
+          </>
         ) : (
           <>
-            {' '}If required, collect Director and DG endorsements, then submit. ODU Manager reviews before Secretary approval.
+            {' '}Department requests need Director and DG endorsements, then ODU Manager review and Secretary approval.
           </>
         )}
       </div>
@@ -305,13 +311,15 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
           <label className="block text-sm font-medium mb-1">Title / subject <span className="text-red-500">*</span></label>
           <input className="input" required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Overseas training — Port Vila workshop" />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Department</label>
-          <select className="input" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
-            <option value="">— Select department —</option>
-            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-        </div>
+        {!ministryCsuPath && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Department</label>
+            <select className="input" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
+              <option value="">— Select department —</option>
+              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </div>
+        )}
         {endorserSlots.length > 0 && (
           <div className="rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/20 p-4 space-y-3">
             <p className="text-sm font-medium text-sky-900 dark:text-sky-100">Ministry endorsers</p>
