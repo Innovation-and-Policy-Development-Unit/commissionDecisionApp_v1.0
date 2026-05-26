@@ -6,7 +6,13 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import ComplianceCmsGuidance from './ComplianceCmsGuidance'
 import { isComplianceRole } from '../../constants/compliance'
-import { ENDORSER_SLOTS, isTravelFormCode, TRAVEL_CATEGORY_CODE } from '../../constants/travel'
+import {
+  endorserSlotsForTravelForm,
+  isForm44Code,
+  isTravelFormCode,
+  TRAVEL_CATEGORY_CODE,
+  FORM_44_CODE,
+} from '../../constants/travel'
 import { filterCommissionFormTypes, filterSecretaryFormTypes } from '../../constants/submissionCreate'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -205,7 +211,7 @@ function InternalDocumentUpload({ files, onChange }) {
 // Travel submission form (Traveller — PSC 4.4 / 4.5 / 4.6)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories, ministries, departments }) {
+function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories, ministries, departments, user }) {
   const navigate = useNavigate()
   const toast = useToast()
   const [form, setForm] = useState({
@@ -256,19 +262,30 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     }
   }
 
-  const needsMinister = form.form_type_code === 'PSC 4.6'
+  const endorserSlots = endorserSlotsForTravelForm(form.form_type_code, user)
+  const isForm44 = isForm44Code(form.form_type_code)
 
   return (
     <div>
       {!modal && (
         <PageHeader
           title="Secretary approval"
-          subtitle="PSC Forms 4.4–4.6 — Secretary only, not the Commission."
+          subtitle="Lodged to the PSC Secretary — not the Commission."
         />
       )}
       <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100">
-        <strong>Secretary approval only.</strong> Collect ministry endorsements on the form, then submit to PSC.
-        This matter is <strong>not</strong> listed for a Commission sitting.
+        <strong>Secretary approval only.</strong>
+        {isForm44 ? (
+          <>
+            {' '}<strong>Form {FORM_44_CODE}</strong> is for department directors and ministry Director-General only.
+            After you sign, {user?.department_id ? 'the DG endorses, then' : ''} the Secretary approves.
+            Staff domestic travel is handled within your ministry and is not lodged here.
+          </>
+        ) : (
+          <>
+            {' '}Collect ministry endorsements on the form, then submit to PSC. Not listed for a Commission sitting.
+          </>
+        )}
       </div>
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -292,23 +309,27 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
             {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </div>
-        <div className="rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/20 p-4 space-y-3">
-          <p className="text-sm font-medium text-sky-900 dark:text-sky-100">Ministry endorsers</p>
-          <p className="text-xs text-sky-800/80">Nominate who will digitally sign each section (they must have a profile signature uploaded).</p>
-          {ENDORSER_SLOTS.filter(s => s.key !== 'minister' || needsMinister || form.form_type_code === 'PSC 4.5').map(slot => (
-            <div key={slot.key}>
-              <label className="block text-xs font-medium mb-1">{slot.label}</label>
-              <input
-                className="input text-sm"
-                type="number"
-                min="1"
-                placeholder="User ID of endorser"
-                value={form[slot.key] || ''}
-                onChange={e => setForm(f => ({ ...f, [slot.key]: e.target.value }))}
-              />
-            </div>
-          ))}
-        </div>
+        {endorserSlots.length > 0 && (
+          <div className="rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/20 p-4 space-y-3">
+            <p className="text-sm font-medium text-sky-900 dark:text-sky-100">Ministry endorsers</p>
+            <p className="text-xs text-sky-800/80">
+              Nominate who will digitally sign before the Secretary (profile signature required).
+            </p>
+            {endorserSlots.map(slot => (
+              <div key={slot.key}>
+                <label className="block text-xs font-medium mb-1">{slot.label}</label>
+                <input
+                  className="input text-sm"
+                  type="number"
+                  min="1"
+                  placeholder="User ID of endorser"
+                  value={form[slot.key] || ''}
+                  onChange={e => setForm(f => ({ ...f, [slot.key]: e.target.value }))}
+                />
+              </div>
+            ))}
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium mb-1">Notes</label>
           <textarea className="input" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
@@ -410,7 +431,7 @@ function CommissionSubmissionForm({
     <div>
       <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-100">
         This matter goes through <strong>PSC unit assessment</strong> and may be listed for a <strong>Commission sitting</strong>.
-        For travel forms (4.4–4.6), use <strong>Secretary approval</strong> instead.
+        For overseas travel (Forms 4.5–4.6) or director domestic travel (Form 4.4), use <strong>Secretary approval</strong>.
       </div>
 
       <DeadlineBanner />
@@ -703,7 +724,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
 
   const isInternalUser = user && INTERNAL_ROLES.includes(user.role)
   const isComplianceUser = user && isComplianceRole(user.role)
-  const isMinistryUser = user && ['ministry_hr', 'dept_admin'].includes(user.role)
+  const isMinistryUser = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
 
   const internalFormTypesResolved = formTypes.filter(ft => {
     const cat = categories.find(c => String(c.id) === String(ft.form_category))
@@ -711,8 +732,8 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   })
 
   const allowed =
-    user && ['psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'traveller',
-              ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager'].includes(user.role)
+    user && ['psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
+              'traveller', ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager'].includes(user.role)
 
   useEffect(() => {
     Promise.all([
@@ -777,12 +798,20 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
 
   const effectiveMode = createMode || (user?.role === 'traveller' ? 'secretary' : 'commission')
   const commissionFormTypes = filterCommissionFormTypes(formTypes, categories)
-  const secretaryFormTypes = filterSecretaryFormTypes(formTypes, categories)
+  const secretaryFormTypes = filterSecretaryFormTypes(formTypes, categories, user)
   const travelFormTypes = secretaryFormTypes.length
     ? secretaryFormTypes
-    : formTypes.filter(ft => isTravelFormCode(ft.code))
+    : formTypes.filter(ft => isTravelFormCode(ft.code) && !isForm44Code(ft.code))
 
   if (effectiveMode === 'secretary') {
+    if (travelFormTypes.length === 0) {
+      const msg = modal
+        ? 'No secretary travel forms are available for your role. Form 4.4 is for directors and DG only; staff use ministry processes.'
+        : null
+      return modal ? <p className="text-sm text-slate-600 py-4">{msg}</p> : (
+        <div><PageHeader title="Secretary approval" subtitle={msg} /></div>
+      )
+    }
     return (
       <TravelSubmissionForm
         modal={modal}
@@ -792,6 +821,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
         categories={categories.filter(c => c.code === TRAVEL_CATEGORY_CODE)}
         ministries={ministries}
         departments={departments}
+        user={user}
       />
     )
   }

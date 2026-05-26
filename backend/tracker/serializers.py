@@ -911,8 +911,13 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
         if role in COMPLIANCE_SUBMITTER_ROLES:
             raise PermissionDenied(CMS_ORIGIN_MESSAGE)
         elif form_type_code.startswith("COMP-"):
-            from django.core.exceptions import PermissionDenied
             raise PermissionDenied("Only Compliance unit staff may create compliance submission types.")
+        from .travel_forms import assert_may_create_secretary_travel_form, normalize_form_type_code
+
+        code = normalize_form_type_code(form_type_code)
+        if code:
+            attrs["form_type_code"] = code
+            assert_may_create_secretary_travel_form(profile, code)
         return attrs
 
     def create(self, validated_data):

@@ -1,12 +1,19 @@
 """
 PSC Forms 4.4 / 4.5 / 4.6 — travel & overseas mission workflows.
 
-These are secretary-only (never Commission). Created by the traveller; ministry
-endorsements are captured as in-system section signatures before submit.
-Forms 4.5 and 4.6 require an official approval letter after Secretary sign-off.
+Form 4.4 (domestic travel allowance) is secretary-only and only for department
+directors and ministry Director-General (head_of_agency). Staff-level 4.4 is
+approved within the ministry and is not lodged in SCDMS.
+
+Forms 4.5 and 4.6 are for overseas travel; ministry staff may lodge them here
+with in-system endorsements before Secretary sign-off.
 """
 
 from __future__ import annotations
+
+import re
+
+from django.core.exceptions import PermissionDenied
 
 from tracker.models import Role
 
@@ -17,7 +24,19 @@ TRAVEL_FORM_45 = "PSC 4.5"
 TRAVEL_FORM_46 = "PSC 4.6"
 
 TRAVEL_FORM_CODES = frozenset({TRAVEL_FORM_44, TRAVEL_FORM_45, TRAVEL_FORM_46})
+TRAVELLER_SECRETARY_FORM_CODES = frozenset({TRAVEL_FORM_45, TRAVEL_FORM_46})
 TRAVEL_LETTER_FORM_CODES = frozenset({TRAVEL_FORM_45, TRAVEL_FORM_46})
+
+FORM_44_CREATOR_ROLES = frozenset({Role.HEAD_OF_AGENCY})
+SECRETARY_TRAVEL_CREATOR_ROLES = frozenset({
+    Role.TRAVELLER,
+    Role.MINISTRY_HR,
+    Role.DEPT_ADMIN,
+    Role.HEAD_OF_AGENCY,
+    Role.PSC_OFFICER,
+    Role.PSC_ADMIN,
+    Role.PSC_SECRETARY,
+})
 
 # Signer role hints used by the sign-section API
 SIGNER_CREATOR = "creator"
@@ -34,29 +53,115 @@ TRAVEL_FORM_TYPES = (
 )
 
 
+def normalize_form_type_code(code: str | None) -> str:
+    """Accept registry variants such as PSC4.4 vs PSC 4.4."""
+    if not code:
+        return ""
+    c = re.sub(r"\s+", " ", str(code).strip())
+    compact = c.upper().replace(" ", "")
+    if compact == "PSC4.4":
+        return TRAVEL_FORM_44
+    if compact == "PSC4.5":
+        return TRAVEL_FORM_45
+    if compact == "PSC4.6":
+        return TRAVEL_FORM_46
+    return c
+
+
 def is_travel_form_code(code: str | None) -> bool:
-    return bool(code and code in TRAVEL_FORM_CODES)
+    return normalize_form_type_code(code) in TRAVEL_FORM_CODES
+
+
+def is_form_44_code(code: str | None) -> bool:
+    return normalize_form_type_code(code) == TRAVEL_FORM_44
 
 
 def requires_approval_letter(code: str | None) -> bool:
-    return bool(code and code in TRAVEL_LETTER_FORM_CODES)
+    return normalize_form_type_code(code) in TRAVEL_LETTER_FORM_CODES
 
 
-def endorsement_sections(form_type_code: str) -> list[dict]:
+def can_create_form_44(profile) -> bool:
+    return profile.role in FORM_44_CREATOR_ROLES
+
+
+def _creator_profile(submission):
+    if not submission or not submission.created_by_id:
+        return None
+    try:
+        return submission.created_by.psc_profile
+    except Exception:
+        return None
+
+
+def is_dept_director_submission(submission) -> bool:
+    """Department director: head_of_agency with a department on profile or submission."""
+    prof = _creator_profile(submission)
+    if not prof or prof.role != Role.HEAD_OF_AGENCY:
+        return False
+    return bool(prof.department_id or getattr(submission, "department_id", None))
+
+
+def is_ministry_dg_submission(submission) -> bool:
+    """Ministry DG: head_of_agency without a department scope."""
+    prof = _creator_profile(submission)
+    if not prof or prof.role != Role.HEAD_OF_AGENCY:
+        return False
+    return not (prof.department_id or getattr(submission, "department_id", None))
+
+
+def assert_may_create_secretary_travel_form(profile, form_code: str | None) -> None:
+    code = normalize_form_type_code(form_code)
+    if not code or code not in TRAVEL_FORM_CODES:
+        return
+    if code == TRAVEL_FORM_44:
+        if profile.role in FORM_44_CREATOR_ROLES:
+            return
+        if profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY}:
+            return
+        raise PermissionDenied(
+            "PSC Form 4.4 is only for department directors and ministry Director-General. "
+            "Staff domestic travel is approved within your ministry and is not lodged here."
+        )
+    if code in TRAVELLER_SECRETARY_FORM_CODES:
+        if profile.role in SECRETARY_TRAVEL_CREATOR_ROLES:
+            return
+        raise PermissionDenied(
+            "You are not authorised to create this travel form."
+        )
+
+
+def endorsement_sections(form_type_code: str, submission=None) -> list[dict]:
     """Ordered endorsement slots that must be signed before submit to PSC."""
-    if form_type_code == TRAVEL_FORM_44:
+    code = normalize_form_type_code(form_type_code)
+    if code == TRAVEL_FORM_44:
+        if submission and is_dept_director_submission(submission):
+            return [
+                {
+                    "key": "claimant_signature",
+                    "label": "Department director (claimant)",
+                    "signer": SIGNER_CREATOR,
+                },
+                {
+                    "key": "dg_signature",
+                    "label": "Director-General",
+                    "signer": SIGNER_DG,
+                },
+            ]
         return [
-            {"key": "claimant_signature", "label": "Travelling staff member", "signer": SIGNER_CREATOR},
-            {"key": "hod_signature", "label": "Head of Department", "signer": SIGNER_HOD},
+            {
+                "key": "claimant_signature",
+                "label": "Director-General (claimant)",
+                "signer": SIGNER_CREATOR,
+            },
         ]
-    if form_type_code == TRAVEL_FORM_45:
+    if code == TRAVEL_FORM_45:
         return [
             {"key": "applicant_signature", "label": "Applicant", "signer": SIGNER_CREATOR},
             {"key": "director_signature", "label": "Director", "signer": SIGNER_DIRECTOR},
             {"key": "dg_signature", "label": "Director-General", "signer": SIGNER_DG},
             {"key": "minister_signature", "label": "Minister", "signer": SIGNER_MINISTER, "optional": True},
         ]
-    if form_type_code == TRAVEL_FORM_46:
+    if code == TRAVEL_FORM_46:
         return [
             {"key": "mission_leader_signature", "label": "Mission leader", "signer": SIGNER_CREATOR},
             {"key": "director_signature", "label": "Director", "signer": SIGNER_DIRECTOR},
@@ -67,14 +172,17 @@ def endorsement_sections(form_type_code: str) -> list[dict]:
 
 
 def secretary_decision_section(form_type_code: str) -> dict | None:
-    if form_type_code in TRAVEL_LETTER_FORM_CODES or form_type_code == TRAVEL_FORM_44:
+    code = normalize_form_type_code(form_type_code)
+    if code in TRAVEL_LETTER_FORM_CODES or code == TRAVEL_FORM_44:
         return {"key": "secretary_decision", "label": "PSC Secretary", "signer": SIGNER_SECRETARY}
     return None
 
 
-def missing_endorsements(form_type_code: str, signed_keys: set[str]) -> list[str]:
+def missing_endorsements(
+    form_type_code: str, signed_keys: set[str], submission=None
+) -> list[str]:
     missing = []
-    for section in endorsement_sections(form_type_code):
+    for section in endorsement_sections(form_type_code, submission):
         if section.get("optional"):
             continue
         if section["key"] not in signed_keys:

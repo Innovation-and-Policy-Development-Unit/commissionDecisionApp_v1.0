@@ -472,13 +472,20 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         profile = _profile(self.request.user)
 
         if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
-            from .travel_forms import is_travel_form_code, requires_approval_letter
+            from .travel_forms import (
+                assert_may_create_secretary_travel_form,
+                is_travel_form_code,
+                normalize_form_type_code,
+                requires_approval_letter,
+            )
 
-            form_code = self.request.data.get("form_type_code") or ""
+            form_code = normalize_form_type_code(self.request.data.get("form_type_code"))
             kwargs = {"current_stage": WorkflowStage.DRAFT, "is_internal": False}
             if is_travel_form_code(form_code):
+                assert_may_create_secretary_travel_form(profile, form_code)
                 endorsers = self.request.data.get("travel_endorsers") or {}
                 kwargs.update(
+                    form_type_code=form_code,
                     secretary_only=True,
                     requires_travel_letter=requires_approval_letter(form_code),
                     travel_endorsers=endorsers if isinstance(endorsers, dict) else {},
@@ -490,17 +497,26 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission = serializer.save(**kwargs)
 
         elif profile.role == Role.TRAVELLER:
-            from .travel_forms import is_travel_form_code, requires_approval_letter
+            from .travel_forms import (
+                assert_may_create_secretary_travel_form,
+                is_travel_form_code,
+                normalize_form_type_code,
+                requires_approval_letter,
+                TRAVELLER_SECRETARY_FORM_CODES,
+            )
 
-            form_code = self.request.data.get("form_type_code") or ""
-            if not is_travel_form_code(form_code):
+            form_code = normalize_form_type_code(self.request.data.get("form_type_code"))
+            if form_code not in TRAVELLER_SECRETARY_FORM_CODES:
                 raise PermissionDenied(
-                    "Travellers may only create PSC Forms 4.4, 4.5, and 4.6."
+                    "Travellers may only create PSC Forms 4.5 and 4.6 (overseas travel). "
+                    "Form 4.4 is for directors and Director-General only."
                 )
+            assert_may_create_secretary_travel_form(profile, form_code)
             endorsers = self.request.data.get("travel_endorsers") or {}
             kwargs = {
                 "current_stage": WorkflowStage.DRAFT,
                 "is_internal": False,
+                "form_type_code": form_code,
                 "secretary_only": True,
                 "requires_travel_letter": requires_approval_letter(form_code),
                 "travel_endorsers": endorsers if isinstance(endorsers, dict) else {},
@@ -509,6 +525,33 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 kwargs["ministry_id"] = profile.ministry_id
             if profile.department_id:
                 kwargs["department_id"] = profile.department_id
+            submission = serializer.save(**kwargs)
+
+        elif profile.role == Role.HEAD_OF_AGENCY:
+            from .travel_forms import (
+                assert_may_create_secretary_travel_form,
+                is_travel_form_code,
+                normalize_form_type_code,
+                requires_approval_letter,
+            )
+
+            form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
+            kwargs = {"current_stage": WorkflowStage.DRAFT, "is_internal": False}
+            if is_travel_form_code(form_code):
+                assert_may_create_secretary_travel_form(profile, form_code)
+                endorsers = self.request.data.get("travel_endorsers") or {}
+                kwargs.update(
+                    form_type_code=form_code,
+                    secretary_only=True,
+                    requires_travel_letter=requires_approval_letter(form_code),
+                    travel_endorsers=endorsers if isinstance(endorsers, dict) else {},
+                )
+            if profile.ministry_id:
+                kwargs["ministry_id"] = profile.ministry_id
+            if profile.department_id:
+                kwargs["department_id"] = profile.department_id
+            elif self.request.data.get("department"):
+                kwargs["department_id"] = self.request.data.get("department")
             submission = serializer.save(**kwargs)
 
         elif profile.role == Role.CSU_MANAGER:
@@ -542,13 +585,20 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(CMS_ORIGIN_MESSAGE)
 
         elif profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY}:
-            from .travel_forms import is_travel_form_code, requires_approval_letter
+            from .travel_forms import (
+                assert_may_create_secretary_travel_form,
+                is_travel_form_code,
+                normalize_form_type_code,
+                requires_approval_letter,
+            )
 
-            form_code = self.request.data.get("form_type_code") or ""
+            form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
             kwargs = {}
             if is_travel_form_code(form_code):
+                assert_may_create_secretary_travel_form(profile, form_code)
                 endorsers = self.request.data.get("travel_endorsers") or {}
                 kwargs = {
+                    "form_type_code": form_code,
                     "secretary_only": True,
                     "requires_travel_letter": requires_approval_letter(form_code),
                     "travel_endorsers": endorsers if isinstance(endorsers, dict) else {},
@@ -556,8 +606,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission = serializer.save(**kwargs)
         else:
             raise PermissionDenied(
-                "Only PSC Officers, Admins, Secretaries, Ministry staff, Travellers, OPSC unit staff, "
-                "or Compliance unit staff can create submissions."
+                "Only PSC Officers, Admins, Secretaries, Ministry staff, Directors-General, "
+                "Travellers, OPSC unit staff, or Compliance unit staff can create submissions."
             )
         _log(self.request, _AL.Action.CREATE,
              resource_type="Submission", resource_id=submission.id,
@@ -1212,7 +1262,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         if not submission.secretary_only:
             return Response({"sections": [], "signed": []})
-        sections = list(endorsement_sections(submission.form_type_code or ""))
+        sections = list(endorsement_sections(submission.form_type_code or "", submission))
         sec = secretary_decision_section(submission.form_type_code or "")
         if sec:
             sections.append(sec)

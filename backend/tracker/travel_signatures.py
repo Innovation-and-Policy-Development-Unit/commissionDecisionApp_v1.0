@@ -29,7 +29,7 @@ def endorsements_complete(submission) -> bool:
     except Exception:
         pass
     signed = signed_section_keys(submission)
-    for section in endorsement_sections(submission.form_type_code or ""):
+    for section in endorsement_sections(submission.form_type_code or "", submission):
         if section.get("optional"):
             if (
                 section["key"] == "minister_signature"
@@ -71,7 +71,7 @@ def sign_travel_section(
     if not submission.secretary_only or not is_travel_form_code(submission.form_type_code):
         raise ValueError("Not a travel submission.")
 
-    sections = endorsement_sections(submission.form_type_code)
+    sections = endorsement_sections(submission.form_type_code, submission)
     sec = secretary_decision_section(submission.form_type_code)
     if sec and sec["key"] == section_key:
         section = sec
@@ -113,7 +113,7 @@ def sign_travel_section(
 
 
 def _notify_next_endorser(submission, completed_key: str) -> None:
-    sections = endorsement_sections(submission.form_type_code)
+    sections = endorsement_sections(submission.form_type_code, submission)
     keys = [s["key"] for s in sections]
     if completed_key not in keys:
         return
