@@ -5,7 +5,12 @@ from django.test import TestCase
 from django.utils import timezone
 
 from tracker.models import Department, Ministry, Profile, Role, Submission, WorkflowStage
-from tracker.travel_forms import endorsement_sections, needs_department_director_endorsement
+from tracker.travel_forms import (
+    default_head_position_title,
+    endorsement_sections,
+    ministry_dg_endorsement_label,
+    needs_department_director_endorsement,
+)
 
 
 class TravelEndorsementSectionTests(TestCase):
@@ -25,6 +30,30 @@ class TravelEndorsementSectionTests(TestCase):
             created_by=user,
             **extra,
         )
+
+    def test_biosecurity_head_label(self):
+        self.assertEqual(
+            default_head_position_title(self.department),
+            "Director, Biosecurity",
+        )
+
+    def test_statistics_chief_statistician_label(self):
+        vbo = Department.objects.create(
+            ministry=self.ministry,
+            code="VNSO",
+            name="Vanuatu Bureau of Statistics",
+            head_position_title="Chief Statistician",
+        )
+        self.assertEqual(default_head_position_title(vbo), "Chief Statistician")
+
+    def test_dg_label_includes_ministry(self):
+        user = User.objects.create_user("trav", password="x")
+        Profile.objects.create(
+            user=user, role=Role.TRAVELLER,
+            ministry=self.ministry, department=self.department,
+        )
+        sub = self._submission_for(user, department=self.department)
+        self.assertIn(self.ministry.name, ministry_dg_endorsement_label(sub))
 
     def test_traveller_requires_director_and_dg(self):
         user = User.objects.create_user("traveller", password="x")

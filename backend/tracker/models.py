@@ -157,6 +157,14 @@ class Department(models.Model):
     ministry = models.ForeignKey(Ministry, on_delete=models.CASCADE, related_name="departments")
     code = models.CharField(max_length=32)
     name = models.CharField(max_length=255)
+    head_position_title = models.CharField(
+        max_length=128,
+        blank=True,
+        help_text=(
+            "Title of the department head for travel endorsements "
+            "(e.g. Chief Statistician). Leave blank to derive from department name."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

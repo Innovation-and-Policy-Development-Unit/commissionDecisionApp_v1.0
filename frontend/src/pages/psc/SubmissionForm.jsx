@@ -239,8 +239,13 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     setBusy(true)
     setError('')
     try {
+      const dept = departments.find(d => String(d.id) === String(form.department)) || null
       const travel_endorsers = {}
-      endorserSlotsForTravelForm(form.form_type_code, user).forEach(slot => {
+      endorserSlotsForTravelForm(form.form_type_code, user, {
+        department: dept,
+        ministries,
+        departmentId: form.department,
+      }).forEach(slot => {
         const raw = form[slot.key]
         if (raw) travel_endorsers[slot.key] = Number(raw)
       })
@@ -266,7 +271,12 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     }
   }
 
-  const endorserSlots = endorserSlotsForTravelForm(form.form_type_code, user, form.department)
+  const selectedDepartment = departments.find(d => String(d.id) === String(form.department)) || null
+  const endorserSlots = endorserSlotsForTravelForm(form.form_type_code, user, {
+    department: selectedDepartment,
+    ministries,
+    departmentId: form.department,
+  })
   const isForm44 = isForm44Code(form.form_type_code)
   const ministryCsuPath = isMinistryCsuInitiator(user, form.department)
 

@@ -120,9 +120,11 @@ class MinistrySerializer(serializers.ModelSerializer):
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
+    ministry_name = serializers.CharField(source="ministry.name", read_only=True)
+
     class Meta:
         model = Department
-        fields = ("id", "ministry", "code", "name")
+        fields = ("id", "ministry", "ministry_name", "code", "name", "head_position_title")
 
     def validate(self, attrs):
         if "ministry" in attrs and attrs["ministry"] is None:

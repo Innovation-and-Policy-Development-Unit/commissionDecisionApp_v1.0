@@ -33,15 +33,51 @@ export function canCreateForm44(user) {
   return user?.role === 'head_of_agency'
 }
 
-const DG_ENDORSER_SLOT = {
-  key: 'dg',
-  label: 'Director-General (or Officer-in-Charge / Acting DG)',
+function resolveDepartmentContext(departmentContext) {
+  if (departmentContext && typeof departmentContext === 'object') {
+    if ('department' in departmentContext || 'ministries' in departmentContext) {
+      return {
+        department: departmentContext.department ?? null,
+        ministries: departmentContext.ministries ?? [],
+        departmentId:
+          departmentContext.departmentId
+          ?? departmentContext.department?.id
+          ?? '',
+      }
+    }
+    return {
+      department: departmentContext,
+      ministries: [],
+      departmentId: departmentContext.id ?? '',
+    }
+  }
+  return { department: null, ministries: [], departmentId: departmentContext || '' }
 }
 
-const DEPT_ENDORSER_SLOTS = [
-  { key: 'director', label: 'Department Director' },
-  DG_ENDORSER_SLOT,
-]
+/** Department head title for endorsements (matches backend default_head_position_title). */
+export function defaultHeadPositionTitle(department) {
+  if (!department) return 'Department head'
+  const custom = (department.head_position_title || '').trim()
+  if (custom) return custom
+  const name = (department.name || '').trim()
+  const code = (department.code || '').toUpperCase()
+  if (/statistic/i.test(name) || ['VNSO', 'NSO', 'VBS'].includes(code)) {
+    return 'Chief Statistician'
+  }
+  if (name) return `Director, ${name}`
+  return 'Director'
+}
+
+/** DG of the ministry that owns the selected department. */
+export function ministryDgEndorserLabel(department, ministries = []) {
+  const ministryName =
+    department?.ministry_name
+    || ministries.find(m => String(m.id) === String(department?.ministry))?.name
+  if (ministryName) {
+    return `Director-General — ${ministryName}`
+  }
+  return 'Director-General (or Officer-in-Charge / Acting DG)'
+}
 
 /**
  * Ministry CSU / central ministry HR (no department on profile or form).
@@ -64,14 +100,33 @@ export function isDepartmentStaffInitiator(user, departmentIdOnForm = '') {
 }
 
 /** Endorser fields shown when creating a secretary travel request. */
-export function endorserSlotsForTravelForm(formTypeCode, user, departmentIdOnForm = '') {
+export function endorserSlotsForTravelForm(formTypeCode, user, departmentContext = '') {
   const code = normalizeTravelFormCode(formTypeCode)
   if (isForm44Code(code)) return []
   if (!TRAVELLER_SECRETARY_FORM_CODES.includes(code)) return []
+
+  const { department, ministries, departmentId } = resolveDepartmentContext(departmentContext)
+
   if (user?.role === 'head_of_agency') return []
-  if (isMinistryCsuInitiator(user, departmentIdOnForm)) return [DG_ENDORSER_SLOT]
-  if (isDepartmentStaffInitiator(user, departmentIdOnForm)) return DEPT_ENDORSER_SLOTS
-  return DEPT_ENDORSER_SLOTS
+
+  const dgSlot = {
+    key: 'dg',
+    label: ministryDgEndorserLabel(department, ministries),
+  }
+
+  if (isMinistryCsuInitiator(user, departmentId)) return [dgSlot]
+
+  if (isDepartmentStaffInitiator(user, departmentId) || department) {
+    return [
+      { key: 'director', label: defaultHeadPositionTitle(department) },
+      dgSlot,
+    ]
+  }
+
+  return [
+    { key: 'director', label: defaultHeadPositionTitle(department) },
+    dgSlot,
+  ]
 }
 
 export function isTravellerRole(user) {

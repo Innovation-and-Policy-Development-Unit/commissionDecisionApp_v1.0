@@ -108,6 +108,37 @@ def is_ministry_dg_submission(submission) -> bool:
     return not (prof.department_id or getattr(submission, "department_id", None))
 
 
+def default_head_position_title(department) -> str:
+    """Department head label for endorsements (e.g. Chief Statistician, Director, Biosecurity)."""
+    if not department:
+        return "Department head"
+    custom = (getattr(department, "head_position_title", None) or "").strip()
+    if custom:
+        return custom
+    name = (getattr(department, "name", None) or "").strip()
+    code = (getattr(department, "code", None) or "").upper()
+    if "STATISTIC" in name.upper() or code in {"VNSO", "NSO", "VBS"}:
+        return "Chief Statistician"
+    if name:
+        return f"Director, {name}"
+    return "Director"
+
+
+def ministry_dg_endorsement_label(submission) -> str:
+    """DG of the ministry that owns the submission department."""
+    ministry = None
+    if submission:
+        ministry = getattr(submission, "ministry", None)
+        if ministry is None and submission.department_id:
+            try:
+                ministry = submission.department.ministry
+            except Exception:
+                pass
+    if ministry and getattr(ministry, "name", None):
+        return f"Director-General — {ministry.name}"
+    return "Director-General (or Officer-in-Charge / Acting DG)"
+
+
 def _submission_department_id(submission) -> int | None:
     if not submission:
         return None
@@ -143,19 +174,25 @@ def _endorsement_sections_45_46(submission) -> list[dict]:
     prof = _creator_profile(submission)
     if prof and prof.role == Role.HEAD_OF_AGENCY:
         return []
+    department = None
+    if submission and submission.department_id:
+        try:
+            department = submission.department
+        except Exception:
+            department = None
     sections: list[dict] = []
     if needs_department_director_endorsement(submission):
         sections.append(
             {
                 "key": "director_signature",
-                "label": "Department Director",
+                "label": default_head_position_title(department),
                 "signer": SIGNER_DIRECTOR,
             }
         )
     sections.append(
         {
             "key": "dg_signature",
-            "label": "Director-General (or Officer-in-Charge / Acting DG)",
+            "label": ministry_dg_endorsement_label(submission),
             "signer": SIGNER_DG,
         }
     )
