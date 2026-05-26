@@ -419,7 +419,7 @@
     "submit_for_commission": "Submit for Commission",
     "submit_for_commission_hint": "Appointments, establishment, salary, and other matters for unit assessment and a Commission sitting.",
     "secretary_approval": "Secretary approval",
-    "secretary_approval_hint": "PSC Forms 4.4–4.6 (travel). Secretary only — not listed for Commission.",
+    "secretary_approval_hint": "Form 4.4: directors and DG only. Forms 4.5–4.6: overseas travel.",
     "internal_submission": "Internal submission",
     "internal_submission_hint": "OPSC internal matter routed to the Secretary for review.",
     "filter_placeholder": "Filter by reference, title, ministry, or stage…",

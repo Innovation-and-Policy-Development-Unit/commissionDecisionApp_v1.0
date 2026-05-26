@@ -228,6 +228,12 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
   const [busy, setBusy] = useState(false)
   const categoryId = categories[0]?.id
 
+  useEffect(() => {
+    if (user?.department_id && !form.department) {
+      setForm(f => ({ ...f, department: String(user.department_id) }))
+    }
+  }, [user?.department_id, form.department])
+
   const submit = async e => {
     e.preventDefault()
     if (!form.form_type_code) { setError('Select a travel form type.'); return }
