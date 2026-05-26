@@ -1,12 +1,16 @@
 """
-PSC Forms 4.4 / 4.5 / 4.6 — travel workflows.
+PSC Forms 4.4 / 4.5 / 4.6 — travel workflows (secretary-only; then ODU Manager → Secretary).
 
-Workflow (v1.0 behaviour aligned with current policy):
-- 4.4: Department Director / Ministry DG only. No ministry endorsements captured in SCDMS.
-  Routed to ODU Manager review, then Secretary approval.
-- 4.5 / 4.6: ODU Manager → Secretary. Department staff: Director → DG before submit.
-  Ministry CSU staff (ministry HR without a department): DG only before submit.
-  DG may delegate to Officer-in-Charge (< 5 days leave) or Acting DG (≥ 5 days).
+PSC 4.4 (domestic allowance):
+- Department staff → department head endorsement → ODU → Secretary
+- Ministry CSU staff → DG endorsement → ODU → Secretary
+- Department director or ministry DG initiator → ODU → Secretary (no ministry endorsements)
+
+PSC 4.5 / 4.6 (overseas):
+- Department staff → department head → DG → ODU → Secretary
+- Department director initiator → DG → ODU → Secretary
+- Ministry CSU staff → DG → ODU → Secretary
+- Ministry DG initiator → ODU → Secretary (no ministry endorsements)
 """
 
 from __future__ import annotations
@@ -27,7 +31,6 @@ TRAVEL_FORM_CODES = frozenset({TRAVEL_FORM_44, TRAVEL_FORM_45, TRAVEL_FORM_46})
 TRAVELLER_SECRETARY_FORM_CODES = frozenset({TRAVEL_FORM_45, TRAVEL_FORM_46})
 TRAVEL_LETTER_FORM_CODES = frozenset({TRAVEL_FORM_45, TRAVEL_FORM_46})
 
-FORM_44_CREATOR_ROLES = frozenset({Role.HEAD_OF_AGENCY})
 SECRETARY_TRAVEL_CREATOR_ROLES = frozenset({
     Role.TRAVELLER,
     Role.MINISTRY_HR,
@@ -80,7 +83,7 @@ def requires_approval_letter(code: str | None) -> bool:
 
 
 def can_create_form_44(profile) -> bool:
-    return profile.role in FORM_44_CREATOR_ROLES
+    return profile.role in SECRETARY_TRAVEL_CREATOR_ROLES
 
 
 def _creator_profile(submission):
@@ -146,10 +149,7 @@ def _submission_department_id(submission) -> int | None:
 
 
 def is_ministry_csu_initiator(submission) -> bool:
-    """
-    Ministry central / CSU staff: ministry_hr with no department on profile or submission.
-    They need DG endorsement only (not the department director).
-    """
+    """Ministry corporate services staff: ministry_hr with no department scope."""
     prof = _creator_profile(submission)
     if not prof or prof.role != Role.MINISTRY_HR:
         return False
@@ -158,44 +158,64 @@ def is_ministry_csu_initiator(submission) -> bool:
     return True
 
 
-def needs_department_director_endorsement(submission) -> bool:
-    """Department staff path for 4.5 / 4.6: Director then DG."""
+def is_department_staff_initiator(submission) -> bool:
+    """Department staff (not CSU, not director/DG head_of_agency)."""
     prof = _creator_profile(submission)
-    if not prof:
-        return True
-    if prof.role == Role.HEAD_OF_AGENCY:
+    if not prof or prof.role == Role.HEAD_OF_AGENCY:
         return False
     if is_ministry_csu_initiator(submission):
         return False
-    return True
+    if prof.role in {Role.TRAVELLER, Role.DEPT_ADMIN}:
+        return True
+    if prof.role == Role.MINISTRY_HR and (
+        prof.department_id or _submission_department_id(submission)
+    ):
+        return True
+    return False
+
+
+def _submission_department(submission):
+    if not submission or not submission.department_id:
+        return None
+    try:
+        return submission.department
+    except Exception:
+        return None
+
+
+def _dg_section(submission) -> dict:
+    return {
+        "key": "dg_signature",
+        "label": ministry_dg_endorsement_label(submission),
+        "signer": SIGNER_DG,
+    }
+
+
+def _director_section(submission) -> dict:
+    return {
+        "key": "director_signature",
+        "label": default_head_position_title(_submission_department(submission)),
+        "signer": SIGNER_DIRECTOR,
+    }
+
+
+def _endorsement_sections_44(submission) -> list[dict]:
+    if is_ministry_dg_submission(submission) or is_dept_director_submission(submission):
+        return []
+    if is_ministry_csu_initiator(submission):
+        return [_dg_section(submission)]
+    if is_department_staff_initiator(submission):
+        return [_director_section(submission)]
+    return []
 
 
 def _endorsement_sections_45_46(submission) -> list[dict]:
-    prof = _creator_profile(submission)
-    if prof and prof.role == Role.HEAD_OF_AGENCY:
+    if is_ministry_dg_submission(submission):
         return []
-    department = None
-    if submission and submission.department_id:
-        try:
-            department = submission.department
-        except Exception:
-            department = None
     sections: list[dict] = []
-    if needs_department_director_endorsement(submission):
-        sections.append(
-            {
-                "key": "director_signature",
-                "label": default_head_position_title(department),
-                "signer": SIGNER_DIRECTOR,
-            }
-        )
-    sections.append(
-        {
-            "key": "dg_signature",
-            "label": ministry_dg_endorsement_label(submission),
-            "signer": SIGNER_DG,
-        }
-    )
+    if is_department_staff_initiator(submission):
+        sections.append(_director_section(submission))
+    sections.append(_dg_section(submission))
     return sections
 
 
@@ -204,14 +224,9 @@ def assert_may_create_secretary_travel_form(profile, form_code: str | None) -> N
     if not code or code not in TRAVEL_FORM_CODES:
         return
     if code == TRAVEL_FORM_44:
-        if profile.role in FORM_44_CREATOR_ROLES:
+        if profile.role in SECRETARY_TRAVEL_CREATOR_ROLES:
             return
-        if profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY}:
-            return
-        raise PermissionDenied(
-            "PSC Form 4.4 is only for department directors and ministry Director-General. "
-            "Staff domestic travel is approved within your ministry and is not lodged here."
-        )
+        raise PermissionDenied("You are not authorised to create PSC Form 4.4.")
     if code in TRAVELLER_SECRETARY_FORM_CODES:
         if profile.role in SECRETARY_TRAVEL_CREATOR_ROLES:
             return
@@ -224,8 +239,7 @@ def endorsement_sections(form_type_code: str, submission=None) -> list[dict]:
     """Ordered endorsement slots that must be signed before submit to PSC."""
     code = normalize_form_type_code(form_type_code)
     if code == TRAVEL_FORM_44:
-        # 4.4 goes directly to ODU Manager review; no ministry endorsement slots.
-        return []
+        return _endorsement_sections_44(submission)
     if code in {TRAVEL_FORM_45, TRAVEL_FORM_46}:
         return _endorsement_sections_45_46(submission)
     return []
@@ -288,9 +302,59 @@ def user_may_sign_section(
         if submission.department_id and prof.department_id == submission.department_id:
             return True
     if signer == SIGNER_DG and role == Role.HEAD_OF_AGENCY:
+        if prof.department_id:
+            return False
         if submission.ministry_id and prof.ministry_id == submission.ministry_id:
             return True
     return False
+
+
+def recipient_for_signer_slot(submission, signer: str):
+    """Resolve the ministry official who should sign this slot (for notifications)."""
+    from .models import Profile
+
+    if not submission:
+        return None
+    if signer == SIGNER_DIRECTOR:
+        if not submission.department_id:
+            return None
+        prof = (
+            Profile.objects.filter(
+                role=Role.HEAD_OF_AGENCY,
+                department_id=submission.department_id,
+                ministry_id=submission.ministry_id,
+                user__is_active=True,
+            )
+            .select_related("user")
+            .first()
+        )
+        return prof.user if prof else None
+    if signer == SIGNER_DG:
+        prof = (
+            Profile.objects.filter(
+                role=Role.HEAD_OF_AGENCY,
+                ministry_id=submission.ministry_id,
+                department__isnull=True,
+                user__is_active=True,
+            )
+            .select_related("user")
+            .first()
+        )
+        return prof.user if prof else None
+    return None
+
+
+def sync_travel_endorsers_from_roles(submission) -> dict:
+    """Populate travel_endorsers user ids from ministry role assignments (not manual entry)."""
+    endorsers: dict = {}
+    sections = endorsement_sections(submission.form_type_code or "", submission)
+    for section in sections:
+        signer = section.get("signer")
+        if signer in {SIGNER_DIRECTOR, SIGNER_DG}:
+            user = recipient_for_signer_slot(submission, signer)
+            if user:
+                endorsers[signer] = user.id
+    return endorsers
 
 
 def _field(label, key, ftype="text", required=False, order=0, **extra):

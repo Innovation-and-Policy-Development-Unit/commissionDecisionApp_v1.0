@@ -69,7 +69,8 @@ export default function TravelEndorsementPanel({ submissionId, submission, onSig
       <div>
         <h3 className="text-sm font-semibold text-sky-900 dark:text-sky-100">Travel endorsements</h3>
         <p className="text-xs text-sky-800/80 dark:text-sky-200/80 mt-0.5">
-          Department staff: Director then DG. Ministry CSU staff: DG only. Then ODU Manager review and Secretary decision.
+          Endorsements depend on who lodged the form (4.4: department head or DG only;
+          4.5/4.6: department head and/or DG). Then ODU Manager review and Secretary decision.
           Forms 4.5 &amp; 4.6 receive an official letter after Secretary approval.
         </p>
       </div>

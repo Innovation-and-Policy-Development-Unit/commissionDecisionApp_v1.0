@@ -7,7 +7,9 @@ from django.core.files.base import ContentFile
 from .models import FormSectionSignature, Notification
 from .travel_forms import (
     endorsement_sections,
+    recipient_for_signer_slot,
     secretary_decision_section,
+    sync_travel_endorsers_from_roles,
     user_may_sign_section,
 )
 
@@ -98,6 +100,23 @@ def sign_travel_section(
     return obj
 
 
+def notify_first_pending_endorser(submission) -> None:
+    """Tell the first unsigned ministry endorser their signature is required."""
+    signed = signed_section_keys(submission)
+    for section in endorsement_sections(submission.form_type_code or "", submission):
+        if section["key"] in signed:
+            continue
+        recipient = recipient_for_signer_slot(submission, section.get("signer"))
+        if recipient:
+            Notification.objects.create(
+                recipient=recipient,
+                title=f"Travel form endorsement required ({submission.reference_number})",
+                body=f"Please digitally sign “{section['label']}” for {submission.title}.",
+                submission=submission,
+            )
+        break
+
+
 def _notify_next_endorser(submission, completed_key: str) -> None:
     sections = endorsement_sections(submission.form_type_code, submission)
     keys = [s["key"] for s in sections]
@@ -108,14 +127,14 @@ def _notify_next_endorser(submission, completed_key: str) -> None:
     for nxt in sections[idx + 1 :]:
         if nxt["key"] in signed:
             continue
-        uid = (submission.travel_endorsers or {}).get(nxt["signer"]) or (
-            submission.travel_endorsers or {}
-        ).get(f"{nxt['signer']}_id")
-        if not uid:
-            break
-        from django.contrib.auth.models import User
+        recipient = recipient_for_signer_slot(submission, nxt.get("signer"))
+        if not recipient:
+            endorsers = submission.travel_endorsers or {}
+            uid = endorsers.get(nxt["signer"]) or endorsers.get(f"{nxt['signer']}_id")
+            if uid:
+                from django.contrib.auth.models import User
 
-        recipient = User.objects.filter(pk=uid, is_active=True).first()
+                recipient = User.objects.filter(pk=uid, is_active=True).first()
         if recipient:
             Notification.objects.create(
                 recipient=recipient,
@@ -124,3 +143,13 @@ def _notify_next_endorser(submission, completed_key: str) -> None:
                 submission=submission,
             )
         break
+
+
+def ensure_travel_endorsers_synced(submission) -> None:
+    """After create/update, align travel_endorsers with role-based routing."""
+    if not submission.secretary_only:
+        return
+    endorsers = sync_travel_endorsers_from_roles(submission)
+    if endorsers != (submission.travel_endorsers or {}):
+        submission.travel_endorsers = endorsers
+        submission.save(update_fields=["travel_endorsers", "updated_at"])

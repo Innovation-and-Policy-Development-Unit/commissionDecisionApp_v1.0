@@ -1,4 +1,4 @@
-/** PSC travel forms — secretary-only workflow. */
+/** PSC travel forms — secretary-only workflow; ODU Manager → Secretary. */
 
 export const TRAVEL_CATEGORY_CODE = 'TRAVEL'
 
@@ -6,6 +6,9 @@ export const FORM_44_CODE = 'PSC 4.4'
 export const TRAVEL_FORM_CODES = [FORM_44_CODE, 'PSC 4.5', 'PSC 4.6']
 export const TRAVELLER_SECRETARY_FORM_CODES = ['PSC 4.5', 'PSC 4.6']
 export const TRAVEL_LETTER_FORM_CODES = ['PSC 4.5', 'PSC 4.6']
+
+const STAFF_CREATE_ROLES = ['traveller', 'dept_admin', 'ministry_hr', 'head_of_agency']
+const PSC_CREATE_ROLES = ['psc_officer', 'psc_admin', 'psc_secretary']
 
 export function normalizeTravelFormCode(code) {
   const c = (code || '').trim()
@@ -28,9 +31,9 @@ export function requiresTravelLetter(code) {
   return TRAVEL_LETTER_FORM_CODES.includes(normalizeTravelFormCode(code))
 }
 
-/** Form 4.4 — department director or ministry DG (head_of_agency). */
 export function canCreateForm44(user) {
-  return user?.role === 'head_of_agency'
+  if (!user?.role) return false
+  return STAFF_CREATE_ROLES.includes(user.role) || PSC_CREATE_ROLES.includes(user.role)
 }
 
 function resolveDepartmentContext(departmentContext) {
@@ -54,7 +57,6 @@ function resolveDepartmentContext(departmentContext) {
   return { department: null, ministries: [], departmentId: departmentContext || '' }
 }
 
-/** Department head title for endorsements (matches backend default_head_position_title). */
 export function defaultHeadPositionTitle(department) {
   if (!department) return 'Department head'
   const custom = (department.head_position_title || '').trim()
@@ -68,7 +70,6 @@ export function defaultHeadPositionTitle(department) {
   return 'Director'
 }
 
-/** DG of the ministry that owns the selected department. */
 export function ministryDgEndorserLabel(department, ministries = []) {
   const ministryName =
     department?.ministry_name
@@ -79,10 +80,7 @@ export function ministryDgEndorserLabel(department, ministries = []) {
   return 'Director-General (or Officer-in-Charge / Acting DG)'
 }
 
-/**
- * Ministry CSU / central ministry HR (no department on profile or form).
- * 4.5/4.6: DG only → ODU Manager → Secretary.
- */
+/** Ministry CSU staff — ministry_hr with no department on profile or form. */
 export function isMinistryCsuInitiator(user, departmentIdOnForm = '') {
   if (!user || user.role === 'head_of_agency') return false
   if (user.role !== 'ministry_hr') return false
@@ -90,7 +88,7 @@ export function isMinistryCsuInitiator(user, departmentIdOnForm = '') {
   return !deptId
 }
 
-/** Department staff (traveller, dept admin, or ministry HR tied to a department). */
+/** Department staff (traveller, dept admin, ministry HR with a department). */
 export function isDepartmentStaffInitiator(user, departmentIdOnForm = '') {
   if (!user || user.role === 'head_of_agency') return false
   if (isMinistryCsuInitiator(user, departmentIdOnForm)) return false
@@ -99,34 +97,79 @@ export function isDepartmentStaffInitiator(user, departmentIdOnForm = '') {
   return false
 }
 
-/** Endorser fields shown when creating a secretary travel request. */
+/** Department director — head_of_agency with a department. */
+export function isDeptDirectorInitiator(user) {
+  return user?.role === 'head_of_agency' && !!user?.department_id
+}
+
+/** Ministry DG — head_of_agency without a department. */
+export function isMinistryDgInitiator(user) {
+  return user?.role === 'head_of_agency' && !user?.department_id
+}
+
+/** Endorser pick-list when creating a travel request (matches backend endorsement_sections). */
 export function endorserSlotsForTravelForm(formTypeCode, user, departmentContext = '') {
   const code = normalizeTravelFormCode(formTypeCode)
-  if (isForm44Code(code)) return []
-  if (!TRAVELLER_SECRETARY_FORM_CODES.includes(code)) return []
+  if (!isTravelFormCode(code)) return []
 
   const { department, ministries, departmentId } = resolveDepartmentContext(departmentContext)
-
-  if (user?.role === 'head_of_agency') return []
-
+  const directorSlot = {
+    key: 'director',
+    label: defaultHeadPositionTitle(department),
+  }
   const dgSlot = {
     key: 'dg',
     label: ministryDgEndorserLabel(department, ministries),
   }
 
-  if (isMinistryCsuInitiator(user, departmentId)) return [dgSlot]
+  if (isMinistryDgInitiator(user)) return []
 
-  if (isDepartmentStaffInitiator(user, departmentId) || department) {
-    return [
-      { key: 'director', label: defaultHeadPositionTitle(department) },
-      dgSlot,
-    ]
+  if (isForm44Code(code)) {
+    if (isDeptDirectorInitiator(user)) return []
+    if (isMinistryCsuInitiator(user, departmentId)) return [dgSlot]
+    if (isDepartmentStaffInitiator(user, departmentId)) return [directorSlot]
+    return []
   }
 
-  return [
-    { key: 'director', label: defaultHeadPositionTitle(department) },
-    dgSlot,
-  ]
+  // 4.5 / 4.6
+  if (isDeptDirectorInitiator(user) || isMinistryCsuInitiator(user, departmentId)) {
+    return [dgSlot]
+  }
+  if (isDepartmentStaffInitiator(user, departmentId)) {
+    return [directorSlot, dgSlot]
+  }
+  return [directorSlot, dgSlot]
+}
+
+/** Short workflow hint on the create form. */
+export function travelWorkflowHint(formTypeCode, user, departmentIdOnForm = '') {
+  const code = normalizeTravelFormCode(formTypeCode)
+  const tail = 'then ODU Manager review and Secretary approval.'
+  if (isMinistryDgInitiator(user)) {
+    return `As ministry DG you lodge directly — ${tail}`
+  }
+  if (isForm44Code(code)) {
+    if (isDeptDirectorInitiator(user)) {
+      return `As department director you lodge directly — ${tail}`
+    }
+    if (isMinistryCsuInitiator(user, departmentIdOnForm)) {
+      return `Ministry CSU: DG endorsement, ${tail}`
+    }
+    if (isDepartmentStaffInitiator(user, departmentIdOnForm)) {
+      return `Department staff: your department head endorses, ${tail}`
+    }
+    return `Domestic travel allowance (4.4): ${tail}`
+  }
+  if (isDeptDirectorInitiator(user)) {
+    return `Department director: DG endorsement, ${tail}`
+  }
+  if (isMinistryCsuInitiator(user, departmentIdOnForm)) {
+    return `Ministry CSU: DG endorsement, ${tail}`
+  }
+  if (isDepartmentStaffInitiator(user, departmentIdOnForm)) {
+    return `Department staff: department head then DG, ${tail}`
+  }
+  return `Collect required endorsements, ${tail}`
 }
 
 export function isTravellerRole(user) {

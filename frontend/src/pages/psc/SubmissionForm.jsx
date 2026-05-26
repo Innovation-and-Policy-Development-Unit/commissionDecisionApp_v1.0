@@ -9,10 +9,9 @@ import { isComplianceRole } from '../../constants/compliance'
 import {
   endorserSlotsForTravelForm,
   isForm44Code,
-  isMinistryCsuInitiator,
+  travelWorkflowHint,
   isTravelFormCode,
   TRAVEL_CATEGORY_CODE,
-  FORM_44_CODE,
 } from '../../constants/travel'
 import { filterCommissionFormTypes, filterSecretaryFormTypes } from '../../constants/submissionCreate'
 
@@ -220,8 +219,6 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     form_type_code: '',
     department: '',
     notes: '',
-    director: '',
-    dg: '',
   })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -277,8 +274,8 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     ministries,
     departmentId: form.department,
   })
-  const isForm44 = isForm44Code(form.form_type_code)
-  const ministryCsuPath = isMinistryCsuInitiator(user, form.department)
+  const workflowHint = travelWorkflowHint(form.form_type_code, user, form.department)
+  const ministryCsuPath = !user?.department_id && user?.role === 'ministry_hr'
 
   return (
     <div>
@@ -289,22 +286,7 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
         />
       )}
       <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100">
-        <strong>Secretary approval only.</strong>
-        {isForm44 ? (
-          <>
-            {' '}<strong>Form {FORM_44_CODE}</strong> is for department directors and ministry Director-General only.
-            After submission, ODU Manager reviews, then the Secretary approves.
-            Staff domestic travel is handled within your ministry and is not lodged here.
-          </>
-        ) : ministryCsuPath ? (
-          <>
-            {' '}Ministry CSU requests need DG endorsement, then ODU Manager review and Secretary approval.
-          </>
-        ) : (
-          <>
-            {' '}Department requests need Director and DG endorsements, then ODU Manager review and Secretary approval.
-          </>
-        )}
+        <strong>Secretary approval only.</strong> {workflowHint}
       </div>
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -827,7 +809,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   if (effectiveMode === 'secretary') {
     if (travelFormTypes.length === 0) {
       const msg = modal
-        ? 'No secretary travel forms are available for your role. Form 4.4 is for directors and DG only; staff use ministry processes.'
+        ? 'No secretary travel forms (4.4–4.6) are available for your role.'
         : null
       return modal ? <p className="text-sm text-slate-600 py-4">{msg}</p> : (
         <div><PageHeader title="Secretary approval" subtitle={msg} /></div>

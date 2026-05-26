@@ -1,4 +1,4 @@
-"""PSC Form 4.4 — directors/DG only; staff use 4.5/4.6 or ministry-only processes."""
+"""PSC Form 4.4 — create access and endorsement chains by initiator."""
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from tracker.models import Department, FormCategory, Ministry, Profile, Role
+from tracker.travel_forms import endorsement_sections
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
@@ -27,9 +28,9 @@ class TravelForm44AccessTests(TestCase):
             department=self.department,
         )
 
-        self.hr = User.objects.create_user("ministryhr", password="pass12345!")
+        self.hr_csu = User.objects.create_user("ministryhr", password="pass12345!")
         Profile.objects.create(
-            user=self.hr,
+            user=self.hr_csu,
             role=Role.MINISTRY_HR,
             ministry=self.ministry,
         )
@@ -60,18 +61,31 @@ class TravelForm44AccessTests(TestCase):
         }
         return self.client.post("/api/submissions/", payload, format="json")
 
-    def test_traveller_cannot_create_form_44(self):
+    def _submission(self, user, **extra):
+        from tracker.models import Submission, WorkflowStage
+
+        return Submission.objects.create(
+            title="Travel",
+            ministry=self.ministry,
+            form_type_code="PSC 4.4",
+            current_stage=WorkflowStage.DRAFT,
+            received_at=timezone.now(),
+            created_by=user,
+            **extra,
+        )
+
+    def test_traveller_can_create_form_44(self):
         resp = self._post_travel(self.traveller, "PSC 4.4")
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 201, resp.content)
 
     def test_traveller_can_create_form_45(self):
         resp = self._post_travel(self.traveller, "PSC 4.5")
         self.assertEqual(resp.status_code, 201, resp.content)
         self.assertTrue(resp.json().get("secretary_only"))
 
-    def test_ministry_hr_cannot_create_form_44(self):
-        resp = self._post_travel(self.hr, "PSC 4.4")
-        self.assertEqual(resp.status_code, 403)
+    def test_csu_hr_can_create_form_44(self):
+        resp = self._post_travel(self.hr_csu, "PSC 4.4")
+        self.assertEqual(resp.status_code, 201, resp.content)
 
     def test_dept_director_can_create_form_44(self):
         resp = self._post_travel(self.director, "PSC4.4", department=self.department.id)
@@ -84,3 +98,17 @@ class TravelForm44AccessTests(TestCase):
         resp = self._post_travel(self.dg, "PSC 4.4")
         self.assertEqual(resp.status_code, 201, resp.content)
         self.assertTrue(resp.json().get("secretary_only"))
+
+    def test_44_dept_staff_needs_director_only(self):
+        sub = self._submission(self.traveller, department=self.department)
+        keys = [s["key"] for s in endorsement_sections("PSC 4.4", sub)]
+        self.assertEqual(keys, ["director_signature"])
+
+    def test_44_csu_needs_dg_only(self):
+        sub = self._submission(self.hr_csu)
+        keys = [s["key"] for s in endorsement_sections("PSC 4.4", sub)]
+        self.assertEqual(keys, ["dg_signature"])
+
+    def test_44_director_initiator_no_endorsements(self):
+        sub = self._submission(self.director, department=self.department)
+        self.assertEqual(endorsement_sections("PSC 4.4", sub), [])

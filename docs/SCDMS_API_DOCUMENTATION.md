@@ -307,15 +307,22 @@ POST /api/submissions/
 
 Response sets `secretary_only: true`, `requires_travel_letter` (true for 4.5 and 4.6).
 
-**Form 4.4** — domestic travel allowance: **only `head_of_agency`** (department director or ministry DG). Staff 4.4 is **not** accepted via API. **No ministry endorser slots are captured in SCDMS for 4.4**; travel requests route **Submitted → ODU Manager review → Secretary approval**.
+**PSC 4.4** (domestic travel allowance) — all paths end **ODU Manager → Secretary**.
 
-**Forms 4.5 / 4.6** — overseas travel: route **Submitted → ODU Manager review → Secretary approval**.
+| Initiator | Endorsements before submit | Then |
+|-----------|---------------------------|------|
+| Department staff | Department head (e.g. Director, Biosecurity) | ODU → Secretary |
+| Ministry CSU staff (`ministry_hr`, no department) | DG of ministry | ODU → Secretary |
+| Department director or ministry DG (`head_of_agency`) | None | ODU → Secretary |
 
-| Initiator | Endorsements before submit (in SCDMS) | Then |
-|-----------|----------------------------------------|------|
-| Department staff (`traveller`, `dept_admin`, or `ministry_hr` with a department) | Department Director → DG | ODU Manager → Secretary |
-| Ministry CSU staff (`ministry_hr` with no department on profile or submission) | DG only | ODU Manager → Secretary |
-| Director-General / department director (`head_of_agency`) | None | ODU Manager → Secretary |
+**PSC 4.5 / 4.6** (overseas travel):
+
+| Initiator | Endorsements before submit | Then |
+|-----------|---------------------------|------|
+| Department staff | Department head → DG | ODU → Secretary |
+| Department director (`head_of_agency` with department) | DG | ODU → Secretary |
+| Ministry CSU staff | DG | ODU → Secretary |
+| Ministry DG (`head_of_agency`, no department) | None | ODU → Secretary |
 
 If the DG is on leave, an **Officer-in-Charge** (< 5 days) or **Acting DG** (≥ 5 days) may sign the DG slot.
 
@@ -332,7 +339,7 @@ POST /api/submissions/{id}/transition/
 
 Allowed `new_stage` values depend on **current stage**, **role**, `is_internal`, and `secretary_only`. See §8.
 
-Travel submissions in `draft` → `submitted` require any **required endorsements** signed via `/api/submissions/{id}/sign-travel-section/` (4.4: none; 4.5/4.6: DG only for ministry CSU initiators, Director + DG for department staff).
+Travel submissions in `draft` → `submitted` require **required endorsements** signed via `/api/submissions/{id}/sign-travel-section/` per the tables above (initiator-dependent).
 
 #### Key read-only fields on detail
 

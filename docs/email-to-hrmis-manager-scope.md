@@ -30,7 +30,7 @@ It supports, among other things:
 - **Registration, routing, and assessment** by OPSC units (ODU, VIPAM, HR Unit, Compliance, CSU, etc.)  
 - **Commission** agenda, sittings, minutes, and the decision register  
 - **Post-decision tasks** and implementation status on PSC matters  
-- **Secretary-only** approvals for certain PSC forms (e.g. overseas travel 4.5/4.6; domestic travel **4.4 for department directors and Director-General only**—staff domestic travel remains within ministry processes and is **not** lodged in SCDMS)
+- **Secretary-only** approvals for PSC travel forms **4.4–4.6** (ministry endorsements then **ODU Manager → Secretary**; paths differ by initiator—see API guide)
 
 SCDMS is **not** a human resources information system, payroll system, or employee master database.
 

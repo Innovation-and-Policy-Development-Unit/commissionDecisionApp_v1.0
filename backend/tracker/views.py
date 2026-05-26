@@ -507,10 +507,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
 
             form_code = normalize_form_type_code(self.request.data.get("form_type_code"))
-            if form_code not in TRAVELLER_SECRETARY_FORM_CODES:
+            if not is_travel_form_code(form_code):
                 raise PermissionDenied(
-                    "Travellers may only create PSC Forms 4.5 and 4.6 (overseas travel). "
-                    "Form 4.4 is for directors and Director-General only."
+                    "Travellers may only create PSC travel forms 4.4, 4.5, and 4.6."
                 )
             assert_may_create_secretary_travel_form(profile, form_code)
             endorsers = self.request.data.get("travel_endorsers") or {}
@@ -613,6 +612,17 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 "Only PSC Officers, Admins, Secretaries, Ministry staff, Directors-General, "
                 "Travellers, OPSC unit staff, or Compliance unit staff can create submissions."
             )
+        if submission.secretary_only:
+            from .travel_forms import is_travel_form_code
+            from .travel_signatures import (
+                ensure_travel_endorsers_synced,
+                notify_first_pending_endorser,
+            )
+
+            if is_travel_form_code(submission.form_type_code):
+                ensure_travel_endorsers_synced(submission)
+                notify_first_pending_endorser(submission)
+
         _log(self.request, _AL.Action.CREATE,
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,
@@ -633,6 +643,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if profile.role not in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.TRAVELLER}:
             raise PermissionDenied("Only PSC staff or Ministry users can edit submissions.")
         submission = serializer.save()
+        if submission.secretary_only:
+            from .travel_forms import is_travel_form_code
+            from .travel_signatures import ensure_travel_endorsers_synced
+
+            if is_travel_form_code(submission.form_type_code):
+                ensure_travel_endorsers_synced(submission)
         _log(self.request, _AL.Action.UPDATE,
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,
@@ -1287,6 +1303,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 "signed_keys": list(signed_section_keys(submission)),
                 "travel_endorsers": submission.travel_endorsers or {},
                 "requires_travel_letter": submission.requires_travel_letter,
+                "approval_route": [s["label"] for s in sections if s.get("key") != "secretary_decision"],
             }
         )
 

@@ -13,7 +13,7 @@ export function categoryById(categories) {
   return Object.fromEntries((categories || []).map(c => [String(c.id), c]))
 }
 
-/** Secretary path: 4.5/4.6 for staff; 4.4 only for head_of_agency (director / DG). */
+/** Secretary path: travel forms 4.4–4.6 (role-dependent). */
 export function filterSecretaryFormTypes(formTypes, categories, user) {
   const cats = categoryById(categories)
   return (formTypes || []).filter(ft => {
