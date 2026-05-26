@@ -40,7 +40,13 @@
     "feedback": "Fidbak blong Ol Yusa",
     "backup_restore": "Bakap mo Restoa",
     "account": "Akaon",
-    "logout": "Lokaut"
+    "logout": "Lokaut",
+    "sub_meetings": "Ol Mitin",
+    "sub_minutes_agenda": "Ol Minit mo Ajenda",
+    "sub_outcomes": "Ol Autkom",
+    "sub_access_control": "Aksess Kontrol",
+    "sub_content": "Kontent",
+    "sub_system": "Sistem"
   },
   "breadcrumb": {
     "dashboard": "Dasbod",

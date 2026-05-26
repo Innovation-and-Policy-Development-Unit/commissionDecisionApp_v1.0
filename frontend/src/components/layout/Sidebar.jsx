@@ -175,6 +175,14 @@ function NavItem({ item }) {
     return item.children.some(c => c.path === location.pathname)
   })
 
+  // Auto-open accordion when navigating to a child route (e.g., direct URL or browser back/forward)
+  useEffect(() => {
+    if (!item.children) return
+    if (item.children.some(c => c.path === location.pathname)) {
+      setOpen(true)
+    }
+  }, [location.pathname, item.children])
+
   const hasChildren = !!item.children
   const Icon = item.icon
   const label = translateLabel(item, t)

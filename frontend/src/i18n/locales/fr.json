@@ -40,7 +40,13 @@
     "feedback": "Retours utilisateurs",
     "backup_restore": "Sauvegarde et restauration",
     "account": "Compte",
-    "logout": "Déconnexion"
+    "logout": "Déconnexion",
+    "sub_meetings": "Réunions",
+    "sub_minutes_agenda": "Procès-verbaux & Ordre du jour",
+    "sub_outcomes": "Résultats",
+    "sub_access_control": "Contrôle d'accès",
+    "sub_content": "Contenu",
+    "sub_system": "Système"
   },
   "breadcrumb": {
     "dashboard": "Tableau de bord",

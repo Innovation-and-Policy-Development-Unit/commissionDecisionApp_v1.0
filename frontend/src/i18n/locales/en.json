@@ -42,7 +42,13 @@
     "account": "Account",
     "logout": "Logout",
     "wiki": "OPSC Wiki",
-    "knowledge_base": "Knowledge Base"
+    "knowledge_base": "Knowledge Base",
+    "sub_meetings": "Meetings",
+    "sub_minutes_agenda": "Minutes & Agenda",
+    "sub_outcomes": "Outcomes",
+    "sub_access_control": "Access Control",
+    "sub_content": "Content",
+    "sub_system": "System"
   },
   "breadcrumb": {
     "dashboard": "Dashboard",

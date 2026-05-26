@@ -19,6 +19,8 @@ import { menuItemVisibleForUser } from '../utils/complianceAccess'
  *   - `label`     : English fallback (used when no translator is supplied)
  *   - `labelKey`  : i18next translation key (preferred when rendering with t())
  *   - `audience`  : all | compliance | secretariat | exclude_compliance
+ *
+ * Items may have a `children` array to create accordion sub-menus inside a group.
  */
 const menuItems = [
   {
@@ -60,19 +62,35 @@ const menuItems = [
     groupIcon: Gavel,
     audience: 'secretariat',
     items: [
-      { label: 'Meeting room',    labelKey: 'nav.meeting_room',  icon: Headphones,   path: '/secretariat/meeting-room' },
-      { label: 'Meetings',        labelKey: 'nav.meetings',      icon: CalendarDays, path: '/secretariat/meetings' },
-      { label: 'Agenda',          labelKey: 'nav.agenda',        icon: ScrollText,   path: '/secretariat/agenda' },
-      { label: 'Minutes',         labelKey: 'nav.minutes',       icon: FileText,     path: '/secretariat/minutes' },
-      { label: 'Minute intake',   labelKey: 'nav.minute_intake', icon: PenLine,      path: '/secretariat/minute-intake' },
-      { label: 'Decisions',       labelKey: 'nav.decisions',     icon: Gavel,        path: '/secretariat/decisions' },
       {
-        label: 'Minutes decision tasks',
-        labelKey: 'nav.minutes_tasks',
-        icon: ListTodo,
-        path: '/secretariat/tasks',
+        label: 'Meetings',
+        labelKey: 'nav.sub_meetings',
+        icon: CalendarDays,
+        children: [
+          { label: 'Meeting room',  labelKey: 'nav.meeting_room', icon: Headphones,   path: '/secretariat/meeting-room' },
+          { label: 'Meetings',      labelKey: 'nav.meetings',     icon: CalendarDays, path: '/secretariat/meetings' },
+        ],
       },
-      { label: 'Notifications',   labelKey: 'nav.notifications', icon: Bell,         path: '/secretariat/notifications' },
+      {
+        label: 'Minutes & Agenda',
+        labelKey: 'nav.sub_minutes_agenda',
+        icon: FileText,
+        children: [
+          { label: 'Agenda',        labelKey: 'nav.agenda',        icon: ScrollText, path: '/secretariat/agenda' },
+          { label: 'Minutes',       labelKey: 'nav.minutes',       icon: FileText,   path: '/secretariat/minutes' },
+          { label: 'Minute intake', labelKey: 'nav.minute_intake', icon: PenLine,    path: '/secretariat/minute-intake' },
+        ],
+      },
+      {
+        label: 'Outcomes',
+        labelKey: 'nav.sub_outcomes',
+        icon: Gavel,
+        children: [
+          { label: 'Decisions',               labelKey: 'nav.decisions',     icon: Gavel,    path: '/secretariat/decisions' },
+          { label: 'Minutes decision tasks',  labelKey: 'nav.minutes_tasks', icon: ListTodo, path: '/secretariat/tasks' },
+          { label: 'Notifications',           labelKey: 'nav.notifications', icon: Bell,     path: '/secretariat/notifications' },
+        ],
+      },
     ],
   },
   {
@@ -108,18 +126,39 @@ const menuItems = [
     adminAccess: true,
     audience: 'exclude_compliance',
     items: [
-      { label: 'Roles & Permissions',      labelKey: 'nav.roles_permissions',      icon: Shield,        path: '/admin/roles-permissions',      visibility: 'admin' },
-      { label: 'Ministries & Departments', labelKey: 'nav.ministries_departments', icon: Building2,     path: '/admin/ministries-departments', visibility: 'admin' },
-      { label: 'PSC Form Types',           labelKey: 'nav.form_types',             icon: ClipboardList, path: '/admin/form-types',             visibility: 'admin' },
-      { label: 'API Keys',                 labelKey: 'nav.api_keys',               icon: Lock,         path: '/admin/api-keys',               visibility: 'roles' },
-      { label: 'System Config',            labelKey: 'nav.system_config',          icon: Settings,     path: '/admin/system-config',          visibility: 'roles' },
-      { label: 'Email templates',          labelKey: 'nav.email_templates',        icon: Mail,         path: '/admin/email-templates',        visibility: 'roles' },
-      { label: 'Daily Brief',              labelKey: 'nav.daily_brief',            icon: Calendar,     path: '/admin/daily-brief',            visibility: 'roles' },
-      { label: 'UI translations',          labelKey: 'nav.ui_translations',        icon: Languages,    path: '/admin/ui-translations',        visibility: 'translations' },
-      { label: 'Knowledge Base',         labelKey: 'nav.knowledge_base',         icon: BookOpen,     path: '/admin/knowledge-base',         visibility: 'admin' },
-      { label: 'Security',                 labelKey: 'nav.security',               icon: ShieldAlert,  path: '/admin/security',               visibility: 'audit' },
-      { label: 'User Feedback',            labelKey: 'nav.feedback',               icon: MessageSquare, path: '/admin/feedback',              visibility: 'feedback' },
-      { label: 'Backup & Restore',         labelKey: 'nav.backup_restore',         icon: HardDrive,    path: '/admin/backup-restore',         visibility: 'roles' },
+      {
+        label: 'Access Control',
+        labelKey: 'nav.sub_access_control',
+        icon: Shield,
+        children: [
+          { label: 'Roles & Permissions',      labelKey: 'nav.roles_permissions',      icon: Shield,        path: '/admin/roles-permissions',      visibility: 'admin' },
+          { label: 'Ministries & Departments', labelKey: 'nav.ministries_departments', icon: Building2,     path: '/admin/ministries-departments', visibility: 'admin' },
+          { label: 'PSC Form Types',           labelKey: 'nav.form_types',             icon: ClipboardList, path: '/admin/form-types',             visibility: 'admin' },
+        ],
+      },
+      {
+        label: 'Content',
+        labelKey: 'nav.sub_content',
+        icon: BookOpen,
+        children: [
+          { label: 'Knowledge Base',  labelKey: 'nav.knowledge_base',  icon: BookOpen,  path: '/admin/knowledge-base',  visibility: 'admin' },
+          { label: 'Email templates', labelKey: 'nav.email_templates', icon: Mail,      path: '/admin/email-templates', visibility: 'roles' },
+          { label: 'Daily Brief',     labelKey: 'nav.daily_brief',     icon: Calendar,  path: '/admin/daily-brief',     visibility: 'roles' },
+          { label: 'UI translations', labelKey: 'nav.ui_translations', icon: Languages, path: '/admin/ui-translations', visibility: 'translations' },
+        ],
+      },
+      {
+        label: 'System',
+        labelKey: 'nav.sub_system',
+        icon: Settings,
+        children: [
+          { label: 'API Keys',        labelKey: 'nav.api_keys',      icon: Lock,      path: '/admin/api-keys',      visibility: 'roles' },
+          { label: 'System Config',   labelKey: 'nav.system_config', icon: Settings,  path: '/admin/system-config', visibility: 'roles' },
+          { label: 'Backup & Restore',labelKey: 'nav.backup_restore',icon: HardDrive, path: '/admin/backup-restore',visibility: 'roles' },
+        ],
+      },
+      { label: 'Security',    labelKey: 'nav.security', icon: ShieldAlert,   path: '/admin/security', visibility: 'audit' },
+      { label: 'User Feedback',labelKey: 'nav.feedback', icon: MessageSquare, path: '/admin/feedback', visibility: 'feedback' },
     ],
   },
 ]
@@ -137,7 +176,7 @@ export function getAllPaths(items) {
   const paths = []
   items.forEach(item => {
     if (item.path) paths.push(item.path)
-    if (item.children) item.children.forEach(c => paths.push(c.path))
+    if (item.children) item.children.forEach(c => { if (c.path) paths.push(c.path) })
   })
   return paths
 }
@@ -153,6 +192,34 @@ export function flattenItems(items) {
     }
   })
   return flat
+}
+
+/** Check whether a single item passes its visibility rule for adminAccess groups */
+function passesAdminVisibility(vis, user, feedbackEnabled) {
+  if (vis === 'admin') return userCanAccessAdminPanel(user)
+  if (vis === 'roles') return userCanManageRoles(user)
+  if (vis === 'audit') return userCanViewAuditLog(user)
+  if (vis === 'feedback') return feedbackEnabled && userCanManageFeedback(user)
+  if (vis === 'translations') return userCanManageTranslations(user)
+  return true
+}
+
+/** Filter a single admin item (may have children) */
+function filterAdminItem(item, user, feedbackEnabled) {
+  if (!menuItemVisibleForUser(item, user)) return null
+
+  if (item.children) {
+    // Parent sub-menu: keep it if at least one child is visible
+    const visibleChildren = item.children.filter(child => {
+      if (!menuItemVisibleForUser(child, user)) return false
+      return passesAdminVisibility(child.visibility ?? 'admin', user, feedbackEnabled)
+    })
+    if (visibleChildren.length === 0) return null
+    return { ...item, children: visibleChildren }
+  }
+
+  // Leaf item
+  return passesAdminVisibility(item.visibility ?? 'admin', user, feedbackEnabled) ? item : null
 }
 
 export function getVisibleMenuForUser(user, feedbackEnabled = true) {
@@ -178,21 +245,11 @@ export function getVisibleMenuForUser(user, feedbackEnabled = true) {
       if (group.adminAccess) {
         if (!user) return null
         const showGroup =
-          userCanAccessAdminPanel(user) || userCanViewAuditLog(user)
+          userCanAccessAdminPanel(user) || userCanViewAuditLog(user) || userCanManageFeedback(user)
         if (!showGroup) return null
-        const items = group.items.filter((item) => {
-          if (!menuItemVisibleForUser(item, user)) return false
-          const vis = item.visibility ?? 'admin'
-          if (vis === 'admin') return userCanAccessAdminPanel(user)
-          if (vis === 'roles') return userCanManageRoles(user)
-          if (vis === 'audit') return userCanViewAuditLog(user)
-          if (vis === 'feedback') {
-            if (!feedbackEnabled) return false
-            return userCanManageFeedback(user)
-          }
-          if (vis === 'translations') return userCanManageTranslations(user)
-          return true
-        })
+        const items = group.items
+          .map(item => filterAdminItem(item, user, feedbackEnabled))
+          .filter(Boolean)
         if (items.length === 0) return null
         return { ...group, items }
       }
