@@ -78,13 +78,8 @@ export default function Login() {
         } else {
           setShow2FA(true)
         }
-      } else {
-        const from = location.state?.from
-        const to   = from?.pathname != null
-          ? `${from.pathname}${from.search || ''}${from.hash || ''}`
-          : '/'
-        navigate(to, { replace: true })
       }
+      // Redirect via <Navigate> when accessToken, user, and authReady are set (see top of component).
     } catch (err) {
       const detail = err.response?.data?.detail
       setError(typeof detail === 'string' ? detail : 'Sign-in failed. Please check your credentials.')

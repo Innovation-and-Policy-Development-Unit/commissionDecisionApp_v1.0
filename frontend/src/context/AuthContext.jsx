@@ -124,6 +124,7 @@ export function AuthProvider({ children }) {
       setAuthReady(true)
       return
     }
+    setAuthReady(false)
     try {
       const { data } = await api.get('/me/')
       setUser(normalizeUserMedia(data))
@@ -138,9 +139,17 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // Hydrate session on mount when a JWT is already in storage (page refresh).
   useEffect(() => {
-    setAccessToken(localStorage.getItem('psc_access'))
-  }, [])
+    const token = localStorage.getItem('psc_access')
+    if (!token) {
+      setUser(null)
+      setAuthReady(true)
+      return
+    }
+    setAccessToken(token)
+    refreshMe()
+  }, [refreshMe])
 
   // Listen for cross-tab clear / silent token refresh
   useEffect(() => {
@@ -153,7 +162,10 @@ export function AuthProvider({ children }) {
     }
     const onRefreshed = (e) => {
       const access = e.detail?.access
-      if (access) setAccessToken(access)
+      if (access) {
+        setAccessToken(access)
+        refreshMe()
+      }
     }
     window.addEventListener('psc-auth:cleared', onCleared)
     window.addEventListener('psc-auth:refreshed', onRefreshed)
@@ -161,18 +173,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener('psc-auth:cleared', onCleared)
       window.removeEventListener('psc-auth:refreshed', onRefreshed)
     }
-  }, [])
-
-  useEffect(() => {
-    const token = localStorage.getItem('psc_access')
-    if (!token) {
-      setUser(null)
-      setAuthReady(true)
-      return
-    }
-    setAuthReady(false)
-    refreshMe()
-  }, [accessToken, refreshMe])
+  }, [refreshMe])
 
   // ── Login ─────────────────────────────────────────────────────────────────
   const setTokens = useCallback((access, refresh) => {
@@ -181,7 +182,7 @@ export function AuthProvider({ children }) {
     setAccessToken(access)
   }, [])
 
-  const login = async (username, password) => {
+  const login = useCallback(async (username, password) => {
     const { data } = await api.post('/auth/token/', { username, password })
 
     if (data.two_factor_required || data.pin_required) {
@@ -189,20 +190,9 @@ export function AuthProvider({ children }) {
     }
 
     setTokens(data.access, data.refresh)
-    try {
-      const me = await api.get('/me/')
-      setUser(normalizeUserMedia(me.data))
-    } catch (err) {
-      localStorage.removeItem('psc_access')
-      localStorage.removeItem('psc_refresh')
-      setAccessToken(null)
-      setUser(null)
-      setAuthReady(true)
-      throw err
-    }
-    setAuthReady(true)
+    await refreshMe()
     return data
-  }
+  }, [setTokens, refreshMe])
 
   const value = useMemo(
     () => ({
