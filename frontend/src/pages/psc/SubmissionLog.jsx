@@ -683,7 +683,7 @@ export default function SubmissionLog() {
         }
         subtitle={
           modalCreateMode === 'secretary'
-            ? t('submission.secretary_approval_hint')
+            ? undefined
             : modalCreateMode === 'commission'
               ? t('submission.submit_for_commission_hint')
               : t('submission.internal_submission_hint')
