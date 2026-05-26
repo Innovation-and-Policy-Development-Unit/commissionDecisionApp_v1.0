@@ -55,7 +55,11 @@ _SECRETARY_ONLY_STAGE_GRAPH = {
         WorkflowStage.SUBMITTED,
     ],
     WorkflowStage.SUBMITTED: [
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+    ],
+    WorkflowStage.MANAGER_CHECKLIST_REVIEW: [
         WorkflowStage.SECRETARY_REVIEW,
+        WorkflowStage.RETURNED_FOR_CLARIFICATION,
     ],
     WorkflowStage.SECRETARY_REVIEW: [
         WorkflowStage.APPROVED,
@@ -288,9 +292,17 @@ def assert_transition_allowed(
                 raise PermissionDenied("Travellers can submit or respond to clarification requests.")
             return
 
-        if role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
-            if current_stage == WorkflowStage.SUBMITTED and target_stage == WorkflowStage.SECRETARY_REVIEW:
+        if role in {Role.ODU_MANAGER}:
+            allowed_pairs = {
+                (WorkflowStage.SUBMITTED, WorkflowStage.MANAGER_CHECKLIST_REVIEW),
+                (WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.SECRETARY_REVIEW),
+                (WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.RETURNED_FOR_CLARIFICATION),
+            }
+            if (current_stage, target_stage) in allowed_pairs:
                 return
+            raise PermissionDenied("ODU Manager can review and forward travel submissions to the Secretary.")
+
+        if role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
             if current_stage == WorkflowStage.SECRETARY_REVIEW and target_stage in {
                 WorkflowStage.APPROVED,
                 WorkflowStage.REJECTED,
@@ -298,17 +310,11 @@ def assert_transition_allowed(
             }:
                 return
             raise PermissionDenied(
-                "Secretary can move travel submissions: Submitted→Secretary Review, "
-                "or Secretary Review→Approved/Rejected/Returned."
+                "Secretary can decide travel submissions from the Secretary Review stage."
             )
 
         if role == Role.PSC_OFFICER:
-            if (current_stage, target_stage) == (
-                WorkflowStage.SUBMITTED,
-                WorkflowStage.SECRETARY_REVIEW,
-            ):
-                return
-            raise PermissionDenied("PSC Officers can register travel submissions for Secretary review.")
+            raise PermissionDenied("Travel submissions are routed to ODU Manager before Secretary review.")
 
         if role == Role.PSC_ADMIN:
             return
@@ -460,10 +466,12 @@ def iter_allowed_targets(
             if current_stage == WorkflowStage.RETURNED_FOR_CLARIFICATION:
                 return [WorkflowStage.SUBMITTED, WorkflowStage.DRAFT]
             return []
-        if role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
+        if role == Role.ODU_MANAGER:
             return list(_SECRETARY_ONLY_STAGE_GRAPH.get(current_stage, []))
-        if role == Role.PSC_OFFICER and current_stage == WorkflowStage.SUBMITTED:
-            return [WorkflowStage.SECRETARY_REVIEW]
+        if role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
+            if current_stage == WorkflowStage.SECRETARY_REVIEW:
+                return list(_SECRETARY_ONLY_STAGE_GRAPH.get(current_stage, []))
+            return []
         return []
 
     if is_internal:

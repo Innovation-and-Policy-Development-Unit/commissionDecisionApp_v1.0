@@ -298,7 +298,6 @@ POST /api/submissions/
   "form_type_code": "PSC 4.5",
   "received_at": "2026-05-22T08:00:00+11:00",
   "travel_endorsers": {
-    "hod": 42,
     "director": 55,
     "dg": 7
   },
@@ -308,7 +307,9 @@ POST /api/submissions/
 
 Response sets `secretary_only: true`, `requires_travel_letter` (true for 4.5 and 4.6).
 
-**Form 4.4** — domestic travel allowance: **only `head_of_agency`** (department director or ministry DG). Staff 4.4 is **not** accepted via API. DG path: self-sign then Secretary; department director: DG endorsement then Secretary.
+**Form 4.4** — domestic travel allowance: **only `head_of_agency`** (department director or ministry DG). Staff 4.4 is **not** accepted via API. **No ministry endorser slots are captured in SCDMS for 4.4**; travel requests route **Submitted → ODU Manager review → Secretary approval**.
+
+**Forms 4.5 / 4.6** — overseas travel: route **Submitted → ODU Manager review → Secretary approval**. If created by department staff, Director then DG endorsement is required before submit. If the DG is on leave, the DG may nominate an **Officer-in-Charge** (< 5 days) or an **Acting DG** (≥ 5 days) to sign the DG slot.
 
 #### Workflow transition
 
@@ -323,7 +324,7 @@ POST /api/submissions/{id}/transition/
 
 Allowed `new_stage` values depend on **current stage**, **role**, `is_internal`, and `secretary_only`. See §8.
 
-Travel submissions in `draft` → `submitted` require **all ministry endorsements** signed via `/api/submissions/{id}/sign-travel-section/`.
+Travel submissions in `draft` → `submitted` require any **required endorsements** signed via `/api/submissions/{id}/sign-travel-section/` (4.4 has none; 4.5/4.6 may require Director and DG depending on who created the request).
 
 #### Key read-only fields on detail
 
@@ -334,7 +335,7 @@ Travel submissions in `draft` → `submitted` require **all ministry endorsement
 | `form_type_code` | e.g. `PSC 3.6`, `PSC 4.5` |
 | `secretary_only` | Secretary path (no Commission sitting) |
 | `requires_travel_letter` | 4.5 / 4.6 letter after Secretary approval |
-| `travel_endorsers` | `{ "dg": 7, "hod": 42, ... }` user IDs |
+| `travel_endorsers` | `{ "director": 55, "dg": 7 }` user IDs (when endorsements are required) |
 | `implementation_status` | Post-decision implementation |
 | `cms_case_id` | Linked CMS case (compliance) |
 | `subway_map` | UI workflow map (optional for integrations) |

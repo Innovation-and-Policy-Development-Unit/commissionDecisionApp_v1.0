@@ -34,28 +34,26 @@ export function canCreateForm44(user) {
 }
 
 export const ENDORSER_SLOTS_45_46 = [
-  { key: 'hod', label: 'Head of Department' },
   { key: 'director', label: 'Director' },
-  { key: 'dg', label: 'Director-General' },
-  { key: 'minister', label: 'Minister (if DG is travelling — Form 4.5)' },
+  { key: 'dg', label: 'Director-General (or Officer-in-Charge / Acting DG)' },
 ]
 
 /** Endorser fields shown when creating a secretary travel request. */
 export function endorserSlotsForTravelForm(formTypeCode, user) {
   const code = normalizeTravelFormCode(formTypeCode)
   if (isForm44Code(code)) {
-    if (user?.role === 'head_of_agency' && user?.department_id) {
-      return [{ key: 'dg', label: 'Director-General (signs before Secretary)' }]
-    }
     return []
   }
   if (code === 'PSC 4.5') {
-    return ENDORSER_SLOTS_45_46.filter(s => s.key !== 'minister')
-  }
-  if (code === 'PSC 4.6') {
+    if (user?.role === 'head_of_agency') return []
     return ENDORSER_SLOTS_45_46
   }
-  return ENDORSER_SLOTS_45_46.filter(s => s.key !== 'minister')
+  if (code === 'PSC 4.6') {
+    if (user?.role === 'head_of_agency') return []
+    return ENDORSER_SLOTS_45_46
+  }
+  if (user?.role === 'head_of_agency') return []
+  return ENDORSER_SLOTS_45_46
 }
 
 export function isTravellerRole(user) {

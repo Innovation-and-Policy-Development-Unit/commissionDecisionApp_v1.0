@@ -34,10 +34,8 @@ export default function TravelEndorsementPanel({ submissionId, submission, onSig
     const uid = data.travel_endorsers?.[section.signer] || data.travel_endorsers?.[`${section.signer}_id`]
     if (uid && Number(uid) === user.id) return true
     if (section.signer === 'secretary' && ['psc_secretary', 'psc_admin'].includes(user.role)) return true
-    if (section.signer === 'hod' && user.role === 'dept_admin') return true
     if (section.signer === 'director' && user.role === 'dept_admin') return true
     if (section.signer === 'dg' && user.role === 'head_of_agency') return true
-    if (section.signer === 'minister' && user.role === 'head_of_agency') return true
     return false
   }
 
@@ -67,7 +65,8 @@ export default function TravelEndorsementPanel({ submissionId, submission, onSig
       <div>
         <h3 className="text-sm font-semibold text-sky-900 dark:text-sky-100">Travel endorsements</h3>
         <p className="text-xs text-sky-800/80 dark:text-sky-200/80 mt-0.5">
-          Ministry sign-offs are captured in-system before submit. Forms 4.5 &amp; 4.6 receive an official letter after Secretary approval.
+          Where required, Director and DG sign-offs are captured in-system before submit. ODU Manager reviews before Secretary decision.
+          Forms 4.5 &amp; 4.6 receive an official letter after Secretary approval.
         </p>
       </div>
       <ul className="space-y-2">

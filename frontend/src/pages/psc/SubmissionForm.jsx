@@ -219,10 +219,8 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     form_type_code: '',
     department: '',
     notes: '',
-    hod: '',
     director: '',
     dg: '',
-    minister: '',
   })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -240,12 +238,11 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
     setBusy(true)
     setError('')
     try {
-      const travel_endorsers = {
-        hod: form.hod ? Number(form.hod) : null,
-        director: form.director ? Number(form.director) : null,
-        dg: form.dg ? Number(form.dg) : null,
-        minister: form.minister ? Number(form.minister) : null,
-      }
+      const travel_endorsers = {}
+      endorserSlotsForTravelForm(form.form_type_code, user).forEach(slot => {
+        const raw = form[slot.key]
+        if (raw) travel_endorsers[slot.key] = Number(raw)
+      })
       const payload = {
         title: form.title.trim(),
         form_type_code: form.form_type_code,
@@ -256,7 +253,7 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
       }
       if (form.department) payload.department = Number(form.department)
       const { data: submission } = await api.post('/submissions/', payload)
-      toast.success('Travel request created. Complete the form and collect endorsements before submitting to PSC.')
+      toast.success('Travel request created. Complete the form and submit when ready.')
       if (onSuccess) onSuccess(submission.id)
       else navigate(`/submissions/${submission.id}`)
     } catch (err) {
@@ -284,12 +281,12 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
         {isForm44 ? (
           <>
             {' '}<strong>Form {FORM_44_CODE}</strong> is for department directors and ministry Director-General only.
-            After you sign, {user?.department_id ? 'the DG endorses, then' : ''} the Secretary approves.
+            After submission, ODU Manager reviews, then the Secretary approves.
             Staff domestic travel is handled within your ministry and is not lodged here.
           </>
         ) : (
           <>
-            {' '}Collect ministry endorsements on the form, then submit to PSC. Not listed for a Commission sitting.
+            {' '}If required, collect Director and DG endorsements, then submit. ODU Manager reviews before Secretary approval.
           </>
         )}
       </div>

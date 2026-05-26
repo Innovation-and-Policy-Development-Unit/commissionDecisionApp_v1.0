@@ -489,6 +489,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     secretary_only=True,
                     requires_travel_letter=requires_approval_letter(form_code),
                     travel_endorsers=endorsers if isinstance(endorsers, dict) else {},
+                    routed_unit=RoutedUnit.ODU,
                 )
             if profile.ministry_id:
                 kwargs["ministry_id"] = profile.ministry_id
@@ -520,6 +521,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 "secretary_only": True,
                 "requires_travel_letter": requires_approval_letter(form_code),
                 "travel_endorsers": endorsers if isinstance(endorsers, dict) else {},
+                "routed_unit": RoutedUnit.ODU,
             }
             if profile.ministry_id:
                 kwargs["ministry_id"] = profile.ministry_id
@@ -545,6 +547,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     secretary_only=True,
                     requires_travel_letter=requires_approval_letter(form_code),
                     travel_endorsers=endorsers if isinstance(endorsers, dict) else {},
+                    routed_unit=RoutedUnit.ODU,
                 )
             if profile.ministry_id:
                 kwargs["ministry_id"] = profile.ministry_id
@@ -602,6 +605,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     "secretary_only": True,
                     "requires_travel_letter": requires_approval_letter(form_code),
                     "travel_endorsers": endorsers if isinstance(endorsers, dict) else {},
+                    "routed_unit": RoutedUnit.ODU,
                 }
             submission = serializer.save(**kwargs)
         else:
@@ -706,8 +710,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 return Response(
                     {
                         "detail": (
-                            "All required ministry endorsements must be digitally signed "
-                            "before submitting to the Public Service Commission."
+                            "All required endorsements must be digitally signed "
+                            "before submitting."
                         ),
                     },
                     status=status.HTTP_400_BAD_REQUEST,

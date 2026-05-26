@@ -1,12 +1,12 @@
 """
-PSC Forms 4.4 / 4.5 / 4.6 — travel & overseas mission workflows.
+PSC Forms 4.4 / 4.5 / 4.6 — travel workflows.
 
-Form 4.4 (domestic travel allowance) is secretary-only and only for department
-directors and ministry Director-General (head_of_agency). Staff-level 4.4 is
-approved within the ministry and is not lodged in SCDMS.
-
-Forms 4.5 and 4.6 are for overseas travel; ministry staff may lodge them here
-with in-system endorsements before Secretary sign-off.
+Workflow (v1.0 behaviour aligned with current policy):
+- 4.4: Department Director / Ministry DG only. No ministry endorsements captured in SCDMS.
+  Routed to ODU Manager review, then Secretary approval.
+- 4.5 / 4.6: Similar routing (ODU Manager → Secretary). If created by department staff,
+  Director then DG endorsement is required before submit. (DG can nominate Officer-in-Charge
+  or Acting DG depending on leave duration; still satisfies the DG sign-off slot.)
 """
 
 from __future__ import annotations
@@ -40,11 +40,10 @@ SECRETARY_TRAVEL_CREATOR_ROLES = frozenset({
 
 # Signer role hints used by the sign-section API
 SIGNER_CREATOR = "creator"
-SIGNER_HOD = "hod"
 SIGNER_DIRECTOR = "director"
 SIGNER_DG = "dg"
-SIGNER_MINISTER = "minister"
 SIGNER_SECRETARY = "secretary"
+SIGNER_ODU_MANAGER = "odu_manager"
 
 TRAVEL_FORM_TYPES = (
     (TRAVEL_FORM_44, "Domestic Travel Allowance (Form 4.4)"),
@@ -134,39 +133,24 @@ def endorsement_sections(form_type_code: str, submission=None) -> list[dict]:
     """Ordered endorsement slots that must be signed before submit to PSC."""
     code = normalize_form_type_code(form_type_code)
     if code == TRAVEL_FORM_44:
-        if submission and is_dept_director_submission(submission):
-            return [
-                {
-                    "key": "claimant_signature",
-                    "label": "Department director (claimant)",
-                    "signer": SIGNER_CREATOR,
-                },
-                {
-                    "key": "dg_signature",
-                    "label": "Director-General",
-                    "signer": SIGNER_DG,
-                },
-            ]
-        return [
-            {
-                "key": "claimant_signature",
-                "label": "Director-General (claimant)",
-                "signer": SIGNER_CREATOR,
-            },
-        ]
+        # 4.4 goes directly to ODU Manager review; no ministry endorsement slots.
+        return []
     if code == TRAVEL_FORM_45:
+        # Staff chain (if not created by Head of Agency): Director → DG.
+        creator = _creator_profile(submission) if submission else None
+        if creator and creator.role == Role.HEAD_OF_AGENCY:
+            return []
         return [
-            {"key": "applicant_signature", "label": "Applicant", "signer": SIGNER_CREATOR},
             {"key": "director_signature", "label": "Director", "signer": SIGNER_DIRECTOR},
             {"key": "dg_signature", "label": "Director-General", "signer": SIGNER_DG},
-            {"key": "minister_signature", "label": "Minister", "signer": SIGNER_MINISTER, "optional": True},
         ]
     if code == TRAVEL_FORM_46:
+        creator = _creator_profile(submission) if submission else None
+        if creator and creator.role == Role.HEAD_OF_AGENCY:
+            return []
         return [
-            {"key": "mission_leader_signature", "label": "Mission leader", "signer": SIGNER_CREATOR},
             {"key": "director_signature", "label": "Director", "signer": SIGNER_DIRECTOR},
             {"key": "dg_signature", "label": "Director-General", "signer": SIGNER_DG},
-            {"key": "minister_signature", "label": "Minister / PM", "signer": SIGNER_MINISTER},
         ]
     return []
 
@@ -221,16 +205,10 @@ def user_may_sign_section(
     except Exception:
         return False
 
-    if signer == SIGNER_HOD and role == Role.DEPT_ADMIN:
-        if submission.department_id and prof.department_id == submission.department_id:
-            return True
     if signer == SIGNER_DIRECTOR and role == Role.DEPT_ADMIN:
         if submission.department_id and prof.department_id == submission.department_id:
             return True
     if signer == SIGNER_DG and role == Role.HEAD_OF_AGENCY:
-        if submission.ministry_id and prof.ministry_id == submission.ministry_id:
-            return True
-    if signer == SIGNER_MINISTER and role == Role.HEAD_OF_AGENCY:
         if submission.ministry_id and prof.ministry_id == submission.ministry_id:
             return True
     return False
