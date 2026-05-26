@@ -1343,7 +1343,7 @@ const stageDescriptions = {
     </div>
 
     {/* ── AI Analysis Section (PSC staff only) ─────────────────────────── */}
-    {submission && !isComplianceRole(profile?.role) && (
+    {submission && !isComplianceRole(user?.role) && (
       <div style={{ marginTop: '32px' }}>
         <details>
           <summary style={{ cursor: 'pointer', userSelect: 'none', marginBottom: '16px' }}>
