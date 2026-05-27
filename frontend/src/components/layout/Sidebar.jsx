@@ -167,21 +167,9 @@ function CollapsedGroupItem({ group }) {
 }
 
 // Expanded sidebar: individual items with accordion for children
-function NavItem({ item }) {
+function NavItem({ item, itemKey, openKey, setOpenKey }) {
   const { t } = useTranslation()
   const location = useLocation()
-  const [open, setOpen] = useState(() => {
-    if (!item.children) return false
-    return item.children.some(c => c.path === location.pathname)
-  })
-
-  // Auto-open accordion when navigating to a child route (e.g., direct URL or browser back/forward)
-  useEffect(() => {
-    if (!item.children) return
-    if (item.children.some(c => c.path === location.pathname)) {
-      setOpen(true)
-    }
-  }, [location.pathname, item.children])
 
   const hasChildren = !!item.children
   const Icon = item.icon
@@ -218,13 +206,20 @@ function NavItem({ item }) {
   }
 
   const anyChildActive = item.children.some(c => c.path === location.pathname)
+  const open = openKey === itemKey || anyChildActive
+
+  // Ensure the active parent section is open when navigating directly to a child route
+  useEffect(() => {
+    if (!anyChildActive) return
+    setOpenKey(itemKey)
+  }, [anyChildActive, itemKey, setOpenKey])
 
   return (
     <div>
       <button
         type="button"
         aria-expanded={open}
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpenKey(curr => (curr === itemKey ? null : itemKey))}
         className={clsx(
           'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
           anyChildActive
@@ -276,6 +271,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
   const { sidebarCollapsed, feedbackEnabled } = useTheme()
   const { user } = useAuth()
   const collapsed = sidebarCollapsed
+  const [openKey, setOpenKey] = useState(null)
 
   const visibleMenu = useMemo(
     () => getVisibleMenuForUser(user, feedbackEnabled),
@@ -334,7 +330,13 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
                 </div>
                 <div className="space-y-0.5">
                   {group.items.map(item => (
-                    <NavItem key={item.path || item.label} item={item} />
+                    <NavItem
+                      key={item.path || item.label}
+                      item={item}
+                      itemKey={item.path || item.label}
+                      openKey={openKey}
+                      setOpenKey={setOpenKey}
+                    />
                   ))}
                 </div>
               </div>

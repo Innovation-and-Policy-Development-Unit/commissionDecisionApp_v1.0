@@ -136,13 +136,9 @@ function HorizGroupItem({ group }) {
 }
 
 // Mobile: individual nav items matching sidebar expanded style
-function MobileNavItem({ item, onClose }) {
+function MobileNavItem({ item, onClose, itemKey, openKey, setOpenKey }) {
   const { t } = useTranslation()
   const location = useLocation()
-  const [open, setOpen] = useState(() => {
-    if (!item.children) return false
-    return item.children.some(c => c.path === location.pathname)
-  })
 
   const hasChildren = !!item.children
   const Icon = item.icon
@@ -167,13 +163,19 @@ function MobileNavItem({ item, onClose }) {
   }
 
   const anyChildActive = item.children.some(c => c.path === location.pathname)
+  const open = openKey === itemKey || anyChildActive
+
+  useEffect(() => {
+    if (!anyChildActive) return
+    setOpenKey(itemKey)
+  }, [anyChildActive, itemKey, setOpenKey])
 
   return (
     <div>
       <button
         type="button"
         aria-expanded={open}
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpenKey(curr => (curr === itemKey ? null : itemKey))}
         className={clsx(
           'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
           anyChildActive
@@ -222,6 +224,7 @@ export default function HorizontalMenu({ mobileOpen, onMobileClose }) {
   const { t } = useTranslation()
   const { user } = useAuth()
   const { feedbackEnabled } = useTheme()
+  const [openKey, setOpenKey] = useState(null)
   const visibleMenuGroups = useMemo(
     () => getVisibleMenuForUser(user, feedbackEnabled),
     [user, feedbackEnabled]
@@ -284,7 +287,14 @@ export default function HorizontalMenu({ mobileOpen, onMobileClose }) {
               </div>
               <div className="space-y-0.5">
                 {group.items.map(item => (
-                  <MobileNavItem key={item.path || item.label} item={item} onClose={onMobileClose} />
+                  <MobileNavItem
+                    key={item.path || item.label}
+                    item={item}
+                    onClose={onMobileClose}
+                    itemKey={item.path || item.label}
+                    openKey={openKey}
+                    setOpenKey={setOpenKey}
+                  />
                 ))}
               </div>
             </div>
