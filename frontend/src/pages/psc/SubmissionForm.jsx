@@ -13,7 +13,8 @@ import {
   isTravelFormCode,
   TRAVEL_CATEGORY_CODE,
 } from '../../constants/travel'
-import { filterCommissionFormTypes, filterSecretaryFormTypes } from '../../constants/submissionCreate'
+import { filterSecretaryFormTypes } from '../../constants/submissionCreate'
+import { COMMISSION_LODGE_SECTIONS } from '../../constants/agendaCategories'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -340,14 +341,13 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CommissionSubmissionForm({
-  modal, onClose, onSuccess, formTypes, categories, ministries, departments, isMinistryUser,
+  modal, onClose, onSuccess, ministries, departments, isMinistryUser,
 }) {
   const navigate = useNavigate()
   const toast = useToast()
   const [form, setForm] = useState({
     title: '',
-    form_type_code: '',
-    form_category: '',
+    agenda_category: 'other',
     ministry: '',
     department: '',
     notes: '',
@@ -355,35 +355,20 @@ function CommissionSubmissionForm({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const hasFormTypes = formTypes.length > 0
-
   useEffect(() => {
     if (ministries.length === 1 && !form.ministry) {
       setForm(f => ({ ...f, ministry: String(ministries[0].id) }))
     }
   }, [ministries, form.ministry])
 
-  const onFormTypeChange = code => {
-    const ft = formTypes.find(t => t.code === code)
-    setForm(f => ({
-      ...f,
-      form_type_code: code,
-      form_category: ft?.form_category ? String(ft.form_category) : f.form_category,
-    }))
-  }
-
   const submit = async e => {
     e.preventDefault()
-    if (hasFormTypes && !form.form_type_code) {
-      setError('Please select a PSC form type.')
+    if (!form.agenda_category) {
+      setError('Please select an agenda section.')
       return
     }
     if (!form.title.trim()) {
       setError('Please enter a title / subject.')
-      return
-    }
-    if (!hasFormTypes && !form.form_category) {
-      setError('Please select a submission category.')
       return
     }
     setBusy(true)
@@ -391,11 +376,10 @@ function CommissionSubmissionForm({
     try {
       const payload = {
         title: form.title.trim(),
+        agenda_category: form.agenda_category,
         received_at: new Date().toISOString(),
         notes: form.notes,
       }
-      if (form.form_type_code) payload.form_type_code = form.form_type_code
-      if (form.form_category) payload.form_category = Number(form.form_category)
       if (!isMinistryUser && form.ministry) payload.ministry = Number(form.ministry)
       if (form.department) payload.department = Number(form.department)
 
@@ -419,6 +403,7 @@ function CommissionSubmissionForm({
     <div>
       <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-100">
         This matter goes through <strong>PSC unit assessment</strong> and may be listed for a <strong>Commission sitting</strong>.
+        Scanned <strong>PSC forms and supporting papers</strong> are attached after you create the submission.
         For overseas travel (Forms 4.5–4.6) or director domestic travel (Form 4.4), use <strong>Secretary approval</strong>.
       </div>
 
@@ -431,43 +416,24 @@ function CommissionSubmissionForm({
       )}
 
       <form onSubmit={submit} className={modal ? 'space-y-4' : 'card p-6 space-y-4 max-w-3xl'}>
-        {hasFormTypes ? (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              PSC form type <span className="text-red-500">*</span>
-            </label>
-            <select
-              className="input"
-              required
-              value={form.form_type_code}
-              onChange={e => onFormTypeChange(e.target.value)}
-            >
-              <option value="">— Select form —</option>
-              {formTypes.map(ft => (
-                <option key={ft.id} value={ft.code}>{ft.code} — {ft.name}</option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Submission category <span className="text-red-500">*</span>
-            </label>
-            <select
-              className="input"
-              required
-              value={form.form_category}
-              onChange={e => setForm(f => ({ ...f, form_category: e.target.value }))}
-            >
-              <option value="">— Select category —</option>
-              {categories
-                .filter(c => c.name !== 'Internal Submissions' && c.code !== TRAVEL_CATEGORY_CODE && c.code !== 'COMPLIANCE')
-                .map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-            </select>
-          </div>
-        )}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            Agenda section <span className="text-red-500">*</span>
+          </label>
+          <select
+            className="input"
+            required
+            value={form.agenda_category}
+            onChange={e => setForm(f => ({ ...f, agenda_category: e.target.value }))}
+          >
+            {COMMISSION_LODGE_SECTIONS.map(section => (
+              <option key={section.value} value={section.value}>{section.label}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Which Commission agenda section this matter belongs to. PSC form numbers are not required here — attach them as documents on the next screen.
+          </p>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -785,7 +751,6 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   }
 
   const effectiveMode = createMode || 'commission'
-  const commissionFormTypes = filterCommissionFormTypes(formTypes, categories)
   const secretaryFormTypes = filterSecretaryFormTypes(formTypes, categories, user)
   const travelFormTypes = secretaryFormTypes.length
     ? secretaryFormTypes
@@ -826,8 +791,6 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
         modal={modal}
         onClose={onClose}
         onSuccess={onSuccess}
-        formTypes={commissionFormTypes}
-        categories={categories}
         ministries={ministries}
         departments={departments}
         isMinistryUser={isMinistryUser}

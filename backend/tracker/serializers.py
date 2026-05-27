@@ -481,12 +481,12 @@ class SubmissionListSerializer(serializers.ModelSerializer):
         return obj.assigned_to.get_full_name() or obj.assigned_to.username if obj.assigned_to else None
 
     def get_form_agenda_category(self, obj):
-        """Return the agenda_category from the linked PSCFormType, or 'other'.
-        Uses a per-request cache to avoid N+1 queries."""
+        """Agenda section for this submission: lodge-time choice, else form type, else other."""
+        if obj.agenda_category:
+            return obj.agenda_category
         cache = self.context.get("_ft_agenda_cache")
         if cache is None:
             cache = dict(PSCFormType.objects.values_list("code", "agenda_category"))
-            # Store back — context is a shared dict for this serializer instance
             self.context["_ft_agenda_cache"] = cache
         return cache.get(obj.form_type_code) or "other"
 
@@ -497,6 +497,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "reference_number",
             "title",
             "form_type_code",
+            "agenda_category",
             "form_agenda_category",
             "ministry_name",
             "category_name",
@@ -593,6 +594,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "reference_number",
             "title",
             "form_type_code",
+            "agenda_category",
             "form_type_detail",
             "ministry",
             "department",
@@ -881,6 +883,7 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             "title",
             "form_category",
             "form_type_code",
+            "agenda_category",
             "ministry",
             "department",
             "routed_unit",

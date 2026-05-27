@@ -1048,6 +1048,13 @@ class Submission(models.Model):
     title = models.CharField(max_length=512)
     form_category = models.ForeignKey(FormCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name="submissions")
     form_type_code = models.CharField(max_length=64, blank=True, help_text='e.g. "PSC 3.6"')
+    agenda_category = models.CharField(
+        max_length=32,
+        choices=AgendaCategory.choices,
+        blank=True,
+        default="",
+        help_text="Commission agenda section chosen at lodge (paper submissions).",
+    )
     ministry = models.ForeignKey(Ministry, on_delete=models.PROTECT, related_name="submissions")
     department = models.ForeignKey(
         Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="submissions"

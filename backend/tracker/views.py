@@ -4661,15 +4661,17 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         submission = serializer.validated_data["submission"]
         category   = serializer.validated_data.get("category", "other")
 
-        # Auto-derive agenda category from the submission's form type when the
-        # caller did not provide an explicit non-'other' value.
-        if category == "other" and submission.form_type_code:
-            try:
-                ft = PSCFormType.objects.get(code=submission.form_type_code)
-                if ft.agenda_category and ft.agenda_category != "other":
-                    category = ft.agenda_category
-            except PSCFormType.DoesNotExist:
-                pass
+        # Prefer lodge-time agenda section, then form type mapping.
+        if category == "other":
+            if submission.agenda_category and submission.agenda_category != "other":
+                category = submission.agenda_category
+            elif submission.form_type_code:
+                try:
+                    ft = PSCFormType.objects.get(code=submission.form_type_code)
+                    if ft.agenda_category and ft.agenda_category != "other":
+                        category = ft.agenda_category
+                except PSCFormType.DoesNotExist:
+                    pass
 
         # Enforce effective cutoff (manual submission_cutoff or auto 3-day rule)
         if submission.received_at:

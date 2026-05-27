@@ -28,32 +28,11 @@ import {
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
   Send, ThumbsUp, Mail, ChevronsRight, Tablet,
 } from 'lucide-react'
-
-// ── Category config (order matches real PSC agenda template) ────────────────
-
-const CATEGORIES = [
-  { value: 'preliminaries',         label: '1. Preliminaries & Endorsements',                                 isSpecial: true  },
-  { value: 'matters_arising',       label: '2. Matters Arising',                                               isSpecial: true  },
-  { value: 'discipline_compliance', label: '3. Discipline / Compliance',                                         isSpecial: false },
-  { value: 'health_commission',     label: '4. Health Commission',                                             isSpecial: false },
-  { value: 'appointment',           label: '5. Appointment / Acting Appointment',                              isSpecial: false },
-  { value: 'direct_appointment',    label: '6. Direct Appointment / Confirmation of Appointment',              isSpecial: false },
-  { value: 'extra_responsibility',  label: '7. Extra Responsibility / Overtime Allowance / Special Skills Allowance', isSpecial: false },
-  { value: 'contract',              label: '8. Contract / Temporary Salaried Appointment',                     isSpecial: false },
-  { value: 'temporary_salaried',    label: '9. Temporary Salaried Appointment',                                isSpecial: false },
-  { value: 'salary_adjustment',     label: '10. Salary Adjustment',                                            isSpecial: false },
-  { value: 'training',              label: '11. Long Term Training / Scholarship / Internship / Cadetship / Extension / Direct Appointment', isSpecial: false },
-  { value: 'medical_claim',         label: '12. Medical Claim',                                                isSpecial: false },
-  { value: 'partial_severance',     label: '13. Partial Severance',                                            isSpecial: false },
-  { value: 'resignation',           label: '14. Resignation / Retirement / Death',                             isSpecial: false },
-  { value: 'other',                 label: '15. Other Matters',                                                isSpecial: false },
-]
-
-const CATEGORY_ORDER = CATEGORIES.map(c => c.value)
-
-function categoryLabel(value) {
-  return CATEGORIES.find(c => c.value === value)?.label ?? value
-}
+import {
+  AGENDA_SECTIONS as CATEGORIES,
+  AGENDA_SECTION_ORDER as CATEGORY_ORDER,
+  agendaSectionLabel as categoryLabel,
+} from '../../constants/agendaCategories'
 
 // Sub-item letters a, b, c … z, aa, ab …
 function subLetter(idx) {
@@ -660,7 +639,7 @@ export default function Agenda() {
                   // Otherwise, fall back to the submission's default agenda category.
                   const autoCat = sub?.current_stage === 'matters_arising'
                     ? 'matters_arising'
-                    : (sub?.form_agenda_category || 'other')
+                    : (sub?.agenda_category || sub?.form_agenda_category || 'other')
                   setForm(f => ({
                     ...f,
                     submission_id: id,
@@ -674,7 +653,7 @@ export default function Agenda() {
                 </option>
                 {submissions.map(s => (
                   <option key={s.id} value={s.id}>
-                    [{s.form_type_code || '—'}] {s.reference_number} — {s.title}
+                    [{s.form_type_code || categoryLabel(s.agenda_category || s.form_agenda_category || 'other')}] {s.reference_number} — {s.title}
                     {s.ministry_name ? ` (${s.ministry_name})` : ''}
                   </option>
                 ))}

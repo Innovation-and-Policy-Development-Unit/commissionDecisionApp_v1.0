@@ -7,6 +7,7 @@ import VerificationBadge from '../../components/audit/VerificationBadge'
 import SubmissionPresenceBar from '../../components/submissions/SubmissionPresenceBar'
 import PolicyGuardrailDrawer from '../../components/submissions/PolicyGuardrailDrawer'
 import { policyGuardrailApplies } from '../../utils/policyGuardrail'
+import { agendaSectionLabel } from '../../constants/agendaCategories'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -766,8 +767,13 @@ const stageDescriptions = {
                 <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{submission.form_category?.name || '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Form Type</p>
-                <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{submission.form_type_code || '—'}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {submission.form_type_code ? 'Form Type' : 'Agenda section'}
+                </p>
+                <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
+                  {submission.form_type_code
+                    || (submission.agenda_category ? agendaSectionLabel(submission.agenda_category) : '—')}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Assessment Started</p>
