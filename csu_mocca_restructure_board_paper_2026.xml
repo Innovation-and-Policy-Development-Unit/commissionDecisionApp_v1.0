@@ -1,0 +1,502 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PSC Board Submission Paper — CSU MOCCA Restructure (21 May 2026)
+  Source: CSU MOCCA 21-05-2026 Restructure.pdf
+  Ministry of Climate Change & Adaptation (MOCCA) — Corporate Services Unit
+  Import into Form Builder via Import (.xml) on the linked PSC form type.
+-->
+<fields>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COVER — BOARD SUBMISSION PAPER
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>PSC Board Submission Paper</label>
+    <field_key>section_cover</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+
+  <field>
+    <label>Meeting Number</label>
+    <field_key>meeting_number</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. PSC Meeting No. …</placeholder>
+    <is_required>false</is_required>
+    <display_order>20</display_order>
+  </field>
+
+  <field>
+    <label>Item Number</label>
+    <field_key>item_number</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>30</display_order>
+  </field>
+
+  <field>
+    <label>Submitted By</label>
+    <field_key>submitted_by</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Acting Secretary</placeholder>
+    <is_required>true</is_required>
+    <display_order>40</display_order>
+  </field>
+
+  <field>
+    <label>Action Officer</label>
+    <field_key>action_officer</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Manager ODU</placeholder>
+    <is_required>true</is_required>
+    <display_order>50</display_order>
+  </field>
+
+  <field>
+    <label>PSC File Reference</label>
+    <field_key>psc_file</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>60</display_order>
+  </field>
+
+  <field>
+    <label>Prepared By</label>
+    <field_key>prepared_by</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Principal Job Analysts</placeholder>
+    <is_required>true</is_required>
+    <display_order>70</display_order>
+  </field>
+
+  <field>
+    <label>Date Submitted to PSC by Ministry</label>
+    <field_key>date_submitted_by_ministry</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>80</display_order>
+  </field>
+
+  <field>
+    <label>Date Submitted to PSC Board (PSCB)</label>
+    <field_key>date_submitted_to_pscb</field_key>
+    <field_type>date</field_type>
+    <help_text>Example from source paper: 19 May 2026.</help_text>
+    <is_required>true</is_required>
+    <display_order>90</display_order>
+  </field>
+
+  <field>
+    <label>Subject</label>
+    <field_key>subject</field_key>
+    <field_type>text</field_type>
+    <placeholder>Propose Organizational Structure for Corporate Service Unit, Ministry of Climate Change &amp; Adaptation (MOCCA)</placeholder>
+    <is_required>true</is_required>
+    <display_order>100</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       BACKGROUND
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Background</label>
+    <field_key>section_background</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>110</display_order>
+  </field>
+
+  <field>
+    <label>Background — Ministry Mandate and CSU Role</label>
+    <field_key>background_mandate</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Describe MOCCA's mandate (climate resilience, disaster risk, environment, energy, five departments, NDMO) and the role of the Corporate Services Unit.</placeholder>
+    <help_text>Include purpose of submission: seek approval for proposed CSU restructure to strengthen institutional capacity.</help_text>
+    <is_required>true</is_required>
+    <display_order>120</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ISSUES FOR COMMISSION
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Issues</label>
+    <field_key>section_issues</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>130</display_order>
+  </field>
+
+  <field>
+    <label>Issue(s) for the Commission</label>
+    <field_key>issues_for_commission</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Whether the proposed CSU structure for MOCCA is in line with Government priority policy in terms of service delivery.</placeholder>
+    <is_required>true</is_required>
+    <display_order>140</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       DISCUSSIONS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Discussions</label>
+    <field_key>section_discussions</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>150</display_order>
+  </field>
+
+  <field>
+    <label>Current Structure — Justification</label>
+    <field_key>discussion_current_structure</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Why the 2020/2021 approved structure is no longer sufficient (expanded programs, international commitments, donor-funded initiatives, etc.).</placeholder>
+    <is_required>true</is_required>
+    <display_order>160</display_order>
+  </field>
+
+  <field>
+    <label>Core Functions of the Ministry</label>
+    <field_key>discussion_core_functions</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Climate adaptation/mitigation, meteorology/geo-hazards, NDMO, environmental protection, energy, policy coordination.</placeholder>
+    <is_required>true</is_required>
+    <display_order>170</display_order>
+  </field>
+
+  <field>
+    <label>Major National and International Policies Supported</label>
+    <field_key>discussion_policies_supported</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>NSDP 2016–2030, CCDRR Policy, NERM, Environment &amp; Biodiversity Policy, Decentralization Act, Rio Conventions (UNFCCC, UNCBD, UNCCD), etc.</placeholder>
+    <is_required>true</is_required>
+    <display_order>180</display_order>
+  </field>
+
+  <field>
+    <label>Proposed Structure — Justification</label>
+    <field_key>discussion_proposed_structure</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>How the restructure enhances policy coordination, governance, HR, M&amp;E, climate finance, ICT, decentralisation, and NSDP alignment.</placeholder>
+    <is_required>true</is_required>
+    <display_order>190</display_order>
+  </field>
+
+  <field>
+    <label>Corporate Services Unit — Functional Areas</label>
+    <field_key>discussion_csu_functions</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Strategic &amp; policy capacity; provincial service delivery; operational/admin support; ICT &amp; information management; HR governance; monitoring, evaluation &amp; accountability.</placeholder>
+    <is_required>true</is_required>
+    <display_order>200</display_order>
+  </field>
+
+  <field>
+    <label>Rationale — Re-graded / Existing Positions</label>
+    <field_key>rationale_existing_positions</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Summarise justification for each existing post with salary scale change (e.g. NAB Project Development Officer, Policy &amp; Planning Officer, Finance Manager, HR roles, etc.).</placeholder>
+    <help_text>One narrative block or bullet list per position as in the board paper.</help_text>
+    <is_required>true</is_required>
+    <display_order>210</display_order>
+  </field>
+
+  <field>
+    <label>Rationale — New Positions</label>
+    <field_key>rationale_new_positions</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Justification for new posts (e.g. Provincial Coordinators x5, Climate Finance Officer, Principal Compliance &amp; Treaty, ICT Help Desk, Security, Logistics, etc.).</placeholder>
+    <is_required>true</is_required>
+    <display_order>220</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       STRUCTURE ANALYSIS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Structure Analysis</label>
+    <field_key>section_structure_analysis</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>230</display_order>
+  </field>
+
+  <field>
+    <label>Current Structure — Total Established Posts (2020/2021)</label>
+    <field_key>current_total_established</field_key>
+    <field_type>number</field_type>
+    <placeholder>21</placeholder>
+    <is_required>true</is_required>
+    <display_order>240</display_order>
+  </field>
+
+  <field>
+    <label>Current Structure — Occupied Posts</label>
+    <field_key>current_occupied</field_key>
+    <field_type>number</field_type>
+    <placeholder>18</placeholder>
+    <is_required>true</is_required>
+    <display_order>250</display_order>
+  </field>
+
+  <field>
+    <label>Current Structure — Vacant Posts</label>
+    <field_key>current_vacant</field_key>
+    <field_type>number</field_type>
+    <placeholder>3</placeholder>
+    <is_required>true</is_required>
+    <display_order>260</display_order>
+  </field>
+
+  <field>
+    <label>Current Structure — Vacancy Analysis</label>
+    <field_key>current_vacancy_analysis</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Impact of vacancies on CSU service delivery (finance, HR, procurement, logistics).</placeholder>
+    <is_required>false</is_required>
+    <display_order>270</display_order>
+  </field>
+
+  <field>
+    <label>Proposed Structure — New Posts</label>
+    <field_key>proposed_new_posts</field_key>
+    <field_type>number</field_type>
+    <placeholder>24</placeholder>
+    <is_required>true</is_required>
+    <display_order>280</display_order>
+  </field>
+
+  <field>
+    <label>Proposed Structure — Existing Posts (unchanged scale)</label>
+    <field_key>proposed_existing_posts</field_key>
+    <field_type>number</field_type>
+    <placeholder>19</placeholder>
+    <is_required>true</is_required>
+    <display_order>290</display_order>
+  </field>
+
+  <field>
+    <label>Proposed Structure — Total Posts</label>
+    <field_key>proposed_total_posts</field_key>
+    <field_type>number</field_type>
+    <placeholder>43</placeholder>
+    <is_required>true</is_required>
+    <display_order>300</display_order>
+  </field>
+
+  <field>
+    <label>Analysis of Proposed Structure — Key Observations</label>
+    <field_key>proposed_structure_analysis</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Expansion in capacity; minimal disruption to existing staff scales; specialised functions; alignment with mandate; decentralisation support.</placeholder>
+    <is_required>true</is_required>
+    <display_order>310</display_order>
+  </field>
+
+  <field>
+    <label>Proposed Divisions (3)</label>
+    <field_key>proposed_divisions_overview</field_key>
+    <field_type>select</field_type>
+    <choices>NAB Secretariat
+Administration &amp; Operations
+Policy &amp; Planning
+All three divisions (full CSU restructure)</choices>
+    <is_required>true</is_required>
+    <display_order>320</display_order>
+  </field>
+
+  <field>
+    <label>Division 1 — NAB Secretariat (Purpose and Key Functions)</label>
+    <field_key>division_nab_secretariat</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Coordinate NAB climate finance processes; facilitate access to funds; compliance and reporting; project screening and monitoring.</placeholder>
+    <is_required>true</is_required>
+    <display_order>330</display_order>
+  </field>
+
+  <field>
+    <label>Division 2 — Administration &amp; Operations (Purpose and Key Functions)</label>
+    <field_key>division_admin_operations</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>HR administration, general admin, procurement/logistics/assets, facilities/security/maintenance, ICT support.</placeholder>
+    <is_required>true</is_required>
+    <display_order>340</display_order>
+  </field>
+
+  <field>
+    <label>Division 3 — Policy &amp; Planning (Purpose and Key Functions)</label>
+    <field_key>division_policy_planning</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Policy development, strategic planning, research, M&amp;E, NSDP alignment, international reporting and treaty compliance.</placeholder>
+    <is_required>true</is_required>
+    <display_order>350</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COSTING
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Costing</label>
+    <field_key>section_costing</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>360</display_order>
+  </field>
+
+  <field>
+    <label>Total Cost of New Positions (VUV per annum)</label>
+    <field_key>cost_new_positions_total</field_key>
+    <field_type>number</field_type>
+    <placeholder>34929000</placeholder>
+    <help_text>Source paper: VT 34,929,000 for new posts only.</help_text>
+    <is_required>true</is_required>
+    <display_order>370</display_order>
+  </field>
+
+  <field>
+    <label>Total Proposed Annual Costing (VUV)</label>
+    <field_key>cost_proposed_total</field_key>
+    <field_type>number</field_type>
+    <placeholder>78508000</placeholder>
+    <help_text>Source paper: VT 78,508,000 total proposed costing.</help_text>
+    <is_required>true</is_required>
+    <display_order>380</display_order>
+  </field>
+
+  <field>
+    <label>Table 1.3 — Costing Summary (Current vs Proposed)</label>
+    <field_key>costing_table_summary</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Paste or summarise Table 1.3: posts deleted/affected, proposed new/upgraded posts, salary levels, and differences. Attach full OPSC Excel spreadsheet via Documents.</placeholder>
+    <help_text>Include current approved positions affected and proposed positions to be created or regraded.</help_text>
+    <is_required>true</is_required>
+    <display_order>390</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       IMPLEMENTATION PLAN
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Implementation Plan</label>
+    <field_key>section_implementation</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>400</display_order>
+  </field>
+
+  <field>
+    <label>Implementation Plan — Details</label>
+    <field_key>implementation_plan</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Funding subject to MBC approval; positions in 2027 budget; external advertisement after PSC/MBC approval; acting arrangements for regraded posts; donor funding discussions.</placeholder>
+    <is_required>true</is_required>
+    <display_order>410</display_order>
+  </field>
+
+  <field>
+    <label>Target Budget Year for New Establishments</label>
+    <field_key>implementation_budget_year</field_key>
+    <field_type>text</field_type>
+    <placeholder>2027</placeholder>
+    <is_required>false</is_required>
+    <display_order>420</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       RECOMMENDATIONS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Recommendations</label>
+    <field_key>section_recommendations</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>430</display_order>
+  </field>
+
+  <field>
+    <label>Recommendation to the Public Service Commission</label>
+    <field_key>recommendation_text</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>It is recommended that the Public Service Commission approve the structure proposal for CSU, Ministry of Climate Change &amp; Adaptation (MOCCA).</placeholder>
+    <is_required>true</is_required>
+    <display_order>440</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ATTACHMENTS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Attachments</label>
+    <field_key>section_attachments</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>450</display_order>
+  </field>
+
+  <field>
+    <label>Current and Proposed CSU Structure (MOCCA) — Uploaded</label>
+    <field_key>attachment_org_charts</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — current and proposed CSU structure charts uploaded</placeholder>
+    <help_text>Upload via the submission Documents panel.</help_text>
+    <is_required>false</is_required>
+    <display_order>460</display_order>
+  </field>
+
+  <field>
+    <label>Copy of Ministry Submission — Uploaded</label>
+    <field_key>attachment_ministry_submission</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — copy of ministry submission uploaded</placeholder>
+    <is_required>false</is_required>
+    <display_order>470</display_order>
+  </field>
+
+  <field>
+    <label>Attachments List / References</label>
+    <field_key>attachments_list</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Current and Propose CSU Structure, MOCCA; Copy of Submission; costing spreadsheet; job descriptions as applicable.</placeholder>
+    <is_required>false</is_required>
+    <display_order>480</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SIGN-OFF — ACTING SECRETARY
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Sign-Off</label>
+    <field_key>section_signoff</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>490</display_order>
+  </field>
+
+  <field>
+    <label>Acting Secretary — Name</label>
+    <field_key>acting_secretary_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Acting Secretary, Public Service Commission</placeholder>
+    <is_required>false</is_required>
+    <display_order>500</display_order>
+  </field>
+
+  <field>
+    <label>Acting Secretary — Date</label>
+    <field_key>acting_secretary_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>510</display_order>
+  </field>
+
+</fields>

@@ -40,7 +40,7 @@ import PSCForm21View from './PSCForm21View'
 import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
-import { submissionUsesOduRestructureChecklist } from '../../utils/oduChecklist'
+import { canShowOduChecklist } from '../../utils/oduChecklist'
 import RestructureSubmissionForm from './RestructureSubmissionForm'
 import { CMS_PORTAL_URL, isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
 import { formatApiError } from '../../utils/apiError'
@@ -148,12 +148,7 @@ export default function SubmissionDetail() {
   const canEditDigitizedForm = canEditForm37 || canEditComplianceForm
   const isCmsLinkedCompliance = isComplianceFormCode(submission?.form_type_code)
 
-  const isOduRole      = user && ['odu_principal', 'odu_manager'].includes(user.role)
-  const isOduRestructureSubmission = submissionUsesOduRestructureChecklist(submission)
-  const canViewOduChecklist = isOduRestructureSubmission && user && [
-    'odu_principal', 'odu_manager',
-    'psc_secretary', 'psc_admin', 'psc_manager',
-  ].includes(user.role)
+  const showOduChecklist = canShowOduChecklist(submission, user)
 
   // Restructure Submission Form (ORG-3.1 template)
   const isRestructureSubmission = submission?.form_type_code === 'ORG-3.1'
@@ -1143,11 +1138,10 @@ const stageDescriptions = {
           )}
 
           {/* ── ODU Restructure Checklist ── */}
-          {canViewOduChecklist && (
+          {showOduChecklist && (
             <ODURestructureChecklistForm
               submissionId={Number(id)}
               submission={submission}
-              readOnly={!isOduRole}
             />
           )}
 

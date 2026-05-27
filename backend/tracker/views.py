@@ -4038,12 +4038,15 @@ class PasswordResetConfirmView(APIView):
 
 def _build_claude_minutes_prompt(meeting):
     """Build a staff-facing Claude prompt from meeting metadata and transcript."""
+    from .agenda_sections import agenda_section_label
+
     agenda_lines = []
     for item in meeting.agenda_items.select_related("submission").order_by("sequence"):
         sub = item.submission
         ref = getattr(sub, "reference_number", "") if sub else ""
         title = getattr(sub, "title", "") if sub else ""
-        agenda_lines.append(f"- {item.sequence}. [{item.get_category_display()}] {ref} — {title}")
+        cat_label = agenda_section_label(item.category or "")
+        agenda_lines.append(f"- {item.sequence}. [{cat_label}] {ref} — {title}")
     agenda_block = "\n".join(agenda_lines) if agenda_lines else "(No agenda items on record)"
 
     raw_transcript = ""
@@ -4425,6 +4428,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
     )
     def minute_intake_format_item(self, request, pk=None, agenda_item_id=None):
         """Claude-format one agenda item's raw notes."""
+        from .agenda_sections import agenda_section_label
         from .ai.minute_intake_format import format_minute_intake_item
         from .minute_intake import (
             ensure_intake_rows,
@@ -4460,7 +4464,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
             agenda_title=row.agenda_title,
             agenda_description=row.agenda_description,
             submission_ref=ref,
-            category_display=row.agenda_item.get_category_display(),
+            category_display=agenda_section_label(row.agenda_item.category or ""),
             discussion_notes=row.discussion_notes,
             decision_text=row.decision_text,
             action_officer=row.action_officer,
@@ -4477,6 +4481,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="minute-intake/format-all")
     def minute_intake_format_all(self, request, pk=None):
         """Claude-format all intake rows that have raw notes."""
+        from .agenda_sections import agenda_section_label
         from .ai.minute_intake_format import format_minute_intake_item
         from .minute_intake import (
             ensure_intake_rows,
@@ -4519,7 +4524,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 agenda_title=row.agenda_title,
                 agenda_description=row.agenda_description,
                 submission_ref=ref,
-                category_display=row.agenda_item.get_category_display(),
+                category_display=agenda_section_label(row.agenda_item.category or ""),
                 discussion_notes=row.discussion_notes,
                 decision_text=row.decision_text,
                 action_officer=row.action_officer,
@@ -5030,16 +5035,17 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="smtp-status")
     def smtp_status(self, request):
-        """Non-secret SMTP config summary for troubleshooting."""
-        from .email_backend import smtp_config_diagnostics
+        """Non-secret email config summary (Resend or SMTP) for troubleshooting."""
+        from .email_backend import email_config_diagnostics
 
-        return Response(smtp_config_diagnostics())
+        return Response(email_config_diagnostics())
 
     @action(detail=False, methods=["post"], url_path="test-email")
     def test_email(self, request):
-        """Send a test message using the configured SMTP backend (env or SystemSetting)."""
+        """Send a test message using Resend or SMTP (whichever is configured)."""
         from django.conf import settings as django_settings
         from django.core.exceptions import ValidationError
+        from django.core.mail import send_mail
         from django.core.validators import validate_email
 
         to = (request.data.get("to") or "").strip()
@@ -5049,6 +5055,48 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
             validate_email(to)
         except ValidationError:
             return Response({"detail": "Invalid email address."}, status=400)
+
+        from .email_backend import email_config_diagnostics
+        from .email_templates import get_from_email
+        from .resend_backend import format_resend_error, uses_resend
+
+        if uses_resend():
+            diag = email_config_diagnostics()
+            from_email = get_from_email()
+            subject = "Commission Decision App — Resend test"
+            html = (
+                "<p>This is a test email from the <strong>Commission Decision App</strong> "
+                "via <a href=\"https://resend.com\">Resend</a>.</p>"
+                f"<p>From: {from_email}</p>"
+            )
+            try:
+                send_mail(
+                    subject,
+                    "This is a test email from the Commission Decision App (Resend).",
+                    from_email,
+                    [to],
+                    fail_silently=False,
+                    html_message=html,
+                )
+            except Exception as exc:
+                return Response(
+                    {
+                        "detail": f"Failed to send test email: {format_resend_error(exc)}",
+                        **diag,
+                    },
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            from .audit import log_action as _log
+            from .models import AuditLog as _AL
+
+            _log(
+                request,
+                _AL.Action.SETTINGS,
+                resource_type="SystemSetting",
+                description=f"Resend test email sent to {to}",
+                extra_data={"to": to, "provider": "resend"},
+            )
+            return Response({"detail": f"Test email sent to {to} via Resend.", **diag})
 
         from .email_backend import (
             _normalize_password,
@@ -6555,24 +6603,37 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
     """
     CRUD + submit for the ODU Restructure Checklist.
 
-    Accessible by ODU_PRINCIPAL (create / edit draft) and ODU_MANAGER (approve).
-    Also readable by PSC secretariat / admin roles.
+    ODU Principal: create/edit draft during Manager Checklist Review (ODU-routed).
+    ODU Manager: review submitted checklist and approve.
 
-    Filtering:  GET /odu-checklists/?submission=<id>
-    """
+    GET /odu-checklists/ensure/?submission=<id> — load or create pre-filled draft (principal).
+  """
 
     serializer_class   = ODUChecklistSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    ODU_ROLES = {
-        Role.ODU_PRINCIPAL,
-        Role.ODU_MANAGER,
-        Role.PSC_SECRETARY,
-        Role.PSC_ADMIN,
-        Role.PSC_MANAGER,
-    }
+    ODU_ROLES = {Role.ODU_PRINCIPAL, Role.ODU_MANAGER}
+
+    def _require_odu_role(self, profile):
+        if profile.role not in self.ODU_ROLES:
+            raise PermissionDenied("Only ODU Principal or ODU Manager can access this checklist.")
+
+    def _validate_submission_for_checklist(self, submission):
+        from rest_framework.exceptions import ValidationError
+
+        from .odu_checklist_rules import submission_eligible_for_odu_checklist
+
+        if not submission_eligible_for_odu_checklist(submission):
+            raise ValidationError({
+                "submission": (
+                    "ODU Restructure Checklist is only available for ORG-3.1 or PSC 2-1 "
+                    "submissions in Manager Checklist Review while routed to ODU."
+                ),
+            })
 
     def get_queryset(self):
+        profile = _profile(self.request.user)
+        self._require_odu_role(profile)
         qs = ODURestructureChecklist.objects.select_related(
             "submission", "created_by",
         ).all()
@@ -6581,40 +6642,86 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
             qs = qs.filter(submission_id=sub_id)
         return qs
 
+    @action(detail=False, methods=["get"], url_path="ensure")
+    def ensure(self, request):
+        """Load checklist for submission, creating a pre-filled draft (ODU Principal only)."""
+        from rest_framework.exceptions import ValidationError
+
+        from .odu_checklist_prefill import ensure_odu_checklist_for_submission
+        from .odu_checklist_rules import submission_eligible_for_odu_checklist
+
+        profile = _profile(request.user)
+        self._require_odu_role(profile)
+
+        submission_id = request.query_params.get("submission")
+        if not submission_id:
+            raise ValidationError({"submission": "Query parameter submission is required."})
+
+        submission = get_object_or_404(
+            Submission.objects.select_related("ministry", "department"),
+            pk=submission_id,
+        )
+        if not submission_eligible_for_odu_checklist(submission):
+            return Response(
+                {
+                    "detail": (
+                        "Checklist is only shown for ORG-3.1 / PSC 2-1 submissions "
+                        "in Manager Checklist Review routed to ODU."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        allow_create = profile.role == Role.ODU_PRINCIPAL
+        checklist = ensure_odu_checklist_for_submission(
+            submission,
+            user=request.user,
+            allow_create=allow_create,
+        )
+        if not checklist:
+            return Response(
+                {
+                    "detail": (
+                        "Checklist has not been started. The ODU Principal must open "
+                        "this submission during checklist review."
+                    ),
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(ODUChecklistSerializer(checklist).data)
+
     def perform_create(self, serializer):
         from rest_framework.exceptions import ValidationError
 
-        from .odu_checklist_rules import submission_uses_odu_restructure_checklist
-
         profile = _profile(self.request.user)
-        if profile.role not in self.ODU_ROLES:
-            raise PermissionDenied("Only ODU officers can create checklists.")
+        self._require_odu_role(profile)
+        if profile.role != Role.ODU_PRINCIPAL:
+            raise PermissionDenied("Only the ODU Principal can create the checklist draft.")
         submission = serializer.validated_data["submission"]
-        if not submission_uses_odu_restructure_checklist(submission):
-            raise ValidationError({
-                "submission": (
-                    "ODU Restructure Checklist only applies to organisation restructure "
-                    "submissions (ORG-3.1 or PSC 2-1), not this form type."
-                ),
-            })
+        self._validate_submission_for_checklist(submission)
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
         profile = _profile(self.request.user)
-        if profile.role not in self.ODU_ROLES:
-            raise PermissionDenied("Only ODU officers can edit checklists.")
+        self._require_odu_role(profile)
+        if profile.role != Role.ODU_PRINCIPAL:
+            raise PermissionDenied("Only the ODU Principal can edit the checklist draft.")
+        instance = serializer.instance
+        if instance.status != ODUChecklistStatus.DRAFT:
+            raise PermissionDenied("Only draft checklists can be edited.")
         serializer.save()
 
     @action(detail=True, methods=["post"], url_path="submit")
     def submit(self, request, pk=None):
         """
         Transition checklist from Draft → Submitted.
-        Must be ODU_PRINCIPAL or above. All 20 items must be answered.
+        ODU Principal only. All 20 items must be answered.
         """
         checklist = self.get_object()
         profile = _profile(request.user)
-        if profile.role not in self.ODU_ROLES:
-            raise PermissionDenied("Only ODU officers can submit checklists.")
+        self._require_odu_role(profile)
+        if profile.role != Role.ODU_PRINCIPAL:
+            raise PermissionDenied("Only the ODU Principal can submit the checklist for manager review.")
         if checklist.status != ODUChecklistStatus.DRAFT:
             return Response(
                 {"detail": "Only Draft checklists can be submitted."},

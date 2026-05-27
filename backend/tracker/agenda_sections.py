@@ -37,6 +37,16 @@ def fallback_agenda_choices():
     return list(AgendaCategory.choices)
 
 
+def agenda_section_label(code: str) -> str:
+    if not code:
+        return ""
+    section = AgendaSection.objects.filter(code=code).first()
+    if section:
+        return section.label
+    legacy = dict(AgendaCategory.choices).get(code)
+    return legacy or code.replace("_", " ").title()
+
+
 def apply_agenda_section_defaults(attrs: dict) -> None:
     """When lodging by agenda section only, attach the linked digitized form if configured."""
     code = attrs.get("agenda_category") or ""

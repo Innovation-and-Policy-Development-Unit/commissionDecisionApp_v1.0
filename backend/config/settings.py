@@ -406,9 +406,18 @@ CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
 
 # ── Notifications & 2FA ──────────────────────────────────────────────────────
 
-# In production, use 'tracker.email_backend.DynamicEmailBackend'
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'tracker.email_backend.DynamicEmailBackend')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'PSC Tracker <noreply@psc.gov.vu>')
+# Resend (RESEND_API_KEY) or SMTP (DynamicEmailBackend). Override with EMAIL_BACKEND.
+_resend_api_key = os.getenv('RESEND_API_KEY', '').strip()
+_default_email_backend = (
+    'tracker.resend_backend.ResendEmailBackend'
+    if _resend_api_key
+    else 'tracker.email_backend.DynamicEmailBackend'
+)
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', _default_email_backend)
+DEFAULT_FROM_EMAIL = os.getenv(
+    'DEFAULT_FROM_EMAIL',
+    'onboarding@resend.dev' if _resend_api_key else 'PSC Tracker <noreply@psc.gov.vu>',
+)
 
 # SMTP defaults (overridden by .env; DynamicEmailBackend also reads SMTP_* env first)
 EMAIL_HOST = os.getenv('EMAIL_HOST', os.getenv('SMTP_HOST', 'localhost'))

@@ -251,11 +251,10 @@ class PSCFormType(models.Model):
     display_order = models.IntegerField(default=0)
     agenda_category = models.CharField(
         max_length=32,
-        choices=AgendaCategory.choices,
-        default=AgendaCategory.OTHER,
         blank=True,
+        default="",
         help_text=(
-            "Which PSC agenda section this form type belongs to. "
+            "Agenda section code (AgendaSection.code). "
             "Used to auto-categorize agenda items when a submission is added to a meeting."
         ),
     )
@@ -483,8 +482,10 @@ class AgendaItem(models.Model):
     submission = models.ForeignKey("Submission", on_delete=models.CASCADE, related_name="agenda_placements")
     sequence   = models.PositiveIntegerField(default=0, help_text="Order within the category group.")
     category   = models.CharField(
-        max_length=32, choices=AgendaCategory.choices, default=AgendaCategory.OTHER,
-        help_text="Agenda section this item belongs to.",
+        max_length=32,
+        blank=True,
+        default="",
+        help_text="Agenda section code (AgendaSection.code) for this item.",
     )
     # Matters Arising only — reference back to a previous meeting/agenda item
     matters_arising_meeting_ref = models.CharField(
@@ -507,7 +508,10 @@ class AgendaItem(models.Model):
         unique_together = ("meeting", "submission")
 
     def __str__(self):
-        return f"{self.meeting.reference_number} [{self.get_category_display()}] #{self.sequence}: {self.submission.reference_number}"
+        from .agenda_sections import agenda_section_label
+
+        label = agenda_section_label(self.category or "")
+        return f"{self.meeting.reference_number} [{label}] #{self.sequence}: {self.submission.reference_number}"
 
 
 class SittingPackSession(models.Model):
@@ -1088,10 +1092,9 @@ class Submission(models.Model):
     form_type_code = models.CharField(max_length=64, blank=True, help_text='e.g. "PSC 3.6"')
     agenda_category = models.CharField(
         max_length=32,
-        choices=AgendaCategory.choices,
         blank=True,
         default="",
-        help_text="Commission agenda section chosen at lodge (paper submissions).",
+        help_text="Agenda section code (AgendaSection.code) chosen at lodge.",
     )
     ministry = models.ForeignKey(Ministry, on_delete=models.PROTECT, related_name="submissions")
     department = models.ForeignKey(

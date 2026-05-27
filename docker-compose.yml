@@ -65,6 +65,7 @@ services:
       TWO_FACTOR_REQUIRED: ${TWO_FACTOR_REQUIRED:-false}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
       MEDIA_ROOT: /var/scdms/media
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_TLS: ${SMTP_TLS:-false}
@@ -115,6 +116,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       CLAUDE_MODEL_HAIKU: ${CLAUDE_MODEL_HAIKU:-claude-haiku-4-5-20251001}
       CLAUDE_MODEL_SONNET: ${CLAUDE_MODEL_SONNET:-claude-sonnet-4-6}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_TLS: ${SMTP_TLS:-false}
@@ -152,6 +154,8 @@ services:
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-PSC Tracker Dev <dev@localhost>}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
     volumes:

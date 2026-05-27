@@ -27,7 +27,7 @@ def meeting_allows_minute_intake(meeting: Meeting) -> bool:
 
 def _agenda_title_description(item: AgendaItem) -> tuple[str, str]:
     sub = item.submission
-    if item.category == AgendaCategory.MATTERS_ARISING and item.matters_arising_meeting_ref:
+    if item.category == "matters_arising" and item.matters_arising_meeting_ref:
         title = f"Matters arising — {item.matters_arising_agenda_no or ''}".strip()
         if item.matters_arising_meeting_ref:
             title = f"{title} ({item.matters_arising_meeting_ref})".strip()

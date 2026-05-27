@@ -1032,12 +1032,30 @@ class PSCFormResponseSerializer(serializers.ModelSerializer):
 
 class PSCFormTypeSerializer(serializers.ModelSerializer):
     form_category_name = serializers.CharField(source='form_category.name', read_only=True)
+    agenda_category_display = serializers.SerializerMethodField()
 
     class Meta:
         model = PSCFormType
         fields = ('id', 'code', 'name', 'description', 'form_category',
                   'form_category_name', 'is_digitized', 'digitized_form_key',
-                  'is_active', 'display_order', 'agenda_category')
+                  'is_active', 'display_order', 'agenda_category', 'agenda_category_display')
+
+    def get_agenda_category_display(self, obj):
+        from .agenda_sections import agenda_section_label
+        return agenda_section_label(obj.agenda_category or "")
+
+    def validate_agenda_category(self, value):
+        from rest_framework.exceptions import ValidationError
+
+        from .agenda_sections import validate_agenda_section_code
+
+        code = (value or "").strip()
+        if not code:
+            return ""
+        try:
+            return validate_agenda_section_code(code, allow_inactive=True)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
 
 class TransitionSerializer(serializers.Serializer):
@@ -1203,10 +1221,27 @@ class AgendaItemSerializer(serializers.ModelSerializer):
     submission_reference = serializers.CharField(source="submission.reference_number", read_only=True)
     submission_title     = serializers.CharField(source="submission.title", read_only=True)
     submission_ministry  = serializers.SerializerMethodField()
-    category_display     = serializers.CharField(source="get_category_display", read_only=True)
+    category_display     = serializers.SerializerMethodField()
 
     def get_submission_ministry(self, obj):
         return obj.submission.ministry.name if obj.submission.ministry else ""
+
+    def get_category_display(self, obj):
+        from .agenda_sections import agenda_section_label
+        return agenda_section_label(obj.category or "")
+
+    def validate_category(self, value):
+        from rest_framework.exceptions import ValidationError
+
+        from .agenda_sections import validate_agenda_section_code
+
+        code = (value or "").strip()
+        if not code:
+            return ""
+        try:
+            return validate_agenda_section_code(code, allow_inactive=True)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
     class Meta:
         model = AgendaItem
@@ -1659,10 +1694,12 @@ class MinuteAgendaIntakeSerializer(serializers.ModelSerializer):
     agenda_item_id = serializers.IntegerField(source="agenda_item.id", read_only=True)
     sequence = serializers.IntegerField(source="agenda_item.sequence", read_only=True)
     category = serializers.CharField(source="agenda_item.category", read_only=True)
-    category_display = serializers.CharField(
-        source="agenda_item.get_category_display", read_only=True,
-    )
+    category_display = serializers.SerializerMethodField()
     submission_ref = serializers.SerializerMethodField()
+
+    def get_category_display(self, obj):
+        from .agenda_sections import agenda_section_label
+        return agenda_section_label(obj.agenda_item.category or "")
     has_formatted = serializers.SerializerMethodField()
 
     class Meta:

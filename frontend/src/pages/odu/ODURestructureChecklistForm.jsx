@@ -7,7 +7,8 @@
  * Props:
  *   submissionId  – numeric ID of the parent Submission
  *   submission    – the submission object (for pre-filling Section A)
- *   readOnly      – optional; if true renders in view-only mode
+ * Shown only during Manager Checklist Review (ODU-routed restructure submissions).
+ * Principal edits and submits; Manager reviews read-only then approves.
  */
 
 import { useEffect, useState, useCallback } from 'react'
@@ -243,11 +244,12 @@ const EMPTY_FORM = {
   manager_verifier_date: '',
 }
 
-export default function ODURestructureChecklistForm({ submissionId, submission, readOnly: readOnlyProp }) {
+export default function ODURestructureChecklistForm({ submissionId, submission }) {
   const { user } = useAuth()
   const toast = useToast()
 
-  const [checklist, setChecklist] = useState(null)  // null = loading
+  const [checklist, setChecklist] = useState(undefined)  // undefined = loading
+  const [loadMessage, setLoadMessage] = useState('')
   const [form, setForm]           = useState(EMPTY_FORM)
   const [saving, setSaving]       = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -256,42 +258,52 @@ export default function ODURestructureChecklistForm({ submissionId, submission, 
 
   const isOduPrincipal = user?.role === 'odu_principal'
   const isOduManager   = user?.role === 'odu_manager'
-  const canEdit = (isOduPrincipal || isOduManager) && checklist?.status === 'draft'
-  const canSubmit = (isOduPrincipal || isOduManager) && checklist?.status === 'draft'
+  const canEdit = isOduPrincipal && checklist?.status === 'draft'
+  const canSubmit = isOduPrincipal && checklist?.status === 'draft'
   const canApprove = isOduManager && checklist?.status === 'submitted'
-  const readOnly = readOnlyProp || (!canEdit && checklist !== null)
+  const readOnly = !canEdit
 
   // Count answered items
   const answeredCount = ALL_ITEM_FIELDS.filter(f => form[f] !== null && form[f] !== undefined).length
 
   // Fetch existing checklist for this submission
+  const populateFormFromChecklist = useCallback((data) => {
+    const filled = { ...EMPTY_FORM }
+    Object.keys(EMPTY_FORM).forEach(k => {
+      if (data[k] !== undefined) filled[k] = data[k] ?? (k.startsWith('b') ? null : '')
+    })
+    setForm(filled)
+  }, [])
+
   const fetchChecklist = useCallback(async () => {
     if (!submissionId) return
+    setChecklist(undefined)
+    setLoadMessage('')
     try {
-      const r = await api.get(`/odu-checklists/?submission=${submissionId}`)
-      const results = Array.isArray(r.data) ? r.data : (r.data?.results ?? [])
-      if (results.length > 0) {
-        const data = results[0]
-        setChecklist(data)
-        // Populate form from API data
-        const filled = { ...EMPTY_FORM }
-        Object.keys(EMPTY_FORM).forEach(k => {
-          if (data[k] !== undefined) filled[k] = data[k] ?? (k.startsWith('b') ? null : '')
-        })
-        setForm(filled)
-      } else {
-        // No checklist yet — pre-fill Section A from the submission
+      const r = await api.get(`/odu-checklists/ensure/?submission=${submissionId}`)
+      setChecklist(r.data)
+      populateFormFromChecklist(r.data)
+    } catch (err) {
+      const status = err.response?.status
+      const detail = err.response?.data?.detail
+      if (status === 404) {
         setChecklist(null)
-        setForm(prev => ({
-          ...EMPTY_FORM,
-          ministry_department: submission?.ministry_name || '',
-          odu_officer_assigned: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username : '',
-        }))
+        setLoadMessage(
+          typeof detail === 'string'
+            ? detail
+            : 'The ODU Principal must start the checklist during this review stage.',
+        )
+        return
       }
-    } catch {
+      if (status === 400) {
+        setChecklist(null)
+        setLoadMessage(typeof detail === 'string' ? detail : 'This checklist is not available for this submission.')
+        return
+      }
       setChecklist(null)
+      setLoadMessage('Unable to load the ODU checklist.')
     }
-  }, [submissionId, submission, user])
+  }, [submissionId, populateFormFromChecklist])
 
   useEffect(() => { fetchChecklist() }, [fetchChecklist])
 
@@ -382,12 +394,20 @@ export default function ODURestructureChecklistForm({ submissionId, submission, 
     }
   }
 
-  // Loading
   if (checklist === undefined) {
     return (
       <div className="card p-5 flex items-center gap-3 text-slate-400 text-sm">
         <div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-primary-500 animate-spin" />
         Loading ODU checklist…
+      </div>
+    )
+  }
+
+  if (!checklist) {
+    return (
+      <div className="card p-5 flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+        <Info size={16} className="shrink-0 text-slate-400 mt-0.5" />
+        <p>{loadMessage || 'ODU checklist is not available.'}</p>
       </div>
     )
   }
@@ -405,16 +425,27 @@ export default function ODURestructureChecklistForm({ submissionId, submission, 
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                 ODU Restructure Submission Checklist
               </h3>
-              {checklist && <StatusBadge status={checklist.status} />}
-              {!checklist && (
-                <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 dark:text-slate-400 px-2 py-0.5 rounded-full">
-                  Not yet created
-                </span>
-              )}
+              <StatusBadge status={checklist.status} />
             </div>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
               Office of the Public Service Commission — Organisational Development Unit
             </p>
+            {checklist?.status === 'draft' && isOduPrincipal && (
+              <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-2">
+                Section A and suggested Yes/No answers are pre-filled from the submission and uploaded documents.
+                Verify each item, complete Groups 6–7, then submit for manager approval.
+              </p>
+            )}
+            {checklist?.status === 'submitted' && isOduManager && (
+              <p className="text-xs text-amber-800 dark:text-amber-200 mt-2">
+                Review all checklist items below. Approve only when you are satisfied the package is ready.
+              </p>
+            )}
+            {checklist?.status === 'submitted' && isOduPrincipal && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                Submitted for manager review — editing is locked until the manager returns it or approves.
+              </p>
+            )}
           </div>
           {checklist?.submitted_at && (
             <div className="text-right shrink-0">
@@ -559,10 +590,16 @@ export default function ODURestructureChecklistForm({ submissionId, submission, 
           )}
         </div>
 
-        {!readOnly && (
+        {canEdit && (
           <div className="mb-4 flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
             <Info size={13} className="shrink-0 mt-0.5" />
-            Click <strong>Yes</strong> or <strong>No</strong> for each item. Click the same button again to clear your answer.
+            Pre-filled suggestions are based on submission data and attachments. Click <strong>Yes</strong> or <strong>No</strong> to confirm each item (click again to clear).
+          </div>
+        )}
+        {readOnly && checklist?.status === 'submitted' && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+            Read-only review — use <strong>Approve Checklist</strong> below when the verification is complete.
           </div>
         )}
 

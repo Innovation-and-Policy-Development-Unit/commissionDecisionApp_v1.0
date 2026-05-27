@@ -170,6 +170,17 @@ def send_smtp_message(
             pass
 
 
+def email_config_diagnostics() -> dict:
+    """Active email provider summary (Resend or SMTP)."""
+    from .resend_backend import resend_config_diagnostics, uses_resend
+
+    if uses_resend():
+        return resend_config_diagnostics()
+    diag = smtp_config_diagnostics()
+    diag["provider"] = "smtp"
+    return diag
+
+
 def smtp_config_diagnostics() -> dict:
     """Non-secret summary for admin troubleshooting."""
     db_cfg = _smtp_config_from_settings()

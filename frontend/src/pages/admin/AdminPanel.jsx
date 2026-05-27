@@ -1237,6 +1237,8 @@ export function SettingsTab({ settings, onRefresh }) {
   const [testEmailTo, setTestEmailTo] = useState('')
   const [testEmailLoading, setTestEmailLoading] = useState(false)
   const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false)
+  const [emailProvider, setEmailProvider] = useState('smtp') // 'smtp' | 'resend'
+  const [resendConfigured, setResendConfigured] = useState(false)
   const smtpPasswordRef = useRef(null)
   const [emailSchedule, setEmailSchedule] = useState({
     enabled: true,
@@ -1270,6 +1272,9 @@ export function SettingsTab({ settings, onRefresh }) {
   const fetchSmtpStatus = useCallback(async () => {
     try {
       const res = await api.get('/settings/smtp-status/')
+      const provider = res.data?.provider === 'resend' ? 'resend' : 'smtp'
+      setEmailProvider(provider)
+      setResendConfigured(provider === 'resend' && Boolean(res.data?.api_key_configured))
       setSmtpPasswordConfigured(Boolean(res.data?.password_configured))
     } catch {
       /* best-effort */
@@ -1417,18 +1422,24 @@ export function SettingsTab({ settings, onRefresh }) {
     setSuccess('')
     setError('')
     try {
+      const useResend = emailProvider === 'resend' && resendConfigured
       const pwd = readSmtpPasswordInput()
-      if (!pwd) {
+      if (!useResend && !pwd) {
         toast.error('Paste your SMTP password in the field above, then send the test.')
         setTestEmailLoading(false)
         return
       }
-      const smtpPayload = {}
-      SMTP_SETTING_KEYS.forEach(k => { smtpPayload[k] = form[k] ?? '' })
-      smtpPayload.SMTP_PASSWORD = pwd
-      await api.post('/settings/batch-update/', smtpPayload)
-      await fetchSmtpStatus()
-      const res = await api.post('/settings/test-email/', { to, smtp_password: pwd })
+      if (!useResend) {
+        const smtpPayload = {}
+        SMTP_SETTING_KEYS.forEach(k => { smtpPayload[k] = form[k] ?? '' })
+        smtpPayload.SMTP_PASSWORD = pwd
+        await api.post('/settings/batch-update/', smtpPayload)
+        await fetchSmtpStatus()
+      }
+      const res = await api.post(
+        '/settings/test-email/',
+        useResend ? { to } : { to, smtp_password: pwd },
+      )
       if (pwd) {
         setForm(f => ({ ...f, SMTP_PASSWORD: '' }))
         if (smtpPasswordRef.current) smtpPasswordRef.current.value = ''
@@ -1629,13 +1640,35 @@ export function SettingsTab({ settings, onRefresh }) {
         <section className="space-y-4">
           <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-medium border-b pb-2">
             <Mail size={18} className="text-primary-500" />
-            <h3>Email Server (SMTP)</h3>
-            {smtpPasswordConfigured && (
+            <h3>{emailProvider === 'resend' ? 'Email (Resend)' : 'Email Server (SMTP)'}</h3>
+            {emailProvider === 'resend' && resendConfigured && (
+              <span className="ml-auto text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                Resend API key configured
+              </span>
+            )}
+            {emailProvider === 'smtp' && smtpPasswordConfigured && (
               <span className="ml-auto text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
                 Password saved
               </span>
             )}
           </div>
+          {emailProvider === 'resend' && (
+            <div className="space-y-2 -mt-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Outbound mail uses <strong>RESEND_API_KEY</strong> in <code className="text-[11px]">.env</code>.
+                Use <code className="text-[11px]">onboarding@resend.dev</code> as Default From until your domain is verified.
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-200 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+                <strong>Resend testing limit:</strong> without a verified domain, test emails can only be sent to the
+                email address on your Resend account (the address you signed up with). To send to{' '}
+                <code className="text-[11px]">@psc.gov.vu</code> or other recipients, verify your domain at{' '}
+                <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="underline">
+                  resend.com/domains
+                </a>{' '}
+                and set Default From to e.g. <code className="text-[11px]">noreply@yourdomain.gov.vu</code>.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1"><label className="text-xs font-medium text-slate-500">SMTP Host</label><input className="input text-sm" value={form.SMTP_HOST || ''} onChange={e => setForm({...form, SMTP_HOST: e.target.value})} /></div>
             <div className="space-y-1"><label className="text-xs font-medium text-slate-500">SMTP Port</label><input type="number" className="input text-sm" value={form.SMTP_PORT || ''} onChange={e => setForm({...form, SMTP_PORT: e.target.value})} /></div>
@@ -1696,7 +1729,9 @@ export function SettingsTab({ settings, onRefresh }) {
               </button>
             </div>
             <p className="text-[11px] text-slate-400">
-              Paste the SMTP password above before each test (it is not shown after save).
+              {emailProvider === 'resend' && resendConfigured
+                ? 'Send test uses Resend — no SMTP password needed. Restart the API after changing RESEND_API_KEY in .env or Render.'
+                : 'Paste the SMTP password above before each test (it is not shown after save).'}
             </p>
           </div>
         </section>
