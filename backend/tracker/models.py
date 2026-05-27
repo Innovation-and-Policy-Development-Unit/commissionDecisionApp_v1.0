@@ -177,6 +177,44 @@ class Department(models.Model):
         return f"{self.name} ({self.ministry.code})"
 
 
+class AgendaSection(models.Model):
+    """Configurable Commission meeting agenda sections (admin-managed)."""
+
+    code = models.SlugField(
+        max_length=32,
+        unique=True,
+        help_text="Stable key stored on submissions and agenda items (e.g. appointment).",
+    )
+    label = models.CharField(
+        max_length=255,
+        help_text="Display label including section number, e.g. '5. Appointment / Acting Appointment'.",
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    is_special = models.BooleanField(
+        default=False,
+        help_text="Meeting-only sections (Preliminaries, Matters Arising) — hidden from ministry lodge form.",
+    )
+    is_active = models.BooleanField(default=True)
+    digitized_form = models.ForeignKey(
+        "PSCFormType",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="agenda_sections_as_default",
+        help_text="Default digitized PSC form for submissions lodged under this agenda section.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_order", "id"]
+        verbose_name = "Agenda section"
+        verbose_name_plural = "Agenda sections"
+
+    def __str__(self):
+        return self.label
+
+
 class FormCategory(models.Model):
     code = models.CharField(max_length=64, unique=True)
     name = models.CharField(max_length=255)

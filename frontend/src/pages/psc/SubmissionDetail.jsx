@@ -7,7 +7,7 @@ import VerificationBadge from '../../components/audit/VerificationBadge'
 import SubmissionPresenceBar from '../../components/submissions/SubmissionPresenceBar'
 import PolicyGuardrailDrawer from '../../components/submissions/PolicyGuardrailDrawer'
 import { policyGuardrailApplies } from '../../utils/policyGuardrail'
-import { agendaSectionLabel } from '../../constants/agendaCategories'
+import { useAgendaSections } from '../../hooks/useAgendaSections'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -96,6 +96,7 @@ export default function SubmissionDetail() {
   const { user } = useAuth()
   const toast   = useToast()
   const confirm = useConfirm()
+  const { agendaSectionLabel } = useAgendaSections()
   const [submission, setSubmission] = useState(null)
   const [auditStationFilter, setAuditStationFilter] = useState(null)
 

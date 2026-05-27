@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  VIPAM Submission Paper — Public Service Commission
+  Source: VIPAM Submission Template.pdf
+  Import into Form Builder via Import (.xml) on the linked PSC form type.
+-->
+<fields>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COVER — ADMINISTRATIVE DETAILS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Cover Details</label>
+    <field_key>section_cover</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+
+  <field>
+    <label>Meeting Number</label>
+    <field_key>meeting_number</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. PSC Meeting No. 12</placeholder>
+    <help_text>Commission meeting reference, if known at time of submission.</help_text>
+    <is_required>false</is_required>
+    <display_order>20</display_order>
+  </field>
+
+  <field>
+    <label>Prepared by (Ministry HR)</label>
+    <field_key>prepared_by_ministry_hr</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name and title</placeholder>
+    <is_required>true</is_required>
+    <display_order>30</display_order>
+  </field>
+
+  <field>
+    <label>Reviewed by (VIPAM Staff)</label>
+    <field_key>reviewed_by_vipam_staff</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name and title</placeholder>
+    <is_required>false</is_required>
+    <display_order>40</display_order>
+  </field>
+
+  <field>
+    <label>Date Prepared</label>
+    <field_key>date_prepared</field_key>
+    <field_type>date</field_type>
+    <is_required>true</is_required>
+    <display_order>50</display_order>
+  </field>
+
+  <field>
+    <label>Date Received (VIPAM)</label>
+    <field_key>date_received</field_key>
+    <field_type>date</field_type>
+    <help_text>Date the submission was received by VIPAM.</help_text>
+    <is_required>false</is_required>
+    <display_order>60</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SUBMISSION TYPE
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Type of Submission</label>
+    <field_key>section_type_of_submission</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>70</display_order>
+  </field>
+
+  <field>
+    <label>Type of Submission</label>
+    <field_key>type_of_submission</field_key>
+    <field_type>select</field_type>
+    <choices>Internship
+Training
+Education
+Internship, Training, Education (combined)
+Other</choices>
+    <help_text>As per VIPAM submission paper template.</help_text>
+    <is_required>true</is_required>
+    <display_order>80</display_order>
+  </field>
+
+  <field>
+    <label>Other type (specify)</label>
+    <field_key>type_of_submission_other</field_key>
+    <field_type>text</field_type>
+    <placeholder>Complete if "Other" is selected</placeholder>
+    <is_required>false</is_required>
+    <display_order>90</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SUBMISSION BODY
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Submission Content</label>
+    <field_key>section_submission_content</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>100</display_order>
+  </field>
+
+  <field>
+    <label>Purpose</label>
+    <field_key>purpose</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>State the purpose of this VIPAM submission.</placeholder>
+    <is_required>true</is_required>
+    <display_order>110</display_order>
+  </field>
+
+  <field>
+    <label>Policy and Strategic Alignment</label>
+    <field_key>policy_strategic_alignment</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Explain how the matter aligns with government policy, NSDP, ministry corporate plan, or PSC priorities.</placeholder>
+    <is_required>true</is_required>
+    <display_order>120</display_order>
+  </field>
+
+  <field>
+    <label>Background Information</label>
+    <field_key>background_information</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Provide relevant background and context.</placeholder>
+    <is_required>true</is_required>
+    <display_order>130</display_order>
+  </field>
+
+  <field>
+    <label>Discussion — Context</label>
+    <field_key>discussion_context</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Context for the matter.</placeholder>
+    <help_text>Part of Discussion: Context, What Happened / Current Situation, Proposed Action, Expected Outcome.</help_text>
+    <is_required>true</is_required>
+    <display_order>140</display_order>
+  </field>
+
+  <field>
+    <label>Discussion — What Happened / Current Situation</label>
+    <field_key>discussion_current_situation</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Describe what happened or the current situation.</placeholder>
+    <is_required>true</is_required>
+    <display_order>150</display_order>
+  </field>
+
+  <field>
+    <label>Discussion — Proposed Action</label>
+    <field_key>discussion_proposed_action</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Describe the proposed action.</placeholder>
+    <is_required>true</is_required>
+    <display_order>160</display_order>
+  </field>
+
+  <field>
+    <label>Discussion — Expected Outcome</label>
+    <field_key>discussion_expected_outcome</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Describe the expected outcome.</placeholder>
+    <is_required>true</is_required>
+    <display_order>170</display_order>
+  </field>
+
+  <field>
+    <label>Recommendation</label>
+    <field_key>recommendation</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Clear recommendation for the Commission / Secretary-General.</placeholder>
+    <is_required>true</is_required>
+    <display_order>180</display_order>
+  </field>
+
+  <field>
+    <label>Attachment(s)</label>
+    <field_key>attachments_list</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List supporting documents attached to this submission (or state "See submission documents tab").</placeholder>
+    <help_text>Upload files on the submission record; list them here for the sitting paper.</help_text>
+    <is_required>false</is_required>
+    <display_order>190</display_order>
+  </field>
+
+  <field>
+    <label>Submitted by</label>
+    <field_key>submitted_by</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name, title, ministry/department</placeholder>
+    <is_required>true</is_required>
+    <display_order>200</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ENDORSEMENT — SG-PSC
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Endorsement of SG-PSC</label>
+    <field_key>section_endorsement_sg_psc</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>210</display_order>
+  </field>
+
+  <field>
+    <label>Manager VIPAM — Name</label>
+    <field_key>manager_vipam_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Manager VIPAM</placeholder>
+    <is_required>false</is_required>
+    <display_order>220</display_order>
+  </field>
+
+  <field>
+    <label>Manager VIPAM — Date</label>
+    <field_key>manager_vipam_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>230</display_order>
+  </field>
+
+  <field>
+    <label>PSC Secretary — Name</label>
+    <field_key>psc_secretary_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>PSC Secretary</placeholder>
+    <is_required>false</is_required>
+    <display_order>240</display_order>
+  </field>
+
+  <field>
+    <label>PSC Secretary — Date</label>
+    <field_key>psc_secretary_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>250</display_order>
+  </field>
+
+</fields>

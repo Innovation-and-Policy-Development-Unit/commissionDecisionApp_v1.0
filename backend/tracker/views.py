@@ -23,6 +23,7 @@ from .models import (
     CommissionTaskUpdate,
     Department,
     FlyingMinuteSignature,
+    AgendaSection,
     FormCategory,
     PSCFormField,
     PSCFormResponse,
@@ -67,6 +68,7 @@ from .serializers import (
     CommissionTaskUpdateBodySerializer,
     CommissionTaskUpdateSerializer,
     DepartmentSerializer,
+    AgendaSectionSerializer,
     FormCategorySerializer,
     PSCFormFieldSerializer,
     PSCFormResponseSerializer,
@@ -1983,6 +1985,87 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         return qs
 
 
+class AgendaSectionViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for Commission agenda sections.
+    Read: any authenticated user.
+    Write / reorder: PSC Admins only.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
+    serializer_class = AgendaSectionSerializer
+    queryset = AgendaSection.objects.select_related("digitized_form").all().order_by(
+        "display_order", "id",
+    )
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get("active_only") == "1":
+            qs = qs.filter(is_active=True)
+        if self.request.query_params.get("lodge_only") == "1":
+            qs = qs.filter(is_special=False)
+        return qs
+
+    def _require_admin(self):
+        if self.request.user.is_superuser or self.request.user.is_staff:
+            return
+        try:
+            profile = self.request.user.psc_profile
+        except Exception:
+            raise PermissionDenied("Admin access required.")
+        if profile.role != Role.PSC_ADMIN:
+            raise PermissionDenied("Only PSC Administrators can manage agenda sections.")
+
+    def perform_create(self, serializer):
+        self._require_admin()
+        if not serializer.validated_data.get("display_order"):
+            max_order = (
+                AgendaSection.objects.order_by("-display_order")
+                .values_list("display_order", flat=True)
+                .first()
+            ) or 0
+            serializer.save(display_order=max_order + 10)
+        else:
+            serializer.save()
+
+    def perform_update(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_admin()
+        instance = self.get_object()
+        from .agenda_sections import agenda_section_usage_counts
+
+        usage = agenda_section_usage_counts(instance)
+        total = sum(usage.values())
+        if total > 0:
+            raise PermissionDenied(
+                f"Cannot delete: {usage['submissions']} submission(s), "
+                f"{usage['agenda_items']} agenda item(s), and "
+                f"{usage['form_types']} form type(s) use this section. "
+                "Deactivate it instead."
+            )
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=["post"], url_path="reorder")
+    def reorder(self, request):
+        self._require_admin()
+        order = request.data.get("order")
+        if not isinstance(order, list) or not order:
+            return Response(
+                {"detail": "Provide order as a list of agenda section ids."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        with transaction.atomic():
+            for idx, pk in enumerate(order):
+                AgendaSection.objects.filter(pk=pk).update(display_order=(idx + 1) * 10)
+        qs = self.get_queryset()
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+
 class FormCategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
     queryset = FormCategory.objects.all().order_by('display_order', 'name')
@@ -2027,6 +2110,8 @@ class PSCFormTypeViewSet(viewsets.ModelViewSet):
         qs = PSCFormType.objects.select_related('form_category').all()
         if self.request.query_params.get('active_only') == '1':
             qs = qs.filter(is_active=True)
+        if self.request.query_params.get('digitized_only') == '1':
+            qs = qs.filter(is_digitized=True)
         cat = self.request.query_params.get('form_category')
         if cat:
             qs = qs.filter(form_category_id=cat)

@@ -18,6 +18,7 @@ from .views import (
     DocumentSignatureViewSet,
     MySignatureView,
     VerifyPinView,
+    AgendaSectionViewSet,
     FormCategoryViewSet,
     PSCFormFieldViewSet,
     PSCFormTypeViewSet,
@@ -90,6 +91,7 @@ router = DefaultRouter()
 router.register(r"submissions", SubmissionViewSet, basename="submission")
 router.register(r"ministries", MinistryViewSet, basename="ministry")
 router.register(r"departments", DepartmentViewSet, basename="department")
+router.register(r"agenda-sections", AgendaSectionViewSet, basename="agendasection")
 router.register(r"form-categories", FormCategoryViewSet, basename="formcategory")
 router.register(r"form-types",      PSCFormTypeViewSet,  basename="formtype")
 router.register(r"form-fields",         PSCFormFieldViewSet,      basename="formfield")

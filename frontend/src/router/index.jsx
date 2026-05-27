@@ -26,6 +26,8 @@ import AdminBackupRestorePage from '../pages/admin/AdminBackupRestorePage'
 import AdminSecurityPage from '../pages/admin/AdminSecurityPage'
 import FeedbackManagementPage from '../pages/admin/FeedbackManagementPage'
 import FormTypesAdmin from '../pages/admin/FormTypesAdmin'
+import AgendaSectionsAdmin from '../pages/admin/AgendaSectionsAdmin'
+import AgendaSectionFormsAdmin from '../pages/admin/AgendaSectionFormsAdmin'
 import FormBuilder from '../pages/admin/FormBuilder'
 import KnowledgeBaseAdmin from '../pages/admin/KnowledgeBaseAdmin'
 import KnowledgeArticleEditor from '../pages/admin/KnowledgeArticleEditor'
@@ -92,6 +94,8 @@ export default function AppRouter() {
           <Route path="/admin/security" element={<AdminSecurityPage />} />
           <Route path="/admin/feedback" element={<FeedbackManagementPage />} />
           <Route path="/admin/form-types" element={<FormTypesAdmin />} />
+          <Route path="/admin/agenda-sections" element={<AgendaSectionsAdmin />} />
+          <Route path="/admin/agenda-section-forms" element={<AgendaSectionFormsAdmin />} />
           <Route path="/admin/form-types/:formTypeId/builder" element={<FormBuilder />} />
           <Route path="/admin/knowledge-base" element={<KnowledgeBaseAdmin />} />
           <Route path="/admin/knowledge-base/new" element={<KnowledgeArticleEditor />} />

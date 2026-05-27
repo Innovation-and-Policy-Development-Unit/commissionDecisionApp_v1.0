@@ -20,6 +20,7 @@ from .models import (
     TranscriptSource,
     Minutes,
     AgendaItem,
+    AgendaSection,
     Ministry,
     Notification,
     Profile,
@@ -412,6 +413,78 @@ class TaskReportRowSerializer(serializers.Serializer):
     subtask_count = serializers.IntegerField()
     subtask_completed = serializers.IntegerField()
     days_overdue = serializers.IntegerField()
+
+
+class AgendaSectionSerializer(serializers.ModelSerializer):
+    usage = serializers.SerializerMethodField()
+    digitized_form_code = serializers.CharField(
+        source="digitized_form.code", read_only=True, default=None,
+    )
+    digitized_form_name = serializers.CharField(
+        source="digitized_form.name", read_only=True, default=None,
+    )
+
+    class Meta:
+        model = AgendaSection
+        fields = (
+            "id",
+            "code",
+            "label",
+            "display_order",
+            "is_special",
+            "is_active",
+            "digitized_form",
+            "digitized_form_code",
+            "digitized_form_name",
+            "usage",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "created_at",
+            "updated_at",
+            "usage",
+            "digitized_form_code",
+            "digitized_form_name",
+        )
+
+    def get_usage(self, obj):
+        from .agenda_sections import agenda_section_usage_counts
+
+        return agenda_section_usage_counts(obj)
+
+    def validate_code(self, value):
+        value = (value or "").strip().lower().replace(" ", "_")
+        if not value:
+            raise serializers.ValidationError("Code is required.")
+        return value
+
+    def validate_digitized_form(self, form_type):
+        if form_type is None:
+            return form_type
+        if not form_type.is_digitized:
+            raise serializers.ValidationError(
+                "Only form types marked as digitized can be linked to an agenda section."
+            )
+        if not form_type.is_active:
+            raise serializers.ValidationError("The selected form type is not active.")
+        return form_type
+
+    def _sync_form_agenda_category(self, section):
+        if section.digitized_form_id:
+            PSCFormType.objects.filter(pk=section.digitized_form_id).update(
+                agenda_category=section.code,
+            )
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        self._sync_form_agenda_category(instance)
+        return instance
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        self._sync_form_agenda_category(instance)
+        return instance
 
 
 class FormCategorySerializer(serializers.ModelSerializer):
@@ -923,6 +996,16 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
         if code:
             attrs["form_type_code"] = code
             assert_may_create_secretary_travel_form(profile, code)
+
+        agenda_code = (attrs.get("agenda_category") or "").strip()
+        if agenda_code:
+            from .agenda_sections import apply_agenda_section_defaults, validate_agenda_section_code
+
+            try:
+                attrs["agenda_category"] = validate_agenda_section_code(agenda_code)
+                apply_agenda_section_defaults(attrs)
+            except ValueError as exc:
+                raise serializers.ValidationError({"agenda_category": str(exc)}) from exc
         return attrs
 
     def create(self, validated_data):

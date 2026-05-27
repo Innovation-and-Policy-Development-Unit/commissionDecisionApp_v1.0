@@ -28,11 +28,7 @@ import {
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
   Send, ThumbsUp, Mail, ChevronsRight, Tablet,
 } from 'lucide-react'
-import {
-  AGENDA_SECTIONS as CATEGORIES,
-  AGENDA_SECTION_ORDER as CATEGORY_ORDER,
-  agendaSectionLabel as categoryLabel,
-} from '../../constants/agendaCategories'
+import { useAgendaSections } from '../../hooks/useAgendaSections'
 
 // Sub-item letters a, b, c … z, aa, ab …
 function subLetter(idx) {
@@ -81,6 +77,11 @@ export default function Agenda() {
   const confirm = useConfirm()
   const { user } = useAuth()
   const printRef = useRef()
+  const {
+    sections: CATEGORIES,
+    categoryOrder: CATEGORY_ORDER,
+    agendaSectionLabel: categoryLabel,
+  } = useAgendaSections()
 
   const [meetings, setMeetings]         = useState([])
   const [selectedId, setSelectedId]     = useState('')
@@ -195,7 +196,7 @@ export default function Agenda() {
       result[cat] = catItems.map(item => ({ ...item, agendaNo: counter++ }))
     }
     return result
-  }, [grouped])
+  }, [grouped, CATEGORY_ORDER])
 
   // ── CRUD ────────────────────────────────────────────────────────────────
 

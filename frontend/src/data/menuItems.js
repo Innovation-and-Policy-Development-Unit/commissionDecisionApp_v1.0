@@ -3,6 +3,7 @@ import {
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, BarChart2, CalendarCheck,
+  ListChecks,
 } from 'lucide-react'
 import { CMS_PORTAL_URL } from '../constants/compliance'
 import {
@@ -134,6 +135,8 @@ const menuItems = [
           { label: 'Roles & Permissions',      labelKey: 'nav.roles_permissions',      icon: Shield,        path: '/admin/roles-permissions',      visibility: 'admin' },
           { label: 'Ministries & Departments', labelKey: 'nav.ministries_departments', icon: Building2,     path: '/admin/ministries-departments', visibility: 'admin' },
           { label: 'PSC Form Types',           labelKey: 'nav.form_types',             icon: ClipboardList, path: '/admin/form-types',             visibility: 'admin' },
+          { label: 'Agenda sections',          labelKey: 'nav.agenda_sections',        icon: ListChecks,    path: '/admin/agenda-sections',        visibility: 'admin' },
+          { label: 'Agenda section forms',     labelKey: 'nav.agenda_section_forms',   icon: FileText,      path: '/admin/agenda-section-forms',   visibility: 'admin' },
         ],
       },
       {

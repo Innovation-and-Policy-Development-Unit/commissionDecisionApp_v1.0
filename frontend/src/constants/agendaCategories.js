@@ -1,8 +1,7 @@
 /**
- * Commission meeting agenda sections — mirrors backend AgendaCategory.
- * Used by secretariat agenda builder and ministry "Submit for Commission".
+ * Fallback agenda sections when API is unavailable (matches default DB seed).
  */
-export const AGENDA_SECTIONS = [
+export const AGENDA_SECTIONS_FALLBACK = [
   { value: 'preliminaries', label: '1. Preliminaries & Endorsements', isSpecial: true },
   { value: 'matters_arising', label: '2. Matters Arising', isSpecial: true },
   { value: 'discipline_compliance', label: '3. Discipline / Compliance', isSpecial: false },
@@ -20,11 +19,13 @@ export const AGENDA_SECTIONS = [
   { value: 'other', label: '15. Other Matters', isSpecial: false },
 ]
 
-/** Sections ministries may select when lodging a paper submission with PSC. */
-export const COMMISSION_LODGE_SECTIONS = AGENDA_SECTIONS.filter(s => !s.isSpecial)
+/** @deprecated use useAgendaSections — kept for imports that expect AGENDA_SECTIONS */
+export const AGENDA_SECTIONS = AGENDA_SECTIONS_FALLBACK
 
-export const AGENDA_SECTION_ORDER = AGENDA_SECTIONS.map(s => s.value)
+export const COMMISSION_LODGE_SECTIONS = AGENDA_SECTIONS_FALLBACK.filter(s => !s.isSpecial)
+
+export const AGENDA_SECTION_ORDER = AGENDA_SECTIONS_FALLBACK.map(s => s.value)
 
 export function agendaSectionLabel(value) {
-  return AGENDA_SECTIONS.find(s => s.value === value)?.label ?? value
+  return AGENDA_SECTIONS_FALLBACK.find(s => s.value === value)?.label ?? value
 }

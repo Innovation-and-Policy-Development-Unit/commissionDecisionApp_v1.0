@@ -14,7 +14,7 @@ import {
   TRAVEL_CATEGORY_CODE,
 } from '../../constants/travel'
 import { filterSecretaryFormTypes } from '../../constants/submissionCreate'
-import { COMMISSION_LODGE_SECTIONS } from '../../constants/agendaCategories'
+import { useAgendaSections } from '../../hooks/useAgendaSections'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -345,6 +345,7 @@ function CommissionSubmissionForm({
 }) {
   const navigate = useNavigate()
   const toast = useToast()
+  const { sections: lodgeSections, loading: sectionsLoading } = useAgendaSections({ lodgeOnly: true })
   const [form, setForm] = useState({
     title: '',
     agenda_category: 'other',
@@ -426,12 +427,16 @@ function CommissionSubmissionForm({
             value={form.agenda_category}
             onChange={e => setForm(f => ({ ...f, agenda_category: e.target.value }))}
           >
-            {COMMISSION_LODGE_SECTIONS.map(section => (
+            {lodgeSections.map(section => (
               <option key={section.value} value={section.value}>{section.label}</option>
             ))}
           </select>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Which Commission agenda section this matter belongs to. PSC form numbers are not required here — attach them as documents on the next screen.
+            Which Commission agenda section this matter belongs to.
+            {lodgeSections.find(s => s.value === form.agenda_category)?.digitizedFormCode && (
+              <> A linked digitized form ({lodgeSections.find(s => s.value === form.agenda_category).digitizedFormCode}) will open on the submission page.</>
+            )}
+            {' '}Scanned papers can still be attached as documents.
           </p>
         </div>
 
@@ -504,7 +509,7 @@ function CommissionSubmissionForm({
         </div>
 
         <div className="flex items-center gap-3 pt-2">
-          <button type="submit" className="btn-primary px-6 py-2.5" disabled={busy}>
+          <button type="submit" className="btn-primary px-6 py-2.5" disabled={busy || sectionsLoading}>
             {busy ? 'Saving…' : 'Create submission'}
           </button>
           {modal && onClose && (

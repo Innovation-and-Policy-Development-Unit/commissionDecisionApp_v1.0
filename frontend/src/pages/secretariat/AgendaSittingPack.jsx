@@ -20,6 +20,7 @@ import api from '../../api/client'
 import { normalizeListPayload } from '../../utils/listPayload'
 import { useAuth } from '../../context/AuthContext'
 import { buildSittingPackRows } from '../../utils/agendaGrouping'
+import { useAgendaSections } from '../../hooks/useAgendaSections'
 import DigitalSealOverlay from '../../components/sitting-pack/DigitalSealOverlay'
 import ExecutiveBriefPanel from '../../components/sitting-pack/ExecutiveBriefPanel'
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
@@ -122,7 +123,12 @@ export default function AgendaSittingPack() {
     'psc_manager',
   ].includes(role)
 
-  const rows = useMemo(() => buildSittingPackRows(items), [items])
+  const { categoryOrder, allSections } = useAgendaSections()
+
+  const rows = useMemo(
+    () => buildSittingPackRows(items, categoryOrder, allSections),
+    [items, categoryOrder, allSections],
+  )
 
   const selectedRow = useMemo(
     () => rows.find((r) => r.type === 'item' && r.id === selectedItemId),
