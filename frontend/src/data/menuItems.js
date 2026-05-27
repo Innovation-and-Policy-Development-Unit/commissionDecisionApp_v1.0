@@ -61,15 +61,16 @@ const menuItems = [
     group: 'Commission Decision',
     groupKey: 'nav.group_commission',
     groupIcon: Gavel,
-    audience: 'secretariat',
+    audience: 'commission_decision',
     items: [
       {
         label: 'Meetings',
         labelKey: 'nav.sub_meetings',
         icon: CalendarDays,
+        audience: 'secretariat',
         children: [
-          { label: 'Meeting room',  labelKey: 'nav.meeting_room', icon: Headphones,   path: '/secretariat/meeting-room' },
-          { label: 'Meetings',      labelKey: 'nav.meetings',     icon: CalendarDays, path: '/secretariat/meetings' },
+          { label: 'Meeting room',  labelKey: 'nav.meeting_room', icon: Headphones,   path: '/secretariat/meeting-room', audience: 'secretariat' },
+          { label: 'Meetings',      labelKey: 'nav.meetings',     icon: CalendarDays, path: '/secretariat/meetings',     audience: 'secretariat' },
         ],
       },
       {
@@ -77,9 +78,9 @@ const menuItems = [
         labelKey: 'nav.sub_minutes_agenda',
         icon: FileText,
         children: [
-          { label: 'Agenda',        labelKey: 'nav.agenda',        icon: ScrollText, path: '/secretariat/agenda' },
-          { label: 'Minutes',       labelKey: 'nav.minutes',       icon: FileText,   path: '/secretariat/minutes' },
-          { label: 'Minute intake', labelKey: 'nav.minute_intake', icon: PenLine,    path: '/secretariat/minute-intake' },
+          { label: 'Agenda',        labelKey: 'nav.agenda',        icon: ScrollText, path: '/secretariat/agenda',        audience: 'secretariat' },
+          { label: 'Minutes',       labelKey: 'nav.minutes',       icon: FileText,   path: '/secretariat/minutes',       audience: 'commission_decision' },
+          { label: 'Minute intake', labelKey: 'nav.minute_intake', icon: PenLine,    path: '/secretariat/minute-intake', audience: 'secretariat' },
         ],
       },
       {
@@ -87,9 +88,9 @@ const menuItems = [
         labelKey: 'nav.sub_outcomes',
         icon: Gavel,
         children: [
-          { label: 'Decisions',               labelKey: 'nav.decisions',     icon: Gavel,    path: '/secretariat/decisions' },
-          { label: 'Minutes decision tasks',  labelKey: 'nav.minutes_tasks', icon: ListTodo, path: '/secretariat/tasks' },
-          { label: 'Notifications',           labelKey: 'nav.notifications', icon: Bell,     path: '/secretariat/notifications' },
+          { label: 'Decisions',               labelKey: 'nav.decisions',     icon: Gavel,    path: '/secretariat/decisions',     audience: 'secretariat' },
+          { label: 'Minutes decision tasks',  labelKey: 'nav.minutes_tasks', icon: ListTodo, path: '/secretariat/tasks',         audience: 'commission_decision' },
+          { label: 'Notifications',           labelKey: 'nav.notifications', icon: Bell,     path: '/secretariat/notifications', audience: 'secretariat' },
         ],
       },
     ],
@@ -257,7 +258,17 @@ export function getVisibleMenuForUser(user, feedbackEnabled = true) {
         return { ...group, items }
       }
 
-      const items = group.items.filter((item) => menuItemVisibleForUser(item, user))
+      const items = group.items
+        .map((item) => {
+          if (!menuItemVisibleForUser(item, user)) return null
+          if (item.children) {
+            const children = item.children.filter((c) => menuItemVisibleForUser(c, user))
+            if (children.length === 0) return null
+            return { ...item, children }
+          }
+          return item
+        })
+        .filter(Boolean)
       if (items.length === 0) return null
       return { ...group, items }
     })

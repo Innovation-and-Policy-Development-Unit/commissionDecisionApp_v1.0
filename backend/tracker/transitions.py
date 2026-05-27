@@ -3,6 +3,7 @@
 from django.core.exceptions import PermissionDenied
 
 from .models import Role, WorkflowStage, MeetingType
+from .opsc_access import OPSC_UNIT_MANAGER_ROLES
 
 # ---------------------------------------------------------------------------
 # Internal submission roles — only unit managers (not principals) create submissions
@@ -198,12 +199,7 @@ _MINISTRY_ALLOWED = {
 }
 
 # OPSC Unit Managers handle the checklist review stage only
-_UNIT_MANAGER_ROLES = {
-    Role.VIPAM_MANAGER,
-    Role.HR_UNIT_MANAGER,
-    Role.ODU_MANAGER,
-    Role.COMPLIANCE_MANAGER,
-}
+_UNIT_MANAGER_ROLES = OPSC_UNIT_MANAGER_ROLES
 
 _UNIT_MANAGER_STAGES = {
     WorkflowStage.MANAGER_CHECKLIST_REVIEW,

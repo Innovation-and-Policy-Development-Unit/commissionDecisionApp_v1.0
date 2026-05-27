@@ -676,6 +676,10 @@ class Command(BaseCommand):
         ("allocate_decision",   "Allocate Decision",   "tasks",          "Assign post-decision work to an OPSC Manager after commission deliberation."),
         ("assign_task",         "Assign Task to Staff","tasks",          "Assign a specific task to a Principal Officer or Senior Officer."),
         ("update_implementation","Update Implementation","tasks",        "Update the implementation status and progress of a decision."),
+        ("view_commission_minutes", "View Commission Minutes", "tasks",
+         "Browse Commission minutes (read-only for OPSC unit managers and principals)."),
+        ("view_commission_tasks", "View Commission Task Register", "tasks",
+         "See all post-decision tasks; change only tasks allocated to you."),
         # Reports
         ("view_dashboard",      "View Dashboard",      "reports",        "Access the analytics and performance dashboard."),
         ("view_reports",        "View Reports",        "reports",        "Access the reports module and statistical summaries."),
@@ -745,39 +749,59 @@ class Command(BaseCommand):
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
             "allocate_decision", "assign_task", "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
             "view_reports", "view_audit_trail",
         ]),
         ("principal_officer", (
             "Executes tasks allocated by the OPSC Manager; updates implementation status "
             "and reports on progress to the Manager."
         ), [
-            "view_submissions", "update_implementation", "view_audit_trail",
+            "view_submissions", "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
         ]),
         ("senior_officer", (
             "Assists in executing tasks allocated by the OPSC Manager; updates implementation "
             "progress and escalates issues to the Principal Officer or Manager."
         ), [
-            "view_submissions", "update_implementation", "view_audit_trail",
+            "view_submissions", "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
         ]),
         ("vipam_manager", (
-            "VIPAM Manager — reviews checklist for study/training-related submissions "
-            "and approves or returns them for clarification."
+            "VIPAM Manager — reviews checklist for study/training-related submissions; "
+            "views all Commission minutes and tasks; works only on tasks allocated to VIPAM."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
+            "assign_task", "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
             "view_reports", "view_audit_trail",
         ]),
         ("hr_unit_manager", (
-            "HR Unit Manager — reviews checklist for HR-related submissions "
-            "and approves or returns them for clarification."
+            "HR Unit Manager — reviews HR submissions; views all Commission minutes and tasks; "
+            "works only on tasks allocated to the HR unit."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
+            "assign_task", "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
             "view_reports", "view_audit_trail",
         ]),
         ("odu_manager", (
-            "ODU Manager — reviews checklist for organisational development-related submissions "
-            "and approves or returns them for clarification."
+            "ODU Manager — reviews organisational development submissions; views all Commission "
+            "minutes and tasks; works only on tasks allocated to ODU."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
+            "assign_task", "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_reports", "view_audit_trail",
+        ]),
+        ("csu_manager", (
+            "CSU Manager — lodges internal OPSC submissions; views all Commission minutes and tasks; "
+            "works only on tasks allocated to CSU."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow", "create_submission",
+            "assign_task", "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
             "view_reports", "view_audit_trail",
         ]),
         ("compliance_manager", (
@@ -785,7 +809,36 @@ class Command(BaseCommand):
             "Commission Portal for Secretary review and sign-off."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
+            "assign_task", "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
             "view_reports", "view_audit_trail",
+        ]),
+        ("vipam_principal", (
+            "VIPAM Principal — assessment work assigned by the VIPAM Manager; views all Commission "
+            "minutes and tasks; updates only tasks allocated to them."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
+        ]),
+        ("hr_unit_principal", (
+            "HR Unit Principal — assessment work assigned by the HR Unit Manager; views all Commission "
+            "minutes and tasks; updates only tasks allocated to them."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
+        ]),
+        ("odu_principal", (
+            "ODU Principal — assessment work assigned by the ODU Manager; views all Commission "
+            "minutes and tasks; updates only tasks allocated to them."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
         ]),
         ("compliance_senior", (
             "Compliance Senior Officer — creates and maintains compliance cases in CMS "
@@ -795,10 +848,12 @@ class Command(BaseCommand):
             "view_reports", "view_audit_trail",
         ]),
         ("compliance_principal", (
-            "Compliance Principal — assigned compliance cases in CMS; may register all "
-            "linked portal types including PSA amendments."
+            "Compliance Principal — assigned compliance cases in CMS; views all Commission "
+            "minutes and tasks; updates only tasks allocated to them."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
+            "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
             "view_reports", "view_audit_trail",
         ]),
         ("ministry_hr", "Submits cases on behalf of their ministry and monitors submission status.", [

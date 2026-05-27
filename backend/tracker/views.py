@@ -55,6 +55,16 @@ from .models import (
     KnowledgeArticle,
 )
 from .models import PasswordResetToken
+from .opsc_access import (
+    COMMISSION_TASK_MANAGER_ROLES,
+    COMMISSION_TASK_STAFF_ROLES,
+    MANAGER_ROLE_TO_PRINCIPAL_ROLE,
+    MANAGER_ROLE_TO_ROUTED_UNIT,
+    OPSC_UNIT_MANAGER_ROLES,
+    user_can_view_all_commission_tasks,
+    user_can_view_commission_minutes,
+    user_can_work_commission_task,
+)
 from .rbac import (
     rbac_can_access_admin_panel,
     rbac_can_mutate_ministry_department,
@@ -264,6 +274,7 @@ def _submission_queryset_for(user):
         Role.HR_UNIT_MANAGER,
         Role.ODU_MANAGER,
         Role.COMPLIANCE_MANAGER,
+        Role.CSU_MANAGER,
     }:
         return qs
     if rbac_user_has_permission(user, "view_submissions"):
@@ -286,6 +297,10 @@ def _commission_task_queryset_for(user):
         return qs
     if rbac_user_has_permission(user, "allocate_decision"):
         return qs
+    # OPSC unit managers/principals and post-decision staff: see full register;
+    # perform_update enforces write only on allocated rows.
+    if user_can_view_all_commission_tasks(user):
+        return qs
     if rbac_user_has_permission(user, "assign_task"):
         return qs.filter(assigned_manager=user)
     if rbac_user_has_permission(user, "update_implementation"):
@@ -296,17 +311,7 @@ def _commission_task_queryset_for(user):
 
 
 def _user_can_add_commission_task_update(user, task):
-    if user.is_superuser or user.is_staff:
-        return True
-    if rbac_user_has_permission(user, "allocate_decision"):
-        return True
-    if task.assigned_manager_id == user.id and rbac_user_has_permission(user, "assign_task"):
-        return True
-    if task.assigned_staff_id == user.id and rbac_user_has_permission(user, "update_implementation"):
-        return True
-    if task.assigned_staff_m2m.filter(id=user.id).exists() and rbac_user_has_permission(user, "update_implementation"):
-        return True
-    return False
+    return user_can_work_commission_task(user, task)
 
 
 class HasManageUsers(permissions.BasePermission):
@@ -1184,21 +1189,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         submission = self.get_object()
         profile = _profile(request.user)
 
-        _manager_to_unit = {
-            Role.ODU_MANAGER: "odu",
-            Role.VIPAM_MANAGER: "vipam",
-            Role.HR_UNIT_MANAGER: "hr",
-            Role.COMPLIANCE_MANAGER: "compliance",
-        }
-        _manager_to_principal_role = {
-            Role.ODU_MANAGER: Role.ODU_PRINCIPAL,
-            Role.VIPAM_MANAGER: Role.VIPAM_PRINCIPAL,
-            Role.HR_UNIT_MANAGER: Role.HR_UNIT_PRINCIPAL,
-            Role.COMPLIANCE_MANAGER: Role.COMPLIANCE_PRINCIPAL,
-        }
+        _manager_to_unit = MANAGER_ROLE_TO_ROUTED_UNIT
+        _manager_to_principal_role = MANAGER_ROLE_TO_PRINCIPAL_ROLE
 
         is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff
-        is_unit_manager = profile.role in _manager_to_unit
+        is_unit_manager = profile.role in OPSC_UNIT_MANAGER_ROLES
 
         if not (is_admin or is_unit_manager):
             raise PermissionDenied("Only unit managers can assign submissions to principals.")
@@ -2345,6 +2340,9 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             self._maybe_close_cms_for_task(updated)
             return
 
+        if not user_can_work_commission_task(user, task):
+            raise PermissionDenied("You cannot update this task.")
+
         vd = serializer.validated_data
         keys = set(vd.keys())
 
@@ -2356,7 +2354,9 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             self._maybe_close_cms_for_task(updated)
             return
 
-        is_manager = task.assigned_manager_id == user.id and rbac_user_has_permission(user, "assign_task")
+        is_manager = task.assigned_manager_id == user.id and rbac_user_has_permission(
+            user, "assign_task"
+        )
         is_staff = (
             task.assigned_staff_id == user.id
             or task.assigned_staff_m2m.filter(id=user.id).exists()
@@ -2364,7 +2364,9 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
 
         if is_manager:
             if "submission" in keys or "assigned_manager" in keys:
-                raise PermissionDenied("You cannot reassign the submission or manager for this task.")
+                raise PermissionDenied(
+                    "You cannot reassign the submission or manager for this task."
+                )
             updated = serializer.save()
             _notify_new_assignees(updated)
             self._maybe_close_cms_for_task(updated)
@@ -2453,7 +2455,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         from django.contrib.auth.models import User
         valid_staff = User.objects.filter(
             id__in=staff_ids,
-            psc_profile__role__in=(Role.PRINCIPAL_OFFICER, Role.SENIOR_OFFICER),
+            psc_profile__role__in=COMMISSION_TASK_STAFF_ROLES,
             is_active=True,
         )
         if valid_staff.count() != len(set(staff_ids)):
@@ -2682,7 +2684,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         if not rbac_user_has_permission(request.user, "allocate_decision"):
             raise PermissionDenied()
         qs = (
-            User.objects.filter(psc_profile__role=Role.PSC_MANAGER, is_active=True)
+            User.objects.filter(psc_profile__role__in=COMMISSION_TASK_MANAGER_ROLES, is_active=True)
             .select_related("psc_profile")
             .order_by("username")
         )
@@ -2693,7 +2695,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         if not rbac_user_has_permission(request.user, "assign_task"):
             raise PermissionDenied()
         qs = User.objects.filter(
-            psc_profile__role__in=(Role.PRINCIPAL_OFFICER, Role.SENIOR_OFFICER),
+            psc_profile__role__in=COMMISSION_TASK_STAFF_ROLES,
             is_active=True,
         )
         try:

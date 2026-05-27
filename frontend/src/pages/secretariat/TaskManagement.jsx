@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatApiError } from '../../utils/apiError'
+import { userCanWorkCommissionTask, userHasCommissionDecisionView } from '../../utils/opscAccess'
 import clsx from 'clsx'
 
 const TASK_LINK_STAGES = new Set([
@@ -754,7 +755,17 @@ export default function TaskManagement() {
     || editTask.assigned_staff_m2m?.includes(user?.id)
   ) && editTask.assigned_manager_username !== user?.username
 
-  const canEditTask = (t) => canAllocate || (canPickStaff && t.assigned_manager_username === user?.username) || ((t.assigned_staff_username === user?.username || t.assigned_staff_m2m?.includes(user?.id)) && t.status !== 'cancelled')
+  const canEditTask = (t) => {
+    if (t.status === 'cancelled') return false
+    if (canAllocate) return true
+    if (canPickStaff && t.assigned_manager_username === user?.username) return true
+    if (t.assigned_staff_username === user?.username || t.assigned_staff_m2m?.includes(user?.id)) {
+      return true
+    }
+    return userHasCommissionDecisionView(user) && userCanWorkCommissionTask(user, t)
+  }
+
+  const isViewOnlyRow = (t) => userHasCommissionDecisionView(user) && !canEditTask(t)
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -918,7 +929,7 @@ export default function TaskManagement() {
 
                         {/* Edit */}
                         <td className="px-3 py-3 text-right">
-                          {canEditTask(t) && (
+                          {canEditTask(t) ? (
                             <button
                               type="button"
                               onClick={() => setEditTask(t)}
@@ -926,7 +937,15 @@ export default function TaskManagement() {
                             >
                               Edit
                             </button>
-                          )}
+                          ) : isViewOnlyRow(t) ? (
+                            <button
+                              type="button"
+                              onClick={() => setEditTask(t)}
+                              className="text-slate-500 dark:text-slate-400 text-xs font-medium hover:underline whitespace-nowrap"
+                            >
+                              View
+                            </button>
+                          ) : null}
                         </td>
                       </tr>
                     ))}
@@ -947,6 +966,7 @@ export default function TaskManagement() {
           key={editTask.id}
           task={editTask}
           staffList={staffList}
+          readOnly={!canEditTask(editTask)}
           mode={isCoordinatorEdit ? 'coordinator' : isManagerEdit ? 'manager' : isStaffOnTask ? 'staff' : canAllocate ? 'coordinator' : 'manager'}
           onClose={() => setEditTask(null)}
           onSaved={() => { setEditTask(null); fetchTasks() }}
@@ -1080,7 +1100,7 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
 
 // ── Edit Task Modal ──────────────────────────────────────────────────────────
 
-function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
+function EditTaskModal({ task, staffList, mode, readOnly = false, onClose, onSaved }) {
   const toast = useToast()
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description || '')
@@ -1151,7 +1171,9 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
   })
 
   const submit = async e => {
-    e.preventDefault(); setErr(''); setSaving(true)
+    e.preventDefault()
+    if (readOnly) return
+    setErr(''); setSaving(true)
     try {
       const payload = {}
       if (mode === 'staff') {
@@ -1190,12 +1212,13 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
   return (
     <Modal
       open
-      title="Update task"
+      title={readOnly ? 'View task' : 'Update task'}
       subtitle={task.decision_number || task.submission_reference_number || 'Commission Task'}
       onClose={onClose}
       size="lg"
     >
       <form onSubmit={submit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+        <fieldset disabled={readOnly} className="space-y-4 border-0 p-0 m-0 min-w-0">
         {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
 
         {mode === 'staff' ? (
@@ -1268,7 +1291,7 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
         <TaskStatusUpdatesSection taskId={task.id} />
 
         {/* Subtask Section (for managers and coordinators) */}
-        {mode !== 'staff' && (
+        {mode !== 'staff' && !readOnly && (
           <SubtaskSection
             taskId={task.id}
             subtasks={subtasks}
@@ -1278,9 +1301,13 @@ function EditTaskModal({ task, staffList, mode, onClose, onSaved }) {
           />
         )}
 
+        </fieldset>
+
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="btn-outline py-2 px-4 text-sm">Cancel</button>
-          <button type="submit" disabled={saving} className="btn-gradient py-2 px-4 text-sm disabled:opacity-60">{saving ? 'Saving...' : 'Save'}</button>
+          <button type="button" onClick={onClose} className="btn-outline py-2 px-4 text-sm">{readOnly ? 'Close' : 'Cancel'}</button>
+          {!readOnly && (
+            <button type="submit" disabled={saving} className="btn-gradient py-2 px-4 text-sm disabled:opacity-60">{saving ? 'Saving...' : 'Save'}</button>
+          )}
         </div>
       </form>
     </Modal>
