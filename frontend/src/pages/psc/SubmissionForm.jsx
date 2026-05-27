@@ -357,10 +357,10 @@ function CommissionSubmissionForm({
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (ministries.length === 1 && !form.ministry) {
+    if (!isMinistryUser && ministries.length > 0 && !form.ministry) {
       setForm(f => ({ ...f, ministry: String(ministries[0].id) }))
     }
-  }, [ministries, form.ministry])
+  }, [ministries, isMinistryUser, form.ministry])
 
   const submit = async e => {
     e.preventDefault()
@@ -370,6 +370,10 @@ function CommissionSubmissionForm({
     }
     if (!form.title.trim()) {
       setError('Please enter a title / subject.')
+      return
+    }
+    if (!isMinistryUser && !form.ministry) {
+      setError('Please select a ministry.')
       return
     }
     setBusy(true)
@@ -390,11 +394,20 @@ function CommissionSubmissionForm({
       else navigate(`/submissions/${submission.id}`)
     } catch (err) {
       const detail = err.response?.data
-      const msg = typeof detail === 'object'
-        ? (detail.detail || JSON.stringify(detail))
-        : 'Could not create submission.'
-      setError(String(msg))
-      toast.error(String(msg))
+      let msg = 'Could not create submission.'
+      if (typeof detail === 'object' && detail !== null) {
+        if (detail.ministry) {
+          msg = Array.isArray(detail.ministry) ? detail.ministry.join(' ') : String(detail.ministry)
+        } else if (detail.agenda_category) {
+          msg = Array.isArray(detail.agenda_category) ? detail.agenda_category.join(' ') : String(detail.agenda_category)
+        } else if (detail.detail) {
+          msg = String(detail.detail)
+        } else {
+          msg = JSON.stringify(detail)
+        }
+      }
+      setError(msg)
+      toast.error(msg)
     } finally {
       setBusy(false)
     }

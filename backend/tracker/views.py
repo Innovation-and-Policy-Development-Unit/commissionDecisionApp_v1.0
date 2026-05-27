@@ -166,6 +166,19 @@ def _profile(user):
     return ensure_psc_profile(user)
 
 
+def _resolve_submission_ministry_id(profile, request, validated_data):
+    """Resolve ministry for external (Commission) submissions."""
+    ministry = validated_data.get("ministry")
+    if ministry is not None:
+        return ministry.pk
+    raw = request.data.get("ministry")
+    if raw not in (None, ""):
+        return int(raw)
+    if profile.ministry_id:
+        return profile.ministry_id
+    return None
+
+
 def _resolve_opsc_ministry(profile):
     """Return the Ministry PK for an OPSC internal submitter.
 
@@ -476,7 +489,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
         from .transitions import INTERNAL_SUBMITTER_ROLES
+        from rest_framework.exceptions import ValidationError
+
         profile = _profile(self.request.user)
+        validated = serializer.validated_data
 
         if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
             from .travel_forms import (
@@ -487,7 +503,19 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
 
             form_code = normalize_form_type_code(self.request.data.get("form_type_code"))
-            kwargs = {"current_stage": WorkflowStage.DRAFT, "is_internal": False}
+            ministry_id = _resolve_submission_ministry_id(profile, self.request, validated)
+            if not ministry_id:
+                raise ValidationError({
+                    "ministry": (
+                        "Ministry is required. Your profile is not linked to a ministry — "
+                        "contact PSC IT or select a ministry if lodging on behalf of a line ministry."
+                    ),
+                })
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": False,
+                "ministry_id": ministry_id,
+            }
             if is_travel_form_code(form_code):
                 assert_may_create_secretary_travel_form(profile, form_code)
                 endorsers = self.request.data.get("travel_endorsers") or {}
@@ -498,10 +526,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     travel_endorsers=endorsers if isinstance(endorsers, dict) else {},
                     routed_unit=RoutedUnit.ODU,
                 )
-            if profile.ministry_id:
-                kwargs["ministry_id"] = profile.ministry_id
             if profile.department_id:
                 kwargs["department_id"] = profile.department_id
+            elif self.request.data.get("department"):
+                kwargs["department_id"] = self.request.data.get("department")
             submission = serializer.save(**kwargs)
 
         elif profile.role == Role.TRAVELLER:
@@ -519,7 +547,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
 
             form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
-            kwargs = {"current_stage": WorkflowStage.DRAFT, "is_internal": False}
+            ministry_id = _resolve_submission_ministry_id(profile, self.request, validated)
+            if not ministry_id:
+                raise ValidationError({"ministry": "Please select the ministry for this submission."})
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": False,
+                "ministry_id": ministry_id,
+            }
             if is_travel_form_code(form_code):
                 assert_may_create_secretary_travel_form(profile, form_code)
                 endorsers = self.request.data.get("travel_endorsers") or {}
@@ -530,8 +565,6 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     travel_endorsers=endorsers if isinstance(endorsers, dict) else {},
                     routed_unit=RoutedUnit.ODU,
                 )
-            if profile.ministry_id:
-                kwargs["ministry_id"] = profile.ministry_id
             if profile.department_id:
                 kwargs["department_id"] = profile.department_id
             elif self.request.data.get("department"):
@@ -577,17 +610,26 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
 
             form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
-            kwargs = {}
+            ministry_id = _resolve_submission_ministry_id(profile, self.request, validated)
+            if not ministry_id:
+                raise ValidationError({"ministry": "Please select the ministry for this submission."})
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": False,
+                "ministry_id": ministry_id,
+            }
             if is_travel_form_code(form_code):
                 assert_may_create_secretary_travel_form(profile, form_code)
                 endorsers = self.request.data.get("travel_endorsers") or {}
-                kwargs = {
-                    "form_type_code": form_code,
-                    "secretary_only": True,
-                    "requires_travel_letter": requires_approval_letter(form_code),
-                    "travel_endorsers": endorsers if isinstance(endorsers, dict) else {},
-                    "routed_unit": RoutedUnit.ODU,
-                }
+                kwargs.update(
+                    form_type_code=form_code,
+                    secretary_only=True,
+                    requires_travel_letter=requires_approval_letter(form_code),
+                    travel_endorsers=endorsers if isinstance(endorsers, dict) else {},
+                    routed_unit=RoutedUnit.ODU,
+                )
+            if self.request.data.get("department"):
+                kwargs["department_id"] = self.request.data.get("department")
             submission = serializer.save(**kwargs)
         else:
             raise PermissionDenied(
@@ -6540,9 +6582,21 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
+        from rest_framework.exceptions import ValidationError
+
+        from .odu_checklist_rules import submission_uses_odu_restructure_checklist
+
         profile = _profile(self.request.user)
         if profile.role not in self.ODU_ROLES:
             raise PermissionDenied("Only ODU officers can create checklists.")
+        submission = serializer.validated_data["submission"]
+        if not submission_uses_odu_restructure_checklist(submission):
+            raise ValidationError({
+                "submission": (
+                    "ODU Restructure Checklist only applies to organisation restructure "
+                    "submissions (ORG-3.1 or PSC 2-1), not this form type."
+                ),
+            })
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):

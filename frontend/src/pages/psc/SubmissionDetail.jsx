@@ -16,7 +16,7 @@ import {
   stageLabel, stageBadgeClass, stageDotClass, stageMeta,
   needsHrAction, isTerminal,
 } from '../../constants/stages'
-import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
@@ -40,6 +40,7 @@ import PSCForm21View from './PSCForm21View'
 import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
+import { submissionUsesOduRestructureChecklist } from '../../utils/oduChecklist'
 import RestructureSubmissionForm from './RestructureSubmissionForm'
 import { CMS_PORTAL_URL, isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
 import { formatApiError } from '../../utils/apiError'
@@ -104,8 +105,6 @@ export default function SubmissionDetail() {
     setAuditStationFilter(null)
   }, [id])
   const [allowed, setAllowed]       = useState([])
-  const [transitionGuidance, setTransitionGuidance] = useState(null)
-  const [guidancePending, setGuidancePending] = useState(false)
   const [remarks, setRemarks]       = useState('')
   const [targetStage, setTargetStage] = useState('')
   const [error, setError]           = useState('')
@@ -150,7 +149,8 @@ export default function SubmissionDetail() {
   const isCmsLinkedCompliance = isComplianceFormCode(submission?.form_type_code)
 
   const isOduRole      = user && ['odu_principal', 'odu_manager'].includes(user.role)
-  const canViewOduChecklist = user && [
+  const isOduRestructureSubmission = submissionUsesOduRestructureChecklist(submission)
+  const canViewOduChecklist = isOduRestructureSubmission && user && [
     'odu_principal', 'odu_manager',
     'psc_secretary', 'psc_admin', 'psc_manager',
   ].includes(user.role)
@@ -197,8 +197,6 @@ export default function SubmissionDetail() {
       const r = await api.get(`/submissions/${id}/allowed_transitions/`)
       const next = r.data.allowed || []
       setAllowed(next)
-      setTransitionGuidance(r.data.transition_guidance || null)
-      setGuidancePending(!!r.data.transition_guidance_pending)
       setTargetStage(p => (next.includes(p) ? p : next[0] || ''))
     } catch {
       setAllowed([])
@@ -212,12 +210,6 @@ export default function SubmissionDetail() {
   useEffect(() => {
     fetchTransitions()
   }, [fetchTransitions])
-
-  useEffect(() => {
-    if (!guidancePending || !id) return undefined
-    const t = setInterval(fetchTransitions, 4000)
-    return () => clearInterval(t)
-  }, [guidancePending, id, fetchTransitions])
 
   // Poll every 30s for stage changes (no WebSocket infra needed)
   useEffect(() => {
@@ -1193,37 +1185,6 @@ const stageDescriptions = {
 
         {/* ── Right: transition panel ── */}
         <div className="space-y-5">
-
-          {canTransition && (transitionGuidance?.suggestions?.length > 0 || guidancePending) && (
-            <div className="card card-compact space-y-3 border border-violet-200/60 dark:border-violet-900/40">
-              <div className="flex items-center gap-2">
-                <Sparkles size={14} className="text-violet-500" />
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Transition guidance</h3>
-                {guidancePending && <Loader2 size={14} className="animate-spin text-slate-400 ml-auto" />}
-              </div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                AI draft — verify before acting
-              </p>
-              {!guidancePending && transitionGuidance?.suggestions?.map(s => (
-                <div
-                  key={s.stage}
-                  className={`rounded-lg border px-3 py-2 text-xs ${
-                    s.stage === targetStage
-                      ? 'border-violet-300 bg-violet-50/80 dark:border-violet-700 dark:bg-violet-950/30'
-                      : 'border-slate-200 dark:border-slate-700'
-                  }`}
-                >
-                  <p className="font-semibold text-slate-800 dark:text-slate-100">{s.label || stageLabel(s.stage)}</p>
-                  {s.rationale && <p className="text-slate-600 dark:text-slate-400 mt-1">{s.rationale}</p>}
-                  {s.blockers?.length > 0 && (
-                    <ul className="mt-1.5 space-y-0.5 text-amber-800 dark:text-amber-200">
-                      {s.blockers.map((b, i) => <li key={i}>• {b}</li>)}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
 
           {submission?.ai_clarification_bilingual?.processed && (
             <div className="card card-compact space-y-3 border border-sky-200/60 dark:border-sky-900/40">

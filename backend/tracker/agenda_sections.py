@@ -52,7 +52,7 @@ def apply_agenda_section_defaults(attrs: dict) -> None:
     ft = section.digitized_form
     attrs["form_type_code"] = ft.code
     if ft.form_category_id and not attrs.get("form_category"):
-        attrs["form_category"] = ft.form_category_id
+        attrs["form_category"] = ft.form_category
 
 
 def agenda_section_usage_counts(section: AgendaSection) -> dict[str, int]:
