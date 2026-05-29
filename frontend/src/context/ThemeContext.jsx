@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import api from '../api/client'
 const ThemeContext = createContext(null)
 
 // Migrate old boolean 'liner-dark' key → new 'liner-theme' string key
@@ -39,8 +40,7 @@ export function ThemeProvider({ children }) {
 
   const fetchFeedbackStatus = async () => {
     try {
-      const res = await fetch('/api/auth/feedback-status/')
-      const data = await res.json()
+      const { data } = await api.get('/auth/feedback-status/')
       setFeedbackEnabled(data.enabled !== false)
     } catch {
       setFeedbackEnabled(true)

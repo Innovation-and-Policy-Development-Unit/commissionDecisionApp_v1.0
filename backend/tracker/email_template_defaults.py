@@ -24,21 +24,89 @@ def _ph(*extra: str) -> str:
 
 DEFAULT_EMAIL_TEMPLATES = [
     {
+        "slug": "new_user_welcome",
+        "name": "New user account created",
+        "category": "authentication",
+        "description": "Sent when an administrator creates a new user account.",
+        "placeholders": _ph("initial_password, login_url"),
+        "subject_template": "SCDMS account created — sign-in instructions ({{username}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "An administrator created your account on SCDMS (Submission & Commission Decision Management System) "
+            "for the Office of the Public Service Commission.\n\n"
+            "Username: {{username}}\n"
+            "Temporary password: {{initial_password}}\n\n"
+            "Sign in (use this exact link):\n"
+            "{{login_url}}\n\n"
+            "If the link is blocked by your email or firewall, open a browser and type:\n"
+            "{{login_url}}\n\n"
+            "Network access: your IT team may need to allow HTTPS (port 443) to scdms.xyz.\n\n"
+            "After sign-in you will be asked to set a new password.\n\n"
+            "If you did not expect this email, contact your SCDMS administrator."
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 16px 0;\">An administrator created your <strong>SCDMS</strong> account "
+            "(Office of the Public Service Commission).</p>"
+            "<div style=\"background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin:0 0 18px 0;\">"
+            "<p style=\"margin:0;\"><strong>Username:</strong> {{username}}</p>"
+            "<p style=\"margin:6px 0 0 0;\"><strong>Temporary password:</strong> {{initial_password}}</p>"
+            "</div>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{login_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;"
+            "text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;\">"
+            "Sign in to SCDMS</a>"
+            "</p>"
+            "<p style=\"margin:0 0 10px 0;color:#475569;font-size:13px;word-break:break-all;\">"
+            "Or copy this link: <a href=\"{{login_url}}\" style=\"color:#1e40af;\">{{login_url}}</a>"
+            "</p>"
+            "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">"
+            "If your browser warns about the site or your network blocks access, ask IT to allow "
+            "<strong>https://scdms.xyz</strong> on port <strong>443</strong>."
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">"
+            "You will be prompted to set a new password on first sign-in."
+            "</p>"
+        ),
+    },
+    {
         "slug": "password_reset",
         "name": "Password reset",
         "category": "authentication",
         "description": "Sent when a user requests a password reset link.",
-        "placeholders": _ph("reset_url, expiry_hours"),
+        "placeholders": _ph("reset_url, expiry_hours, login_url"),
         "subject_template": "Reset your password — Commission Decision App",
         "body_text_template": (
             "Dear {{firstname}},\n\n"
             "You requested a password reset for your Commission Decision App account.\n"
+            "Username: {{username}}\n\n"
             "Open this link to set a new password:\n\n"
             "{{reset_url}}\n\n"
             "This link expires in {{expiry_hours}} hour(s).\n\n"
+            "After resetting, sign in at: {{login_url}}\n\n"
             "If you did not request this, you can ignore this email."
         ),
-        "body_html_template": "",
+        "body_html_template": (
+            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
+            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
+            "Commission Decision App"
+            "</div>"
+            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 10px 0;\">You requested a password reset for your account.</p>"
+            "<p style=\"margin:0 0 16px 0;\"><strong>Username:</strong> {{username}}</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{reset_url}}\" style=\"display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">Reset password</a>"
+            "</p>"
+            "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">This link expires in {{expiry_hours}} hour(s).</p>"
+            "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">If the button does not open, copy this link:</p>"
+            "<p style=\"margin:0 0 16px 0;word-break:break-all;font-size:13px;\"><a href=\"{{reset_url}}\" style=\"color:#2563eb;\">{{reset_url}}</a></p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">If you did not request this, you can ignore this email.</p>"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
     },
     {
         "slug": "submission_submitted",
@@ -259,9 +327,14 @@ DEFAULT_EMAIL_TEMPLATES = [
 
 
 SAMPLE_EMAIL_CONTEXTS = {
+    "new_user_welcome": {
+        "initial_password": "TempPass123!",
+        "login_url": "http://localhost:8080/auth/login",
+    },
     "password_reset": {
         "reset_url": "http://localhost:8080/auth/reset-password/confirm?token=sample",
         "expiry_hours": "1",
+        "login_url": "http://localhost:8080/auth/login",
     },
     "submission_submitted": {
         "submission_reference": "PSC-2026-0042",

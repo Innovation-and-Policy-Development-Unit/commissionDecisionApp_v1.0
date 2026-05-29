@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom'
 import { ArrowRight, ShieldCheck, Lock, KeyRound, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
@@ -31,6 +31,23 @@ const ANIM_STYLES = `
   .anim-vibrate  { animation: phone-vibrate 0.3s ease-in-out 3; }
 `
 
+function redirectTarget(location) {
+  const from = location.state?.from
+  return from?.pathname != null
+    ? `${from.pathname}${from.search || ''}${from.hash || ''}`
+    : '/'
+}
+
+function policyHintLines(policy) {
+  if (!policy) return []
+  const lines = [`At least ${policy.min_length} characters`]
+  if (policy.require_uppercase) lines.push('One uppercase letter (A–Z)')
+  if (policy.require_lowercase) lines.push('One lowercase letter (a–z)')
+  if (policy.require_digits) lines.push('One digit (0–9)')
+  if (policy.require_special) lines.push('One special character (!@#$% …)')
+  return lines
+}
+
 export default function Login() {
   const navigate  = useNavigate()
   const location  = useLocation()
@@ -46,6 +63,32 @@ export default function Login() {
   const [pin,              setPin]              = useState('')
   const [simPush,          setSimPush]          = useState(false)
   const [pushState,        setPushState]        = useState('idle') // idle, pending, approved
+  const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const [newPassword,      setNewPassword]      = useState('')
+  const [confirmPassword,  setConfirmPassword]  = useState('')
+  const [passwordPolicy,   setPasswordPolicy]   = useState(null)
+  const [currentPassword,  setCurrentPassword]  = useState('')
+  const loginPasswordRef = useRef('')
+  const needsCurrentPassword = showPasswordChange && !loginPasswordRef.current
+
+  useEffect(() => {
+    if (showPasswordChange) {
+      api.get('/auth/password-policy/').then(r => setPasswordPolicy(r.data)).catch(() => {})
+    }
+  }, [showPasswordChange])
+
+  useEffect(() => {
+    if (accessToken && user && authReady && user.must_change_password) {
+      setShowPasswordChange(true)
+    }
+  }, [accessToken, user, authReady])
+
+  const policyLines = useMemo(() => policyHintLines(passwordPolicy), [passwordPolicy])
+  const minPasswordLength = passwordPolicy?.min_length ?? 8
+
+  const goToApp = () => {
+    navigate(redirectTarget(location), { replace: true })
+  }
 
   if (accessToken && !authReady) {
     return (
@@ -55,12 +98,8 @@ export default function Login() {
     )
   }
 
-  if (accessToken && user && authReady) {
-    const from = location.state?.from
-    const to   = from?.pathname != null
-      ? `${from.pathname}${from.search || ''}${from.hash || ''}`
-      : '/'
-    return <Navigate to={to} replace />
+  if (accessToken && user && authReady && !user.must_change_password && !showPasswordChange) {
+    return <Navigate to={redirectTarget(location)} replace />
   }
 
   const handleSubmit = async e => {
@@ -68,6 +107,7 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
+      loginPasswordRef.current = password
       const data = await login(username.trim(), password)
       if (data?.pin_required) {
         setShowPIN(true)
@@ -78,8 +118,10 @@ export default function Login() {
         } else {
           setShow2FA(true)
         }
+      } else if (data?.must_change_password) {
+        setShowPasswordChange(true)
       }
-      // Redirect via <Navigate> when accessToken, user, and authReady are set (see top of component).
+      // Otherwise redirect via <Navigate> when accessToken, user, and authReady are set.
     } catch (err) {
       const detail = err.response?.data?.detail
       setError(typeof detail === 'string' ? detail : 'Sign-in failed. Please check your credentials.')
@@ -96,10 +138,12 @@ export default function Login() {
       const payload = simPush ? { username, push_approved: true } : { username, code: otp }
       const { data } = await api.post('/auth/totp/verify/', payload)
       setTokens(data.access, data.refresh)
-      await refreshMe()
-      const from = location.state?.from
-      const to = from?.pathname != null ? `${from.pathname}${from.search || ''}${from.hash || ''}` : '/'
-      navigate(to, { replace: true })
+      const me = await refreshMe()
+      if (me?.must_change_password) {
+        setShowPasswordChange(true)
+        return
+      }
+      goToApp()
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid verification code.')
       setPushState('idle')
@@ -125,12 +169,56 @@ export default function Login() {
     try {
       const { data } = await api.post('/auth/session-pin/verify/', { username, pin })
       setTokens(data.access, data.refresh)
-      await refreshMe()
-      const from = location.state?.from
-      const to = from?.pathname != null ? `${from.pathname}${from.search || ''}${from.hash || ''}` : '/'
-      navigate(to, { replace: true })
+      const me = await refreshMe()
+      if (me?.must_change_password) {
+        setShowPasswordChange(true)
+        return
+      }
+      goToApp()
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid PIN or session expired.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleChangePassword = async e => {
+    e.preventDefault()
+    setError('')
+    if (newPassword.length < minPasswordLength) {
+      setError(`New password must be at least ${minPasswordLength} characters.`)
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('New passwords do not match.')
+      return
+    }
+    const oldPassword = loginPasswordRef.current || currentPassword
+    if (!oldPassword) {
+      setError('Enter your current (temporary) password.')
+      return
+    }
+    setLoading(true)
+    try {
+      await api.post('/me/change-password/', {
+        old_password: oldPassword,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      })
+      loginPasswordRef.current = ''
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setShowPasswordChange(false)
+      const me = await refreshMe()
+      if (me?.must_change_password) {
+        setError('Password was not accepted. Please try a different password.')
+        setShowPasswordChange(true)
+        return
+      }
+      goToApp()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to change password.')
     } finally {
       setLoading(false)
     }
@@ -174,7 +262,70 @@ export default function Login() {
               animationDelay: '0.08s',
             }}
           >
-            {!show2FA && !showPIN ? (
+            {showPasswordChange ? (
+              <>
+                <div className="flex justify-center mb-5">
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #0c2451, #1a4080)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Lock size={26} color="white" />
+                  </div>
+                </div>
+                <h1 className="text-xl font-bold text-center text-slate-900 mb-1">Set your password</h1>
+                <p className="text-sm text-center text-slate-500 mb-6">
+                  Password change is required on first login. Choose a new password to continue.
+                </p>
+
+                {error && (
+                  <BaseMessageBar intent="error" className="mb-4">
+                    {error}
+                  </BaseMessageBar>
+                )}
+
+                <form onSubmit={handleChangePassword} className="space-y-4">
+                  {needsCurrentPassword && (
+                    <BasePasswordInput
+                      label="Current password"
+                      value={currentPassword}
+                      onChange={e => setCurrentPassword(e.target.value)}
+                      placeholder="Temporary password from your administrator"
+                      required
+                      autoFocus
+                    />
+                  )}
+                  <BasePasswordInput
+                    label="New password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Enter new password"
+                    required
+                    autoFocus={!needsCurrentPassword}
+                  />
+                  <BasePasswordInput
+                    label="Confirm new password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    required
+                  />
+                  {policyLines.length > 0 && (
+                    <ul className="text-xs text-slate-500 space-y-1 list-disc pl-4">
+                      {policyLines.map(line => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <BaseButton
+                    type="submit"
+                    variant="primary"
+                    className="w-full !py-3"
+                    loading={loading}
+                    loadingLabel="Updating password"
+                    icon={!loading ? <ArrowRight size={16} /> : undefined}
+                  >
+                    Update password &amp; continue
+                  </BaseButton>
+                </form>
+              </>
+            ) : !show2FA && !showPIN ? (
               <>
                 <div className="mb-7">
                   <h1 className="text-2xl font-bold text-slate-900 mb-1 tracking-tight">PSC Submission Portal</h1>

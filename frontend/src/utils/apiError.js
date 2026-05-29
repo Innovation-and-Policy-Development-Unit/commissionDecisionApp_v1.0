@@ -1,4 +1,11 @@
 function extractDetail(data) {
+  if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) {
+    const msg = data.non_field_errors.join(' ')
+    if (/unique set/i.test(msg)) {
+      return 'This code already exists under the selected ministry. Edit the existing record or choose a different code.'
+    }
+    return msg
+  }
   if (typeof data?.detail === 'string') return data.detail
   if (Array.isArray(data?.detail)) {
     const first = data.detail[0]

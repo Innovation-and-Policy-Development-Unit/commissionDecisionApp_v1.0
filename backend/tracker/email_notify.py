@@ -224,6 +224,70 @@ def notify_subtask_due_soon(
     send_templated_email(slug="subtask_due_soon", to=[email], context=ctx)
 
 
+def find_active_user_by_email(email: str) -> User | None:
+    """Return an active user with a non-empty email matching `email` (case-insensitive)."""
+    normalized = (email or "").strip().lower()
+    if not normalized or "@" not in normalized:
+        return None
+    return (
+        User.objects.filter(is_active=True, email__iexact=normalized)
+        .exclude(email="")
+        .first()
+    )
+
+
+def send_password_reset_email(*, user: User, reset_url: str, to_email: str) -> bool:
+    """
+    Send password-reset link to a registered user.
+    Returns True when delivery succeeded, False otherwise.
+    """
+    import logging
+
+    from django.conf import settings
+    from django.core.mail import send_mail
+
+    from .email_templates import get_from_email, send_templated_email
+
+    log = logging.getLogger("scdms.security")
+    ctx = merge_recipient_context(
+        user,
+        reset_url=reset_url,
+        expiry_hours="1",
+        login_url=f"{get_frontend_base_url()}/auth/login",
+    )
+    if send_templated_email(
+        slug="password_reset",
+        to=[to_email],
+        context=ctx,
+        fail_silently=False,
+    ):
+        log.info("PASSWORD_RESET_EMAIL_SENT | username=%s | to=%s", user.username, to_email)
+        return True
+
+    subject = "Reset your password — Commission Decision App"
+    message = (
+        f"Hello {user.username},\n\n"
+        "You requested a password reset for your Commission Decision App account.\n"
+        "Open this link to set a new password:\n\n"
+        f"{reset_url}\n\n"
+        "This link expires in 1 hour.\n\n"
+        "If you did not request this, you can ignore this email."
+    )
+    try:
+        send_mail(
+            subject,
+            message,
+            get_from_email(),
+            [to_email],
+            fail_silently=False,
+        )
+        log.info("PASSWORD_RESET_EMAIL_SENT | username=%s | to=%s | fallback=plain", user.username, to_email)
+        return True
+    except Exception:
+        log.exception("PASSWORD_RESET_EMAIL_FAILED | username=%s | to=%s", user.username, to_email)
+        return False
+
+
 def sample_context_for_slug(slug: str) -> dict[str, str]:
     from .email_template_defaults import SAMPLE_RECIPIENT
 

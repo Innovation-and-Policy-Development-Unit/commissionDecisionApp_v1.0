@@ -10,10 +10,10 @@ import { userCanAccessAdminPanel } from '../../utils/adminAccess'
 import { invalidateAgendaSectionsCache } from '../../hooks/useAgendaSections'
 import PageHeader from '../../components/shared/PageHeader'
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="card w-full max-w-lg p-0 overflow-hidden animate-scale-in">
+      <div className={`card w-full p-0 overflow-hidden animate-scale-in ${wide ? 'max-w-2xl' : 'max-w-lg'}`}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
           <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400">
@@ -31,7 +31,24 @@ const EMPTY_FORM = {
   label: '',
   is_special: false,
   is_active: true,
+  receiver_roles: [],
 }
+
+/** Roles commonly configured as submission receivers (full list from role definitions). */
+const RECEIVER_ROLE_HINTS = [
+  'odu_manager',
+  'hr_unit_manager',
+  'vipam_manager',
+  'compliance_manager',
+  'csu_manager',
+  'psc_officer',
+  'psc_secretary',
+  'odu_principal',
+  'principal_org_dev_analyst',
+  'principal_job_analyst',
+  'hr_unit_principal',
+  'vipam_principal',
+]
 
 export default function AgendaSectionsAdmin() {
   const { user } = useAuth()
@@ -46,6 +63,7 @@ export default function AgendaSectionsAdmin() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [dragId, setDragId] = useState(null)
   const [dragOverId, setDragOverId] = useState(null)
+  const [roleLabels, setRoleLabels] = useState({})
 
   useEffect(() => {
     if (user && !userCanAccessAdminPanel(user)) navigate('/', { replace: true })
@@ -70,6 +88,19 @@ export default function AgendaSectionsAdmin() {
     load()
   }, [load])
 
+  useEffect(() => {
+    api.get('/role-defs/')
+      .then(({ data }) => {
+        const list = data.results ?? data
+        const map = {}
+        list.forEach(rd => {
+          map[rd.role] = rd.role_label || rd.role
+        })
+        setRoleLabels(map)
+      })
+      .catch(() => {})
+  }, [])
+
   const openCreate = () => {
     setForm(EMPTY_FORM)
     setModal('create')
@@ -81,8 +112,19 @@ export default function AgendaSectionsAdmin() {
       label: row.label,
       is_special: row.is_special,
       is_active: row.is_active,
+      receiver_roles: row.receiver_roles || [],
     })
     setModal(row)
+  }
+
+  const toggleReceiverRole = roleCode => {
+    setForm(f => {
+      const current = f.receiver_roles || []
+      const next = current.includes(roleCode)
+        ? current.filter(r => r !== roleCode)
+        : [...current, roleCode]
+      return { ...f, receiver_roles: next.sort() }
+    })
   }
 
   const save = async e => {
@@ -101,6 +143,7 @@ export default function AgendaSectionsAdmin() {
         label: form.label.trim(),
         is_special: form.is_special,
         is_active: form.is_active,
+        receiver_roles: form.receiver_roles || [],
       }
       if (modal === 'create') {
         payload.code = form.code.trim().toLowerCase().replace(/\s+/g, '_')
@@ -198,7 +241,7 @@ export default function AgendaSectionsAdmin() {
     <div>
       <PageHeader
         title="Agenda sections"
-        subtitle="Manage Commission meeting agenda sections — order, labels, and visibility on the lodge form."
+        subtitle="Manage agenda sections, submission routing (which roles receive new cases), and lodge form visibility."
         action={
           <button type="button" className="btn-primary flex items-center gap-2" onClick={openCreate}>
             <Plus size={16} />
@@ -209,8 +252,8 @@ export default function AgendaSectionsAdmin() {
 
       <div className="card overflow-hidden">
         <p className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
-          Drag rows to reorder. <strong>Meeting-only</strong> sections are hidden from ministry &quot;Submit for Commission&quot;.
-          The <strong>code</strong> is stored on submissions and cannot be changed after creation.
+          Drag rows to reorder. Configure <strong>receiver roles</strong> per section (or under Administration → Roles).
+          <strong> Meeting-only</strong> sections are hidden from ministry lodge. The <strong>code</strong> cannot change after creation.
         </p>
 
         {loading ? (
@@ -252,6 +295,12 @@ export default function AgendaSectionsAdmin() {
                       <span className="ml-2 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 px-1.5 py-0.5">Inactive</span>
                     )}
                   </p>
+                  {(row.receiver_roles?.length > 0) && (
+                    <p className="text-[10px] text-slate-500 mt-1 truncate">
+                      Receivers:{' '}
+                      {row.receiver_roles.map(r => roleLabels[r] || r).join(', ')}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
@@ -281,6 +330,7 @@ export default function AgendaSectionsAdmin() {
         <Modal
           title={modal === 'create' ? 'Add agenda section' : `Edit — ${modal.label}`}
           onClose={() => setModal(null)}
+          wide
         >
           <form onSubmit={save} className="space-y-4">
             {modal === 'create' && (
@@ -322,6 +372,38 @@ export default function AgendaSectionsAdmin() {
               />
               Active
             </label>
+            <div>
+              <label className="block text-sm font-medium mb-1">Roles that receive submissions</label>
+              <p className="text-xs text-slate-500 mb-2">
+                Users with these roles are notified when a case is lodged under this section.
+                Leave empty to use the default routed-unit manager.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-1 max-h-48 overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-lg p-2">
+                {Object.keys(roleLabels).length > 0
+                  ? Object.entries(roleLabels)
+                    .sort((a, b) => a[1].localeCompare(b[1]))
+                    .map(([code, label]) => (
+                      <label key={code} className="flex items-center gap-2 text-xs cursor-pointer py-1 px-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <input
+                          type="checkbox"
+                          checked={(form.receiver_roles || []).includes(code)}
+                          onChange={() => toggleReceiverRole(code)}
+                        />
+                        <span className="text-slate-700 dark:text-slate-300">{label}</span>
+                      </label>
+                    ))
+                  : RECEIVER_ROLE_HINTS.map(code => (
+                    <label key={code} className="flex items-center gap-2 text-xs cursor-pointer py-1 px-1">
+                      <input
+                        type="checkbox"
+                        checked={(form.receiver_roles || []).includes(code)}
+                        onChange={() => toggleReceiverRole(code)}
+                      />
+                      <code>{code}</code>
+                    </label>
+                  ))}
+              </div>
+            </div>
             <div className="flex gap-3 pt-2">
               <button type="submit" className="btn-primary px-5" disabled={saving}>
                 {saving ? 'Saving…' : 'Save'}

@@ -10,6 +10,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Temporary stability mode: unregister existing service workers and clear
+      // old precache manifests that reference removed media URLs.
+      selfDestroying: true,
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'scdms-brand.svg', 'logo.svg'],
       manifest: {

@@ -209,6 +209,8 @@ _UNIT_MANAGER_STAGES = {
 # They can do checklist review AND assessment; assignment enforcement happens in views.py.
 _UNIT_PRINCIPAL_ROLES = {
     Role.ODU_PRINCIPAL,
+    Role.PRINCIPAL_ORG_DEV_ANALYST,
+    Role.PRINCIPAL_JOB_ANALYST,
     Role.HR_UNIT_PRINCIPAL,
     Role.VIPAM_PRINCIPAL,
     Role.COMPLIANCE_PRINCIPAL,

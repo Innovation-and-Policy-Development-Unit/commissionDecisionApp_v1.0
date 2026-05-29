@@ -12,6 +12,8 @@ export const OPSC_UNIT_PRINCIPAL_ROLES = new Set([
   'vipam_principal',
   'hr_unit_principal',
   'odu_principal',
+  'principal_org_dev_analyst',
+  'principal_job_analyst',
   'compliance_principal',
 ])
 

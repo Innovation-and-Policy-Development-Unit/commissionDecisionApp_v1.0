@@ -19,6 +19,7 @@ import {
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import { userIsOduPrincipalWorker } from '../../utils/oduChecklist'
 
 // ── Checklist item definitions ────────────────────────────────────────────────
 
@@ -256,7 +257,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
   const [approving, setApproving] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState({})
 
-  const isOduPrincipal = user?.role === 'odu_principal'
+  const isOduPrincipal = userIsOduPrincipalWorker(user?.role)
   const isOduManager   = user?.role === 'odu_manager'
   const canEdit = isOduPrincipal && checklist?.status === 'draft'
   const canSubmit = isOduPrincipal && checklist?.status === 'draft'

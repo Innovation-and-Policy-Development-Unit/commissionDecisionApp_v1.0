@@ -8,6 +8,7 @@ from .models import (
     CommissionSubTask,
     CommissionTaskUpdate,
     Department,
+    Unit,
     EmploymentType,
     FlyingMinuteSignature,
     FormCategory,
@@ -127,6 +128,48 @@ class DepartmentSerializer(serializers.ModelSerializer):
         model = Department
         fields = ("id", "ministry", "ministry_name", "code", "name", "head_position_title")
 
+
+class UnitSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source="department.name", read_only=True)
+    ministry = serializers.IntegerField(source="department.ministry_id", read_only=True)
+    ministry_name = serializers.CharField(source="department.ministry.name", read_only=True)
+
+    class Meta:
+        model = Unit
+        fields = (
+            "id",
+            "department",
+            "department_name",
+            "ministry",
+            "ministry_name",
+            "code",
+            "name",
+            "routed_unit",
+        )
+
+    def validate(self, attrs):
+        department = attrs.get("department") or (
+            self.instance.department if self.instance else None
+        )
+        code = (
+            attrs.get("code")
+            if attrs.get("code") is not None
+            else (self.instance.code if self.instance else "")
+        ) or ""
+        code = code.strip()
+        if not department:
+            raise serializers.ValidationError({"department": "Select a department for this unit."})
+        if not code:
+            raise serializers.ValidationError({"code": "Unit code is required."})
+        qs = Unit.objects.filter(department=department, code__iexact=code)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                {"code": "A unit with this code already exists for the selected department."}
+            )
+        return attrs
+
     def validate(self, attrs):
         if "ministry" in attrs and attrs["ministry"] is None:
             raise serializers.ValidationError({"ministry": "Department must belong to a ministry."})
@@ -151,10 +194,11 @@ class ProfileSerializer(serializers.ModelSerializer):
     email = serializers.CharField(source="user.email", read_only=True)
     ministry = MinistrySerializer(read_only=True, allow_null=True)
     department = DepartmentSerializer(read_only=True, allow_null=True)
+    unit = UnitSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Profile
-        fields = ("username", "email", "role", "ministry", "department", "profile_picture", "signature")
+        fields = ("username", "email", "role", "ministry", "department", "unit", "profile_picture", "signature")
 
 
 class MeSerializer(serializers.ModelSerializer):
@@ -164,11 +208,13 @@ class MeSerializer(serializers.ModelSerializer):
     email = serializers.CharField(source="user.email", read_only=True)
     ministry = MinistrySerializer(read_only=True, allow_null=True)
     department = DepartmentSerializer(read_only=True, allow_null=True)
+    unit = UnitSerializer(read_only=True, allow_null=True)
     is_superuser = serializers.BooleanField(source="user.is_superuser", read_only=True)
     is_staff = serializers.BooleanField(source="user.is_staff", read_only=True)
     profile_picture = serializers.SerializerMethodField()
     signature = serializers.SerializerMethodField()
     session_pin_set = serializers.SerializerMethodField()
+    must_change_password = serializers.BooleanField(source="force_password_change", read_only=True)
     can_manage_users    = serializers.SerializerMethodField()
     can_manage_roles    = serializers.SerializerMethodField()
     can_manage_translations = serializers.SerializerMethodField()
@@ -183,6 +229,7 @@ class MeSerializer(serializers.ModelSerializer):
             "role",
             "ministry",
             "department",
+            "unit",
             "profile_picture",
             "is_superuser",
             "is_staff",
@@ -193,6 +240,7 @@ class MeSerializer(serializers.ModelSerializer):
             "can_view_audit_log",
             "two_factor_enabled",
             "session_pin_set",
+            "must_change_password",
             "signature",
         )
 
@@ -433,6 +481,7 @@ class AgendaSectionSerializer(serializers.ModelSerializer):
             "display_order",
             "is_special",
             "is_active",
+            "receiver_roles",
             "digitized_form",
             "digitized_form_code",
             "digitized_form_name",
@@ -469,6 +518,22 @@ class AgendaSectionSerializer(serializers.ModelSerializer):
         if not form_type.is_active:
             raise serializers.ValidationError("The selected form type is not active.")
         return form_type
+
+    def validate_receiver_roles(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("receiver_roles must be a list of role codes.")
+        allowed = {choice for choice, _ in Role.choices}
+        cleaned = []
+        for role in value:
+            code = (role or "").strip()
+            if not code:
+                continue
+            if code not in allowed:
+                raise serializers.ValidationError(f"Invalid role: {code}")
+            cleaned.append(code)
+        return sorted(set(cleaned))
 
     def _sync_form_agenda_category(self, section):
         if section.digitized_form_id:
@@ -948,6 +1013,11 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    unit = serializers.PrimaryKeyRelatedField(
+        queryset=Unit.objects.select_related("department__ministry").all(),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Submission
@@ -959,6 +1029,7 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             "agenda_category",
             "ministry",
             "department",
+            "unit",
             "routed_unit",
             "classification",
             "received_at",
@@ -974,6 +1045,12 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "is_internal", "secretary_only", "requires_travel_letter")
 
     def validate(self, attrs):
+        unit = attrs.get("unit")
+        if unit:
+            attrs["department"] = unit.department
+            attrs["ministry"] = unit.department.ministry
+            if unit.routed_unit and not attrs.get("routed_unit"):
+                attrs["routed_unit"] = unit.routed_unit
         request = self.context.get("request")
         if not request or not getattr(request, "user", None):
             return attrs
@@ -1071,6 +1148,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     ministry_name   = serializers.SerializerMethodField()
     department_id   = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
+    unit_id         = serializers.SerializerMethodField()
+    unit_name       = serializers.SerializerMethodField()
     # Security — lockout info injected from view context (batch-loaded, no N+1)
     is_locked       = serializers.SerializerMethodField()
     failed_attempts = serializers.SerializerMethodField()
@@ -1081,6 +1160,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = (
             "id", "username", "email", "is_active", "date_joined",
             "role", "ministry_id", "ministry_name", "department_id", "department_name",
+            "unit_id", "unit_name",
             "is_locked", "failed_attempts", "two_factor_enabled",
         )
 
@@ -1109,6 +1189,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_department_name(self, obj):
         p = self._profile(obj)
         return p.department.name if p and p.department else None
+
+    def get_unit_id(self, obj):
+        p = self._profile(obj)
+        return p.unit_id if p else None
+
+    def get_unit_name(self, obj):
+        p = self._profile(obj)
+        return p.unit.name if p and p.unit else None
 
     def get_is_locked(self, obj):
         """True if axes has locked this username out."""
@@ -1190,7 +1278,25 @@ class UserAdminUpdateSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=Role.choices)
     ministry_id = serializers.IntegerField(required=False, allow_null=True)
     department_id = serializers.IntegerField(required=False, allow_null=True)
+    unit_id = serializers.IntegerField(required=False, allow_null=True)
     is_active = serializers.BooleanField(required=False)
+
+    def validate(self, attrs):
+        unit_id = attrs.get("unit_id")
+        department_id = attrs.get("department_id")
+        if unit_id is not None and unit_id != "":
+            try:
+                unit = Unit.objects.select_related("department").get(pk=unit_id)
+            except Unit.DoesNotExist:
+                raise serializers.ValidationError({"unit_id": "Unit not found."})
+            if department_id and unit.department_id != department_id:
+                raise serializers.ValidationError(
+                    {"unit_id": "Unit must belong to the selected department."}
+                )
+            attrs["department_id"] = unit.department_id
+            if unit.department.ministry_id:
+                attrs["ministry_id"] = unit.department.ministry_id
+        return attrs
 
     def validate_username(self, value):
         user = self.instance
@@ -1213,6 +1319,8 @@ class UserAdminUpdateSerializer(serializers.Serializer):
         profile.role = validated_data["role"]
         profile.ministry_id = validated_data.get("ministry_id")
         profile.department_id = validated_data.get("department_id")
+        if "unit_id" in validated_data:
+            profile.unit_id = validated_data.get("unit_id")
         profile.save()
         return instance
 
@@ -1361,7 +1469,11 @@ class TOTPVerifySerializer(serializers.Serializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     """Request a password reset link by email."""
+
     email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return (value or "").strip().lower()
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
@@ -1428,21 +1540,56 @@ class RoleDefinitionSerializer(serializers.ModelSerializer):
     role_label   = serializers.CharField(source="get_role_display", read_only=True)
     permissions  = SystemPermissionSerializer(many=True, read_only=True)
     user_count   = serializers.SerializerMethodField()
+    agenda_section_ids = serializers.SerializerMethodField()
 
     def get_user_count(self, obj):
         return Profile.objects.filter(role=obj.role).count()
 
+    def get_agenda_section_ids(self, obj):
+        from .agenda_sections import agenda_section_ids_for_role
+
+        return agenda_section_ids_for_role(obj.role)
+
     class Meta:
         model = RoleDefinition
-        fields = ("id", "role", "role_label", "description", "is_builtin", "permissions", "user_count")
+        fields = (
+            "id",
+            "role",
+            "role_label",
+            "description",
+            "is_builtin",
+            "permissions",
+            "user_count",
+            "agenda_section_ids",
+        )
 
 
 class RoleDefinitionWriteSerializer(serializers.Serializer):
-    """Update description and permission set for a role definition."""
+    """Update description, permissions, and agenda-section routing for a role."""
     description    = serializers.CharField(required=False, allow_blank=True)
     permission_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True
     )
+    agenda_section_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=True,
+        help_text="Agenda sections that notify this role when a submission is lodged.",
+    )
+
+    def validate_agenda_section_ids(self, value):
+        if value is None:
+            return value
+        ids = list({int(pk) for pk in value})
+        found = set(
+            AgendaSection.objects.filter(id__in=ids).values_list("id", flat=True)
+        )
+        missing = set(ids) - found
+        if missing:
+            raise serializers.ValidationError(
+                f"Unknown agenda section id(s): {sorted(missing)}"
+            )
+        return ids
 
     def update(self, instance, validated_data):
         if "description" in validated_data:
@@ -1450,6 +1597,13 @@ class RoleDefinitionWriteSerializer(serializers.Serializer):
             instance.save(update_fields=["description"])
         if "permission_ids" in validated_data:
             instance.permissions.set(validated_data["permission_ids"])
+        if "agenda_section_ids" in validated_data:
+            from .agenda_sections import sync_role_receiver_agenda_sections
+
+            sync_role_receiver_agenda_sections(
+                instance.role,
+                validated_data["agenda_section_ids"],
+            )
         return instance
 
 
@@ -1462,15 +1616,25 @@ class RegisterSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=Role.choices)
     ministry_id = serializers.IntegerField(required=False, allow_null=True)
     department_id = serializers.IntegerField(required=False, allow_null=True)
+    unit_id = serializers.IntegerField(required=False, allow_null=True)
 
     def validate(self, attrs):
         if User.objects.filter(username=attrs["username"]).exists():
             raise serializers.ValidationError({"username": "Username already taken."})
+        unit_id = attrs.get("unit_id")
+        if unit_id:
+            try:
+                unit = Unit.objects.select_related("department__ministry").get(pk=unit_id)
+            except Unit.DoesNotExist:
+                raise serializers.ValidationError({"unit_id": "Unit not found."})
+            attrs["department_id"] = unit.department_id
+            attrs["ministry_id"] = unit.department.ministry_id
         return attrs
 
     def create(self, validated_data):
         ministry_id = validated_data.pop("ministry_id", None)
         department_id = validated_data.pop("department_id", None)
+        unit_id = validated_data.pop("unit_id", None)
         role = validated_data.pop("role")
         password = validated_data.pop("password")
         email = validated_data.pop("email", "") or ""
@@ -1484,6 +1648,10 @@ class RegisterSerializer(serializers.Serializer):
             profile_kwargs["ministry_id"] = ministry_id
         if department_id:
             profile_kwargs["department_id"] = department_id
+        if unit_id:
+            profile_kwargs["unit_id"] = unit_id
+        # New accounts must rotate their initial/admin-set password after first sign-in.
+        profile_kwargs["force_password_change"] = True
         Profile.objects.create(**profile_kwargs)
         return user
 

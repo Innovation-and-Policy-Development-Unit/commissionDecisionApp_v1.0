@@ -8,7 +8,17 @@ export const ODU_CHECKLIST_REVIEW_STAGE = 'manager_checklist_review'
 
 export const ODU_ROUTED_UNIT = 'odu'
 
-export const ODU_CHECKLIST_ROLES = ['odu_principal', 'odu_manager']
+export const ODU_PRINCIPAL_WORKER_ROLES = [
+  'odu_principal',
+  'principal_org_dev_analyst',
+  'principal_job_analyst',
+]
+
+export const ODU_CHECKLIST_ROLES = [...ODU_PRINCIPAL_WORKER_ROLES, 'odu_manager']
+
+export function userIsOduPrincipalWorker(role) {
+  return ODU_PRINCIPAL_WORKER_ROLES.includes(role)
+}
 
 export function submissionUsesOduRestructureChecklist(submission) {
   const code = submission?.form_type_code || ''

@@ -71,6 +71,7 @@ _MIDDLEWARE += [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     # django-axes: must come AFTER AuthenticationMiddleware
     'axes.middleware.AxesMiddleware',
+    'tracker.middleware.ForcePasswordChangeMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]

@@ -35,6 +35,8 @@ class Role(models.TextChoices):
     VIPAM_PRINCIPAL       = "vipam_principal",       "VIPAM Principal"
     HR_UNIT_PRINCIPAL     = "hr_unit_principal",     "HR Unit Principal"
     ODU_PRINCIPAL         = "odu_principal",          "ODU Principal"
+    PRINCIPAL_ORG_DEV_ANALYST = "principal_org_dev_analyst", "Principal Organization Development Analyst"
+    PRINCIPAL_JOB_ANALYST     = "principal_job_analyst",     "Principal Job Analyst"
     COMPLIANCE_PRINCIPAL  = "compliance_principal",  "Compliance Principal"
 
 
@@ -177,6 +179,37 @@ class Department(models.Model):
         return f"{self.name} ({self.ministry.code})"
 
 
+class Unit(models.Model):
+    """Organizational unit within a department (e.g. ODU, HR Unit, Corporate Services Unit)."""
+
+    department = models.ForeignKey(
+        Department, on_delete=models.CASCADE, related_name="units",
+    )
+    code = models.CharField(max_length=32)
+    name = models.CharField(max_length=255)
+    routed_unit = models.CharField(
+        max_length=16,
+        choices=RoutedUnit.choices,
+        blank=True,
+        help_text="OPSC workflow routing key when submissions are routed to this unit.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["department__ministry__name", "department__name", "name"]
+        verbose_name = "Unit"
+        verbose_name_plural = "Units"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["department", "code"],
+                name="uniq_unit_code_per_department",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.department.ministry.code})"
+
+
 class AgendaSection(models.Model):
     """Configurable Commission meeting agenda sections (admin-managed)."""
 
@@ -195,6 +228,14 @@ class AgendaSection(models.Model):
         help_text="Meeting-only sections (Preliminaries, Matters Arising) — hidden from ministry lodge form.",
     )
     is_active = models.BooleanField(default=True)
+    receiver_roles = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "PSC profile roles allowed to receive new submissions for this agenda section. "
+            "Empty means fallback to routed unit manager only."
+        ),
+    )
     digitized_form = models.ForeignKey(
         "PSCFormType",
         null=True,
@@ -592,6 +633,9 @@ class Profile(models.Model):
     department = models.ForeignKey(
         Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles"
     )
+    unit = models.ForeignKey(
+        Unit, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles",
+    )
     profile_picture = models.ImageField(upload_to="profile_pics/", null=True, blank=True)
     signature = models.ImageField(upload_to="signatures/", null=True, blank=True,
         help_text="Upload an image of your signature (PNG with transparent background recommended).")
@@ -602,6 +646,10 @@ class Profile(models.Model):
     session_pin = models.CharField(max_length=128, blank=True, null=True,
         help_text="Hashed 4-6 digit PIN for trusted session re-authentication.")
     session_pin_set_at = models.DateTimeField(null=True, blank=True)
+    force_password_change = models.BooleanField(
+        default=False,
+        help_text="Require user to change password at first sign-in.",
+    )
 
     class Meta:
         verbose_name_plural = "PSC profiles"
@@ -1099,6 +1147,9 @@ class Submission(models.Model):
     ministry = models.ForeignKey(Ministry, on_delete=models.PROTECT, related_name="submissions")
     department = models.ForeignKey(
         Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="submissions"
+    )
+    unit = models.ForeignKey(
+        Unit, null=True, blank=True, on_delete=models.SET_NULL, related_name="submissions",
     )
     routed_unit = models.CharField(max_length=16, choices=RoutedUnit.choices, blank=True)
     current_stage = models.CharField(

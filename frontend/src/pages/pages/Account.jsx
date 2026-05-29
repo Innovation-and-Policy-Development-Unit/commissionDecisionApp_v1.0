@@ -389,6 +389,7 @@ export default function Account() {
         new_password: newPw,
         confirm_password: confirmPw,
       })
+      await refreshMe()
       setOldPw('')
       setNewPw('')
       setConfirmPw('')
@@ -408,6 +409,11 @@ export default function Account() {
   return (
     <>
     <div className="max-w-5xl mx-auto p-6 space-y-6">
+      {user?.must_change_password && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+          Password change is required on first login. You will be prompted on the sign-in page, or you can update your password below.
+        </div>
+      )}
 
       {/* ── Banner header ── */}
       <div className="relative rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #0c2451 0%, #1e3a6f 60%, #0c2451 100%)' }}>

@@ -23,7 +23,13 @@ import { useAgendaSections } from '../../hooks/useAgendaSections'
 const FALLBACK_FORM_TYPES = []
 
 /** Roles that submit OPSC-internal submissions (no checklist, straight to Secretary). */
-const INTERNAL_ROLES = ['csu_manager', 'odu_manager', 'odu_principal']
+const INTERNAL_ROLES = [
+  'csu_manager',
+  'odu_manager',
+  'odu_principal',
+  'principal_org_dev_analyst',
+  'principal_job_analyst',
+]
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Deadline Banner
@@ -341,7 +347,7 @@ function TravelSubmissionForm({ modal, onClose, onSuccess, formTypes, categories
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CommissionSubmissionForm({
-  modal, onClose, onSuccess, ministries, departments, isMinistryUser,
+  modal, onClose, onSuccess, ministries, departments, units, isMinistryUser,
 }) {
   const navigate = useNavigate()
   const toast = useToast()
@@ -351,8 +357,12 @@ function CommissionSubmissionForm({
     agenda_category: 'other',
     ministry: '',
     department: '',
+    unit: '',
     notes: '',
   })
+  const availUnits = units.filter(
+    u => !form.department || u.department === parseInt(form.department, 10),
+  )
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -387,6 +397,7 @@ function CommissionSubmissionForm({
       }
       if (!isMinistryUser && form.ministry) payload.ministry = Number(form.ministry)
       if (form.department) payload.department = Number(form.department)
+      if (form.unit) payload.unit = Number(form.unit)
 
       const { data: submission } = await api.post('/submissions/', payload)
       toast.success('Submission created. Complete documents and submit when ready.')
@@ -472,7 +483,7 @@ function CommissionSubmissionForm({
             <select
               className="input"
               value={form.department}
-              onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
+              onChange={e => setForm(f => ({ ...f, department: e.target.value, unit: '' }))}
             >
               <option value="">— Select department —</option>
               {departments.map(d => (
@@ -489,7 +500,7 @@ function CommissionSubmissionForm({
                 required
                 disabled={ministries.length === 1}
                 value={form.ministry}
-                onChange={e => setForm(f => ({ ...f, ministry: e.target.value, department: '' }))}
+                onChange={e => setForm(f => ({ ...f, ministry: e.target.value, department: '', unit: '' }))}
               >
                 {ministries.map(m => (
                   <option key={m.id} value={m.id}>{m.name}</option>
@@ -501,7 +512,7 @@ function CommissionSubmissionForm({
               <select
                 className="input"
                 value={form.department}
-                onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, department: e.target.value, unit: '' }))}
               >
                 <option value="">—</option>
                 {departments.map(d => (
@@ -509,6 +520,22 @@ function CommissionSubmissionForm({
                 ))}
               </select>
             </div>
+          </div>
+        )}
+        {availUnits.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Unit (optional)</label>
+            <select
+              className="input"
+              value={form.unit}
+              onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
+              disabled={!form.department}
+            >
+              <option value="">—</option>
+              {availUnits.map(u => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
           </div>
         )}
 
@@ -691,6 +718,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
 
   const [ministries, setMinistries] = useState([])
   const [departments, setDepartments] = useState([])
+  const [units, setUnits] = useState([])
   const [categories, setCategories] = useState([])
   const [formTypes, setFormTypes] = useState(FALLBACK_FORM_TYPES)
 
@@ -728,6 +756,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
       return
     }
     api.get('/departments/', { params: { ministry: mid } }).then(res => setDepartments(res.data))
+    api.get('/units/', { params: { ministry: mid } }).then(res => setUnits(res.data.results || res.data))
   }, [ministries, isMinistryUser, user?.ministry_id])
 
   if (!user) {
@@ -811,6 +840,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
         onSuccess={onSuccess}
         ministries={ministries}
         departments={departments}
+        units={units}
         isMinistryUser={isMinistryUser}
       />
     </div>

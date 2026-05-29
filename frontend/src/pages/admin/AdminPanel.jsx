@@ -39,6 +39,7 @@ import {
   X,
 } from 'lucide-react'
 import api from '../../api/client'
+import { fetchAllPaginated } from '../../utils/paginatedApi'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { useToast } from '../../context/ToastContext'
@@ -72,6 +73,8 @@ const ROLE_CHOICES = [
   { value: 'vipam_principal', label: 'VIPAM Principal' },
   { value: 'hr_unit_principal', label: 'HR Unit Principal' },
   { value: 'odu_principal', label: 'ODU Principal' },
+  { value: 'principal_org_dev_analyst', label: 'Principal Organization Development Analyst' },
+  { value: 'principal_job_analyst', label: 'Principal Job Analyst' },
   { value: 'compliance_principal', label: 'Compliance Principal' },
   { value: 'ministry_hr', label: 'Ministry HR Officer' },
   { value: 'dept_admin', label: 'Department Admin Officer' },
@@ -195,9 +198,10 @@ const EMPTY_USER_FORM = {
   role: 'psc_officer',
   ministry_id: '',
   department_id: '',
+  unit_id: '',
 }
 
-function UsersTab({ users, ministries, departments, onRefresh }) {
+function UsersTab({ users, ministries, departments, units, onRefresh }) {
   const toast = useToast()
   const confirm = useConfirm()
   const [search, setSearch] = useState('')
@@ -209,6 +213,9 @@ function UsersTab({ users, ministries, departments, onRefresh }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(new Set())
+  const [deptOptions, setDeptOptions] = useState([])
+  const [unitOptions, setUnitOptions] = useState([])
+  const [loadingDepts, setLoadingDepts] = useState(false)
 
   const filtered = users.filter(u => {
     const q = search.toLowerCase()
@@ -241,7 +248,14 @@ function UsersTab({ users, ministries, departments, onRefresh }) {
   }
 
   const openCreate = () => {
-    setForm(EMPTY_USER_FORM)
+    const defaultMinistry = ministries.find(m => m.code === 'MPM')
+      || ministries.find(m => /prime minister/i.test(m.name))
+    setForm({
+      ...EMPTY_USER_FORM,
+      ministry_id: defaultMinistry ? String(defaultMinistry.id) : '',
+    })
+    setDeptOptions([])
+    setUnitOptions([])
     setError('')
     setModal('create')
   }
@@ -254,6 +268,7 @@ function UsersTab({ users, ministries, departments, onRefresh }) {
       role: u.role || 'psc_officer',
       ministry_id: u.ministry_id ?? '',
       department_id: u.department_id ?? '',
+      unit_id: u.unit_id ?? '',
     })
     setError('')
     setModal('edit')
@@ -279,6 +294,7 @@ function UsersTab({ users, ministries, departments, onRefresh }) {
         role: form.role,
         ministry_id: form.ministry_id || null,
         department_id: form.department_id || null,
+        unit_id: form.unit_id || null,
       }
       if (modal === 'create') {
         await api.post('/users/', { ...payload, password: form.password })
@@ -339,7 +355,52 @@ function UsersTab({ users, ministries, departments, onRefresh }) {
     }
   }
 
-  const availDepts = departments.filter(d => !form.ministry_id || d.ministry === parseInt(form.ministry_id, 10))
+  useEffect(() => {
+    if (!modal || !form.ministry_id) {
+      setDeptOptions([])
+      return undefined
+    }
+    let cancelled = false
+    setLoadingDepts(true)
+    fetchAllPaginated('/departments/', { ministry: form.ministry_id })
+      .then(rows => {
+        if (!cancelled) setDeptOptions(rows)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDeptOptions(
+            departments.filter(d => Number(d.ministry) === Number(form.ministry_id)),
+          )
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDepts(false)
+      })
+    return () => { cancelled = true }
+  }, [modal, form.ministry_id, departments])
+
+  useEffect(() => {
+    if (!modal || !form.department_id) {
+      setUnitOptions([])
+      return undefined
+    }
+    let cancelled = false
+    fetchAllPaginated('/units/', { department: form.department_id })
+      .then(rows => {
+        if (!cancelled) setUnitOptions(rows)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUnitOptions(
+            units.filter(u => Number(u.department) === Number(form.department_id)),
+          )
+        }
+      })
+    return () => { cancelled = true }
+  }, [modal, form.department_id, units])
+
+  const availDepts = deptOptions
+  const availUnits = unitOptions
 
   return (
     <div>
@@ -385,7 +446,7 @@ function UsersTab({ users, ministries, departments, onRefresh }) {
               </th>
               <th>User</th>
               <th>Role</th>
-              <th>Ministry / Dept</th>
+              <th>Ministry / Dept / Unit</th>
               <th className="text-center">Active</th>
               <th className="sr-only">Actions</th>
             </tr>
@@ -441,6 +502,12 @@ function UsersTab({ users, ministries, departments, onRefresh }) {
                     <>
                       <br />
                       {u.department_name}
+                    </>
+                  )}
+                  {u.unit_name && (
+                    <>
+                      <br />
+                      <span className="text-primary-600 dark:text-primary-400">{u.unit_name}</span>
                     </>
                   )}
                 </td>
@@ -549,12 +616,12 @@ function UsersTab({ users, ministries, departments, onRefresh }) {
                 <select
                   className="input text-sm"
                   value={form.ministry_id}
-                  onChange={e => setForm(f => ({ ...f, ministry_id: e.target.value, department_id: '' }))}
+                  onChange={e => setForm(f => ({ ...f, ministry_id: e.target.value, department_id: '', unit_id: '' }))}
                 >
                   <option value="">— None —</option>
                   {ministries.map(m => (
                     <option key={m.id} value={m.id}>
-                      {m.name}
+                      {m.name}{m.code ? ` (${m.code})` : ''}
                     </option>
                   ))}
                 </select>
@@ -564,17 +631,40 @@ function UsersTab({ users, ministries, departments, onRefresh }) {
                 <select
                   className="input text-sm"
                   value={form.department_id}
-                  onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))}
-                  disabled={!form.ministry_id}
+                  onChange={e => setForm(f => ({ ...f, department_id: e.target.value, unit_id: '' }))}
+                  disabled={!form.ministry_id || loadingDepts}
                 >
-                  <option value="">— None —</option>
+                  <option value="">
+                    {loadingDepts ? 'Loading departments…' : '— None —'}
+                  </option>
+                  {availDepts.length === 0 && form.ministry_id && !loadingDepts && (
+                    <option value="" disabled>
+                      No departments — use MPM (not OPM) for OPSC staff
+                    </option>
+                  )}
                   {availDepts.map(d => (
                     <option key={d.id} value={d.id}>
-                      {d.name}
+                      {d.name}{d.code ? ` (${d.code})` : ''}
                     </option>
                   ))}
                 </select>
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Unit</label>
+              <select
+                className="input text-sm"
+                value={form.unit_id}
+                onChange={e => setForm(f => ({ ...f, unit_id: e.target.value }))}
+                disabled={!form.department_id}
+              >
+                <option value="">— None —</option>
+                {availUnits.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-5">
@@ -629,15 +719,39 @@ function RolesTab({ roleDefs, permissions, onRefresh }) {
   const [selected, setSelected] = useState(null)
   const [desc, setDesc] = useState('')
   const [checked, setChecked] = useState(new Set())
+  const [agendaSections, setAgendaSections] = useState([])
+  const [agendaChecked, setAgendaChecked] = useState(new Set())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    api.get('/agenda-sections/', { params: { active_only: '1' } })
+      .then(({ data }) => {
+        const list = (data.results ?? data).slice().sort(
+          (a, b) => a.display_order - b.display_order || a.id - b.id,
+        )
+        setAgendaSections(list)
+      })
+      .catch(() => {})
+  }, [])
 
   const openRole = rd => {
     setSelected(rd)
     setDesc(rd.description)
     setChecked(new Set(rd.permissions.map(p => p.id)))
+    setAgendaChecked(new Set(rd.agenda_section_ids || []))
     setError('')
+    setSaved(false)
+  }
+
+  const toggleAgendaSection = id => {
+    setAgendaChecked(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
     setSaved(false)
   }
 
@@ -660,10 +774,11 @@ function RolesTab({ roleDefs, permissions, onRefresh }) {
       await api.patch(`/role-defs/${selected.id}/`, {
         description: desc,
         permission_ids: [...checked],
+        agenda_section_ids: [...agendaChecked],
       })
       await onRefresh()
       setSaved(true)
-      toast.success(`Role permissions updated.`)
+      toast.success('Role updated.')
       setTimeout(() => setSaved(false), 2500)
     } catch (err) {
       const msg = err.response?.data?.detail ?? 'Save failed.'
@@ -814,6 +929,80 @@ function RolesTab({ roleDefs, permissions, onRefresh }) {
                     </div>
                   ))}
                 </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                    Agenda sections — receive submissions ({agendaChecked.size} selected)
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAgendaChecked(new Set(
+                          agendaSections.filter(s => !s.is_special).map(s => s.id),
+                        ))
+                        setSaved(false)
+                      }}
+                      className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                    >
+                      All lodge sections
+                    </button>
+                    <span className="text-slate-300 dark:text-slate-600">|</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAgendaChecked(new Set())
+                        setSaved(false)
+                      }}
+                      className="text-xs text-slate-500 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2 leading-relaxed">
+                  When a ministry lodges a submission under an agenda section, users with this role are
+                  notified. If none are selected for a section, the system uses the default routed-unit
+                  manager (e.g. ODU Manager for structure cases).
+                </p>
+                {agendaSections.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-4 text-center rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
+                    No agenda sections loaded. Configure sections under Administration → Agenda sections.
+                  </p>
+                ) : (
+                  <div className="space-y-1 max-h-56 overflow-y-auto pr-1 border border-slate-100 dark:border-slate-800 rounded-lg p-2">
+                    {agendaSections.map(section => (
+                      <label
+                        key={section.id}
+                        className="flex items-start gap-2.5 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <div
+                          role="presentation"
+                          onClick={() => toggleAgendaSection(section.id)}
+                          className={`w-4 h-4 mt-0.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer ${
+                            agendaChecked.has(section.id)
+                              ? 'bg-primary-600 border-primary-600'
+                              : 'border-slate-300 dark:border-slate-600'
+                          }`}
+                        >
+                          {agendaChecked.has(section.id) && <Check size={10} className="text-white" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-slate-700 dark:text-slate-300 leading-snug">
+                            {section.label}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            <code>{section.code}</code>
+                            {section.is_special && (
+                              <span className="ml-1.5 text-amber-600 dark:text-amber-400">meeting only</span>
+                            )}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2324,6 +2513,7 @@ export default function AdminPanel() {
   const [users, setUsers] = useState([])
   const [ministries, setMinistries] = useState([])
   const [departments, setDepartments] = useState([])
+  const [units, setUnits] = useState([])
   const [roleDefs, setRoleDefs] = useState([])
   const [permissions, setPermissions] = useState([])
   const [loadingData, setLoadingData] = useState(true)
@@ -2369,16 +2559,35 @@ export default function AdminPanel() {
     setLoadingData(true)
     try {
       const settled = await Promise.allSettled([
-        api.get('/users/'), api.get('/ministries/'), api.get('/departments/'),
-        api.get('/role-defs/'), api.get('/permissions/'),
+        api.get('/users/'),
+        fetchAllPaginated('/ministries/'),
+        fetchAllPaginated('/departments/'),
+        fetchAllPaginated('/units/'),
+        api.get('/role-defs/'),
+        api.get('/permissions/'),
       ])
-      const pick = i => {
+      const pickList = i => {
         if (settled[i].status !== 'fulfilled') return []
-        const d = settled[i].value.data
-        return d.results ?? d
+        const v = settled[i].value
+        if (Array.isArray(v)) return v
+        const d = v?.data
+        return d?.results ?? (Array.isArray(d) ? d : [])
       }
-      setUsers(pick(0)); setMinistries(pick(1)); setDepartments(pick(2));
-      setRoleDefs(pick(3)); setPermissions(pick(4));
+      setUsers(pickList(0))
+      setMinistries(pickList(1))
+      setDepartments(pickList(2))
+      setUnits(pickList(3))
+      setRoleDefs(pickList(4))
+      setPermissions(pickList(5))
+      try {
+        await api.post('/departments/ensure-opsc/')
+        const depts = await fetchAllPaginated('/departments/')
+        setDepartments(depts)
+        const unitsList = await fetchAllPaginated('/units/')
+        setUnits(unitsList)
+      } catch {
+        /* ensure-opsc requires admin; departments/units already loaded above */
+      }
     } finally { setLoadingData(false) }
     // BackupTab manages its own data fetch
   }, [])
@@ -2411,7 +2620,7 @@ export default function AdminPanel() {
         <div className="flex items-center justify-center h-48 text-slate-400 text-sm gap-2"><RefreshCw size={16} className="animate-spin" /> Loading…</div>
       ) : (
         <>
-          {tab === 'users'       && <UsersTab users={users} ministries={ministries} departments={departments} onRefresh={fetchAll} />}
+          {tab === 'users'       && <UsersTab users={users} ministries={ministries} departments={departments} units={units} onRefresh={fetchAll} />}
           {tab === 'roles'       && <RolesTab roleDefs={roleDefs} permissions={permissions} onRefresh={fetchAll} />}
           {tab === 'permissions' && <PermissionsTab permissions={permissions} onRefresh={fetchAll} />}
         </>

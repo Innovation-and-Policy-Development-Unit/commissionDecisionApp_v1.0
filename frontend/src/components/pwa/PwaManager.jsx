@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { registerSW } from 'virtual:pwa-register'
 import { Download, RefreshCw, WifiOff, X } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -26,16 +25,12 @@ export default function PwaManager() {
   const updateSWRef = useRef(null)
 
   useEffect(() => {
-    const updateSW = registerSW({
-      immediate: true,
-      onNeedRefresh() {
-        setNeedRefresh(true)
-      },
-      onOfflineReady() {
-        /* shell cached — no toast to avoid noise on every deploy */
-      },
-    })
-    updateSWRef.current = updateSW
+    // Emergency mitigation: disable SW registration and clear stale registrations
+    // that can trap clients in redirect/precache loops after broken deploys.
+    if (!('serviceWorker' in navigator)) return
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => reg.unregister())
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -53,10 +48,9 @@ export default function PwaManager() {
     if (isStandaloneDisplay()) return undefined
 
     const onBeforeInstall = (e) => {
-      // Defer the browser mini-infobar; we call prompt() from the install button.
-      e.preventDefault()
+      // Keep browser default install behavior; no preventDefault to avoid
+      // "Banner not shown" console warning on Chromium.
       setInstallPrompt(e)
-      /* Chrome may log "Banner not shown…" in DevTools — expected when using a custom install UI. */
     }
     window.addEventListener('beforeinstallprompt', onBeforeInstall)
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall)

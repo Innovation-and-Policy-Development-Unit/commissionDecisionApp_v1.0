@@ -53,14 +53,15 @@ from .models import (
     UserSignature,
     KnowledgeCategory,
     KnowledgeArticle,
+    Unit,
 )
 from .models import PasswordResetToken
 from .opsc_access import (
     COMMISSION_TASK_MANAGER_ROLES,
     COMMISSION_TASK_STAFF_ROLES,
-    MANAGER_ROLE_TO_PRINCIPAL_ROLE,
     MANAGER_ROLE_TO_ROUTED_UNIT,
     OPSC_UNIT_MANAGER_ROLES,
+    manager_allowed_staff_roles,
     user_can_view_all_commission_tasks,
     user_can_view_commission_minutes,
     user_can_work_commission_task,
@@ -78,6 +79,7 @@ from .serializers import (
     CommissionTaskUpdateBodySerializer,
     CommissionTaskUpdateSerializer,
     DepartmentSerializer,
+    UnitSerializer,
     AgendaSectionSerializer,
     FormCategorySerializer,
     PSCFormFieldSerializer,
@@ -190,27 +192,23 @@ def _resolve_submission_ministry_id(profile, request, validated_data):
 
 
 def _resolve_opsc_ministry(profile):
-    """Return the Ministry PK for an OPSC internal submitter.
+    """Return the line ministry PK for OPSC internal submissions (Ministry of the Prime Minister)."""
+    from .org_structure import resolve_opsc_ministry_id
 
-    Uses the user's own profile ministry if set, otherwise looks for the OPSC
-    ministry by name (contains 'Public Service Commission').
-    Raises PermissionDenied if no ministry can be resolved.
-    """
-    if profile.ministry_id:
-        return profile.ministry_id
-    opsc = (
-        Ministry.objects.filter(code__iexact="OPSC").first()
-        or Ministry.objects.filter(
-            models.Q(name__icontains="Public Service Commission")
-            | models.Q(name__icontains="OPSC")
-        ).first()
-    )
-    if opsc:
-        return opsc.pk
-    raise PermissionDenied(
-        "Could not resolve an OPSC ministry for this internal submission. "
-        "Please ensure your profile has a Ministry set or that an OPSC ministry record exists."
-    )
+    try:
+        return resolve_opsc_ministry_id(profile)
+    except ValueError as exc:
+        raise PermissionDenied(str(exc)) from exc
+
+
+def _resolve_opsc_submission_org(profile):
+    """Ministry (OPM), department (OPSC), and optional unit for OPSC internal submissions."""
+    from .org_structure import resolve_opsc_submission_org
+
+    try:
+        return resolve_opsc_submission_org(profile)
+    except ValueError as exc:
+        raise PermissionDenied(str(exc)) from exc
 
 
 def _submission_queryset_for(user):
@@ -245,6 +243,8 @@ def _submission_queryset_for(user):
         return qs.filter(department_id=profile.department_id)
     _UNIT_PRINCIPAL_ROLES = {
         Role.ODU_PRINCIPAL,
+        Role.PRINCIPAL_ORG_DEV_ANALYST,
+        Role.PRINCIPAL_JOB_ANALYST,
         Role.HR_UNIT_PRINCIPAL,
         Role.VIPAM_PRINCIPAL,
         Role.COMPLIANCE_PRINCIPAL,
@@ -375,17 +375,40 @@ def _dispatch_transition_notifications(submission, prev, target, actor):
 
     recipients = []
 
-    if prev == WorkflowStage.DRAFT and target == WorkflowStage.SUBMITTED:
-        # Notify the relevant OPSC Unit Manager
+    def _resolve_receiver_roles():
+        agenda_code = (submission.agenda_category or "").strip().lower()
+        if not agenda_code and submission.form_type_code:
+            ft = (
+                PSCFormType.objects.filter(code__iexact=submission.form_type_code)
+                .values("agenda_category")
+                .first()
+            )
+            if ft:
+                agenda_code = (ft.get("agenda_category") or "").strip().lower()
+        section_roles = []
+        if agenda_code:
+            section = (
+                AgendaSection.objects.filter(code=agenda_code, is_active=True)
+                .values("receiver_roles")
+                .first()
+            )
+            if section:
+                section_roles = list(section.get("receiver_roles") or [])
+        if section_roles:
+            return section_roles
         unit_to_role = {
             "odu": Role.ODU_MANAGER,
             "hr": Role.HR_UNIT_MANAGER,
             "vipam": Role.VIPAM_MANAGER,
             "compliance": Role.COMPLIANCE_MANAGER,
+            "csu": Role.CSU_MANAGER,
         }
-        manager_role = unit_to_role.get(submission.routed_unit, Role.PSC_OFFICER)
+        return [unit_to_role.get(submission.routed_unit, Role.PSC_OFFICER)]
+
+    if prev == WorkflowStage.DRAFT and target == WorkflowStage.SUBMITTED:
+        receiver_roles = _resolve_receiver_roles()
         recipients = User.objects.filter(
-            psc_profile__role=manager_role, is_active=True
+            psc_profile__role__in=receiver_roles, is_active=True
         )
         title = f"New submission: {submission.reference_number}"
         body = f"{submission.title} has been submitted and needs your checklist review."
@@ -578,23 +601,27 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         elif profile.role == Role.CSU_MANAGER:
             # OPSC CSU internal submission — routes directly to Secretary
-            ministry_id = _resolve_opsc_ministry(profile)
+            org = _resolve_opsc_submission_org(profile)
             kwargs = {
                 "current_stage": WorkflowStage.DRAFT,
                 "is_internal": True,
                 "routed_unit": RoutedUnit.CSU,
-                "ministry_id": ministry_id,
+                "ministry_id": org["ministry_id"],
+                "department_id": org["department_id"],
+                "unit_id": org.get("unit_id"),
             }
             submission = serializer.save(**kwargs)
 
         elif profile.role == Role.ODU_MANAGER:
             # OPSC ODU internal submission — only the manager creates, routes to Secretary
-            ministry_id = _resolve_opsc_ministry(profile)
+            org = _resolve_opsc_submission_org(profile)
             kwargs = {
                 "current_stage": WorkflowStage.DRAFT,
                 "is_internal": True,
                 "routed_unit": RoutedUnit.ODU,
-                "ministry_id": ministry_id,
+                "ministry_id": org["ministry_id"],
+                "department_id": org["department_id"],
+                "unit_id": org.get("unit_id"),
             }
             submission = serializer.save(**kwargs)
 
@@ -796,6 +823,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         # ── Unit principals can only transition submissions assigned to them ──
         _unit_principal_to_routed = {
             Role.ODU_PRINCIPAL: "odu",
+            Role.PRINCIPAL_ORG_DEV_ANALYST: "odu",
+            Role.PRINCIPAL_JOB_ANALYST: "odu",
             Role.VIPAM_PRINCIPAL: "vipam",
             Role.HR_UNIT_PRINCIPAL: "hr",
             Role.COMPLIANCE_PRINCIPAL: "compliance",
@@ -1190,8 +1219,6 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         profile = _profile(request.user)
 
         _manager_to_unit = MANAGER_ROLE_TO_ROUTED_UNIT
-        _manager_to_principal_role = MANAGER_ROLE_TO_PRINCIPAL_ROLE
-
         is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff
         is_unit_manager = profile.role in OPSC_UNIT_MANAGER_ROLES
 
@@ -1222,16 +1249,16 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({"detail": "User not found or inactive."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verify the assignee is a principal in the correct unit
+        # Verify the assignee is an allowed officer in the manager's unit
         assignee_profile = getattr(assignee, "psc_profile", None)
         if assignee_profile is None:
             return Response({"detail": "That user has no PSC profile."}, status=status.HTTP_400_BAD_REQUEST)
 
         if is_unit_manager:
-            required_principal_role = _manager_to_principal_role[profile.role]
-            if assignee_profile.role != required_principal_role:
+            allowed_roles = manager_allowed_staff_roles(profile.role)
+            if assignee_profile.role not in allowed_roles:
                 return Response(
-                    {"detail": f"Assignee must be a principal in your unit ({required_principal_role})."},
+                    {"detail": "Assignee must be one of your unit's principals or senior officers."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -1993,7 +2020,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
 
     def get_permissions(self):
-        if self.action in ("create", "update", "partial_update", "destroy"):
+        if self.action in ("create", "update", "partial_update", "destroy", "ensure_opsc"):
             return [permissions.IsAuthenticated(), CanMutateMinistryDepartment()]
         return [permissions.IsAuthenticated(), HasProfilePermission()]
 
@@ -2019,6 +2046,80 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         mid = self.request.query_params.get("ministry")
         if mid:
             qs = qs.filter(ministry_id=mid)
+        return qs
+
+    @action(detail=False, methods=["post"], url_path="ensure-opsc")
+    def ensure_opsc(self, request):
+        """Create or update OPSC department under Ministry of the Prime Minister (idempotent)."""
+        from .org_structure import (
+            OPSC_DEPARTMENT_NAME,
+            ensure_opsc_units,
+            get_opm_ministry,
+            get_opsc_department,
+        )
+
+        pm = get_opm_ministry()
+        if not pm:
+            return Response(
+                {"detail": "Ministry of the Prime Minister is not configured."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        dept = get_opsc_department(create=True)
+        changed = False
+        if dept.ministry_id != pm.pk:
+            dept.ministry = pm
+            changed = True
+        if dept.code.upper() != "OPSC":
+            dept.code = "OPSC"
+            changed = True
+        if dept.name != OPSC_DEPARTMENT_NAME:
+            dept.name = OPSC_DEPARTMENT_NAME
+            changed = True
+        if changed:
+            dept.save()
+        ensure_opsc_units(dept)
+        return Response(self.get_serializer(dept).data)
+
+
+class UnitViewSet(viewsets.ModelViewSet):
+    """
+    List/retrieve: authenticated users (filter ?ministry= and/or ?department=).
+    Create/update/delete: PSC Administrators only.
+    """
+
+    serializer_class = UnitSerializer
+
+    def get_permissions(self):
+        if self.action in ("create", "update", "partial_update", "destroy"):
+            return [permissions.IsAuthenticated(), CanMutateMinistryDepartment()]
+        return [permissions.IsAuthenticated(), HasProfilePermission()]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Unit.objects.select_related("department", "department__ministry").order_by(
+            "department__ministry__name", "department__name", "name",
+        )
+        if not (user.is_superuser or user.is_staff):
+            profile = _profile(user)
+            psc_roles = {
+                Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY,
+                Role.PSC_MANAGER, Role.CHAIRPERSON, Role.PSC_COMMISSIONER,
+                Role.SENIOR_ADMIN_OFFICER, Role.PRINCIPAL_OFFICER, Role.SENIOR_OFFICER,
+                Role.VIPAM_MANAGER, Role.HR_UNIT_MANAGER, Role.ODU_MANAGER, Role.COMPLIANCE_MANAGER,
+                Role.CSU_MANAGER,
+            }
+            if profile.role not in psc_roles:
+                if profile.ministry_id:
+                    qs = qs.filter(department__ministry_id=profile.ministry_id)
+                else:
+                    qs = qs.none()
+
+        mid = self.request.query_params.get("ministry")
+        if mid:
+            qs = qs.filter(department__ministry_id=mid)
+        did = self.request.query_params.get("department")
+        if did:
+            qs = qs.filter(department_id=did)
         return qs
 
 
@@ -2397,21 +2498,35 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
     def subtasks(self, request, pk=None):
         """CRUD for subtasks within a commission task."""
         task = self.get_object()
+        manager_role = getattr(getattr(task.assigned_manager, "psc_profile", None), "role", None)
+        allowed_staff_roles = manager_allowed_staff_roles(manager_role)
         is_manager = (
             request.user.is_superuser
             or request.user.is_staff
             or rbac_user_has_permission(request.user, "allocate_decision")
             or (task.assigned_manager_id == request.user.id and rbac_user_has_permission(request.user, "assign_task"))
         )
+        is_assigned_executor = (
+            task.assigned_staff_id == request.user.id
+            or task.assigned_staff_m2m.filter(id=request.user.id).exists()
+        ) and rbac_user_has_permission(request.user, "update_implementation")
 
         if request.method == "GET":
             qs = task.subtasks.select_related("created_by").prefetch_related("assigned_staff").all()
             return Response(CommissionSubTaskSerializer(qs, many=True).data)
 
-        if not is_manager:
-            raise PermissionDenied("Only the task manager can manage subtasks.")
+        if not (is_manager or is_assigned_executor):
+            raise PermissionDenied("Only the task manager or assigned staff can manage subtasks.")
 
         if request.method == "POST":
+            requested_staff = request.data.get("assigned_staff")
+            if isinstance(requested_staff, list) and requested_staff:
+                if User.objects.filter(
+                    id__in=requested_staff,
+                    psc_profile__role__in=allowed_staff_roles,
+                    is_active=True,
+                ).count() != len(set(requested_staff)):
+                    raise PermissionDenied("Subtask assignees must be within the manager's unit roles.")
             ser = CommissionSubTaskSerializer(data={**request.data, "task": task.id})
             ser.is_valid(raise_exception=True)
             obj = ser.save(created_by=request.user)
@@ -2426,6 +2541,14 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Subtask not found."}, status=404)
 
         if request.method == "PATCH":
+            requested_staff = request.data.get("assigned_staff")
+            if isinstance(requested_staff, list) and requested_staff:
+                if User.objects.filter(
+                    id__in=requested_staff,
+                    psc_profile__role__in=allowed_staff_roles,
+                    is_active=True,
+                ).count() != len(set(requested_staff)):
+                    raise PermissionDenied("Subtask assignees must be within the manager's unit roles.")
             ser = CommissionSubTaskSerializer(subtask, data=request.data, partial=True)
             ser.is_valid(raise_exception=True)
             ser.save()
@@ -2452,10 +2575,12 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         if not isinstance(staff_ids, list) or not staff_ids:
             return Response({"detail": "Provide assigned_staff_m2m as a non-empty list of user IDs."}, status=400)
 
+        manager_role = getattr(getattr(task.assigned_manager, "psc_profile", None), "role", None)
+        allowed_roles = manager_allowed_staff_roles(manager_role)
         from django.contrib.auth.models import User
         valid_staff = User.objects.filter(
             id__in=staff_ids,
-            psc_profile__role__in=COMMISSION_TASK_STAFF_ROLES,
+            psc_profile__role__in=allowed_roles,
             is_active=True,
         )
         if valid_staff.count() != len(set(staff_ids)):
@@ -2764,6 +2889,13 @@ def change_password_view(request):
         )
     user.set_password(new_password)
     user.save(update_fields=["password"])
+    try:
+        profile = user.psc_profile
+        if profile.force_password_change:
+            profile.force_password_change = False
+            profile.save(update_fields=["force_password_change"])
+    except Exception:
+        pass
     _security_log.info("PASSWORD_CHANGED | username=%s", user.username)
     from .audit import log_action as _log
     from .models import AuditLog as _AL
@@ -3277,9 +3409,11 @@ def _axes_lockout_context(usernames=None):
 
 
 class UserAdminViewSet(
+    mixins.CreateModelMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
     """CRUD-lite for user management — manage_users / staff / superuser / PSC Admin."""
@@ -3317,11 +3451,36 @@ class UserAdminViewSet(
         from .models import AuditLog as _AL
         ser = RegisterSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+        initial_password = ser.validated_data.get("password", "")
         user = ser.save()
         _log(request, _AL.Action.CREATE,
              resource_type="User", resource_id=user.id,
              resource_label=user.username,
              description=f"User account created: {user.username} (role: {request.data.get('role', '')})")
+
+        # Send onboarding credentials email for admin-created accounts.
+        # Email delivery errors should never block user creation.
+        user_email = (user.email or "").strip()
+        if user_email and initial_password:
+            try:
+                from .email_notify import merge_recipient_context
+                from .email_templates import get_frontend_base_url, send_templated_email
+
+                send_templated_email(
+                    slug="new_user_welcome",
+                    to=[user_email],
+                    context=merge_recipient_context(
+                        user,
+                        initial_password=initial_password,
+                        login_url=f"{get_frontend_base_url()}/auth/login",
+                    ),
+                    fail_silently=True,
+                )
+            except Exception:
+                import logging
+                logging.getLogger("django").exception(
+                    "Failed to send new user welcome email for %s", user.username
+                )
         ctx = self.get_serializer_context()
         ctx.update(_axes_lockout_context(usernames=[user.username]))
         out = UserProfileSerializer(user, context=ctx)
@@ -3349,6 +3508,36 @@ class UserAdminViewSet(
         kwargs["partial"] = True
         return self.update(request, *args, **kwargs)
 
+    def destroy(self, request, *args, **kwargs):
+        """DELETE /users/{id}/ — remove user account (with safety guards)."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        user = self.get_object()
+        if user.id == request.user.id:
+            return Response(
+                {"detail": "You cannot delete your own account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if user.is_superuser:
+            return Response(
+                {"detail": "Superuser accounts cannot be deleted from this endpoint."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        username = user.username
+        user_id = user.id
+        resp = super().destroy(request, *args, **kwargs)
+        _log(
+            request,
+            _AL.Action.DELETE,
+            resource_type="User",
+            resource_id=user_id,
+            resource_label=username,
+            description=f"User account deleted: {username}",
+        )
+        return resp
+
     # ── set-password ──────────────────────────────────────────────────────────
     @action(detail=True, methods=["post"], url_path="set-password")
     def set_password(self, request, pk=None):
@@ -3359,6 +3548,13 @@ class UserAdminViewSet(
         ser.is_valid(raise_exception=True)
         user.set_password(ser.validated_data["password"])
         user.save()
+        try:
+            profile = user.psc_profile
+            if not profile.force_password_change:
+                profile.force_password_change = True
+                profile.save(update_fields=["force_password_change"])
+        except Exception:
+            pass
         _log(request, _AL.Action.PASSWORD_CHANGE,
              resource_type="User", resource_id=user.id,
              resource_label=user.username,
@@ -3519,10 +3715,14 @@ class RoleDefinitionViewSet(
         ser = RoleDefinitionWriteSerializer(instance, data=request.data, partial=partial)
         ser.is_valid(raise_exception=True)
         ser.save()
+        parts = ["permissions"]
+        if "agenda_section_ids" in request.data:
+            parts.append("agenda routing")
         _log(request, _AL.Action.PERMISSION,
              resource_type="RoleDefinition", resource_id=instance.id,
              resource_label=instance.role,
-             description=f"Role permissions updated: {instance.role}")
+             description=f"Role updated ({', '.join(parts)}): {instance.role}")
+        instance = self.get_queryset().get(pk=instance.pk)
         return Response(RoleDefinitionSerializer(instance).data)
 
     def partial_update(self, request, *args, **kwargs):
@@ -3963,54 +4163,43 @@ class PasswordResetRequestView(APIView):
         ser = PasswordResetRequestSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         email = ser.validated_data["email"]
-        try:
-            user = User.objects.get(email__iexact=email, is_active=True)
-            token = PasswordResetToken.generate_for(user)
 
+        from .email_notify import find_active_user_by_email, send_password_reset_email
+
+        user = find_active_user_by_email(email)
+        if user:
+            token = PasswordResetToken.generate_for(user)
             base = _password_reset_frontend_base(request)
             reset_url = f"{base}/auth/reset-password/confirm?token={token.token}"
-            
-            from django.conf import settings
-            from django.core.mail import send_mail
-
-            from .email_notify import merge_recipient_context
-            from .email_templates import send_templated_email
-
-            ctx = merge_recipient_context(
-                user,
+            sent = send_password_reset_email(
+                user=user,
                 reset_url=reset_url,
-                expiry_hours="1",
+                to_email=(user.email or email).strip(),
             )
-            if not send_templated_email(
-                slug="password_reset",
-                to=[email],
-                context=ctx,
-                fail_silently=True,
-            ):
-                subject = "Reset Your Password - Commission Decision App"
-                message = (
-                    f"Hello {user.username},\n\n"
-                    "You requested a password reset for your Commission Decision App account.\n"
-                    "Please click the link below to set a new password:\n\n"
-                    f"{reset_url}\n\n"
-                    "This link will expire in 1 hour.\n\n"
-                    "If you did not request a password reset, you can safely ignore this email."
-                )
-                send_mail(
-                    subject,
-                    message,
-                    settings.DEFAULT_FROM_EMAIL,
-                    [email],
-                    fail_silently=True,
-                )
+            from .audit import log_action as _log
+            from .models import AuditLog as _AL
 
-            import logging
-            logging.getLogger("django").info(
-                f"[PASSWORD RESET] Reset link for {email}: {reset_url}"
-            )
-        except User.DoesNotExist:
-            pass  # Silent — do not reveal whether email exists
-        # Always return success to avoid user enumeration
+            if sent:
+                _log(
+                    request,
+                    _AL.Action.SETTINGS,
+                    resource_type="PasswordResetEmail",
+                    resource_id=user.id,
+                    resource_label=user.username,
+                    description=f"Password reset email sent to {user.email}",
+                    extra_data={"email": user.email, "status": "sent"},
+                )
+            else:
+                _log(
+                    request,
+                    _AL.Action.SETTINGS,
+                    resource_type="PasswordResetEmail",
+                    resource_id=user.id,
+                    resource_label=user.username,
+                    description=f"Password reset email failed for {user.email}",
+                    extra_data={"email": user.email, "status": "failed"},
+                )
+        # Do not reveal whether the email is registered (anti-enumeration).
         return Response({"detail": "If that email is registered, a reset link has been sent."})
 
 
@@ -4023,6 +4212,13 @@ class PasswordResetConfirmView(APIView):
         ser = PasswordResetConfirmSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         user = ser.save()
+        try:
+            profile = user.psc_profile
+            if profile.force_password_change:
+                profile.force_password_change = False
+                profile.save(update_fields=["force_password_change"])
+        except Exception:
+            pass
         from .audit import log_action as _log
         from .models import AuditLog as _AL
 
@@ -6614,11 +6810,13 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
     serializer_class   = ODUChecklistSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    ODU_ROLES = {Role.ODU_PRINCIPAL, Role.ODU_MANAGER}
-
     def _require_odu_role(self, profile):
-        if profile.role not in self.ODU_ROLES:
-            raise PermissionDenied("Only ODU Principal or ODU Manager can access this checklist.")
+        from .odu_checklist_rules import ODU_CHECKLIST_ROLES
+
+        if profile.role not in ODU_CHECKLIST_ROLES:
+            raise PermissionDenied(
+                "Only ODU Manager or ODU principal analysts can access this checklist."
+            )
 
     def _validate_submission_for_checklist(self, submission):
         from rest_framework.exceptions import ValidationError
@@ -6674,7 +6872,9 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        allow_create = profile.role == Role.ODU_PRINCIPAL
+        from .odu_checklist_rules import user_is_odu_principal_worker
+
+        allow_create = user_is_odu_principal_worker(profile.role)
         checklist = ensure_odu_checklist_for_submission(
             submission,
             user=request.user,
@@ -6695,19 +6895,23 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from rest_framework.exceptions import ValidationError
 
+        from .odu_checklist_rules import user_is_odu_principal_worker
+
         profile = _profile(self.request.user)
         self._require_odu_role(profile)
-        if profile.role != Role.ODU_PRINCIPAL:
-            raise PermissionDenied("Only the ODU Principal can create the checklist draft.")
+        if not user_is_odu_principal_worker(profile.role):
+            raise PermissionDenied("Only an ODU principal analyst can create the checklist draft.")
         submission = serializer.validated_data["submission"]
         self._validate_submission_for_checklist(submission)
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
+        from .odu_checklist_rules import user_is_odu_principal_worker
+
         profile = _profile(self.request.user)
         self._require_odu_role(profile)
-        if profile.role != Role.ODU_PRINCIPAL:
-            raise PermissionDenied("Only the ODU Principal can edit the checklist draft.")
+        if not user_is_odu_principal_worker(profile.role):
+            raise PermissionDenied("Only an ODU principal analyst can edit the checklist draft.")
         instance = serializer.instance
         if instance.status != ODUChecklistStatus.DRAFT:
             raise PermissionDenied("Only draft checklists can be edited.")
@@ -6719,11 +6923,15 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
         Transition checklist from Draft → Submitted.
         ODU Principal only. All 20 items must be answered.
         """
+        from .odu_checklist_rules import user_is_odu_principal_worker
+
         checklist = self.get_object()
         profile = _profile(request.user)
         self._require_odu_role(profile)
-        if profile.role != Role.ODU_PRINCIPAL:
-            raise PermissionDenied("Only the ODU Principal can submit the checklist for manager review.")
+        if not user_is_odu_principal_worker(profile.role):
+            raise PermissionDenied(
+                "Only an ODU principal analyst can submit the checklist for manager review."
+            )
         if checklist.status != ODUChecklistStatus.DRAFT:
             return Response(
                 {"detail": "Only Draft checklists can be submitted."},

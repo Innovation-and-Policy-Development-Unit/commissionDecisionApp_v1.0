@@ -18,9 +18,10 @@ from django.utils import timezone
 
 from tracker.models import (
     AgendaItem, CommissionTask, Department, FormCategory, Meeting,
-    Ministry, Profile, Role, RoleDefinition, Submission,
+    Ministry, Profile, Role, RoleDefinition, Submission, Unit,
     SystemPermission, WorkflowEvent, WorkflowStage,
 )
+from tracker.org_structure import OPSC_UNIT_SEED, ensure_opsc_units, get_opsc_department
 
 # ── Reference data ────────────────────────────────────────────────────────────
 
@@ -58,10 +59,8 @@ CATEGORIES = [
 ]
 
 MINISTRIES = [
-    # PSC internal units (not in CSV — always present)
-    ("OPSC",     "Office of the Public Service Commission"),
     # Ministries from Book 19 CSV (official names)
-    ("OPM",      "Ministry of Prime Minister"),
+    ("MPM",      "Ministry of the Prime Minister"),
     ("MALFB",    "Ministry of Agriculture, Livestock, Forestry and Biosecurity"),
     ("MCCA",     "Ministry of Climate Change and Adaptation"),
     ("MTTCNB",   "Ministry of Trades, Tourism, Commerce and Ni-Vanuatu Business"),
@@ -79,20 +78,14 @@ MINISTRIES = [
 # (ministry_code, dept_code, dept_name)
 # OPSC internal units kept; all others sourced from Book 19 CSV.
 DEPARTMENTS = [
-    # PSC internal
-    ("OPSC",    "OPSC_COMPLIANCE", "Compliance Unit"),
-    ("OPSC",    "OPSC_ODU",        "Organisation Development Unit"),
-    ("OPSC",    "OPSC_CSU",        "Corporate Services Unit"),
-    ("OPSC",    "OPSC_VIPAM",      "VIPAM Unit"),
-    ("OPSC",    "OPSC_HR",         "HR Unit"),
-    # Office of the Prime Minister
-    ("OPM",     "OPM_CSU",         "Corporate Service Unit"),
-    ("OPM",     "OPM_DSPPAC",      "Department of Strategic Policy, Planning and Aid Coordination"),
-    ("OPM",     "OPM_DLS",         "Department of Language Services"),
-    ("OPM",     "OPM_GRT",         "Government Remuneration Tribunal"),
-    ("OPM",     "OPM_DCDT",        "Department of Communication and Digital Transformation"),
-    ("OPM",     "OPM_CO",          "Citizenship Office"),
-    ("OPM",     "OPM_OPSC",        "Office of Public Service Commission"),
+    # Office of the Prime Minister — OPSC is a department; IPDU/ODU/etc. are units (seeded separately)
+    ("MPM",     "OPSC",            "Office of the Public Service Commission"),
+    ("MPM",     "OPM_CSU",         "Corporate Service Unit"),
+    ("MPM",     "OPM_DSPPAC",      "Department of Strategic Policy, Planning and Aid Coordination"),
+    ("MPM",     "OPM_DLS",         "Department of Language Services"),
+    ("MPM",     "OPM_GRT",         "Government Remuneration Tribunal"),
+    ("MPM",     "OPM_DCDT",        "Department of Communication and Digital Transformation"),
+    ("MPM",     "OPM_CO",          "Citizenship Office"),
     # Agriculture, Livestock, Forestry and Biosecurity
     ("MALFB",   "MALFB_CSU",       "Corporate Service Unit"),
     ("MALFB",   "MALFB_DARD",      "Department of Agriculture and Rural Development"),
@@ -173,12 +166,12 @@ USERS = [
     ("m.carlot",       "m.carlot@psc.gov.vu",        "Commissioner123!",  "psc_commissioner",       None),
     ("j.taue",         "j.taue@psc.gov.vu",          "Commissioner123!",  "chairperson",            None),
     # Unit Managers
-    ("m.vipam",        "m.vipam@psc.gov.vu",         "Manager123!",       "vipam_manager",          "OPSC"),
-    ("m.hrunit",       "m.hrunit@psc.gov.vu",        "Manager123!",       "hr_unit_manager",        "OPSC"),
-    ("m.odu",          "m.odu@psc.gov.vu",           "Manager123!",       "odu_manager",            "OPSC"),
-    ("m.compliance",   "m.compliance@psc.gov.vu",    "Manager123!",       "compliance_manager",     "OPSC"),
-    ("s.compliance",   "s.compliance@psc.gov.vu",    "Officer123!",       "compliance_senior",      "OPSC"),
-    ("p.compliance",   "p.compliance@psc.gov.vu",    "Officer123!",       "compliance_principal",   "OPSC"),
+    ("m.vipam",        "m.vipam@psc.gov.vu",         "Manager123!",       "vipam_manager",          "MPM"),
+    ("m.hrunit",       "m.hrunit@psc.gov.vu",        "Manager123!",       "hr_unit_manager",        "MPM"),
+    ("m.odu",          "m.odu@psc.gov.vu",           "Manager123!",       "odu_manager",            "MPM"),
+    ("m.compliance",   "m.compliance@psc.gov.vu",    "Manager123!",       "compliance_manager",     "MPM"),
+    ("s.compliance",   "s.compliance@psc.gov.vu",    "Officer123!",       "compliance_senior",      "MPM"),
+    ("p.compliance",   "p.compliance@psc.gov.vu",    "Officer123!",       "compliance_principal",   "MPM"),
     # OPSC Manager — allocates decisions to staff after Chairperson signs minutes
     ("m.opsc",         "m.opsc@psc.gov.vu",          "Manager123!",       "psc_manager",            None),
     # Ministry HR
@@ -571,6 +564,7 @@ class Command(BaseCommand):
         self._seed_categories()
         self._seed_ministries()
         self._seed_departments()
+        self._seed_opsc_units()
         self._seed_permissions()
         self._seed_role_definitions()
 
@@ -657,6 +651,31 @@ class Command(BaseCommand):
             if c:
                 created += 1
         self.stdout.write(f"  [OK] {len(DEPARTMENTS)} departments ({created} new)")
+
+    _OPSC_ROLE_UNIT = {
+        "vipam_manager": "VIPAM",
+        "hr_unit_manager": "HR",
+        "odu_manager": "ODU",
+        "compliance_manager": "COMPLIANCE",
+        "compliance_senior": "COMPLIANCE",
+        "compliance_principal": "COMPLIANCE",
+        "csu_manager": "CSU",
+    }
+
+    _OPSC_STAFF_ROLES = frozenset({
+        "psc_admin", "psc_officer", "psc_secretary", "senior_admin_officer",
+        "psc_commissioner", "chairperson", "psc_manager", "principal_officer",
+        "senior_officer", "odu_principal", "principal_org_dev_analyst",
+        "principal_job_analyst",
+    })
+
+    def _seed_opsc_units(self):
+        dept = get_opsc_department(create=True)
+        if not dept:
+            self.stdout.write(self.style.WARNING("  [SKIP] OPSC department under OPM not found"))
+            return
+        ensure_opsc_units(dept)
+        self.stdout.write(f"  [OK] {len(OPSC_UNIT_SEED)} OPSC units under {dept.code}")
 
     # ── Permissions ───────────────────────────────────────────────────────────
 
@@ -840,6 +859,24 @@ class Command(BaseCommand):
             "view_commission_minutes", "view_commission_tasks",
             "view_audit_trail",
         ]),
+        ("principal_org_dev_analyst", (
+            "Principal Organization Development Analyst (ODU) — completes the ODU restructure "
+            "checklist and assessment on submissions assigned by the ODU Manager (ORG-3.1 / PSC 2-1)."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
+        ]),
+        ("principal_job_analyst", (
+            "Principal Job Analyst (ODU) — job analysis and establishment variation work on "
+            "submissions assigned by the ODU Manager; same ODU workflow access as org development analyst."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
+        ]),
         ("compliance_senior", (
             "Compliance Senior Officer — creates and maintains compliance cases in CMS "
             "(PSA amendments: Principal and Manager only in CMS)."
@@ -899,6 +936,11 @@ class Command(BaseCommand):
 
     def _seed_users(self):
         ministry_map = {m.code: m for m in Ministry.objects.all()}
+        opsc_dept = get_opsc_department(create=False)
+        unit_map = {}
+        if opsc_dept:
+            unit_map = {u.code.upper(): u for u in Unit.objects.filter(department=opsc_dept)}
+        opm = ministry_map.get("OPM")
         created = 0
         for username, email, password, role, min_code in USERS:
             user, new_user = User.objects.get_or_create(
@@ -922,9 +964,17 @@ class Command(BaseCommand):
                     user.save(update_fields=["is_active", "email"])
             # Ensure profile exists
             ministry = ministry_map.get(min_code) if min_code else None
+            profile_defaults = {"role": role, "ministry": ministry}
+            if opm and (min_code in ("OPM", "MPM") or role in self._OPSC_STAFF_ROLES):
+                profile_defaults["ministry"] = opm
+                if opsc_dept:
+                    profile_defaults["department"] = opsc_dept
+                    unit_code = self._OPSC_ROLE_UNIT.get(role)
+                    if unit_code:
+                        profile_defaults["unit"] = unit_map.get(unit_code.upper())
             Profile.objects.update_or_create(
                 user=user,
-                defaults={"role": role, "ministry": ministry},
+                defaults=profile_defaults,
             )
         self.stdout.write(f"  [OK] {len(USERS)} users ({created} new)")
 

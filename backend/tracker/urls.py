@@ -14,6 +14,7 @@ from .views import (
     ODUChecklistViewSet,
     SecurityNoticeViewSet,
     DepartmentViewSet,
+    UnitViewSet,
     DocumentAnnotationViewSet,
     DocumentSignatureViewSet,
     MySignatureView,
@@ -91,6 +92,7 @@ router = DefaultRouter()
 router.register(r"submissions", SubmissionViewSet, basename="submission")
 router.register(r"ministries", MinistryViewSet, basename="ministry")
 router.register(r"departments", DepartmentViewSet, basename="department")
+router.register(r"units", UnitViewSet, basename="unit")
 router.register(r"agenda-sections", AgendaSectionViewSet, basename="agendasection")
 router.register(r"form-categories", FormCategoryViewSet, basename="formcategory")
 router.register(r"form-types",      PSCFormTypeViewSet,  basename="formtype")
@@ -158,6 +160,8 @@ urlpatterns = [
     path("auth/security-audit/", security_audit_view),
     path("auth/api-inventory/", api_inventory_view),
     path("auth/feedback-status/", FeedbackStatusView.as_view(), name="feedback-status"),
+    # Slashless alias avoids APPEND_SLASH redirects in some clients/SW states.
+    path("auth/feedback-status", FeedbackStatusView.as_view(), name="feedback-status-noslash"),
     path("auth/verify-pin/",      VerifyPinView.as_view(),      name="verify-pin"),
     path("my-signature/",         MySignatureView.as_view(),    name="my-signature"),
     path("search/", global_search_view),

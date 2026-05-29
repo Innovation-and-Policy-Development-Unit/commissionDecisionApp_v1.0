@@ -21,7 +21,16 @@ OPSC_UNIT_PRINCIPAL_ROLES: frozenset[str] = frozenset({
     Role.VIPAM_PRINCIPAL,
     Role.HR_UNIT_PRINCIPAL,
     Role.ODU_PRINCIPAL,
+    Role.PRINCIPAL_ORG_DEV_ANALYST,
+    Role.PRINCIPAL_JOB_ANALYST,
     Role.COMPLIANCE_PRINCIPAL,
+})
+
+# ODU principals and specialist analysts (checklist / assessment work under ODU Manager)
+ODU_PRINCIPAL_WORKER_ROLES: frozenset[str] = frozenset({
+    Role.ODU_PRINCIPAL,
+    Role.PRINCIPAL_ORG_DEV_ANALYST,
+    Role.PRINCIPAL_JOB_ANALYST,
 })
 
 OPSC_POST_DECISION_ROLES: frozenset[str] = frozenset({
@@ -50,6 +59,19 @@ MANAGER_ROLE_TO_PRINCIPAL_ROLE: dict[str, str] = {
     Role.COMPLIANCE_MANAGER: Role.COMPLIANCE_PRINCIPAL,
 }
 
+MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES: dict[str, set[str]] = {
+    Role.ODU_MANAGER: {
+        Role.ODU_PRINCIPAL,
+        Role.PRINCIPAL_ORG_DEV_ANALYST,
+        Role.PRINCIPAL_JOB_ANALYST,
+        Role.SENIOR_OFFICER,
+    },
+    Role.VIPAM_MANAGER: {Role.VIPAM_PRINCIPAL, Role.SENIOR_OFFICER},
+    Role.HR_UNIT_MANAGER: {Role.HR_UNIT_PRINCIPAL, Role.SENIOR_OFFICER},
+    Role.COMPLIANCE_MANAGER: {Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_SENIOR},
+    Role.CSU_MANAGER: {Role.SENIOR_OFFICER},
+}
+
 # Roles that may be assigned as commission-task managers (secretariat allocates)
 COMMISSION_TASK_MANAGER_ROLES: frozenset[str] = OPSC_UNIT_MANAGER_ROLES | frozenset({Role.PSC_MANAGER})
 
@@ -57,6 +79,12 @@ COMMISSION_TASK_MANAGER_ROLES: frozenset[str] = OPSC_UNIT_MANAGER_ROLES | frozen
 COMMISSION_TASK_STAFF_ROLES: frozenset[str] = (
     OPSC_UNIT_PRINCIPAL_ROLES | frozenset({Role.PRINCIPAL_OFFICER, Role.SENIOR_OFFICER})
 )
+
+
+def manager_allowed_staff_roles(manager_role: str | None) -> set[str]:
+    if not manager_role:
+        return set(COMMISSION_TASK_STAFF_ROLES)
+    return set(MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES.get(manager_role, set(COMMISSION_TASK_STAFF_ROLES)))
 
 
 def profile_role(user: User) -> str | None:

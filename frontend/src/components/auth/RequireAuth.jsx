@@ -22,5 +22,9 @@ export default function RequireAuth() {
     return <Navigate to="/auth/login" replace state={{ from: location }} />
   }
 
+  if (user.must_change_password) {
+    return <Navigate to="/auth/login" replace state={{ from: location, forcePasswordChange: true }} />
+  }
+
   return <Outlet />
 }

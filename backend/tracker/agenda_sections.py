@@ -65,6 +65,32 @@ def apply_agenda_section_defaults(attrs: dict) -> None:
         attrs["form_category"] = ft.form_category
 
 
+def agenda_section_ids_for_role(role: str) -> list[int]:
+    """Agenda sections that list ``role`` in receiver_roles."""
+    if not role:
+        return []
+    return list(
+        AgendaSection.objects.filter(receiver_roles__contains=[role]).values_list("id", flat=True)
+    )
+
+
+def sync_role_receiver_agenda_sections(role: str, section_ids: list[int]) -> None:
+    """Set which agenda sections notify ``role`` on new submissions."""
+    wanted = {int(pk) for pk in section_ids}
+    for section in AgendaSection.objects.all().only("id", "receiver_roles"):
+        current = list(section.receiver_roles or [])
+        has_role = role in current
+        should_have = section.id in wanted
+        if should_have and not has_role:
+            current.append(role)
+        elif not should_have and has_role:
+            current = [r for r in current if r != role]
+        else:
+            continue
+        section.receiver_roles = sorted(set(current))
+        section.save(update_fields=["receiver_roles", "updated_at"])
+
+
 def agenda_section_usage_counts(section: AgendaSection) -> dict[str, int]:
     code = section.code
     return {

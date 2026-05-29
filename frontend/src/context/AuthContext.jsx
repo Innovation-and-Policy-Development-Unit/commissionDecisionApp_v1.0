@@ -122,18 +122,21 @@ export function AuthProvider({ children }) {
     if (!token) {
       setUser(null)
       setAuthReady(true)
-      return
+      return null
     }
     setAuthReady(false)
     try {
       const { data } = await api.get('/me/')
-      setUser(normalizeUserMedia(data))
+      const normalized = normalizeUserMedia(data)
+      setUser(normalized)
+      return normalized
     } catch {
       /* Any /me/ failure means no usable session — clear tokens so dashboard stays gated. */
       setUser(null)
       localStorage.removeItem('psc_access')
       localStorage.removeItem('psc_refresh')
       setAccessToken(null)
+      return null
     } finally {
       setAuthReady(true)
     }
@@ -190,8 +193,8 @@ export function AuthProvider({ children }) {
     }
 
     setTokens(data.access, data.refresh)
-    await refreshMe()
-    return data
+    const me = await refreshMe()
+    return { ...data, must_change_password: Boolean(me?.must_change_password) }
   }, [setTokens, refreshMe])
 
   const value = useMemo(
