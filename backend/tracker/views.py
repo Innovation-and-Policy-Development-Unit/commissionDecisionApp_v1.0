@@ -5362,16 +5362,19 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
         skip_if_blank = {"SMTP_PASSWORD", "ANTHROPIC_API_KEY"}
         updated = []
         smtp_password_saved = False
+        anthropic_key_saved = False
         for key, value in settings_dict.items():
             if key in skip_if_blank and not str(value).strip():
                 continue
             setting, _ = SystemSetting.objects.get_or_create(key=key)
-            raw = str(value)
+            raw = str(value).strip()
             if key == "SMTP_PASSWORD":
                 from .email_backend import _normalize_password
 
                 raw = _normalize_password(raw)
                 smtp_password_saved = bool(raw)
+            elif key == "ANTHROPIC_API_KEY":
+                anthropic_key_saved = bool(raw)
             setting.value = raw
             setting.save()
             updated.append(SystemSettingSerializer(setting).data)
@@ -5379,7 +5382,11 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
         _log(request, _AL.Action.SETTINGS,
              resource_type="SystemSetting",
              description=f"Settings updated: {', '.join(settings_dict.keys())}",
-             extra_data={"keys": list(settings_dict.keys()), "smtp_password_saved": smtp_password_saved})
+             extra_data={
+                 "keys": list(settings_dict.keys()),
+                 "smtp_password_saved": smtp_password_saved,
+                 "anthropic_key_saved": anthropic_key_saved,
+             })
 
         if {"EMAIL_CRON_ENABLED", "EMAIL_CRON_SCHEDULE"} & set(settings_dict.keys()):
             try:
@@ -5458,6 +5465,71 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
         from .email_backend import email_config_diagnostics
 
         return Response(email_config_diagnostics())
+
+    @action(detail=False, methods=["get"], url_path="ai-status")
+    def ai_status(self, request):
+        """Non-secret Anthropic API config summary for Admin."""
+        from .ai.claude_client import anthropic_config_diagnostics
+
+        return Response(anthropic_config_diagnostics())
+
+    @action(detail=False, methods=["post"], url_path="test-ai")
+    def test_ai(self, request):
+        """Verify Anthropic API key with a minimal Claude request."""
+        from .ai.claude_client import anthropic_config_diagnostics, resolve_anthropic_api_key
+
+        inline_key = (request.data.get("anthropic_api_key") or request.data.get("api_key") or "").strip()
+        if inline_key:
+            setting, _ = SystemSetting.objects.get_or_create(key="ANTHROPIC_API_KEY")
+            setting.value = inline_key
+            setting.save()
+
+        api_key = resolve_anthropic_api_key()
+        if not api_key:
+            return Response(
+                {
+                    "detail": (
+                        "Anthropic API key is not configured. Paste your key in Admin → "
+                        "System Config, save, then run Test again."
+                    ),
+                    **anthropic_config_diagnostics(),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from anthropic import Anthropic
+
+            client = Anthropic(api_key=api_key)
+            msg = client.messages.create(
+                model=anthropic_config_diagnostics()["model_haiku"],
+                max_tokens=16,
+                messages=[{"role": "user", "content": "Reply with exactly: OK"}],
+            )
+            snippet = ""
+            if msg.content:
+                block = msg.content[0]
+                snippet = getattr(block, "text", str(block))[:80]
+        except Exception as exc:
+            return Response(
+                {"detail": f"Anthropic API test failed: {exc}", **anthropic_config_diagnostics()},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        _log(
+            request,
+            _AL.Action.SETTINGS,
+            resource_type="SystemSetting",
+            description="Anthropic API key verified (test message)",
+        )
+        return Response({
+            "detail": "Anthropic API key is valid. AI features (briefs, quality scores, etc.) can run.",
+            "response_snippet": snippet,
+            **anthropic_config_diagnostics(),
+        })
 
     @action(detail=False, methods=["post"], url_path="test-email")
     def test_email(self, request):

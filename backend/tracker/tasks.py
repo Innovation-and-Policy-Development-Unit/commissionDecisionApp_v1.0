@@ -2130,3 +2130,503 @@ def queue_outcome_letter(submission_id: int, outcome: str = "", conditions: list
     except Exception as exc:
         app_log.warning("F3_LETTER_FALLBACK | %s | %s", submission_id, exc)
         generate_outcome_letter(submission_id, outcome=outcome, conditions=conditions or [], force=force)
+
+
+@shared_task
+def auto_transition_submitted_to_received():
+    """
+    SLA enforcement: auto-transition submissions that have been in SUBMITTED
+    state past the configured registration SLA (default 2 working days) to
+    RECEIVED_BY_PSC, and log the action.
+    """
+    from django.conf import settings as django_settings
+    from django.utils import timezone
+    from .models import Submission, WorkflowStage, WorkflowEvent
+
+    sla_days = getattr(django_settings, 'PSC_REGISTRATION_SLA_DAYS', 2)
+
+    overdue = Submission.objects.filter(
+        current_stage=WorkflowStage.SUBMITTED,
+        is_internal=False,
+        secretary_only=False,
+    )
+
+    transitioned = 0
+    for submission in overdue:
+        if not submission.is_registration_overdue:
+            continue
+        prev = submission.current_stage
+        submission.current_stage = WorkflowStage.RECEIVED_BY_PSC
+        submission.save(update_fields=["current_stage", "updated_at"])
+        WorkflowEvent.objects.create(
+            submission=submission,
+            previous_stage=prev,
+            new_stage=WorkflowStage.RECEIVED_BY_PSC,
+            remarks=f"Auto-transitioned by system: registration SLA of {sla_days} working day(s) exceeded.",
+            actor=None,
+        )
+        transitioned += 1
+        app_log.info(
+            "SLA_AUTO_RECEIVE | Submission %s auto-transitioned SUBMITTED → RECEIVED_BY_PSC",
+            submission.reference_number,
+        )
+
+    app_log.info("SLA_AUTO_RECEIVE | Processed %d submission(s)", transitioned)
+    return transitioned
+
+
+@shared_task
+def flag_overdue_registrations():
+    """
+    Returns a list of submissions in SUBMITTED state past the SLA.
+    Used by the receptionist dashboard API endpoint.
+    """
+    from .models import Submission, WorkflowStage
+    overdue = [
+        s.reference_number
+        for s in Submission.objects.filter(
+            current_stage=WorkflowStage.SUBMITTED,
+            is_internal=False,
+        )
+        if s.is_registration_overdue
+    ]
+    app_log.info("SLA_FLAG | %d overdue registration(s) found", len(overdue))
+    return overdue
+
+
+# ── Assessment overdue escalation ─────────────────────────────────────────────
+
+@shared_task
+def escalate_overdue_assessments():
+    """
+    Daily escalation ladder for submissions overdue in UNDER_ASSESSMENT:
+
+      >21 working days → email the assigned unit manager
+      >28 working days → email the PSC Secretary
+      >35 working days → in-app flag for PSC Commissioner / Chairperson
+
+    Escalation emails are sent once per threshold crossing (tracked via
+    WorkflowEvent remarks so the task is idempotent).
+    """
+    from django.utils import timezone
+    from .models import Submission, WorkflowStage, WorkflowEvent, Notification, add_working_days
+    from .email_notify import send_email_to_user
+
+    now = timezone.now()
+
+    submissions = Submission.objects.filter(
+        current_stage=WorkflowStage.UNDER_ASSESSMENT,
+        assessment_started_at__isnull=False,
+        is_internal=False,
+    ).select_related('assigned_to', 'ministry')
+
+    escalated = 0
+    for sub in submissions:
+        if not sub.assessment_deadline_at:
+            continue
+        if now <= sub.assessment_deadline_at:
+            continue  # still within SLA
+
+        days_overdue = (now - sub.assessment_deadline_at).days
+        ref = sub.reference_number
+
+        # Determine which thresholds have already been sent
+        sent_tags = set(
+            WorkflowEvent.objects.filter(
+                submission=sub,
+                remarks__startswith='ESCALATION:',
+            ).values_list('remarks', flat=True)
+        )
+
+        def _already_sent(tag):
+            return any(tag in r for r in sent_tags)
+
+        def _log_escalation(tag, msg):
+            WorkflowEvent.objects.create(
+                submission=sub,
+                actor=None,
+                previous_stage=WorkflowStage.UNDER_ASSESSMENT,
+                new_stage=WorkflowStage.UNDER_ASSESSMENT,
+                remarks=f'ESCALATION:{tag} — {msg}',
+            )
+
+        # Tier 1: >21 days → unit manager
+        if days_overdue >= 0 and not _already_sent('TIER1'):
+            if sub.assigned_to:
+                send_email_to_user(
+                    user=sub.assigned_to,
+                    subject=f'[OVERDUE] Assessment deadline passed — {ref}',
+                    body=(
+                        f'Submission {ref} ({sub.title}) has passed its assessment deadline.\n'
+                        f'It has been {days_overdue} day(s) past the deadline.\n'
+                        f'Please prioritise completing the assessment.'
+                    ),
+                )
+            _log_escalation('TIER1', f'{days_overdue}d overdue — notified assigned officer')
+            escalated += 1
+
+        # Tier 2: >7 days overdue → PSC Secretary
+        if days_overdue >= 7 and not _already_sent('TIER2'):
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            secretaries = User.objects.filter(
+                psc_profile__role__in=['psc_secretary', 'senior_admin_officer'],
+                is_active=True,
+            )
+            for sec in secretaries:
+                send_email_to_user(
+                    user=sec,
+                    subject=f'[ESCALATION] Assessment {days_overdue}d overdue — {ref}',
+                    body=(
+                        f'Submission {ref} ({sub.title}) is now {days_overdue} day(s) past its '
+                        f'assessment deadline and has not been completed.\n'
+                        f'Assigned officer: {sub.assigned_to or "unassigned"}\n'
+                        f'Please follow up with the responsible unit.'
+                    ),
+                )
+            _log_escalation('TIER2', f'{days_overdue}d overdue — escalated to Secretary')
+            escalated += 1
+
+        # Tier 3: >14 days overdue → Commissioner in-app flag
+        if days_overdue >= 14 and not _already_sent('TIER3'):
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            commissioners = User.objects.filter(
+                psc_profile__role__in=['psc_commissioner', 'chairperson'],
+                is_active=True,
+            )
+            for comm in commissioners:
+                Notification.objects.get_or_create(
+                    recipient=comm,
+                    channel=Notification.Channel.IN_APP,
+                    title=f'Assessment seriously overdue: {ref}',
+                    defaults=dict(
+                        body=(
+                            f'Submission {ref} ({sub.title}) is {days_overdue} day(s) past its '
+                            f'assessment deadline. Commissioner attention may be required.'
+                        ),
+                        is_read=False,
+                    ),
+                )
+            _log_escalation('TIER3', f'{days_overdue}d overdue — flagged for Commissioner')
+            escalated += 1
+
+    app_log.info('ESCALATION | Processed %d escalation action(s)', escalated)
+    return escalated
+
+
+# ── Auto-schedule forwarded submissions to next Commission meeting ─────────────
+
+@shared_task
+def auto_schedule_to_meeting():
+    """
+    Nightly task: find submissions in FORWARDED_TO_COMMISSION with no upcoming
+    agenda item and assign them to the next available meeting before its cutoff.
+
+    A submission is considered "unscheduled" if it has no AgendaItem linking it
+    to a future or in-progress meeting.
+    """
+    from django.utils import timezone
+    from .models import Submission, WorkflowStage, Meeting, AgendaItem, WorkflowEvent
+
+    now = timezone.now()
+
+    # Submissions waiting for the Commission with no agenda item yet
+    unscheduled = Submission.objects.filter(
+        current_stage=WorkflowStage.FORWARDED_TO_COMMISSION,
+        is_internal=False,
+        secretary_only=False,
+    ).exclude(
+        agenda_items__meeting__status__in=('scheduled', 'in_progress'),
+        agenda_items__meeting__date__gte=now.date(),
+    ).select_related('ministry')
+
+    if not unscheduled.exists():
+        app_log.info('AUTO_SCHEDULE | No unscheduled forwarded submissions')
+        return 0
+
+    # Find eligible meetings (scheduled, in future, before cutoff)
+    upcoming = Meeting.objects.filter(
+        status='scheduled',
+        date__gte=now.date(),
+    ).order_by('date')
+
+    scheduled_count = 0
+    for submission in unscheduled:
+        target_meeting = None
+        for meeting in upcoming:
+            # Skip meetings whose submission cutoff has already passed
+            if meeting.submission_cutoff and now > meeting.submission_cutoff:
+                continue
+            target_meeting = meeting
+            break
+
+        if not target_meeting:
+            app_log.warning(
+                'AUTO_SCHEDULE | No eligible meeting for %s — no future meetings before cutoff',
+                submission.reference_number,
+            )
+            continue
+
+        # Create agenda item if one doesn't already exist
+        _, created = AgendaItem.objects.get_or_create(
+            meeting=target_meeting,
+            submission=submission,
+            defaults={
+                'category': submission.agenda_category or 'other',
+                'sequence': AgendaItem.objects.filter(meeting=target_meeting).count() + 1,
+            },
+        )
+
+        if created:
+            # Update the submission's scheduled_meeting pointer too
+            submission.scheduled_meeting = target_meeting
+            submission.save(update_fields=['scheduled_meeting', 'updated_at'])
+
+            WorkflowEvent.objects.create(
+                submission=submission,
+                actor=None,
+                previous_stage=WorkflowStage.FORWARDED_TO_COMMISSION,
+                new_stage=WorkflowStage.FORWARDED_TO_COMMISSION,
+                remarks=(
+                    f'Auto-scheduled to meeting {target_meeting.reference_number} '
+                    f'({target_meeting.date}) by system.'
+                ),
+            )
+            scheduled_count += 1
+            app_log.info(
+                'AUTO_SCHEDULE | %s → meeting %s (%s)',
+                submission.reference_number,
+                target_meeting.reference_number,
+                target_meeting.date,
+            )
+
+    app_log.info('AUTO_SCHEDULE | Scheduled %d submission(s)', scheduled_count)
+    return scheduled_count
+
+
+# ── DG endorsement overdue reminder ───────────────────────────────────────────
+
+@shared_task
+def remind_overdue_dg_endorsements():
+    """
+    Daily task: remind the Head of Agency when a submission has been sitting in
+    PENDING_DG_ENDORSEMENT for more than 5 working days without action.
+    If >10 working days, also notify Ministry HR so they can follow up.
+
+    Idempotent: tracks reminders via WorkflowEvent remarks.
+    """
+    from django.utils import timezone
+    from .models import (
+        Submission, WorkflowStage, WorkflowEvent, Notification,
+        add_working_days,
+    )
+    from .email_notify import send_email_to_user
+    from .views import _dg_recipients_for_submission  # noqa: PLC0415
+
+    DG_SLA_DAYS        = 5   # first reminder to DG
+    ESCALATION_DAYS    = 10  # escalate to ministry HR
+
+    now = timezone.now()
+    pending = Submission.objects.filter(
+        current_stage=WorkflowStage.PENDING_DG_ENDORSEMENT,
+        is_internal=False,
+    ).select_related('ministry', 'department')
+
+    processed = 0
+    for sub in pending:
+        # Calculate working days since the submission was logged
+        # (use received_at as the start point — it's set when the submission is created)
+        sla_date = add_working_days(sub.received_at.date(), DG_SLA_DAYS)
+        if now.date() < sla_date:
+            continue  # still within SLA
+
+        overdue_sla_date = add_working_days(sub.received_at.date(), ESCALATION_DAYS)
+
+        sent_tags = set(
+            WorkflowEvent.objects.filter(
+                submission=sub,
+                remarks__startswith='DG_REMINDER:',
+            ).values_list('remarks', flat=True)
+        )
+
+        def _already(tag):
+            return any(tag in r for r in sent_tags)
+
+        def _log(tag, msg):
+            WorkflowEvent.objects.create(
+                submission=sub, actor=None,
+                previous_stage=WorkflowStage.PENDING_DG_ENDORSEMENT,
+                new_stage=WorkflowStage.PENDING_DG_ENDORSEMENT,
+                remarks=f'DG_REMINDER:{tag} — {msg}',
+            )
+
+        # Tier 1: remind DG
+        if not _already('TIER1'):
+            dg_users = _dg_recipients_for_submission(sub)
+            for dg in dg_users:
+                Notification.objects.create(
+                    recipient=dg,
+                    submission=sub,
+                    channel=Notification.Channel.BOTH,
+                    title=f'Endorsement overdue: {sub.reference_number}',
+                    body=(
+                        f'Submission "{sub.title}" has been awaiting your endorsement for more '
+                        f'than {DG_SLA_DAYS} working days. Please review and endorse or return '
+                        f'it to the HR officer.'
+                    ),
+                )
+                send_email_to_user(
+                    dg,
+                    subject=f'[ACTION REQUIRED] Endorsement overdue — {sub.reference_number}',
+                    body=(
+                        f'Dear {dg.get_full_name() or dg.username},\n\n'
+                        f'Submission "{sub.title}" ({sub.reference_number}) has been awaiting '
+                        f'your endorsement for more than {DG_SLA_DAYS} working days.\n\n'
+                        f'Please log in to review and endorse or return the submission.'
+                    ),
+                )
+            _log('TIER1', f'>{DG_SLA_DAYS} working days — DG reminded')
+            processed += 1
+
+        # Tier 2: escalate to ministry HR
+        if now.date() >= overdue_sla_date and not _already('TIER2'):
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            hr_users = User.objects.filter(
+                psc_profile__ministry_id=sub.ministry_id,
+                psc_profile__role__in=['ministry_hr', 'dept_admin'],
+                is_active=True,
+            )
+            for hr in hr_users:
+                Notification.objects.create(
+                    recipient=hr,
+                    submission=sub,
+                    channel=Notification.Channel.BOTH,
+                    title=f'DG endorsement seriously overdue: {sub.reference_number}',
+                    body=(
+                        f'Submission "{sub.title}" has been awaiting DG endorsement for more '
+                        f'than {ESCALATION_DAYS} working days. Please follow up with your '
+                        f'Head of Agency.'
+                    ),
+                )
+            _log('TIER2', f'>{ESCALATION_DAYS} working days — escalated to Ministry HR')
+            processed += 1
+
+    app_log.info('DG_REMINDER | Processed %d endorsement reminder(s)', processed)
+    return processed
+
+
+# ── Implementation report overdue ─────────────────────────────────────────────
+
+@shared_task
+def notify_overdue_implementation_reports():
+    """
+    Daily task: notify the OPSC Manager when a submission's implementation
+    report is overdue (past implementation_due_date and not yet IMPLEMENTED).
+
+    Also escalates to PSC Secretary after 14 days past due.
+    Idempotent: tracked via WorkflowEvent remarks.
+    """
+    from datetime import date
+    from django.utils import timezone
+    from .models import (
+        Submission, WorkflowStage, WorkflowEvent, Notification,
+        ImplementationStatus,
+    )
+    from .email_notify import send_email_to_user
+
+    today = date.today()
+
+    overdue = Submission.objects.filter(
+        current_stage__in=[
+            WorkflowStage.UNDER_IMPLEMENTATION,
+            WorkflowStage.IMPLEMENTATION_REPORT,
+        ],
+        implementation_due_date__lt=today,
+        implementation_status__in=[
+            ImplementationStatus.NOT_STARTED,
+            ImplementationStatus.IN_PROGRESS,
+        ],
+    ).select_related('ministry')
+
+    processed = 0
+    for sub in overdue:
+        days_overdue = (today - sub.implementation_due_date).days
+
+        sent_tags = set(
+            WorkflowEvent.objects.filter(
+                submission=sub,
+                remarks__startswith='IMPL_OVERDUE:',
+            ).values_list('remarks', flat=True)
+        )
+
+        def _already(tag):
+            return any(tag in r for r in sent_tags)
+
+        def _log(tag, msg):
+            WorkflowEvent.objects.create(
+                submission=sub, actor=None,
+                previous_stage=sub.current_stage,
+                new_stage=sub.current_stage,
+                remarks=f'IMPL_OVERDUE:{tag} — {msg}',
+            )
+
+        # Tier 1: notify OPSC Manager immediately when overdue
+        if not _already('TIER1'):
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            managers = User.objects.filter(
+                psc_profile__role='psc_manager',
+                is_active=True,
+            )
+            for mgr in managers:
+                Notification.objects.create(
+                    recipient=mgr,
+                    submission=sub,
+                    channel=Notification.Channel.BOTH,
+                    title=f'Implementation overdue: {sub.reference_number}',
+                    body=(
+                        f'Submission "{sub.title}" implementation report is {days_overdue} '
+                        f'day(s) overdue (due {sub.implementation_due_date}). '
+                        f'Status: {sub.get_implementation_status_display()}.'
+                    ),
+                )
+                send_email_to_user(
+                    mgr,
+                    subject=f'[OVERDUE] Implementation report — {sub.reference_number}',
+                    body=(
+                        f'Dear {mgr.get_full_name() or mgr.username},\n\n'
+                        f'The implementation report for "{sub.title}" ({sub.reference_number}) '
+                        f'is {days_overdue} day(s) past its due date ({sub.implementation_due_date}).\n\n'
+                        f'Current status: {sub.get_implementation_status_display()}\n\n'
+                        f'Please follow up with the assigned implementation team.'
+                    ),
+                )
+            _log('TIER1', f'{days_overdue}d overdue — OPSC Manager notified')
+            processed += 1
+
+        # Tier 2: escalate to PSC Secretary after 14 days
+        if days_overdue >= 14 and not _already('TIER2'):
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            secretaries = User.objects.filter(
+                psc_profile__role__in=['psc_secretary', 'senior_admin_officer'],
+                is_active=True,
+            )
+            for sec in secretaries:
+                Notification.objects.create(
+                    recipient=sec,
+                    submission=sub,
+                    channel=Notification.Channel.IN_APP,
+                    title=f'Implementation seriously overdue: {sub.reference_number}',
+                    body=(
+                        f'"{sub.title}" implementation is {days_overdue} days past due. '
+                        f'Secretary attention may be required.'
+                    ),
+                )
+            _log('TIER2', f'{days_overdue}d overdue — escalated to Secretary')
+            processed += 1
+
+    app_log.info('IMPL_OVERDUE | Processed %d overdue report(s)', processed)
+    return processed

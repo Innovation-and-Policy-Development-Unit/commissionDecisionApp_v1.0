@@ -514,6 +514,8 @@ class AgendaSectionSerializer(serializers.ModelSerializer):
             "id",
             "code",
             "label",
+            "group",
+            "approval_chain",
             "display_order",
             "is_special",
             "is_active",
@@ -547,10 +549,6 @@ class AgendaSectionSerializer(serializers.ModelSerializer):
     def validate_digitized_form(self, form_type):
         if form_type is None:
             return form_type
-        if not form_type.is_digitized:
-            raise serializers.ValidationError(
-                "Only form types marked as digitized can be linked to an agenda section."
-            )
         if not form_type.is_active:
             raise serializers.ValidationError("The selected form type is not active.")
         return form_type
@@ -631,11 +629,25 @@ class AttachedSubmissionSerializer(serializers.ModelSerializer):
         fields = ("id", "reference_number", "title", "form_type_code", "current_stage")
 
 
+class CoAssignmentSerializer(serializers.Serializer):
+    """Read-only representation of a secondary analyst co-assignment."""
+    id          = serializers.IntegerField(source='principal.id')
+    full_name   = serializers.SerializerMethodField()
+    username    = serializers.CharField(source='principal.username')
+    role        = serializers.CharField()
+    notes       = serializers.CharField()
+    assigned_at = serializers.DateTimeField()
+
+    def get_full_name(self, obj):
+        return obj.principal.get_full_name() or obj.principal.username
+
+
 class SubmissionListSerializer(serializers.ModelSerializer):
     ministry_name = serializers.CharField(source="ministry.name", read_only=True)
     category_name = serializers.CharField(source="form_category.name", read_only=True)
     logged_by = serializers.CharField(source="created_by.username", read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
+    co_assignments = CoAssignmentSerializer(many=True, read_only=True)
     is_assessment_overdue = serializers.SerializerMethodField()
     estimated_meeting_date = serializers.SerializerMethodField()
     parent_reference = serializers.CharField(
@@ -685,6 +697,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "assigned_to",
             "assigned_to_name",
             "assigned_at",
+            "co_assignments",
             "is_attachment",
             "is_internal",
             "parent_submission",
@@ -746,28 +759,44 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         return obj.dg_endorsed_by.username if obj.dg_endorsed_by else None
 
     def get_form_type_detail(self, obj):
-        if not obj.form_type_code:
+        ft = None
+        if obj.form_type_code:
+            try:
+                ft = PSCFormType.objects.select_related('checklist_form_type').get(
+                    code=obj.form_type_code
+                )
+            except PSCFormType.DoesNotExist:
+                pass
+
+        # Fall back to the agenda section's configured digitized form
+        if ft is None and obj.agenda_category:
+            from .models import AgendaSection
+            try:
+                section = AgendaSection.objects.select_related(
+                    'digitized_form__checklist_form_type'
+                ).get(code=obj.agenda_category)
+                if section.digitized_form:
+                    ft = section.digitized_form
+            except AgendaSection.DoesNotExist:
+                pass
+
+        if ft is None:
             return None
-        try:
-            ft = PSCFormType.objects.select_related('checklist_form_type').get(
-                code=obj.form_type_code
-            )
-            cft = ft.checklist_form_type
-            return {
-                'id': ft.id,
-                'code': ft.code,
-                'name': ft.name,
-                'is_digitized': ft.is_digitized,
-                'digitized_form_key': ft.digitized_form_key,
-                'agenda_category': ft.agenda_category,
-                'checklist_form_type': {
-                    'id': cft.id,
-                    'code': cft.code,
-                    'name': cft.name,
-                } if cft else None,
-            }
-        except PSCFormType.DoesNotExist:
-            return None
+
+        cft = ft.checklist_form_type
+        return {
+            'id': ft.id,
+            'code': ft.code,
+            'name': ft.name,
+            'is_digitized': ft.is_digitized,
+            'digitized_form_key': ft.digitized_form_key,
+            'agenda_category': ft.agenda_category,
+            'checklist_form_type': {
+                'id': cft.id,
+                'code': cft.code,
+                'name': cft.name,
+            } if cft else None,
+        }
 
     class Meta:
         model = Submission
@@ -1159,6 +1188,8 @@ class PSCFormTypeSerializer(serializers.ModelSerializer):
         model = PSCFormType
         fields = ('id', 'code', 'name', 'description', 'form_category',
                   'form_category_name', 'is_digitized', 'digitized_form_key',
+                  'is_checklist', 'checklist_form_type',
+                  'routed_unit', 'assessment_deadline_days',
                   'is_active', 'display_order', 'agenda_category', 'agenda_category_display')
 
     def get_agenda_category_display(self, obj):
@@ -1183,6 +1214,7 @@ class TransitionSerializer(serializers.Serializer):
     new_stage = serializers.ChoiceField(choices=WorkflowStage.choices)
     remarks = serializers.CharField(required=False, allow_blank=True)
     acknowledge_gaps = serializers.BooleanField(required=False, default=False)
+    acknowledge_no_form_type = serializers.BooleanField(required=False, default=False)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):

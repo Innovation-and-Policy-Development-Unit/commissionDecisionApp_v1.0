@@ -58,9 +58,51 @@ def _settings_attr(name: str, default: str = "") -> str:
         return os.environ.get(name, default)
 
 
+def resolve_anthropic_api_key() -> str:
+    """
+    Active Anthropic API key: Admin SystemSetting overrides environment/.env.
+    """
+    try:
+        from tracker.models import SystemSetting
+
+        db_key = (SystemSetting.get_val("ANTHROPIC_API_KEY") or "").strip()
+        if db_key:
+            return db_key
+    except Exception:
+        pass
+    return (_settings_attr("ANTHROPIC_API_KEY") or "").strip()
+
+
+def anthropic_config_diagnostics() -> dict:
+    """Non-secret summary for Admin → System Config."""
+    db_key = ""
+    try:
+        from tracker.models import SystemSetting
+
+        db_key = (SystemSetting.get_val("ANTHROPIC_API_KEY") or "").strip()
+    except Exception:
+        pass
+    env_key = (_settings_attr("ANTHROPIC_API_KEY") or "").strip()
+    active = resolve_anthropic_api_key()
+    if db_key:
+        source = "admin_settings"
+    elif env_key:
+        source = "environment"
+    else:
+        source = "none"
+    return {
+        "source": source,
+        "api_key_configured": bool(active),
+        "admin_key_set": bool(db_key),
+        "env_key_set": bool(env_key),
+        "model_haiku": get_model_id("haiku"),
+        "model_sonnet": get_model_id("sonnet"),
+    }
+
+
 def get_anthropic_client():
     """Return an Anthropic client, or None if the API key is missing."""
-    api_key = _settings_attr("ANTHROPIC_API_KEY")
+    api_key = resolve_anthropic_api_key()
     if not api_key:
         logger.warning("ANTHROPIC_API_KEY not set — AI features are disabled.")
         return None
@@ -74,7 +116,7 @@ def get_anthropic_client():
 
 
 def ai_enabled() -> bool:
-    return bool(_settings_attr("ANTHROPIC_API_KEY"))
+    return bool(resolve_anthropic_api_key())
 
 
 def get_model_id(tier: ModelTier = "haiku") -> str:

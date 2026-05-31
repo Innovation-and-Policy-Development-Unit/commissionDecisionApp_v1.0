@@ -29,7 +29,7 @@ import {
   Settings,
   Shield,
   ShieldAlert,
-  Trash2,
+  Sparkles,
   ToggleLeft,
   ToggleRight,
   Upload,
@@ -1440,7 +1440,11 @@ export function SettingsTab({ settings, onRefresh }) {
   const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false)
   const [emailProvider, setEmailProvider] = useState('smtp') // 'smtp' | 'resend'
   const [resendConfigured, setResendConfigured] = useState(false)
+  const [anthropicKeyConfigured, setAnthropicKeyConfigured] = useState(false)
+  const [aiStatus, setAiStatus] = useState({ model_haiku: '', model_sonnet: '', source: 'none' })
+  const [testAiLoading, setTestAiLoading] = useState(false)
   const smtpPasswordRef = useRef(null)
+  const anthropicKeyRef = useRef(null)
   const [emailSchedule, setEmailSchedule] = useState({
     enabled: true,
     cron_expr: '0 8 * * *',
@@ -1482,13 +1486,28 @@ export function SettingsTab({ settings, onRefresh }) {
     }
   }, [])
 
+  const fetchAiStatus = useCallback(async () => {
+    try {
+      const res = await api.get('/settings/ai-status/')
+      setAnthropicKeyConfigured(Boolean(res.data?.api_key_configured))
+      setAiStatus(res.data || {})
+    } catch {
+      /* best-effort */
+    }
+  }, [])
+
   const readSmtpPasswordInput = () =>
     (smtpPasswordRef.current?.value || form.SMTP_PASSWORD || '').trim()
+
+  const readAnthropicKeyInput = () =>
+    (anthropicKeyRef.current?.value || form.ANTHROPIC_API_KEY || '').trim()
 
   const buildSavePayload = () => {
     const payload = { ...form }
     const pwd = readSmtpPasswordInput()
     if (pwd) payload.SMTP_PASSWORD = pwd
+    const aiKey = readAnthropicKeyInput()
+    if (aiKey) payload.ANTHROPIC_API_KEY = aiKey
     return payload
   }
 
@@ -1504,8 +1523,9 @@ export function SettingsTab({ settings, onRefresh }) {
   useEffect(() => {
     fetchLockoutStats()
     fetchSmtpStatus()
+    fetchAiStatus()
     fetchEmailSchedule()
-  }, [fetchLockoutStats, fetchSmtpStatus, fetchEmailSchedule])
+  }, [fetchLockoutStats, fetchSmtpStatus, fetchAiStatus, fetchEmailSchedule])
 
   useEffect(() => {
     if (user?.email && !testEmailTo) setTestEmailTo(user.email)
@@ -1543,17 +1563,33 @@ export function SettingsTab({ settings, onRefresh }) {
     setSuccess('')
     setError('')
     const pwd = readSmtpPasswordInput()
+    const aiKey = readAnthropicKeyInput()
     try {
       await api.post('/settings/batch-update/', buildSavePayload())
       await onRefresh()
       await fetchSmtpStatus()
+      await fetchAiStatus()
       await fetchLockoutStats()
       if (refreshFeedbackStatus) await refreshFeedbackStatus()
       setForm(f => ({ ...f, ANTHROPIC_API_KEY: '' }))
       if (pwd) {
         setForm(f => ({ ...f, SMTP_PASSWORD: '', ANTHROPIC_API_KEY: '' }))
         if (smtpPasswordRef.current) smtpPasswordRef.current.value = ''
+      }
+      if (aiKey) {
+        setForm(f => ({ ...f, ANTHROPIC_API_KEY: '' }))
+        if (anthropicKeyRef.current) anthropicKeyRef.current.value = ''
+      }
+      if (pwd && aiKey) {
+        const msg = 'Settings saved. SMTP password and Anthropic API key are stored securely (fields stay blank).'
+        setSuccess(msg)
+        toast.success(msg)
+      } else if (pwd) {
         const msg = 'Settings saved. SMTP password is stored securely (the field stays blank).'
+        setSuccess(msg)
+        toast.success(msg)
+      } else if (aiKey) {
+        const msg = 'Settings saved. Anthropic API key is stored securely (the field stays blank).'
         setSuccess(msg)
         toast.success(msg)
       } else {
@@ -1710,6 +1746,34 @@ export function SettingsTab({ settings, onRefresh }) {
       toast.error(msg)
     } finally {
       setEmailDispatchLoading(false)
+    }
+  }
+
+  const runAiKeyTest = async () => {
+    setTestAiLoading(true)
+    setSuccess('')
+    setError('')
+    try {
+      const aiKey = readAnthropicKeyInput()
+      if (aiKey) {
+        await api.post('/settings/batch-update/', { ANTHROPIC_API_KEY: aiKey })
+        setForm(f => ({ ...f, ANTHROPIC_API_KEY: '' }))
+        if (anthropicKeyRef.current) anthropicKeyRef.current.value = ''
+      }
+      const res = await api.post(
+        '/settings/test-ai/',
+        aiKey ? { anthropic_api_key: aiKey } : {},
+      )
+      await fetchAiStatus()
+      const msg = res.data.detail ?? 'Anthropic API key verified.'
+      setSuccess(msg)
+      toast.success(msg)
+    } catch (err) {
+      const msg = err.response?.data?.detail ?? 'Anthropic API test failed.'
+      setError(typeof msg === 'string' ? msg : 'Anthropic API test failed.')
+      toast.error(typeof msg === 'string' ? msg : 'Anthropic API test failed.')
+    } finally {
+      setTestAiLoading(false)
     }
   }
 
@@ -1941,6 +2005,69 @@ export function SettingsTab({ settings, onRefresh }) {
             >
               {lockoutLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
               Save Security Settings
+            </button>
+          </div>
+        </section>
+
+        {/* ── Anthropic AI (Claude) ── */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-medium border-b pb-2">
+            <Sparkles size={18} className="text-violet-500" />
+            <h3>Anthropic AI (Claude)</h3>
+            {anthropicKeyConfigured && (
+              <span className="ml-auto text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                API key configured
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Powers executive briefs, quality scores, minute drafting, staff assistant, and other AI features.
+            Get a key at{' '}
+            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="underline">
+              console.anthropic.com
+            </a>.
+            Admin setting overrides <code className="text-[11px]">ANTHROPIC_API_KEY</code> in{' '}
+            <code className="text-[11px]">.env</code>. Celery workers pick up changes without restart.
+          </p>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-500">Anthropic API key</label>
+            <input
+              ref={anthropicKeyRef}
+              type="password"
+              title="Anthropic API key"
+              name="anthropic_api_key"
+              autoComplete="off"
+              className="input text-sm font-mono"
+              placeholder={
+                anthropicKeyConfigured
+                  ? 'Saved — paste again to change (sk-ant-...)'
+                  : 'sk-ant-api03-...'
+              }
+              value={form.ANTHROPIC_API_KEY || ''}
+              onChange={e => setForm({ ...form, ANTHROPIC_API_KEY: e.target.value })}
+            />
+          </div>
+          {(aiStatus.model_haiku || aiStatus.model_sonnet) && (
+            <p className="text-[11px] text-slate-400">
+              Models: Haiku <code className="text-[10px]">{aiStatus.model_haiku}</code>
+              {' · '}
+              Sonnet <code className="text-[10px]">{aiStatus.model_sonnet}</code>
+              {aiStatus.source && aiStatus.source !== 'none' ? ` · source: ${aiStatus.source}` : ''}
+            </p>
+          )}
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+              Paste your key, click <strong className="font-medium">Save settings</strong> at the bottom, or use
+              Test API to save and verify in one step. The field stays blank after save for security.
+            </p>
+            <button
+              type="button"
+              onClick={runAiKeyTest}
+              disabled={testAiLoading}
+              className="inline-flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-medium border border-violet-500 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 disabled:opacity-60 transition-colors"
+            >
+              {testAiLoading ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {testAiLoading ? 'Testing…' : 'Test Anthropic API'}
             </button>
           </div>
         </section>
