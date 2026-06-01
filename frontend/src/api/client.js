@@ -17,6 +17,10 @@ const refreshClient = axios.create({
 let isRefreshing = false
 let refreshWaitQueue = []
 
+// Track rate-limit state so pollers can back off without spamming the console.
+let rateLimitedUntil = 0
+export function isRateLimited() { return Date.now() < rateLimitedUntil }
+
 function clearStoredTokens() {
   localStorage.removeItem('psc_access')
   localStorage.removeItem('psc_refresh')
@@ -130,6 +134,15 @@ api.interceptors.response.use(
 
     if (status === 401 && !isObtainPairRequest(originalRequest)) {
       clearStoredTokens()
+    }
+
+    if (status === 429 && originalRequest && !originalRequest._rateLimitRetry) {
+      const retryAfter = parseInt(err.response?.headers?.['retry-after'] ?? '60', 10)
+      rateLimitedUntil = Date.now() + retryAfter * 1000
+      originalRequest._rateLimitRetry = true
+      return new Promise(resolve =>
+        setTimeout(() => resolve(api(originalRequest)), retryAfter * 1000)
+      )
     }
 
     return Promise.reject(err)

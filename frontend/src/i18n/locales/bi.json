@@ -437,6 +437,7 @@
   },
   "stage": {
     "draft": "Draf",
+    "pending_dg_endorsement": "I Submitim long DG",
     "submitted": "I Submitim long PSC",
     "received_by_psc": "PSC I Risivim",
     "returned_for_clarification": "I Sanem Bak Blong Klia",

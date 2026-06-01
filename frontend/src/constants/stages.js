@@ -3,6 +3,7 @@
 export const STAGE_LABELS = {
   // Pre-submission
   draft:                      'Draft',
+  pending_dg_endorsement:     'Submitted to DG',
   submitted:                  'Submitted to PSC',
   // PSC intake
   received_by_psc:            'Received by PSC',
@@ -10,6 +11,7 @@ export const STAGE_LABELS = {
   registered_routed:          'Registered and Routed',
   manager_checklist_review:   'Manager Checklist Review',
   under_assessment:           'Under Assessment',
+  compliance_under_review:    'Compliance Under Review',
   // Hold / deferral
   deferred:                   'Deferred',
   tabled:                     'Tabled',
@@ -88,6 +90,7 @@ export function phaseLabel(phaseKey, t) {
  */
 export const STAGE_META = {
   draft:                      { color: 'slate',  category: 'Pre-submission',  terminal: false },
+  pending_dg_endorsement:     { color: 'cyan',   category: 'Pre-submission',  terminal: false },
   submitted:                  { color: 'blue',   category: 'Pre-submission',  terminal: false },
   received_by_psc:            { color: 'blue',   category: 'PSC Intake',      terminal: false },
   returned_for_clarification: { color: 'orange', category: 'Clarification',   terminal: false },
@@ -142,7 +145,7 @@ export function stageBadgeClass(code) {
  * Groups stages into 5 high-level phases.
  */
 export const PHASES = [
-  { key: 'submitted',   label: 'Submitted',         color: 'blue',     stages: ['submitted', 'returned_for_clarification'] },
+  { key: 'submitted',   label: 'Submitted',         color: 'blue',     stages: ['pending_dg_endorsement', 'submitted', 'returned_for_clarification'] },
   { key: 'review',      label: 'Checklist Review',  color: 'indigo',   stages: ['manager_checklist_review'] },
   { key: 'assessment',  label: 'Under Assessment',  color: 'violet',   stages: ['under_assessment', 'awaiting_legal_advice'] },
   { key: 'commission',  label: 'With Commission',   color: 'purple',   stages: ['forwarded_to_commission', 'commission_sitting', 'tabled', 'matters_arising'] },

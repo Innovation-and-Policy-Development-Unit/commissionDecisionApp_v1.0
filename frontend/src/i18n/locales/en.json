@@ -552,6 +552,7 @@
   },
   "stage": {
     "draft": "Draft",
+    "pending_dg_endorsement": "Submitted to DG",
     "submitted": "Submitted to PSC",
     "received_by_psc": "Received by PSC",
     "returned_for_clarification": "Returned for Clarification",

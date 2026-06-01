@@ -730,6 +730,14 @@ class Command(BaseCommand):
             "manage_users", "manage_roles", "manage_ui_translations", "view_audit_trail",
             "feedback_view", "feedback_manage", "feedback_respond", "feedback_configure",
         ]),
+        ("receptionist", (
+            "Receptionist (registry front desk) — receives paper submissions, scans and uploads "
+            "them as PDFs (auto OCR for searchable text), then routes each submission to the "
+            "responsible unit Manager (e.g. ODU for restructure / establishment variation)."
+        ), [
+            "view_dashboard", "view_submissions", "create_submission", "edit_submission",
+            "transition_workflow", "view_audit_trail",
+        ]),
         ("psc_officer", "Receives and processes submissions through initial operational workflow stages.", [
             "view_dashboard", "view_submissions", "create_submission", "edit_submission",
             "export_submissions", "transition_workflow", "assess_submission",

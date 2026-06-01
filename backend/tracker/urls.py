@@ -12,6 +12,7 @@ from .views import (
     BackupViewSet,
     CommissionTaskViewSet,
     ODUChecklistViewSet,
+    SubmissionChecklistViewSet,
     SecurityNoticeViewSet,
     DepartmentViewSet,
     UnitViewSet,
@@ -121,7 +122,8 @@ router.register(r"minutes",          MinutesViewSet,          basename="minutes"
 router.register(r"transcripts",      TranscriptViewSet,       basename="transcript")
 router.register(r"doc-annotations",  DocumentAnnotationViewSet, basename="doc-annotation")
 router.register(r"doc-signatures",   DocumentSignatureViewSet,  basename="doc-signature")
-router.register(r"odu-checklists",   ODUChecklistViewSet,       basename="odu-checklist")
+router.register(r"odu-checklists",        ODUChecklistViewSet,        basename="odu-checklist")
+router.register(r"submission-checklists", SubmissionChecklistViewSet, basename="submission-checklist")
 router.register(r"staff-chat/sessions", StaffChatSessionViewSet, basename="staff-chat-session")
 router.register(
     r"deadline-reminder-drafts",

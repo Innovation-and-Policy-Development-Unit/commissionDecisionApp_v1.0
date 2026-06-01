@@ -1,6 +1,10 @@
 """
 E1 — OCR and key-facts extraction from scanned images and non-searchable PDFs.
-Uses local text extraction when possible, then Claude Sonnet (vision) for scans.
+
+Text extraction is local-first: embedded PDF text (pypdf), then local OCR via
+Tesseract (pytesseract over PyMuPDF-rasterized pages). Claude Sonnet vision is
+only used as a fallback when local OCR is unavailable or yields nothing — this
+keeps "scanned PDF -> searchable text" working without an AI API call.
 """
 
 from __future__ import annotations
@@ -83,6 +87,85 @@ def pdf_page_images_base64(path: Path, max_pages: int = MAX_VISION_PAGES) -> lis
     return images
 
 
+MIN_OCR_CHARS = 20
+
+
+def _tesseract_available() -> bool:
+    try:
+        import pytesseract  # noqa: F401
+    except Exception:
+        return False
+    try:
+        import pytesseract
+
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception as exc:
+        logger.info("Tesseract binary not available: %s", exc)
+        return False
+
+
+def local_ocr_text(path: Path, original_name: str, max_pages: int = 30) -> str:
+    """
+    Extract text locally without AI.
+
+    Order: embedded PDF text (pypdf) first; if the document is a scan (little or
+    no embedded text) run Tesseract OCR over rasterized pages / the image.
+    Returns extracted text, or "" if nothing could be read locally.
+    """
+    lower = (original_name or "").lower()
+
+    if lower.endswith(".pdf"):
+        plain = extract_pdf_text(path)
+        if len(plain) >= MIN_TEXT_CHARS_FOR_SKIP_VISION:
+            return plain
+        ocr = _tesseract_pdf(path, max_pages=max_pages)
+        # Prefer whichever produced more usable text.
+        return ocr if len(ocr) > len(plain) else plain
+
+    if lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff")):
+        return _tesseract_image(path)
+
+    return ""
+
+
+def _tesseract_pdf(path: Path, max_pages: int = 30) -> str:
+    if not _tesseract_available():
+        return ""
+    try:
+        import fitz
+        import pytesseract
+        from PIL import Image
+
+        parts: list[str] = []
+        doc = fitz.open(str(path))
+        for i, page in enumerate(doc):
+            if i >= max_pages:
+                break
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            parts.append(pytesseract.image_to_string(img) or "")
+        doc.close()
+        return "\n".join(parts).strip()
+    except Exception as exc:
+        logger.warning("Tesseract PDF OCR failed: %s", exc)
+        return ""
+
+
+def _tesseract_image(path: Path) -> str:
+    if not _tesseract_available():
+        return ""
+    try:
+        import pytesseract
+        from PIL import Image
+
+        img = Image.open(str(path))
+        return (pytesseract.image_to_string(img) or "").strip()
+    except Exception as exc:
+        logger.warning("Tesseract image OCR failed: %s", exc)
+        return ""
+
+
 def image_file_base64(path: Path) -> list[tuple[str, str]]:
     suffix = path.suffix.lower()
     media = "image/jpeg"
@@ -114,12 +197,26 @@ def run_document_extraction(*, file_path: Path, original_name: str, description:
     if not path.is_file():
         return None, "File not found on disk."
 
+    # ── Local-first text extraction (no AI): embedded PDF text or Tesseract OCR ──
+    local_text = local_ocr_text(path, original_name)
+    if len(local_text) >= MIN_OCR_CHARS:
+        return {
+            "extracted_text": local_text,
+            "document_summary": "",
+            "key_facts": {
+                "names": [], "dates": [], "positions": [],
+                "references": [], "statements": [],
+            },
+            "ocr_engine": "local",
+        }, None
+
+    # ── AI fallback only when local OCR could not read the document ──
     plain = ""
     images: list[tuple[str, str]] = []
 
     lower = original_name.lower()
     if lower.endswith(".pdf"):
-        plain = extract_pdf_text(path)
+        plain = local_text or extract_pdf_text(path)
         if len(plain) < MIN_TEXT_CHARS_FOR_SKIP_VISION:
             images = pdf_page_images_base64(path)
     elif lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff")):

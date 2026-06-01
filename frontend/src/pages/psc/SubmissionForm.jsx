@@ -732,7 +732,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   })
 
   const allowed =
-    user && ['psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
+    user && ['receptionist', 'psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
               ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager'].includes(user.role)
 
   useEffect(() => {
@@ -778,6 +778,14 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
       )
   }
 
+  // ── Receptionist intake route disabled by admin ────────────────────────
+  if (user.role === 'receptionist' && user.intake_receptionist_enabled === false) {
+    const msg = 'Receptionist intake is currently disabled by your administrator.'
+    return modal
+      ? <p className="text-sm text-slate-600 py-4">{msg}</p>
+      : <div><PageHeader title="New submission" subtitle={msg} /></div>
+  }
+
   // ── Compliance: cases are created in CMS, not in this portal ───────────
   if (isComplianceUser) {
     return (
@@ -798,6 +806,15 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   }
 
   const effectiveMode = createMode || 'commission'
+
+  // ── Direct ministry (HR) submission route disabled by admin ─────────────
+  if (isMinistryUser && effectiveMode === 'commission' && user.intake_hr_enabled === false) {
+    const msg = 'Direct ministry submission is currently disabled. Please deliver the signed submission to the PSC registry — the Receptionist will lodge it on your behalf.'
+    return modal
+      ? <p className="text-sm text-slate-600 py-4">{msg}</p>
+      : <div><PageHeader title="New submission" subtitle={msg} /></div>
+  }
+
   const secretaryFormTypes = filterSecretaryFormTypes(formTypes, categories, user)
   const travelFormTypes = secretaryFormTypes.length
     ? secretaryFormTypes

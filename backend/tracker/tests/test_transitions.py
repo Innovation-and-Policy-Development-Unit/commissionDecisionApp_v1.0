@@ -13,8 +13,12 @@ class TransitionTests(TestCase):
             self._call(role, current, target)
 
     # ── Ministry roles ────────────────────────────────────────────────────
-    def test_ministry_hr_can_submit_draft(self):
-        self._call(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
+    def test_ministry_hr_submits_draft_to_dg(self):
+        self._call(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
+
+    def test_ministry_hr_cannot_submit_directly_to_psc(self):
+        # HR must route through the DG; direct Draft -> Submitted is no longer allowed.
+        self._denied(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
 
     def test_ministry_hr_cannot_skip_to_assessment(self):
         self._denied(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.UNDER_ASSESSMENT)
@@ -22,14 +26,47 @@ class TransitionTests(TestCase):
     def test_ministry_hr_cannot_approve(self):
         self._denied(Role.MINISTRY_HR, WorkflowStage.FORWARDED_TO_COMMISSION, WorkflowStage.APPROVED)
 
-    def test_dept_admin_can_submit_draft(self):
-        self._call(Role.DEPT_ADMIN, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
+    def test_dept_admin_submits_draft_to_dg(self):
+        self._call(Role.DEPT_ADMIN, WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
 
     def test_ministry_can_resubmit_after_clarification(self):
-        self._call(Role.MINISTRY_HR, WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED)
+        self._call(Role.MINISTRY_HR, WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_DG_ENDORSEMENT)
 
-    def test_ministry_can_resubmit_after_deferral(self):
-        self._call(Role.MINISTRY_HR, WorkflowStage.DEFERRED_BACK_TO_HR, WorkflowStage.SUBMITTED)
+    def test_ministry_can_respond_to_deferral(self):
+        self._call(Role.MINISTRY_HR, WorkflowStage.DEFERRED_BACK_TO_HR, WorkflowStage.DRAFT)
+
+    # ── Director-General (Head of Agency) endorsement ─────────────────────
+    def test_dg_can_endorse_and_submit_to_psc(self):
+        self._call(Role.HEAD_OF_AGENCY, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED)
+
+    def test_dg_can_return_to_hr(self):
+        self._call(Role.HEAD_OF_AGENCY, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DRAFT)
+
+    def test_hr_cannot_endorse_to_psc(self):
+        self._denied(Role.MINISTRY_HR, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED)
+
+    def test_hr_targets_from_draft_is_pending_dg(self):
+        targets = iter_allowed_targets(Role.MINISTRY_HR, WorkflowStage.DRAFT)
+        self.assertEqual(targets, [WorkflowStage.PENDING_DG_ENDORSEMENT.value])
+
+    def test_dg_targets_from_pending(self):
+        targets = iter_allowed_targets(Role.HEAD_OF_AGENCY, WorkflowStage.PENDING_DG_ENDORSEMENT)
+        self.assertIn(WorkflowStage.SUBMITTED.value, targets)
+        self.assertIn(WorkflowStage.DRAFT.value, targets)
+
+    # ── Receptionist (registry intake) ────────────────────────────────────
+    def test_receptionist_can_route_to_manager(self):
+        self._call(Role.RECEPTIONIST, WorkflowStage.DRAFT, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+
+    def test_receptionist_cannot_submit_to_psc(self):
+        self._denied(Role.RECEPTIONIST, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
+
+    def test_receptionist_cannot_assess(self):
+        self._denied(Role.RECEPTIONIST, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT)
+
+    def test_receptionist_targets_from_draft(self):
+        targets = iter_allowed_targets(Role.RECEPTIONIST, WorkflowStage.DRAFT)
+        self.assertEqual(targets, [WorkflowStage.MANAGER_CHECKLIST_REVIEW.value])
 
     # ── Unit manager roles ────────────────────────────────────────────────
     def test_vipam_manager_can_review_checklist(self):

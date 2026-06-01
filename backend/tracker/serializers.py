@@ -29,6 +29,7 @@ from .models import (
     PSCFormField,
     PSCFormResponse,
     PSCFormType,
+    SubmissionChecklistResponse,
     Role,
     RoleDefinition,
     SecurityIncident,
@@ -220,6 +221,11 @@ class MeSerializer(serializers.ModelSerializer):
     can_manage_translations = serializers.SerializerMethodField()
     can_access_admin_panel = serializers.SerializerMethodField()
     can_view_audit_log  = serializers.SerializerMethodField()
+    intake_receptionist_enabled = serializers.SerializerMethodField()
+    intake_hr_enabled = serializers.SerializerMethodField()
+    ai_package_validation_enabled = serializers.SerializerMethodField()
+    ai_checklist_autofill_enabled = serializers.SerializerMethodField()
+    ai_enabled = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -238,6 +244,11 @@ class MeSerializer(serializers.ModelSerializer):
             "can_manage_translations",
             "can_access_admin_panel",
             "can_view_audit_log",
+            "intake_receptionist_enabled",
+            "intake_hr_enabled",
+            "ai_package_validation_enabled",
+            "ai_checklist_autofill_enabled",
+            "ai_enabled",
             "two_factor_enabled",
             "session_pin_set",
             "must_change_password",
@@ -271,6 +282,31 @@ class MeSerializer(serializers.ModelSerializer):
 
     def get_can_view_audit_log(self, obj):
         return rbac_user_can_view_audit_log(obj.user)
+
+    def get_intake_receptionist_enabled(self, obj):
+        from .intake_routing import receptionist_intake_enabled
+
+        return receptionist_intake_enabled()
+
+    def get_intake_hr_enabled(self, obj):
+        from .intake_routing import hr_intake_enabled
+
+        return hr_intake_enabled()
+
+    def get_ai_package_validation_enabled(self, obj):
+        from .ai_settings import package_validation_enabled
+
+        return package_validation_enabled()
+
+    def get_ai_checklist_autofill_enabled(self, obj):
+        from .ai_settings import checklist_autofill_enabled
+
+        return checklist_autofill_enabled()
+
+    def get_ai_enabled(self, obj):
+        from .ai.claude_client import ai_enabled
+
+        return ai_enabled()
 
 
 _TASK_LINK_STAGES = frozenset(
@@ -713,7 +749,10 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         if not obj.form_type_code:
             return None
         try:
-            ft = PSCFormType.objects.get(code=obj.form_type_code)
+            ft = PSCFormType.objects.select_related('checklist_form_type').get(
+                code=obj.form_type_code
+            )
+            cft = ft.checklist_form_type
             return {
                 'id': ft.id,
                 'code': ft.code,
@@ -721,6 +760,11 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
                 'is_digitized': ft.is_digitized,
                 'digitized_form_key': ft.digitized_form_key,
                 'agenda_category': ft.agenda_category,
+                'checklist_form_type': {
+                    'id': cft.id,
+                    'code': cft.code,
+                    'name': cft.name,
+                } if cft else None,
             }
         except PSCFormType.DoesNotExist:
             return None
@@ -1671,11 +1715,15 @@ class SystemSettingSerializer(serializers.ModelSerializer):
         fields = ("id", "key", "value", "description", "updated_at")
         read_only_fields = ("updated_at",)
 
+    # Secret settings: never return the raw value, only a "configured" flag.
+    SECRET_KEYS = {"SMTP_PASSWORD", "ANTHROPIC_API_KEY"}
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        if instance.key == "SMTP_PASSWORD" and (data.get("value") or "").strip():
+        if instance.key in self.SECRET_KEYS:
+            configured = bool((data.get("value") or "").strip())
             data["value"] = ""
-            data["configured"] = True
+            data["configured"] = configured
         return data
 
 
@@ -2359,3 +2407,40 @@ class DocumentVersionSerializer(serializers.ModelSerializer):
             "uploaded_by", "uploaded_by_username", "uploaded_at", "notes", "is_current",
         )
         read_only_fields = ("id", "version_num", "uploaded_by", "uploaded_by_username", "uploaded_at", "is_current")
+
+
+class ChecklistFormFieldSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PSCFormField
+        fields = (
+            "id", "field_key", "label", "field_type", "placeholder",
+            "help_text", "choices", "is_required", "display_order", "start_new_page",
+        )
+
+
+class ChecklistFormTypeSerializer(serializers.ModelSerializer):
+    fields = ChecklistFormFieldSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PSCFormType
+        fields = ("id", "code", "name", "description", "fields")
+
+
+class SubmissionChecklistResponseSerializer(serializers.ModelSerializer):
+    checklist_form_type_detail = ChecklistFormTypeSerializer(
+        source='checklist_form_type', read_only=True
+    )
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        model = SubmissionChecklistResponse
+        fields = (
+            "id", "submission", "checklist_form_type", "checklist_form_type_detail",
+            "data", "status", "manager_comments",
+            "created_by", "created_by_username",
+            "submitted_at", "approved_at", "created_at", "updated_at",
+        )
+        read_only_fields = (
+            "id", "created_by", "created_by_username",
+            "submitted_at", "approved_at", "created_at", "updated_at",
+        )

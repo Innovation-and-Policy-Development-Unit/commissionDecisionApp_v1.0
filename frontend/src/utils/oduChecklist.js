@@ -6,6 +6,29 @@ export const ODU_RESTRUCTURE_CHECKLIST_FORM_CODES = ['ORG-3.1', 'PSC 2-1']
 
 export const ODU_CHECKLIST_REVIEW_STAGE = 'manager_checklist_review'
 
+// Stages after checklist review where the completed checklist stays visible (read-only).
+export const ODU_CHECKLIST_VIEW_STAGES = [
+  'under_assessment',
+  'secretary_review',
+  'returned_for_clarification',
+  'deferred',
+  'tabled',
+  'awaiting_legal_advice',
+  'awaiting_cabinet_decision',
+  'resubmitted',
+  'forwarded_to_commission',
+  'commission_sitting',
+  'matters_arising',
+  'approved',
+  'rejected',
+  'returned',
+  'deferred_back_to_hr',
+  'minutes_drafted_signed',
+  'decision_entered_assigned',
+  'under_implementation',
+  'implementation_report',
+]
+
 export const ODU_ROUTED_UNIT = 'odu'
 
 export const ODU_PRINCIPAL_WORKER_ROLES = [
@@ -15,6 +38,16 @@ export const ODU_PRINCIPAL_WORKER_ROLES = [
 ]
 
 export const ODU_CHECKLIST_ROLES = [...ODU_PRINCIPAL_WORKER_ROLES, 'odu_manager']
+
+// Roles allowed to view (read-only) the completed checklist after review.
+export const ODU_CHECKLIST_VIEW_ROLES = [
+  ...ODU_CHECKLIST_ROLES,
+  'psc_officer',
+  'psc_secretary',
+  'senior_admin_officer',
+  'psc_manager',
+  'psc_admin',
+]
 
 export function userIsOduPrincipalWorker(role) {
   return ODU_PRINCIPAL_WORKER_ROLES.includes(role)
@@ -32,7 +65,31 @@ export function submissionInOduReviewPhase(submission) {
   )
 }
 
+export function submissionInOduViewPhase(submission) {
+  return (
+    submission?.routed_unit === ODU_ROUTED_UNIT
+    && ODU_CHECKLIST_VIEW_STAGES.includes(submission?.current_stage)
+  )
+}
+
 export function canShowOduChecklist(submission, user) {
-  if (!user || !ODU_CHECKLIST_ROLES.includes(user.role)) return false
-  return submissionUsesOduRestructureChecklist(submission) && submissionInOduReviewPhase(submission)
+  if (!user || !submission) return false
+  if (!submissionUsesOduRestructureChecklist(submission)) return false
+  // Admins / superusers get visibility in both phases for oversight + testing.
+  const isAdmin = user.is_superuser || user.role === 'psc_admin'
+  // Active review phase — ODU manager + principals edit/approve.
+  if (
+    (isAdmin || ODU_CHECKLIST_ROLES.includes(user.role))
+    && submissionInOduReviewPhase(submission)
+  ) {
+    return true
+  }
+  // Read-only after review — broader reviewer roles keep visibility.
+  if (
+    (isAdmin || ODU_CHECKLIST_VIEW_ROLES.includes(user.role))
+    && submissionInOduViewPhase(submission)
+  ) {
+    return true
+  }
+  return false
 }

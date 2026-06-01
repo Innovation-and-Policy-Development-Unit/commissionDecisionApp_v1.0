@@ -105,7 +105,20 @@ def merge_recipient_context(user: User, **extra: str) -> dict[str, str]:
 
 
 def get_transition_email_slug(prev: str, target: str) -> str | None:
-    if prev == WorkflowStage.DRAFT and target == WorkflowStage.SUBMITTED:
+    if (
+        prev == WorkflowStage.DRAFT
+        and target == WorkflowStage.PENDING_DG_ENDORSEMENT
+    ):
+        return "submission_pending_dg_endorsement"
+    if (
+        prev == WorkflowStage.PENDING_DG_ENDORSEMENT
+        and target == WorkflowStage.DRAFT
+    ):
+        return "submission_returned_to_hr"
+    if (
+        prev in (WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
+        and target == WorkflowStage.SUBMITTED
+    ):
         return "submission_submitted"
     if target == WorkflowStage.RETURNED_FOR_CLARIFICATION:
         return "submission_returned_clarification"
@@ -148,6 +161,7 @@ def send_transition_emails(
     users: Iterable[User],
     *,
     decision_label: str = "",
+    remarks: str = "",
 ) -> None:
     slug = get_transition_email_slug(prev, target)
     if not slug:
@@ -167,7 +181,22 @@ def send_transition_emails(
             ctx["decision_label"] = decision_label or (
                 "approved" if target == WorkflowStage.APPROVED else "rejected"
             )
+        if slug == "submission_returned_to_hr":
+            ctx["remarks"] = (remarks or "").strip() or "(No comment was provided.)"
         send_templated_email(slug=slug, to=[email], context=ctx)
+
+
+def send_assignment_email(submission: Submission, assignee: User, *, manager_name: str = "") -> None:
+    """Email an officer when a unit manager allocates a submission to them."""
+    email = (getattr(assignee, "email", None) or "").strip()
+    if not email:
+        return
+    ctx = merge_recipient_context(
+        assignee,
+        manager_name=manager_name or "Your unit manager",
+        **submission_email_context(submission),
+    )
+    send_templated_email(slug="submission_assigned_officer", to=[email], context=ctx)
 
 
 def notify_task_assigned(task: CommissionTask, users: Iterable[User]) -> None:

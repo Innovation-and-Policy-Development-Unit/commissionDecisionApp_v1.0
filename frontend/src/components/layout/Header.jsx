@@ -28,7 +28,7 @@ const ALL_QUICK_ACTIONS = [
     icon: Plus,
     path: '/submissions/new',
     kbd: 'N',
-    roles: ['ministry_hr', 'dept_admin', 'head_of_agency', 'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'hr_unit_manager', 'vipam_manager', 'odu_manager'],
+    roles: ['receptionist', 'ministry_hr', 'dept_admin', 'head_of_agency', 'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'hr_unit_manager', 'vipam_manager', 'odu_manager'],
   },
   {
     id: 'dashboard',

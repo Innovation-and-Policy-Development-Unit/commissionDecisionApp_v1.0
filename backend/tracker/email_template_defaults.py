@@ -184,6 +184,38 @@ DEFAULT_EMAIL_TEMPLATES = [
         "body_html_template": "",
     },
     {
+        "slug": "submission_pending_dg_endorsement",
+        "name": "Awaiting DG endorsement",
+        "category": "submission_workflow",
+        "description": "Notifies the Head of Agency (DG) when Ministry HR submits a paper for their endorsement.",
+        "placeholders": _ph("submission_reference, submission_title, submission_url, new_stage"),
+        "subject_template": "Endorsement required: {{submission_reference}}",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "\"{{submission_title}}\" ({{submission_reference}}) has been submitted by your Ministry HR "
+            "and is awaiting your endorsement before it is sent to the Public Service Commission.\n\n"
+            "Please review and either endorse it to the PSC or return it to HR with your comments.\n\n"
+            "View submission: {{submission_url}}"
+        ),
+        "body_html_template": "",
+    },
+    {
+        "slug": "submission_returned_to_hr",
+        "name": "Returned by DG for changes",
+        "category": "submission_workflow",
+        "description": "Notifies Ministry HR when the Head of Agency (DG) returns a submission to draft for changes.",
+        "placeholders": _ph("submission_reference, submission_title, submission_url, new_stage, remarks"),
+        "subject_template": "Returned for changes: {{submission_reference}}",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "The Director-General returned \"{{submission_title}}\" ({{submission_reference}}) to you for changes.\n\n"
+            "Comment from the Director-General:\n{{remarks}}\n\n"
+            "Please make the requested changes and resubmit for endorsement.\n\n"
+            "View submission: {{submission_url}}"
+        ),
+        "body_html_template": "",
+    },
+    {
         "slug": "submission_approved",
         "name": "Submission approved",
         "category": "submission_workflow",
@@ -230,6 +262,21 @@ DEFAULT_EMAIL_TEMPLATES = [
             "Dear {{firstname}},\n\n"
             "{{submission_title}} ({{submission_reference}}) has moved from {{previous_stage}} to {{new_stage}}.\n\n"
             "View submission: {{submission_url}}"
+        ),
+        "body_html_template": "",
+    },
+    {
+        "slug": "submission_assigned_officer",
+        "name": "Submission allocated to you",
+        "category": "submission_workflow",
+        "description": "Notifies a unit officer when their manager allocates a submission to them for assessment.",
+        "placeholders": _ph("submission_reference, submission_title, submission_url, manager_name"),
+        "subject_template": "Assigned to you: {{submission_reference}}",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "{{manager_name}} has allocated \"{{submission_title}}\" ({{submission_reference}}) "
+            "to you for assessment.\n\n"
+            "Open the submission: {{submission_url}}"
         ),
         "body_html_template": "",
     },
@@ -342,12 +389,31 @@ SAMPLE_EMAIL_CONTEXTS = {
         "submission_url": "http://localhost:8080/submissions/1",
         "new_stage": "Submitted to PSC",
     },
+    "submission_pending_dg_endorsement": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Senior appointment — Ministry of Finance",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "new_stage": "Submitted to DG (Pending Endorsement)",
+    },
+    "submission_returned_to_hr": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Senior appointment — Ministry of Finance",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "new_stage": "Draft",
+        "remarks": "Please attach the updated organisation chart and correct the position titles in section 3.",
+    },
     "submission_stage_changed": {
         "submission_reference": "PSC-2026-0042",
         "submission_title": "Senior appointment — Ministry of Finance",
         "submission_url": "http://localhost:8080/submissions/1",
         "previous_stage": "Under Assessment",
         "new_stage": "Forwarded to Commission",
+    },
+    "submission_assigned_officer": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Organisation restructure — Ministry of Climate Change",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "manager_name": "Manager ODU",
     },
     "task_assigned": {
         "task_title": "Implement decision on senior appointment",

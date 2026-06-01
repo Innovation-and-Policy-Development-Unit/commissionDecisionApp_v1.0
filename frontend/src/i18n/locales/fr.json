@@ -424,6 +424,7 @@
   },
   "stage": {
     "draft": "Brouillon",
+    "pending_dg_endorsement": "Soumis au DG",
     "submitted": "Soumis à la PSC",
     "received_by_psc": "Reçu par la PSC",
     "returned_for_clarification": "Retourné pour clarification",

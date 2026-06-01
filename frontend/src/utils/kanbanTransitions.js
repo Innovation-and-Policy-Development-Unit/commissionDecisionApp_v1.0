@@ -12,6 +12,8 @@ export const KANBAN_TRANSITION_ROLES = [
   'psc_admin',
   'ministry_hr',
   'dept_admin',
+  'head_of_agency',
+  'receptionist',
   'vipam_manager',
   'hr_unit_manager',
   'odu_manager',

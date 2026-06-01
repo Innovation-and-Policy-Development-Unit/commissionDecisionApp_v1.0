@@ -32,6 +32,8 @@ const EMPTY_FORM = {
   agenda_category: '',
   is_digitized: false,
   digitized_form_key: '',
+  is_checklist: false,
+  checklist_form_type: '',
   is_active: true,
   display_order: 0,
 }
@@ -96,6 +98,8 @@ export default function FormTypesAdmin() {
       agenda_category: row.agenda_category ?? '',
       is_digitized: row.is_digitized,
       digitized_form_key: row.digitized_form_key || '',
+      is_checklist: row.is_checklist || false,
+      checklist_form_type: row.checklist_form_type || '',
       is_active: row.is_active,
       display_order: row.display_order,
     })
@@ -421,10 +425,14 @@ export default function FormTypesAdmin() {
               <textarea className="input min-h-[72px]" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Optional description" />
             </div>
 
-            <div className="flex items-center gap-6 pt-1">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-1">
               <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
                 <input type="checkbox" className="w-4 h-4 rounded" checked={form.is_digitized} onChange={e => set('is_digitized', e.target.checked)} />
                 Has digitized form
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" className="w-4 h-4 rounded" checked={form.is_checklist} onChange={e => set('is_checklist', e.target.checked)} />
+                This is a checklist form
               </label>
               <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
                 <input type="checkbox" className="w-4 h-4 rounded" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} />
@@ -439,6 +447,26 @@ export default function FormTypesAdmin() {
                   {DIGITIZED_KEYS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
                 </select>
                 <p className="mt-1 text-xs text-slate-400">Links this form type to its frontend component.</p>
+              </div>
+            )}
+
+            {!form.is_checklist && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Linked checklist</label>
+                <select
+                  className="input"
+                  value={form.checklist_form_type || ''}
+                  onChange={e => set('checklist_form_type', e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">— None —</option>
+                  {rows.filter(r => r.is_checklist).map(r => (
+                    <option key={r.id} value={r.id}>{r.code} — {r.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-400">
+                  The checklist that assigned principals fill out during Manager Checklist Review for this form type.
+                  Create the checklist form type first, then link it here.
+                </p>
               </div>
             )}
 

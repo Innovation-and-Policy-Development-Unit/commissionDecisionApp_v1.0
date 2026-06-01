@@ -91,12 +91,22 @@ _STAGE_GRAPH = {
     # ── Ministry pre-submission ────────────────────────────────────────────
     WorkflowStage.DRAFT: [
         WorkflowStage.SUBMITTED,
+        WorkflowStage.PENDING_DG_ENDORSEMENT,
+        # Receptionist intake: route a lodged (scanned + OCR'd) paper submission
+        # straight to the responsible unit Manager for checklist review.
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+    ],
+    # Head of Agency (DG) endorsement gate before the submission reaches PSC.
+    WorkflowStage.PENDING_DG_ENDORSEMENT: [
+        WorkflowStage.SUBMITTED,
+        WorkflowStage.DRAFT,
     ],
     WorkflowStage.SUBMITTED: [
         WorkflowStage.MANAGER_CHECKLIST_REVIEW,
     ],
     WorkflowStage.RETURNED_FOR_CLARIFICATION: [
         WorkflowStage.SUBMITTED,
+        WorkflowStage.PENDING_DG_ENDORSEMENT,
         WorkflowStage.DRAFT,
     ],
     # ── Manager checklist review ──────────────────────────────────────────
@@ -189,13 +199,32 @@ _STAGE_GRAPH = {
 # Role-based target restrictions
 # ---------------------------------------------------------------------------
 
-# Ministry users may only submit drafts or respond to clarifications / deferrals
-_MINISTRY_ALLOWED = {
-    (WorkflowStage.DRAFT,                WorkflowStage.SUBMITTED),
-    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
+# Ministry HR / Department Admin: draft the paper and submit it to their DG
+# (Head of Agency) for endorsement, plus respond to clarifications / deferrals.
+_MINISTRY_HR_ALLOWED = {
+    (WorkflowStage.DRAFT,                      WorkflowStage.PENDING_DG_ENDORSEMENT),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_DG_ENDORSEMENT),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
-    (WorkflowStage.DEFERRED_BACK_TO_HR,  WorkflowStage.MATTERS_ARISING),
-    (WorkflowStage.DEFERRED_BACK_TO_HR,  WorkflowStage.DRAFT),
+    (WorkflowStage.DEFERRED_BACK_TO_HR,        WorkflowStage.MATTERS_ARISING),
+    (WorkflowStage.DEFERRED_BACK_TO_HR,        WorkflowStage.DRAFT),
+}
+
+# Head of Agency (DG): endorse a paper pending endorsement and submit it to PSC,
+# or return it to HR (back to Draft). A DG who drafts their own paper can also
+# move it into the endorsement queue.
+_MINISTRY_DG_ALLOWED = {
+    (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED),
+    (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DRAFT),
+    (WorkflowStage.DRAFT,                  WorkflowStage.PENDING_DG_ENDORSEMENT),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_DG_ENDORSEMENT),
+    (WorkflowStage.DEFERRED_BACK_TO_HR,    WorkflowStage.MATTERS_ARISING),
+    (WorkflowStage.DEFERRED_BACK_TO_HR,    WorkflowStage.DRAFT),
+}
+
+# Receptionist (registry front desk): lodges a scanned submission and routes it
+# to the responsible unit Manager (Manager Checklist Review).
+_RECEPTIONIST_ALLOWED = {
+    (WorkflowStage.DRAFT, WorkflowStage.MANAGER_CHECKLIST_REVIEW),
 }
 
 # OPSC Unit Managers handle the checklist review stage only
@@ -367,12 +396,29 @@ def assert_transition_allowed(
 
         raise PermissionDenied("Only the submitter or Secretary may act on internal submissions.")
 
-    # ── Ministry roles ───────────────────────────────────────────────────────
-    if role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
-        if (current_stage, target_stage) not in _MINISTRY_ALLOWED:
+    # ── Ministry HR / Department Admin ─────────────────────────────────────
+    if role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
+        if (current_stage, target_stage) not in _MINISTRY_HR_ALLOWED:
             raise PermissionDenied(
-                "Ministry users can only submit a draft, respond to clarification requests, "
-                "or respond to a commission deferral."
+                "HR can submit a draft to the Director-General for endorsement, respond to "
+                "clarification requests, or respond to a commission deferral."
+            )
+        return
+
+    # ── Head of Agency (Director-General) ──────────────────────────────────
+    if role == Role.HEAD_OF_AGENCY:
+        if (current_stage, target_stage) not in _MINISTRY_DG_ALLOWED:
+            raise PermissionDenied(
+                "The Director-General can endorse a paper and submit it to PSC, or return it "
+                "to HR for changes."
+            )
+        return
+
+    # ── Receptionist (registry intake) ──────────────────────────────────────
+    if role == Role.RECEPTIONIST:
+        if (current_stage, target_stage) not in _RECEPTIONIST_ALLOWED:
+            raise PermissionDenied(
+                "The Receptionist can route a lodged submission to the responsible unit Manager."
             )
         return
 
@@ -500,9 +546,15 @@ def iter_allowed_targets(
         return []
 
     if role == Role.PSC_ADMIN:
-        return [m.value for m in WorkflowStage]
-    if role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
-        return [t.value for (s, t) in _MINISTRY_ALLOWED if s == current_stage]
+        # Admins normally only see the valid next stages; the UI offers an
+        # explicit "override" to jump to any stage when genuinely needed.
+        return list(_STAGE_GRAPH.get(current_stage, []))
+    if role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
+        return [t.value for (s, t) in _MINISTRY_HR_ALLOWED if s == current_stage]
+    if role == Role.HEAD_OF_AGENCY:
+        return [t.value for (s, t) in _MINISTRY_DG_ALLOWED if s == current_stage]
+    if role == Role.RECEPTIONIST:
+        return [t.value for (s, t) in _RECEPTIONIST_ALLOWED if s == current_stage]
     if role in _UNIT_MANAGER_ROLES:
         if current_stage in _UNIT_MANAGER_STAGES:
             return _STAGE_GRAPH.get(current_stage, [])

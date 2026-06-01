@@ -10,11 +10,45 @@ ODU_RESTRUCTURE_CHECKLIST_FORM_CODES = frozenset({"ORG-3.1", "PSC 2-1"})
 # ODU manager checklist review (workflow diagram: Manager ODU checklist review)
 ODU_CHECKLIST_REVIEW_STAGES = frozenset({WorkflowStage.MANAGER_CHECKLIST_REVIEW})
 
+# Stages AFTER checklist review where the completed checklist stays visible
+# (read-only) so the verification record remains accessible downstream.
+ODU_CHECKLIST_VIEW_STAGES = frozenset({
+    WorkflowStage.UNDER_ASSESSMENT,
+    WorkflowStage.SECRETARY_REVIEW,
+    WorkflowStage.RETURNED_FOR_CLARIFICATION,
+    WorkflowStage.DEFERRED,
+    WorkflowStage.TABLED,
+    WorkflowStage.AWAITING_LEGAL_ADVICE,
+    WorkflowStage.AWAITING_CABINET_DECISION,
+    WorkflowStage.RESUBMITTED,
+    WorkflowStage.FORWARDED_TO_COMMISSION,
+    WorkflowStage.COMMISSION_SITTING,
+    WorkflowStage.MATTERS_ARISING,
+    WorkflowStage.APPROVED,
+    WorkflowStage.REJECTED,
+    WorkflowStage.RETURNED,
+    WorkflowStage.DEFERRED_BACK_TO_HR,
+    WorkflowStage.MINUTES_DRAFTED_SIGNED,
+    WorkflowStage.DECISION_ENTERED_ASSIGNED,
+    WorkflowStage.UNDER_IMPLEMENTATION,
+    WorkflowStage.IMPLEMENTATION_REPORT,
+})
+
 ODU_CHECKLIST_ROLES = frozenset({
     "odu_principal",
     "principal_org_dev_analyst",
     "principal_job_analyst",
     "odu_manager",
+})
+
+# Roles allowed to VIEW (read-only) the completed checklist after the ODU
+# review stage. ODU roles plus the PSC reviewers who handle later stages.
+ODU_CHECKLIST_VIEW_ROLES = ODU_CHECKLIST_ROLES | frozenset({
+    "psc_officer",
+    "psc_secretary",
+    "senior_admin_officer",
+    "psc_manager",
+    "psc_admin",
 })
 
 ODU_PRINCIPAL_WORKER_ROLES = frozenset({
@@ -44,4 +78,20 @@ def submission_eligible_for_odu_checklist(submission: Submission) -> bool:
     return (
         submission_uses_odu_restructure_checklist(submission)
         and submission_in_odu_review_phase(submission)
+    )
+
+
+def submission_in_odu_view_phase(submission: Submission) -> bool:
+    """Submission has passed checklist review but the record stays viewable."""
+    return (
+        submission.routed_unit == RoutedUnit.ODU
+        and submission.current_stage in ODU_CHECKLIST_VIEW_STAGES
+    )
+
+
+def submission_viewable_odu_checklist(submission: Submission) -> bool:
+    """Checklist can be shown (editable in review phase, read-only afterwards)."""
+    return submission_uses_odu_restructure_checklist(submission) and (
+        submission_in_odu_review_phase(submission)
+        or submission_in_odu_view_phase(submission)
     )

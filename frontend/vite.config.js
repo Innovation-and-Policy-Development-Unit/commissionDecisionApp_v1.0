@@ -70,6 +70,28 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['pdfjs-dist'],
   },
+  build: {
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        // Only carve out heavy, framework-agnostic leaf libraries into their
+        // own long-lived cache chunks. React and every React-coupled library
+        // are left to Rollup's default chunking so load order stays correct
+        // (manually splitting React caused a chunk cycle → undefined hooks).
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('pdfjs-dist')) return 'vendor-pdf'
+          if (id.includes('@fullcalendar')) return 'vendor-calendar'
+          if (
+            id.includes('fabric')
+            || id.includes('html2canvas')
+            || id.includes('cropperjs')
+          ) return 'vendor-canvas'
+          return undefined
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': {

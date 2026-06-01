@@ -37,6 +37,19 @@ _CURRENT_DEFAULTS: dict[ModelTier, str] = {
 
 
 def _settings_attr(name: str, default: str = "") -> str:
+    # 1. Runtime override stored in SystemSetting (admin-configurable via the
+    #    Administration panel). Takes precedence so a key entered in the UI works
+    #    without redeploying / editing .env.
+    try:
+        from ..models import SystemSetting
+
+        stored = (SystemSetting.get_val(name) or "").strip()
+        if stored:
+            return stored
+    except Exception:
+        pass
+
+    # 2. Django settings / environment (.env).
     try:
         from django.conf import settings
 

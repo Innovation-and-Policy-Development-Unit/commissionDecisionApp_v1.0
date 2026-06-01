@@ -368,8 +368,9 @@ def generate_submission_brief(submission_id: int, force: bool = False):
     if not ai_enabled():
         _mark_submission_brief_failed(
             submission,
-            "AI brief could not be generated: ANTHROPIC_API_KEY is not configured on the server. "
-            "Add the key to .env and restart the backend, then click Regenerate.",
+            "AI brief could not be generated: the Anthropic API key is not configured. "
+            "An administrator can add it under Administration → System config → AI Features, "
+            "then click Regenerate.",
         )
         app_log.error("BRIEF_FAIL | Submission %s | ANTHROPIC_API_KEY missing", submission_id)
         return

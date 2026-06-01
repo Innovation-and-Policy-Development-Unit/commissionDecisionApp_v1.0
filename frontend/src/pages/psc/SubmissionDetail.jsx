@@ -8,20 +8,19 @@ import SubmissionPresenceBar from '../../components/submissions/SubmissionPresen
 import PolicyGuardrailDrawer from '../../components/submissions/PolicyGuardrailDrawer'
 import { policyGuardrailApplies } from '../../utils/policyGuardrail'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
-import api from '../../api/client'
+import api, { isRateLimited } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import {
   stageLabel, stageBadgeClass, stageDotClass, stageMeta,
-  needsHrAction, isTerminal,
+  needsHrAction, isTerminal, STAGE_LABELS,
 } from '../../constants/stages'
 import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
 import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
-import SubmissionQualityScore from '../../components/submissions/SubmissionQualityScore'
 import SubmissionPackageValidation from '../../components/submissions/SubmissionPackageValidation'
 import DeadlineReminderDrafts from '../../components/submissions/DeadlineReminderDrafts'
 import DocumentAnnotatorModal from '../../components/shared/DocumentAnnotatorModal'
@@ -40,19 +39,27 @@ import PSCForm21View from './PSCForm21View'
 import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
+import SubmissionChecklistPanel from '../../components/submissions/SubmissionChecklistPanel'
+import SittingPackView from '../../components/submissions/SittingPackView'
 import { canShowOduChecklist } from '../../utils/oduChecklist'
-import RestructureSubmissionForm from './RestructureSubmissionForm'
 import { CMS_PORTAL_URL, isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
 import { formatApiError } from '../../utils/apiError'
 
 // All roles that may trigger a transition
 const TRANSITION_ROLES = [
   'psc_officer', 'psc_secretary', 'psc_commissioner', 'psc_admin',
-  'ministry_hr', 'dept_admin',
-  'vipam_manager', 'hr_unit_manager', 'compliance_manager',
+  'ministry_hr', 'dept_admin', 'head_of_agency', 'receptionist',
+  'vipam_manager', 'hr_unit_manager', 'odu_manager', 'compliance_manager',
 ]
 
 const UNIT_MANAGER_ROLES = ['vipam_manager', 'hr_unit_manager', 'odu_manager', 'compliance_manager']
+const MANAGER_ROLE_TO_UNIT = {
+  odu_manager: 'odu',
+  vipam_manager: 'vipam',
+  hr_unit_manager: 'hr',
+  compliance_manager: 'compliance',
+  csu_manager: 'csu',
+}
 const SECRETARIAT_BRIEF_ROLES = ['psc_secretary', 'senior_admin_officer', 'psc_admin']
 const DOC_EXTRACT_ROLES = [
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
@@ -60,11 +67,6 @@ const DOC_EXTRACT_ROLES = [
 ]
 const DEADLINE_DRAFT_ROLES = [
   'psc_secretary', 'psc_admin', 'psc_officer', 'senior_admin_officer', 'psc_manager',
-]
-const QUALITY_SCORE_ROLES = [
-  'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_manager',
-  'odu_manager', 'hr_unit_manager', 'vipam_manager', 'compliance_manager',
-  'compliance_senior', 'compliance_principal',
 ]
 const PACKAGE_VALIDATE_ROLES = [
   'ministry_hr', 'dept_admin', 'head_of_agency',
@@ -74,6 +76,22 @@ const CHECKLIST_EDIT_ROLES = [
   'ministry_hr', 'dept_admin', 'head_of_agency',
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
   'vipam_manager', 'hr_unit_manager', 'compliance_manager', 'compliance_senior',
+]
+
+const DYNAMIC_CHECKLIST_EDIT_ROLES = [
+  'odu_manager', 'odu_principal', 'principal_org_dev_analyst', 'principal_job_analyst', 'psc_admin',
+]
+const DYNAMIC_CHECKLIST_VIEW_ROLES = [
+  ...DYNAMIC_CHECKLIST_EDIT_ROLES,
+  'psc_officer', 'psc_secretary', 'senior_admin_officer', 'psc_manager',
+]
+const DYNAMIC_CHECKLIST_EDIT_STAGE   = 'manager_checklist_review'
+const DYNAMIC_CHECKLIST_VIEW_STAGES  = [
+  'under_assessment', 'secretary_review', 'returned_for_clarification', 'deferred', 'tabled',
+  'awaiting_legal_advice', 'awaiting_cabinet_decision', 'resubmitted', 'forwarded_to_commission',
+  'commission_sitting', 'matters_arising', 'approved', 'rejected', 'returned',
+  'deferred_back_to_hr', 'minutes_drafted_signed', 'decision_entered_assigned',
+  'under_implementation', 'implementation_report',
 ]
 
 // ─── Stage badge ──────────────────────────────────────────────────────────────
@@ -111,6 +129,7 @@ export default function SubmissionDetail() {
   const [busy, setBusy]             = useState(false)
   const [checklist, setChecklist]   = useState([])
   const [checklistBusy, setChecklistBusy] = useState(false)
+  const [sittingPackMode, setSittingPackMode] = useState(false)
   const [documents, setDocuments]   = useState([])
   const [uploadBusy, setUploadBusy] = useState(false)
   const [uploadDesc, setUploadDesc] = useState('')
@@ -125,10 +144,19 @@ export default function SubmissionDetail() {
   const [dynamicFormBusy, setDynamicFormBusy] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
+  const [officers, setOfficers] = useState([])
+  const [selectedOfficer, setSelectedOfficer] = useState('')
+  const [allocateBusy, setAllocateBusy] = useState(false)
+  const [overrideStage, setOverrideStage] = useState(false)
 
   const isAdmin        = user?.role === 'psc_admin'
-  const canTransition  = user && TRANSITION_ROLES.includes(user.role)
+  const canOverrideStage = user && (isAdmin || user.is_superuser || user.is_staff)
+  const canTransition  = user && (TRANSITION_ROLES.includes(user.role) || canOverrideStage)
   const isUnitManager  = user && UNIT_MANAGER_ROLES.includes(user.role)
+  const canAllocate    = user && (
+    isAdmin
+    || (MANAGER_ROLE_TO_UNIT[user.role] && MANAGER_ROLE_TO_UNIT[user.role] === submission?.routed_unit)
+  )
   const canAnnotateDocs = user && [
     ...UNIT_MANAGER_ROLES,
     'psc_officer', 'psc_secretary', 'psc_commissioner', 'psc_admin',
@@ -150,18 +178,20 @@ export default function SubmissionDetail() {
 
   const showOduChecklist = canShowOduChecklist(submission, user)
 
-  // Restructure Submission Form (ORG-3.1 template)
-  const isRestructureSubmission = submission?.form_type_code === 'ORG-3.1'
-  const canEditRestructure = user && [
-    'ministry_hr', 'dept_admin', 'head_of_agency',
-    'psc_officer', 'psc_admin', 'psc_secretary',
-  ].includes(user.role)
+  // Dynamic checklist — shown when the form type has a linked checklist and the user has a matching role/stage
+  const hasDynamicChecklist = Boolean(submission?.form_type_detail?.checklist_form_type)
+  const stage = submission?.current_stage
+  const showDynamicChecklist = user && hasDynamicChecklist && (
+    (DYNAMIC_CHECKLIST_EDIT_ROLES.includes(user.role) && stage === DYNAMIC_CHECKLIST_EDIT_STAGE) ||
+    (DYNAMIC_CHECKLIST_VIEW_ROLES.includes(user.role) && DYNAMIC_CHECKLIST_VIEW_STAGES.includes(stage)) ||
+    user.is_superuser
+  )
 
   const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
-  const showSecretariatBrief = user && SECRETARIAT_BRIEF_ROLES.includes(user.role)
-  const showDeadlineDrafts = user && DEADLINE_DRAFT_ROLES.includes(user.role)
-  const showQualityScore = user && QUALITY_SCORE_ROLES.includes(user.role)
+  const showSecretariatBrief = user && SECRETARIAT_BRIEF_ROLES.includes(user.role) && user.ai_enabled === true
+  const showDeadlineDrafts = user && DEADLINE_DRAFT_ROLES.includes(user.role) && user.ai_enabled === true
   const showPackageValidation = user && PACKAGE_VALIDATE_ROLES.includes(user.role)
+    && user.ai_package_validation_enabled !== false
   const showPolicyGuardrail = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
     && policyGuardrailApplies(submission)
   const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
@@ -186,6 +216,43 @@ export default function SubmissionDetail() {
     if (showPolicyGuardrail) setPolicyDrawerOpen(true)
   }, [showPolicyGuardrail])
 
+  useEffect(() => {
+    let cancelled = false
+    if (!id || !canAllocate) { setOfficers([]); return undefined }
+    api.get(`/submissions/${id}/assignable-officers/`)
+      .then(r => { if (!cancelled) setOfficers(r.data || []) })
+      .catch(() => { if (!cancelled) setOfficers([]) })
+    return () => { cancelled = true }
+  }, [id, canAllocate])
+
+  const allocateOfficer = async () => {
+    if (!selectedOfficer) { toast.error('Select an officer to allocate to.'); return }
+    setAllocateBusy(true)
+    try {
+      await api.post(`/submissions/${id}/assign/`, { assigned_to: Number(selectedOfficer) })
+      setSelectedOfficer('')
+      await reload()
+      toast.success('Submission allocated.')
+    } catch (err) {
+      toast.error(formatApiError(err, 'Could not allocate the submission.'))
+    } finally {
+      setAllocateBusy(false)
+    }
+  }
+
+  const unallocateOfficer = async () => {
+    setAllocateBusy(true)
+    try {
+      await api.post(`/submissions/${id}/assign/`, { assigned_to: null })
+      await reload()
+      toast.success('Submission unallocated.')
+    } catch (err) {
+      toast.error(formatApiError(err, 'Could not unallocate the submission.'))
+    } finally {
+      setAllocateBusy(false)
+    }
+  }
+
   const fetchTransitions = useCallback(async () => {
     if (!id || !user || !canTransition) { setAllowed([]); setTargetStage(''); return }
     try {
@@ -208,7 +275,7 @@ export default function SubmissionDetail() {
 
   // Poll every 30s for stage changes (no WebSocket infra needed)
   useEffect(() => {
-    const interval = setInterval(fetchSubmission, 30000)
+    const interval = setInterval(() => { if (!isRateLimited()) fetchSubmission() }, 30000)
     return () => clearInterval(interval)
   }, [fetchSubmission])
 
@@ -449,6 +516,14 @@ const stageDescriptions = {
     e.preventDefault()
     if (!targetStage) return
 
+    const isDgReturn =
+      submission?.current_stage === 'pending_dg_endorsement' && targetStage === 'draft'
+    if (isDgReturn && !remarks.trim()) {
+      setError('Please add a comment explaining why you are returning this submission to HR.')
+      toast.error('A comment is required when returning to HR.')
+      return
+    }
+
     const runTransition = async (acknowledgeGaps = false) => {
       await api.post(`/submissions/${id}/transition/`, {
         new_stage: targetStage,
@@ -539,6 +614,16 @@ const stageDescriptions = {
         action={
           <div className="flex items-center gap-2">
             <Link to="/submissions" className="btn-outline">Back to log</Link>
+            {showOduChecklist && (
+              <button
+                type="button"
+                onClick={() => setSittingPackMode(true)}
+                className="btn-primary inline-flex items-center gap-1.5"
+              >
+                <ClipboardList size={14} />
+                Sitting Pack mode
+              </button>
+            )}
             {isAdmin && (
               <>
                 <Link
@@ -609,13 +694,8 @@ const stageDescriptions = {
         />
       )}
 
-      {showQualityScore && (
-        <SubmissionQualityScore
-          submission={submission}
-          submissionId={id}
-          onUpdated={setSubmission}
-          canRescore
-        />
+      {showDynamicChecklist && (
+        <SubmissionChecklistPanel submissionId={id} />
       )}
 
       {showSecretariatBrief && (
@@ -1125,15 +1205,7 @@ const stageDescriptions = {
               submissionId={id}
               canEdit={canEditChecklist}
               hasDocuments={documents.length > 0}
-            />
-          )}
-
-          {/* ── Restructure Submission Form (ORG-3.1 template) ── */}
-          {isRestructureSubmission && (
-            <RestructureSubmissionForm
-              submissionId={Number(id)}
-              submission={submission}
-              canEdit={!!canEditRestructure}
+              autofillEnabled={user?.ai_checklist_autofill_enabled !== false}
             />
           )}
 
@@ -1202,20 +1274,57 @@ const stageDescriptions = {
             </div>
           )}
 
-          {canTransition && allowed.length > 0 && (
+          {canTransition && (allowed.length > 0 || canOverrideStage) && (
             <form onSubmit={submitTransition} className="card card-compact space-y-4">
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Move to Next Stage</h3>
+              {canOverrideStage && !overrideStage && allowed.length === 0 && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  No standard transitions from <span className="font-medium">{stageLabel(submission.current_stage)}</span>. Enable override below to move it anyway.
+                </p>
+              )}
+              {canOverrideStage && (
+                <label className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={overrideStage}
+                    onChange={e => {
+                      const checked = e.target.checked
+                      setOverrideStage(checked)
+                      if (checked) {
+                        setTargetStage(prev => prev || Object.keys(STAGE_LABELS).find(s => s !== submission.current_stage) || '')
+                      } else {
+                        setTargetStage(allowed[0] || '')
+                      }
+                    }}
+                  />
+                  <span>
+                    Override (move to any stage). Bypasses the normal workflow — use only to correct mistakes.
+                  </span>
+                </label>
+              )}
               <BaseSelect
                 label="Select stage"
                 value={targetStage}
                 onChange={(_e, v) => setTargetStage(v)}
-                options={allowed.map(s => ({ value: s, label: stageLabel(s) }))}
+                options={(overrideStage
+                  ? Object.keys(STAGE_LABELS).filter(s => s !== submission.current_stage)
+                  : allowed
+                ).map(s => ({ value: s, label: stageLabel(s) }))}
                 hint={targetStage ? stageMeta(targetStage).category : undefined}
               />
               <BaseTextarea
                 label="Remarks"
-                hint="Optional"
-                placeholder="Add notes about this transition…"
+                hint={
+                  submission.current_stage === 'pending_dg_endorsement' && targetStage === 'draft'
+                    ? 'Required — explain what HR needs to change'
+                    : 'Optional'
+                }
+                placeholder={
+                  submission.current_stage === 'pending_dg_endorsement' && targetStage === 'draft'
+                    ? 'Explain why you are returning this submission to HR…'
+                    : 'Add notes about this transition…'
+                }
                 value={remarks}
                 onChange={e => setRemarks(e.target.value)}
                 rows={3}
@@ -1226,6 +1335,7 @@ const stageDescriptions = {
                 className="w-full"
                 loading={busy}
                 loadingLabel="Saving"
+                disabled={!targetStage}
                 icon={!busy ? <ArrowRight size={14} /> : undefined}
               >
                 Apply transition
@@ -1233,7 +1343,52 @@ const stageDescriptions = {
             </form>
           )}
 
-          {canTransition && !allowed.length && (
+          {canAllocate && (
+            <div className="card card-compact space-y-3">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Allocate to officer</h3>
+              {submission.assigned_to_name ? (
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-slate-600 dark:text-slate-300">
+                    Currently with <span className="font-medium text-slate-800 dark:text-slate-100">{submission.assigned_to_name}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={unallocateOfficer}
+                    disabled={allocateBusy}
+                    className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Not yet allocated. Choose an officer in your unit to carry out the assessment.
+                </p>
+              )}
+              <BaseSelect
+                label="Officer"
+                value={selectedOfficer}
+                onChange={(_e, v) => setSelectedOfficer(v)}
+                options={[
+                  { value: '', label: 'Select an officer…' },
+                  ...officers.map(o => ({ value: String(o.id), label: `${o.full_name} — ${(o.role || '').replace(/_/g, ' ')}` })),
+                ]}
+              />
+              <BaseButton
+                type="button"
+                variant="primary"
+                className="w-full"
+                loading={allocateBusy}
+                loadingLabel="Allocating"
+                onClick={allocateOfficer}
+                disabled={!selectedOfficer}
+              >
+                {submission.assigned_to_name ? 'Reassign' : 'Allocate'}
+              </BaseButton>
+            </div>
+          )}
+
+          {canTransition && !allowed.length && !canOverrideStage && (
             <div className="card card-compact">
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 No transitions available from <span className="font-medium">{stageLabel(submission.current_stage)}</span> for your role.
@@ -1345,6 +1500,16 @@ const stageDescriptions = {
           setSignerDoc(null)
           fetchSignatureCounts()
         }}
+      />
+    )}
+    {sittingPackMode && showOduChecklist && (
+      <SittingPackView
+        submissionId={id}
+        submission={submission}
+        documents={documents}
+        dynamicForm={dynamicForm}
+        isDedicatedForm={isDedicatedForm}
+        onClose={() => setSittingPackMode(false)}
       />
     )}
     </>

@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PSSM 3.1 — Organization Restructure and/or Establishment Variation Submission
+  Standard Format (Public Service Staff Manual, Section 3.1)
+
+  General-purpose template. Use for ANY Ministry/Department/Agency submission to
+  the Public Service Commission requesting an organisation restructure or
+  establishment variation.
+
+  Import into Form Builder via Import (.xml) on the linked PSC form type.
+  Replace bracketed guidance in placeholders/help text with submission-specific
+  content at data-entry time.
+-->
+<fields>
+
+  <!-- ═══════════════════════════════════════════════════════
+       COVER — SUBMISSION HEADER
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Organization Restructure / Establishment Variation Submission</label>
+    <field_key>section_cover</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+
+  <field>
+    <label>Ministry / Department / Agency</label>
+    <field_key>submitting_entity</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. Ministry / Department of …</placeholder>
+    <help_text>To be typed on Ministry or Departmental letterhead.</help_text>
+    <is_required>true</is_required>
+    <display_order>20</display_order>
+  </field>
+
+  <field>
+    <label>Addressed To</label>
+    <field_key>addressed_to</field_key>
+    <field_type>text</field_type>
+    <placeholder>The Secretary, Public Service Commission, PM Bag 017, Port Vila</placeholder>
+    <is_required>false</is_required>
+    <display_order>30</display_order>
+  </field>
+
+  <field>
+    <label>Submission Type</label>
+    <field_key>submission_type</field_key>
+    <field_type>select</field_type>
+    <choices>Organization Restructure
+Establishment Variation
+Both (Restructure and Establishment Variation)</choices>
+    <is_required>true</is_required>
+    <display_order>40</display_order>
+  </field>
+
+  <field>
+    <label>Subject</label>
+    <field_key>subject</field_key>
+    <field_type>text</field_type>
+    <placeholder>Proposal to Revise the Organisation Structure for the Ministry/Department of …</placeholder>
+    <help_text>Insert the title of the proposal.</help_text>
+    <is_required>true</is_required>
+    <display_order>50</display_order>
+  </field>
+
+  <field>
+    <label>Date Submitted</label>
+    <field_key>date_submitted</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>60</display_order>
+  </field>
+
+  <field>
+    <label>File Reference</label>
+    <field_key>file_reference</field_key>
+    <field_type>text</field_type>
+    <is_required>false</is_required>
+    <display_order>70</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       1. BACKGROUND
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>1. Background</label>
+    <field_key>section_background</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>80</display_order>
+  </field>
+
+  <field>
+    <label>Background</label>
+    <field_key>background</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Insert the reasons for seeking the restructure / establishment variation.</placeholder>
+    <help_text>Describe the entity's mandate, the drivers for change, and the expected improvement in service delivery to clients.</help_text>
+    <is_required>true</is_required>
+    <display_order>90</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       2. PROPOSAL
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>2. Proposal</label>
+    <field_key>section_proposal</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>100</display_order>
+  </field>
+
+  <field>
+    <label>Proposal — Positions, Roles and Grading</label>
+    <field_key>proposal_details</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Insert details of any positions to be deleted or re-graded, the new positions being sought, their respective roles and responsibilities, and the proposed grading of each position.</placeholder>
+    <is_required>true</is_required>
+    <display_order>110</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       3. COSTING
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>3. Costing</label>
+    <field_key>section_costing</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>120</display_order>
+  </field>
+
+  <field>
+    <label>Costing Table — Current Positions vs Proposed Positions</label>
+    <field_key>costing_table</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>CURRENT APPROVED POSITIONS TO BE DELETED OR AFFECTED | PROPOSED POSITIONS TO BE CREATED / UPGRADED / DOWNGRADED&#10;Columns: Post No. | Title/Occupant | Level/Grade | Salary || Post No. | Title | Level/Grade | Salary* | Salary Difference (+/-)</placeholder>
+    <help_text>Provide the costing table as per the standard format. *Insert salary figure for the proposed grade. Include totals for both sides.</help_text>
+    <is_required>true</is_required>
+    <display_order>130</display_order>
+  </field>
+
+  <field>
+    <label>Vacant Positions — Funding Status</label>
+    <field_key>costing_vacant_funding</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>For any vacant position, indicate whether funds have been allocated from the current financial year to enable the position to be filled (if required).</placeholder>
+    <is_required>false</is_required>
+    <display_order>140</display_order>
+  </field>
+
+  <field>
+    <label>Amount Required to Fill Proposed Positions (Current Financial Year)</label>
+    <field_key>costing_current_year_required</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>State the amount required to fill the proposed positions in the current financial year (e.g. if a new position is filled in July, only 6/12 of the full-year funding is required this year).</placeholder>
+    <is_required>true</is_required>
+    <display_order>150</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       4. IMPLEMENTATION PLAN
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>4. Implementation Plan</label>
+    <field_key>section_implementation</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>160</display_order>
+  </field>
+
+  <field>
+    <label>Implementation Plan</label>
+    <field_key>implementation_plan</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Insert details of how the proposal, if approved by the PSC, will be implemented.</placeholder>
+    <help_text>State whether funds are available from the current year's budget for immediate filling of new positions, and how positions will be filled (transfer at same grade, acting arrangements pending advertisement, temporary or contract appointment, etc.).</help_text>
+    <is_required>true</is_required>
+    <display_order>170</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       5. RECOMMENDATION
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>5. Recommendation</label>
+    <field_key>section_recommendation</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>180</display_order>
+  </field>
+
+  <field>
+    <label>Recommendation to the Public Service Commission</label>
+    <field_key>recommendation</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>It is therefore recommended that the PSC approve … (insert details of what the Ministry/Department wants the PSC to approve).</placeholder>
+    <is_required>true</is_required>
+    <display_order>190</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       DIRECTOR SIGN-OFF
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Director Sign-Off</label>
+    <field_key>section_director_signoff</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>200</display_order>
+  </field>
+
+  <field>
+    <label>Director — Name and Title</label>
+    <field_key>director_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Director's name and title</placeholder>
+    <is_required>true</is_required>
+    <display_order>210</display_order>
+  </field>
+
+  <field>
+    <label>Director — Date</label>
+    <field_key>director_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>220</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ATTACHMENTS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Attachments</label>
+    <field_key>section_attachments</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>230</display_order>
+  </field>
+
+  <field>
+    <label>Current Structure (OPSC-stamped) &amp; Proposed Structure — Uploaded</label>
+    <field_key>attachment_org_charts</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — current structure (with OPSC stamp) and proposed structure uploaded</placeholder>
+    <help_text>The current structure must carry the OPSC stamp. Upload via the submission Documents panel.</help_text>
+    <is_required>false</is_required>
+    <display_order>240</display_order>
+  </field>
+
+  <field>
+    <label>Job Descriptions — New Positions Only — Uploaded</label>
+    <field_key>attachment_job_descriptions</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — job descriptions for new positions uploaded</placeholder>
+    <is_required>false</is_required>
+    <display_order>250</display_order>
+  </field>
+
+  <field>
+    <label>Other Supporting Documents — Uploaded</label>
+    <field_key>attachment_other</field_key>
+    <field_type>checkbox</field_type>
+    <placeholder>Confirmed — other supporting documents uploaded</placeholder>
+    <is_required>false</is_required>
+    <display_order>260</display_order>
+  </field>
+
+  <field>
+    <label>Attachments List / References</label>
+    <field_key>attachments_list</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>List the attachments: current &amp; proposed structures, job descriptions (new positions), costing spreadsheet, and any other supporting documents.</placeholder>
+    <is_required>false</is_required>
+    <display_order>270</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       DIRECTOR-GENERAL ENDORSEMENT
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Director-General Endorsement</label>
+    <field_key>section_dg_endorsement</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>280</display_order>
+  </field>
+
+  <field>
+    <label>Endorsement Statement</label>
+    <field_key>dg_endorsement_statement</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>I support/endorse the above proposal from the Director, (insert title of Director).</placeholder>
+    <is_required>false</is_required>
+    <display_order>290</display_order>
+  </field>
+
+  <field>
+    <label>Director-General — Name and Title</label>
+    <field_key>dg_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Director-General's name and title</placeholder>
+    <is_required>false</is_required>
+    <display_order>300</display_order>
+  </field>
+
+  <field>
+    <label>Director-General — Date</label>
+    <field_key>dg_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>310</display_order>
+  </field>
+
+</fields>

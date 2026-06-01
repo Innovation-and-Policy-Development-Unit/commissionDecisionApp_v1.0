@@ -80,7 +80,7 @@ _KEYWORD_HINTS: tuple[tuple[tuple[str, ...], str], ...] = (
 
 def _manager_odu_name() -> str:
     profile = (
-        User.objects.filter(profile__role=Role.ODU_MANAGER)
+        User.objects.filter(psc_profile__role=Role.ODU_MANAGER)
         .order_by("id")
         .first()
     )

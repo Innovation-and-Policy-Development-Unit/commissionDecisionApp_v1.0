@@ -134,6 +134,8 @@ from .serializers import (
     RestructureSubmissionDataSerializer,
     KnowledgeCategorySerializer,
     KnowledgeArticleSerializer,
+    SubmissionChecklistResponseSerializer,
+    ChecklistFormTypeSerializer,
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
@@ -168,7 +170,10 @@ from .models import (
     FeedbackStatus,
     ODURestructureChecklist,
     ODUChecklistStatus,
+    PSCFormField,
+    PSCFormType,
     RestructureSubmissionData,
+    SubmissionChecklistResponse,
 )
 
 
@@ -261,6 +266,7 @@ def _submission_queryset_for(user):
     if role == Role.CSU_MANAGER:
         return qs.filter(is_internal=True)
     if role in {
+        Role.RECEPTIONIST,
         Role.PSC_OFFICER,
         Role.PSC_SECRETARY,
         Role.PSC_COMMISSIONER,
@@ -366,14 +372,43 @@ def _updated_fields(submission, prev, target):
         fields.add("assessment_deadline_at")
     if submission.scheduled_meeting_id:
         fields.add("scheduled_meeting")
+    if prev == WorkflowStage.PENDING_DG_ENDORSEMENT and target == WorkflowStage.SUBMITTED:
+        fields.add("dg_endorsed_by")
+        fields.add("dg_endorsed_at")
+    if prev == WorkflowStage.DRAFT and target == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
+        fields.add("routed_unit")
     return fields
 
 
-def _dispatch_transition_notifications(submission, prev, target, actor):
+def _dg_recipients_for_submission(submission):
+    """Resolve the Head of Agency (DG) who endorses this submission.
+
+    For a department-scoped submission, prefer the department director; otherwise
+    fall back to the ministry-level DG (head of agency without a department).
+    """
+    from .models import Profile
+
+    if not submission or not submission.ministry_id:
+        return []
+    base = Profile.objects.filter(
+        role=Role.HEAD_OF_AGENCY,
+        ministry_id=submission.ministry_id,
+        user__is_active=True,
+    ).select_related("user")
+    if submission.department_id:
+        dept = base.filter(department_id=submission.department_id)
+        if dept.exists():
+            return [p.user for p in dept]
+    return [p.user for p in base.filter(department__isnull=True)]
+
+
+def _dispatch_transition_notifications(submission, prev, target, actor, remarks=""):
     """Create in-app Notification records for the relevant parties."""
     from .models import Meeting, Notification as NotificationModel
 
     recipients = []
+    title = ""
+    body = ""
 
     def _resolve_receiver_roles():
         agenda_code = (submission.agenda_category or "").strip().lower()
@@ -405,13 +440,42 @@ def _dispatch_transition_notifications(submission, prev, target, actor):
         }
         return [unit_to_role.get(submission.routed_unit, Role.PSC_OFFICER)]
 
-    if prev == WorkflowStage.DRAFT and target == WorkflowStage.SUBMITTED:
+    if (
+        prev in (WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
+        and target == WorkflowStage.SUBMITTED
+    ):
         receiver_roles = _resolve_receiver_roles()
         recipients = User.objects.filter(
             psc_profile__role__in=receiver_roles, is_active=True
         )
         title = f"New submission: {submission.reference_number}"
         body = f"{submission.title} has been submitted and needs your checklist review."
+
+    elif prev == WorkflowStage.DRAFT and target == WorkflowStage.PENDING_DG_ENDORSEMENT:
+        recipients = _dg_recipients_for_submission(submission)
+        actor_name = (actor.get_full_name() or actor.username) if actor else "Ministry HR"
+        title = f"Endorsement required: {submission.reference_number}"
+        body = (
+            f"{submission.title} has been submitted by {actor_name} and is awaiting your "
+            f"endorsement before it is sent to the Public Service Commission."
+        )
+
+    elif prev == WorkflowStage.PENDING_DG_ENDORSEMENT and target == WorkflowStage.DRAFT:
+        recipients = User.objects.filter(
+            pk=submission.created_by_id, is_active=True
+        )
+        reason = (remarks or "").strip()
+        title = f"Returned for changes: {submission.reference_number}"
+        if reason:
+            body = (
+                f"The Director-General returned '{submission.title}' to you for changes.\n\n"
+                f"Reason: {reason}"
+            )
+        else:
+            body = (
+                f"The Director-General returned '{submission.title}' to you for changes. "
+                f"Please review the submission."
+            )
 
     elif target == WorkflowStage.RETURNED_FOR_CLARIFICATION:
         recipients = User.objects.filter(
@@ -486,7 +550,7 @@ def _dispatch_transition_notifications(submission, prev, target, actor):
         if target in (WorkflowStage.APPROVED, WorkflowStage.REJECTED):
             label = "approved" if target == WorkflowStage.APPROVED else "rejected"
         send_transition_emails(
-            submission, prev, target, recipient_list, decision_label=label
+            submission, prev, target, recipient_list, decision_label=label, remarks=remarks
         )
 
 
@@ -517,6 +581,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
         from .transitions import INTERNAL_SUBMITTER_ROLES
+        from .intake_routing import hr_intake_enabled, receptionist_intake_enabled
         from rest_framework.exceptions import ValidationError
 
         profile = _profile(self.request.user)
@@ -531,6 +596,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
 
             form_code = normalize_form_type_code(self.request.data.get("form_type_code"))
+            if not is_travel_form_code(form_code) and not hr_intake_enabled():
+                raise PermissionDenied(
+                    "Direct ministry submission is currently disabled. Please deliver the signed "
+                    "submission to the PSC registry — the Receptionist will lodge it on your behalf."
+                )
             ministry_id = _resolve_submission_ministry_id(profile, self.request, validated)
             if not ministry_id:
                 raise ValidationError({
@@ -575,6 +645,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
 
             form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
+            if not is_travel_form_code(form_code) and not hr_intake_enabled():
+                raise PermissionDenied(
+                    "Direct ministry submission is currently disabled. Please deliver the signed "
+                    "submission to the PSC registry — the Receptionist will lodge it on your behalf."
+                )
             ministry_id = _resolve_submission_ministry_id(profile, self.request, validated)
             if not ministry_id:
                 raise ValidationError({"ministry": "Please select the ministry for this submission."})
@@ -633,7 +708,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             from .cms_register import CMS_ORIGIN_MESSAGE
             raise PermissionDenied(CMS_ORIGIN_MESSAGE)
 
-        elif profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY}:
+        elif profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.RECEPTIONIST}:
             from .travel_forms import (
                 assert_may_create_secretary_travel_form,
                 is_travel_form_code,
@@ -641,6 +716,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 requires_approval_letter,
             )
 
+            if profile.role == Role.RECEPTIONIST and not receptionist_intake_enabled():
+                raise PermissionDenied(
+                    "Receptionist intake is currently disabled. Contact a PSC administrator."
+                )
             form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
             ministry_id = _resolve_submission_ministry_id(profile, self.request, validated)
             if not ministry_id:
@@ -768,6 +847,44 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             secretary_only=submission.secretary_only,
         )
 
+        # ── Intake route toggles: block submit/route via a disabled route ──────
+        from .intake_routing import hr_intake_enabled, receptionist_intake_enabled
+
+        if (
+            profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}
+            and target in {WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED}
+            and not submission.secretary_only
+            and not hr_intake_enabled()
+        ):
+            raise PermissionDenied(
+                "Direct ministry submission is currently disabled. Please deliver the signed "
+                "submission to the PSC registry — the Receptionist will lodge it on your behalf."
+            )
+        if (
+            profile.role == Role.RECEPTIONIST
+            and target == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            and not receptionist_intake_enabled()
+        ):
+            raise PermissionDenied(
+                "Receptionist intake is currently disabled. Contact a PSC administrator."
+            )
+
+        # ── DG must explain why a submission is returned to HR ─────────────────
+        if (
+            prev == WorkflowStage.PENDING_DG_ENDORSEMENT
+            and target == WorkflowStage.DRAFT
+            and not (remarks or "").strip()
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Please add a comment explaining why you are returning this "
+                        "submission to HR."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if (
             submission.secretary_only
             and prev == WorkflowStage.DRAFT
@@ -848,11 +965,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             target = WorkflowStage.SECRETARY_REVIEW
 
         # ── A3: pre-submit package validation (draft → submitted) ───────────────
+        from .ai_settings import package_validation_enabled
+
         if (
-            prev == WorkflowStage.DRAFT
+            prev in {WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT}
             and target in {WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW}
             and not acknowledge_gaps
             and not submission.secretary_only
+            and package_validation_enabled()
         ):
             from django.conf import settings as django_settings
 
@@ -919,9 +1039,30 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             submission.current_stage = target
 
-            # ── On first submission: auto-assign scheduled_meeting based on cutoff ──
+            # ── Auto-route to the responsible unit when entering checklist review ──
+            # Covers both the Receptionist intake path (DRAFT → checklist review)
+            # and the ministry HR → DG → PSC path (SUBMITTED → checklist review):
+            # whenever a submission enters Manager Checklist Review without a unit,
+            # derive it from the form type so the unit Manager/Principals (and the
+            # ODU restructure checklist) can pick it up.
             if (
-                prev == WorkflowStage.DRAFT
+                target == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+                and not submission.routed_unit
+            ):
+                from .intake_routing import routed_unit_for_form_type
+
+                routed = routed_unit_for_form_type(submission.form_type_code)
+                if routed:
+                    submission.routed_unit = routed
+
+            # ── DG (Head of Agency) endorsement: stamp endorser when submitting to PSC ──
+            if prev == WorkflowStage.PENDING_DG_ENDORSEMENT and target == WorkflowStage.SUBMITTED:
+                submission.dg_endorsed_by = request.user
+                submission.dg_endorsed_at = timezone.now()
+
+            # ── On first submission to PSC: auto-assign scheduled_meeting based on cutoff ──
+            if (
+                prev in {WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT}
                 and target == WorkflowStage.SUBMITTED
                 and not submission.secretary_only
             ):
@@ -980,7 +1121,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         # ── Fire notifications after commit ──
         transaction.on_commit(
-            lambda: _dispatch_transition_notifications(submission, prev, target, request.user)
+            lambda: _dispatch_transition_notifications(
+                submission, prev, target, request.user, remarks
+            )
         )
 
         from .tasks import SUBMISSION_BRIEF_STAGES, queue_submission_brief
@@ -1082,6 +1225,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         submission = self.get_object()
         profile = _profile(request.user)
+
+        from .ai_settings import package_validation_enabled
+
+        if not package_validation_enabled():
+            return Response(
+                {"detail": "AI package validation is currently disabled by the administrator."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         _submit_roles = {
             Role.MINISTRY_HR,
             Role.DEPT_ADMIN,
@@ -1094,9 +1246,17 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if profile.role not in _submit_roles and not request.user.is_staff:
             raise PermissionDenied("You do not have permission to validate this submission package.")
 
-        if submission.current_stage != WorkflowStage.DRAFT:
+        if submission.current_stage not in {
+            WorkflowStage.DRAFT,
+            WorkflowStage.PENDING_DG_ENDORSEMENT,
+        }:
             return Response(
-                {"detail": "Package validation is only available while the submission is in Draft."},
+                {
+                    "detail": (
+                        "Package validation is only available while the submission is in "
+                        "Draft or pending the Director-General's endorsement."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1205,6 +1365,40 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         queue_submission_brief(submission.id, force=True, sync_fallback=False)
         return Response(SubmissionDetailSerializer(submission).data)
 
+    @action(detail=True, methods=["get"], url_path="assignable-officers")
+    def assignable_officers(self, request, pk=None):
+        """List officers the current unit manager may allocate this submission to."""
+        from django.contrib.auth.models import User
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff
+        is_unit_manager = profile.role in OPSC_UNIT_MANAGER_ROLES
+        if not (is_admin or is_unit_manager):
+            raise PermissionDenied("Only unit managers can allocate submissions.")
+
+        allowed_roles = manager_allowed_staff_roles(
+            profile.role if is_unit_manager else None
+        )
+        officers = (
+            User.objects.filter(
+                is_active=True,
+                psc_profile__role__in=allowed_roles,
+            )
+            .select_related("psc_profile")
+            .order_by("first_name", "username")
+        )
+        data = [
+            {
+                "id": u.id,
+                "full_name": (u.get_full_name() or u.username),
+                "username": u.username,
+                "role": getattr(u.psc_profile, "role", ""),
+            }
+            for u in officers
+        ]
+        return Response(data)
+
     @action(detail=True, methods=["post"], url_path="assign")
     def assign(self, request, pk=None):
         """
@@ -1212,7 +1406,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         POST { "assigned_to": <user_id> }  — pass null to unassign.
         """
         from .audit import log_action as _log
-        from .models import AuditLog as _AL
+        from .models import AuditLog as _AL, Notification
         from django.contrib.auth.models import User
 
         submission = self.get_object()
@@ -1269,6 +1463,25 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         _log(request, _AL.Action.UPDATE, resource_type="Submission",
              resource_id=submission.id, resource_label=submission.reference_number,
              description=f"Submission assigned to {assignee.username}")
+
+        # ── Notify the assignee (in-app + desktop alert + email) ──────────────
+        manager_name = request.user.get_full_name() or request.user.username
+        Notification.objects.create(
+            recipient=assignee,
+            submission=submission,
+            channel=Notification.Channel.BOTH,
+            title=f"Assigned to you: {submission.reference_number}",
+            body=(
+                f"{manager_name} has allocated '{submission.title}' to you for assessment."
+            ),
+        )
+        try:
+            from .email_notify import send_assignment_email
+
+            send_assignment_email(submission, assignee, manager_name=manager_name)
+        except Exception:
+            pass
+
         return Response(SubmissionDetailSerializer(submission).data)
 
     def _assign_scheduled_meeting(self, submission):
@@ -1576,6 +1789,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .submission_checklist import ensure_submission_checklist_items
 
         submission = self.get_object()
+
+        from .ai_settings import checklist_autofill_enabled
+
+        if not checklist_autofill_enabled():
+            return Response(
+                {"detail": "AI checklist autofill is currently disabled by the administrator."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if submission.is_attachment or submission.is_internal:
             return Response({"suggestions": {}, "items": [], "error": None})
@@ -5138,7 +5359,7 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
 
-        skip_if_blank = {"SMTP_PASSWORD"}
+        skip_if_blank = {"SMTP_PASSWORD", "ANTHROPIC_API_KEY"}
         updated = []
         smtp_password_saved = False
         for key, value in settings_dict.items():
@@ -6818,6 +7039,14 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                 "Only ODU Manager or ODU principal analysts can access this checklist."
             )
 
+    def _require_view_role(self, profile):
+        from .odu_checklist_rules import ODU_CHECKLIST_VIEW_ROLES
+
+        if profile.role not in ODU_CHECKLIST_VIEW_ROLES:
+            raise PermissionDenied(
+                "You do not have access to the ODU restructure checklist."
+            )
+
     def _validate_submission_for_checklist(self, submission):
         from rest_framework.exceptions import ValidationError
 
@@ -6844,14 +7073,25 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="ensure")
     def ensure(self, request):
-        """Load checklist for submission, creating a pre-filled draft (ODU Principal only)."""
+        """Load checklist for a submission.
+
+        During Manager Checklist Review (ODU-routed) an ODU Principal gets a
+        pre-filled draft created on demand. After review, the completed checklist
+        is returned read-only to ODU + PSC reviewer roles so the verification
+        record stays visible downstream.
+        """
         from rest_framework.exceptions import ValidationError
 
         from .odu_checklist_prefill import ensure_odu_checklist_for_submission
-        from .odu_checklist_rules import submission_eligible_for_odu_checklist
+        from .odu_checklist_rules import (
+            submission_eligible_for_odu_checklist,
+            submission_in_odu_view_phase,
+            submission_viewable_odu_checklist,
+            user_is_odu_principal_worker,
+        )
 
         profile = _profile(request.user)
-        self._require_odu_role(profile)
+        self._require_view_role(profile)
 
         submission_id = request.query_params.get("submission")
         if not submission_id:
@@ -6861,35 +7101,39 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
             Submission.objects.select_related("ministry", "department"),
             pk=submission_id,
         )
-        if not submission_eligible_for_odu_checklist(submission):
+        if not submission_viewable_odu_checklist(submission):
             return Response(
                 {
                     "detail": (
                         "Checklist is only shown for ORG-3.1 / PSC 2-1 submissions "
-                        "in Manager Checklist Review routed to ODU."
+                        "routed to ODU."
                     ),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from .odu_checklist_rules import user_is_odu_principal_worker
-
-        allow_create = user_is_odu_principal_worker(profile.role)
+        # Only create a draft during the active review phase, and only for the
+        # ODU Principal (or an admin/superuser, for oversight + testing). In the
+        # read-only view phase, never create — just load.
+        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser
+        in_review = submission_eligible_for_odu_checklist(submission)
+        allow_create = in_review and (
+            user_is_odu_principal_worker(profile.role) or is_admin
+        )
         checklist = ensure_odu_checklist_for_submission(
             submission,
             user=request.user,
             allow_create=allow_create,
         )
         if not checklist:
-            return Response(
-                {
-                    "detail": (
-                        "Checklist has not been started. The ODU Principal must open "
-                        "this submission during checklist review."
-                    ),
-                },
-                status=status.HTTP_404_NOT_FOUND,
+            view_phase = submission_in_odu_view_phase(submission)
+            detail = (
+                "No ODU checklist was completed for this submission."
+                if view_phase
+                else "Checklist has not been started. The ODU Principal must open "
+                     "this submission during checklist review."
             )
+            return Response({"detail": detail}, status=status.HTTP_404_NOT_FOUND)
         return Response(ODUChecklistSerializer(checklist).data)
 
     def perform_create(self, serializer):
@@ -7507,3 +7751,197 @@ class DocumentVersionViewSet(
         next_num = (last.version_num + 1) if last else 1
         DocumentVersion.objects.filter(document=doc, is_current=True).update(is_current=False)
         serializer.save(document=doc, version_num=next_num, uploaded_by=self.request.user, is_current=True)
+
+
+# ── Submission Checklist Response ─────────────────────────────────────────────
+
+# Roles that can fill/edit the checklist during manager_checklist_review
+CHECKLIST_EDIT_STAGE   = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+CHECKLIST_EDIT_ROLES   = frozenset({
+    Role.ODU_MANAGER, Role.ODU_PRINCIPAL,
+    Role.PRINCIPAL_ORG_DEV_ANALYST, Role.PRINCIPAL_JOB_ANALYST,
+    Role.PSC_ADMIN,
+})
+# Roles that can view the completed checklist in later stages
+CHECKLIST_VIEW_STAGES  = frozenset({
+    WorkflowStage.UNDER_ASSESSMENT,
+    WorkflowStage.SECRETARY_REVIEW,
+    WorkflowStage.RETURNED_FOR_CLARIFICATION,
+    WorkflowStage.DEFERRED,
+    WorkflowStage.TABLED,
+    WorkflowStage.AWAITING_LEGAL_ADVICE,
+    WorkflowStage.AWAITING_CABINET_DECISION,
+    WorkflowStage.RESUBMITTED,
+    WorkflowStage.FORWARDED_TO_COMMISSION,
+    WorkflowStage.COMMISSION_SITTING,
+    WorkflowStage.MATTERS_ARISING,
+    WorkflowStage.APPROVED,
+    WorkflowStage.REJECTED,
+    WorkflowStage.RETURNED,
+    WorkflowStage.DEFERRED_BACK_TO_HR,
+    WorkflowStage.MINUTES_DRAFTED_SIGNED,
+    WorkflowStage.DECISION_ENTERED_ASSIGNED,
+    WorkflowStage.UNDER_IMPLEMENTATION,
+    WorkflowStage.IMPLEMENTATION_REPORT,
+})
+CHECKLIST_VIEW_ROLES   = CHECKLIST_EDIT_ROLES | frozenset({
+    Role.PSC_OFFICER, Role.PSC_SECRETARY,
+    Role.SENIOR_ADMIN_OFFICER, Role.PSC_MANAGER,
+})
+CHECKLIST_APPROVE_ROLES = frozenset({Role.ODU_MANAGER, Role.PSC_ADMIN})
+
+
+class SubmissionChecklistViewSet(viewsets.GenericViewSet):
+    """
+    Dynamic checklist attached to a submission.
+
+    GET  /submission-checklists/ensure/?submission=<id>
+         Load (or create) the checklist response for the authenticated user.
+    PATCH /submission-checklists/<id>/
+         Save draft answers.
+    POST /submission-checklists/<id>/submit/
+         Principal submits for manager review.
+    POST /submission-checklists/<id>/approve/
+         Manager approves.
+    POST /submission-checklists/<id>/return/
+         Manager returns for revision.
+    """
+
+    serializer_class   = SubmissionChecklistResponseSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _profile_and_submission(self, request, submission_id=None):
+        profile = _profile(request.user)
+        if submission_id:
+            submission = get_object_or_404(Submission, pk=submission_id)
+        else:
+            submission = None
+        return profile, submission
+
+    @action(detail=False, methods=["get"], url_path="ensure")
+    def ensure(self, request):
+        """Return the checklist response for a submission, creating it if it doesn't exist."""
+        from django.utils import timezone
+
+        submission_id = request.query_params.get("submission")
+        if not submission_id:
+            return Response({"detail": "submission query parameter required."}, status=400)
+
+        profile, submission = self._profile_and_submission(request, submission_id)
+
+        # Resolve linked checklist form type via the submission's form type
+        checklist_ft = None
+        if submission.form_type_code:
+            try:
+                ft = PSCFormType.objects.select_related("checklist_form_type").get(
+                    code=submission.form_type_code
+                )
+                checklist_ft = ft.checklist_form_type
+            except PSCFormType.DoesNotExist:
+                pass
+
+        if not checklist_ft:
+            return Response(
+                {"detail": "No checklist is configured for this submission type."},
+                status=404,
+            )
+
+        stage = submission.current_stage
+        can_edit = (
+            profile.role in CHECKLIST_EDIT_ROLES or request.user.is_superuser
+        ) and stage == CHECKLIST_EDIT_STAGE
+        can_view = (
+            profile.role in CHECKLIST_VIEW_ROLES or request.user.is_superuser
+        ) and (stage in CHECKLIST_VIEW_STAGES or stage == CHECKLIST_EDIT_STAGE)
+
+        if not can_view and not can_edit:
+            raise PermissionDenied("You do not have access to this checklist.")
+
+        checklist, created = SubmissionChecklistResponse.objects.get_or_create(
+            submission=submission,
+            checklist_form_type=checklist_ft,
+            defaults={"created_by": request.user, "data": {}},
+        )
+
+        serializer = SubmissionChecklistResponseSerializer(checklist)
+        data = serializer.data
+        data["can_edit"] = can_edit
+        data["can_approve"] = profile.role in CHECKLIST_APPROVE_ROLES or request.user.is_superuser
+        return Response(data)
+
+    def partial_update(self, request, pk=None):
+        """PATCH — save draft answers."""
+        checklist = get_object_or_404(SubmissionChecklistResponse, pk=pk)
+        profile   = _profile(request.user)
+        stage     = checklist.submission.current_stage
+
+        if not (profile.role in CHECKLIST_EDIT_ROLES or request.user.is_superuser):
+            raise PermissionDenied("Only checklist reviewers can edit this checklist.")
+        if checklist.status == SubmissionChecklistResponse.Status.APPROVED:
+            return Response({"detail": "Approved checklists cannot be edited."}, status=400)
+
+        allowed_fields = {"data", "manager_comments"}
+        data = {k: v for k, v in request.data.items() if k in allowed_fields}
+        serializer = SubmissionChecklistResponseSerializer(
+            checklist, data=data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        """Principal submits the checklist for manager review."""
+        from django.utils import timezone
+
+        checklist = get_object_or_404(SubmissionChecklistResponse, pk=pk)
+        profile   = _profile(request.user)
+
+        if profile.role not in (CHECKLIST_EDIT_ROLES - CHECKLIST_APPROVE_ROLES) and not request.user.is_superuser:
+            raise PermissionDenied("Only the assigned principal can submit the checklist.")
+        if checklist.status not in (
+            SubmissionChecklistResponse.Status.DRAFT,
+            SubmissionChecklistResponse.Status.RETURNED,
+        ):
+            return Response({"detail": "Only draft or returned checklists can be submitted."}, status=400)
+
+        checklist.status       = SubmissionChecklistResponse.Status.SUBMITTED
+        checklist.submitted_at = timezone.now()
+        checklist.save(update_fields=["status", "submitted_at", "updated_at"])
+        return Response(SubmissionChecklistResponseSerializer(checklist).data)
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        """Manager approves the submitted checklist."""
+        from django.utils import timezone
+
+        checklist = get_object_or_404(SubmissionChecklistResponse, pk=pk)
+        profile   = _profile(request.user)
+
+        if profile.role not in CHECKLIST_APPROVE_ROLES and not request.user.is_superuser:
+            raise PermissionDenied("Only the ODU Manager or admin can approve the checklist.")
+        if checklist.status != SubmissionChecklistResponse.Status.SUBMITTED:
+            return Response({"detail": "Only submitted checklists can be approved."}, status=400)
+
+        checklist.status      = SubmissionChecklistResponse.Status.APPROVED
+        checklist.approved_at = timezone.now()
+        if request.data.get("manager_comments"):
+            checklist.manager_comments = request.data["manager_comments"]
+        checklist.save(update_fields=["status", "approved_at", "manager_comments", "updated_at"])
+        return Response(SubmissionChecklistResponseSerializer(checklist).data)
+
+    @action(detail=True, methods=["post"])
+    def return_for_revision(self, request, pk=None):
+        """Manager returns the checklist to the principal for revision."""
+        checklist = get_object_or_404(SubmissionChecklistResponse, pk=pk)
+        profile   = _profile(request.user)
+
+        if profile.role not in CHECKLIST_APPROVE_ROLES and not request.user.is_superuser:
+            raise PermissionDenied("Only the ODU Manager or admin can return a checklist.")
+        if checklist.status != SubmissionChecklistResponse.Status.SUBMITTED:
+            return Response({"detail": "Only submitted checklists can be returned."}, status=400)
+
+        checklist.status           = SubmissionChecklistResponse.Status.RETURNED
+        checklist.manager_comments = request.data.get("manager_comments", checklist.manager_comments)
+        checklist.save(update_fields=["status", "manager_comments", "updated_at"])
+        return Response(SubmissionChecklistResponseSerializer(checklist).data)

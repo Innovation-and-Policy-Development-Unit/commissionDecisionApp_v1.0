@@ -56,6 +56,7 @@ const TABS = [
 
 const ROLE_CHOICES = [
   { value: 'psc_admin', label: 'PSC Administrator' },
+  { value: 'receptionist', label: 'Receptionist' },
   { value: 'psc_officer', label: 'PSC Officer' },
   { value: 'psc_secretary', label: 'PSC Secretary' },
   { value: 'senior_admin_officer', label: 'Senior Administration Officer' },
@@ -1513,19 +1514,28 @@ export function SettingsTab({ settings, onRefresh }) {
   useEffect(() => {
     const s = {}
     settings.forEach(item => { s[item.key] = item.value })
-    const defaults = ['ENABLE_USER_FEEDBACK', 'TWO_FACTOR_REQUIRED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_TLS', 'SMTP_SSL', 'DEFAULT_FROM_EMAIL', 'AXES_FAILURE_LIMIT', 'AXES_COOLOFF_HOURS', 'LOGIN_RATE_LIMIT', 'PASSWORD_MIN_LENGTH', 'PASSWORD_REQUIRE_UPPERCASE', 'PASSWORD_REQUIRE_LOWERCASE', 'PASSWORD_REQUIRE_DIGITS', 'PASSWORD_REQUIRE_SPECIAL', 'PASSWORD_HISTORY_COUNT']
+    const defaults = ['ENABLE_USER_FEEDBACK', 'INTAKE_RECEPTIONIST_ENABLED', 'INTAKE_HR_ENABLED', 'AI_PACKAGE_VALIDATION_ENABLED', 'AI_CHECKLIST_AUTOFILL_ENABLED', 'ANTHROPIC_API_KEY', 'TWO_FACTOR_REQUIRED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_TLS', 'SMTP_SSL', 'DEFAULT_FROM_EMAIL', 'AXES_FAILURE_LIMIT', 'AXES_COOLOFF_HOURS', 'LOGIN_RATE_LIMIT', 'PASSWORD_MIN_LENGTH', 'PASSWORD_REQUIRE_UPPERCASE', 'PASSWORD_REQUIRE_LOWERCASE', 'PASSWORD_REQUIRE_DIGITS', 'PASSWORD_REQUIRE_SPECIAL', 'PASSWORD_HISTORY_COUNT']
     defaults.forEach(k => { if (s[k] === undefined) s[k] = '' })
     if (s.ENABLE_USER_FEEDBACK === '') s.ENABLE_USER_FEEDBACK = 'true'
+    if (s.INTAKE_RECEPTIONIST_ENABLED === '') s.INTAKE_RECEPTIONIST_ENABLED = 'true'
+    if (s.INTAKE_HR_ENABLED === '') s.INTAKE_HR_ENABLED = 'true'
+    if (s.AI_PACKAGE_VALIDATION_ENABLED === '') s.AI_PACKAGE_VALIDATION_ENABLED = 'true'
+    if (s.AI_CHECKLIST_AUTOFILL_ENABLED === '') s.AI_CHECKLIST_AUTOFILL_ENABLED = 'true'
     if (!s.PASSWORD_MIN_LENGTH)    s.PASSWORD_MIN_LENGTH    = '8'
     if (!s.PASSWORD_HISTORY_COUNT) s.PASSWORD_HISTORY_COUNT = '5'
     if (!s.AXES_FAILURE_LIMIT) s.AXES_FAILURE_LIMIT = '5'
     if (!s.AXES_COOLOFF_HOURS) s.AXES_COOLOFF_HOURS = '1'
     setForm(prev => ({
       ...s,
-      // Never repopulate the secret from the API; keep what the user is typing.
+      // Never repopulate secrets from the API; keep what the user is typing.
       SMTP_PASSWORD: prev.SMTP_PASSWORD || '',
+      ANTHROPIC_API_KEY: prev.ANTHROPIC_API_KEY || '',
     }))
   }, [settings])
+
+  const anthropicConfigured = (settings || []).some(
+    item => item.key === 'ANTHROPIC_API_KEY' && item.configured,
+  )
 
   const save = async e => {
     e.preventDefault()
@@ -1539,8 +1549,9 @@ export function SettingsTab({ settings, onRefresh }) {
       await fetchSmtpStatus()
       await fetchLockoutStats()
       if (refreshFeedbackStatus) await refreshFeedbackStatus()
+      setForm(f => ({ ...f, ANTHROPIC_API_KEY: '' }))
       if (pwd) {
-        setForm(f => ({ ...f, SMTP_PASSWORD: '' }))
+        setForm(f => ({ ...f, SMTP_PASSWORD: '', ANTHROPIC_API_KEY: '' }))
         if (smtpPasswordRef.current) smtpPasswordRef.current.value = ''
         const msg = 'Settings saved. SMTP password is stored securely (the field stays blank).'
         setSuccess(msg)
@@ -1720,6 +1731,103 @@ export function SettingsTab({ settings, onRefresh }) {
             </div>
             <button type="button" onClick={() => toggle('ENABLE_USER_FEEDBACK')}>
               {form.ENABLE_USER_FEEDBACK === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}
+            </button>
+          </div>
+        </section>
+
+        {/* ── Submission Intake Routes ── */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-medium border-b pb-2">
+            <ToggleRight size={18} className="text-primary-500" />
+            <h3>Submission Intake Routes</h3>
+          </div>
+          <p className="text-xs text-slate-500 -mt-1">
+            Choose how submissions enter SCDMS. You can run both routes at once, or disable one.
+          </p>
+          <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-slate-800/40">
+            <div>
+              <p className="text-sm font-medium">Receptionist intake</p>
+              <p className="text-xs text-slate-500">Receptionist scans paper submissions, uploads PDFs (auto OCR), and routes them to the responsible unit Manager.</p>
+            </div>
+            <button type="button" onClick={() => toggle('INTAKE_RECEPTIONIST_ENABLED')}>
+              {form.INTAKE_RECEPTIONIST_ENABLED === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-slate-800/40">
+            <div>
+              <p className="text-sm font-medium">Direct ministry (HR) submission</p>
+              <p className="text-xs text-slate-500">Ministry HR drafts the submission, the DG endorses it, and it is submitted directly to PSC. (Secretary travel forms are unaffected.)</p>
+            </div>
+            <button type="button" onClick={() => toggle('INTAKE_HR_ENABLED')}>
+              {form.INTAKE_HR_ENABLED === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}
+            </button>
+          </div>
+        </section>
+
+        {/* ── AI Features ── */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-medium border-b pb-2">
+            <ToggleRight size={18} className="text-primary-500" />
+            <h3>AI Features</h3>
+          </div>
+
+          {/* API key card — always first */}
+          <div className="p-4 rounded-xl border bg-white dark:bg-slate-800/40 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium">Anthropic API key</p>
+              {anthropicConfigured ? (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  <CheckCircle2 size={12} /> Configured
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                  <ShieldAlert size={12} /> Not set
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">
+              Powers all AI features (executive briefs, quality score, checklist autofill, etc.). Paste your key from{' '}
+              <code className="text-[11px]">console.anthropic.com</code>. Stored securely — the field stays blank after saving and the existing key is kept if you leave it empty.
+            </p>
+            <input
+              type="password"
+              autoComplete="new-password"
+              className="input text-sm w-full"
+              title="Anthropic API key"
+              placeholder={anthropicConfigured ? '•••••••••• (leave blank to keep current key)' : 'sk-ant-…'}
+              value={form.ANTHROPIC_API_KEY || ''}
+              onChange={e => setForm({ ...form, ANTHROPIC_API_KEY: e.target.value })}
+            />
+          </div>
+
+          {/* Feature toggles — disabled (with explanation) when no API key is set */}
+          {!anthropicConfigured && (
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 text-amber-800 dark:text-amber-300 text-xs">
+              <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+              <span>AI features are disabled — add an Anthropic API key above to enable them.</span>
+            </div>
+          )}
+
+          <p className="text-xs text-slate-500 -mt-1">
+            Turn AI-backed helpers off to conserve API tokens. Disable while quota is exhausted, then re-enable later.
+          </p>
+
+          <div className={`flex items-center justify-between p-4 rounded-xl border ${anthropicConfigured ? 'bg-white dark:bg-slate-800/40' : 'bg-slate-50 dark:bg-slate-800/20 opacity-50 pointer-events-none'}`}>
+            <div>
+              <p className="text-sm font-medium">Validate package before submit</p>
+              <p className="text-xs text-slate-500">AI completeness check (documents, fields, attachments) required before HR submits or the DG endorses. When off, the check is hidden and submissions/endorsements proceed without it.</p>
+            </div>
+            <button type="button" onClick={() => toggle('AI_PACKAGE_VALIDATION_ENABLED')} disabled={!anthropicConfigured}>
+              {form.AI_PACKAGE_VALIDATION_ENABLED === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}
+            </button>
+          </div>
+          <div className={`flex items-center justify-between p-4 rounded-xl border ${anthropicConfigured ? 'bg-white dark:bg-slate-800/40' : 'bg-slate-50 dark:bg-slate-800/20 opacity-50 pointer-events-none'}`}>
+            <div>
+              <p className="text-sm font-medium">Auto-fill checklist</p>
+              <p className="text-xs text-slate-500">AI suggests which checklist items are present from the uploaded documents during manager/principal review. When off, the "AI autofill" button is hidden and the checklist is filled manually.</p>
+            </div>
+            <button type="button" onClick={() => toggle('AI_CHECKLIST_AUTOFILL_ENABLED')} disabled={!anthropicConfigured}>
+              {form.AI_CHECKLIST_AUTOFILL_ENABLED === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}
             </button>
           </div>
         </section>

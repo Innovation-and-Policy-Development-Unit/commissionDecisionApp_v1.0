@@ -30,19 +30,25 @@ export default function SubmissionPackageValidation({
   const [localError, setLocalError] = useState('')
   const [pollTimedOut, setPollTimedOut] = useState(false)
 
-  if (!submission || submission.current_stage !== 'draft') return null
+  // Shown while the submission is still pre-PSC: a Draft (HR) or pending the
+  // Director-General's endorsement (DG). NOTE: the conditional return MUST come
+  // after every hook below, otherwise React throws "rendered fewer hooks than
+  // expected" (#300) when the stage changes while mounted.
+  const canValidate = ['draft', 'pending_dg_endorsement'].includes(
+    submission?.current_stage,
+  )
 
-  const gaps = submission.ai_package_gaps || []
+  const gaps = submission?.ai_package_gaps || []
   const sortedGaps = [...gaps].sort(
     (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity),
   )
-  const hasResult = submission.ai_package_processed
-  const ready = submission.ai_package_ready
+  const hasResult = submission?.ai_package_processed
+  const ready = submission?.ai_package_ready
   const processing = !hasResult && validating
 
   useEffect(() => {
-    if (!submissionId || hasResult) return undefined
-    if (!validating && submission.ai_package_processed) return undefined
+    if (!submissionId || !canValidate || hasResult) return undefined
+    if (!validating && submission?.ai_package_processed) return undefined
 
     let attempts = 0
     const interval = setInterval(async () => {
@@ -67,7 +73,9 @@ export default function SubmissionPackageValidation({
     }, POLL_MS)
 
     return () => clearInterval(interval)
-  }, [submissionId, hasResult, validating, onUpdated])
+  }, [submissionId, canValidate, hasResult, validating, onUpdated])
+
+  if (!canValidate) return null
 
   const handleValidate = async () => {
     setValidating(true)

@@ -30,6 +30,7 @@ export default function ChecklistPanel({
   submissionId,
   canEdit,
   hasDocuments,
+  autofillEnabled = true,
 }) {
   const { t } = useTranslation()
   const [autofilling, setAutofilling] = useState(false)
@@ -161,7 +162,7 @@ export default function ChecklistPanel({
         <span className="text-xs text-slate-400 ml-1">
           {confirmedCount}/{checklist.length}
         </span>
-        {canEdit && (
+        {canEdit && autofillEnabled && (
           <button
             type="button"
             onClick={handleAutofill}

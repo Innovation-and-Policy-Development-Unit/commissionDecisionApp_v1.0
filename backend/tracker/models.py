@@ -10,6 +10,7 @@ from django.utils import timezone
 class Role(models.TextChoices):
     # ── PSC Internal roles ──────────────────────────────────────────────────
     PSC_ADMIN              = "psc_admin",              "PSC Administrator"
+    RECEPTIONIST           = "receptionist",           "Receptionist"
     PSC_OFFICER            = "psc_officer",            "PSC Officer"
     PSC_SECRETARY          = "psc_secretary",          "PSC Secretary"
     SENIOR_ADMIN_OFFICER   = "senior_admin_officer",   "Senior Administration Officer"
@@ -43,6 +44,7 @@ class Role(models.TextChoices):
 class WorkflowStage(models.TextChoices):
     # ── Ministry pre-submission ─────────────────────────────────────────────
     DRAFT                      = "draft",                      "Draft"
+    PENDING_DG_ENDORSEMENT     = "pending_dg_endorsement",     "Submitted to DG (Pending Endorsement)"
     SUBMITTED                  = "submitted",                  "Submitted to PSC"
     # ── PSC intake ─────────────────────────────────────────────────────────
     RECEIVED_BY_PSC            = "received_by_psc",            "Received by PSC"
@@ -289,6 +291,15 @@ class PSCFormType(models.Model):
         help_text="Internal key linking to the frontend component, e.g. 'psc_3_7'.")
     is_active = models.BooleanField(default=True,
         help_text="Only active forms appear in the submission dropdown.")
+    is_checklist = models.BooleanField(default=False,
+        help_text="True when this form type defines a checklist (not a submission form).")
+    checklist_form_type = models.ForeignKey(
+        'self',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='submission_form_types',
+        help_text="Checklist form type attached to this submission form type.",
+    )
     display_order = models.IntegerField(default=0)
     agenda_category = models.CharField(
         max_length=32,
@@ -360,6 +371,54 @@ class PSCFormResponse(models.Model):
 
     def __str__(self):
         return f"Response for {self.submission}"
+
+
+class SubmissionChecklistResponse(models.Model):
+    """
+    Stores answers to a dynamic checklist form linked to a submission.
+    One record per (submission, checklist_form_type) pair — filled by the
+    assigned principal during Manager Checklist Review, reviewed by the manager.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT     = "draft",     "Draft"
+        SUBMITTED = "submitted", "Submitted for manager review"
+        APPROVED  = "approved",  "Approved by manager"
+        RETURNED  = "returned",  "Returned for revision"
+
+    submission = models.ForeignKey(
+        'Submission', on_delete=models.CASCADE,
+        related_name='checklist_responses',
+    )
+    checklist_form_type = models.ForeignKey(
+        PSCFormType, on_delete=models.PROTECT,
+        related_name='checklist_responses',
+        limit_choices_to={'is_checklist': True},
+    )
+    data = models.JSONField(default=dict,
+        help_text="Keyed by PSCFormField.field_key — stores the principal's answers.")
+    status = models.CharField(
+        max_length=12, choices=Status.choices,
+        default=Status.DRAFT, db_index=True,
+    )
+    manager_comments = models.TextField(blank=True)
+    created_by  = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='checklist_responses_created',
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    approved_at  = models.DateTimeField(null=True, blank=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+    updated_at   = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('submission', 'checklist_form_type')]
+        verbose_name        = "Submission Checklist Response"
+        verbose_name_plural = "Submission Checklist Responses"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Checklist {self.checklist_form_type.code} — {self.submission.reference_number} ({self.status})"
 
 
 class FormSectionSignature(models.Model):
