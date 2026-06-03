@@ -4,6 +4,7 @@ import { Gauge, RefreshCw, AlertCircle } from 'lucide-react'
 import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import clsx from 'clsx'
 import api from '../../api/client'
+import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 
 const DIMENSION_KEYS = [
   'completeness',
@@ -92,7 +93,9 @@ export default function SubmissionQualityScore({ submission, submissionId, onUpd
     if (!submissionId || submission?.ai_quality_processed || submission?.current_stage === 'draft') {
       return undefined
     }
-    const interval = setInterval(poll, 3000)
+    const interval = setInterval(() => {
+      if (isTabVisible()) poll()
+    }, 3000)
     return () => clearInterval(interval)
   }, [submissionId, submission?.ai_quality_processed, submission?.current_stage, poll])
 

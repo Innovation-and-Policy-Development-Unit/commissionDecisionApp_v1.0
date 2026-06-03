@@ -4,6 +4,9 @@ export const STAGE_LABELS = {
   // Pre-submission
   draft:                      'Draft',
   pending_dg_endorsement:     'Submitted to DG',
+  dg_approved:                'Endorsed by DG',
+  pending_manager_approval:   'Pending Manager Approval',
+  pending_second_approval:    'Pending Second Approval',
   submitted:                  'Submitted to PSC',
   // PSC intake
   received_by_psc:            'Received by PSC',
@@ -32,6 +35,7 @@ export const STAGE_LABELS = {
   decision_entered_assigned:  'Decision Entered and Assigned',
   under_implementation:       'Under Implementation',
   implementation_report:      'Implementation Report',
+  recalled:                   'Recalled by Ministry',
 }
 
 /**
@@ -91,6 +95,9 @@ export function phaseLabel(phaseKey, t) {
 export const STAGE_META = {
   draft:                      { color: 'slate',  category: 'Pre-submission',  terminal: false },
   pending_dg_endorsement:     { color: 'cyan',   category: 'Pre-submission',  terminal: false },
+  dg_approved:                { color: 'teal',   category: 'Pre-submission',  terminal: false },
+  pending_manager_approval:   { color: 'cyan',   category: 'Pre-submission',  terminal: false },
+  pending_second_approval:    { color: 'teal',   category: 'Pre-submission',  terminal: false },
   submitted:                  { color: 'blue',   category: 'Pre-submission',  terminal: false },
   received_by_psc:            { color: 'blue',   category: 'PSC Intake',      terminal: false },
   returned_for_clarification: { color: 'orange', category: 'Clarification',   terminal: false },
@@ -113,6 +120,7 @@ export const STAGE_META = {
   decision_entered_assigned:  { color: 'teal',   category: 'Post-decision',   terminal: false },
   under_implementation:       { color: 'green',  category: 'Implementation',  terminal: false },
   implementation_report:      { color: 'green',  category: 'Implementation',  terminal: true  },
+  recalled:                   { color: 'slate',  category: 'terminal',        terminal: true  },
 }
 
 export function stageMeta(code) {
@@ -145,7 +153,7 @@ export function stageBadgeClass(code) {
  * Groups stages into 5 high-level phases.
  */
 export const PHASES = [
-  { key: 'submitted',   label: 'Submitted',         color: 'blue',     stages: ['pending_dg_endorsement', 'submitted', 'returned_for_clarification'] },
+  { key: 'submitted',   label: 'Submitted',         color: 'blue',     stages: ['pending_dg_endorsement', 'dg_approved', 'submitted', 'returned_for_clarification'] },
   { key: 'review',      label: 'Checklist Review',  color: 'indigo',   stages: ['manager_checklist_review'] },
   { key: 'assessment',  label: 'Under Assessment',  color: 'violet',   stages: ['under_assessment', 'awaiting_legal_advice'] },
   { key: 'commission',  label: 'With Commission',   color: 'purple',   stages: ['forwarded_to_commission', 'commission_sitting', 'tabled', 'matters_arising'] },

@@ -36,8 +36,12 @@ class TransitionTests(TestCase):
         self._call(Role.MINISTRY_HR, WorkflowStage.DEFERRED_BACK_TO_HR, WorkflowStage.DRAFT)
 
     # ── Director-General (Head of Agency) endorsement ─────────────────────
-    def test_dg_can_endorse_and_submit_to_psc(self):
-        self._call(Role.HEAD_OF_AGENCY, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED)
+    # Option A: DG endorsement uses the dedicated /endorse/ endpoint which
+    # chains PENDING_DG_ENDORSEMENT → DG_APPROVED → SUBMITTED in one call.
+    # The standard transition endpoint no longer allows DG → SUBMITTED directly.
+    def test_dg_cannot_submit_to_psc_via_standard_transition(self):
+        """DG must use /endorse/ endpoint; direct SUBMITTED is blocked."""
+        self._denied(Role.HEAD_OF_AGENCY, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED)
 
     def test_dg_can_return_to_hr(self):
         self._call(Role.HEAD_OF_AGENCY, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DRAFT)
@@ -50,9 +54,12 @@ class TransitionTests(TestCase):
         self.assertEqual(targets, [WorkflowStage.PENDING_DG_ENDORSEMENT.value])
 
     def test_dg_targets_from_pending(self):
+        """DG can return to draft or endorse via DG_APPROVED; SUBMITTED is via /endorse/."""
         targets = iter_allowed_targets(Role.HEAD_OF_AGENCY, WorkflowStage.PENDING_DG_ENDORSEMENT)
-        self.assertIn(WorkflowStage.SUBMITTED.value, targets)
+        # Return to HR is still available via standard transition
         self.assertIn(WorkflowStage.DRAFT.value, targets)
+        # SUBMITTED is no longer a direct standard transition target (use /endorse/ instead)
+        self.assertNotIn(WorkflowStage.SUBMITTED.value, targets)
 
     # ── Receptionist (registry intake) ────────────────────────────────────
     def test_receptionist_can_route_to_manager(self):

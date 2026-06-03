@@ -8,6 +8,7 @@ import {
 } from '@fluentui/react-components'
 import { PeopleTeamRegular } from '@fluentui/react-icons'
 import api from '../../api/client'
+import { useVisibilityAwareInterval } from '../../hooks/useVisibilityAwareInterval'
 
 const HEARTBEAT_MS = 30_000
 
@@ -43,12 +44,15 @@ export default function SubmissionPresenceBar({ submissionId }) {
   useEffect(() => {
     if (!submissionId) return undefined
     sendHeartbeat()
-    const id = setInterval(sendHeartbeat, HEARTBEAT_MS)
     return () => {
-      clearInterval(id)
       api.post(`/submissions/${submissionId}/presence/leave/`).catch(() => {})
     }
   }, [submissionId, sendHeartbeat])
+
+  useVisibilityAwareInterval(sendHeartbeat, HEARTBEAT_MS, {
+    enabled: Boolean(submissionId),
+    fireOnVisible: false,
+  })
 
   const others = viewers.filter((v) => !v.is_self)
   const statusText = presenceStatusLabel(t, viewers)

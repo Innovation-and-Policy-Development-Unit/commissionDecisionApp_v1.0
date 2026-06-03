@@ -11,6 +11,7 @@ import {
 import { ShieldCheckmarkRegular, DismissRegular, ArrowSyncRegular } from '@fluentui/react-icons'
 import clsx from 'clsx'
 import api from '../../api/client'
+import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 import { formatApiError } from '../../utils/apiError'
 import { confidenceTone, policyGuardrailApplies } from '../../utils/policyGuardrail'
 
@@ -91,6 +92,7 @@ export default function PolicyGuardrailDrawer({
 
     let attempts = 0
     const interval = setInterval(async () => {
+      if (!isTabVisible()) return
       attempts += 1
       if (attempts > POLL_MAX) {
         clearInterval(interval)

@@ -7,6 +7,11 @@ import { useConfirm } from '../../context/ConfirmContext'
 import { useNavigate } from 'react-router-dom'
 import { PlusCircle, Pencil, Trash2, RefreshCw, CheckCircle2, XCircle, Wrench, X, ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseSelect from '../../components/shared/BaseSelect'
+import BaseTextarea from '../../components/shared/BaseTextarea'
+import BaseCheckbox from '../../components/shared/BaseCheckbox'
 
 const PER_PAGE = 15
 
@@ -17,13 +22,22 @@ function Modal({ title, onClose, children, wide }) {
       <div className={`relative z-10 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} bg-white dark:bg-slate-800 rounded-xl shadow-2xl`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"><X size={16} /></button>
+          <BaseButton variant="ghost" size="icon" iconOnly onClick={onClose} icon={<X size={16} />} />
         </div>
         <div className="px-6 py-5">{children}</div>
       </div>
     </div>
   )
 }
+
+const ROUTED_UNIT_OPTIONS = [
+  { value: '',           label: '— None (manual routing) —' },
+  { value: 'odu',        label: 'ODU — Organisational Development Unit' },
+  { value: 'hr',         label: 'HR — Human Resources Unit' },
+  { value: 'vipam',      label: 'VIPAM' },
+  { value: 'compliance', label: 'Compliance Unit' },
+  { value: 'csu',        label: 'CSU — Corporate Services Unit' },
+]
 
 const EMPTY_FORM = {
   code: '',
@@ -34,6 +48,9 @@ const EMPTY_FORM = {
   digitized_form_key: '',
   is_checklist: false,
   checklist_form_type: '',
+  linked_submission_form: '',  // UI-only: which digitized form this checklist belongs to
+  routed_unit: '',
+  assessment_deadline_days: 21,
   is_active: true,
   display_order: 0,
 }
@@ -91,6 +108,9 @@ export default function FormTypesAdmin() {
   }
 
   const openEdit = (row) => {
+    const linkedSubmissionForm = row.is_checklist
+      ? (rows.find(r => r.checklist_form_type === row.id)?.id ?? '')
+      : ''
     setForm({
       code: row.code,
       name: row.name,
@@ -100,6 +120,9 @@ export default function FormTypesAdmin() {
       digitized_form_key: row.digitized_form_key || '',
       is_checklist: row.is_checklist || false,
       checklist_form_type: row.checklist_form_type || '',
+      linked_submission_form: linkedSubmissionForm,
+      routed_unit: row.routed_unit || '',
+      assessment_deadline_days: row.assessment_deadline_days ?? 21,
       is_active: row.is_active,
       display_order: row.display_order,
     })
@@ -115,20 +138,42 @@ export default function FormTypesAdmin() {
     setSaving(true)
     setError('')
     try {
+      const { linked_submission_form, ...rest } = form
       const payload = {
-        ...form,
+        ...rest,
         agenda_category: form.agenda_category || '',
         form_category: null,
       }
+      let savedId
       if (modal === 'create') {
         const { data } = await api.post('/form-types/', payload)
         setRows(prev => [...prev, data])
+        savedId = data.id
         toast.success(`"${data.code}" created.`)
       } else {
         const { data } = await api.patch(`/form-types/${modal.id}/`, payload)
         setRows(prev => prev.map(r => r.id === data.id ? data : r))
+        savedId = data.id
         toast.success(`"${data.code}" updated.`)
       }
+
+      // When saving a checklist form, update the linked submission form's checklist_form_type
+      if (form.is_checklist) {
+        const prevLinked = modal !== 'create'
+          ? rows.find(r => r.checklist_form_type === modal.id)?.id
+          : undefined
+        // Clear old link if changed
+        if (prevLinked && prevLinked !== Number(linked_submission_form)) {
+          const { data: cleared } = await api.patch(`/form-types/${prevLinked}/`, { checklist_form_type: null })
+          setRows(prev => prev.map(r => r.id === cleared.id ? cleared : r))
+        }
+        // Set new link
+        if (linked_submission_form) {
+          const { data: linked } = await api.patch(`/form-types/${linked_submission_form}/`, { checklist_form_type: savedId })
+          setRows(prev => prev.map(r => r.id === linked.id ? linked : r))
+        }
+      }
+
       setModal(null)
     } catch (err) {
       const detail = err.response?.data
@@ -201,39 +246,27 @@ export default function FormTypesAdmin() {
         subtitle="Manage PSC form types, agenda section assignment, and digitized forms. Agenda sections are configured under Administration → Agenda sections."
         action={
           <div className="flex items-center gap-2">
-            <button onClick={load} disabled={loading} className="btn-outline inline-flex items-center gap-2 py-2 px-3 text-sm">
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              Refresh
-            </button>
-            <button onClick={openCreate} className="btn-primary inline-flex items-center gap-2">
-              <PlusCircle size={16} />
-              Add Form Type
-            </button>
+            <BaseButton variant="outline" icon={<RefreshCw size={14} className={loading ? 'animate-spin' : ''} />} onClick={load} disabled={loading}>Refresh</BaseButton>
+            <BaseButton variant="primary" icon={<PlusCircle size={16} />} onClick={openCreate}>Add Form Type</BaseButton>
           </div>
         }
       />
 
       <div className="card overflow-hidden">
         <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input
-              type="search"
-              placeholder="Search code, name or agenda section…"
-              value={q}
-              onChange={e => { setQ(e.target.value); setPage(1); setSelected(new Set()) }}
-              className="input pl-9 text-sm w-full"
-            />
-          </div>
+          <BaseInput
+            hideLabel label="Search"
+            type="search"
+            placeholder="Search code, name or agenda section…"
+            value={q}
+            onChange={e => { setQ(e.target.value); setPage(1); setSelected(new Set()) }}
+            contentBefore={<Search size={15} className="text-slate-400" />}
+            className="flex-1 max-w-sm"
+          />
           {selected.size > 0 && (
-            <button
-              type="button"
-              onClick={handleBulkDelete}
-              className="btn-danger text-sm inline-flex items-center gap-2 py-2 px-3 whitespace-nowrap"
-            >
-              <Trash2 size={14} />
+            <BaseButton variant="danger" icon={<Trash2 size={14} />} onClick={handleBulkDelete} className="whitespace-nowrap">
               Delete {selected.size}
-            </button>
+            </BaseButton>
           )}
         </div>
         <div className="table-wrapper">
@@ -241,12 +274,7 @@ export default function FormTypesAdmin() {
             <thead>
               <tr>
                 <th className="w-10">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded"
-                    checked={paged.length > 0 && paged.every(r => selected.has(r.id))}
-                    onChange={toggleAll}
-                  />
+                  <BaseCheckbox checked={paged.length > 0 && paged.every(r => selected.has(r.id))} onChange={toggleAll} />
                 </th>
                 <th>Order</th>
                 <th>Code</th>
@@ -270,12 +298,7 @@ export default function FormTypesAdmin() {
               {!loading && paged.map(row => (
                 <tr key={row.id} className={selected.has(row.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}>
                   <td>
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded"
-                      checked={selected.has(row.id)}
-                      onChange={() => toggleOne(row.id)}
-                    />
+                    <BaseCheckbox checked={selected.has(row.id)} onChange={() => toggleOne(row.id)} />
                   </td>
                   <td>
                     <span className="text-xs text-slate-400 font-mono">{row.display_order}</span>
@@ -304,27 +327,9 @@ export default function FormTypesAdmin() {
                   </td>
                   <td>
                     <div className="flex items-center gap-0.5">
-                      <button
-                        onClick={() => navigate(`/admin/form-types/${row.id}/builder`)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
-                        title="Design Form Fields"
-                      >
-                        <Wrench size={13} />
-                      </button>
-                      <button
-                        onClick={() => openEdit(row)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-colors"
-                        title="Edit"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(row)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      <BaseButton variant="ghost" size="icon" iconOnly title="Design Form Fields" onClick={() => navigate(`/admin/form-types/${row.id}/builder`)} icon={<Wrench size={13} />} />
+                      <BaseButton variant="ghost" size="icon" iconOnly title="Edit" onClick={() => openEdit(row)} icon={<Pencil size={13} />} />
+                      <BaseButton variant="ghost" size="icon" iconOnly title="Delete" onClick={() => handleDelete(row)} icon={<Trash2 size={13} />} />
                     </div>
                   </td>
                 </tr>
@@ -344,34 +349,16 @@ export default function FormTypesAdmin() {
               {' form types'}
             </p>
             <div className="flex items-center gap-1">
-              <button
-                onClick={() => changePage(safePage - 1)}
-                disabled={safePage === 1}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
-              >
-                <ChevronLeft size={16} />
-              </button>
+              <BaseButton variant="ghost" size="icon" iconOnly aria-label="Previous" onClick={() => changePage(safePage - 1)} disabled={safePage === 1} icon={<ChevronLeft size={16} />} />
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let p = i + 1
                 if (totalPages > 5 && safePage > 3) p = safePage - 2 + i
                 if (p > totalPages) return null
                 return (
-                  <button
-                    key={p}
-                    onClick={() => changePage(p)}
-                    className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${safePage === p ? 'bg-primary-500 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'}`}
-                  >
-                    {p}
-                  </button>
+                  <BaseButton key={p} variant={safePage === p ? 'primary' : 'ghost'} size="sm" onClick={() => changePage(p)} className="!min-w-8">{p}</BaseButton>
                 )
               })}
-              <button
-                onClick={() => changePage(safePage + 1)}
-                disabled={safePage === totalPages}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
-              >
-                <ChevronRight size={16} />
-              </button>
+              <BaseButton variant="ghost" size="icon" iconOnly aria-label="Next" onClick={() => changePage(safePage + 1)} disabled={safePage === totalPages} icon={<ChevronRight size={16} />} />
             </div>
           </div>
         )}
@@ -391,78 +378,91 @@ export default function FormTypesAdmin() {
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Code <span className="text-red-500">*</span></label>
-                <input className="input" value={form.code} onChange={e => set('code', e.target.value)} placeholder="e.g. PSC 3-7" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Display Order</label>
-                <input className="input" type="number" value={form.display_order} onChange={e => set('display_order', Number(e.target.value))} />
-              </div>
+              <BaseInput label="Code" required value={form.code} onChange={e => set('code', e.target.value)} placeholder="e.g. PSC 3-7" />
+              <BaseInput label="Display Order" type="number" value={form.display_order} onChange={e => set('display_order', Number(e.target.value))} />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Agenda section</label>
-              <select className="input" value={form.agenda_category} onChange={e => set('agenda_category', e.target.value)}>
-                <option value="">— None —</option>
-                {agendaSections.map(s => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
+              <BaseSelect
+                label="Agenda section"
+                placeholder="— None —"
+                value={form.agenda_category}
+                options={agendaSections.map(s => ({ value: s.value, label: s.label }))}
+                onChange={(_, v) => set('agenda_category', v)}
+              />
               <p className="mt-1 text-xs text-slate-400">
                 Links this form to a Commission agenda section. Manage sections under{' '}
                 <span className="font-medium">Administration → Agenda sections</span>.
               </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Name <span className="text-red-500">*</span></label>
-              <input className="input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="Full form name" />
-            </div>
+            <BaseInput label="Name" required value={form.name} onChange={e => set('name', e.target.value)} placeholder="Full form name" />
 
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Description</label>
-              <textarea className="input min-h-[72px]" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Optional description" />
-            </div>
+            <BaseTextarea label="Description" rows={3} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Optional description" />
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
-                <input type="checkbox" className="w-4 h-4 rounded" checked={form.is_digitized} onChange={e => set('is_digitized', e.target.checked)} />
-                Has digitized form
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
-                <input type="checkbox" className="w-4 h-4 rounded" checked={form.is_checklist} onChange={e => set('is_checklist', e.target.checked)} />
-                This is a checklist form
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
-                <input type="checkbox" className="w-4 h-4 rounded" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} />
-                Active (visible in dropdowns)
-              </label>
+              <BaseCheckbox label="Has digitized form" checked={form.is_digitized} onChange={e => set('is_digitized', e.target.checked)} />
+              <BaseCheckbox label="This is a checklist form" checked={form.is_checklist} onChange={e => set('is_checklist', e.target.checked)} />
+              <BaseCheckbox label="Active (visible in dropdowns)" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} />
             </div>
 
             {form.is_digitized && (
               <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Digitized Form Key</label>
-                <select className="input" value={form.digitized_form_key} onChange={e => set('digitized_form_key', e.target.value)}>
-                  {DIGITIZED_KEYS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
-                </select>
+                <BaseSelect
+                  label="Digitized Form Key"
+                  value={form.digitized_form_key}
+                  options={DIGITIZED_KEYS.map(k => ({ value: k.value, label: k.label }))}
+                  onChange={(_, v) => set('digitized_form_key', v)}
+                />
                 <p className="mt-1 text-xs text-slate-400">Links this form type to its frontend component.</p>
               </div>
             )}
 
             {!form.is_checklist && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <BaseSelect
+                    label="Auto-route to unit"
+                    value={form.routed_unit}
+                    options={ROUTED_UNIT_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                    onChange={(_, v) => set('routed_unit', v)}
+                  />
+                  <p className="mt-1 text-xs text-slate-400">Unit that receives this form for checklist review.</p>
+                </div>
+                <div>
+                  <BaseInput
+                    label="Assessment deadline (working days)"
+                    type="number" min="1" max="90"
+                    value={form.assessment_deadline_days}
+                    onChange={e => set('assessment_deadline_days', Number(e.target.value) || 21)}
+                  />
+                  <p className="mt-1 text-xs text-slate-400">Default 21. Overrides the system-wide SLA for this form type.</p>
+                </div>
+              </div>
+            )}
+
+            {form.is_checklist && (
               <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Linked checklist</label>
-                <select
-                  className="input"
+                <BaseSelect
+                  label="Linked digitized form"
+                  placeholder="— None —"
+                  value={form.linked_submission_form || ''}
+                  options={rows.filter(r => r.is_digitized && !r.is_checklist && (modal === 'create' || r.id !== modal?.id)).map(r => ({ value: String(r.id), label: `${r.code} — ${r.name}` }))}
+                  onChange={(_, v) => set('linked_submission_form', v ? Number(v) : '')}
+                />
+                <p className="mt-1 text-xs text-slate-400">The digitized submission form that this checklist is associated with.</p>
+              </div>
+            )}
+
+            {!form.is_checklist && (
+              <div>
+                <BaseSelect
+                  label="Linked checklist"
+                  placeholder="— None —"
                   value={form.checklist_form_type || ''}
-                  onChange={e => set('checklist_form_type', e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">— None —</option>
-                  {rows.filter(r => r.is_checklist).map(r => (
-                    <option key={r.id} value={r.id}>{r.code} — {r.name}</option>
-                  ))}
-                </select>
+                  options={rows.filter(r => r.is_checklist).map(r => ({ value: String(r.id), label: `${r.code} — ${r.name}` }))}
+                  onChange={(_, v) => set('checklist_form_type', v ? Number(v) : null)}
+                />
                 <p className="mt-1 text-xs text-slate-400">
                   The checklist that assigned principals fill out during Manager Checklist Review for this form type.
                   Create the checklist form type first, then link it here.
@@ -471,10 +471,10 @@ export default function FormTypesAdmin() {
             )}
 
             <div className="flex gap-3 pt-2">
-              <button onClick={save} disabled={saving} className="btn-primary px-5 py-2">
-                {saving ? 'Saving…' : modal === 'create' ? 'Create' : 'Save Changes'}
-              </button>
-              <button onClick={() => setModal(null)} className="btn-secondary px-5 py-2">Cancel</button>
+              <BaseButton onClick={save} variant="primary" loading={saving} loadingLabel="Saving">
+                {modal === 'create' ? 'Create' : 'Save Changes'}
+              </BaseButton>
+              <BaseButton onClick={() => setModal(null)} variant="secondary">Cancel</BaseButton>
             </div>
           </div>
         </Modal>

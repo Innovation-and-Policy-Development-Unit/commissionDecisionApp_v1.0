@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { PageSkeleton } from '../components/shared/Skeleton'
 import Layout from '../components/layout/Layout'
 import RequireAuth from '../components/auth/RequireAuth'
 
@@ -11,10 +12,11 @@ import TwoSteps from '../pages/auth/TwoSteps'
 import TOTPSetup from '../pages/auth/TOTPSetup'
 import Error404 from '../pages/auth/Error404'
 
-// Everything else is code-split so heavy pages (charts, PDF, canvas, calendar,
-// admin tooling) only download when the route is actually visited.
-const PscDashboard = lazy(() => import('../pages/psc/PscDashboard'))
-const SubmissionLog = lazy(() => import('../pages/psc/SubmissionLog'))
+// Core navigation pages — small enough to be eager so the list/detail loop feels instant.
+import HomeDashboard from '../pages/HomeDashboard'
+import SubmissionLog from '../pages/psc/SubmissionLog'
+
+// Large pages stay code-split; fallback is invisible so there's no spinner flash.
 const SubmissionDetail = lazy(() => import('../pages/psc/SubmissionDetail'))
 const SubmissionForm = lazy(() => import('../pages/psc/SubmissionForm'))
 const SmartReports = lazy(() => import('../pages/psc/SmartReports'))
@@ -31,7 +33,6 @@ const AdminSecurityPage = lazy(() => import('../pages/admin/AdminSecurityPage'))
 const FeedbackManagementPage = lazy(() => import('../pages/admin/FeedbackManagementPage'))
 const FormTypesAdmin = lazy(() => import('../pages/admin/FormTypesAdmin'))
 const AgendaSectionsAdmin = lazy(() => import('../pages/admin/AgendaSectionsAdmin'))
-const AgendaSectionFormsAdmin = lazy(() => import('../pages/admin/AgendaSectionFormsAdmin'))
 const FormBuilder = lazy(() => import('../pages/admin/FormBuilder'))
 const KnowledgeBaseAdmin = lazy(() => import('../pages/admin/KnowledgeBaseAdmin'))
 const KnowledgeArticleEditor = lazy(() => import('../pages/admin/KnowledgeArticleEditor'))
@@ -54,93 +55,94 @@ const CommissionCalendar = lazy(() => import('../pages/psc/CommissionCalendar'))
 const AuditTrailExplorer = lazy(() => import('../pages/psc/AuditTrailExplorer'))
 const AnalyticsDashboard = lazy(() => import('../pages/psc/AnalyticsDashboard'))
 const WorkloadDashboard = lazy(() => import('../pages/psc/WorkloadDashboard'))
+const PendingDecisions = lazy(() => import('../pages/psc/PendingDecisions'))
+const MinistryPerformance = lazy(() => import('../pages/psc/MinistryPerformance'))
 
-function RouteFallback() {
-  return (
-    <div className="flex items-center justify-center py-24" role="status" aria-label="Loading">
-      <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-300 border-t-primary-500" />
-    </div>
-  )
+function RouteFallback({ detail = false }) {
+  return <PageSkeleton detailMode={detail} />
 }
+
+const S = ({ detail = false, children }) => (
+  <Suspense fallback={<RouteFallback detail={detail} />}>{children}</Suspense>
+)
 
 export default function AppRouter() {
   return (
-    <Suspense fallback={<RouteFallback />}>
-      <Routes>
-        {/* ── Public auth routes ── */}
-        <Route path="/auth/login"                    element={<Login />} />
-        <Route path="/auth/reset-password"           element={<ResetPassword />} />
-        <Route path="/auth/reset-password/confirm"   element={<PasswordResetConfirm />} />
-        <Route path="/auth/2fa"                      element={<TwoSteps />} />
-        <Route path="/auth/totp-setup"               element={<TOTPSetup />} />
+    <Routes>
+      {/* ── Public auth routes ── */}
+      <Route path="/auth/login"                    element={<Login />} />
+      <Route path="/auth/reset-password"           element={<ResetPassword />} />
+      <Route path="/auth/reset-password/confirm"   element={<PasswordResetConfirm />} />
+      <Route path="/auth/2fa"                      element={<TwoSteps />} />
+      <Route path="/auth/totp-setup"               element={<TOTPSetup />} />
 
-        <Route element={<RequireAuth />}>
-          <Route path="/secretariat/agenda/sitting-pack" element={<AgendaSittingPack />} />
-          <Route element={<Layout />}>
-            <Route path="/" element={<PscDashboard />} />
-            <Route path="/submissions" element={<SubmissionLog />} />
-            <Route path="/submissions/new" element={<SubmissionForm />} />
-            <Route path="/submissions/:id" element={<SubmissionDetail />} />
-            <Route path="/reports" element={<SmartReports />} />
-            <Route path="/wiki" element={<KnowledgeBaseBrowse />} />
-            <Route path="/wiki/:slug" element={<ArticleViewer />} />
-            <Route path="/assistant" element={<StaffChatbot />} />
-            <Route path="/status-assistant" element={<Navigate to="/assistant" replace />} />
-            <Route path="/meetings/capture" element={<RedirectToMinuteIntake />} />
+      <Route element={<RequireAuth />}>
+        <Route path="/secretariat/agenda/sitting-pack" element={<S><AgendaSittingPack /></S>} />
+        <Route element={<Layout />}>
+          <Route path="/" element={<HomeDashboard />} />
+          <Route path="/submissions" element={<SubmissionLog />} />
+          <Route path="/submissions/new" element={<S><SubmissionForm /></S>} />
+          <Route path="/submissions/:id" element={<S detail><SubmissionDetail /></S>} />
+          <Route path="/reports" element={<S><SmartReports /></S>} />
+          <Route path="/wiki" element={<S><KnowledgeBaseBrowse /></S>} />
+          <Route path="/wiki/:slug" element={<S detail><ArticleViewer /></S>} />
+          <Route path="/assistant" element={<S><StaffChatbot /></S>} />
+          <Route path="/status-assistant" element={<Navigate to="/assistant" replace />} />
+          <Route path="/meetings/capture" element={<S><RedirectToMinuteIntake /></S>} />
 
-            {/* ── P1–P4 New Routes ── */}
-            <Route path="/executive-dashboard"  element={<ExecutiveDashboard />} />
-            <Route path="/calendar"             element={<CommissionCalendar />} />
-            <Route path="/audit-trail"          element={<AuditTrailExplorer />} />
-            <Route path="/analytics"            element={<AnalyticsDashboard />} />
-            <Route path="/workload"             element={<WorkloadDashboard />} />
+          {/* ── P1–P4 New Routes ── */}
+          <Route path="/executive-dashboard"  element={<S><ExecutiveDashboard /></S>} />
+          <Route path="/calendar"             element={<S><CommissionCalendar /></S>} />
+          <Route path="/audit-trail"          element={<S><AuditTrailExplorer /></S>} />
+          <Route path="/analytics"            element={<S><AnalyticsDashboard /></S>} />
+          <Route path="/workload"             element={<S><WorkloadDashboard /></S>} />
+          <Route path="/pending-decisions"    element={<S><PendingDecisions /></S>} />
+          <Route path="/ministry-performance" element={<S><MinistryPerformance /></S>} />
 
-            {/* ── Admin ── */}
-            <Route path="/admin/roles-permissions" element={<AdminPanel />} />
-            <Route path="/admin/ministries-departments" element={<MinistriesDepartments />} />
-            <Route path="/admin/api-keys" element={<AdminApiKeysPage />} />
-            <Route path="/admin/system-config" element={<AdminSystemConfigPage />} />
-            <Route path="/admin/email-templates" element={<AdminEmailTemplatesPage />} />
-            <Route path="/admin/daily-brief" element={<DailyBriefAdmin />} />
-            <Route path="/admin/ui-translations" element={<AdminTranslationsPage />} />
-            <Route path="/admin/security" element={<AdminSecurityPage />} />
-            <Route path="/admin/feedback" element={<FeedbackManagementPage />} />
-            <Route path="/admin/form-types" element={<FormTypesAdmin />} />
-            <Route path="/admin/agenda-sections" element={<AgendaSectionsAdmin />} />
-            <Route path="/admin/agenda-section-forms" element={<AgendaSectionFormsAdmin />} />
-            <Route path="/admin/form-types/:formTypeId/builder" element={<FormBuilder />} />
-            <Route path="/admin/knowledge-base" element={<KnowledgeBaseAdmin />} />
-            <Route path="/admin/knowledge-base/new" element={<KnowledgeArticleEditor />} />
-            <Route path="/admin/knowledge-base/edit/:slug" element={<KnowledgeArticleEditor />} />
-            <Route path="/admin/backup-restore" element={<AdminBackupRestorePage />} />
-            <Route path="/admin-panel" element={<Navigate to="/admin/roles-permissions?tab=users" replace />} />
+          {/* ── Admin ── */}
+          <Route path="/admin/roles-permissions" element={<S><AdminPanel /></S>} />
+          <Route path="/admin/ministries-departments" element={<S><MinistriesDepartments /></S>} />
+          <Route path="/admin/api-keys" element={<S><AdminApiKeysPage /></S>} />
+          <Route path="/admin/system-config" element={<S><AdminSystemConfigPage /></S>} />
+          <Route path="/admin/email-templates" element={<S><AdminEmailTemplatesPage /></S>} />
+          <Route path="/admin/daily-brief" element={<S><DailyBriefAdmin /></S>} />
+          <Route path="/admin/ui-translations" element={<S><AdminTranslationsPage /></S>} />
+          <Route path="/admin/security" element={<S><AdminSecurityPage /></S>} />
+          <Route path="/admin/feedback" element={<S><FeedbackManagementPage /></S>} />
+          <Route path="/admin/form-types" element={<S><FormTypesAdmin /></S>} />
+          <Route path="/admin/agenda-sections" element={<S><AgendaSectionsAdmin /></S>} />
+          <Route path="/admin/form-types/:formTypeId/builder" element={<S detail><FormBuilder /></S>} />
+          <Route path="/admin/knowledge-base" element={<S><KnowledgeBaseAdmin /></S>} />
+          <Route path="/admin/knowledge-base/new" element={<S detail><KnowledgeArticleEditor /></S>} />
+          <Route path="/admin/knowledge-base/edit/:slug" element={<S detail><KnowledgeArticleEditor /></S>} />
+          <Route path="/admin/backup-restore" element={<S><AdminBackupRestorePage /></S>} />
+          <Route path="/admin-panel" element={<Navigate to="/admin/roles-permissions?tab=users" replace />} />
 
-            {/* ── Secretariat ── */}
-            <Route path="/secretariat/meeting-room" element={<MeetingRoomHub />} />
-            <Route path="/secretariat/meeting-room/logitech-guide" element={<Navigate to="/secretariat/meeting-room" state={{ openLogitechGuide: true }} replace />} />
-            <Route path="/secretariat/meeting-room/minutes-pipeline" element={<RedirectToMinuteIntake />} />
-            <Route path="/secretariat/meetings" element={<CommissionSittings />} />
-            <Route path="/secretariat/meetings/:meetingId/minutes" element={<MinutesEditor />} />
-            <Route path="/secretariat/agenda" element={<Agenda />} />
-            <Route path="/secretariat/minutes" element={<MinutesIndex />} />
-            <Route path="/secretariat/minute-intake" element={<MinuteIntake />} />
-            <Route path="/secretariat/minute-intake/:meetingId" element={<MinuteIntake />} />
-            <Route path="/secretariat/decisions" element={<Decisions />} />
-            <Route path="/secretariat/tasks" element={<TaskManagement />} />
-            <Route path="/secretariat/notifications" element={<Notifications />} />
+          {/* ── Secretariat ── */}
+          <Route path="/secretariat/meeting-room" element={<S><MeetingRoomHub /></S>} />
+          <Route path="/secretariat/meeting-room/logitech-guide" element={<Navigate to="/secretariat/meeting-room" state={{ openLogitechGuide: true }} replace />} />
+          <Route path="/secretariat/meeting-room/minutes-pipeline" element={<S><RedirectToMinuteIntake /></S>} />
+          <Route path="/secretariat/meetings" element={<S><CommissionSittings /></S>} />
+          <Route path="/secretariat/meetings/:meetingId/minutes" element={<S detail><MinutesEditor /></S>} />
+          <Route path="/secretariat/agenda" element={<S><Agenda /></S>} />
+          <Route path="/secretariat/minutes" element={<S><MinutesIndex /></S>} />
+          <Route path="/secretariat/minute-intake" element={<S detail><MinuteIntake /></S>} />
+          <Route path="/secretariat/minute-intake/:meetingId" element={<S detail><MinuteIntake /></S>} />
+          <Route path="/secretariat/decisions" element={<S><Decisions /></S>} />
+          <Route path="/secretariat/tasks" element={<S><TaskManagement /></S>} />
+          <Route path="/secretariat/notifications" element={<S><Notifications /></S>} />
 
-            <Route path="/guide/hr-manager" element={<Navigate to="/wiki/hr-manager-guide" replace />} />
-            <Route path="/guide/unit-manager" element={<Navigate to="/wiki/unit-manager-guide" replace />} />
-            <Route path="/guide/secretary" element={<Navigate to="/wiki/secretary-guide" replace />} />
+          <Route path="/guide/hr-manager" element={<Navigate to="/wiki/hr-manager-guide" replace />} />
+          <Route path="/guide/unit-manager" element={<Navigate to="/wiki/unit-manager-guide" replace />} />
+          <Route path="/guide/secretary" element={<Navigate to="/wiki/secretary-guide" replace />} />
 
-            <Route path="/pages/account" element={<Account />} />
-            <Route path="/404" element={<Error404 />} />
-            <Route path="*" element={<Navigate to="/404" replace />} />
-          </Route>
+          <Route path="/pages/account" element={<S detail><Account /></S>} />
+          <Route path="/404" element={<Error404 />} />
+          <Route path="*" element={<Navigate to="/404" replace />} />
         </Route>
+      </Route>
 
-        <Route path="*" element={<Navigate to="/auth/login" replace />} />
-      </Routes>
-    </Suspense>
+      <Route path="*" element={<Navigate to="/auth/login" replace />} />
+    </Routes>
   )
 }

@@ -67,6 +67,7 @@ export default {
         'gradient-dark': 'none',
       },
       animation: {
+        'shimmer': 'shimmer 1.4s infinite',
         'slide-in-right': 'slideInRight 0.3s ease-out',
         'slide-out-right': 'slideOutRight 0.3s ease-in',
         'slide-in-left': 'slideInLeft 0.3s ease-out',
@@ -75,6 +76,9 @@ export default {
         'scale-in': 'scaleIn 0.2s ease-out',
       },
       keyframes: {
+        shimmer: {
+          '100%': { transform: 'translateX(100%)' },
+        },
         slideInRight: {
           '0%': { transform: 'translateX(100%)' },
           '100%': { transform: 'translateX(0)' },

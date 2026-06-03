@@ -17,6 +17,7 @@ import {
   pickDefaultTargetStage,
   stationIdForStage,
 } from '../../utils/kanbanTransitions'
+import { prefetchSubmissionDetail } from '../../utils/submissionBootstrap'
 
 function KanbanCard({ submission, draggable, onDragStart, onDragEnd, showQuality }) {
   const { t } = useTranslation()
@@ -45,6 +46,8 @@ function KanbanCard({ submission, draggable, onDragStart, onDragEnd, showQuality
           <Link
             to={`/submissions/${submission.id}`}
             className="font-mono text-[11px] font-semibold text-primary-600 dark:text-primary-400 hover:underline"
+            onMouseEnter={() => prefetchSubmissionDetail(submission.id)}
+            onFocus={() => prefetchSubmissionDetail(submission.id)}
             onClick={(e) => e.stopPropagation()}
           >
             {submission.reference_number}

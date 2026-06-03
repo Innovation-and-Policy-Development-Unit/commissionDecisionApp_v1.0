@@ -2,11 +2,12 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import api from '../api/client'
 const ThemeContext = createContext(null)
 
-// Migrate old boolean 'liner-dark' key → new 'liner-theme' string key
+// Two modes only: light and dark.
 function readTheme() {
   const saved = localStorage.getItem('liner-theme')
-  if (saved === 'light' || saved === 'dim' || saved === 'dark') return saved
-  // Migrate from legacy boolean key
+  if (saved === 'dark') return 'dark'
+  // Migrate from legacy keys (dim → dark, boolean → dark)
+  if (saved === 'dim') return 'dark'
   const legacy = localStorage.getItem('liner-dark')
   if (legacy === 'true') return 'dark'
   return 'light'
@@ -51,17 +52,15 @@ export function ThemeProvider({ children }) {
     fetchFeedbackStatus()
   }, [])
 
-  // Apply theme — dim uses dark class + dim modifier; dark uses dark class only
+  // Apply theme — dark adds .dark class, light removes it.
   useEffect(() => {
     const html = document.documentElement
     if (theme === 'dark') {
       html.classList.add('dark')
-      html.classList.remove('dim')
-    } else if (theme === 'dim') {
-      html.classList.add('dark', 'dim')
     } else {
-      html.classList.remove('dark', 'dim')
+      html.classList.remove('dark')
     }
+    html.classList.remove('dim') // clean up legacy dim class
     localStorage.setItem('liner-theme', theme)
   }, [theme])
 
@@ -87,12 +86,8 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('liner-horizontal', JSON.stringify(isHorizontal))
   }, [isHorizontal])
 
-  const setTheme = (value) => setThemeState(value)
-  const cycleTheme = () => setThemeState(prev =>
-    prev === 'light' ? 'dim' : prev === 'dim' ? 'dark' : 'light'
-  )
-
-  // Backward-compat alias (true only for full dark, not dim)
+  const setTheme = (value) => setThemeState(value === 'dim' ? 'dark' : value)
+  const cycleTheme = () => setThemeState(prev => prev === 'light' ? 'dark' : 'light')
   const isDark = theme === 'dark'
   const toggleDark = () => setThemeState(prev => prev === 'dark' ? 'light' : 'dark')
 

@@ -14,6 +14,11 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatApiError } from '../../utils/apiError'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseSelect from '../../components/shared/BaseSelect'
+import BaseTextarea from '../../components/shared/BaseTextarea'
+import BaseCheckbox from '../../components/shared/BaseCheckbox'
 import { userCanWorkCommissionTask, userHasCommissionDecisionView } from '../../utils/opscAccess'
 import clsx from 'clsx'
 
@@ -88,35 +93,33 @@ function DecisionRegisterFields({ decisionNumber, setDecisionNumber, decisionOut
       <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Decision Register</p>
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Decision number</label>
-          <input className="input text-sm w-full" value={decisionNumber} onChange={e => setDecisionNumber(e.target.value)} placeholder="e.g. 02-28-2025" />
-          <p className="text-[11px] text-slate-400 mt-1">Format: decision#-meeting#-year</p>
+          <BaseInput label="Decision number" value={decisionNumber} onChange={e => setDecisionNumber(e.target.value)} placeholder="e.g. 02-28-2025" hint="Format: decision#-meeting#-year" />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Decision outcome</label>
-          <select className="input text-sm w-full" value={decisionOutcome} onChange={e => setDecisionOutcome(e.target.value)}>
-            {DECISION_OUTCOME_OPTIONS.map(o => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Action unit</label>
-          <select className="input text-sm w-full" value={actionUnit} onChange={e => setActionUnit(e.target.value)}>
-            {ACTION_UNIT_OPTIONS.map(o => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Implementation status</label>
-          <select className="input text-sm w-full" value={implementationStatus} onChange={e => setImplementationStatus(e.target.value)}>
-            {IMPL_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+        <BaseSelect
+          label="Decision outcome"
+          value={decisionOutcome}
+          options={DECISION_OUTCOME_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+          placeholder={DECISION_OUTCOME_OPTIONS.find(o => !o.value)?.label ?? '— Select outcome —'}
+          onChange={(_, v) => setDecisionOutcome(v)}
+        />
+        <BaseSelect
+          label="Action unit"
+          value={actionUnit}
+          options={ACTION_UNIT_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+          placeholder={ACTION_UNIT_OPTIONS.find(o => !o.value)?.label ?? '— Select unit —'}
+          onChange={(_, v) => setActionUnit(v)}
+        />
+        <BaseSelect
+          label="Implementation status"
+          value={implementationStatus}
+          options={IMPL_STATUS_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+          onChange={(_, v) => setImplementationStatus(v)}
+        />
+        <div className="sm:col-span-2">
+          <BaseTextarea label="Decision detail" rows={3} value={decisionDetail} onChange={e => setDecisionDetail(e.target.value)} placeholder="Full text of what the Commission decided…" />
         </div>
         <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Decision detail</label>
-          <textarea className="input text-sm w-full min-h-[72px]" value={decisionDetail} onChange={e => setDecisionDetail(e.target.value)} placeholder="Full text of what the Commission decided…" />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Way forward / next steps</label>
-          <textarea className="input text-sm w-full min-h-[56px]" value={wayForward} onChange={e => setWayForward(e.target.value)} placeholder="Notes on next steps or follow-up actions…" />
+          <BaseTextarea label="Way forward / next steps" rows={2} value={wayForward} onChange={e => setWayForward(e.target.value)} placeholder="Notes on next steps or follow-up actions…" />
         </div>
       </div>
     </div>
@@ -129,34 +132,24 @@ function TaskMetadataFields({ meetingReference, setMeetingReference, meetingDate
       <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Commission context</p>
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Meeting / sitting reference</label>
-          <input className="input text-sm w-full" value={meetingReference} onChange={e => setMeetingReference(e.target.value)} placeholder="e.g. PSC Meeting 05/2026" />
-          <p className="text-[11px] text-slate-400 mt-1">Identifies which sitting produced this action.</p>
+          <BaseInput label="Meeting / sitting reference" value={meetingReference} onChange={e => setMeetingReference(e.target.value)} placeholder="e.g. PSC Meeting 05/2026" hint="Identifies which sitting produced this action." />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Meeting date (optional)</label>
-          <input type="date" className="input text-sm w-full" value={meetingDate} onChange={e => setMeetingDate(e.target.value)} />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Minute reference</label>
-          <input className="input text-sm w-full" value={minuteReference} onChange={e => setMinuteReference(e.target.value)} placeholder="e.g. Item 4.2, para. 12" />
-          <p className="text-[11px] text-slate-400 mt-1">Paragraph or item number in the official minutes.</p>
+        <BaseInput label="Meeting date (optional)" type="date" value={meetingDate} onChange={e => setMeetingDate(e.target.value)} />
+        <BaseInput label="Minute reference" value={minuteReference} onChange={e => setMinuteReference(e.target.value)} placeholder="e.g. Item 4.2, para. 12" hint="Paragraph or item number in the official minutes." />
+        <div className="sm:col-span-2">
+          <BaseSelect
+            label="Decision type"
+            value={decisionType}
+            options={DECISION_TYPE_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+            placeholder={DECISION_TYPE_OPTIONS.find(o => !o.value)?.label ?? '— Select type —'}
+            onChange={(_, v) => setDecisionType(v)}
+          />
         </div>
         <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Decision type</label>
-          <select className="input text-sm w-full" value={decisionType} onChange={e => setDecisionType(e.target.value)}>
-            {DECISION_TYPE_OPTIONS.map(o => (
-              <option key={o.value || 'unset'} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          <BaseTextarea label="Success criteria" rows={3} value={successCriteria} onChange={e => setSuccessCriteria(e.target.value)} placeholder='What does "complete" look like for this task?' />
         </div>
         <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Success criteria</label>
-          <textarea className="input text-sm w-full min-h-[72px]" value={successCriteria} onChange={e => setSuccessCriteria(e.target.value)} placeholder='What does "complete" look like for this task?' />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Legal / regulation reference (optional)</label>
-          <input className="input text-sm w-full" value={legalReference} onChange={e => setLegalReference(e.target.value)} placeholder="e.g. PSC Staff Manual §..., Act Cap. ..." />
+          <BaseInput label="Legal / regulation reference (optional)" value={legalReference} onChange={e => setLegalReference(e.target.value)} placeholder="e.g. PSC Staff Manual §..., Act Cap. ..." />
         </div>
       </div>
     </div>
@@ -208,9 +201,8 @@ function TaskStatusUpdatesSection({ taskId }) {
             ))}
           </ul>}
       <div className="space-y-2">
-        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">Add update</label>
-        <textarea className="input text-sm w-full min-h-[72px]" value={body} onChange={e => setBody(e.target.value)} placeholder="e.g. Awaiting legal advice; revised deadline proposed for ..." maxLength={8000} />
-        <button type="button" onClick={add} disabled={posting || !body.trim()} className="btn-outline py-1.5 px-3 text-xs disabled:opacity-50">{posting ? 'Posting...' : 'Post update'}</button>
+        <BaseTextarea label="Add update" rows={3} value={body} onChange={e => setBody(e.target.value)} placeholder="e.g. Awaiting legal advice; revised deadline proposed for ..." maxLength={8000} />
+        <BaseButton variant="outline" size="sm" onClick={add} loading={posting} loadingLabel="Posting" disabled={!body.trim()}>Post update</BaseButton>
       </div>
     </div>
   )
@@ -335,44 +327,35 @@ function SubtaskSection({ taskId, subtasks, aiDrafts, onRefresh, onDraftRefresh 
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {sub.status !== 'completed' && (
-                  <button type="button" onClick={() => updateSubStatus(sub.id, 'completed')} className="p-1 text-emerald-500 hover:text-emerald-600 transition-colors" title="Mark completed">
-                    <CheckCircle2 size={14} />
-                  </button>
+                  <BaseButton variant="ghost" size="icon" iconOnly title="Mark completed" onClick={() => updateSubStatus(sub.id, 'completed')} icon={<CheckCircle2 size={14} />} />
                 )}
-                <button type="button" onClick={() => deleteSub(sub.id)} className="p-1 text-red-400 hover:text-red-600 transition-colors" title="Delete">
-                  <Trash2 size={14} />
-                </button>
+                <BaseButton variant="ghost" size="icon" iconOnly title="Delete" onClick={() => deleteSub(sub.id)} icon={<Trash2 size={14} />} />
               </div>
             </div>
           ))}
           {showCreate ? (
             <form onSubmit={createSub} className="p-3 rounded-xl border border-dashed border-primary-300 dark:border-primary-700 bg-primary-50/50 dark:bg-primary-900/10 space-y-2">
               {subErr && <p className="text-xs text-red-600">{subErr}</p>}
-              <input className="input text-sm w-full" value={stitle} onChange={e => setStitle(e.target.value)} placeholder="Subtask title" required />
-              <textarea className="input text-sm w-full min-h-[48px]" value={sdesc} onChange={e => setSdesc(e.target.value)} placeholder="Description (optional)" />
-              <input type="date" className="input text-sm w-full" value={sdue} onChange={e => setSdue(e.target.value)} placeholder="Due date" />
+              <BaseInput hideLabel label="Subtask title" value={stitle} onChange={e => setStitle(e.target.value)} placeholder="Subtask title" required />
+              <BaseTextarea hideLabel label="Description" rows={2} value={sdesc} onChange={e => setSdesc(e.target.value)} placeholder="Description (optional)" />
+              <BaseInput hideLabel label="Due date" type="date" value={sdue} onChange={e => setSdue(e.target.value)} />
               {staffOpts.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-slate-500 mb-1">Assign staff:</p>
                   <div className="flex flex-wrap gap-2">
                     {staffOpts.map(s => (
-                      <label key={s.id} className="flex items-center gap-1 text-xs cursor-pointer">
-                        <input type="checkbox" checked={sstaff.includes(s.id)} onChange={() => toggleStaff(s.id)} className="rounded" />
-                        {s.username}
-                      </label>
+                      <BaseCheckbox key={s.id} label={s.username} checked={sstaff.includes(s.id)} onChange={() => toggleStaff(s.id)} />
                     ))}
                   </div>
                 </div>
               )}
               <div className="flex gap-2 pt-1">
-                <button type="submit" disabled={subSaving} className="btn-gradient py-1.5 px-3 text-xs disabled:opacity-60">{subSaving ? 'Creating...' : 'Create'}</button>
-                <button type="button" onClick={() => setShowCreate(false)} className="btn-outline py-1.5 px-3 text-xs">Cancel</button>
+                <BaseButton type="submit" variant="primary" size="sm" loading={subSaving} loadingLabel="Creating">Create</BaseButton>
+                <BaseButton type="button" variant="outline" size="sm" onClick={() => setShowCreate(false)}>Cancel</BaseButton>
               </div>
             </form>
           ) : (
-            <button type="button" onClick={() => setShowCreate(true)} className="flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors">
-              <Plus size={12} /> Add Subtask
-            </button>
+            <BaseButton variant="ghost" size="sm" icon={<Plus size={12} />} onClick={() => setShowCreate(true)}>Add Subtask</BaseButton>
           )}
         </div>
       )}
@@ -536,11 +519,13 @@ function ReportView() {
         <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
           {t('register_report.prompt_label')}
         </label>
-        <textarea
-          className="input text-sm w-full min-h-[88px] mb-2"
+        <BaseTextarea
+          hideLabel label="AI prompt"
+          rows={4}
           value={aiPrompt}
           onChange={e => setAiPrompt(e.target.value)}
           placeholder={t('register_report.prompt_placeholder')}
+          className="mb-2"
         />
         <div className="flex flex-wrap gap-2 mb-3">
           {AI_REPORT_EXAMPLES.map(ex => (
@@ -555,15 +540,9 @@ function ReportView() {
           ))}
         </div>
         <p className="text-[11px] text-slate-400 mb-3">{t('register_report.filters_hint')}</p>
-        <button
-          type="button"
-          onClick={generateAiReport}
-          disabled={aiLoading || aiBusy}
-          className="btn-gradient py-2 px-4 text-sm inline-flex items-center gap-2 disabled:opacity-60"
-        >
-          {aiLoading || aiBusy ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
-          {aiBusy ? t('register_report.generating') : t('register_report.generate')}
-        </button>
+        <BaseButton variant="primary" onClick={generateAiReport} loading={aiLoading || aiBusy} loadingLabel={t('register_report.generating')} icon={!aiLoading && !aiBusy ? <Sparkles size={14} /> : undefined}>
+          {t('register_report.generate')}
+        </BaseButton>
         {aiError && <p className="text-sm text-red-600 mt-3">{aiError}</p>}
         {aiFailed && aiJob?.error_message && (
           <p className="text-sm text-red-600 mt-3">{aiJob.error_message}</p>
@@ -583,39 +562,21 @@ function ReportView() {
               {t('register_report.row_count', { count: aiJob.row_count ?? 0 })}
             </p>
             <div className="flex flex-wrap gap-2 mt-3">
-              <button
-                type="button"
-                className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
-                onClick={() => downloadAiReport(aiJob.downloads.html, 'decision_register_report.html')}
-              >
-                <Download size={14} /> {t('register_report.download_html')}
-              </button>
+              <BaseButton variant="outline" size="sm" icon={<Download size={14} />} onClick={() => downloadAiReport(aiJob.downloads.html, 'decision_register_report.html')}>
+                {t('register_report.download_html')}
+              </BaseButton>
             </div>
           </div>
         )}
       </div>
 
       <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end">
-        <div><label className="block text-[10px] font-semibold text-slate-500 mb-1">From</label><input type="date" className="input text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
-        <div><label className="block text-[10px] font-semibold text-slate-500 mb-1">To</label><input type="date" className="input text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>
-        <div><label className="block text-[10px] font-semibold text-slate-500 mb-1">Status</label>
-          <select className="input text-sm" value={rStatus} onChange={e => setRStatus(e.target.value)}>
-            <option value="">All</option>
-            {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
-        </div>
-        <div><label className="block text-[10px] font-semibold text-slate-500 mb-1">Manager</label>
-          <select className="input text-sm" value={rManagerId} onChange={e => setRManagerId(e.target.value)}>
-            <option value="">All</option>
-            {managers.map(m => <option key={m.id} value={m.id}>{m.username}</option>)}
-          </select>
-        </div>
-        <button onClick={() => fetchReport('json')} disabled={loading} className="btn-gradient py-2 px-4 text-sm inline-flex items-center gap-2 disabled:opacity-60">
-          {loading ? <Loader size={14} className="animate-spin" /> : <FileText size={14} />} Generate
-        </button>
-        <button onClick={() => fetchReport('csv')} className="btn-outline py-2 px-4 text-sm inline-flex items-center gap-2">
-          <Download size={14} /> CSV
-        </button>
+        <BaseInput hideLabel label="From" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+        <BaseInput hideLabel label="To" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+        <BaseSelect hideLabel label="Status" placeholder="All" value={rStatus} options={Object.entries(STATUS_META).map(([k, v]) => ({ value: k, label: v.label }))} onChange={(_, v) => setRStatus(v)} className="min-w-36" />
+        <BaseSelect hideLabel label="Manager" placeholder="All" value={rManagerId ? String(rManagerId) : ''} options={managers.map(m => ({ value: String(m.id), label: m.username }))} onChange={(_, v) => setRManagerId(v)} className="min-w-36" />
+        <BaseButton variant="primary" onClick={() => fetchReport('json')} loading={loading} loadingLabel="Generating" icon={!loading ? <FileText size={14} /> : undefined}>Generate</BaseButton>
+        <BaseButton variant="outline" onClick={() => fetchReport('csv')} icon={<Download size={14} />}>CSV</BaseButton>
       </div>
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
@@ -723,7 +684,7 @@ export default function TaskManagement() {
 
   const loadCreateLookups = useCallback(async () => {
     try {
-      const [subRes, mgrRes] = await Promise.all([api.get('/submissions/'), api.get('/commission-tasks/eligible-managers/')])
+      const [subRes, mgrRes] = await Promise.all([api.get('/submissions/?page_size=500'), api.get('/commission-tasks/eligible-managers/')])
       setSubmissions(Array.isArray(subRes.data) ? subRes.data : subRes.data?.results ?? [])
       setManagers(Array.isArray(mgrRes.data) ? mgrRes.data : [])
     } catch { setSubmissions([]); setManagers([]) }
@@ -774,9 +735,7 @@ export default function TaskManagement() {
         subtitle="PS Commission Implementation Tracker — decision outcomes, action units, and implementation progress."
         action={
           canAllocate ? (
-            <button type="button" onClick={() => setCreateOpen(true)} className="btn-gradient py-2 px-4 text-sm inline-flex items-center gap-2">
-              <Plus size={16} /> Allocate task
-            </button>
+            <BaseButton variant="primary" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>Allocate task</BaseButton>
           ) : null
         }
       />
@@ -787,13 +746,16 @@ export default function TaskManagement() {
           { key: 'tasks', label: 'Tasks', icon: ListChecks },
           { key: 'report', label: 'Report', icon: FileText },
         ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={clsx(
-              'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all',
-              tab === t.key ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
-            )}>
-            <t.icon size={14} /> {t.label}
-          </button>
+          <BaseButton
+            key={t.key}
+            variant={tab === t.key ? 'outline' : 'ghost'}
+            size="sm"
+            icon={<t.icon size={14} />}
+            onClick={() => setTab(t.key)}
+            className={tab === t.key ? '!bg-white dark:!bg-slate-700 !shadow-sm' : ''}
+          >
+            {t.label}
+          </BaseButton>
         ))}
       </div>
 
@@ -802,17 +764,25 @@ export default function TaskManagement() {
       ) : (
         <>
           <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input className="input pl-9 text-sm" placeholder="Search title or submission reference..." value={q} onChange={e => setQ(e.target.value)} />
-            </div>
-            <select className="input text-sm w-full sm:w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="">All statuses</option>
-              {Object.keys(STATUS_META).map(st => <option key={st} value={st}>{STATUS_META[st].label}</option>)}
-            </select>
-            <button type="button" onClick={fetchTasks} disabled={loading} className="btn-outline py-2 px-3 text-sm inline-flex items-center gap-2">
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-            </button>
+            <BaseInput
+              hideLabel label="Search"
+              className="flex-1"
+              placeholder="Search title or submission reference..."
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              contentBefore={<Search size={14} className="text-slate-400" />}
+            />
+            <BaseSelect
+              hideLabel label="Status"
+              className="sm:w-44"
+              placeholder="All statuses"
+              value={statusFilter}
+              options={Object.keys(STATUS_META).map(st => ({ value: st, label: STATUS_META[st].label }))}
+              onChange={(_, v) => setStatusFilter(v)}
+            />
+            <BaseButton variant="outline" onClick={fetchTasks} disabled={loading} icon={<RefreshCw size={14} className={loading ? 'animate-spin' : ''} />}>
+              Refresh
+            </BaseButton>
           </div>
 
           <div className="card overflow-hidden">
@@ -930,21 +900,9 @@ export default function TaskManagement() {
                         {/* Edit */}
                         <td className="px-3 py-3 text-right">
                           {canEditTask(t) ? (
-                            <button
-                              type="button"
-                              onClick={() => setEditTask(t)}
-                              className="text-primary-600 dark:text-primary-400 text-xs font-semibold hover:underline whitespace-nowrap"
-                            >
-                              Edit
-                            </button>
+                            <BaseButton variant="ghost" size="sm" onClick={() => setEditTask(t)}>Edit</BaseButton>
                           ) : isViewOnlyRow(t) ? (
-                            <button
-                              type="button"
-                              onClick={() => setEditTask(t)}
-                              className="text-slate-500 dark:text-slate-400 text-xs font-medium hover:underline whitespace-nowrap"
-                            >
-                              View
-                            </button>
+                            <BaseButton variant="ghost" size="sm" onClick={() => setEditTask(t)}>View</BaseButton>
                           ) : null}
                         </td>
                       </tr>
@@ -1053,19 +1011,22 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
         <div className="pt-2 border-t border-slate-100 dark:border-slate-700">
           <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-3">Assignment</p>
           <div className="space-y-3">
+            <BaseSelect
+              label="OPSC Manager"
+              required
+              placeholder="Select manager..."
+              value={managerId ? String(managerId) : ''}
+              options={managers.map(m => ({ value: String(m.id), label: m.username }))}
+              onChange={(_, v) => setManagerId(v)}
+            />
             <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">OPSC Manager <span className="text-red-500">*</span></label>
-              <select className="input text-sm w-full" value={managerId} onChange={e => setManagerId(e.target.value)} required>
-                <option value="">Select manager...</option>
-                {managers.map(m => <option key={m.id} value={m.id}>{m.username}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Submission (optional)</label>
-              <select className="input text-sm w-full" value={submissionId} onChange={e => setSubmissionId(e.target.value)}>
-                <option value="">— No linked submission —</option>
-                {submissionChoices.map(s => <option key={s.id} value={s.id}>{s.reference_number} — {s.title.slice(0, 60)}</option>)}
-              </select>
+              <BaseSelect
+                label="Submission (optional)"
+                placeholder="— No linked submission —"
+                value={submissionId ? String(submissionId) : ''}
+                options={submissionChoices.map(s => ({ value: String(s.id), label: `${s.reference_number} — ${s.title.slice(0, 60)}` }))}
+                onChange={(_, v) => setSubmissionId(v)}
+              />
               <p className="text-[11px] text-slate-400 mt-1">Only post-decision / implementation stage items listed.</p>
             </div>
           </div>
@@ -1075,23 +1036,14 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
 
         <div className="pt-2 border-t border-slate-100 dark:border-slate-700 space-y-3">
           <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Task</p>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Task title <span className="text-red-500">*</span></label>
-            <input className="input text-sm w-full" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Draft implementation memo" required />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Description</label>
-            <textarea className="input text-sm w-full min-h-[64px]" value={description} onChange={e => setDescription(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Due date (optional)</label>
-            <input type="date" className="input text-sm w-full" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-          </div>
+          <BaseInput label="Task title" required value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Draft implementation memo" />
+          <BaseTextarea label="Description" rows={3} value={description} onChange={e => setDescription(e.target.value)} />
+          <BaseInput label="Due date (optional)" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="btn-outline py-2 px-4 text-sm">Cancel</button>
-          <button type="submit" disabled={saving} className="btn-gradient py-2 px-4 text-sm disabled:opacity-60">{saving ? 'Saving...' : 'Create task'}</button>
+          <BaseButton variant="secondary" onClick={onClose}>Cancel</BaseButton>
+          <BaseButton type="submit" variant="primary" loading={saving} loadingLabel="Saving">Create task</BaseButton>
         </div>
       </form>
     </Modal>
@@ -1223,68 +1175,68 @@ function EditTaskModal({ task, staffList, mode, readOnly = false, onClose, onSav
 
         {mode === 'staff' ? (
           <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Implementation status</label>
-              <select className="input text-sm w-full" value={implementationStatus} onChange={e => setImplementationStatus(e.target.value)}>
-                {IMPL_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Way forward / next steps</label>
-              <textarea className="input text-sm w-full min-h-[56px]" value={wayForward} onChange={e => setWayForward(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Task status</label>
-              <select className="input text-sm w-full" value={status} onChange={e => setStatus(e.target.value)}>
-                <option value="open">Open</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
-              </select>
-            </div>
+            <BaseSelect
+              label="Implementation status"
+              value={implementationStatus}
+              options={IMPL_STATUS_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+              onChange={(_, v) => setImplementationStatus(v)}
+            />
+            <BaseTextarea label="Way forward / next steps" rows={2} value={wayForward} onChange={e => setWayForward(e.target.value)} />
+            <BaseSelect
+              label="Task status"
+              value={status}
+              options={[
+                { value: 'open', label: 'Open' },
+                { value: 'in_progress', label: 'In progress' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'cancelled', label: 'Cancelled' },
+              ]}
+              onChange={(_, v) => setStatus(v)}
+            />
           </div>
         ) : (
           <>
             {mode === 'coordinator' && (
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">OPSC Manager</label>
-                <select className="input text-sm w-full" value={managerId} onChange={e => setManagerId(e.target.value)}>
-                  {!managers.some(m => String(m.id) === managerId) && <option value={managerId}>{task.assigned_manager_username}</option>}
-                  {managers.map(m => <option key={m.id} value={m.id}>{m.username}</option>)}
-                </select>
-              </div>
+              <BaseSelect
+                label="OPSC Manager"
+                value={managerId ? String(managerId) : ''}
+                options={[
+                  ...(!managers.some(m => String(m.id) === managerId) ? [{ value: String(managerId), label: task.assigned_manager_username }] : []),
+                  ...managers.map(m => ({ value: String(m.id), label: m.username })),
+                ]}
+                onChange={(_, v) => setManagerId(v)}
+              />
             )}
 
             <DecisionRegisterFields {...{ decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }} />
 
             <TaskMetadataFields {...{ meetingReference, setMeetingReference, meetingDate, setMeetingDate, minuteReference, setMinuteReference, decisionType, setDecisionType, successCriteria, setSuccessCriteria, legalReference, setLegalReference }} />
 
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Title</label>
-              <input className="input text-sm w-full" value={title} onChange={e => setTitle(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Description</label>
-              <textarea className="input text-sm w-full min-h-[80px]" value={description} onChange={e => setDescription(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Due date</label>
-              <input type="date" className="input text-sm w-full" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-            </div>
+            <BaseInput label="Title" value={title} onChange={e => setTitle(e.target.value)} />
+            <BaseTextarea label="Description" rows={3} value={description} onChange={e => setDescription(e.target.value)} />
+            <BaseInput label="Due date" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
 
             {/* Multi-Staff Assignment */}
             <MultiStaffSelect selected={selectedStaff} onChange={setSelectedStaff} staffList={staffList} label="Assign staff (one or more)" />
 
             {/* Reassign Button (for managers) */}
             {mode === 'manager' && selectedStaff.length > 0 && (
-              <button type="button" onClick={reassignStaff} disabled={saving} className="btn-outline py-1.5 px-3 text-xs inline-flex items-center gap-1.5 disabled:opacity-50">
-                <Users size={12} /> Reassign to {selectedStaff.length} staff
-              </button>
+              <BaseButton variant="outline" size="sm" icon={<Users size={12} />} onClick={reassignStaff} disabled={saving}>
+                Reassign to {selectedStaff.length} staff
+              </BaseButton>
             )}
 
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
-              <select className="input text-sm w-full" value={status} onChange={e => setStatus(e.target.value)}>
-                <option value="open">Open</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
-              </select>
-            </div>
+            <BaseSelect
+              label="Status"
+              value={status}
+              options={[
+                { value: 'open', label: 'Open' },
+                { value: 'in_progress', label: 'In progress' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'cancelled', label: 'Cancelled' },
+              ]}
+              onChange={(_, v) => setStatus(v)}
+            />
           </>
         )}
 
@@ -1304,9 +1256,9 @@ function EditTaskModal({ task, staffList, mode, readOnly = false, onClose, onSav
         </fieldset>
 
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="btn-outline py-2 px-4 text-sm">{readOnly ? 'Close' : 'Cancel'}</button>
+          <BaseButton variant="secondary" onClick={onClose}>{readOnly ? 'Close' : 'Cancel'}</BaseButton>
           {!readOnly && (
-            <button type="submit" disabled={saving} className="btn-gradient py-2 px-4 text-sm disabled:opacity-60">{saving ? 'Saving...' : 'Save'}</button>
+            <BaseButton type="submit" variant="primary" loading={saving} loadingLabel="Saving">Save</BaseButton>
           )}
         </div>
       </form>

@@ -168,11 +168,21 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
     if (fieldErrors[field]) setFieldErrors(prev => { const n = { ...prev }; delete n[field]; return n })
   }
 
-  // Auto-populate ministry name on mount
+  // Auto-populate fields on mount from submission data
   useEffect(() => {
-    if (!form.ministry_department_name && submission?.ministry_name) {
-      setForm(prev => ({ ...prev, ministry_department_name: submission.ministry_name }))
-    }
+    setForm(prev => {
+      const updates = {}
+      if (!prev.ministry_department_name) {
+        const ministryName = submission?.ministry?.name ?? submission?.ministry_name ?? ''
+        const departmentName = submission?.department?.name ?? submission?.department_name ?? ''
+        const combined = [ministryName, departmentName].filter(Boolean).join(' / ')
+        if (combined) updates.ministry_department_name = combined
+      }
+      if (!prev.proposal_title && submission?.title) {
+        updates.proposal_title = submission.title
+      }
+      return Object.keys(updates).length ? { ...prev, ...updates } : prev
+    })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-calculate net salary difference when savings or cost change

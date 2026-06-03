@@ -11,6 +11,7 @@ import {
 import { SparkleRegular, ArrowSyncRegular } from '@fluentui/react-icons'
 import AiTextSkeleton from '../shared/AiTextSkeleton'
 import api from '../../api/client'
+import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 
 const POLL_MS = 3000
 const POLL_MAX = 40
@@ -55,6 +56,7 @@ export default function ExecutiveBriefPanel({
 
     let attempts = 0
     const interval = setInterval(async () => {
+      if (!isTabVisible()) return
       attempts += 1
       if (attempts > POLL_MAX) {
         clearInterval(interval)

@@ -9,6 +9,168 @@ from typing import Any
 
 from .models import WorkflowStage
 
+# ── Human-readable role titles (no personal names — role/title only) ──────────
+_ROLE_TITLE: dict[str, str] = {
+    "odu_principal":               "ODU Principal Analyst",
+    "principal_org_dev_analyst":   "Principal Org Dev Analyst",
+    "principal_job_analyst":       "Principal Job Analyst",
+    "hr_unit_principal":           "HR Principal Officer",
+    "vipam_principal":             "VIPAM Principal",
+    "compliance_principal":        "Compliance Principal",
+    "compliance_senior":           "Compliance Senior Officer",
+    "psc_officer":                 "PSC Officer",
+    "psc_secretary":               "PSC Secretary",
+    "senior_admin_officer":        "Senior Administration Officer",
+    "psc_manager":                 "OPSC Manager",
+    "psc_admin":                   "PSC Administrator",
+    "odu_manager":                 "ODU Manager",
+    "hr_unit_manager":             "HR Unit Manager",
+    "vipam_manager":               "VIPAM Manager",
+    "compliance_manager":          "Compliance Manager",
+    "csu_manager":                 "CSU Manager",
+    "principal_officer":           "Principal Officer",
+    "senior_officer":              "Senior Officer",
+}
+
+_UNIT_LABEL: dict[str, str] = {
+    "odu":        "ODU",
+    "hr":         "HR Unit",
+    "vipam":      "VIPAM",
+    "compliance": "Compliance Unit",
+    "csu":        "Corporate Services Unit",
+}
+
+
+def _role_title(role: str | None) -> str:
+    if not role:
+        return "assigned officer"
+    return _ROLE_TITLE.get(role, role.replace("_", " ").title())
+
+
+def _unit_label(unit: str | None) -> str:
+    if not unit:
+        return "the responsible unit"
+    return _UNIT_LABEL.get(unit, unit.upper())
+
+
+def _build_status_detail(submission) -> str:
+    """
+    Return a short, human-readable status line for the current station.
+    Uses role titles only — never personal names.
+    """
+    stage = submission.current_stage or ""
+
+    # Helper: get assigned principal's role title (if any)
+    assigned_role: str | None = None
+    try:
+        profile = getattr(submission.assigned_to, "psc_profile", None)
+        if profile:
+            assigned_role = profile.role
+    except Exception:
+        pass
+
+    has_co_assigned = False
+    try:
+        has_co_assigned = submission.co_assignments.exists()
+    except Exception:
+        pass
+
+    unit = submission.routed_unit or ""
+
+    # ── Ministry pre-submission ───────────────────────────────────────────────
+    if stage == WorkflowStage.DRAFT:
+        return "Preparing submission"
+    if stage == WorkflowStage.PENDING_DG_ENDORSEMENT:
+        return "Awaiting Director-General endorsement"
+    if stage in (WorkflowStage.SUBMITTED, WorkflowStage.RESUBMITTED):
+        return "Received — awaiting PSC registration"
+    if stage == WorkflowStage.RECEIVED_BY_PSC:
+        return "Registered at PSC"
+
+    # ── Return / clarification ────────────────────────────────────────────────
+    if stage == WorkflowStage.RETURNED_FOR_CLARIFICATION:
+        return "Returned — ministry clarification required"
+    if stage == WorkflowStage.DEFERRED_BACK_TO_HR:
+        return "Deferred by Commission — ministry action required"
+    if stage == WorkflowStage.RECALLED:
+        return "Recalled by Ministry"
+
+    # ── Assessment ───────────────────────────────────────────────────────────
+    if stage == WorkflowStage.REGISTERED_ROUTED:
+        if unit:
+            return f"Routed to {_unit_label(unit)} for checklist review"
+        return "Registered and routed for review"
+
+    if stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
+        if assigned_role:
+            detail = f"Checklist review assigned to {_role_title(assigned_role)}"
+            if has_co_assigned:
+                detail += " and co-analysts"
+            return detail
+        if unit:
+            return f"{_unit_label(unit)} Manager reviewing submission package"
+        return "Manager checklist review in progress"
+
+    if stage == WorkflowStage.UNDER_ASSESSMENT:
+        overdue = getattr(submission, "is_assessment_overdue", False)
+        if overdue:
+            if assigned_role:
+                return f"Assessment overdue — with {_role_title(assigned_role)}"
+            return "Assessment overdue — pending escalation"
+        if assigned_role:
+            detail = f"Under assessment by {_role_title(assigned_role)}"
+            if has_co_assigned:
+                detail += " and co-analysts"
+            return detail
+        if unit:
+            return f"Awaiting assignment by {_unit_label(unit)} Manager"
+        return "Under assessment"
+
+    if stage == WorkflowStage.COMPLIANCE_UNDER_REVIEW:
+        return "Compliance review in progress (CMS)"
+
+    if stage == WorkflowStage.DEFERRED:
+        return "Deferred — awaiting further information"
+    if stage == WorkflowStage.AWAITING_LEGAL_ADVICE:
+        return "Awaiting legal advice"
+    if stage == WorkflowStage.AWAITING_CABINET_DECISION:
+        return "Awaiting Cabinet decision"
+
+    # ── Commission ────────────────────────────────────────────────────────────
+    if stage == WorkflowStage.FORWARDED_TO_COMMISSION:
+        return "Forwarded — queued for Commission sitting"
+    if stage == WorkflowStage.COMMISSION_SITTING:
+        return "Before the Public Service Commission"
+    if stage == WorkflowStage.MATTERS_ARISING:
+        return "Matters arising — follow-up required"
+    if stage == WorkflowStage.TABLED:
+        return "Tabled — deferred to a future sitting"
+
+    # ── Internal (Secretary review) ───────────────────────────────────────────
+    if stage == WorkflowStage.SECRETARY_REVIEW:
+        return "Under Secretary review"
+
+    # ── Decision ─────────────────────────────────────────────────────────────
+    if stage == WorkflowStage.APPROVED:
+        return "Approved by the Commission"
+    if stage == WorkflowStage.REJECTED:
+        return "Rejected by the Commission"
+    if stage == WorkflowStage.RETURNED:
+        return "Returned — further action required"
+
+    # ── Post-decision / implementation ────────────────────────────────────────
+    if stage == WorkflowStage.MINUTES_DRAFTED_SIGNED:
+        return "Decision recorded — minutes being finalised"
+    if stage == WorkflowStage.DECISION_ENTERED_ASSIGNED:
+        return "Decision entered — implementation assigned"
+    if stage == WorkflowStage.UNDER_IMPLEMENTATION:
+        return "Under implementation"
+    if stage == WorkflowStage.IMPLEMENTATION_REPORT:
+        return "Implementation complete"
+
+    # Fallback
+    return stage.replace("_", " ").title()
+
 SENT_BACK_STAGES = frozenset({
     WorkflowStage.RETURNED_FOR_CLARIFICATION,
     WorkflowStage.DEFERRED_BACK_TO_HR,
@@ -220,6 +382,7 @@ def build_subway_map(submission) -> dict[str, Any]:
         "sent_back": sent_back,
         "progress_percent": min(100, max(0, progress_percent)),
         "station_order": list(STATION_IDS),
+        "status_detail": _build_status_detail(submission),
     }
 
 

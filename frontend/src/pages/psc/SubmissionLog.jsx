@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
 import Badge from '../../components/shared/Badge'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseSelect from '../../components/shared/BaseSelect'
+import BaseCheckbox from '../../components/shared/BaseCheckbox'
+import { ToggleButton } from '@fluentui/react-components'
 import api from '../../api/client'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { queryClient } from '../../api/queryClient'
 import { stageLabel, stageBadgeClass, STAGE_META } from '../../constants/stages'
 import SubmissionProgressBar from '../../components/shared/SubmissionProgressBar'
-import { PlusCircle, RefreshCw, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2, LayoutList, Columns3, Stamp } from 'lucide-react'
+import { PlusCircle, RefreshCw, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2, LayoutList, Columns3 } from 'lucide-react'
 import SubmissionKanbanBoard from '../../components/submissions/SubmissionKanbanBoard'
 import SubmissionForm from './SubmissionForm'
-import { canCreateSecretaryTravel, canViewSecretaryTravelList } from '../../constants/submissionCreate'
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { isComplianceRole } from '../../constants/compliance'
@@ -18,8 +24,13 @@ import BulkOperationsBar from '../../components/shared/BulkOperationsBar'
 import { useToast } from '../../context/ToastContext'
 import { QualityScoreBadge } from '../../components/submissions/SubmissionQualityScore'
 import { normalizeListPayload } from '../../utils/listPayload'
+import { useAgendaSections } from '../../hooks/useAgendaSections'
+import { prefetchSubmissionDetail } from '../../utils/submissionBootstrap'
 
 const PER_PAGE = 15
+// Kanban groups every matching card by stage, so it fetches in one capped page
+// rather than paginating. Mirrors the backend SubmissionPagination.max_page_size.
+const KANBAN_CAP = 500
 
 // Map workflow stages to Badge variants
 const STAGE_VARIANT = {
@@ -39,14 +50,17 @@ const STAGE_VARIANT = {
 export default function SubmissionLog() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
+  const { agendaSectionLabel } = useAgendaSections()
   const confirm = useConfirm()
   const toast = useToast()
 
-  const [rows, setRows]           = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [loadError, setLoadError] = useState('')
+  // Dashboard quick-filter from ?filter= query param
+  const [dashboardFilter, setDashboardFilter] = useState(() => searchParams.get('filter') || '')
+
   const [q, setQ]                 = useState('')
+  const [qDebounced, setQDebounced] = useState('')
   const [stageFilter, setStageFilter] = useState('')
   const [ministryFilter, setMinistryFilter] = useState('')
   const [page, setPage]           = useState(1)
@@ -59,21 +73,17 @@ export default function SubmissionLog() {
   const [nlMeta, setNlMeta]       = useState(null)
   const [nlIdSet, setNlIdSet]     = useState(null)
   const [viewMode, setViewMode]   = useState('list')
-  const [secretaryOnlyFilter, setSecretaryOnlyFilter] = useState(false)
-
   const isAdmin = user?.role === 'psc_admin'
   const isComplianceUser = user && isComplianceRole(user.role)
   const canCreateSubmission = user && !isComplianceUser
   const isTraveller = user?.role === 'traveller'
   const isInternalCreate = user && ['csu_manager', 'odu_manager'].includes(user.role)
   const showCommissionCreate = canCreateSubmission && !isTraveller && !isInternalCreate
-  const showSecretaryCreate = canCreateSecretaryTravel(user) && !isInternalCreate
-  const showSecretaryView = canViewSecretaryTravelList(user) && !isInternalCreate
   const showInternalCreate = canCreateSubmission && isInternalCreate
 
-  useEffect(() => {
-    if (isTraveller) setSecretaryOnlyFilter(true)
-  }, [isTraveller])
+  const warmSubmission = useCallback(submissionId => {
+    prefetchSubmissionDetail(submissionId)
+  }, [])
 
   const openCreateModal = mode => {
     setModalCreateMode(mode)
@@ -94,27 +104,76 @@ export default function SubmissionLog() {
     return map[i18n.resolvedLanguage] || map[i18n.language] || 'en-GB'
   }, [i18n.resolvedLanguage, i18n.language])
 
-  const loadRows = useCallback(() => {
-    setLoading(true)
-    setLoadError('')
-    return api.get('/submissions/')
-      .then(res => setRows(normalizeListPayload(res.data)))
-      .catch(err => {
-        const d = err.response?.data
-        const msg = typeof d?.detail === 'string' ? d.detail : err.message || t('submission.load_error_default')
-        setLoadError(msg)
-        setRows([])
-      })
-      .finally(() => setLoading(false))
-  }, [t])
+  // Debounce the free-text search before it hits the server query.
+  useEffect(() => {
+    const id = setTimeout(() => setQDebounced(q.trim()), 300)
+    return () => clearTimeout(id)
+  }, [q])
 
-  useEffect(() => { loadRows() }, [loadRows])
+  // Server-side filter params shared by the list and kanban queries.
+  const filterParams = useMemo(() => {
+    const p = {}
+    if (qDebounced) p.search = qDebounced
+    if (stageFilter) p.current_stage = stageFilter
+    if (ministryFilter) p.ministry = ministryFilter
+    if (dashboardFilter && dashboardFilter !== 'all') p.dashboard = dashboardFilter
+    if (nlIdSet) p.ids = [...nlIdSet].join(',')
+    return p
+  }, [qDebounced, stageFilter, ministryFilter, dashboardFilter, nlIdSet])
 
-  // Unique sorted ministries from loaded data
-  const ministryOptions = useMemo(() => {
-    const names = [...new Set(rows.map(r => r.ministry_name).filter(Boolean))].sort()
-    return names
-  }, [rows])
+  // The api client unwraps DRF pagination to a bare array (r.data) and exposes
+  // the total on r.pagination.count — normalise both into { results, count }.
+  const toPage = r => ({ results: Array.isArray(r.data) ? r.data : [], count: r.pagination?.count ?? (Array.isArray(r.data) ? r.data.length : 0) })
+
+  // ── List query (server-paginated, stale-while-revalidate) ───────────────────
+  const listQuery = useQuery({
+    queryKey: ['submissions', 'list', { page, ...filterParams }],
+    queryFn: () =>
+      api.get('/submissions/', { params: { page, page_size: PER_PAGE, ...filterParams } })
+        .then(toPage),
+    placeholderData: keepPreviousData,
+    enabled: viewMode === 'list',
+  })
+
+  // ── Kanban query (capped bulk fetch, grouped client-side) ───────────────────
+  const kanbanQuery = useQuery({
+    queryKey: ['submissions', 'kanban', filterParams],
+    queryFn: () =>
+      api.get('/submissions/', { params: { page_size: KANBAN_CAP, ...filterParams } })
+        .then(toPage),
+    placeholderData: keepPreviousData,
+    enabled: viewMode === 'kanban',
+  })
+
+  // ── Ministry filter options (can't be derived from one page any more) ───────
+  const ministriesQuery = useQuery({
+    queryKey: ['ministries', 'options'],
+    queryFn: () => api.get('/ministries/').then(r => normalizeListPayload(r.data)),
+    staleTime: 5 * 60_000,
+  })
+
+  const rows = listQuery.data?.results ?? []
+  const totalCount = listQuery.data?.count ?? 0
+  const kanbanRows = kanbanQuery.data?.results ?? []
+  const kanbanCount = kanbanQuery.data?.count ?? 0
+
+  const loading = viewMode === 'list' ? listQuery.isLoading : kanbanQuery.isLoading
+  const refreshing = listQuery.isFetching || kanbanQuery.isFetching
+  const activeError = listQuery.error || kanbanQuery.error
+  const loadError = activeError
+    ? (activeError?.response?.data?.detail || t('submission.load_error_default'))
+    : ''
+
+  const ministryOptions = useMemo(
+    () => [...new Set((ministriesQuery.data ?? []).map(m => m.name).filter(Boolean))].sort(),
+    [ministriesQuery.data],
+  )
+
+  // Invalidate every submissions query (list + kanban) after a mutation/refresh.
+  const refetchSubmissions = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['submissions'] }),
+    [],
+  )
 
   // Stage groups for the dropdown optgroups
   const stageGroups = useMemo(() => {
@@ -155,31 +214,23 @@ export default function SubmissionLog() {
     setNlIdSet(null)
   }
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase()
-    return rows.filter(r => {
-      if (nlIdSet && !nlIdSet.has(r.id)) return false
-      if (stageFilter && r.current_stage !== stageFilter) return false
-      if (ministryFilter && r.ministry_name !== ministryFilter) return false
-      if (secretaryOnlyFilter && !r.secretary_only) return false
-      if (s && !(
-        (r.reference_number && r.reference_number.toLowerCase().includes(s)) ||
-        (r.title && r.title.toLowerCase().includes(s)) ||
-        (r.ministry_name && r.ministry_name.toLowerCase().includes(s))
-      )) return false
-      return true
-    })
-  }, [rows, q, stageFilter, ministryFilter, secretaryOnlyFilter, nlIdSet])
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+  const totalPages = Math.max(1, Math.ceil(totalCount / PER_PAGE))
   const safePage   = Math.min(page, totalPages)
-  const paged      = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE)
   const changePage = (p) => setPage(Math.max(1, Math.min(totalPages, p)))
 
-  useEffect(() => { setSelected(new Set()) }, [q, stageFilter, ministryFilter])
+  // Reset to page 1 (and clear selection) whenever the active filters change.
+  useEffect(() => {
+    setSelected(new Set())
+    setPage(1)
+  }, [qDebounced, stageFilter, ministryFilter, dashboardFilter, nlIdSet])
+
+  // Clamp the page if a delete/filter shrinks the result set below it.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   const toggleAll = () => setSelected(prev =>
-    paged.every(r => prev.has(r.id)) ? new Set() : new Set(paged.map(r => r.id))
+    rows.length > 0 && rows.every(r => prev.has(r.id)) ? new Set() : new Set(rows.map(r => r.id))
   )
 
   const toggleOne = id => setSelected(prev => {
@@ -198,8 +249,8 @@ export default function SubmissionLog() {
     if (!ok) return
     const ids = [...selected]
     await Promise.all(ids.map(id => api.delete(`/submissions/${id}/`).catch(() => {})))
-    setRows(prev => prev.filter(r => !selected.has(r.id)))
     setSelected(new Set())
+    refetchSubmissions()
   }
 
   const handleBulkAction = async (action, extra = {}) => {
@@ -214,6 +265,7 @@ export default function SubmissionLog() {
         a.href = url; a.download = 'submissions-export.json'; a.click()
         URL.revokeObjectURL(url)
       }
+      if (action !== 'export_list') refetchSubmissions()
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Bulk action failed.')
     }
@@ -228,7 +280,7 @@ export default function SubmissionLog() {
     if (!ok) return
     try {
       await api.delete(`/submissions/${row.id}/`)
-      setRows(prev => prev.filter(r => r.id !== row.id))
+      refetchSubmissions()
     } catch { /* handled by api interceptor */ }
   }
 
@@ -243,54 +295,47 @@ export default function SubmissionLog() {
           canCreateSubmission ? (
             <div className="flex flex-wrap items-center gap-2">
               {showCommissionCreate && (
-                <button
-                  type="button"
+                <BaseButton
+                  variant="primary"
+                  icon={<PlusCircle size={16} />}
                   onClick={() => openCreateModal('commission')}
-                  className="btn-primary flex items-center gap-2"
                 >
-                  <PlusCircle size={16} />
                   {t('submission.submit_for_commission')}
-                </button>
-              )}
-              {showSecretaryCreate && (
-                <button
-                  type="button"
-                  onClick={() => openCreateModal('secretary')}
-                  className="btn-secondary flex items-center gap-2 border-sky-300 text-sky-800 hover:bg-sky-50 dark:border-sky-700 dark:text-sky-200 dark:hover:bg-sky-950/40"
-                >
-                  <Stamp size={16} />
-                  {t('submission.secretary_approval')}
-                </button>
-              )}
-              {showSecretaryView && (
-                <button
-                  type="button"
-                  onClick={() => { setSecretaryOnlyFilter(true); setPage(1) }}
-                  className="btn-secondary flex items-center gap-2 border-sky-300 text-sky-800 hover:bg-sky-50 dark:border-sky-700 dark:text-sky-200 dark:hover:bg-sky-950/40"
-                  title={t('submission.secretary_approval_view_hint')}
-                >
-                  <Stamp size={16} />
-                  {t('submission.secretary_approval')}
-                </button>
+                </BaseButton>
               )}
               {showInternalCreate && (
-                <button
-                  type="button"
+                <BaseButton
+                  variant="primary"
+                  icon={<PlusCircle size={16} />}
                   onClick={() => openCreateModal(null)}
-                  className="btn-primary flex items-center gap-2"
                 >
-                  <PlusCircle size={16} />
                   {t('submission.internal_submission')}
-                </button>
+                </BaseButton>
               )}
             </div>
           ) : null
         }
       />
 
-      {isTraveller && secretaryOnlyFilter && (
-        <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100">
-          {t('submission.secretary_traveller_list_banner')}
+      {dashboardFilter && dashboardFilter !== 'all' && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
+          <span>
+            Showing:{' '}
+            <strong>
+              {dashboardFilter === 'active' && 'Active / Pending submissions'}
+              {dashboardFilter === 'this_week' && 'Submissions from the last 7 days'}
+              {dashboardFilter === 'this_month' && 'Submissions from the last 30 days'}
+              {dashboardFilter === 'overdue' && 'Overdue submissions (>30 days)'}
+            </strong>
+          </span>
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            className="ml-4"
+            onClick={() => { setDashboardFilter(''); setSearchParams({}) }}
+          >
+            Clear filter
+          </BaseButton>
         </div>
       )}
 
@@ -312,110 +357,103 @@ export default function SubmissionLog() {
         {/* ── Toolbar ── */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-3">
         <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800 w-fit">
-          <button
-            type="button"
+          <ToggleButton
+            appearance="subtle"
+            size="small"
+            checked={viewMode === 'list'}
+            icon={<LayoutList size={15} />}
             onClick={() => setViewMode('list')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'list'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
           >
-            <LayoutList size={15} />
             {t('submission.view_list')}
-          </button>
-          <button
-            type="button"
+          </ToggleButton>
+          <ToggleButton
+            appearance="subtle"
+            size="small"
+            checked={viewMode === 'kanban'}
+            icon={<Columns3 size={15} />}
             onClick={() => setViewMode('kanban')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'kanban'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
           >
-            <Columns3 size={15} />
             {t('submission.view_kanban')}
-          </button>
+          </ToggleButton>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input
-              type="search"
-              placeholder={t('submission.filter_placeholder')}
-              value={q}
-              onChange={e => { setQ(e.target.value); setPage(1) }}
-              className="input pl-9 text-sm w-full"
-            />
-          </div>
-          <select
-            className="input text-sm sm:w-52"
+        {/* Row 1: free-text search */}
+        <BaseInput
+          hideLabel
+          label={t('submission.filter_placeholder')}
+          type="search"
+          placeholder={t('submission.filter_placeholder')}
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          contentBefore={<Search size={15} className="text-slate-400" />}
+        />
+        {/* Row 2: filters + actions — wraps naturally when space is tight */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <BaseSelect
+            hideLabel
+            label="Stage"
+            className="w-48"
+            placeholder="All stages"
             value={stageFilter}
-            onChange={e => { setStageFilter(e.target.value); setPage(1) }}
-          >
-            <option value="">All stages</option>
-            {Object.entries(stageGroups).map(([category, codes]) => (
-              <optgroup key={category} label={category}>
-                {codes.map(code => (
-                  <option key={code} value={code}>{stageLabel(code, t)}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <select
-            className="input text-sm sm:w-48"
+            options={Object.entries(stageGroups).flatMap(([, codes]) =>
+              codes.map(code => ({ value: code, label: stageLabel(code, t) }))
+            )}
+            onChange={(_, v) => { setStageFilter(v); setPage(1) }}
+          />
+          <BaseSelect
+            hideLabel
+            label="Ministry"
+            className="w-44"
             value={ministryFilter}
-            onChange={e => { setMinistryFilter(e.target.value); setPage(1) }}
-          >
-            <option value="">All ministries</option>
-            {ministryOptions.map(name => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
+            placeholder="All ministries"
+            options={ministryOptions}
+            onChange={(_, value) => { setMinistryFilter(value); setPage(1) }}
+          />
           {isAdmin && selected.size > 0 && (
-            <>
-              <button
-                type="button"
-                onClick={handleBulkDelete}
-                className="btn-danger text-sm inline-flex items-center gap-2 py-2 px-3 whitespace-nowrap"
-              >
-                <Trash2 size={14} />
-                Delete {selected.size}
-              </button>
-            </>
+            <BaseButton
+              variant="danger"
+              icon={<Trash2 size={14} />}
+              onClick={handleBulkDelete}
+              className="whitespace-nowrap"
+            >
+              Delete {selected.size}
+            </BaseButton>
           )}
-          <button
-            type="button"
-            onClick={() => loadRows()}
-            disabled={loading}
-            className="btn-outline text-sm inline-flex items-center gap-2 py-2 px-3 whitespace-nowrap"
+          <BaseButton
+            variant="outline"
+            onClick={() => refetchSubmissions()}
+            disabled={refreshing}
+            icon={<RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />}
+            className="whitespace-nowrap"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             {t('submission.reload')}
-          </button>
+          </BaseButton>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
-          <input
+          <BaseInput
+            hideLabel
+            label="Smart search"
             type="text"
-            className="input text-sm flex-1"
+            className="flex-1"
             placeholder='Smart search, e.g. "ODU restructures deferred in 2025"'
             value={nlQuery}
             onChange={e => setNlQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runNlSearch() } }}
           />
-          <button
-            type="button"
+          <BaseButton
+            variant="secondary"
             onClick={runNlSearch}
-            disabled={nlBusy || !nlQuery.trim()}
-            className="btn-secondary text-sm inline-flex items-center gap-2 shrink-0 disabled:opacity-50"
+            loading={nlBusy}
+            loadingLabel="Searching"
+            disabled={!nlQuery.trim()}
+            icon={!nlBusy ? <Sparkles size={14} /> : undefined}
+            className="shrink-0"
           >
-            {nlBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
             Smart search
-          </button>
+          </BaseButton>
           {nlIdSet && (
-            <button type="button" onClick={clearNlSearch} className="btn-outline text-sm shrink-0">
+            <BaseButton variant="outline" onClick={clearNlSearch} className="shrink-0">
               Clear AI filter
-            </button>
+            </BaseButton>
           )}
         </div>
         {nlMeta && (
@@ -439,11 +477,22 @@ export default function SubmissionLog() {
                 <p className="text-sm">{t('common.loading')}</p>
               </div>
             ) : (
-              <SubmissionKanbanBoard
-                submissions={filtered}
-                showQualityColumn={showQualityColumn}
-                onRefresh={loadRows}
-              />
+              <>
+                {kanbanCount > KANBAN_CAP && (
+                  <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+                    {t('submission.kanban_cap_notice', {
+                      shown: KANBAN_CAP,
+                      total: kanbanCount,
+                      defaultValue: `Showing the first ${KANBAN_CAP} of ${kanbanCount} matching submissions. Use filters to narrow the board.`,
+                    })}
+                  </div>
+                )}
+                <SubmissionKanbanBoard
+                  submissions={kanbanRows}
+                  showQualityColumn={showQualityColumn}
+                  onRefresh={refetchSubmissions}
+                />
+              </>
             )}
           </div>
         )}
@@ -467,10 +516,8 @@ export default function SubmissionLog() {
               <tr>
                 {isAdmin && (
                   <th className="w-10">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded"
-                      checked={paged.length > 0 && paged.every(r => selected.has(r.id))}
+                    <BaseCheckbox
+                      checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
                       onChange={toggleAll}
                     />
                   </th>
@@ -494,23 +541,21 @@ export default function SubmissionLog() {
                   </td>
                 </tr>
               )}
-              {!loading && paged.length === 0 && (
+              {!loading && rows.length === 0 && (
                 <tr>
                   <td colSpan={cols} className="py-16 text-center text-slate-400 dark:text-slate-500">
                     <FileText size={32} className="mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">{(q || stageFilter || ministryFilter) ? t('submission.no_matches') : t('submission.empty_state_title')}</p>
+                    <p className="text-sm">{(q || stageFilter || ministryFilter || dashboardFilter || nlIdSet) ? t('submission.no_matches') : t('submission.empty_state_title')}</p>
                   </td>
                 </tr>
               )}
-              {!loading && paged.map(r => (
+              {!loading && rows.map(r => (
                 <>
                   {/* ── Parent row ── */}
                   <tr key={r.id} className={selected.has(r.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}>
                     {isAdmin && (
                       <td>
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded"
+                        <BaseCheckbox
                           checked={selected.has(r.id)}
                           onChange={() => toggleOne(r.id)}
                         />
@@ -520,6 +565,8 @@ export default function SubmissionLog() {
                       <Link
                         to={`/submissions/${r.id}`}
                         className="font-mono text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline whitespace-nowrap"
+                        onMouseEnter={() => warmSubmission(r.id)}
+                        onFocus={() => warmSubmission(r.id)}
                       >
                         {r.reference_number}
                       </Link>
@@ -527,7 +574,12 @@ export default function SubmissionLog() {
                     <td className="max-w-md">
                       <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{r.title}</p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                        {[r.category_name, r.ministry_name].filter(Boolean).join(' · ') || '—'}
+                        {[
+                          (r.form_agenda_category || r.agenda_category)
+                            ? agendaSectionLabel(r.form_agenda_category || r.agenda_category).replace(/^\d+\.\s*/, '')
+                            : null,
+                          r.ministry_name,
+                        ].filter(Boolean).join(' · ') || '—'}
                       </p>
                     </td>
                     <td className="min-w-[140px]">
@@ -568,30 +620,29 @@ export default function SubmissionLog() {
                     {isAdmin && (
                       <td>
                         <div className="flex items-center gap-0.5">
-                          <button
-                            type="button"
+                          <BaseButton
+                            variant="ghost" size="icon" iconOnly
+                            aria-label="View"
                             title="View"
+                            onMouseEnter={() => warmSubmission(r.id)}
+                            onFocus={() => warmSubmission(r.id)}
                             onClick={() => navigate(`/submissions/${r.id}`)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
-                          >
-                            <Eye size={13} />
-                          </button>
-                          <button
-                            type="button"
+                            icon={<Eye size={13} />}
+                          />
+                          <BaseButton
+                            variant="ghost" size="icon" iconOnly
+                            aria-label="Edit"
                             title="Edit"
                             onClick={() => navigate(`/submissions/${r.id}`)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-colors"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            type="button"
+                            icon={<Pencil size={13} />}
+                          />
+                          <BaseButton
+                            variant="ghost" size="icon" iconOnly
+                            aria-label="Delete"
                             title="Delete"
                             onClick={() => handleDelete(r)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                            icon={<Trash2 size={13} />}
+                          />
                         </div>
                       </td>
                     )}
@@ -606,6 +657,8 @@ export default function SubmissionLog() {
                           <Link
                             to={`/submissions/${child.id}`}
                             className="font-mono text-xs font-semibold text-primary-500 dark:text-primary-400 hover:underline whitespace-nowrap"
+                            onMouseEnter={() => warmSubmission(child.id)}
+                            onFocus={() => warmSubmission(child.id)}
                           >
                             {child.reference_number}
                           </Link>
@@ -633,7 +686,7 @@ export default function SubmissionLog() {
         </div>
 
         {/* ── Pagination ── */}
-        {!loading && filtered.length > 0 && (
+        {!loading && totalCount > 0 && (
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 dark:border-slate-700">
             <p className="text-sm text-slate-500 dark:text-slate-400">
               Showing{' '}
@@ -642,46 +695,44 @@ export default function SubmissionLog() {
               </span>
               {' – '}
               <span className="font-semibold text-slate-700 dark:text-slate-300">
-                {Math.min(safePage * PER_PAGE, filtered.length)}
+                {Math.min(safePage * PER_PAGE, totalCount)}
               </span>
               {' of '}
-              <span className="font-semibold text-slate-700 dark:text-slate-300">{filtered.length}</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">{totalCount}</span>
               {' submissions'}
             </p>
             {totalPages > 1 && (
               <div className="flex items-center gap-1">
-                <button
+                <BaseButton
+                  variant="ghost" size="icon" iconOnly
+                  aria-label="Previous page"
                   onClick={() => changePage(safePage - 1)}
                   disabled={safePage === 1}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
-                >
-                  <ChevronLeft size={16} />
-                </button>
+                  icon={<ChevronLeft size={16} />}
+                />
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let p = i + 1
                   if (totalPages > 5 && safePage > 3) p = safePage - 2 + i
                   if (p > totalPages) return null
                   return (
-                    <button
+                    <BaseButton
                       key={p}
+                      variant={safePage === p ? 'primary' : 'ghost'}
+                      size="sm"
                       onClick={() => changePage(p)}
-                      className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
-                        safePage === p
-                          ? 'bg-primary-500 text-white'
-                          : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
-                      }`}
+                      className="!min-w-8"
                     >
                       {p}
-                    </button>
+                    </BaseButton>
                   )
                 })}
-                <button
+                <BaseButton
+                  variant="ghost" size="icon" iconOnly
+                  aria-label="Next page"
                   onClick={() => changePage(safePage + 1)}
                   disabled={safePage === totalPages}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
-                >
-                  <ChevronRight size={16} />
-                </button>
+                  icon={<ChevronRight size={16} />}
+                />
               </div>
             )}
           </div>
@@ -695,19 +746,11 @@ export default function SubmissionLog() {
         open={modalOpen}
         onClose={closeCreateModal}
         title={
-          modalCreateMode === 'secretary'
-            ? t('submission.secretary_approval')
-            : modalCreateMode === 'commission'
+          modalCreateMode === 'commission'
               ? t('submission.submit_for_commission')
               : t('submission.internal_submission')
         }
-        subtitle={
-          modalCreateMode === 'secretary'
-            ? undefined
-            : modalCreateMode === 'commission'
-              ? t('submission.submit_for_commission_hint')
-              : t('submission.internal_submission_hint')
-        }
+        subtitle={modalCreateMode !== 'commission' ? t('submission.internal_submission_hint') : undefined}
         size="lg"
       >
         <SubmissionForm

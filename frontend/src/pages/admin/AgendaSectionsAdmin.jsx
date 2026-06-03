@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { GripVertical, Edit2, Plus, Trash2, X } from 'lucide-react'
+import { GripVertical, Edit2, Plus, Trash2, X, ArrowDown } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
@@ -9,6 +9,10 @@ import { useConfirm } from '../../context/ConfirmContext'
 import { userCanAccessAdminPanel } from '../../utils/adminAccess'
 import { invalidateAgendaSectionsCache } from '../../hooks/useAgendaSections'
 import PageHeader from '../../components/shared/PageHeader'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseSelect from '../../components/shared/BaseSelect'
+import BaseCheckbox from '../../components/shared/BaseCheckbox'
 
 function Modal({ title, onClose, children, wide }) {
   return (
@@ -16,9 +20,7 @@ function Modal({ title, onClose, children, wide }) {
       <div className={`card w-full p-0 overflow-hidden animate-scale-in ${wide ? 'max-w-2xl' : 'max-w-lg'}`}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400">
-            <X size={18} />
-          </button>
+          <BaseButton variant="ghost" size="icon" iconOnly onClick={onClose} icon={<X size={18} />} />
         </div>
         <div className="p-5">{children}</div>
       </div>
@@ -26,12 +28,22 @@ function Modal({ title, onClose, children, wide }) {
   )
 }
 
+const CHAIN_STAGES = [
+  { value: 'pending_manager_approval', label: 'Pending Manager Approval' },
+  { value: 'pending_second_approval',  label: 'Pending Second Approval' },
+]
+
+const EMPTY_CHAIN_STEP = { stage: 'pending_manager_approval', roles: [], label: '' }
+
 const EMPTY_FORM = {
   code: '',
   label: '',
+  group: '',
   is_special: false,
   is_active: true,
   receiver_roles: [],
+  digitized_form: null,
+  approval_chain: [],
 }
 
 /** Roles commonly configured as submission receivers (full list from role definitions). */
@@ -64,6 +76,7 @@ export default function AgendaSectionsAdmin() {
   const [dragId, setDragId] = useState(null)
   const [dragOverId, setDragOverId] = useState(null)
   const [roleLabels, setRoleLabels] = useState({})
+  const [formTypes, setFormTypes] = useState([])
 
   useEffect(() => {
     if (user && !userCanAccessAdminPanel(user)) navigate('/', { replace: true })
@@ -93,11 +106,15 @@ export default function AgendaSectionsAdmin() {
       .then(({ data }) => {
         const list = data.results ?? data
         const map = {}
-        list.forEach(rd => {
-          map[rd.role] = rd.role_label || rd.role
-        })
+        list.forEach(rd => { map[rd.role] = rd.role_label || rd.role })
         setRoleLabels(map)
       })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    api.get('/form-types/', { params: { page_size: 200 } })
+      .then(({ data }) => setFormTypes((data.results ?? data).filter(f => f.is_active)))
       .catch(() => {})
   }, [])
 
@@ -110,9 +127,12 @@ export default function AgendaSectionsAdmin() {
     setForm({
       code: row.code,
       label: row.label,
+      group: row.group || '',
       is_special: row.is_special,
       is_active: row.is_active,
       receiver_roles: row.receiver_roles || [],
+      digitized_form: row.digitized_form ?? null,
+      approval_chain: row.approval_chain ?? [],
     })
     setModal(row)
   }
@@ -141,9 +161,12 @@ export default function AgendaSectionsAdmin() {
     try {
       const payload = {
         label: form.label.trim(),
+        group: form.group.trim(),
         is_special: form.is_special,
         is_active: form.is_active,
         receiver_roles: form.receiver_roles || [],
+        digitized_form: form.digitized_form || null,
+        approval_chain: (form.approval_chain || []).filter(s => s.stage && s.roles.length > 0),
       }
       if (modal === 'create') {
         payload.code = form.code.trim().toLowerCase().replace(/\s+/g, '_')
@@ -243,10 +266,9 @@ export default function AgendaSectionsAdmin() {
         title="Agenda sections"
         subtitle="Manage agenda sections, submission routing (which roles receive new cases), and lodge form visibility."
         action={
-          <button type="button" className="btn-primary flex items-center gap-2" onClick={openCreate}>
-            <Plus size={16} />
+          <BaseButton variant="primary" icon={<Plus size={16} />} onClick={openCreate}>
             Add section
-          </button>
+          </BaseButton>
         }
       />
 
@@ -276,23 +298,28 @@ export default function AgendaSectionsAdmin() {
                   !row.is_active && 'opacity-50',
                 )}
               >
-                <button
-                  type="button"
-                  className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600"
+                <BaseButton
+                  variant="ghost" size="icon" iconOnly
+                  className="cursor-grab active:cursor-grabbing"
                   aria-label="Drag to reorder"
                   tabIndex={-1}
-                >
-                  <GripVertical size={18} />
-                </button>
+                  icon={<GripVertical size={18} />}
+                />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{row.label}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2">
                     <code className="text-primary-600 dark:text-primary-400">{row.code}</code>
+                    {row.group && (
+                      <span className="rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5">{row.group}</span>
+                    )}
+                    {row.digitized_form_code && (
+                      <span className="rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-1.5 py-0.5">Form: {row.digitized_form_code}</span>
+                    )}
                     {row.is_special && (
-                      <span className="ml-2 rounded bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5">Meeting only</span>
+                      <span className="rounded bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5">Meeting only</span>
                     )}
                     {!row.is_active && (
-                      <span className="ml-2 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 px-1.5 py-0.5">Inactive</span>
+                      <span className="rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 px-1.5 py-0.5">Inactive</span>
                     )}
                   </p>
                   {(row.receiver_roles?.length > 0) && (
@@ -301,24 +328,15 @@ export default function AgendaSectionsAdmin() {
                       {row.receiver_roles.map(r => roleLabels[r] || r).join(', ')}
                     </p>
                   )}
+                  {(row.approval_chain?.length > 0) && (
+                    <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1 truncate">
+                      Chain: {row.approval_chain.map(s => s.label || s.stage).join(' → ')} → Secretary
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
-                    onClick={() => openEdit(row)}
-                    aria-label="Edit"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600"
-                    onClick={() => remove(row)}
-                    aria-label="Delete or deactivate"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <BaseButton variant="ghost" size="icon" iconOnly onClick={() => openEdit(row)} aria-label="Edit" icon={<Edit2 size={16} />} />
+                  <BaseButton variant="ghost" size="icon" iconOnly onClick={() => remove(row)} aria-label="Delete or deactivate" icon={<Trash2 size={16} />} />
                 </div>
               </li>
             ))}
@@ -335,43 +353,64 @@ export default function AgendaSectionsAdmin() {
           <form onSubmit={save} className="space-y-4">
             {modal === 'create' && (
               <div>
-                <label className="block text-sm font-medium mb-1">Code</label>
-                <input
-                  className="input font-mono text-sm"
+                <BaseInput
+                  label="Code"
                   required
                   placeholder="e.g. appointment"
                   value={form.code}
                   onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
+                  hint="Lowercase slug; used in API and database (cannot change later)."
                 />
-                <p className="text-xs text-slate-500 mt-1">Lowercase slug; used in API and database (cannot change later).</p>
               </div>
             )}
+            <BaseInput
+              label="Label"
+              required
+              placeholder="e.g. Appointment / Acting Appointment"
+              value={form.label}
+              onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
+              hint="Shown as the option text in the submission type dropdown."
+            />
             <div>
-              <label className="block text-sm font-medium mb-1">Label</label>
-              <input
-                className="input"
-                required
-                placeholder="e.g. 5. Appointment / Acting Appointment"
-                value={form.label}
-                onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
+              <BaseInput
+                label="Group"
+                list="group-suggestions"
+                placeholder="e.g. Appointments"
+                value={form.group}
+                onChange={e => setForm(f => ({ ...f, group: e.target.value }))}
               />
+              <datalist id="group-suggestions">
+                {[...new Set(rows.map(r => r.group).filter(Boolean))].sort().map(g => (
+                  <option key={g} value={g} />
+                ))}
+              </datalist>
+              <p className="text-xs text-slate-500 mt-1">
+                Sections with the same group appear together under an <code>&lt;optgroup&gt;</code> heading. Leave blank to appear ungrouped.
+              </p>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.is_special}
-                onChange={e => setForm(f => ({ ...f, is_special: e.target.checked }))}
+            <div>
+              <BaseSelect
+                label="Linked digitized form"
+                placeholder="— None —"
+                value={form.digitized_form != null ? String(form.digitized_form) : ''}
+                options={formTypes
+                  .slice()
+                  .sort((a, b) => a.code.localeCompare(b.code))
+                  .map(ft => ({ value: String(ft.id), label: `${ft.code} — ${ft.name}` }))}
+                onChange={(_, v) => setForm(f => ({ ...f, digitized_form: v ? Number(v) : null }))}
               />
-              Meeting-only (hide from ministry lodge form)
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.is_active}
-                onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))}
-              />
-              Active
-            </label>
+              <p className="text-xs text-slate-500 mt-1">When a submission is created under this type, this form opens automatically.</p>
+            </div>
+            <BaseCheckbox
+              label="Meeting-only (hide from ministry lodge form)"
+              checked={form.is_special}
+              onChange={e => setForm(f => ({ ...f, is_special: e.target.checked }))}
+            />
+            <BaseCheckbox
+              label="Active"
+              checked={form.is_active}
+              onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))}
+            />
             <div>
               <label className="block text-sm font-medium mb-1">Roles that receive submissions</label>
               <p className="text-xs text-slate-500 mb-2">
@@ -383,34 +422,131 @@ export default function AgendaSectionsAdmin() {
                   ? Object.entries(roleLabels)
                     .sort((a, b) => a[1].localeCompare(b[1]))
                     .map(([code, label]) => (
-                      <label key={code} className="flex items-center gap-2 text-xs cursor-pointer py-1 px-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <input
-                          type="checkbox"
-                          checked={(form.receiver_roles || []).includes(code)}
-                          onChange={() => toggleReceiverRole(code)}
-                        />
-                        <span className="text-slate-700 dark:text-slate-300">{label}</span>
-                      </label>
-                    ))
-                  : RECEIVER_ROLE_HINTS.map(code => (
-                    <label key={code} className="flex items-center gap-2 text-xs cursor-pointer py-1 px-1">
-                      <input
-                        type="checkbox"
+                      <BaseCheckbox
+                        key={code}
+                        label={label}
                         checked={(form.receiver_roles || []).includes(code)}
                         onChange={() => toggleReceiverRole(code)}
+                        className="py-1 px-1"
                       />
-                      <code>{code}</code>
-                    </label>
+                    ))
+                  : RECEIVER_ROLE_HINTS.map(code => (
+                    <BaseCheckbox
+                      key={code}
+                      label={<code>{code}</code>}
+                      checked={(form.receiver_roles || []).includes(code)}
+                      onChange={() => toggleReceiverRole(code)}
+                    />
                   ))}
               </div>
             </div>
+            {/* ── Approval Chain ── */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Approval chain</label>
+              <p className="text-xs text-slate-500 mb-2">
+                Steps required before the submission reaches the Secretary.
+                Each step defines who approves and in what order.
+                Leave empty for no pre-approval (submission goes straight to Secretary after creation).
+              </p>
+
+              {/* Step list */}
+              <div className="space-y-2 mb-2">
+                {(form.approval_chain || []).map((step, idx) => (
+                  <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-semibold text-slate-500 w-6">#{idx + 1}</span>
+                      <BaseInput
+                        hideLabel label="Step label"
+                        className="flex-1"
+                        placeholder="Step label, e.g. VIPAM Manager Approval"
+                        value={step.label}
+                        onChange={e => setForm(f => {
+                          const chain = [...(f.approval_chain || [])]
+                          chain[idx] = { ...chain[idx], label: e.target.value }
+                          return { ...f, approval_chain: chain }
+                        })}
+                      />
+                      <BaseSelect
+                        hideLabel label="Stage"
+                        className="w-48"
+                        value={step.stage}
+                        options={CHAIN_STAGES.map(s => ({ value: s.value, label: s.label }))}
+                        onChange={(_, v) => setForm(f => {
+                          const chain = [...(f.approval_chain || [])]
+                          chain[idx] = { ...chain[idx], stage: v }
+                          return { ...f, approval_chain: chain }
+                        })}
+                      />
+                      <BaseButton
+                        variant="ghost" size="icon" iconOnly
+                        aria-label="Remove step"
+                        icon={<Trash2 size={14} />}
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          approval_chain: (f.approval_chain || []).filter((_, i) => i !== idx),
+                        }))}
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1">Roles that approve this step:</p>
+                      <div className="grid sm:grid-cols-2 gap-1 max-h-36 overflow-y-auto border border-slate-100 dark:border-slate-700 rounded p-2">
+                        {Object.keys(roleLabels).length > 0
+                          ? Object.entries(roleLabels).sort((a, b) => a[1].localeCompare(b[1])).map(([code, rl]) => (
+                            <BaseCheckbox
+                              key={code}
+                              label={rl}
+                              checked={(step.roles || []).includes(code)}
+                              onChange={() => setForm(f => {
+                                const chain = [...(f.approval_chain || [])]
+                                const current = chain[idx].roles || []
+                                chain[idx] = {
+                                  ...chain[idx],
+                                  roles: current.includes(code)
+                                    ? current.filter(r => r !== code)
+                                    : [...current, code].sort(),
+                                }
+                                return { ...f, approval_chain: chain }
+                              })}
+                            />
+                          ))
+                          : <p className="text-xs text-slate-400 col-span-2">Loading roles…</p>
+                        }
+                      </div>
+                    </div>
+                    {idx < (form.approval_chain || []).length - 1 && (
+                      <div className="flex justify-center mt-2 text-slate-400">
+                        <ArrowDown size={14} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {(form.approval_chain || []).length < CHAIN_STAGES.length && (
+                <BaseButton
+                  variant="outline"
+                  size="sm"
+                  icon={<Plus size={14} />}
+                  onClick={() => setForm(f => ({
+                    ...f,
+                    approval_chain: [...(f.approval_chain || []), { ...EMPTY_CHAIN_STEP }],
+                  }))}
+                >
+                  Add approval step
+                </BaseButton>
+              )}
+
+              {(form.approval_chain || []).length > 0 && (
+                <div className="mt-2 flex items-center gap-2 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-800 dark:text-blue-200">
+                  <ArrowDown size={12} className="shrink-0" />
+                  <span>After all steps: submission is sent to Secretary / PSC</span>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3 pt-2">
-              <button type="submit" className="btn-primary px-5" disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-              <button type="button" className="btn-secondary px-5" onClick={() => setModal(null)}>
-                Cancel
-              </button>
+              <BaseButton type="submit" variant="primary" loading={saving} loadingLabel="Saving">Save</BaseButton>
+              <BaseButton type="button" variant="secondary" onClick={() => setModal(null)}>Cancel</BaseButton>
             </div>
           </form>
         </Modal>

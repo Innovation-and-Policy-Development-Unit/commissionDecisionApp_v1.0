@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { Mail, ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
 import Logo from '../../components/shared/Logo'
 import api from '../../api/client'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
 
 export default function ResetPassword() {
   const [email,   setEmail]   = useState('')
@@ -70,38 +72,27 @@ export default function ResetPassword() {
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                      Email Address
-                    </label>
-                    <div className="relative">
-                      <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="email"
-                        className="input pl-9"
-                        placeholder="john@example.com"
-                        value={email}
-                        autoComplete="email"
-                        onChange={e => setEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <button
+                  <BaseInput
+                    label="Email Address"
+                    type="email"
+                    placeholder="john@example.com"
+                    value={email}
+                    autoComplete="email"
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    contentBefore={<Mail size={15} className="text-slate-400" />}
+                  />
+                  <BaseButton
                     type="submit"
-                    className="btn-gradient w-full py-2.5 text-sm"
-                    disabled={loading || !email}
+                    variant="primary"
+                    className="w-full !py-2.5"
+                    loading={loading}
+                    loadingLabel="Sending"
+                    disabled={!email}
+                    icon={!loading ? <ArrowRight size={16} /> : undefined}
                   >
-                    {loading ? (
-                      <span className="flex items-center gap-2">
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Sending…
-                      </span>
-                    ) : (
-                      <>Send Reset Link <ArrowRight size={16} /></>
-                    )}
-                  </button>
+                    Send Reset Link
+                  </BaseButton>
                 </form>
               </>
             ) : (
@@ -123,12 +114,13 @@ export default function ResetPassword() {
                   <strong>Tip:</strong> Check your spam or junk folder if the email doesn't arrive within a few minutes.
                 </div>
 
-                <button
+                <BaseButton
+                  variant="outline"
+                  className="w-full !py-2.5 mb-3"
                   onClick={() => { setSent(false); setEmail(''); setError('') }}
-                  className="w-full py-2.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors font-medium mb-3"
                 >
                   Try a different email
-                </button>
+                </BaseButton>
 
                 <Link
                   to="/auth/login"

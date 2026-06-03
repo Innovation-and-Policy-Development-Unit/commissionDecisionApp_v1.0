@@ -70,6 +70,51 @@ class SubmissionAPITests(TestCase):
         resp = self.client.get("/api/submissions/")
         self.assertEqual(resp.status_code, 200)
 
+    def test_list_pagination_and_filters(self):
+        """Server-side pagination + filtering on the submissions list."""
+        from django.utils import timezone
+        from ..models import Submission, WorkflowStage
+
+        # 12 submitted (one uniquely searchable) + 8 draft = 20 rows.
+        for i in range(12):
+            Submission.objects.create(
+                title=("Unique-Zenith-Marker" if i == 0 else f"Submitted {i}"),
+                form_category=self.form_cat, form_type_code="PSC 3.6",
+                ministry=self.ministry, received_at=timezone.now(),
+                created_by=self.user, current_stage=WorkflowStage.SUBMITTED,
+            )
+        for i in range(8):
+            Submission.objects.create(
+                title=f"Draft {i}", form_category=self.form_cat, form_type_code="PSC 3.6",
+                ministry=self.ministry, received_at=timezone.now(),
+                created_by=self.user, current_stage=WorkflowStage.DRAFT,
+            )
+
+        # Scope to this test's ministry to isolate from migration-seeded data
+        # (this also exercises the ministry filter).
+        base = "/api/submissions/?ministry=Test Ministry"
+
+        # Page 1 caps at the requested page_size and reports the full count.
+        body = self.client.get(f"{base}&page_size=15").json()
+        self.assertEqual(body["count"], 20)
+        self.assertEqual(len(body["results"]), 15)
+        self.assertIsNotNone(body["next"])
+
+        # Page 2 reaches the remainder — the >page_size truncation bug is gone.
+        self.assertEqual(len(self.client.get(f"{base}&page=2&page_size=15").json()["results"]), 5)
+
+        # Stage filter.
+        self.assertEqual(self.client.get(f"{base}&current_stage=draft").json()["count"], 8)
+
+        # Free-text search across reference/title/ministry.
+        sbody = self.client.get(f"{base}&search=Zenith").json()
+        self.assertEqual(sbody["count"], 1)
+        self.assertIn("Zenith", sbody["results"][0]["title"])
+
+        # ids filter (NL-search path).
+        ids = [str(s.id) for s in Submission.objects.filter(ministry=self.ministry)[:2]]
+        self.assertEqual(self.client.get(f"/api/submissions/?ids={','.join(ids)}").json()["count"], 2)
+
     def test_create_submission(self):
         from django.utils import timezone
         resp = self.client.post("/api/submissions/", {
@@ -163,3 +208,53 @@ class SubmissionAPITests(TestCase):
         data = self.client.get(f"/api/submissions/{sub.id}/").json()
         self.assertTrue(data.get("ai_package_processed"))
         self.assertIsInstance(data.get("ai_package_gaps"), list)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=['*'])
+class SubmissionEditGateTests(TestCase):
+    """HR may edit only while drafting; the DG is view-only on content."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(code="EDG", name="Edit Gate Ministry")
+        self.form_cat = FormCategory.objects.create(code="psc_3_6_eg", name="PSC 3.6 EG")
+        self.hr = User.objects.create_user("hruser", password="test1234")
+        Profile.objects.create(user=self.hr, role=Role.MINISTRY_HR, ministry=self.ministry)
+        self.dg = User.objects.create_user("dguser", password="test1234")
+        Profile.objects.create(user=self.dg, role=Role.HEAD_OF_AGENCY, ministry=self.ministry)
+
+    def _make(self, stage):
+        from django.utils import timezone
+        from ..models import Submission
+        return Submission.objects.create(
+            title="Edit gate", form_category=self.form_cat, form_type_code="PSC 3.6",
+            ministry=self.ministry, received_at=timezone.now(),
+            created_by=self.hr, current_stage=stage,
+        )
+
+    def test_hr_can_edit_draft_but_not_after_submitting_for_endorsement(self):
+        from ..models import WorkflowStage
+        c = APIClient(); c.force_authenticate(self.hr)
+        draft = self._make(WorkflowStage.DRAFT)
+        self.assertEqual(
+            c.patch(f"/api/submissions/{draft.id}/", {"title": "Revised"}, format="json").status_code, 200)
+        pending = self._make(WorkflowStage.PENDING_DG_ENDORSEMENT)
+        self.assertEqual(
+            c.patch(f"/api/submissions/{pending.id}/", {"title": "Nope"}, format="json").status_code, 403)
+
+    def test_dg_can_view_but_not_edit_draft(self):
+        from ..models import WorkflowStage
+        c = APIClient(); c.force_authenticate(self.dg)
+        draft = self._make(WorkflowStage.DRAFT)
+        self.assertEqual(c.get(f"/api/submissions/{draft.id}/").status_code, 200)
+        self.assertEqual(
+            c.patch(f"/api/submissions/{draft.id}/", {"title": "Nope"}, format="json").status_code, 403)
+
+    def test_can_edit_flag_reflects_role_and_stage(self):
+        from ..models import WorkflowStage
+        c_hr = APIClient(); c_hr.force_authenticate(self.hr)
+        draft = self._make(WorkflowStage.DRAFT)
+        pending = self._make(WorkflowStage.PENDING_DG_ENDORSEMENT)
+        self.assertTrue(c_hr.get(f"/api/submissions/{draft.id}/").json()["can_edit"])
+        self.assertFalse(c_hr.get(f"/api/submissions/{pending.id}/").json()["can_edit"])
+        c_dg = APIClient(); c_dg.force_authenticate(self.dg)
+        self.assertFalse(c_dg.get(f"/api/submissions/{draft.id}/").json()["can_edit"])

@@ -179,16 +179,16 @@ USERS = [
     ("hr.education",   "hr@met.gov.vu",              "Ministry123!",      "ministry_hr",            "MET"),
     ("hr.health",      "hr@moh.gov.vu",              "Ministry123!",      "ministry_hr",            "MOH"),
     ("hr.infra",       "hr@mipu.gov.vu",             "Ministry123!",      "ministry_hr",            "MIPU"),
-    ("hr.agriculture", "hr@malffb.gov.vu",           "Ministry123!",      "ministry_hr",            "MALFFB"),
+    ("hr.agriculture", "hr@malffb.gov.vu",           "Ministry123!",      "ministry_hr",            "MALFB"),
     ("hr.justice",     "hr@mjcs.gov.vu",             "Ministry123!",      "ministry_hr",            "MJCS"),
     ("hr.internal",    "hr@mia.gov.vu",              "Ministry123!",      "ministry_hr",            "MIA"),
     # Head of Agency (DG/Director) — one per ministry for demo
-    ("dg.opm",         "dg@opm.gov.vu",              "DG12345!",          "head_of_agency",         "OPM"),
+    ("dg.opm",         "dg@opm.gov.vu",              "DG12345!",          "head_of_agency",         "MPM"),
     ("dg.mfem",        "dg@mfem.gov.vu",             "DG12345!",          "head_of_agency",         "MFEM"),
     ("dg.met",         "dg@met.gov.vu",              "DG12345!",          "head_of_agency",         "MET"),
     ("dg.moh",         "dg@moh.gov.vu",              "DG12345!",          "head_of_agency",         "MOH"),
     ("dg.mipu",        "dg@mipu.gov.vu",             "DG12345!",          "head_of_agency",         "MIPU"),
-    ("dg.malffb",      "dg@malffb.gov.vu",           "DG12345!",          "head_of_agency",         "MALFFB"),
+    ("dg.malffb",      "dg@malffb.gov.vu",           "DG12345!",          "head_of_agency",         "MALFB"),
 ]
 
 # ── Workflow stage paths ───────────────────────────────────────────────────────
@@ -332,9 +332,9 @@ SUBMISSIONS = [
     ("Transfer of Chief Nursing Officer to Northern Provincial Hospital, MOH",
      "MOH", "NURSING", "other", "PSC 4.5", "hr", "implementation_report", 118),
     ("Reclassification of ICT Officers — OGCIO Grades 3–5",
-     "OPM", "OGCIO", "other", "PSC 2.1", "hr", "implementation_report", 112),
+     "MPM", "OGCIO", "other", "PSC 2.1", "hr", "implementation_report", 112),
     ("Secondment of Agricultural Officer to SPC Regional Office, Suva",
-     "MALFFB", "AGR", "other", "PSC 4.8", "hr", "implementation_report", 105),
+     "MALFB", "AGR", "other", "PSC 4.8", "hr", "implementation_report", 105),
 
     # ── UNDER IMPLEMENTATION ───────────────────────────────────────────────
     ("Appointment of Deputy Director — Customs & Inland Revenue",
@@ -346,7 +346,7 @@ SUBMISSIONS = [
     ("Termination of Employment — Finance Officer, Ministry of Infrastructure",
      "MIPU", "PWD", "discipline_compliance", "PSC 6.4", "compliance", "under_implementation", 82),
     ("Appointment of Director of Agriculture",
-     "MALFFB", "AGR", "appointment", "PSC 3.6", "odu", "under_implementation", 79),
+     "MALFB", "AGR", "appointment", "PSC 3.6", "odu", "under_implementation", 79),
     ("Reclassification of Tourism Officer Posts — Ministry of Tourism",
      "MTCI", None, "other", "PSC 2.1", "hr", "under_implementation", 75),
 
@@ -370,7 +370,7 @@ SUBMISSIONS = [
     ("Secondment of Nurse to WHO Regional Office, Manila",
      "MOH", "NURSING", "other", "PSC 4.8", "hr", "minutes_drafted_signed", 47),
     ("Acting Appointment of Director — Department of Forestry",
-     "MALFFB", "FORESTRY", "appointment", "PSC 3.8", "odu", "minutes_drafted_signed", 44),
+     "MALFB", "FORESTRY", "appointment", "PSC 3.8", "odu", "minutes_drafted_signed", 44),
 
     # ── APPROVED ───────────────────────────────────────────────────────────
     ("Appointment of Director of Education Policy",
@@ -380,9 +380,9 @@ SUBMISSIONS = [
     ("Transfer of Pharmacist — Vila Central Hospital",
      "MOH", "PHARMACY", "other", "PSC 4.5", "hr", "approved", 44),
     ("Secondment of Policy Analyst to Asian Development Bank",
-     "OPM", "DEPT_STATE", "other", "PSC 4.8", "hr", "approved", 42),
+     "MPM", "DEPT_STATE", "other", "PSC 4.8", "hr", "approved", 42),
     ("Appointment of Chief Fisheries Officer",
-     "MALFFB", "FISHERIES", "appointment", "PSC 3.6", "odu", "approved", 40),
+     "MALFB", "FISHERIES", "appointment", "PSC 3.6", "odu", "approved", 40),
     ("Promotion — Senior Immigration Officer to Principal Grade",
      "MIA", "IMMIGRATION", "appointment", "PSC 3.5", "odu", "approved", 38),
     ("Establishment Variation — Ministry of Tourism (3 New Posts)",
@@ -404,11 +404,11 @@ SUBMISSIONS = [
 
     # ── COMMISSION SITTING ─────────────────────────────────────────────────
     ("Appointment of Director General — Office of the Prime Minister",
-     "OPM", "DEPT_STATE", "appointment", "PSC 3.6", "odu", "commission_sitting", 14),
+     "MPM", "DEPT_STATE", "appointment", "PSC 3.6", "odu", "commission_sitting", 14),
     ("Promotion Batch — Ministry of Health Nursing Officers (Grade 4 to 5)",
      "MOH", "NURSING", "appointment", "PSC 3.5", "hr", "commission_sitting", 12),
     ("Termination — Department of Agriculture Officer",
-     "MALFFB", "AGR", "discipline_compliance", "PSC 6.4", "compliance", "commission_sitting", 10),
+     "MALFB", "AGR", "discipline_compliance", "PSC 6.4", "compliance", "commission_sitting", 10),
     ("Reclassification — Finance Officers, Treasury Department (Grade 7 to 8)",
      "MFEM", "TREASURY", "other", "PSC 2.1", "odu", "commission_sitting", 7),
 
@@ -442,13 +442,13 @@ SUBMISSIONS = [
 
     # ── UNDER ASSESSMENT (some overdue) ───────────────────────────────────
     ("Appointment of Director of Forestry — MALFFB",
-     "MALFFB", "FORESTRY", "appointment", "PSC 3.6", "odu", "under_assessment", 38),   # OVERDUE
+     "MALFB", "FORESTRY", "appointment", "PSC 3.6", "odu", "under_assessment", 38),   # OVERDUE
     ("Termination — Senior Accountant, Ministry of Finance",
      "MFEM", "TREASURY", "discipline_compliance", "PSC 6.4", "compliance", "under_assessment", 34),  # OVERDUE
     ("Promotion — Senior Police Officer to Inspector Grade",
      "MIA", "POLICE", "appointment", "PSC 3.5", "odu", "under_assessment", 22),
     ("Secondment of Livestock Officer to FAO Rome",
-     "MALFFB", "LIVESTOCK", "other", "PSC 4.8", "hr", "under_assessment", 18),
+     "MALFB", "LIVESTOCK", "other", "PSC 4.8", "hr", "under_assessment", 18),
     ("Reclassification — Transport Officers, Ministry of Infrastructure",
      "MIPU", "PWD", "other", "PSC 2.1", "hr", "under_assessment", 15),
     ("Appointment of Deputy Secretary — Ministry of Health",
@@ -456,7 +456,7 @@ SUBMISSIONS = [
     ("Acting Appointment — Deputy Director Education (Curriculum)",
      "MET", "SEC_ED", "appointment", "PSC 3.8", "hr", "under_assessment", 10),
     ("Establishment Variation — Ministry of Agriculture (Additional Posts)",
-     "MALFFB", None, "other", "PSC 2.2", "hr", "under_assessment", 8),
+     "MALFB", None, "other", "PSC 2.2", "hr", "under_assessment", 8),
 
     # ── MANAGER CHECKLIST REVIEW ───────────────────────────────────────────
     ("Appointment of Chief Immigration Officer",
@@ -482,7 +482,7 @@ SUBMISSIONS = [
     ("Reclassification — Health Worker Posts (Grade 2 to Grade 3)",
      "MOH", "PUBLIC_HEALTH", "other", "PSC 2.1", "hr", "registered_routed", 4),
     ("Transfer of Fisheries Officer to Luganville Field Office",
-     "MALFFB", "FISHERIES", "other", "PSC 4.5", "hr", "registered_routed", 4),
+     "MALFB", "FISHERIES", "other", "PSC 4.5", "hr", "registered_routed", 4),
     ("Appointment of Principal Education Officer — Curriculum Development",
      "MET", "HIGHER", "appointment", "PSC 3.6", "odu", "registered_routed", 3),
     ("Establishment Variation — Ministry of Health (New Nursing Posts, Santo)",
@@ -492,13 +492,13 @@ SUBMISSIONS = [
     ("Appointment of Director of Civil Aviation",
      "MIPU", "CIVIL_AVIATION", "appointment", "PSC 3.6", "odu", "received_by_psc", 2),
     ("Promotion — Senior Agricultural Officer to Principal Grade",
-     "MALFFB", "AGR", "appointment", "PSC 3.5", "hr", "received_by_psc", 2),
+     "MALFB", "AGR", "appointment", "PSC 3.5", "hr", "received_by_psc", 2),
     ("Transfer of Legal Officer to Ministry of Justice Head Office",
      "MJCS", "STATE_LAW", "other", "PSC 4.5", "hr", "received_by_psc", 1),
     ("Reclassification of Customs Officers — Grade Alignment Review",
      "MFEM", "CIR", "other", "PSC 2.1", "odu", "received_by_psc", 1),
     ("Appointment of Chief Information Officer — OGCIO",
-     "OPM", "OGCIO", "appointment", "PSC 3.6", "odu", "received_by_psc", 0),
+     "MPM", "OGCIO", "appointment", "PSC 3.6", "odu", "received_by_psc", 0),
 
     # ── NEW STAGES FOR VALIDATION (added for demo) ───────────────────────
     ("Recruitment Review — Department of Lands (Missing JD)",
@@ -582,6 +582,11 @@ class Command(BaseCommand):
 
         self._seed_ui_translations()
 
+        # Self-heal: migration 0052 and this seeder use different ministry code
+        # schemes, which can leave two rows per ministry. Collapse duplicates so
+        # ministry-scoped users always see their submissions.
+        self._reconcile_ministries()
+
         self.stdout.write(self.style.SUCCESS("\n[OK] Database seeded successfully."))
         if not submissions_only:
             self.stdout.write("  Login credentials:")
@@ -591,6 +596,10 @@ class Command(BaseCommand):
             for u in USERS:
                 self.stdout.write(f"  | {u[0]:<21} | {u[2]:<20} | {u[3]:<18} |")
             self.stdout.write("  +-----------------------+----------------------+--------------------+")
+
+    def _reconcile_ministries(self):
+        from tracker.ministry_dedup import merge_duplicate_ministries
+        merge_duplicate_ministries(log=self.stdout.write)
 
     def _seed_ui_translations(self):
         from tracker.models import UiTranslation
@@ -948,7 +957,7 @@ class Command(BaseCommand):
         unit_map = {}
         if opsc_dept:
             unit_map = {u.code.upper(): u for u in Unit.objects.filter(department=opsc_dept)}
-        opm = ministry_map.get("OPM")
+        opm = ministry_map.get("MPM")
         created = 0
         for username, email, password, role, min_code in USERS:
             user, new_user = User.objects.get_or_create(
@@ -973,7 +982,7 @@ class Command(BaseCommand):
             # Ensure profile exists
             ministry = ministry_map.get(min_code) if min_code else None
             profile_defaults = {"role": role, "ministry": ministry}
-            if opm and (min_code in ("OPM", "MPM") or role in self._OPSC_STAFF_ROLES):
+            if opm and (min_code in ("MPM", "MPM") or role in self._OPSC_STAFF_ROLES):
                 profile_defaults["ministry"] = opm
                 if opsc_dept:
                     profile_defaults["department"] = opsc_dept

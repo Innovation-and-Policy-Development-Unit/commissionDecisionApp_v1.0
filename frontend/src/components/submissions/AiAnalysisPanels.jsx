@@ -25,6 +25,7 @@ import {
   DocumentRegular,
 } from '@fluentui/react-icons'
 import api from '../../api/client'
+import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 import { useToast } from '../../context/ToastContext'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -106,7 +107,9 @@ export function AiDuplicatePanel({ submissionId }) {
 
   useEffect(() => {
     if (!polling) return
-    const id = setInterval(fetchResult, 3000)
+    const id = setInterval(() => {
+      if (isTabVisible()) fetchResult()
+    }, 3000)
     return () => clearInterval(id)
   }, [polling, fetchResult])
 
@@ -189,7 +192,9 @@ export function AiRiskPanel({ submissionId }) {
   useEffect(() => { fetchResult() }, [fetchResult])
   useEffect(() => {
     if (!polling) return
-    const id = setInterval(fetchResult, 3000)
+    const id = setInterval(() => {
+      if (isTabVisible()) fetchResult()
+    }, 3000)
     return () => clearInterval(id)
   }, [polling, fetchResult])
 
@@ -271,7 +276,9 @@ export function AiOutcomePanel({ submissionId }) {
   useEffect(() => { fetchResult() }, [fetchResult])
   useEffect(() => {
     if (!polling) return
-    const id = setInterval(fetchResult, 3000)
+    const id = setInterval(() => {
+      if (isTabVisible()) fetchResult()
+    }, 3000)
     return () => clearInterval(id)
   }, [polling, fetchResult])
 
@@ -349,7 +356,9 @@ export function AiNoaPanel({ submissionId }) {
   useEffect(() => { fetchResult() }, [fetchResult])
   useEffect(() => {
     if (!polling) return
-    const id = setInterval(fetchResult, 3000)
+    const id = setInterval(() => {
+      if (isTabVisible()) fetchResult()
+    }, 3000)
     return () => clearInterval(id)
   }, [polling, fetchResult])
 
@@ -433,7 +442,9 @@ export function AiLetterPanel({ submissionId, suggestedOutcome = '' }) {
   useEffect(() => { fetchResult() }, [fetchResult])
   useEffect(() => {
     if (!polling) return
-    const id = setInterval(fetchResult, 3000)
+    const id = setInterval(() => {
+      if (isTabVisible()) fetchResult()
+    }, 3000)
     return () => clearInterval(id)
   }, [polling, fetchResult])
 

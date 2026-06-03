@@ -8,6 +8,7 @@ import {
   inferNotificationType,
   showDesktopNotification,
 } from '../utils/browserNotifications'
+import { isTabVisible } from './useVisibilityAwareInterval'
 
 const POLL_MS = 45_000
 
@@ -88,10 +89,21 @@ export function useNotifications({ enabled = true } = {}) {
   useEffect(() => {
     if (!enabled) return undefined
     fetchNotifications()
-    const id = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchNotifications()
-    }, POLL_MS)
-    return () => clearInterval(id)
+
+    const tick = () => {
+      if (isTabVisible()) fetchNotifications()
+    }
+
+    const onVisibility = () => {
+      if (isTabVisible()) fetchNotifications()
+    }
+
+    document.addEventListener('visibilitychange', onVisibility)
+    const id = setInterval(tick, POLL_MS)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [enabled, fetchNotifications])
 
   const markRead = useCallback(async (id) => {

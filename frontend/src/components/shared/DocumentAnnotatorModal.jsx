@@ -7,6 +7,7 @@ import {
   RotateCcw, Save, Loader2, FileText, AlertTriangle, Sparkles,
 } from 'lucide-react'
 import api from '../../api/client'
+import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc
 
@@ -110,7 +111,7 @@ export default function DocumentAnnotatorModal({ document: doc, submissionId, on
     try {
       await api.post(`/submissions/${submissionId}/documents/${doc.id}/annotation-assist/`)
       const iv = setInterval(async () => {
-        await pollDocAi()
+        if (isTabVisible()) await pollDocAi()
       }, 3000)
       setTimeout(() => clearInterval(iv), 120000)
     } finally {
@@ -124,7 +125,7 @@ export default function DocumentAnnotatorModal({ document: doc, submissionId, on
     try {
       await api.post(`/submissions/${submissionId}/documents/${doc.id}/redaction-preview/`)
       const iv = setInterval(async () => {
-        await pollDocAi()
+        if (isTabVisible()) await pollDocAi()
       }, 3000)
       setTimeout(() => clearInterval(iv), 120000)
     } finally {

@@ -4,6 +4,9 @@ import { ShieldCheck, ArrowLeft, ArrowRight, Copy, CheckCircle2 } from 'lucide-r
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import Logo from '../../components/shared/Logo'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
+import BasePasswordInput from '../../components/shared/BasePasswordInput'
 
 export default function TOTPSetup() {
   const navigate = useNavigate()
@@ -128,25 +131,25 @@ export default function TOTPSetup() {
                 <p className="text-sm text-slate-600 dark:text-slate-400">
                   Please confirm your password for <span className="font-semibold text-slate-900 dark:text-slate-200">{username}</span> to start the setup.
                 </p>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">Password</label>
-                  <input
-                    type="password"
-                    className="input w-full"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    required
-                    placeholder="Enter your password"
-                    autoFocus
-                  />
-                </div>
-                <button
+                <BasePasswordInput
+                  label="Password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  placeholder="Enter your password"
+                  autoFocus
+                />
+                <BaseButton
                   type="submit"
-                  disabled={loading || !password}
-                  className="btn-gradient w-full py-3 flex items-center justify-center gap-2"
+                  variant="primary"
+                  className="w-full !py-3"
+                  loading={loading}
+                  loadingLabel="Confirming"
+                  disabled={!password}
+                  icon={!loading ? <ArrowRight size={18} /> : undefined}
                 >
-                  {loading ? 'Confirming…' : <>Continue <ArrowRight size={18} /></>}
-                </button>
+                  Continue
+                </BaseButton>
               </form>
             ) : setupData ? (
               <div className="space-y-8">
@@ -167,13 +170,12 @@ export default function TOTPSetup() {
                     <code className="flex-1 text-sm font-mono text-primary-700 dark:text-primary-400 break-all">
                       {setupData.secret}
                     </code>
-                    <button
+                    <BaseButton
+                      variant="ghost" size="icon" iconOnly
                       onClick={copySecret}
-                      className="p-2 text-slate-400 hover:text-primary-600 transition-colors"
                       title="Copy to clipboard"
-                    >
-                      {copied ? <CheckCircle2 size={18} className="text-emerald-500" /> : <Copy size={18} />}
-                    </button>
+                      icon={copied ? <CheckCircle2 size={18} className="text-emerald-500" /> : <Copy size={18} />}
+                    />
                   </div>
                 </div>
 
@@ -182,22 +184,28 @@ export default function TOTPSetup() {
                     3. Enter the 6-digit code from your app:
                   </p>
                   <form onSubmit={handleVerify} className="space-y-6">
-                    <input
+                    <BaseInput
+                      hideLabel
+                      label="Verification code"
                       type="text"
-                      className="input w-full text-center text-3xl font-mono tracking-[0.3em]"
                       maxLength={6}
                       placeholder="000000"
                       value={code}
                       onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
                       required
+                      input={{ className: 'text-center text-3xl font-mono', style: { letterSpacing: '0.3em' } }}
                     />
-                    <button
+                    <BaseButton
                       type="submit"
-                      disabled={loading || code.length < 6}
-                      className="btn-gradient w-full py-3 flex items-center justify-center gap-2"
+                      variant="primary"
+                      className="w-full !py-3"
+                      loading={loading}
+                      loadingLabel="Verifying"
+                      disabled={code.length < 6}
+                      icon={!loading ? <ShieldCheck size={18} /> : undefined}
                     >
-                      {loading ? 'Verifying…' : <>Complete Setup <ShieldCheck size={18} /></>}
-                    </button>
+                      Complete Setup
+                    </BaseButton>
                   </form>
                 </div>
               </div>

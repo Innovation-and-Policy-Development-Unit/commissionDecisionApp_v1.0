@@ -2,7 +2,7 @@ import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo, PenLine,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen, Languages, Sparkles,
-  TrendingUp, Users, History, BarChart2, CalendarCheck,
+  TrendingUp, Users, History, BarChart2, CalendarCheck, AlertCircle,
   ListChecks,
 } from 'lucide-react'
 import { CMS_PORTAL_URL } from '../constants/compliance'
@@ -93,6 +93,15 @@ const menuItems = [
           { label: 'Notifications',           labelKey: 'nav.notifications', icon: Bell,     path: '/secretariat/notifications', audience: 'secretariat' },
         ],
       },
+      {
+        label: 'Management',
+        labelKey: 'nav.sub_management',
+        icon: Users,
+        audience: 'secretariat',
+        children: [
+          { label: 'Workload', labelKey: 'nav.workload', icon: Users, path: '/workload', audience: 'secretariat' },
+        ],
+      },
     ],
   },
   {
@@ -102,10 +111,10 @@ const menuItems = [
     audience: 'secretariat',
     opsAccess: true,
     items: [
-      { label: 'Executive Dashboard', labelKey: 'nav.executive_dashboard', icon: LayoutDashboard, path: '/executive-dashboard', visibility: 'ops' },
-      { label: 'Commission Calendar', labelKey: 'nav.calendar',            icon: CalendarCheck,   path: '/calendar',           visibility: 'ops' },
-      { label: 'Workload',            labelKey: 'nav.workload',            icon: Users,           path: '/workload',           visibility: 'ops' },
-      { label: 'Audit Trail',         labelKey: 'nav.audit_trail',         icon: History,         path: '/audit-trail',        visibility: 'audit' },
+      { label: 'Executive Dashboard',   labelKey: 'nav.executive_dashboard',   icon: LayoutDashboard, path: '/executive-dashboard',  visibility: 'ops' },
+      { label: 'Commission Calendar',   labelKey: 'nav.calendar',              icon: CalendarCheck,   path: '/calendar',             visibility: 'ops' },
+      { label: 'Pending Decisions',     labelKey: 'nav.pending_decisions',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
+      { label: 'Ministry Performance',  labelKey: 'nav.ministry_performance',  icon: Building2,       path: '/ministry-performance', visibility: 'ops' },
     ],
   },
   {
@@ -137,7 +146,6 @@ const menuItems = [
           { label: 'Ministries, Departments & Units', labelKey: 'nav.ministries_departments', icon: Building2,     path: '/admin/ministries-departments', visibility: 'admin' },
           { label: 'PSC Form Types',           labelKey: 'nav.form_types',             icon: ClipboardList, path: '/admin/form-types',             visibility: 'admin' },
           { label: 'Agenda sections',          labelKey: 'nav.agenda_sections',        icon: ListChecks,    path: '/admin/agenda-sections',        visibility: 'admin' },
-          { label: 'Agenda section forms',     labelKey: 'nav.agenda_section_forms',   icon: FileText,      path: '/admin/agenda-section-forms',   visibility: 'admin' },
         ],
       },
       {
@@ -158,6 +166,7 @@ const menuItems = [
         children: [
           { label: 'API Keys',        labelKey: 'nav.api_keys',      icon: Lock,      path: '/admin/api-keys',      visibility: 'roles' },
           { label: 'System Config',   labelKey: 'nav.system_config', icon: Settings,  path: '/admin/system-config', visibility: 'roles' },
+          { label: 'Audit Trail',     labelKey: 'nav.audit_trail',   icon: History,   path: '/audit-trail',         visibility: 'audit' },
           { label: 'Backup & Restore',labelKey: 'nav.backup_restore',icon: HardDrive, path: '/admin/backup-restore',visibility: 'roles' },
         ],
       },

@@ -15,6 +15,8 @@ function mapApiRows(rows) {
     id: s.id,
     value: s.code,
     label: s.label,
+    group: s.group ?? '',
+    approvalChain: s.approval_chain ?? [],
     isSpecial: s.is_special,
     is_active: s.is_active,
     display_order: s.display_order,

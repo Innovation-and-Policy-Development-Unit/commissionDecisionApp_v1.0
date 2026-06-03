@@ -16,7 +16,7 @@ import {
   stageLabel, stageBadgeClass, stageDotClass, stageMeta,
   needsHrAction, isTerminal, STAGE_LABELS,
 } from '../../constants/stages'
-import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff } from 'lucide-react'
+import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
@@ -32,6 +32,9 @@ import DynamicFormRenderer from '../../components/shared/DynamicFormRenderer'
 import BaseSelect from '../../components/shared/BaseSelect'
 import BaseTextarea from '../../components/shared/BaseTextarea'
 import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseMessageBar from '../../components/shared/BaseMessageBar'
+import BaseCheckbox from '../../components/shared/BaseCheckbox'
 import MultiPageFormRenderer from '../../components/shared/MultiPageFormRenderer'
 import PSCForm22Preview from '../../components/shared/PSCForm22Preview'
 import PSCForm21Fields from './PSCForm21Fields'
@@ -41,9 +44,21 @@ import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
 import SubmissionChecklistPanel from '../../components/submissions/SubmissionChecklistPanel'
 import SittingPackView from '../../components/submissions/SittingPackView'
+import WorkflowActionsPanel from '../../components/submissions/WorkflowActionsPanel'
 import { canShowOduChecklist } from '../../utils/oduChecklist'
 import { CMS_PORTAL_URL, isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
 import { formatApiError } from '../../utils/apiError'
+import { PageSkeleton } from '../../components/shared/Skeleton'
+import { queryClient } from '../../api/queryClient'
+import {
+  fetchSubmissionBootstrap,
+  invalidateSubmissionBootstrap,
+  getCachedSubmissionBootstrap,
+} from '../../utils/submissionBootstrap'
+import {
+  useOnTabVisible,
+  useVisibilityAwareInterval,
+} from '../../hooks/useVisibilityAwareInterval'
 
 // All roles that may trigger a transition
 const TRANSITION_ROLES = [
@@ -84,6 +99,8 @@ const DYNAMIC_CHECKLIST_EDIT_ROLES = [
 const DYNAMIC_CHECKLIST_VIEW_ROLES = [
   ...DYNAMIC_CHECKLIST_EDIT_ROLES,
   'psc_officer', 'psc_secretary', 'senior_admin_officer', 'psc_manager',
+  // Commissioners need to review assessment work when voting during Commission Sitting
+  'psc_commissioner', 'chairperson',
 ]
 const DYNAMIC_CHECKLIST_EDIT_STAGE   = 'manager_checklist_review'
 const DYNAMIC_CHECKLIST_VIEW_STAGES  = [
@@ -115,16 +132,17 @@ export default function SubmissionDetail() {
   const { user } = useAuth()
   const toast   = useToast()
   const confirm = useConfirm()
-  const { agendaSectionLabel } = useAgendaSections()
+  const { agendaSectionLabel, allSections: agendaSections } = useAgendaSections()
   const [submission, setSubmission] = useState(null)
+  const [pageLoading, setPageLoading] = useState(true)
   const [auditStationFilter, setAuditStationFilter] = useState(null)
 
   useEffect(() => {
     setAuditStationFilter(null)
   }, [id])
   const [allowed, setAllowed]       = useState([])
+  const [canEndorse, setCanEndorse] = useState(false)
   const [remarks, setRemarks]       = useState('')
-  const [targetStage, setTargetStage] = useState('')
   const [error, setError]           = useState('')
   const [busy, setBusy]             = useState(false)
   const [checklist, setChecklist]   = useState([])
@@ -144,14 +162,14 @@ export default function SubmissionDetail() {
   const [dynamicFormBusy, setDynamicFormBusy] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState({ title: '', agenda_category: '', notes: '' })
+  const [editBusy, setEditBusy] = useState(false)
+  const [editError, setEditError] = useState('')
   const [officers, setOfficers] = useState([])
   const [selectedOfficer, setSelectedOfficer] = useState('')
   const [allocateBusy, setAllocateBusy] = useState(false)
-  const [overrideStage, setOverrideStage] = useState(false)
-
-  const isAdmin        = user?.role === 'psc_admin'
-  const canOverrideStage = user && (isAdmin || user.is_superuser || user.is_staff)
-  const canTransition  = user && (TRANSITION_ROLES.includes(user.role) || canOverrideStage)
+  const isAdmin = user?.role === 'psc_admin'
   const isUnitManager  = user && UNIT_MANAGER_ROLES.includes(user.role)
   const canAllocate    = user && (
     isAdmin
@@ -167,25 +185,33 @@ export default function SubmissionDetail() {
     'psc_manager', 'principal_officer', 'senior_admin_officer',
     ...UNIT_MANAGER_ROLES,
   ].includes(user.role)
-  const canUploadDocs  = user && ['ministry_hr', 'dept_admin', 'head_of_agency',
+  // Stage/role content-edit gate from the backend (single source of truth):
+  // HR can edit only while drafting; the DG is view-only. `can_edit === false`
+  // means the submission is locked for this user; undefined (older payloads)
+  // stays permissive and the server still enforces.
+  const contentEditable = submission?.can_edit !== false
+  const canUploadDocs  = contentEditable && user && ['ministry_hr', 'dept_admin', 'head_of_agency',
                                    'psc_admin', 'psc_officer', 'psc_secretary'].includes(user.role)
-  const canEditForm37  = user && ['ministry_hr', 'dept_admin', 'psc_admin',
+  const canEditForm37  = contentEditable && user && ['ministry_hr', 'dept_admin', 'psc_admin',
                                    'psc_officer', 'psc_secretary'].includes(user.role)
   // Compliance forms are completed in CMS; portal record is read-only for compliance roles
   const canEditComplianceForm = false
   const canEditDigitizedForm = canEditForm37 || canEditComplianceForm
   const isCmsLinkedCompliance = isComplianceFormCode(submission?.form_type_code)
 
-  const showOduChecklist = canShowOduChecklist(submission, user)
-
   // Dynamic checklist — shown when the form type has a linked checklist and the user has a matching role/stage
   const hasDynamicChecklist = Boolean(submission?.form_type_detail?.checklist_form_type)
+
+  // Suppress the legacy hardcoded ODU form when a dynamic XML checklist is configured for this form type
+  const showOduChecklist = canShowOduChecklist(submission, user) && !hasDynamicChecklist
   const stage = submission?.current_stage
   const showDynamicChecklist = user && hasDynamicChecklist && (
     (DYNAMIC_CHECKLIST_EDIT_ROLES.includes(user.role) && stage === DYNAMIC_CHECKLIST_EDIT_STAGE) ||
     (DYNAMIC_CHECKLIST_VIEW_ROLES.includes(user.role) && DYNAMIC_CHECKLIST_VIEW_STAGES.includes(stage)) ||
     user.is_superuser
   )
+  // Sitting Pack is available whenever either checklist type applies
+  const showSittingPack = showOduChecklist || showDynamicChecklist
 
   const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
   const showSecretariatBrief = user && SECRETARIAT_BRIEF_ROLES.includes(user.role) && user.ai_enabled === true
@@ -198,17 +224,45 @@ export default function SubmissionDetail() {
   const canEditChecklist = user && CHECKLIST_EDIT_ROLES.includes(user.role)
   const showChecklist = !submission?.is_attachment && !submission?.is_internal && !submission?.secretary_only
 
+  const applyBootstrap = useCallback((data) => {
+    const tr = data.allowed_transitions || {}
+    const nextAllowed = tr.allowed || []
+    setSubmission(data.submission)
+    setDocuments(data.documents || [])
+    setChecklist(data.checklist || [])
+    setAllowed(nextAllowed)
+    setCanEndorse(tr.can_endorse ?? false)
+    setAnnotationCounts(data.annotation_counts || {})
+    setSignatureCounts(data.signature_counts || {})
+  }, [])
+
+  const loadBootstrap = useCallback(async ({ useCache = true } = {}) => {
+    if (!id) return
+    const cached = useCache ? getCachedSubmissionBootstrap(id) : null
+    if (cached) {
+      applyBootstrap(cached)
+      setError('')
+      setPageLoading(false)
+      return
+    }
+    setPageLoading(true)
+    try {
+      const data = await fetchSubmissionBootstrap(id, { useCache: false })
+      applyBootstrap(data)
+      setError('')
+    } catch (err) {
+      setError(formatApiError(err, 'Unable to load submission.'))
+    } finally {
+      setPageLoading(false)
+    }
+  }, [id, applyBootstrap])
+
   const fetchSubmission = useCallback(async () => {
     try {
       const r = await api.get(`/submissions/${id}/`)
-      setSubmission(prev => {
-        const changed = prev?.current_stage !== r.data.current_stage
-        return r.data
-      })
-    } catch (err) {
-      if (!submission) {
-        setError(formatApiError(err, 'Unable to load submission.'))
-      }
+      setSubmission(r.data)
+    } catch {
+      // Keep last good state during background refresh
     }
   }, [id])
 
@@ -253,50 +307,62 @@ export default function SubmissionDetail() {
     }
   }
 
+  const addCoAssignee = async (userId) => {
+    setAllocateBusy(true)
+    try {
+      await api.post(`/submissions/${id}/co-assign/`, { user_id: Number(userId), action: 'add' })
+      await reload()
+      toast.success('Co-analyst added.')
+    } catch (err) {
+      toast.error(formatApiError(err, 'Could not add co-analyst.'))
+    } finally {
+      setAllocateBusy(false)
+    }
+  }
+
+  const removeCoAssignee = async (userId) => {
+    setAllocateBusy(true)
+    try {
+      await api.post(`/submissions/${id}/co-assign/`, { user_id: userId, action: 'remove' })
+      await reload()
+      toast.success('Co-analyst removed.')
+    } catch (err) {
+      toast.error(formatApiError(err, 'Could not remove co-analyst.'))
+    } finally {
+      setAllocateBusy(false)
+    }
+  }
+
   const fetchTransitions = useCallback(async () => {
-    if (!id || !user || !canTransition) { setAllowed([]); setTargetStage(''); return }
+    if (!id || !user) { setAllowed([]); setCanEndorse(false); return }
     try {
       const r = await api.get(`/submissions/${id}/allowed_transitions/`)
-      const next = r.data.allowed || []
-      setAllowed(next)
-      setTargetStage(p => (next.includes(p) ? p : next[0] || ''))
+      setAllowed(r.data.allowed || [])
+      setCanEndorse(r.data.can_endorse ?? false)
     } catch {
-      setAllowed([])
+      setAllowed([]); setCanEndorse(false)
     }
-  }, [id, user, canTransition])
+  }, [id, user])
 
   useEffect(() => {
-    fetchSubmission()
-  }, [fetchSubmission])
+    setSubmission(null)
+    setDocuments([])
+    setChecklist([])
+    setAllowed([])
+    setCanEndorse(false)
+    setPageLoading(true)
+    loadBootstrap({ useCache: true })
+  }, [id, loadBootstrap])
 
   useEffect(() => {
     fetchTransitions()
   }, [fetchTransitions])
 
-  // Poll every 30s for stage changes (no WebSocket infra needed)
-  useEffect(() => {
-    const interval = setInterval(() => { if (!isRateLimited()) fetchSubmission() }, 30000)
-    return () => clearInterval(interval)
-  }, [fetchSubmission])
-
-  // Fetch checklist for all stages — required docs are always relevant
-  const fetchChecklist = useCallback(async () => {
-    if (!submission) return
-    if (submission.is_attachment || submission.is_internal || submission.secretary_only) {
-      setChecklist([])
-      return
-    }
-    try {
-      const r = await api.get(`/submissions/${id}/checklist/`)
-      setChecklist(r.data)
-    } catch {
-      // silently ignore
-    }
-  }, [id, submission?.id])
-
-  useEffect(() => {
-    fetchChecklist()
-  }, [fetchChecklist])
+  // Stage sync when returning to the tab — global notification polling (Header)
+  // already covers desktop alerts; no background 30s poll while the tab is hidden.
+  useOnTabVisible(() => {
+    if (!isRateLimited()) fetchSubmission()
+  }, Boolean(submission))
 
   const toggleChecklistItem = async (item) => {
     setChecklistBusy(true)
@@ -347,20 +413,13 @@ export default function SubmissionDetail() {
     }
   }, [id])
 
-  useEffect(() => {
-    fetchDocuments()
-    fetchAnnotationCounts()
-    fetchSignatureCounts()
-  }, [fetchDocuments, fetchAnnotationCounts, fetchSignatureCounts])
-
-  useEffect(() => {
-    const processing = documents.some(
-      d => d.ocr_status === 'pending' || d.ocr_status === 'processing',
-    )
-    if (!processing) return undefined
-    const timer = setInterval(fetchDocuments, 4000)
-    return () => clearInterval(timer)
-  }, [documents, fetchDocuments])
+  const ocrInProgress = documents.some(
+    d => d.ocr_status === 'pending' || d.ocr_status === 'processing',
+  )
+  useVisibilityAwareInterval(fetchDocuments, 5000, {
+    enabled: ocrInProgress,
+    fireOnVisible: true,
+  })
 
   useEffect(() => {
     if (submission?.form_type_code !== 'PSC 3-7') return
@@ -502,51 +561,36 @@ const stageDescriptions = {
 }
 
   const reload = async () => {
-    const [subRes, trRes] = await Promise.all([
-      api.get(`/submissions/${id}/`),
-      canTransition ? api.get(`/submissions/${id}/allowed_transitions/`) : Promise.resolve({ data: { allowed: [] } }),
-    ])
-    setSubmission(subRes.data)
-    const next = trRes.data.allowed || []
-    setAllowed(next)
-    setTargetStage(p => (next.includes(p) ? p : next[0] || ''))
+    invalidateSubmissionBootstrap(id)
+    const data = await fetchSubmissionBootstrap(id, { useCache: false })
+    applyBootstrap(data)
+    // A transition/mutation here may change the row's stage — refresh the list cache.
+    queryClient.invalidateQueries({ queryKey: ['submissions'] })
   }
 
-  const submitTransition = async e => {
-    e.preventDefault()
-    if (!targetStage) return
-
-    const isDgReturn =
-      submission?.current_stage === 'pending_dg_endorsement' && targetStage === 'draft'
-    if (isDgReturn && !remarks.trim()) {
-      setError('Please add a comment explaining why you are returning this submission to HR.')
-      toast.error('A comment is required when returning to HR.')
-      return
-    }
-
-    const runTransition = async (acknowledgeGaps = false) => {
+  /**
+   * Perform a standard workflow transition via the /transition/ endpoint.
+   * Used by both the old form and the new WorkflowActionsPanel.
+   */
+  const performTransition = async (newStage, transitionRemarks = '', acknowledgeGaps = false) => {
+    setBusy(true)
+    setError('')
+    const runOnce = async (ack = false) => {
       await api.post(`/submissions/${id}/transition/`, {
-        new_stage: targetStage,
-        remarks,
-        acknowledge_gaps: acknowledgeGaps,
+        new_stage: newStage,
+        remarks: transitionRemarks,
+        acknowledge_gaps: ack,
       })
       setRemarks('')
       await reload()
       toast.success('Stage updated successfully.')
     }
-
-    setBusy(true)
-    setError('')
     try {
-      await runTransition(false)
+      await runOnce(acknowledgeGaps)
     } catch (err) {
       const data = err.response?.data
       const gaps = data?.package_gaps
-      if (
-        targetStage === 'submitted'
-        && Array.isArray(gaps)
-        && gaps.some(g => g.severity === 'critical')
-      ) {
+      if (newStage === 'submitted' && Array.isArray(gaps) && gaps.some(g => g.severity === 'critical')) {
         setSubmission(prev => ({
           ...prev,
           ai_package_gaps: gaps,
@@ -560,28 +604,45 @@ const stageDescriptions = {
           confirmLabel: 'Submit anyway',
         })
         if (proceed) {
-          try {
-            await runTransition(true)
-          } catch (err2) {
-            const msg2 = err2.response?.data?.detail || 'Transition failed.'
-            setError(String(msg2))
-            toast.error(String(msg2))
+          try { await runOnce(true) } catch (err2) {
+            const m = err2.response?.data?.detail || 'Transition failed.'
+            setError(String(m)); toast.error(String(m))
           }
+          setBusy(false)
           return
         }
         setError(data.detail || 'Submission blocked until critical gaps are resolved.')
         toast.error('Fix critical gaps or confirm submit anyway.')
+        setBusy(false)
         return
       }
-      const msg = data?.detail
-        || (typeof data === 'object' ? JSON.stringify(data) : null)
-        || 'Transition failed.'
+      const msg = data?.detail || (typeof data === 'object' ? JSON.stringify(data) : null) || 'Transition failed.'
       setError(String(msg))
       toast.error(String(msg))
     } finally {
       setBusy(false)
     }
   }
+
+  /** DG Endorse — single API call that auto-chains to SUBMITTED. */
+  const performEndorse = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await api.post(`/submissions/${id}/endorse/`)
+      await reload()
+      toast.success('Endorsed — submission forwarded directly to PSC.')
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Endorsement failed.'
+      setError(String(msg))
+      toast.error(String(msg))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Legacy alias (unused — kept so nothing crashes if any lingering ref exists)
+  const submitTransition = async e => { e?.preventDefault?.() }
 
   const handleDeleteSubmission = async () => {
     const ok = await confirm({
@@ -599,6 +660,10 @@ const stageDescriptions = {
     }
   }
 
+  if (pageLoading && !submission) {
+    return <PageSkeleton detailMode />
+  }
+
   if (!submission) {
     return <div><PageHeader title="Submission" subtitle={error || 'Loading…'} /></div>
   }
@@ -613,34 +678,40 @@ const stageDescriptions = {
         subtitle={submission.title}
         action={
           <div className="flex items-center gap-2">
-            <Link to="/submissions" className="btn-outline">Back to log</Link>
-            {showOduChecklist && (
-              <button
-                type="button"
+            <BaseButton variant="outline" as={Link} to="/submissions">Back to log</BaseButton>
+            {showSittingPack && (
+              <BaseButton
+                variant="primary"
+                icon={<ClipboardList size={14} />}
                 onClick={() => setSittingPackMode(true)}
-                className="btn-primary inline-flex items-center gap-1.5"
               >
-                <ClipboardList size={14} />
-                Sitting Pack mode
-              </button>
+                Review Submission
+              </BaseButton>
             )}
             {isAdmin && (
               <>
-                <Link
-                  to={`/submissions/${id}/edit`}
-                  className="btn-outline inline-flex items-center gap-1.5"
+                <BaseButton
+                  variant="outline"
+                  icon={<Pencil size={14} />}
+                  onClick={() => {
+                    setEditForm({
+                      title: submission.title || '',
+                      agenda_category: submission.agenda_category || '',
+                      notes: submission.notes || '',
+                    })
+                    setEditError('')
+                    setEditOpen(true)
+                  }}
                 >
-                  <Pencil size={14} />
                   Edit
-                </Link>
-                <button
-                  type="button"
+                </BaseButton>
+                <BaseButton
+                  variant="danger"
+                  icon={<Trash2 size={14} />}
                   onClick={handleDeleteSubmission}
-                  className="btn-outline inline-flex items-center gap-1.5 text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
                 >
-                  <Trash2 size={14} />
                   Delete
-                </button>
+                </BaseButton>
               </>
             )}
           </div>
@@ -664,6 +735,17 @@ const stageDescriptions = {
         </div>
       )}
 
+      {submission.can_edit === false && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+          <Lock size={14} className="mt-0.5 shrink-0" />
+          <span>
+            {user?.role === 'head_of_agency'
+              ? t('submission.readonly_dg', { defaultValue: 'View-only: as Director-General you can endorse or return this submission, but not edit its content. Use “Return to HR” to request changes.' })
+              : t('submission.readonly_hr', { defaultValue: 'Read-only: this submission is with the DG for endorsement. You can edit it again only if the DG returns it to draft.' })}
+          </span>
+        </div>
+      )}
+
       {showPolicyGuardrail && (
         <>
           <PolicyGuardrailDrawer
@@ -674,14 +756,14 @@ const stageDescriptions = {
             onUpdated={setSubmission}
           />
           {!policyDrawerOpen && (
-            <button
-              type="button"
+            <BaseButton
+              variant="primary"
               onClick={() => setPolicyDrawerOpen(true)}
-              className="fixed bottom-24 right-6 z-[68] inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-lg bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500"
+              icon={<span aria-hidden="true">🛡</span>}
+              className="!fixed !bottom-24 !right-6 !z-[68] !rounded-full !bg-indigo-600 hover:!bg-indigo-700 dark:!bg-indigo-500"
             >
-              <span aria-hidden="true">🛡</span>
               AI policy scan
-            </button>
+            </BaseButton>
           )}
         </>
       )}
@@ -694,9 +776,7 @@ const stageDescriptions = {
         />
       )}
 
-      {showDynamicChecklist && (
-        <SubmissionChecklistPanel submissionId={id} />
-      )}
+      {/* Checklist shown only in Review Submission split-screen, not inline */}
 
       {showSecretariatBrief && (
         <SecretariatBriefCard
@@ -742,7 +822,7 @@ const stageDescriptions = {
             href={CMS_PORTAL_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-outline shrink-0 inline-flex items-center gap-1.5 text-sm"
+            className="shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline"
           >
             Open CMS
             <ExternalLink size={14} />
@@ -831,16 +911,11 @@ const stageDescriptions = {
                 <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{submission.department?.name || '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Category</p>
-                <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{submission.form_category?.name || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {submission.form_type_code ? 'Form Type' : 'Agenda section'}
-                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Submission Type</p>
                 <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
-                  {submission.form_type_code
-                    || (submission.agenda_category ? agendaSectionLabel(submission.agenda_category) : '—')}
+                  {submission.agenda_category
+                    ? agendaSectionLabel(submission.agenda_category).replace(/^\d+\.\s*/, '')
+                    : '—'}
                 </p>
               </div>
               <div>
@@ -896,10 +971,10 @@ const stageDescriptions = {
                 <>
                   <PSCForm37Fields form37={form37} setForm37={setForm37} />
                   <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                    <button
-                      type="button"
-                      disabled={form37Busy}
-                      className="btn-primary px-5 py-2"
+                    <BaseButton
+                      variant="primary"
+                      loading={form37Busy}
+                      loadingLabel="Saving"
                       onClick={async () => {
                         setForm37Busy(true)
                         try {
@@ -916,8 +991,8 @@ const stageDescriptions = {
                         }
                       }}
                     >
-                      {form37Busy ? 'Saving…' : 'Save Form 3-7'}
-                    </button>
+                      Save Form 3-7
+                    </BaseButton>
                   </div>
                 </>
               ) : (
@@ -940,18 +1015,15 @@ const stageDescriptions = {
                 </span>
                 {/* Preview toggle — only for forms that have a known preview template */}
                 {submission?.form_type_code === 'PSC 2-2' && (
-                  <button
-                    type="button"
+                  <BaseButton
+                    variant={showPreview ? 'primary' : 'outline'}
+                    size="sm"
+                    className="ml-auto"
+                    icon={showPreview ? <EyeOff size={13} /> : <Eye size={13} />}
                     onClick={() => setShowPreview(p => !p)}
-                    className={`ml-auto inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-                      showPreview
-                        ? 'bg-primary-600 text-white border-primary-600'
-                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary-400'
-                    }`}
                   >
-                    {showPreview ? <EyeOff size={13} /> : <Eye size={13} />}
                     {showPreview ? 'Hide Preview' : 'Preview Form'}
-                  </button>
+                  </BaseButton>
                 )}
               </div>
 
@@ -1068,49 +1140,29 @@ const stageDescriptions = {
           {(() => {
             const DocActions = ({ doc }) => (
               <div className="flex items-center gap-1 shrink-0 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => openDocument(doc)}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors"
-                >
-                  <ExternalLink size={13} /> Open
-                </button>
+                <BaseButton variant="ghost" size="sm" icon={<ExternalLink size={13} />} onClick={() => openDocument(doc)}>Open</BaseButton>
                 {canAnnotateDocs && doc.content_type === 'application/pdf' && (
-                  <button
-                    type="button"
-                    onClick={() => setAnnotatorDoc(doc)}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
-                  >
-                    <PenLine size={13} /> Annotate
+                  <BaseButton variant="ghost" size="sm" icon={<PenLine size={13} />} onClick={() => setAnnotatorDoc(doc)}>
+                    Annotate
                     {annotationCounts[doc.id] > 0 && (
                       <span className="ml-0.5 bg-amber-500 text-white rounded-full text-[10px] font-bold px-1.5 py-0 leading-4">
                         {annotationCounts[doc.id]}
                       </span>
                     )}
-                  </button>
+                  </BaseButton>
                 )}
                 {canSignDocs && doc.content_type === 'application/pdf' && (
-                  <button
-                    type="button"
-                    onClick={() => setSignerDoc(doc)}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
-                  >
-                    <Pen size={13} /> Sign
+                  <BaseButton variant="ghost" size="sm" icon={<Pen size={13} />} onClick={() => setSignerDoc(doc)}>
+                    Sign
                     {signatureCounts[doc.id] > 0 && (
                       <span className="ml-0.5 bg-indigo-500 text-white rounded-full text-[10px] font-bold px-1.5 py-0 leading-4">
                         {signatureCounts[doc.id]}
                       </span>
                     )}
-                  </button>
+                  </BaseButton>
                 )}
                 {(canUploadDocs || user?.role === 'psc_admin') && (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteDoc(doc)}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  <BaseButton variant="ghost" size="icon" iconOnly aria-label="Delete document" icon={<Trash2 size={13} />} onClick={() => handleDeleteDoc(doc)} />
                 )}
               </div>
             )
@@ -1167,9 +1219,9 @@ const stageDescriptions = {
                 {canUploadDocs && (
                   <div className={`${documents.length > 0 ? 'border-t border-slate-100 dark:border-slate-700 pt-4' : ''} space-y-2`}>
                     <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Attach a document</p>
-                    <input
-                      type="text"
-                      className="input text-sm"
+                    <BaseInput
+                      hideLabel
+                      label="Description"
                       placeholder="Description (optional)"
                       value={uploadDesc}
                       onChange={e => setUploadDesc(e.target.value)}
@@ -1274,131 +1326,90 @@ const stageDescriptions = {
             </div>
           )}
 
-          {canTransition && (allowed.length > 0 || canOverrideStage) && (
-            <form onSubmit={submitTransition} className="card card-compact space-y-4">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Move to Next Stage</h3>
-              {canOverrideStage && !overrideStage && allowed.length === 0 && (
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  No standard transitions from <span className="font-medium">{stageLabel(submission.current_stage)}</span>. Enable override below to move it anyway.
-                </p>
-              )}
-              {canOverrideStage && (
-                <label className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={overrideStage}
-                    onChange={e => {
-                      const checked = e.target.checked
-                      setOverrideStage(checked)
-                      if (checked) {
-                        setTargetStage(prev => prev || Object.keys(STAGE_LABELS).find(s => s !== submission.current_stage) || '')
-                      } else {
-                        setTargetStage(allowed[0] || '')
-                      }
-                    }}
-                  />
-                  <span>
-                    Override (move to any stage). Bypasses the normal workflow — use only to correct mistakes.
-                  </span>
-                </label>
-              )}
-              <BaseSelect
-                label="Select stage"
-                value={targetStage}
-                onChange={(_e, v) => setTargetStage(v)}
-                options={(overrideStage
-                  ? Object.keys(STAGE_LABELS).filter(s => s !== submission.current_stage)
-                  : allowed
-                ).map(s => ({ value: s, label: stageLabel(s) }))}
-                hint={targetStage ? stageMeta(targetStage).category : undefined}
-              />
-              <BaseTextarea
-                label="Remarks"
-                hint={
-                  submission.current_stage === 'pending_dg_endorsement' && targetStage === 'draft'
-                    ? 'Required — explain what HR needs to change'
-                    : 'Optional'
-                }
-                placeholder={
-                  submission.current_stage === 'pending_dg_endorsement' && targetStage === 'draft'
-                    ? 'Explain why you are returning this submission to HR…'
-                    : 'Add notes about this transition…'
-                }
-                value={remarks}
-                onChange={e => setRemarks(e.target.value)}
-                rows={3}
-              />
-              <BaseButton
-                type="submit"
-                variant="primary"
-                className="w-full"
-                loading={busy}
-                loadingLabel="Saving"
-                disabled={!targetStage}
-                icon={!busy ? <ArrowRight size={14} /> : undefined}
-              >
-                Apply transition
-              </BaseButton>
-            </form>
-          )}
+          <WorkflowActionsPanel
+            submission={submission}
+            allowed={allowed}
+            canEndorse={canEndorse}
+            onTransition={performTransition}
+            onEndorse={performEndorse}
+            busy={busy}
+            error={error}
+            setError={setError}
+          />
 
           {canAllocate && (
             <div className="card card-compact space-y-3">
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Allocate to officer</h3>
+
+              {/* Primary assignee */}
               {submission.assigned_to_name ? (
                 <div className="flex items-center justify-between gap-2 text-sm">
                   <span className="text-slate-600 dark:text-slate-300">
-                    Currently with <span className="font-medium text-slate-800 dark:text-slate-100">{submission.assigned_to_name}</span>
+                    <span className="text-xs text-slate-400 mr-1">Primary:</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-100">{submission.assigned_to_name}</span>
                   </span>
-                  <button
-                    type="button"
-                    onClick={unallocateOfficer}
-                    disabled={allocateBusy}
-                    className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
-                  >
+                  <BaseButton variant="ghost" size="sm" onClick={unallocateOfficer} disabled={allocateBusy}>
                     Remove
-                  </button>
+                  </BaseButton>
                 </div>
               ) : (
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Not yet allocated. Choose an officer in your unit to carry out the assessment.
+                  Not yet allocated. Choose a primary officer below.
                 </p>
               )}
+
+              {/* Co-assignees */}
+              {submission.co_assignments?.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Co-analysts:</p>
+                  {submission.co_assignments.map(ca => (
+                    <div key={ca.id} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-slate-700 dark:text-slate-300">
+                        {ca.full_name}
+                        <span className="ml-1.5 text-xs text-slate-400">({ca.role})</span>
+                      </span>
+                      <BaseButton variant="ghost" size="sm" onClick={() => removeCoAssignee(ca.id)} disabled={allocateBusy}>
+                        Remove
+                      </BaseButton>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Assignment selector — primary or co-analyst */}
               <BaseSelect
-                label="Officer"
+                label={submission.assigned_to_name ? 'Add co-analyst / Reassign primary' : 'Officer'}
                 value={selectedOfficer}
                 onChange={(_e, v) => setSelectedOfficer(v)}
                 options={[
                   { value: '', label: 'Select an officer…' },
-                  ...officers.map(o => ({ value: String(o.id), label: `${o.full_name} — ${(o.role || '').replace(/_/g, ' ')}` })),
+                  ...officers
+                    .filter(o => o.id !== submission.assigned_to && !submission.co_assignments?.some(ca => ca.id === o.id))
+                    .map(o => ({ value: String(o.id), label: `${o.full_name} — ${(o.role || '').replace(/_/g, ' ')}` })),
                 ]}
               />
-              <BaseButton
-                type="button"
-                variant="primary"
-                className="w-full"
-                loading={allocateBusy}
-                loadingLabel="Allocating"
-                onClick={allocateOfficer}
-                disabled={!selectedOfficer}
-              >
-                {submission.assigned_to_name ? 'Reassign' : 'Allocate'}
-              </BaseButton>
+              <div className="flex gap-2">
+                <BaseButton type="button" variant="primary" className="flex-1"
+                  loading={allocateBusy} loadingLabel="Saving"
+                  onClick={allocateOfficer} disabled={!selectedOfficer}>
+                  {submission.assigned_to_name ? 'Reassign primary' : 'Allocate'}
+                </BaseButton>
+                {submission.assigned_to_name && (
+                  <BaseButton type="button" variant="secondary" className="flex-1"
+                    loading={allocateBusy} loadingLabel="Adding"
+                    onClick={() => { if (selectedOfficer) addCoAssignee(selectedOfficer) }}
+                    disabled={!selectedOfficer}>
+                    Add as co-analyst
+                  </BaseButton>
+                )}
+              </div>
             </div>
           )}
 
-          {canTransition && !allowed.length && !canOverrideStage && (
-            <div className="card card-compact">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                No transitions available from <span className="font-medium">{stageLabel(submission.current_stage)}</span> for your role.
-              </p>
-            </div>
-          )}
-
-          {!canTransition && (
-            <div className="card card-compact text-sm text-slate-600 dark:text-slate-300">
-              You have read-only access to this submission.
+          {/* No actions available — view-only notice */}
+          {!allowed.length && !canEndorse && (
+            <div className="card card-compact text-xs text-slate-500 dark:text-slate-400">
+              No actions available at this stage for your role.
             </div>
           )}
 
@@ -1502,13 +1513,87 @@ const stageDescriptions = {
         }}
       />
     )}
-    {sittingPackMode && showOduChecklist && (
+    {editOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditOpen(false)} />
+        <div className="relative z-10 w-full max-w-lg bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Edit Submission</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{submission.reference_number}</p>
+            </div>
+            <BaseButton
+              variant="ghost" size="icon" iconOnly
+              aria-label="Close"
+              onClick={() => setEditOpen(false)}
+              icon={<X size={16} />}
+            />
+          </div>
+          <form
+            className="px-6 py-5 space-y-4"
+            onSubmit={async e => {
+              e.preventDefault()
+              if (!editForm.title.trim()) { setEditError('Title is required.'); return }
+              setEditBusy(true); setEditError('')
+              try {
+                const { data } = await api.patch(`/submissions/${id}/`, {
+                  title: editForm.title.trim(),
+                  agenda_category: editForm.agenda_category || undefined,
+                  notes: editForm.notes,
+                })
+                setSubmission(data)
+                toast.success('Submission updated.')
+                setEditOpen(false)
+              } catch (err) {
+                setEditError(formatApiError(err, 'Failed to update submission.'))
+              } finally {
+                setEditBusy(false)
+              }
+            }}
+          >
+            {editError && (
+              <BaseMessageBar intent="error" className="mb-1">{editError}</BaseMessageBar>
+            )}
+            <BaseInput
+              label="Title / Subject"
+              required
+              value={editForm.title}
+              onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+              placeholder="Enter submission title"
+            />
+            <BaseSelect
+              label="Agenda section"
+              placeholder="— None —"
+              value={editForm.agenda_category}
+              options={agendaSections.map(s => ({ value: s.value, label: s.label }))}
+              onChange={(_, value) => setEditForm(f => ({ ...f, agenda_category: value }))}
+            />
+            <BaseTextarea
+              label="Notes"
+              rows={3}
+              value={editForm.notes}
+              onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Internal notes (optional)"
+            />
+            <div className="flex gap-3 pt-1">
+              <BaseButton type="submit" variant="primary" loading={editBusy} loadingLabel="Saving">
+                Save Changes
+              </BaseButton>
+              <BaseButton type="button" variant="secondary" onClick={() => setEditOpen(false)}>Cancel</BaseButton>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+    {sittingPackMode && showSittingPack && (
       <SittingPackView
         submissionId={id}
         submission={submission}
         documents={documents}
         dynamicForm={dynamicForm}
+        dynamicFormFields={dynamicFormFields}
         isDedicatedForm={isDedicatedForm}
+        checklistPanel={hasDynamicChecklist ? <SubmissionChecklistPanel submissionId={id} /> : null}
         onClose={() => setSittingPackMode(false)}
       />
     )}

@@ -13,6 +13,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Eye, EyeOff, KeyRound, ArrowRight, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
 import Logo from '../../components/shared/Logo'
 import api from '../../api/client'
+import BaseButton from '../../components/shared/BaseButton'
+import BasePasswordInput from '../../components/shared/BasePasswordInput'
 
 /* Simple strength meter: returns { score 0-4, label, color } */
 function passwordStrength(pw) {
@@ -157,32 +159,16 @@ export default function PasswordResetConfirm() {
 
                 <form onSubmit={handleSubmit} className="space-y-5">
 
-                  {/* New password */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                      New Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPw ? 'text' : 'password'}
-                        className="input pe-10"
-                        placeholder={`Minimum ${minLength} characters`}
-                        value={password}
-                        autoComplete="new-password"
-                        onChange={e => { setPassword(e.target.value); setError('') }}
-                        required
-                        minLength={minLength}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPw(p => !p)}
-                        className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                      >
-                        {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-
-                    {/* Strength meter */}
+                    <BasePasswordInput
+                      label="New Password"
+                      placeholder={`Minimum ${minLength} characters`}
+                      value={password}
+                      autoComplete="new-password"
+                      onChange={e => { setPassword(e.target.value); setError('') }}
+                      required
+                      minLength={minLength}
+                    />
                     {password && (
                       <div className="mt-2">
                         <div className="flex gap-1 mb-1">
@@ -195,57 +181,32 @@ export default function PasswordResetConfirm() {
                             />
                           ))}
                         </div>
-                        <p className="text-xs text-slate-400 dark:text-slate-500">
-                          {strength.label}
-                        </p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">{strength.label}</p>
                       </div>
                     )}
                   </div>
 
-                  {/* Confirm password */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                      Confirm Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showCfm ? 'text' : 'password'}
-                        className={`input pe-10 ${mismatch ? 'border-red-400 dark:border-red-500 focus:border-red-400' : ''}`}
-                        placeholder="Repeat your new password"
-                        value={confirm}
-                        autoComplete="new-password"
-                        onChange={e => { setConfirm(e.target.value); setError('') }}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCfm(p => !p)}
-                        className="absolute end-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                      >
-                        {showCfm ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                    {mismatch && (
-                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                        Passwords do not match.
-                      </p>
-                    )}
-                  </div>
+                  <BasePasswordInput
+                    label="Confirm Password"
+                    placeholder="Repeat your new password"
+                    value={confirm}
+                    autoComplete="new-password"
+                    onChange={e => { setConfirm(e.target.value); setError('') }}
+                    required
+                    error={mismatch ? 'Passwords do not match.' : undefined}
+                  />
 
-                  <button
+                  <BaseButton
                     type="submit"
-                    disabled={loading || !token || !password || !confirm || mismatch}
-                    className="btn-gradient w-full py-2.5 text-sm disabled:opacity-60"
+                    variant="primary"
+                    className="w-full !py-2.5"
+                    loading={loading}
+                    loadingLabel="Saving"
+                    disabled={!token || !password || !confirm || mismatch}
+                    icon={!loading ? <ArrowRight size={16} /> : undefined}
                   >
-                    {loading ? (
-                      <span className="flex items-center gap-2">
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Saving…
-                      </span>
-                    ) : (
-                      <>Set New Password <ArrowRight size={16} /></>
-                    )}
-                  </button>
+                    Set New Password
+                  </BaseButton>
                 </form>
               </>
             ) : (

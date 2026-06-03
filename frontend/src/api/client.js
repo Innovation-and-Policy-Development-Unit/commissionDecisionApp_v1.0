@@ -88,7 +88,18 @@ api.interceptors.response.use(
       Array.isArray(res.data.results) &&
       typeof res.data.count === 'number'
     ) {
-      return { ...res, data: res.data.results }
+      // Unwrap DRF pagination to a bare array for legacy callers, but preserve
+      // the pagination metadata on `res.pagination` so callers that need the
+      // total count / page links can still reach it.
+      return {
+        ...res,
+        data: res.data.results,
+        pagination: {
+          count: res.data.count,
+          next: res.data.next,
+          previous: res.data.previous,
+        },
+      }
     }
     return res
   },

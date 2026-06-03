@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Text, Card, Input, Button, Table, TableHeader, TableRow,
   TableHeaderCell, TableBody, TableCell, Badge, Spinner,
-  Select, makeStyles, shorthands, tokens,
+  makeStyles, shorthands, tokens,
 } from '@fluentui/react-components'
 import { SearchRegular, FilterRegular, ChevronLeftRegular, ChevronRightRegular } from '@fluentui/react-icons'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
+import BaseSelect from '../../components/shared/BaseSelect'
 
 const useStyles = makeStyles({
   container: {
@@ -83,29 +84,33 @@ export default function AuditTrailExplorer() {
             onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
-        <Select
+        <BaseSelect
+          hideLabel label="Action"
           value={filters.action}
-          onChange={(e, d) => setFilters(f => ({ ...f, action: d.value }))}
-        >
-          <option value="">All Actions</option>
-          <option value="CREATE">Create</option>
-          <option value="UPDATE">Update</option>
-          <option value="DELETE">Delete</option>
-          <option value="LOGIN">Login</option>
-          <option value="LOGOUT">Logout</option>
-          <option value="DECISION">Decision</option>
-        </Select>
-        <Select
+          placeholder="All Actions"
+          options={[
+            { value: 'CREATE', label: 'Create' },
+            { value: 'UPDATE', label: 'Update' },
+            { value: 'DELETE', label: 'Delete' },
+            { value: 'LOGIN', label: 'Login' },
+            { value: 'LOGOUT', label: 'Logout' },
+            { value: 'DECISION', label: 'Decision' },
+          ]}
+          onChange={(_, v) => setFilters(f => ({ ...f, action: v }))}
+        />
+        <BaseSelect
+          hideLabel label="Resource type"
           value={filters.resource_type}
-          onChange={(e, d) => setFilters(f => ({ ...f, resource_type: d.value }))}
-        >
-          <option value="">All Resources</option>
-          <option value="Submission">Submission</option>
-          <option value="Meeting">Meeting</option>
-          <option value="User">User</option>
-          <option value="Minutes">Minutes</option>
-          <option value="CommissionTask">Commission Task</option>
-        </Select>
+          placeholder="All Resources"
+          options={[
+            { value: 'Submission', label: 'Submission' },
+            { value: 'Meeting', label: 'Meeting' },
+            { value: 'User', label: 'User' },
+            { value: 'Minutes', label: 'Minutes' },
+            { value: 'CommissionTask', label: 'Commission Task' },
+          ]}
+          onChange={(_, v) => setFilters(f => ({ ...f, resource_type: v }))}
+        />
         <Input
           type="date"
           value={filters.date_from}

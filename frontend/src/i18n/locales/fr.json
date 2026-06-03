@@ -1,4 +1,39 @@
 {
+  "ministry_dashboard": {
+    "title": "Tableau de bord du ministère",
+    "subtitle": "Les soumissions de votre ministère tout au long du processus de dépôt",
+    "empty_title": "Aucune soumission pour l'instant",
+    "empty_hint": "Dès que votre ministère déposera des soumissions, les indicateurs de votre tableau de bord apparaîtront ici.",
+    "stage_breakdown": "Répartition par étape",
+    "stage_breakdown_sub": "Les soumissions de votre ministère par étape actuelle",
+    "no_data": "Aucune soumission à répartir pour l'instant.",
+    "recent_submissions": "Soumissions récentes",
+    "recent_submissions_sub": "Dernière activité de votre ministère",
+    "subject": "Objet",
+    "received": "Reçue le",
+    "no_submissions": "Aucune soumission à afficher.",
+    "count": "Nombre",
+    "dg": {
+      "title": "Tableau de bord du Directeur général",
+      "subtitle": "Approbations et situation de votre ministère auprès de la PSC",
+      "awaiting_endorsement": "En attente de mon approbation",
+      "endorsed_awaiting_hr": "Approuvée — en attente de soumission RH",
+      "under_psc_review": "En cours d'examen par la PSC",
+      "decided": "Décidées",
+      "overdue": "En retard",
+      "total": "Total des soumissions"
+    },
+    "hr": {
+      "title": "Tableau de bord RH du ministère",
+      "subtitle": "Les soumissions de votre ministère tout au long du processus de dépôt",
+      "drafts": "Brouillons",
+      "ready_to_submit": "Prêtes à soumettre à la PSC",
+      "awaiting_dg": "En attente de l'approbation du DG",
+      "returned": "Retournées pour clarification",
+      "under_psc_review": "En cours d'examen par la PSC",
+      "decided": "Décidées"
+    }
+  },
   "app": {
     "title": "SCDMS",
     "subtitle": "Système de Gestion des Soumissions et Décisions de la Commission",

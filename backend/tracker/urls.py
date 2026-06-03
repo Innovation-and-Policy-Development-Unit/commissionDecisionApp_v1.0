@@ -84,6 +84,8 @@ from .views import (
     analytics_trends_view,
     workload_officers_view,
     workload_suggest_assignment_view,
+    pending_decisions_view,
+    ministry_performance_view,
     audit_log_search_view,
     WebPushSubscriptionViewSet,
     DocumentVersionViewSet,
@@ -193,6 +195,9 @@ urlpatterns = [
     # Workload
     path("workload/officers/",             workload_officers_view,             name="workload-officers"),
     path("workload/suggest-assignment/",   workload_suggest_assignment_view,   name="workload-suggest-assignment"),
+    # Operations — Commissioners & Secretary
+    path("ops/pending-decisions/",         pending_decisions_view,             name="pending-decisions"),
+    path("ops/ministry-performance/",      ministry_performance_view,          name="ministry-performance"),
     # Audit log search
     path("audit-logs/search/",             audit_log_search_view,              name="audit-log-search"),
 ]

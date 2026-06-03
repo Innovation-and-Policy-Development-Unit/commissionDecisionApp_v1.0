@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react'
 import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import api from '../../api/client'
+import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 
 const POLL_MS = 3000
 const POLL_MAX = 40
@@ -21,6 +22,7 @@ export default function SecretariatBriefCard({ submission, submissionId, onUpdat
 
     let attempts = 0
     const interval = setInterval(async () => {
+      if (!isTabVisible()) return
       attempts += 1
       if (attempts > POLL_MAX) {
         clearInterval(interval)

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Text, Card, CardHeader, Spinner, Badge,
   makeStyles, shorthands, tokens,
@@ -75,8 +76,11 @@ const STAGE_LABELS = {
 
 export default function ExecutiveDashboard() {
   const styles = useStyles()
+  const navigate = useNavigate()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const goToSubmissions = filter => navigate(`/submissions?filter=${filter}`)
 
   const loadStats = useCallback(async () => {
     try {
@@ -122,30 +126,35 @@ export default function ExecutiveDashboard() {
           value={stats?.total_submissions ?? 0}
           icon={DocumentRegular}
           color="blue"
+          onClick={() => goToSubmissions('all')}
         />
         <StatCard
           title="Active / Pending"
           value={stats?.pending_active ?? 0}
           icon={ClockRegular}
           color="amber"
+          onClick={() => goToSubmissions('active')}
         />
         <StatCard
           title="Submitted This Week"
           value={stats?.submitted_this_week ?? 0}
           icon={DataBarVerticalRegular}
           color="emerald"
+          onClick={() => goToSubmissions('this_week')}
         />
         <StatCard
           title="Submitted This Month"
           value={stats?.submitted_this_month ?? 0}
           icon={DataBarVerticalRegular}
           color="cyan"
+          onClick={() => goToSubmissions('this_month')}
         />
         <StatCard
           title="Overdue (>30 days)"
           value={stats?.overdue_count ?? 0}
           icon={AlertUrgentRegular}
           color={stats?.overdue_count > 0 ? 'red' : 'emerald'}
+          onClick={() => goToSubmissions('overdue')}
         />
         <Card style={{ padding: '16px' }}>
           <Text weight="semibold" size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>

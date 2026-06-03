@@ -49,6 +49,10 @@ ODU_CHECKLIST_VIEW_ROLES = ODU_CHECKLIST_ROLES | frozenset({
     "senior_admin_officer",
     "psc_manager",
     "psc_admin",
+    # Commissioners need to see the checklist/assessment work that led to
+    # the recommendation they are voting on during Commission Sitting.
+    "psc_commissioner",
+    "chairperson",
 })
 
 ODU_PRINCIPAL_WORKER_ROLES = frozenset({

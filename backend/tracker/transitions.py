@@ -11,6 +11,7 @@ from .opsc_access import OPSC_UNIT_MANAGER_ROLES
 INTERNAL_SUBMITTER_ROLES = {
     Role.CSU_MANAGER,
     Role.ODU_MANAGER,
+    Role.VIPAM_PRINCIPAL,   # creates VIPAM submissions; vipam_manager is an approver in the chain
 }
 
 TRAVELLER_SUBMITTER_ROLES = {
@@ -25,6 +26,14 @@ SECRETARY_TRAVEL_SUBMITTER_ROLES = {
     Role.PSC_SECRETARY,
 }
 
+# ── Compliance role distinction ──────────────────────────────────────────────
+# compliance_manager  — full manager: assigns principals, approves/rejects checklists,
+#                       routes submissions, manages the unit.
+# compliance_senior   — senior analyst: assigned by compliance_manager; can review
+#                       and assess submissions but CANNOT approve checklists.
+#                       Treated as a unit principal (not a manager) in all workflows.
+# compliance_principal — analyst: same assessment rights as compliance_senior but
+#                        for routine matters.
 _COMPLIANCE_SUBMITTER_ROLES = {
     Role.COMPLIANCE_SENIOR,
     Role.COMPLIANCE_PRINCIPAL,
@@ -38,12 +47,66 @@ _COMPLIANCE_CREATOR_ALLOWED = {
 }
 
 # ---------------------------------------------------------------------------
+# Ministry-side content-edit gate
+# ---------------------------------------------------------------------------
+# Ministry HR / Department Admin draft the paper and may only edit its content
+# (fields, forms, attachments) while it is still in DRAFT. Once it is submitted
+# for DG endorsement — and at every stage thereafter — it is read-only for them;
+# if the DG (or PSC) sends it back, the workflow returns it to DRAFT and editing
+# re-opens. The DG (Head of Agency) endorses or returns the paper via stage
+# transitions and never edits content directly.
+#
+# Other roles are intentionally unaffected here (their write rights are governed
+# at each endpoint), so this can be called as a guard on any submission write
+# path without changing PSC / OPSC behaviour.
+_MINISTRY_DRAFT_EDIT_ROLES = {Role.MINISTRY_HR, Role.DEPT_ADMIN}
+
+
+def can_edit_submission(role, submission) -> bool:
+    """Whether a user with ``role`` may edit the *content* of ``submission``.
+
+    Stage transitions (endorse / submit / return) are governed separately by the
+    transition rules, not by this gate.
+    """
+    if role in _MINISTRY_DRAFT_EDIT_ROLES:
+        return submission.current_stage == WorkflowStage.DRAFT
+    if role == Role.HEAD_OF_AGENCY:
+        return False
+    return True
+
+
+def assert_can_edit_submission(role, submission) -> None:
+    """Raise ``PermissionDenied`` if ``role`` may not edit ``submission`` content."""
+    if can_edit_submission(role, submission):
+        return
+    if role == Role.HEAD_OF_AGENCY:
+        raise PermissionDenied(
+            "The Director-General has view-only access to submission content. "
+            "Use “Return to HR” to request changes; HR will revise and resubmit for endorsement."
+        )
+    raise PermissionDenied(
+        "This submission is read-only because it is no longer in draft. It can only be "
+        "edited while in draft, before it is submitted to the DG for endorsement."
+    )
+
+# ---------------------------------------------------------------------------
 # Internal stage graph — short 4-stage workflow for OPSC internal submissions
 # DRAFT → SUBMITTED → SECRETARY_REVIEW → APPROVED / REJECTED
 # ---------------------------------------------------------------------------
 _INTERNAL_STAGE_GRAPH = {
     WorkflowStage.DRAFT: [
         WorkflowStage.SUBMITTED,
+        WorkflowStage.PENDING_MANAGER_APPROVAL,   # chain step 1
+    ],
+    # Generic chain approval stages — actual role enforcement is done via approval_chain config in views.py
+    WorkflowStage.PENDING_MANAGER_APPROVAL: [
+        WorkflowStage.PENDING_SECOND_APPROVAL,
+        WorkflowStage.SUBMITTED,
+        WorkflowStage.DRAFT,    # return for changes
+    ],
+    WorkflowStage.PENDING_SECOND_APPROVAL: [
+        WorkflowStage.SUBMITTED,
+        WorkflowStage.DRAFT,    # return for changes
     ],
     WorkflowStage.SUBMITTED: [
         WorkflowStage.SECRETARY_REVIEW,
@@ -98,11 +161,18 @@ _STAGE_GRAPH = {
     ],
     # Head of Agency (DG) endorsement gate before the submission reaches PSC.
     WorkflowStage.PENDING_DG_ENDORSEMENT: [
+        WorkflowStage.DG_APPROVED,   # DG endorses → back to HR to forward to PSC
+        WorkflowStage.DRAFT,         # DG returns to HR for changes
+        WorkflowStage.RECALLED,
+    ],
+    # DG has endorsed; HR must now formally submit to PSC.
+    WorkflowStage.DG_APPROVED: [
         WorkflowStage.SUBMITTED,
-        WorkflowStage.DRAFT,
+        WorkflowStage.RECALLED,
     ],
     WorkflowStage.SUBMITTED: [
         WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+        WorkflowStage.RECALLED,
     ],
     WorkflowStage.RETURNED_FOR_CLARIFICATION: [
         WorkflowStage.SUBMITTED,
@@ -199,26 +269,37 @@ _STAGE_GRAPH = {
 # Role-based target restrictions
 # ---------------------------------------------------------------------------
 
-# Ministry HR / Department Admin: draft the paper and submit it to their DG
-# (Head of Agency) for endorsement, plus respond to clarifications / deferrals.
+# Ministry HR / Department Admin: draft the paper, submit to DG for endorsement,
+# then — once DG approves — formally submit to PSC.
 _MINISTRY_HR_ALLOWED = {
     (WorkflowStage.DRAFT,                      WorkflowStage.PENDING_DG_ENDORSEMENT),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_DG_ENDORSEMENT),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
+    (WorkflowStage.DG_APPROVED,                WorkflowStage.SUBMITTED),   # HR submits to PSC after DG endorses
     (WorkflowStage.DEFERRED_BACK_TO_HR,        WorkflowStage.MATTERS_ARISING),
     (WorkflowStage.DEFERRED_BACK_TO_HR,        WorkflowStage.DRAFT),
+    (WorkflowStage.SUBMITTED,                  WorkflowStage.RECALLED),
+    (WorkflowStage.PENDING_DG_ENDORSEMENT,     WorkflowStage.RECALLED),
+    (WorkflowStage.DG_APPROVED,                WorkflowStage.RECALLED),
 }
 
-# Head of Agency (DG): endorse a paper pending endorsement and submit it to PSC,
-# or return it to HR (back to Draft). A DG who drafts their own paper can also
-# move it into the endorsement queue.
+# Head of Agency (DG): endorse a paper (sends it back to HR to forward to PSC),
+# or return it to HR for changes.
 _MINISTRY_DG_ALLOWED = {
-    (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED),
-    (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DRAFT),
+    (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED),  # DG endorses → back to HR
+    (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DRAFT),        # DG returns for changes
     (WorkflowStage.DRAFT,                  WorkflowStage.PENDING_DG_ENDORSEMENT),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_DG_ENDORSEMENT),
     (WorkflowStage.DEFERRED_BACK_TO_HR,    WorkflowStage.MATTERS_ARISING),
     (WorkflowStage.DEFERRED_BACK_TO_HR,    WorkflowStage.DRAFT),
+    (WorkflowStage.SUBMITTED,              WorkflowStage.RECALLED),
+    (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.RECALLED),
+    (WorkflowStage.DG_APPROVED,            WorkflowStage.RECALLED),
+}
+
+# Terminal stages — submissions that have reached a final state.
+_TERMINAL_STAGES = {
+    WorkflowStage.RECALLED,
 }
 
 # Receptionist (registry front desk): lodges a scanned submission and routes it
@@ -243,6 +324,9 @@ _UNIT_PRINCIPAL_ROLES = {
     Role.HR_UNIT_PRINCIPAL,
     Role.VIPAM_PRINCIPAL,
     Role.COMPLIANCE_PRINCIPAL,
+    # compliance_senior is a senior analyst (not a manager); treated as a principal
+    # so it is properly role-gated rather than falling through to the generic graph check.
+    Role.COMPLIANCE_SENIOR,
 }
 
 _UNIT_PRINCIPAL_STAGES = {
@@ -303,12 +387,19 @@ def assert_transition_allowed(
     target_stage: str,
     is_internal: bool = False,
     secretary_only: bool = False,
+    remarks: str = "",
 ) -> None:
     """Raise PermissionDenied if the role cannot move current_stage → target_stage.
 
     Pass is_internal=True for OPSC-internal submissions (CSU/ODU → Secretary workflow).
     Pass secretary_only=True for ministry travel forms (4.4–4.6).
     """
+
+    # ── Matters Arising must have a resolution note ───────────────────────────
+    if current_stage == WorkflowStage.MATTERS_ARISING and not (remarks or "").strip():
+        raise PermissionDenied(
+            "A resolution note is required when advancing from Matters Arising."
+        )
 
     # ── Travel / secretary-only workflow (ministry origin) ─────────────────
     if secretary_only:
@@ -436,6 +527,12 @@ def assert_transition_allowed(
                 "Unit principals can only act at the Checklist Review and Under Assessment stages."
             )
         return
+
+    # ── Recall is a ministry-only action ────────────────────────────────────
+    if target_stage == WorkflowStage.RECALLED and role != Role.PSC_ADMIN:
+        raise PermissionDenied(
+            "Only Ministry HR, Department Admin, or Head of Agency can recall a submission."
+        )
 
     # ── Validate graph edge ──────────────────────────────────────────────────
     if target_stage not in _STAGE_GRAPH.get(current_stage, []) and role != Role.PSC_ADMIN:

@@ -57,7 +57,8 @@ export default function SubmissionSubwayMap({
 
   const pathVariant = subwayMap.path_variant || 'normal'
   const isReturnedPath = pathVariant === 'returned'
-  const detailText = statusDetail || (currentStage ? stageLabel(currentStage, t) : t('subway.in_progress'))
+  // Use API-provided context-aware detail, then prop override, then fallback
+  const detailText = subwayMap.status_detail || statusDetail || (currentStage ? stageLabel(currentStage, t) : t('subway.in_progress'))
 
   const handleStationClick = useCallback((station) => {
     onStationSelect?.({
@@ -136,6 +137,8 @@ export default function SubmissionSubwayMap({
           const isSelected = selectedStationId === station.id
           const showAlert = isCurrent && isAlertState
           const substages = station.stages?.map((code) => stageLabel(code, t)).slice(0, 5).join(' · ')
+          // For the active station, show the context-aware detail in the tooltip
+          const tooltipDetail = isCurrent ? detailText : null
 
           return (
             <Tooltip
@@ -143,6 +146,11 @@ export default function SubmissionSubwayMap({
               content={(
                 <div className="max-w-xs space-y-1">
                   <Text weight="semibold" size={200}>{stationLabel(t, station)}</Text>
+                  {tooltipDetail && (
+                    <Text size={100} style={{ color: tokens.colorBrandForeground1, fontWeight: 600 }}>
+                      {tooltipDetail}
+                    </Text>
+                  )}
                   {substages && (
                     <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
                       {substages}
@@ -201,10 +209,15 @@ export default function SubmissionSubwayMap({
                     </Text>
 
                     {isCurrent && (
-                      <div className="mt-1 w-28 mx-auto">
+                      <div className="mt-1 w-36 mx-auto">
                         <Text
                           size={100}
-                          className="text-primary-600 dark:text-primary-400 font-semibold block leading-tight"
+                          className={[
+                            'font-semibold block leading-tight text-center',
+                            showAlert
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-primary-600 dark:text-primary-400',
+                          ].join(' ')}
                         >
                           {detailText}
                         </Text>

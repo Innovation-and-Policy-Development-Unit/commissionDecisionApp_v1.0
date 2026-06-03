@@ -28,6 +28,7 @@ export default function StatCard({
   color = 'purple',
   suffix = '',
   prefix = '',
+  onClick,
 }) {
   const heading = title || label
   const isPositive = change >= 0
@@ -35,10 +36,17 @@ export default function StatCard({
   const iconNode = renderStatIcon(Icon)
 
   return (
-    <div className={clsx(
-      'relative rounded-2xl p-5 overflow-hidden text-white shadow-card-md hover:shadow-card-lg transition-all duration-200 hover:-translate-y-0.5',
-      solidColor
-    )}>
+    <div
+      className={clsx(
+        'relative rounded-2xl p-5 overflow-hidden text-white shadow-card-md hover:shadow-card-lg transition-all duration-200 hover:-translate-y-0.5',
+        solidColor,
+        onClick && 'cursor-pointer active:scale-[0.98]',
+      )}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
+    >
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-32 h-32 opacity-10">
         <div className="w-full h-full rounded-full bg-white transform translate-x-8 -translate-y-8" />

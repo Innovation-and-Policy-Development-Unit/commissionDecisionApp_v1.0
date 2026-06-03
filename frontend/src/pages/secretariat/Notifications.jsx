@@ -3,6 +3,10 @@ import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
 import { Plus, Send, CheckCircle2, Clock, FileText, Bell, Mail, Printer, Eye } from 'lucide-react'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseSelect from '../../components/shared/BaseSelect'
+import BaseTextarea from '../../components/shared/BaseTextarea'
 
 function useChannelOptions(t) {
   return useMemo(() => ([
@@ -170,9 +174,7 @@ export default function Notifications() {
         title="Decision Notifications"
         subtitle="Track official notification letters issued to ministries following commission decisions."
         action={
-          <button onClick={() => setIssueModalOpen(true)} className="btn-primary flex items-center gap-2">
-            <Plus size={16} /> New Notification
-          </button>
+          <BaseButton variant="primary" icon={<Plus size={16} />} onClick={() => setIssueModalOpen(true)}>New Notification</BaseButton>
         }
       />
 
@@ -180,25 +182,30 @@ export default function Notifications() {
 
       {/* Filters */}
       <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-center">
-        <input
+        <BaseInput
+          hideLabel label="Search"
           type="search"
           placeholder="Search by reference, submission, ministry…"
-          className="input flex-1"
+          className="flex-1"
           value={q}
           onChange={e => setQ(e.target.value)}
         />
-        <select className="input sm:w-44" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">All statuses</option>
-          {Object.entries(STATUS_META).map(([v, m]) => (
-            <option key={v} value={v}>{m.label}</option>
-          ))}
-        </select>
-        <select className="input sm:w-36" value={outcomeFilter} onChange={e => setOutcomeFilter(e.target.value)}>
-          <option value="">All outcomes</option>
-          {Object.entries(DECISION_OUTCOMES).map(([v, m]) => (
-            <option key={v} value={v}>{m.label}</option>
-          ))}
-        </select>
+        <BaseSelect
+          hideLabel label="Status"
+          className="sm:w-44"
+          placeholder="All statuses"
+          value={statusFilter}
+          options={Object.entries(STATUS_META).map(([v, m]) => ({ value: v, label: m.label }))}
+          onChange={(_, v) => setStatusFilter(v)}
+        />
+        <BaseSelect
+          hideLabel label="Outcome"
+          className="sm:w-36"
+          placeholder="All outcomes"
+          value={outcomeFilter}
+          options={Object.entries(DECISION_OUTCOMES).map(([v, m]) => ({ value: v, label: m.label }))}
+          onChange={(_, v) => setOutcomeFilter(v)}
+        />
       </div>
 
       {/* Table */}
@@ -250,30 +257,12 @@ export default function Notifications() {
                   </td>
                   <td>
                     <div className="flex items-center justify-end gap-0.5">
-                      <button
-                        onClick={() => setViewTarget(n)}
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
-                        title="View"
-                      >
-                        <Eye size={13} />
-                      </button>
+                      <BaseButton variant="ghost" size="icon" iconOnly title="View" onClick={() => setViewTarget(n)} icon={<Eye size={13} />} />
                       {(n.status === 'draft' || n.status === 'pending') && (
-                        <button
-                          onClick={() => handleMarkIssued(n.id)}
-                          title="Mark as Issued"
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors"
-                        >
-                          <Send size={13} />
-                        </button>
+                        <BaseButton variant="ghost" size="icon" iconOnly title="Mark as Issued" onClick={() => handleMarkIssued(n.id)} icon={<Send size={13} />} />
                       )}
                       {n.status === 'issued' && (
-                        <button
-                          onClick={() => handleMarkAcknowledged(n.id)}
-                          title="Mark as Acknowledged"
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
-                        >
-                          <CheckCircle2 size={13} />
-                        </button>
+                        <BaseButton variant="ghost" size="icon" iconOnly title="Mark as Acknowledged" onClick={() => handleMarkAcknowledged(n.id)} icon={<CheckCircle2 size={13} />} />
                       )}
                     </div>
                   </td>
@@ -301,37 +290,22 @@ export default function Notifications() {
       >
           <form onSubmit={handleIssue} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Decision reference</label>
-                <input className="input font-mono" required placeholder="DEC-YYYY-###" value={form.decision_ref} onChange={set('decision_ref')} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Submission reference</label>
-                <input className="input font-mono" required placeholder="PSC-YYYY-#####" value={form.submission_ref} onChange={set('submission_ref')} />
-              </div>
+              <BaseInput label="Decision reference" required placeholder="DEC-YYYY-###" value={form.decision_ref} onChange={set('decision_ref')} />
+              <BaseInput label="Submission reference" required placeholder="PSC-YYYY-#####" value={form.submission_ref} onChange={set('submission_ref')} />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Subject / title</label>
-              <input className="input" required value={form.title} onChange={set('title')} placeholder="Brief description of the matter" />
-            </div>
+            <BaseInput label="Subject / title" required value={form.title} onChange={set('title')} placeholder="Brief description of the matter" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ministry</label>
-                <input className="input" required value={form.ministry} onChange={set('ministry')} placeholder="Ministry name" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Decision outcome</label>
-                <select className="input" value={form.outcome} onChange={set('outcome')}>
-                  {Object.entries(DECISION_OUTCOMES).map(([v, m]) => <option key={v} value={v}>{m.label}</option>)}
-                </select>
-              </div>
+              <BaseInput label="Ministry" required value={form.ministry} onChange={set('ministry')} placeholder="Ministry name" />
+              <BaseSelect
+                label="Decision outcome"
+                value={form.outcome}
+                options={Object.entries(DECISION_OUTCOMES).map(([v, m]) => ({ value: v, label: m.label }))}
+                onChange={(_, v) => set('outcome')({ target: { value: v } })}
+              />
             </div>
+            <BaseInput label='Recipient name / title' required value={form.recipient} onChange={set('recipient')} placeholder='e.g. "Secretary-General, Ministry of Finance"' />
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Recipient name / title</label>
-              <input className="input" required value={form.recipient} onChange={set('recipient')} placeholder='e.g. "Secretary-General, Ministry of Finance"' />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notification channel</label>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Notification channel</p>
               <div className="flex gap-3 flex-wrap">
                 {CHANNEL_OPTIONS.map(({ value, label, icon: Icon }) => (
                   <label key={value} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${form.channel === value ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 font-medium' : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'}`}>
@@ -342,13 +316,10 @@ export default function Notifications() {
                 ))}
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes (optional)</label>
-              <textarea className="input min-h-[70px]" value={form.notes} onChange={set('notes')} placeholder="Internal notes for this notification…" />
-            </div>
+            <BaseTextarea label="Notes (optional)" rows={3} value={form.notes} onChange={set('notes')} placeholder="Internal notes for this notification…" />
             <div className="flex items-center gap-3 pt-2">
-              <button type="submit" className="btn-primary px-6 py-2.5">Save as Draft</button>
-              <button type="button" className="btn-secondary px-6 py-2.5" onClick={() => setIssueModalOpen(false)}>Cancel</button>
+              <BaseButton type="submit" variant="primary">Save as Draft</BaseButton>
+              <BaseButton type="button" variant="secondary" onClick={() => setIssueModalOpen(false)}>Cancel</BaseButton>
             </div>
           </form>
       </Modal>
@@ -410,25 +381,13 @@ export default function Notifications() {
             </div>
             <div className="flex items-center gap-3 pt-2">
               {(viewTarget.status === 'draft' || viewTarget.status === 'pending') && (
-                <button
-                  onClick={() => { handleMarkIssued(viewTarget.id); setViewTarget(null) }}
-                  className="btn-primary flex items-center gap-2 px-5 py-2.5 text-sm"
-                >
-                  <Send size={15} /> Mark as Issued
-                </button>
+                <BaseButton variant="primary" icon={<Send size={15} />} onClick={() => { handleMarkIssued(viewTarget.id); setViewTarget(null) }}>Mark as Issued</BaseButton>
               )}
               {viewTarget.status === 'issued' && (
-                <button
-                  onClick={() => { handleMarkAcknowledged(viewTarget.id); setViewTarget(null) }}
-                  className="btn-primary flex items-center gap-2 px-5 py-2.5 text-sm"
-                >
-                  <CheckCircle2 size={15} /> Mark as Acknowledged
-                </button>
+                <BaseButton variant="primary" icon={<CheckCircle2 size={15} />} onClick={() => { handleMarkAcknowledged(viewTarget.id); setViewTarget(null) }}>Mark as Acknowledged</BaseButton>
               )}
-              <button className="btn-secondary flex items-center gap-2 px-5 py-2.5 text-sm" onClick={() => setViewTarget(null)}>
-                <Printer size={15} /> Print Letter
-              </button>
-              <button className="btn-secondary px-5 py-2.5 text-sm" onClick={() => setViewTarget(null)}>Close</button>
+              <BaseButton variant="secondary" icon={<Printer size={15} />} onClick={() => setViewTarget(null)}>Print Letter</BaseButton>
+              <BaseButton variant="secondary" onClick={() => setViewTarget(null)}>Close</BaseButton>
             </div>
           </div>
         )}

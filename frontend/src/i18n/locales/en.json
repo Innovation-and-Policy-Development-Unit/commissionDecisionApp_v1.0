@@ -1,4 +1,57 @@
 {
+  "home_dashboard": {
+    "switcher_label": "Dashboard view",
+    "view_psc": "PSC Dashboard",
+    "view_ministry": "Ministry Dashboard"
+  },
+  "ministry_dashboard": {
+    "title": "Ministry Dashboard",
+    "subtitle": "Your ministry's submissions across the lodging workflow",
+    "activity_title": "Submission Activity",
+    "activity_sub": "Received and decided over time",
+    "pipeline_title": "Monthly Pipeline",
+    "pipeline_sub": "Received vs decided per month",
+    "key_metrics": "Key Metrics",
+    "all_submissions": "All Submissions",
+    "all_submissions_sub": "Total lodged by your ministry",
+    "metric_this_week": "Lodged this week",
+    "metric_this_month": "Lodged this month",
+    "metric_sla": "SLA compliance",
+    "range_3m": "3M",
+    "range_6m": "6M",
+    "range_1y": "1Y",
+    "empty_title": "No submissions yet",
+    "empty_hint": "Once your ministry lodges submissions, your dashboard metrics will appear here.",
+    "stage_breakdown": "Stage Breakdown",
+    "stage_breakdown_sub": "Your ministry's submissions by current stage",
+    "no_data": "No submissions to break down yet.",
+    "recent_submissions": "Recent Submissions",
+    "recent_submissions_sub": "Your ministry's latest activity",
+    "subject": "Subject",
+    "received": "Received",
+    "no_submissions": "No submissions to show.",
+    "count": "Count",
+    "dg": {
+      "title": "Director General Dashboard",
+      "subtitle": "Endorsements and your ministry's standing with the PSC",
+      "awaiting_endorsement": "Awaiting my endorsement",
+      "endorsed_awaiting_hr": "Endorsed — awaiting HR submission",
+      "under_psc_review": "Under PSC review",
+      "decided": "Decided",
+      "overdue": "Overdue",
+      "total": "Total submissions"
+    },
+    "hr": {
+      "title": "Ministry HR Dashboard",
+      "subtitle": "Your ministry's submissions across the lodging workflow",
+      "drafts": "Drafts",
+      "ready_to_submit": "Ready to submit to PSC",
+      "awaiting_dg": "Awaiting DG endorsement",
+      "returned": "Returned for clarification",
+      "under_psc_review": "Under PSC review",
+      "decided": "Decided"
+    }
+  },
   "app": {
     "title": "SCDMS",
     "subtitle": "Submission & Commission Decision Management System",
@@ -436,6 +489,9 @@
     "filter_placeholder": "Filter by reference, title, ministry, or stage…",
     "view_list": "List",
     "view_kanban": "Kanban",
+    "kanban_cap_notice": "Showing the first {{shown}} of {{total}} matching submissions. Use filters to narrow the board.",
+    "readonly_dg": "View-only: as Director-General you can endorse or return this submission, but not edit its content. Use “Return to HR” to request changes.",
+    "readonly_hr": "Read-only: this submission is with the DG for endorsement. You can edit it again only if the DG returns it to draft.",
     "kanban": {
       "aria_board": "Submission workflow board",
       "read_only": "Drag-and-drop stage changes are available for PSC officers, secretariat, commissioners, and ministry HR roles.",

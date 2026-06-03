@@ -17,6 +17,7 @@ import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
 import api from '../../api/client'
+import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 import { normalizeListPayload, normalizeFieldPayload } from '../../utils/listPayload'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -126,7 +127,9 @@ export default function Agenda() {
 
   useEffect(() => {
     if (!selectedId || !hasPendingBlurbs) return undefined
-    const t = setInterval(() => fetchItems(selectedId), 5000)
+    const t = setInterval(() => {
+      if (isTabVisible()) fetchItems(selectedId)
+    }, 5000)
     return () => clearInterval(t)
   }, [selectedId, hasPendingBlurbs])
 

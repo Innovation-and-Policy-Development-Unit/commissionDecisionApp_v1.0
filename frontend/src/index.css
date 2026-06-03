@@ -183,93 +183,108 @@
     font-family: var(--fontFamilyBase) !important;
   }
 
+  /* ── Fluent dark-grey dark mode ────────────────────────────────────────────
+     Override Tailwind slate (blue-grey) with Fluent webDarkTheme neutral greys.
+     colorNeutralBackground1:#292929  bg2:#1f1f1f  bg3:#141414  bg6:#333333
+     stroke1:#666666  stroke2:#525252  fg1:#fff  fg2:#d6d6d6  fg3:#adadad  */
+  .dark {
+    /* Page / body background = Fluent bg3 (darkest content surface) */
+    --tw-dark-body:        #141414;
+    /* Elevated surfaces (cards, modals, sidebar) = Fluent bg1 */
+    --tw-dark-surface:     #292929;
+    /* Subtle elevated (hover, nested card) = Fluent bg6 */
+    --tw-dark-elevated:    #333333;
+    /* Hover states */
+    --tw-dark-hover:       #383838;
+    /* Borders */
+    --tw-dark-border:      #525252;
+    --tw-dark-border-2:    #666666;
+    /* Text */
+    --tw-dark-fg1:         #ffffff;
+    --tw-dark-fg2:         #d6d6d6;
+    --tw-dark-fg3:         #adadad;
+    --tw-dark-fg4:         #999999;
+
+    /* ── Map Tailwind slate dark: classes to Fluent greys ── */
+    /* These CSS-variable overrides feed the @layer base color-scheme. */
+    color-scheme: dark;
+  }
+
   .dark body {
-    @apply bg-slate-900 text-slate-100;
+    background-color: var(--tw-dark-body);
+    color: var(--tw-dark-fg1);
   }
 
-  /* Dim mode — sits between light and dark (WCAG AA text ≥4.5:1 on surfaces).
-     Both .dark and .dim are on <html>; dark: variants still apply. */
-  .dim body {
-    background-color: #1e293b !important;
-    color: #f1f5f9 !important; /* slate-100 */
+  /* Cards and surfaces */
+  .dark .card {
+    background-color: var(--tw-dark-surface) !important;
+    border-color: var(--tw-dark-border) !important;
   }
 
-  .dim .card {
-    background-color: #253347 !important;
-    border-color: #475569 !important;
-    color: #f1f5f9;
+  /* All dark:bg-slate-800 / dark:bg-slate-900 references */
+  .dark [class~="dark:bg-slate-900"],
+  .dark .bg-slate-900 {
+    background-color: var(--tw-dark-body) !important;
   }
 
-  .dim header,
-  .dim aside {
-    background-color: #253347 !important;
-    border-color: #475569 !important;
+  .dark [class~="dark:bg-slate-800"],
+  .dark .bg-slate-800 {
+    background-color: var(--tw-dark-surface) !important;
   }
 
-  .dim .input {
-    background-color: #1e293b !important;
-    border-color: #475569 !important;
-    color: #f8fafc !important;
+  .dark [class~="dark:bg-slate-700"],
+  .dark .bg-slate-700 {
+    background-color: var(--tw-dark-elevated) !important;
   }
 
-  .dim .input::placeholder {
-    color: #94a3b8 !important; /* slate-400 on slate-800 ≈ 4.6:1 */
+  /* Borders */
+  .dark [class~="dark:border-slate-700"] { border-color: var(--tw-dark-border) !important; }
+  .dark [class~="dark:border-slate-600"] { border-color: var(--tw-dark-border-2) !important; }
+  .dark [class~="dark:border-slate-800"] { border-color: var(--tw-dark-border) !important; }
+
+  /* Text */
+  .dark [class~="dark:text-slate-100"],
+  .dark .text-slate-100 { color: var(--tw-dark-fg1) !important; }
+  .dark [class~="dark:text-slate-200"],
+  .dark .text-slate-200 { color: var(--tw-dark-fg2) !important; }
+  .dark [class~="dark:text-slate-300"],
+  .dark .text-slate-300 { color: var(--tw-dark-fg2) !important; }
+  .dark [class~="dark:text-slate-400"],
+  .dark .text-slate-400 { color: var(--tw-dark-fg3) !important; }
+  .dark [class~="dark:text-slate-500"],
+  .dark .text-slate-500 { color: var(--tw-dark-fg4) !important; }
+
+  /* Header and sidebar */
+  .dark header, .dark aside, .dark nav {
+    background-color: var(--tw-dark-surface) !important;
+    border-color: var(--tw-dark-border) !important;
   }
 
-  .dim .nav-link {
-    color: #cbd5e1 !important; /* slate-300 on #253347 */
-  }
+  /* Hover states */
+  .dark [class~="dark:hover:bg-slate-700"]:hover { background-color: var(--tw-dark-hover) !important; }
 
-  .dim .nav-link:hover {
-    color: #f8fafc !important;
+  /* Native .input elements still in the codebase */
+  .dark .input {
+    background-color: var(--tw-dark-surface) !important;
+    border-color: var(--tw-dark-border) !important;
+    color: var(--tw-dark-fg1) !important;
   }
-
-  .dim .nav-link.active {
-    color: rgb(var(--p-fg-on-dark, var(--p-300))) !important;
-    background-color: rgb(var(--p-900) / 0.35) !important;
-  }
-
-  .dim .text-slate-400,
-  .dim .text-slate-500 {
-    color: #cbd5e1 !important;
-  }
-
-  .dim .text-slate-600,
-  .dim .text-slate-700 {
-    color: #e2e8f0 !important;
-  }
-
-  .dim .table thead th {
-    color: #cbd5e1 !important;
-  }
-
-  .dim .table tbody td {
-    color: #f1f5f9 !important;
-  }
-
-  .dim [class*="bg-slate-800"] {
-    background-color: #253347 !important;
-  }
-
-  /* Orange preset on dim: accessible primary text */
-  .dim[data-theme="orange"] .text-primary-400,
-  .dim[data-theme="orange"] .text-primary-500,
-  .dim[data-theme="orange"] .text-primary-600 {
-    color: rgb(var(--p-fg-on-dark, 253 186 116)) !important;
+  .dark .input::placeholder {
+    color: var(--tw-dark-fg4) !important;
   }
 
   /* Orange preset on light: link text uses --p-fg */
-  html:not(.dark):not(.dim) [data-theme="orange"] .text-primary-500,
-  html:not(.dark):not(.dim) [data-theme="orange"] .text-primary-600 {
+  html:not(.dark) [data-theme="orange"] .text-primary-500,
+  html:not(.dark) [data-theme="orange"] .text-primary-600 {
     color: rgb(var(--p-fg, 124 45 18)) !important;
   }
 
-  html:not(.dark):not(.dim) [data-theme="orange"] .badge-primary {
+  html:not(.dark) [data-theme="orange"] .badge-primary {
     color: rgb(var(--p-fg, 124 45 18)) !important;
   }
 
-  .dark:not(.dim) [data-theme="orange"] .text-primary-300,
-  .dark:not(.dim) [data-theme="orange"] .text-primary-400 {
+  .dark [data-theme="orange"] .text-primary-300,
+  .dark [data-theme="orange"] .text-primary-400 {
     color: rgb(var(--p-fg-on-dark, 253 186 116)) !important;
   }
 

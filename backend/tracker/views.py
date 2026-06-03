@@ -11,6 +11,7 @@ from datetime import timedelta
 from rest_framework import mixins, parsers, permissions, status, viewsets, exceptions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -136,6 +137,18 @@ from .serializers import (
     KnowledgeArticleSerializer,
     SubmissionChecklistResponseSerializer,
     ChecklistFormTypeSerializer,
+)
+from .api_cache import (
+    CachedReferenceViewSetMixin,
+    CachedRoleDefinitionViewSetMixin,
+    ORG_REF_NAMESPACES,
+    get_cached_response,
+    invalidate_password_policy_cache,
+    invalidate_ref_groups,
+    invalidate_submission,
+    password_policy_cache_key,
+    set_cached_response,
+    submission_bootstrap_cache_key,
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
@@ -377,6 +390,13 @@ def _updated_fields(submission, prev, target):
         fields.add("dg_endorsed_at")
     if prev == WorkflowStage.DRAFT and target == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
         fields.add("routed_unit")
+    if target == WorkflowStage.MANAGER_CHECKLIST_REVIEW and submission.checklist_review_started_at is not None:
+        fields.add("checklist_review_started_at")
+        fields.add("checklist_review_deadline_at")
+    if target == WorkflowStage.RECALLED:
+        fields.add("recalled_at")
+        fields.add("recalled_by_id")
+        fields.add("recalled_reason")
     return fields
 
 
@@ -400,6 +420,76 @@ def _dg_recipients_for_submission(submission):
         if dept.exists():
             return [p.user for p in dept]
     return [p.user for p in base.filter(department__isnull=True)]
+
+
+def _get_submission_chain(submission):
+    """Return the approval_chain for a submission's agenda section, or []."""
+    if not submission.agenda_category:
+        return []
+    try:
+        sec = AgendaSection.objects.filter(code=submission.agenda_category).first()
+        return sec.approval_chain if sec and sec.approval_chain else []
+    except Exception:
+        return []
+
+
+def _chain_stage_index(chain, stage):
+    """Return index of stage in chain, or -1."""
+    for i, step in enumerate(chain):
+        if step.get("stage") == stage:
+            return i
+    return -1
+
+
+def _chain_targets_for_role(submission, role):
+    """
+    If the submission has a non-empty approval_chain and this role participates
+    in it, return the list of allowed target stages. Returns None if the chain
+    does not apply (use default logic).
+    """
+    if not submission.is_internal:
+        return None
+    chain = _get_submission_chain(submission)
+    if not chain:
+        return None
+
+    current = submission.current_stage
+    from .transitions import INTERNAL_SUBMITTER_ROLES
+
+    # DRAFT: internal submitters send to first chain step
+    if current == WorkflowStage.DRAFT and role in INTERNAL_SUBMITTER_ROLES:
+        return [chain[0]["stage"]]
+
+    # Chain steps: the role listed in a step approves it
+    idx = _chain_stage_index(chain, current)
+    if idx >= 0:
+        step_roles = chain[idx].get("roles", [])
+        if role in step_roles:
+            targets = [WorkflowStage.DRAFT]   # can always return for changes
+            if idx + 1 < len(chain):
+                targets.append(chain[idx + 1]["stage"])   # next step
+            else:
+                targets.append(WorkflowStage.SUBMITTED)   # last step → Secretary
+            return targets
+        # PSC admin bypass handled by caller
+        return None
+
+    return None
+
+
+def _chain_transition_allowed(submission, role, target):
+    """
+    Returns True  → chain explicitly allows this transition.
+    Returns False → chain explicitly denies it.
+    Returns None  → chain doesn't apply; use default logic.
+    """
+    from .models import Role as _Role
+    if role == _Role.PSC_ADMIN:
+        return None   # admin always uses default logic
+    targets = _chain_targets_for_role(submission, role)
+    if targets is None:
+        return None
+    return target in targets
 
 
 def _dispatch_transition_notifications(submission, prev, target, actor, remarks=""):
@@ -440,8 +530,44 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         }
         return [unit_to_role.get(submission.routed_unit, Role.PSC_OFFICER)]
 
-    if (
-        prev in (WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
+    # ── Approval chain notifications ─────────────────────────────────────────
+    _chain = _get_submission_chain(submission)
+    _chain_stages = {step["stage"] for step in _chain}
+    if target in _chain_stages:
+        # Moving into a chain step — notify the roles defined in that step
+        _step = next((s for s in _chain if s["stage"] == target), None)
+        if _step:
+            _step_roles = _step.get("roles", [])
+            _step_label = _step.get("label", "Approval")
+            recipients = User.objects.filter(
+                psc_profile__role__in=_step_roles, is_active=True
+            )
+            actor_name = (actor.get_full_name() or actor.username) if actor else "Staff"
+            title = f"{_step_label} required: {submission.reference_number}"
+            body = (
+                f"'{submission.title}' submitted by {actor_name} is awaiting your "
+                f"{_step_label.lower()} before it is sent to the Secretary."
+            )
+    elif prev in _chain_stages and target == WorkflowStage.DRAFT:
+        # Chain approver returned for changes — notify the creator
+        recipients = User.objects.filter(pk=submission.created_by_id, is_active=True)
+        approver_name = (actor.get_full_name() or actor.username) if actor else "Approver"
+        title = f"Returned for changes: {submission.reference_number}"
+        reason = (remarks or "").strip()
+        body = (
+            f"'{submission.title}' was returned by {approver_name} for changes."
+            + (f"\n\nReason: {reason}" if reason else "")
+        )
+    elif prev in _chain_stages and target == WorkflowStage.SUBMITTED:
+        # Last chain step approved — notify Secretary
+        recipients = User.objects.filter(
+            psc_profile__role__in=[Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER],
+            is_active=True,
+        )
+        title = f"New internal submission: {submission.reference_number}"
+        body = f"'{submission.title}' has completed all approvals and is ready for your review."
+    elif (
+        prev in (WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED)
         and target == WorkflowStage.SUBMITTED
     ):
         receiver_roles = _resolve_receiver_roles()
@@ -450,6 +576,16 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         )
         title = f"New submission: {submission.reference_number}"
         body = f"{submission.title} has been submitted and needs your checklist review."
+
+    elif prev == WorkflowStage.PENDING_DG_ENDORSEMENT and target == WorkflowStage.DG_APPROVED:
+        # DG endorsed — notify the HR who created the submission to now forward to PSC
+        recipients = User.objects.filter(pk=submission.created_by_id, is_active=True)
+        dg_name = (actor.get_full_name() or actor.username) if actor else "Director-General"
+        title = f"Endorsed — please submit to PSC: {submission.reference_number}"
+        body = (
+            f"'{submission.title}' has been endorsed by {dg_name}. "
+            f"Please review and submit the submission to the Public Service Commission."
+        )
 
     elif prev == WorkflowStage.DRAFT and target == WorkflowStage.PENDING_DG_ENDORSEMENT:
         recipients = _dg_recipients_for_submission(submission)
@@ -507,6 +643,21 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         )
         title = f"Ready for Commission: {submission.reference_number}"
         body = f"{submission.title} has been forwarded to the Commission."
+        # Also notify ministry HR so they know their matter is being decided
+        _ministry_hr = User.objects.filter(
+            pk=submission.created_by_id, is_active=True,
+        )
+        for _u in _ministry_hr:
+            NotificationModel.objects.create(
+                recipient=_u,
+                submission=submission,
+                channel=NotificationModel.Channel.BOTH,
+                title=f"Submitted to Commission: {submission.reference_number}",
+                body=(
+                    f"Your submission '{submission.title}' has been forwarded to the "
+                    f"Public Service Commission and will be considered at an upcoming sitting."
+                ),
+            )
 
     elif target == WorkflowStage.DEFERRED_BACK_TO_HR:
         recipients = User.objects.filter(
@@ -523,15 +674,28 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
             "compliance": Role.COMPLIANCE_MANAGER,
         }
         manager_role = unit_to_role.get(submission.routed_unit, Role.PSC_OFFICER)
+        label = "approved" if target == WorkflowStage.APPROVED else "rejected"
+        title = f"Submission {label}: {submission.reference_number}"
+        body = f"'{submission.title}' has been {label} by the Commission."
         recipients = User.objects.filter(
             psc_profile__role__in=[manager_role, Role.PSC_MANAGER],
             is_active=True,
         ).union(
             User.objects.filter(pk=submission.created_by_id, is_active=True)
         )
-        label = "approved" if target == WorkflowStage.APPROVED else "rejected"
-        title = f"Submission {label}: {submission.reference_number}"
-        body = f"'{submission.title}' has been {label} by the Commission."
+        # Also notify the assigned principal who carried out the assessment
+        if submission.assigned_to_id:
+            _assigned = User.objects.filter(pk=submission.assigned_to_id, is_active=True)
+            for _u in _assigned:
+                NotificationModel.objects.create(
+                    recipient=_u,
+                    submission=submission,
+                    channel=NotificationModel.Channel.BOTH,
+                    title=title,
+                    body=(
+                        f"'{submission.title}' that you assessed has been {label} by the Commission."
+                    ),
+                )
 
     recipient_list = list(recipients)
     for user in recipient_list:
@@ -554,8 +718,33 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         )
 
 
+# Stages counted as "active" by the dashboard quick-filter. Kept in sync with the
+# ACTIVE_STAGES set in frontend/src/pages/psc/SubmissionLog.jsx and dashboard_stats_view.
+_ACTIVE_DASHBOARD_STAGES = [
+    "draft", "pending_dg_endorsement", "dg_approved",
+    "pending_manager_approval", "pending_second_approval",
+    "submitted", "received_by_psc", "registered_routed",
+    "returned_for_clarification", "manager_checklist_review",
+    "under_assessment", "forwarded_to_commission",
+    "commission_sitting", "secretary_review",
+]
+
+_SUBMISSION_ORDERING_WHITELIST = {
+    "received_at", "-received_at", "reference_number", "-reference_number",
+}
+
+
+class SubmissionPagination(PageNumberPagination):
+    """Lets the client choose the page size (the list view uses 15; the kanban
+    view requests a large cap to group every matching card by stage)."""
+    page_size = 15
+    page_size_query_param = "page_size"
+    max_page_size = 500
+
+
 class SubmissionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
+    pagination_class = SubmissionPagination
 
     def get_throttles(self):
         if self.action == 'create':
@@ -565,10 +754,56 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = _submission_queryset_for(self.request.user)
-        # Attached submissions are shown nested inside their parent, not as top-level rows
-        if self.action == 'list':
-            qs = qs.filter(is_attachment=False)
-        return qs
+        if self.action != 'list':
+            return qs
+
+        # ── List: attached submissions are nested under their parent ──────────
+        qs = qs.filter(is_attachment=False)
+        params = self.request.query_params
+
+        stage = params.get('current_stage')
+        if stage:
+            qs = qs.filter(current_stage=stage)
+
+        ministry = params.get('ministry')
+        if ministry:
+            qs = qs.filter(ministry__name=ministry)
+
+        # NL-search returns a set of submission ids to scope the list to.
+        ids = params.get('ids')
+        if ids is not None:
+            id_list = [int(x) for x in ids.split(',') if x.strip().isdigit()]
+            qs = qs.filter(id__in=id_list) if id_list else qs.none()
+
+        search = (params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(
+                models.Q(reference_number__icontains=search)
+                | models.Q(title__icontains=search)
+                | models.Q(ministry__name__icontains=search)
+            )
+
+        # Dashboard quick-filter — mirrors SubmissionLog.jsx and dashboard_stats_view.
+        dashboard = params.get('dashboard')
+        if dashboard and dashboard != 'all':
+            now = timezone.now()
+            if dashboard == 'active':
+                qs = qs.filter(current_stage__in=_ACTIVE_DASHBOARD_STAGES)
+            elif dashboard == 'this_week':
+                qs = qs.filter(received_at__gte=now - timedelta(days=7))
+            elif dashboard == 'this_month':
+                qs = qs.filter(received_at__gte=now - timedelta(days=30))
+            elif dashboard == 'overdue':
+                # Matches Submission.is_assessment_overdue (models.py).
+                qs = qs.filter(
+                    current_stage=WorkflowStage.UNDER_ASSESSMENT,
+                    assessment_deadline_at__lt=now,
+                )
+
+        ordering = params.get('ordering')
+        return qs.order_by(
+            ordering if ordering in _SUBMISSION_ORDERING_WHITELIST else '-received_at'
+        )
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -700,6 +935,19 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             }
             submission = serializer.save(**kwargs)
 
+        elif profile.role in {Role.VIPAM_PRINCIPAL, Role.VIPAM_MANAGER}:
+            # VIPAM internal submission — goes through approval chain before Secretary
+            org = _resolve_opsc_submission_org(profile)
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": True,
+                "routed_unit": RoutedUnit.VIPAM,
+                "ministry_id": org["ministry_id"],
+                "department_id": org["department_id"],
+                "unit_id": org.get("unit_id"),
+            }
+            submission = serializer.save(**kwargs)
+
         elif profile.role in {
             Role.COMPLIANCE_SENIOR,
             Role.COMPLIANCE_PRINCIPAL,
@@ -774,7 +1022,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
         if profile.role not in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
             raise PermissionDenied("Only PSC staff or Ministry users can edit submissions.")
+        from .transitions import assert_can_edit_submission
+        assert_can_edit_submission(profile.role, submission)
         submission = serializer.save()
+        invalidate_submission(submission.id)
         if submission.secretary_only:
             from .travel_forms import is_travel_form_code
             from .travel_signatures import ensure_travel_endorsers_synced
@@ -801,30 +1052,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
-        from .tasks import (
-            QUALITY_SCORE_STAGES,
-            queue_submission_brief,
-            queue_submission_quality_score,
-            submission_brief_needs_refresh,
-            submission_quality_needs_refresh,
-        )
 
         submission = self.get_object()
-        profile = _profile(request.user)
-        if profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
-            if submission_brief_needs_refresh(submission):
-                queue_submission_brief(submission.id, sync_fallback=False)
-        if (
-            submission.current_stage in QUALITY_SCORE_STAGES
-            and submission_quality_needs_refresh(submission)
-        ):
-            queue_submission_quality_score(submission.id, force=False)
+        self._submission_view_side_effects(request, submission)
 
         _log(request, _AL.Action.READ,
              resource_type="Submission", resource_id=submission.id,
              resource_label=submission.reference_number,
              description=f"Submission viewed: {submission.title}")
-        return Response(SubmissionDetailSerializer(submission).data)
+        return Response(SubmissionDetailSerializer(submission, context={"request": request}).data)
 
     @action(detail=True, methods=["post"])
     def transition(self, request, pk=None):
@@ -839,20 +1075,31 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         acknowledge_gaps = bool(ser.validated_data.get("acknowledge_gaps"))
         prev = submission.current_stage
 
-        assert_transition_allowed(
-            role=profile.role,
-            current_stage=prev,
-            target_stage=target,
-            is_internal=submission.is_internal,
-            secretary_only=submission.secretary_only,
-        )
+        # ── Approval chain check (dynamic per-section config) ────────────────
+        _chain_result = _chain_transition_allowed(submission, profile.role, target)
+        if _chain_result is False:
+            raise PermissionDenied(
+                "This transition is not permitted by the submission's approval chain. "
+                "Check the workflow configuration for this submission type."
+            )
+        elif _chain_result is None:
+            # Chain doesn't apply — use standard transition rules
+            assert_transition_allowed(
+                role=profile.role,
+                current_stage=prev,
+                target_stage=target,
+                is_internal=submission.is_internal,
+                secretary_only=submission.secretary_only,
+                remarks=remarks,
+            )
+        # if _chain_result is True: chain explicitly allows — skip assert_transition_allowed
 
         # ── Intake route toggles: block submit/route via a disabled route ──────
         from .intake_routing import hr_intake_enabled, receptionist_intake_enabled
 
         if (
             profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}
-            and target in {WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED}
+            and target in {WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED, WorkflowStage.SUBMITTED}
             and not submission.secretary_only
             and not hr_intake_enabled()
         ):
@@ -884,6 +1131,44 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # ── Warn when a non-draft submission has no form type ─────────────────
+        # Admins can override with acknowledge_no_form_type=true in the payload.
+        if (
+            prev == WorkflowStage.DRAFT
+            and not submission.form_type_code
+            and not submission.is_internal
+            and not submission.secretary_only
+            and not ser.validated_data.get("acknowledge_no_form_type")
+        ):
+            # Try to auto-resolve from the agenda section's digitized form
+            _resolved_code = None
+            if submission.agenda_category:
+                try:
+                    from .models import AgendaSection
+                    _sec = AgendaSection.objects.filter(
+                        code=submission.agenda_category
+                    ).select_related("digitized_form").first()
+                    if _sec and _sec.digitized_form:
+                        _resolved_code = _sec.digitized_form.code
+                except Exception:
+                    pass
+
+            if _resolved_code:
+                # Auto-fill silently and continue — no blocking error
+                submission.form_type_code = _resolved_code
+            else:
+                return Response(
+                    {
+                        "detail": (
+                            "This submission has no form type selected. "
+                            "Please set the form type before submitting, or re-submit with "
+                            "acknowledge_no_form_type=true to proceed without one."
+                        ),
+                        "no_form_type": True,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         if (
             submission.secretary_only
@@ -952,9 +1237,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied(
                     f"This submission is routed to {submission.routed_unit}, not your unit ({expected_unit})."
                 )
-            if submission.assigned_to_id != request.user.id:
+            is_primary    = submission.assigned_to_id == request.user.id
+            is_co_assigned = submission.co_assignments.filter(principal=request.user).exists()
+            if not is_primary and not is_co_assigned:
                 raise PermissionDenied(
-                    "This submission has not been assigned to you. Contact your unit manager."
+                    "This submission has not been assigned to you. "
+                    "Contact your unit manager to be assigned as primary or co-analyst."
                 )
 
         if (
@@ -968,7 +1256,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .ai_settings import package_validation_enabled
 
         if (
-            prev in {WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT}
+            prev in {WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED}
             and target in {WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW}
             and not acknowledge_gaps
             and not submission.secretary_only
@@ -1031,6 +1319,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # ── Matters Arising must have a resolution note ──
+        if prev == WorkflowStage.MATTERS_ARISING and not (remarks or "").strip():
+            return Response(
+                {"detail": "A resolution note is required when advancing a submission from Matters Arising. Please add remarks explaining the resolution."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         from .decision_proof import create_decision_proof, is_decision_stage
 
         proof_hash = ""
@@ -1055,14 +1350,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 if routed:
                     submission.routed_unit = routed
 
-            # ── DG (Head of Agency) endorsement: stamp endorser when submitting to PSC ──
-            if prev == WorkflowStage.PENDING_DG_ENDORSEMENT and target == WorkflowStage.SUBMITTED:
+            # ── DG (Head of Agency) endorsement: stamp endorser when DG approves ──
+            if prev == WorkflowStage.PENDING_DG_ENDORSEMENT and target == WorkflowStage.DG_APPROVED:
                 submission.dg_endorsed_by = request.user
                 submission.dg_endorsed_at = timezone.now()
 
             # ── On first submission to PSC: auto-assign scheduled_meeting based on cutoff ──
             if (
-                prev in {WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT}
+                prev in {WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED}
                 and target == WorkflowStage.SUBMITTED
                 and not submission.secretary_only
             ):
@@ -1073,9 +1368,32 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 submission.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
 
             # ── Start assessment timer when entering UNDER_ASSESSMENT ──
-            if target == WorkflowStage.UNDER_ASSESSMENT and submission.assessment_started_at is None:
-                submission.assessment_started_at = timezone.now()
+            if target == WorkflowStage.UNDER_ASSESSMENT:
+                if submission.assessment_started_at is None:
+                    submission.assessment_started_at = timezone.now()
                 submission._set_assessment_deadline_from_start()
+                # Safety net: if deadline is still null (e.g. holiday table issue),
+                # fall back to 30 calendar days so the submission is never untracked.
+                if submission.assessment_deadline_at is None:
+                    import logging as _log_mod
+                    from datetime import timedelta
+                    submission.assessment_deadline_at = timezone.now() + timedelta(days=30)
+                    _log_mod.getLogger("scdms.app").warning(
+                        "DEADLINE_FALLBACK | Submission %s | assessment_deadline_at was null "
+                        "after _set_assessment_deadline_from_start(); using 30-day calendar fallback.",
+                        submission.reference_number,
+                    )
+
+            # ── Start checklist review timer when entering MANAGER_CHECKLIST_REVIEW ──
+            if target == WorkflowStage.MANAGER_CHECKLIST_REVIEW and submission.checklist_review_started_at is None:
+                submission.checklist_review_started_at = timezone.now()
+                submission._set_checklist_review_deadline_from_start()
+
+            # ── Stamp recall metadata ──
+            if target == WorkflowStage.RECALLED:
+                submission.recalled_at = timezone.now()
+                submission.recalled_by = request.user
+                submission.recalled_reason = remarks
 
             submission.save(update_fields=_updated_fields(submission, prev, target))
 
@@ -1216,7 +1534,83 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
         )
 
+        invalidate_submission(submission.id)
         return Response(SubmissionDetailSerializer(submission).data)
+
+    @action(detail=True, methods=["post"], url_path="endorse")
+    def endorse(self, request, pk=None):
+        """DG endorsement — Option A: atomically chains PENDING_DG_ENDORSEMENT
+        → DG_APPROVED (stamps dg_endorsed_by/at) → SUBMITTED in one transaction.
+        HR never has to click "Submit to PSC" after the DG endorses."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+
+        if submission.current_stage != WorkflowStage.PENDING_DG_ENDORSEMENT:
+            return Response(
+                {"detail": "Endorsement is only available when the submission is awaiting DG endorsement."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        allowed_roles = {Role.HEAD_OF_AGENCY}
+        if profile.role not in allowed_roles and not request.user.is_staff and not request.user.is_superuser:
+            raise PermissionDenied(
+                "Only the Director-General (Head of Agency) may endorse this submission."
+            )
+
+        prev = WorkflowStage.PENDING_DG_ENDORSEMENT
+        now = timezone.now()
+
+        with transaction.atomic():
+            # Step 1: record DG approval and stamp endorser
+            submission.current_stage = WorkflowStage.DG_APPROVED
+            submission.dg_endorsed_by = request.user
+            submission.dg_endorsed_at = now
+            submission.save(update_fields=["current_stage", "dg_endorsed_by", "dg_endorsed_at", "updated_at"])
+            WorkflowEvent.objects.create(
+                submission=submission,
+                actor=request.user,
+                previous_stage=prev,
+                new_stage=WorkflowStage.DG_APPROVED,
+                remarks="Endorsed by DG — forwarding directly to PSC.",
+            )
+
+            # Step 2: auto-forward to SUBMITTED (skip HR "submit to PSC" click)
+            self._assign_scheduled_meeting(submission)
+            submission.current_stage = WorkflowStage.SUBMITTED
+            submission.save(update_fields=["current_stage", "scheduled_meeting_id", "updated_at"])
+            WorkflowEvent.objects.create(
+                submission=submission,
+                actor=request.user,
+                previous_stage=WorkflowStage.DG_APPROVED,
+                new_stage=WorkflowStage.SUBMITTED,
+                remarks="Automatically submitted to PSC following DG endorsement.",
+            )
+
+        _log(
+            request,
+            _AL.Action.UPDATE,
+            resource_type="Submission",
+            resource_id=submission.id,
+            resource_label=submission.reference_number,
+            description=f"DG endorsed and auto-submitted to PSC: {submission.title}",
+        )
+
+        from .tasks import queue_submission_notification
+        try:
+            queue_submission_notification(
+                submission.id, "submission_assigned", actor_id=request.user.id
+            )
+        except Exception:
+            pass
+
+        from .cache import invalidate_submission
+        invalidate_submission(submission.id)
+        return Response(
+            SubmissionDetailSerializer(submission, context={"request": request}).data
+        )
 
     @action(detail=True, methods=["post"], url_path="validate-package")
     def validate_package(self, request, pk=None):
@@ -1249,12 +1643,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if submission.current_stage not in {
             WorkflowStage.DRAFT,
             WorkflowStage.PENDING_DG_ENDORSEMENT,
+            WorkflowStage.DG_APPROVED,
         }:
             return Response(
                 {
                     "detail": (
                         "Package validation is only available while the submission is in "
-                        "Draft or pending the Director-General's endorsement."
+                        "Draft, pending DG endorsement, or pending HR submission to PSC."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1484,6 +1879,99 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         return Response(SubmissionDetailSerializer(submission).data)
 
+    @action(detail=True, methods=["post"], url_path="co-assign")
+    def co_assign(self, request, pk=None):
+        """
+        POST /submissions/{id}/co-assign/
+        Add or remove a secondary analyst co-assignment.
+
+        Payload:
+          { "user_id": <int>, "action": "add"|"remove", "role": "secondary"|"specialist", "notes": "" }
+        """
+        from .models import AuditLog as _AL, SubmissionCoAssignment, Notification
+        from django.contrib.auth.models import User
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+
+        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser
+        is_unit_manager = profile.role in OPSC_UNIT_MANAGER_ROLES
+
+        if not (is_admin or is_unit_manager):
+            raise PermissionDenied("Only unit managers can manage co-assignments.")
+
+        if is_unit_manager:
+            expected_unit = MANAGER_ROLE_TO_ROUTED_UNIT.get(profile.role)
+            if expected_unit and submission.routed_unit != expected_unit:
+                raise PermissionDenied(
+                    f"This submission is routed to {submission.routed_unit}, not your unit."
+                )
+
+        user_id    = request.data.get("user_id")
+        action_    = request.data.get("action", "add")
+        role_      = request.data.get("role", "secondary")
+        notes      = request.data.get("notes", "")
+
+        if not user_id:
+            return Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            principal = User.objects.get(pk=user_id, is_active=True)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found or inactive."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if action_ == "remove":
+            SubmissionCoAssignment.objects.filter(submission=submission, principal=principal).delete()
+            _log(request, _AL.Action.UPDATE, resource_type="Submission",
+                 resource_id=submission.id, resource_label=submission.reference_number,
+                 description=f"Co-assignment removed for {principal.username}")
+            return Response(SubmissionDetailSerializer(submission).data)
+
+        # Verify eligibility
+        p_profile = getattr(principal, "psc_profile", None)
+        if p_profile is None:
+            return Response({"detail": "User has no PSC profile."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if is_unit_manager:
+            allowed_roles = manager_allowed_staff_roles(profile.role)
+            if p_profile.role not in allowed_roles:
+                return Response(
+                    {"detail": "Co-assignee must be one of your unit's principals or senior officers."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Cannot co-assign the same person as the primary assignee
+        if submission.assigned_to_id == principal.id:
+            return Response(
+                {"detail": "This analyst is already the primary assignee."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        co, created = SubmissionCoAssignment.objects.update_or_create(
+            submission=submission,
+            principal=principal,
+            defaults={"role": role_, "assigned_by": request.user, "notes": notes},
+        )
+
+        if created:
+            manager_name = request.user.get_full_name() or request.user.username
+            Notification.objects.create(
+                recipient=principal,
+                submission=submission,
+                channel=Notification.Channel.BOTH,
+                title=f"Co-assigned to you: {submission.reference_number}",
+                body=(
+                    f"{manager_name} has added you as a {role_} analyst on "
+                    f"'{submission.title}'."
+                ),
+            )
+
+        _log(request, _AL.Action.UPDATE, resource_type="Submission",
+             resource_id=submission.id, resource_label=submission.reference_number,
+             description=f"Co-assignment {'added' if created else 'updated'} for {principal.username}")
+
+        return Response(SubmissionDetailSerializer(submission).data)
+
     def _assign_scheduled_meeting(self, submission):
         """Set scheduled_meeting based on the next meeting's submission_cutoff."""
         from .models import Meeting
@@ -1505,16 +1993,37 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         else:
             submission.scheduled_meeting = next_meeting
 
-    @action(detail=True, methods=["get"])
-    def allowed_transitions(self, request, pk=None):
-        submission = self.get_object()
-        profile = _profile(request.user)
-        allowed = iter_allowed_targets(
-            profile.role,
-            submission.current_stage,
-            is_internal=submission.is_internal,
-            secretary_only=submission.secretary_only,
+    def _submission_view_side_effects(self, request, submission):
+        """Queue async AI work when a submission is opened (retrieve / bootstrap)."""
+        from .tasks import (
+            QUALITY_SCORE_STAGES,
+            queue_submission_brief,
+            queue_submission_quality_score,
+            submission_brief_needs_refresh,
+            submission_quality_needs_refresh,
         )
+
+        profile = _profile(request.user)
+        if profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            if submission_brief_needs_refresh(submission):
+                queue_submission_brief(submission.id, sync_fallback=False)
+        if (
+            submission.current_stage in QUALITY_SCORE_STAGES
+            and submission_quality_needs_refresh(submission)
+        ):
+            queue_submission_quality_score(submission.id, force=False)
+
+    def _allowed_transitions_payload(self, submission, profile):
+        chain_targets = _chain_targets_for_role(submission, profile.role)
+        if chain_targets is not None:
+            allowed = chain_targets
+        else:
+            allowed = iter_allowed_targets(
+                profile.role,
+                submission.current_stage,
+                is_internal=submission.is_internal,
+                secretary_only=submission.secretary_only,
+            )
         guidance = submission.ai_transition_guidance or {}
         stale = (
             not guidance.get("processed")
@@ -1524,11 +2033,93 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             from .tasks import queue_transition_guidance
 
             queue_transition_guidance(submission.id, role=profile.role, force=True)
-        return Response({
+        can_endorse = (
+            submission.current_stage == WorkflowStage.PENDING_DG_ENDORSEMENT
+            and (
+                profile.role == Role.HEAD_OF_AGENCY
+                or self.request.user.is_staff
+                or self.request.user.is_superuser
+            )
+        )
+        return {
             "allowed": allowed,
+            "can_endorse": can_endorse,
             "transition_guidance": guidance,
             "transition_guidance_pending": stale,
-        })
+        }
+
+    def _checklist_payload(self, submission):
+        if (
+            submission.is_attachment
+            or submission.is_internal
+            or getattr(submission, "secretary_only", False)
+        ):
+            return []
+        from .submission_checklist import ensure_submission_checklist_items
+
+        ensure_submission_checklist_items(submission)
+        items = SubmissionChecklistItem.objects.filter(
+            submission=submission,
+        ).select_related("document", "checked_by")
+        return ChecklistItemSerializer(items, many=True).data
+
+    def _document_meta_counts(self, submission):
+        annotation_counts = {}
+        for doc_id in DocumentAnnotation.objects.filter(
+            document__submission=submission,
+        ).values_list("document_id", flat=True):
+            annotation_counts[doc_id] = annotation_counts.get(doc_id, 0) + 1
+        signature_counts = {}
+        for doc_id in DocumentSignature.objects.filter(
+            document__submission=submission,
+        ).values_list("document_id", flat=True):
+            signature_counts[doc_id] = signature_counts.get(doc_id, 0) + 1
+        return annotation_counts, signature_counts
+
+    @action(detail=True, methods=["get"], url_path="bootstrap")
+    def bootstrap(self, request, pk=None):
+        """Single round-trip payload for the submission detail screen."""
+        from django.conf import settings as django_settings
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        self._submission_view_side_effects(request, submission)
+
+        cache_key = submission_bootstrap_cache_key(submission.id, request)
+        cached = get_cached_response(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        docs = SubmissionDocument.objects.filter(submission=submission)
+        annotation_counts, signature_counts = self._document_meta_counts(submission)
+
+        payload = {
+            "submission": SubmissionDetailSerializer(submission, context={"request": request}).data,
+            "documents": SubmissionDocumentSerializer(docs, many=True).data,
+            "checklist": self._checklist_payload(submission),
+            "allowed_transitions": self._allowed_transitions_payload(submission, profile),
+            "annotation_counts": annotation_counts,
+            "signature_counts": signature_counts,
+        }
+        set_cached_response(cache_key, payload, django_settings.CACHE_BOOTSTRAP_TTL)
+
+        _log(
+            request,
+            _AL.Action.READ,
+            resource_type="Submission",
+            resource_id=submission.id,
+            resource_label=submission.reference_number,
+            description=f"Submission bootstrap: {submission.title}",
+        )
+        return Response(payload)
+
+    @action(detail=True, methods=["get"])
+    def allowed_transitions(self, request, pk=None):
+        submission = self.get_object()
+        profile = _profile(request.user)
+        return Response(self._allowed_transitions_payload(submission, profile))
 
     @action(detail=True, methods=["get"], url_path="travel-endorsements")
     def travel_endorsements(self, request, pk=None):
@@ -1780,6 +2371,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if "notes" in request.data:
             item.notes = str(request.data["notes"])[:1000]
         item.save()
+        invalidate_submission(submission.id)
         return Response(ChecklistItemSerializer(item).data)
 
     @action(detail=True, methods=["post"], url_path="checklist/autofill")
@@ -1847,6 +2439,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         }
         if profile.role not in _upload_allowed_roles:
             raise PermissionDenied("Only ministry HR, PSC staff, or OPSC unit staff may upload documents.")
+        from .transitions import assert_can_edit_submission
+        assert_can_edit_submission(profile.role, submission)
 
         # Support multiple files in one request (for internal submissions free-form upload)
         files = request.FILES.getlist("files") or (
@@ -1891,6 +2485,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             sid = submission.id
             transaction.on_commit(lambda: queue_submission_quality_score(sid))
 
+        invalidate_submission(submission.id)
         if len(created_docs) == 1:
             return Response(SubmissionDocumentSerializer(created_docs[0]).data, status=status.HTTP_201_CREATED)
         return Response(SubmissionDocumentSerializer(created_docs, many=True).data, status=status.HTTP_201_CREATED)
@@ -1979,8 +2574,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             profile = _profile(request.user)
             if profile.role not in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.PSC_ADMIN}:
                 raise PermissionDenied("Only the submitting ministry or PSC Admin may delete documents.")
+            from .transitions import assert_can_edit_submission
+            assert_can_edit_submission(profile.role, submission)
             doc.file.delete(save=False)
             doc.delete()
+            invalidate_submission(submission.id)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         # GET — serve the file
@@ -2020,6 +2618,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         }
         if profile.role not in allowed_write_roles:
             raise PermissionDenied("You do not have permission to update PSC Form 3-7 data.")
+        from .transitions import assert_can_edit_submission
+        assert_can_edit_submission(profile.role, submission)
 
         try:
             instance = submission.form37_data
@@ -2057,6 +2657,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         }
         if profile.role not in allowed_write_roles:
             raise PermissionDenied("You do not have permission to update restructure submission data.")
+        from .transitions import assert_can_edit_submission
+        assert_can_edit_submission(profile.role, submission)
 
         try:
             instance = submission.restructure_data
@@ -2093,6 +2695,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         profile = _profile(request.user)
         if profile.role not in allowed_write_roles:
             raise PermissionDenied("You do not have permission to submit form data.")
+        from .transitions import assert_can_edit_submission
+        assert_can_edit_submission(profile.role, submission)
 
         try:
             instance = submission.dynamic_form_response
@@ -2200,7 +2804,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         return response
 
 
-class MinistryViewSet(viewsets.ModelViewSet):
+class MinistryViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
+    cache_namespace = "ministries"
+    cache_invalidate_groups = ("departments", "units")
     """
     List/retrieve: any authenticated user with a PSC profile (reference data for forms).
     Create/update/delete: PSC Administrators only.
@@ -2233,7 +2839,9 @@ class MinistryViewSet(viewsets.ModelViewSet):
         return [permissions.IsAuthenticated(), HasProfilePermission()]
 
 
-class DepartmentViewSet(viewsets.ModelViewSet):
+class DepartmentViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
+    cache_namespace = "departments"
+    cache_invalidate_groups = ("ministries", "units")
     """
     List/retrieve: any authenticated user with a PSC profile (optionally filter ?ministry=).
     Create/update/delete: PSC Administrators only.
@@ -2299,10 +2907,13 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         if changed:
             dept.save()
         ensure_opsc_units(dept)
+        invalidate_ref_groups(*ORG_REF_NAMESPACES)
         return Response(self.get_serializer(dept).data)
 
 
-class UnitViewSet(viewsets.ModelViewSet):
+class UnitViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
+    cache_namespace = "units"
+    cache_invalidate_groups = ("ministries", "departments")
     """
     List/retrieve: authenticated users (filter ?ministry= and/or ?department=).
     Create/update/delete: PSC Administrators only.
@@ -2344,7 +2955,8 @@ class UnitViewSet(viewsets.ModelViewSet):
         return qs
 
 
-class AgendaSectionViewSet(viewsets.ModelViewSet):
+class AgendaSectionViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
+    cache_namespace = "agenda-sections"
     """
     CRUD for Commission agenda sections.
     Read: any authenticated user.
@@ -2386,10 +2998,12 @@ class AgendaSectionViewSet(viewsets.ModelViewSet):
             serializer.save(display_order=max_order + 10)
         else:
             serializer.save()
+        self._invalidate_reference_cache()
 
     def perform_update(self, serializer):
         self._require_admin()
         serializer.save()
+        self._invalidate_reference_cache()
 
     def destroy(self, request, *args, **kwargs):
         self._require_admin()
@@ -2406,6 +3020,7 @@ class AgendaSectionViewSet(viewsets.ModelViewSet):
                 "Deactivate it instead."
             )
         instance.delete()
+        self._invalidate_reference_cache()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["post"], url_path="reorder")
@@ -2420,12 +3035,15 @@ class AgendaSectionViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             for idx, pk in enumerate(order):
                 AgendaSection.objects.filter(pk=pk).update(display_order=(idx + 1) * 10)
+        self._invalidate_reference_cache()
         qs = self.get_queryset()
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
 
-class FormCategoryViewSet(viewsets.ModelViewSet):
+class FormCategoryViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
+    cache_namespace = "form-categories"
+    cache_invalidate_groups = ("form-types", "form-fields", "required-documents")
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
     queryset = FormCategory.objects.all().order_by('display_order', 'name')
     serializer_class = FormCategorySerializer
@@ -2443,25 +3061,30 @@ class FormCategoryViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         self._require_admin()
         serializer.save()
+        self._invalidate_reference_cache()
 
     def perform_update(self, serializer):
         self._require_admin()
         serializer.save()
+        self._invalidate_reference_cache()
 
     def destroy(self, request, *args, **kwargs):
         self._require_admin()
         instance = self.get_object()
         instance.submissions.all().update(form_category=None)
         instance.delete()
+        self._invalidate_reference_cache()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class PSCFormTypeViewSet(viewsets.ModelViewSet):
+class PSCFormTypeViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
     """
     CRUD for PSC Form Types.
     Read: any authenticated user (drives submission dropdowns).
     Write: PSC Admins only.
     """
+    cache_namespace = "form-types"
+    cache_invalidate_groups = ("form-fields", "required-documents")
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
     serializer_class = PSCFormTypeSerializer
 
@@ -2501,22 +3124,26 @@ class PSCFormTypeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         self._require_admin()
         serializer.save()
+        self._invalidate_reference_cache()
 
     def perform_update(self, serializer):
         self._require_admin()
         serializer.save()
+        self._invalidate_reference_cache()
 
     def destroy(self, request, *args, **kwargs):
         self._require_admin()
         return super().destroy(request, *args, **kwargs)
 
 
-class PSCFormFieldViewSet(viewsets.ModelViewSet):
+class PSCFormFieldViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
     """
     Fields for a dynamic PSC form design.
     Read: any authenticated user.
     Write: PSC Admins (form designers) only.
     """
+    cache_namespace = "form-fields"
+    cache_invalidate_groups = ("form-types",)
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
     serializer_class = PSCFormFieldSerializer
 
@@ -2545,23 +3172,27 @@ class PSCFormFieldViewSet(viewsets.ModelViewSet):
         except PSCFormType.DoesNotExist:
             raise PermissionDenied("Form type not found.")
         serializer.save(form_type=form_type)
+        self._invalidate_reference_cache()
 
     def perform_update(self, serializer):
         self._require_admin()
         serializer.save()
+        self._invalidate_reference_cache()
 
     def destroy(self, request, *args, **kwargs):
         self._require_admin()
         return super().destroy(request, *args, **kwargs)
 
 
-class RequiredDocumentViewSet(viewsets.ModelViewSet):
+class RequiredDocumentViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
     """
     CRUD for RequiredDocument entries.
     Read: any authenticated user with a profile.
     Write: PSC Admins only.
     Supports ?form_type=<id> and ?form_category=<id> query filters.
     """
+    cache_namespace = "required-documents"
+    cache_invalidate_groups = ("form-types",)
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
     serializer_class = RequiredDocumentSerializer
 
@@ -2587,11 +3218,11 @@ class RequiredDocumentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         self._require_admin()
-        serializer.save()
+        super().perform_create(serializer)
 
     def perform_update(self, serializer):
         self._require_admin()
-        serializer.save()
+        super().perform_update(serializer)
 
     def destroy(self, request, *args, **kwargs):
         self._require_admin()
@@ -3131,7 +3762,13 @@ def change_password_view(request):
 @permission_classes([permissions.AllowAny])
 def password_policy_view(request):
     """GET /auth/password-policy/ — live policy from SystemSetting."""
+    from django.conf import settings as django_settings
     from .models import SystemSetting
+
+    cache_key = password_policy_cache_key()
+    cached = get_cached_response(cache_key)
+    if cached is not None:
+        return Response(cached)
 
     def _bool(key, default):
         val = SystemSetting.get_val(key)
@@ -3148,16 +3785,16 @@ def password_policy_view(request):
         except (ValueError, TypeError):
             return default
 
-    return Response(
-        {
-            "min_length": _int("PASSWORD_MIN_LENGTH", 8),
-            "require_uppercase": _bool("PASSWORD_REQUIRE_UPPERCASE", True),
-            "require_lowercase": _bool("PASSWORD_REQUIRE_LOWERCASE", True),
-            "require_digits": _bool("PASSWORD_REQUIRE_DIGITS", True),
-            "require_special": _bool("PASSWORD_REQUIRE_SPECIAL", True),
-            "history_count": _int("PASSWORD_HISTORY_COUNT", 5),
-        }
-    )
+    payload = {
+        "min_length": _int("PASSWORD_MIN_LENGTH", 8),
+        "require_uppercase": _bool("PASSWORD_REQUIRE_UPPERCASE", True),
+        "require_lowercase": _bool("PASSWORD_REQUIRE_LOWERCASE", True),
+        "require_digits": _bool("PASSWORD_REQUIRE_DIGITS", True),
+        "require_special": _bool("PASSWORD_REQUIRE_SPECIAL", True),
+        "history_count": _int("PASSWORD_HISTORY_COUNT", 5),
+    }
+    set_cached_response(cache_key, payload, django_settings.CACHE_PASSWORD_POLICY_TTL)
+    return Response(payload)
 
 
 def _security_audit_checks():
@@ -3909,6 +4546,7 @@ class SystemPermissionViewSet(viewsets.ModelViewSet):
 
 
 class RoleDefinitionViewSet(
+    CachedRoleDefinitionViewSetMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
@@ -5342,12 +5980,20 @@ class APIKeyViewSet(viewsets.ModelViewSet):
         serializer.save(key=raw_key)
 
 
-class SystemSettingViewSet(viewsets.ModelViewSet):
+class SystemSettingViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
     """CRUD for system settings — staff / superuser / PSC Admin."""
+    cache_namespace = "settings"
     permission_classes = [permissions.IsAuthenticated, HasManageRoles]
     queryset = SystemSetting.objects.all()
     serializer_class = SystemSettingSerializer
     lookup_field = "key"
+
+    def _list_ttl(self):
+        from django.conf import settings as django_settings
+        return django_settings.CACHE_SETTINGS_TTL
+
+    def _retrieve_ttl(self):
+        return self._list_ttl()
 
     @action(detail=False, methods=["post"], url_path="batch-update")
     def batch_update(self, request):
@@ -5395,6 +6041,10 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
             except Exception:
                 pass
 
+        self._invalidate_reference_cache()
+        if any(str(k).startswith("PASSWORD_") for k in settings_dict):
+            invalidate_password_policy_cache()
+
         return Response(updated)
 
     @action(detail=False, methods=["get", "post"], url_path="email-schedule")
@@ -5439,6 +6089,8 @@ class SystemSettingViewSet(viewsets.ModelViewSet):
             update_email_schedule(cron_expr=cron_expr if enabled else None, enabled=enabled)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        self._invalidate_reference_cache()
 
         return Response({
             "detail": "Email schedule updated.",
@@ -7311,16 +7963,31 @@ def dashboard_stats_view(request):
     thirty_days_ago = today - timedelta(days=30)
     seven_days_ago = today - timedelta(days=7)
     total = qs.count()
-    submitted_this_month = qs.filter(submitted_at__date__gte=thirty_days_ago).count()
-    submitted_this_week = qs.filter(submitted_at__date__gte=seven_days_ago).count()
+    # Use received_at (when the submission was logged) — matches what the submission list shows
+    submitted_this_month = qs.filter(received_at__date__gte=thirty_days_ago).count()
+    submitted_this_week = qs.filter(received_at__date__gte=seven_days_ago).count()
     stage_counts = dict(qs.values("current_stage").annotate(n=Count("id")).values_list("current_stage", "n"))
 
     active_stages = [
-        WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
-        WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.DRAFT,
+        WorkflowStage.PENDING_DG_ENDORSEMENT,
+        WorkflowStage.DG_APPROVED,
+        WorkflowStage.PENDING_MANAGER_APPROVAL,
+        WorkflowStage.PENDING_SECOND_APPROVAL,
+        WorkflowStage.SUBMITTED,
+        WorkflowStage.RECEIVED_BY_PSC,
+        WorkflowStage.REGISTERED_ROUTED,
+        WorkflowStage.RETURNED_FOR_CLARIFICATION,
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+        WorkflowStage.UNDER_ASSESSMENT,
         WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.COMMISSION_SITTING,
+        WorkflowStage.SECRETARY_REVIEW,
     ]
-    overdue = qs.filter(current_stage__in=active_stages, submitted_at__date__lt=thirty_days_ago).count()
+    overdue = qs.filter(
+        current_stage=WorkflowStage.UNDER_ASSESSMENT,
+        assessment_deadline_at__lt=now,
+    ).count()
     pending_active = qs.filter(current_stage__in=active_stages).count()
     sla_pct = round((1 - overdue / pending_active) * 100) if pending_active else 100
 
@@ -7548,8 +8215,6 @@ def calendar_events_view(request):
     events = []
 
     meetings_qs = Meeting.objects.all().order_by("date")
-    if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
-        meetings_qs = meetings_qs.filter(is_public=True)
 
     for m in meetings_qs[:50]:
         events.append({
@@ -7560,33 +8225,137 @@ def calendar_events_view(request):
             "url": f"/meetings/{m.id}",
         })
 
-    for t in CommissionTask.objects.filter(deadline__isnull=False).order_by("deadline")[:50]:
+    for t in CommissionTask.objects.filter(due_date__isnull=False).order_by("due_date")[:50]:
         events.append({
             "id": f"task-{t.id}",
             "type": "task_deadline",
             "title": t.title or "Commission Task",
-            "date": t.deadline.isoformat() if t.deadline else None,
+            "date": t.due_date.isoformat() if t.due_date else None,
             "status": t.status,
-            "url": f"/commission-tasks/{t.id}",
+            "url": f"/submissions/{t.submission_id}" if t.submission_id else None,
         })
 
-    warn_date = timezone.now().date() - timedelta(days=24)
-    active_stages = [
-        WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
-        WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
-    ]
-    for sub in Submission.objects.filter(current_stage__in=active_stages, submitted_at__date__lte=warn_date).order_by("submitted_at")[:20]:
+    for sub in Submission.objects.filter(
+        current_stage=WorkflowStage.UNDER_ASSESSMENT,
+        assessment_deadline_at__isnull=False,
+    ).order_by("assessment_deadline_at")[:20]:
         events.append({
             "id": f"sla-{sub.id}",
             "type": "sla_warning",
             "title": f"SLA Warning: {sub.reference_number or sub.title}",
-            "date": (sub.submitted_at.date() + timedelta(days=30)).isoformat(),
+            "date": sub.assessment_deadline_at.date().isoformat(),
             "submission_id": sub.id,
             "url": f"/submissions/{sub.id}",
         })
 
     events.sort(key=lambda e: e.get("date") or "")
     return Response({"events": events, "total": len(events)})
+
+
+# ── Pending Decisions View ─────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def pending_decisions_view(request):
+    """Submissions currently at Commission stage awaiting a decision."""
+    from django.db.models import Count
+    profile = _profile(request.user)
+    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_OFFICER,
+               Role.PSC_COMMISSIONER, Role.CHAIRPERSON}
+    if profile.role not in ALLOWED and not request.user.is_staff:
+        raise PermissionDenied("PSC staff and commissioners only.")
+
+    commission_stages = [
+        WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.COMMISSION_SITTING,
+        WorkflowStage.TABLED,
+        WorkflowStage.AWAITING_LEGAL_ADVICE,
+        WorkflowStage.AWAITING_CABINET_DECISION,
+        WorkflowStage.MATTERS_ARISING,
+    ]
+    qs = Submission.objects.filter(
+        current_stage__in=commission_stages
+    ).select_related("ministry", "assigned_to").order_by("received_at")
+
+    data = []
+    for s in qs[:100]:
+        data.append({
+            "id": s.id,
+            "reference_number": s.reference_number,
+            "title": s.title,
+            "current_stage": s.current_stage,
+            "ministry": s.ministry.name if s.ministry else None,
+            "agenda_category": s.agenda_category,
+            "received_at": s.received_at.isoformat() if s.received_at else None,
+            "scheduled_meeting_date": s.scheduled_meeting.date.isoformat() if s.scheduled_meeting_id else None,
+            "assigned_to": (s.assigned_to.get_full_name() or s.assigned_to.username) if s.assigned_to else None,
+            "url": f"/submissions/{s.id}",
+        })
+
+    stage_summary = dict(
+        qs.values("current_stage").annotate(n=Count("id")).values_list("current_stage", "n")
+    )
+
+    return Response({
+        "submissions": data,
+        "total": len(data),
+        "by_stage": stage_summary,
+    })
+
+
+# ── Ministry Performance View ──────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def ministry_performance_view(request):
+    """Per-ministry submission stats for the Secretary's oversight view."""
+    from django.db.models import Count, Q
+    profile = _profile(request.user)
+    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_OFFICER}
+    if profile.role not in ALLOWED and not request.user.is_staff:
+        raise PermissionDenied("PSC staff only.")
+
+    now = timezone.now()
+    thirty_days_ago = now.date() - timedelta(days=30)
+    terminal_stages = [
+        WorkflowStage.APPROVED, WorkflowStage.REJECTED,
+        WorkflowStage.RECALLED, WorkflowStage.RETURNED,
+    ]
+    active_stages = [
+        WorkflowStage.DRAFT, WorkflowStage.SUBMITTED,
+        WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED,
+        WorkflowStage.RECEIVED_BY_PSC, WorkflowStage.REGISTERED_ROUTED,
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.FORWARDED_TO_COMMISSION, WorkflowStage.COMMISSION_SITTING,
+    ]
+
+    from .models import Ministry
+    rows = []
+    for ministry in Ministry.objects.all().order_by("name"):
+        qs = Submission.objects.filter(ministry=ministry)
+        total = qs.count()
+        if total == 0:
+            continue
+        active = qs.filter(current_stage__in=active_stages).count()
+        approved = qs.filter(current_stage=WorkflowStage.APPROVED).count()
+        overdue = qs.filter(
+            current_stage=WorkflowStage.UNDER_ASSESSMENT,
+            assessment_deadline_at__lt=now,
+        ).count()
+        recent = qs.filter(received_at__date__gte=thirty_days_ago).count()
+        rows.append({
+            "ministry_id": ministry.id,
+            "ministry": ministry.name,
+            "total": total,
+            "active": active,
+            "approved": approved,
+            "overdue": overdue,
+            "recent_30d": recent,
+            "approval_rate": round(approved / total * 100) if total else 0,
+        })
+
+    rows.sort(key=lambda r: r["total"], reverse=True)
+    return Response({"ministries": rows, "total_ministries": len(rows)})
 
 
 # ── Analytics Views ────────────────────────────────────────────────────────────
@@ -7655,10 +8424,10 @@ def workload_officers_view(request):
 
     officers = AuthUser.objects.filter(
         is_active=True,
-        userprofile__role__in=[Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER],
+        psc_profile__role__in=[Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER],
     ).annotate(
-        active_count=Count("submission_set", filter=models.Q(submission_set__current_stage__in=active_stages))
-    ).order_by("active_count").select_related("userprofile")
+        active_count=Count("assigned_submissions", filter=models.Q(assigned_submissions__current_stage__in=active_stages))
+    ).order_by("active_count").select_related("psc_profile")
 
     return Response({
         "officers": [
@@ -7666,7 +8435,7 @@ def workload_officers_view(request):
                 "id": o.id,
                 "username": o.username,
                 "full_name": f"{o.first_name} {o.last_name}".strip() or o.username,
-                "role": getattr(getattr(o, "userprofile", None), "role", ""),
+                "role": getattr(getattr(o, "psc_profile", None), "role", ""),
                 "active_submission_count": o.active_count,
             }
             for o in officers
@@ -7859,8 +8628,18 @@ CHECKLIST_VIEW_STAGES  = frozenset({
 CHECKLIST_VIEW_ROLES   = CHECKLIST_EDIT_ROLES | frozenset({
     Role.PSC_OFFICER, Role.PSC_SECRETARY,
     Role.SENIOR_ADMIN_OFFICER, Role.PSC_MANAGER,
+    # Commissioners need to review assessment work when voting in Commission Sitting
+    Role.PSC_COMMISSIONER, Role.CHAIRPERSON,
 })
-CHECKLIST_APPROVE_ROLES = frozenset({Role.ODU_MANAGER, Role.PSC_ADMIN})
+CHECKLIST_APPROVE_ROLES = frozenset({
+    # All unit managers can approve checklists for their own unit's submissions
+    Role.ODU_MANAGER,
+    Role.HR_UNIT_MANAGER,
+    Role.VIPAM_MANAGER,
+    Role.COMPLIANCE_MANAGER,  # compliance_senior cannot approve — manager only
+    Role.CSU_MANAGER,
+    Role.PSC_ADMIN,
+})
 
 
 class SubmissionChecklistViewSet(viewsets.GenericViewSet):
@@ -8016,4 +8795,23 @@ class SubmissionChecklistViewSet(viewsets.GenericViewSet):
         checklist.status           = SubmissionChecklistResponse.Status.RETURNED
         checklist.manager_comments = request.data.get("manager_comments", checklist.manager_comments)
         checklist.save(update_fields=["status", "manager_comments", "updated_at"])
+
+        # Notify the principal who submitted the checklist
+        principal = checklist.created_by
+        if principal and principal.is_active:
+            manager_name = request.user.get_full_name() or request.user.username
+            comment = (checklist.manager_comments or "").strip()
+            from .models import Notification as _Notif
+            _Notif.objects.create(
+                recipient=principal,
+                submission=checklist.submission,
+                channel=_Notif.Channel.BOTH,
+                title=f"Checklist returned for revision: {checklist.submission.reference_number}",
+                body=(
+                    f"{manager_name} has returned your checklist for '{checklist.submission.title}' "
+                    f"for revision."
+                    + (f"\n\nManager note: {comment}" if comment else "")
+                ),
+            )
+
         return Response(SubmissionChecklistResponseSerializer(checklist).data)

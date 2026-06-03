@@ -1,4 +1,39 @@
 {
+  "ministry_dashboard": {
+    "title": "Dashboard blong Ministri",
+    "subtitle": "Ol sabmisen blong ministri blong yu long evri stej blong proses",
+    "empty_title": "I no gat sabmisen yet",
+    "empty_hint": "Taem ministri blong yu i putum ol sabmisen, ol namba blong dashboard blong yu bambae i kamaot long ples ya.",
+    "stage_breakdown": "Brekdaon blong Stej",
+    "stage_breakdown_sub": "Ol sabmisen blong ministri blong yu folem stej naoia",
+    "no_data": "I no gat sabmisen blong soemaot yet.",
+    "recent_submissions": "Ol Niufala Sabmisen",
+    "recent_submissions_sub": "Niufala wok blong ministri blong yu",
+    "subject": "Sabjek",
+    "received": "Kasem long",
+    "no_submissions": "I no gat sabmisen blong soemaot.",
+    "count": "Namba",
+    "dg": {
+      "title": "Dashboard blong Director General",
+      "subtitle": "Ol endosmen mo posisen blong ministri blong yu wetem PSC",
+      "awaiting_endorsement": "Stap wet long endosmen blong mi",
+      "endorsed_awaiting_hr": "Endos finis — stap wet long HR i sabmitim",
+      "under_psc_review": "PSC i stap jekem",
+      "decided": "Disisen i kam",
+      "overdue": "I let",
+      "total": "Total sabmisen"
+    },
+    "hr": {
+      "title": "Dashboard blong Ministri HR",
+      "subtitle": "Ol sabmisen blong ministri blong yu long evri stej blong proses",
+      "drafts": "Ol Draft",
+      "ready_to_submit": "Rere blong sabmit long PSC",
+      "awaiting_dg": "Stap wet long endosmen blong DG",
+      "returned": "I kambak blong moa kliagumen",
+      "under_psc_review": "PSC i stap jekem",
+      "decided": "Disisen i kam"
+    }
+  },
   "app": {
     "title": "SCDMS",
     "subtitle": "Sistem blong Manejem ol Submisen mo Desisen blong Komisin",

@@ -735,6 +735,19 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     attached_submissions = AttachedSubmissionSerializer(many=True, read_only=True)
     preliminary_quality_score = serializers.SerializerMethodField()
     subway_map = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+
+    def get_can_edit(self, obj):
+        """Whether the requesting user may edit this submission's content.
+        Authoritative enforcement lives in the write endpoints; this flag lets
+        the UI render read-only without re-encoding the rule."""
+        from .transitions import can_edit_submission
+        from .opsc_access import profile_role
+
+        request = self.context.get("request")
+        if not request or not getattr(request, "user", None) or request.user.is_anonymous:
+            return None
+        return can_edit_submission(profile_role(request.user), obj)
 
     def get_subway_map(self, obj):
         from .subway_map import build_subway_map
@@ -860,6 +873,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_quality_generated_at",
             "preliminary_quality_score",
             "subway_map",
+            "can_edit",
             "ai_package_gaps",
             "ai_package_ready",
             "ai_package_summary",

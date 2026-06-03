@@ -2,6 +2,9 @@ import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseSelect from '../../components/shared/BaseSelect'
 import {
   Plus, X, Gavel, CheckCircle2, XCircle, RotateCcw, Clock, FileText, RefreshCw,
   ChevronLeft, ChevronRight, ShieldCheck,
@@ -72,7 +75,7 @@ export default function Decisions() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const res = await api.get('/submissions/')
+      const res = await api.get('/submissions/?page_size=500')
       const decisionStages = ['approved', 'rejected', 'deferred', 'returned', 'minutes_drafted_signed', 'decision_entered_assigned', 'under_implementation', 'implementation_report']
       const list = Array.isArray(res.data) ? res.data : (res.data.results || [])
       setSubmissions(list.filter(s => decisionStages.includes(s.current_stage)))
@@ -111,31 +114,37 @@ export default function Decisions() {
       <SummaryBar submissions={submissions} />
 
       {/* Filters */}
-      <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-center">
-        <div className="relative flex-1">
-          <label htmlFor="decisions-search" className="sr-only">{t('common.search')}</label>
-          <input
-            id="decisions-search"
-            type="search"
-            placeholder={t('secretariat.search_decisions_placeholder')}
-            className="input pl-4 pr-10"
-            value={q}
-            onChange={e => { setQ(e.target.value); setPage(1) }}
+      <div className="card p-4 mb-4 space-y-2">
+        {/* Row 1: search */}
+        <BaseInput
+          hideLabel
+          label={t('common.search')}
+          type="search"
+          placeholder={t('secretariat.search_decisions_placeholder')}
+          value={q}
+          onChange={e => { setQ(e.target.value); setPage(1) }}
+        />
+        {/* Row 2: outcome filter + refresh */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <BaseSelect
+            hideLabel
+            label={t('secretariat.all_outcomes')}
+            className="w-44"
+            value={typeFilter}
+            placeholder={t('secretariat.all_outcomes')}
+            options={DECISION_TYPES.map(opt => ({ value: opt.value, label: t(opt.i18nKey) }))}
+            onChange={(_, v) => { setTypeFilter(v); setPage(1) }}
           />
-          <button
-            type="button"
+          <BaseButton
+            variant="outline"
+            size="sm"
+            icon={<RefreshCw size={14} aria-hidden="true" className={loading ? 'animate-spin' : ''} />}
             onClick={fetchData}
             aria-label={t('submission.reload')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 focus:outline-none focus-visible:text-primary-500"
           >
-            <RefreshCw size={14} aria-hidden="true" className={loading ? 'animate-spin' : ''} />
-          </button>
+            {t('submission.reload')}
+          </BaseButton>
         </div>
-        <label htmlFor="decisions-type" className="sr-only">{t('secretariat.all_outcomes')}</label>
-        <select id="decisions-type" className="input sm:w-44" value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setPage(1) }}>
-          <option value="">{t('secretariat.all_outcomes')}</option>
-          {DECISION_TYPES.map(opt => <option key={opt.value} value={opt.value}>{t(opt.i18nKey)}</option>)}
-        </select>
       </div>
 
       {/* Table */}
@@ -217,34 +226,14 @@ export default function Decisions() {
               <span className="font-semibold text-slate-700 dark:text-slate-300">{filtered.length}</span>
             </p>
             <div className="flex items-center gap-1">
-              <button
-                onClick={() => changePage(safePage - 1)}
-                disabled={safePage === 1}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
-              >
-                <ChevronLeft size={16} />
-              </button>
+              <BaseButton variant="ghost" size="icon" iconOnly aria-label="Previous" onClick={() => changePage(safePage - 1)} disabled={safePage === 1} icon={<ChevronLeft size={16} />} />
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let p = i + 1
                 if (totalPages > 5 && safePage > 3) p = safePage - 2 + i
                 if (p > totalPages) return null
-                return (
-                  <button
-                    key={p}
-                    onClick={() => changePage(p)}
-                    className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${safePage === p ? 'bg-primary-500 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'}`}
-                  >
-                    {p}
-                  </button>
-                )
+                return <BaseButton key={p} variant={safePage === p ? 'primary' : 'ghost'} size="sm" onClick={() => changePage(p)} className="!min-w-8">{p}</BaseButton>
               })}
-              <button
-                onClick={() => changePage(safePage + 1)}
-                disabled={safePage === totalPages}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400 transition-colors"
-              >
-                <ChevronRight size={16} />
-              </button>
+              <BaseButton variant="ghost" size="icon" iconOnly aria-label="Next" onClick={() => changePage(safePage + 1)} disabled={safePage === totalPages} icon={<ChevronRight size={16} />} />
             </div>
           </div>
         )}

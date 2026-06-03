@@ -21,6 +21,9 @@ import api from '../../api/client'
 import clsx from 'clsx'
 import Badge from '../../components/shared/Badge'
 import Modal from '../../components/shared/Modal'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseSelect from '../../components/shared/BaseSelect'
+import BaseTextarea from '../../components/shared/BaseTextarea'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 
@@ -203,12 +206,7 @@ export default function FeedbackManagementPage() {
       label: '',
       sortable: false,
       render: (_, row) => (
-        <button
-          onClick={() => handleOpenDetail(row)}
-          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-primary-500 transition-colors"
-        >
-          <Eye size={18} />
-        </button>
+        <BaseButton variant="ghost" size="icon" iconOnly onClick={() => handleOpenDetail(row)} icon={<Eye size={18} />} />
       )
     }
   ]
@@ -219,14 +217,9 @@ export default function FeedbackManagementPage() {
         title="User Feedback Management" 
         subtitle="Review and manage feedback reports submitted by users"
       >
-        <button 
-          onClick={fetchReports}
-          disabled={loading}
-          className="btn btn-secondary btn-sm gap-2"
-        >
-          <RefreshCw size={14} className={clsx(loading && 'animate-spin')} />
+        <BaseButton variant="secondary" size="sm" onClick={fetchReports} disabled={loading} icon={<RefreshCw size={14} className={clsx(loading && 'animate-spin')} />}>
           Refresh
-        </button>
+        </BaseButton>
       </PageHeader>
 
       <div className="card">
@@ -260,27 +253,22 @@ export default function FeedbackManagementPage() {
                 </div>
               </div>
               <div className="flex gap-2 items-center">
-                <select
+                <BaseSelect
+                  hideLabel label="Status"
                   value={selectedReport.status}
-                  onChange={(e) => handleUpdateStatus(e.target.value)}
                   disabled={isUpdating}
-                  className="input py-1 text-sm min-w-[140px]"
-                >
-                  <option value="open">Open</option>
-                  <option value="under_review">Under Review</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="closed">Closed</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={handleDeleteReport}
-                  title="Delete feedback"
-                  className="p-2 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
+                  className="min-w-[140px]"
+                  options={[
+                    { value: 'open', label: 'Open' },
+                    { value: 'under_review', label: 'Under Review' },
+                    { value: 'in_progress', label: 'In Progress' },
+                    { value: 'resolved', label: 'Resolved' },
+                    { value: 'closed', label: 'Closed' },
+                    { value: 'rejected', label: 'Rejected' },
+                  ]}
+                  onChange={(_, v) => handleUpdateStatus(v)}
+                />
+                <BaseButton variant="ghost" size="icon" iconOnly title="Delete feedback" onClick={handleDeleteReport} icon={<Trash2 size={16} />} />
               </div>
             </div>
 
@@ -378,23 +366,26 @@ export default function FeedbackManagementPage() {
               </div>
 
               <form onSubmit={handleAddComment} className="relative">
-                <textarea
+                <BaseTextarea
+                  hideLabel label="Comment"
                   placeholder="Add an internal note..."
-                  className="w-full input py-3 pr-12 min-h-[80px] text-sm"
+                  rows={3}
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                 />
-                <button
+                <BaseButton
                   type="submit"
+                  variant="primary" size="icon" iconOnly
                   disabled={isPostingComment || !commentText.trim()}
-                  className="absolute bottom-3 right-3 p-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="absolute bottom-3 right-3"
+                  icon={isPostingComment ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
                 >
                   {isPostingComment ? (
                     <RefreshCw size={14} className="animate-spin" />
                   ) : (
                     <Send size={14} />
                   )}
-                </button>
+                </BaseButton>
               </form>
             </div>
           </div>

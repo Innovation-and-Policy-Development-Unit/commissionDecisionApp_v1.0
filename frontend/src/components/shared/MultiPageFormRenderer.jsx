@@ -1,6 +1,12 @@
 import { useState, useMemo } from 'react'
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
+import BaseButton from './BaseButton'
+import BaseInput from './BaseInput'
+import BaseTextarea from './BaseTextarea'
+import BaseSelect from './BaseSelect'
+import BaseCheckbox from './BaseCheckbox'
+import { RadioGroup, Radio } from '@fluentui/react-components'
 
 // ── Page splitter ─────────────────────────────────────────────────────────────
 // A new page starts at any section_header that has start_new_page === true.
@@ -111,21 +117,23 @@ export default function MultiPageFormRenderer({
             <div className="flex items-center">
               {pages.map((p, i) => (
                 <div key={i} className="flex items-center flex-1 last:flex-none">
-                  <button
+                  <BaseButton
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => jumpTo(i)}
-                    className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
-                      i < step
-                        ? 'bg-primary-500 text-white cursor-pointer hover:bg-primary-600'
-                        : i === step
-                          ? 'bg-primary-600 text-white ring-4 ring-primary-100 dark:ring-primary-900/40'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-400'
-                    }`}
                     title={p.title}
                     disabled={i > step && !readOnly}
+                    className={`flex-shrink-0 !w-8 !h-8 !rounded-full !text-xs !font-semibold ${
+                      i < step
+                        ? '!bg-primary-500 !text-white hover:!bg-primary-600'
+                        : i === step
+                          ? '!bg-primary-600 !text-white ring-4 ring-primary-100 dark:ring-primary-900/40'
+                          : '!bg-slate-100 dark:!bg-slate-700 !text-slate-400'
+                    }`}
                   >
                     {i < step ? <Check size={13} /> : i + 1}
-                  </button>
+                  </BaseButton>
                   {i < pages.length - 1 && (
                     <div className={`flex-1 h-0.5 mx-1 transition-colors ${i < step ? 'bg-primary-500' : 'bg-slate-200 dark:bg-slate-700'}`} />
                   )}
@@ -183,15 +191,16 @@ export default function MultiPageFormRenderer({
       {/* ── Navigation footer ── */}
       <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between gap-4">
         {/* Back */}
-        <button
+        <BaseButton
           type="button"
+          variant="ghost"
+          size="sm"
+          icon={<ChevronLeft size={15} />}
           onClick={goBack}
           disabled={step === 0}
-          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
-          <ChevronLeft size={15} />
           Back
-        </button>
+        </BaseButton>
 
         {/* Dot indicators */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -211,23 +220,26 @@ export default function MultiPageFormRenderer({
 
         {/* Next / Save */}
         {step < total - 1 ? (
-          <button
+          <BaseButton
             type="button"
+            variant="primary"
+            size="sm"
+            icon={<ChevronRight size={15} />}
             onClick={goNext}
-            className="inline-flex items-center gap-1 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors"
           >
             Next
-            <ChevronRight size={15} />
-          </button>
+          </BaseButton>
         ) : onSave ? (
-          <button
+          <BaseButton
             type="button"
+            variant="primary"
+            size="sm"
+            loading={saving}
+            loadingLabel="Saving"
             onClick={onSave}
-            disabled={saving}
-            className="inline-flex items-center gap-1 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {saving ? 'Saving…' : 'Save Form'}
-          </button>
+            Save &amp; Continue
+          </BaseButton>
         ) : (
           <div className="w-20" />
         )}
@@ -254,94 +266,93 @@ function FieldRow({ field, value, onChange, readOnly, hasError }) {
     ? field.choices.split('\n').map(s => s.trim()).filter(Boolean)
     : []
 
-  return (
-    <div>
-      <label className={`block text-xs font-medium mb-1 ${hasError ? 'text-red-500' : 'text-slate-600 dark:text-slate-400'}`}>
-        {field.label}
-        {field.is_required && !readOnly && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-
-      {readOnly ? (
+  if (readOnly) {
+    return (
+      <div>
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">{field.label}</p>
         <ReadValue field={field} value={value} choices={choices} />
-      ) : (
-        <EditValue field={field} value={value} onChange={onChange} choices={choices} hasError={hasError} />
-      )}
+      </div>
+    )
+  }
 
-      {field.help_text && !hasError && (
-        <p className="mt-1 text-xs text-slate-400">{field.help_text}</p>
-      )}
-      {hasError && (
-        <p className="mt-1 text-xs text-red-500">This field is required.</p>
-      )}
-    </div>
+  return (
+    <EditValue
+      field={field}
+      value={value}
+      onChange={onChange}
+      choices={choices}
+      hasError={hasError}
+    />
   )
 }
 
 function EditValue({ field, value, onChange, choices, hasError }) {
-  const base = `input${hasError ? ' border-red-400 dark:border-red-600 focus:ring-red-400' : ''}`
+  const commonProps = {
+    label: field.label,
+    required: field.is_required,
+    hint: field.help_text || undefined,
+    error: hasError ? 'This field is required.' : undefined,
+    placeholder: field.placeholder || undefined,
+  }
 
   switch (field.field_type) {
     case 'textarea':
       return (
-        <textarea
-          className={`${base} min-h-[80px]`}
+        <BaseTextarea
+          {...commonProps}
+          rows={4}
           value={value ?? ''}
-          placeholder={field.placeholder}
           onChange={e => onChange(e.target.value)}
         />
       )
     case 'number':
       return (
-        <input type="number" className={base} value={value ?? ''} placeholder={field.placeholder} onChange={e => onChange(e.target.value)} />
+        <BaseInput {...commonProps} type="number" value={value ?? ''} onChange={e => onChange(e.target.value)} />
       )
     case 'date':
       return (
-        <input type="date" className={base} value={value ?? ''} onChange={e => onChange(e.target.value)} />
+        <BaseInput {...commonProps} type="date" value={value ?? ''} onChange={e => onChange(e.target.value)} />
       )
     case 'datetime':
       return (
-        <input type="datetime-local" className={base} value={value ?? ''} onChange={e => onChange(e.target.value)} />
+        <BaseInput {...commonProps} type="datetime-local" value={value ?? ''} onChange={e => onChange(e.target.value)} />
       )
     case 'select':
       return (
-        <select className={base} value={value ?? ''} onChange={e => onChange(e.target.value)}>
-          <option value="">— Select —</option>
-          {choices.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <BaseSelect
+          {...commonProps}
+          placeholder="— Select —"
+          value={value ?? ''}
+          options={choices.map(c => ({ value: c, label: c }))}
+          onChange={(_, v) => onChange(v)}
+        />
       )
     case 'radio':
       return (
-        <div className="space-y-1.5 mt-1">
-          {choices.map(c => (
-            <label key={c} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-              <input
-                type="radio"
-                name={field.field_key}
-                value={c}
-                checked={value === c}
-                onChange={() => onChange(c)}
-                className="w-4 h-4"
-              />
-              {c}
-            </label>
-          ))}
+        <div>
+          <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+            {field.label}{field.is_required && <span className="text-red-500 ml-0.5">*</span>}
+          </p>
+          <RadioGroup value={value ?? ''} onChange={(_, d) => onChange(d.value)}>
+            {choices.map(c => (
+              <Radio key={c} value={c} label={c} />
+            ))}
+          </RadioGroup>
+          {field.help_text && <p className="mt-1 text-xs text-slate-400">{field.help_text}</p>}
+          {hasError && <p className="mt-1 text-xs text-red-500">This field is required.</p>}
         </div>
       )
     case 'checkbox':
       return (
-        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer mt-1">
-          <input
-            type="checkbox"
-            className="w-4 h-4 rounded"
-            checked={!!value}
-            onChange={e => onChange(e.target.checked)}
-          />
-          {field.placeholder || 'Yes'}
-        </label>
+        <BaseCheckbox
+          label={field.label || field.placeholder || 'Yes'}
+          checked={!!value}
+          onChange={e => onChange(e.target.checked)}
+        />
       )
     default:
       return (
-        <input type="text" className={base} value={value ?? ''} placeholder={field.placeholder} onChange={e => onChange(e.target.value)} />
+        <BaseInput {...commonProps} type="text" value={value ?? ''} onChange={e => onChange(e.target.value)} />
       )
   }
 }

@@ -8,7 +8,7 @@ import { useConfirm } from '../../context/ConfirmContext'
 import DynamicFormRenderer from '../../components/shared/DynamicFormRenderer'
 import {
   ArrowLeft, PlusCircle, Pencil, Trash2, GripVertical,
-  ChevronUp, ChevronDown, Save, X, Eye, Upload, AlertCircle, CheckCircle2, Square, CheckSquare,
+  ChevronUp, ChevronDown, Save, X, Eye, Upload, Download, AlertCircle, CheckCircle2, Square, CheckSquare,
   ClipboardList, ToggleLeft, ToggleRight
 } from 'lucide-react'
 
@@ -711,6 +711,35 @@ export default function FormBuilder() {
     }
   }
 
+  const handleExport = () => {
+    const escape = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const lines = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      `<form code="${escape(formType?.code)}" name="${escape(formType?.name)}">`,
+      ...fields.map(f => [
+        '  <field>',
+        `    <label>${escape(f.label)}</label>`,
+        `    <field_key>${escape(f.field_key)}</field_key>`,
+        `    <field_type>${escape(f.field_type)}</field_type>`,
+        `    <placeholder>${escape(f.placeholder)}</placeholder>`,
+        `    <help_text>${escape(f.help_text)}</help_text>`,
+        `    <choices>${escape(f.choices)}</choices>`,
+        `    <is_required>${f.is_required ? 'true' : 'false'}</is_required>`,
+        `    <start_new_page>${f.start_new_page ? 'true' : 'false'}</start_new_page>`,
+        `    <display_order>${f.display_order}</display_order>`,
+        '  </field>',
+      ].join('\n')),
+      '</form>',
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'application/xml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${formType?.code ?? 'form'}-fields.xml`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const move = async (index, direction) => {
     const newFields = [...fields]
     const swapIdx = index + direction
@@ -766,6 +795,15 @@ export default function FormBuilder() {
             >
               <Eye size={14} />
               Preview
+            </button>
+            <button
+              onClick={handleExport}
+              className="btn-outline inline-flex items-center gap-2 py-2 px-3 text-sm"
+              title="Export all fields as XML"
+              disabled={fields.length === 0}
+            >
+              <Download size={14} />
+              Export
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}

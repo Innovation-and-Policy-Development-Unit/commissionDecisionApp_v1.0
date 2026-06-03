@@ -434,6 +434,35 @@ TWO_FACTOR_REQUIRED = os.getenv('TWO_FACTOR_REQUIRED', 'false').lower() in ('1',
 # When True, the login page shows simulated push notification instead of manual TOTP input
 DEMO_MODE = os.getenv('DEMO_MODE', 'true').lower() in ('1', 'true', 'yes')
 
+# ── Redis cache (DB 1 — Celery broker/result stay on DB 0) ───────────────────
+CACHE_ENABLED = os.getenv('CACHE_ENABLED', 'true').lower() in ('1', 'true', 'yes')
+CACHE_REF_LIST_TTL = int(os.getenv('CACHE_REF_LIST_TTL', '120'))
+CACHE_REF_RETRIEVE_TTL = int(os.getenv('CACHE_REF_RETRIEVE_TTL', '180'))
+CACHE_SETTINGS_TTL = int(os.getenv('CACHE_SETTINGS_TTL', '60'))
+CACHE_BOOTSTRAP_TTL = int(os.getenv('CACHE_BOOTSTRAP_TTL', '60'))
+CACHE_PASSWORD_POLICY_TTL = int(os.getenv('CACHE_PASSWORD_POLICY_TTL', '300'))
+
+if CACHE_ENABLED:
+    from config.cache_urls import redis_cache_url_from_broker
+
+    _cache_location = os.getenv('REDIS_CACHE_URL', '').strip()
+    if not _cache_location:
+        _cache_location = redis_cache_url_from_broker(
+            os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0'),
+        )
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _cache_location,
+        },
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        },
+    }
+
 # ── Celery distributed task queue ─────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')

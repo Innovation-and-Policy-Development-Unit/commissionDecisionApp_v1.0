@@ -3,7 +3,7 @@ import {
   Text, Card, CardHeader, Button, Spinner, Badge, Table, TableHeader,
   TableRow, TableHeaderCell, TableBody, TableCell,
   Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, DialogTrigger,
-  Field, Select,
+  Field, Select, Input,
   makeStyles, shorthands, tokens,
 } from '@fluentui/react-components'
 import { PeopleRegular, BrainCircuitRegular, PersonAssignRegular } from '@fluentui/react-icons'
@@ -145,17 +145,12 @@ export default function WorkloadDashboard() {
                   Enter a submission ID to get an AI-powered assignment recommendation based on form type, ministry, and officer workload.
                 </Text>
                 <Field label="Submission ID" required>
-                  <input
+                  <Input
                     type="number"
                     value={submissionId}
                     onChange={e => setSubmissionId(e.target.value)}
                     placeholder="Enter submission ID"
-                    style={{
-                      width: '100%', padding: '8px', borderRadius: '4px',
-                      border: '1px solid var(--colorNeutralStroke1)',
-                      background: 'var(--colorNeutralBackground1)',
-                      color: 'var(--colorNeutralForeground1)',
-                    }}
+                    style={{ width: '100%' }}
                   />
                 </Field>
                 <Button

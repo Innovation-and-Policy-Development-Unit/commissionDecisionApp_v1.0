@@ -400,7 +400,9 @@ export default function Login() {
                 <h1 className="text-xl font-bold text-center text-slate-900 mb-1">Two-Factor Authentication</h1>
 
                 {error && (
-                  <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+                  <BaseMessageBar intent="error" className="mb-4">
+                    {error}
+                  </BaseMessageBar>
                 )}
 
                 {pushState === 'idle' ? (
@@ -409,30 +411,27 @@ export default function Login() {
                       Enter the 6-digit code from your authenticator app.
                     </p>
                     <form onSubmit={handleVerifyOTP} className="space-y-5">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2 text-center">
-                          Verification Code
-                        </label>
-                        <input
-                          type="text"
-                          className="input text-center text-3xl font-mono"
-                          style={{ borderRadius: 10, letterSpacing: '0.55em' }}
-                          maxLength={6}
-                          placeholder="——————"
-                          value={otp}
-                          onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                          required
-                          autoFocus
-                        />
-                      </div>
-                      <button
+                      <BaseInput
+                        label="Verification Code"
+                        type="text"
+                        maxLength={6}
+                        placeholder="——————"
+                        value={otp}
+                        onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                        required
+                        autoFocus
+                        input={{ className: 'text-center text-3xl font-mono', style: { letterSpacing: '0.4em' } }}
+                      />
+                      <BaseButton
                         type="submit"
-                        className="w-full py-3 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                        style={{ background: 'linear-gradient(135deg, #0c2451 0%, #1a4080 100%)', borderRadius: 10, boxShadow: '0 4px 14px rgba(12,36,81,0.3)' }}
-                        disabled={loading || otp.length < 6}
+                        variant="primary"
+                        className="w-full !py-3"
+                        loading={loading}
+                        loadingLabel="Verifying"
+                        disabled={otp.length < 6}
                       >
-                        {loading ? 'Verifying…' : 'Verify & Continue'}
-                      </button>
+                        Verify &amp; Continue
+                      </BaseButton>
 
                       <div className="relative flex items-center gap-4 my-6">
                         <div className="flex-1 h-px bg-slate-100" />
@@ -440,20 +439,21 @@ export default function Login() {
                         <div className="flex-1 h-px bg-slate-100" />
                       </div>
 
-                      <button
+                      <BaseButton
                         type="button"
+                        variant="secondary"
+                        className="w-full !py-3"
                         onClick={triggerPush}
-                        className="w-full py-3 text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-xl transition-all flex items-center justify-center gap-2"
+                        icon={<img src="/favicon.svg" alt="" className="w-4 h-4 opacity-50" />}
                       >
-                        <img src="/favicon.svg" alt="" className="w-4 h-4 opacity-50" />
                         Send Push Notification
-                      </button>
+                      </BaseButton>
 
                       <div className="text-center mt-4">
-                        <button type="button" onClick={() => { setShow2FA(false); setOtp(''); setError('') }}
-                          className="text-xs text-slate-400 hover:text-primary-600 underline">
+                        <BaseButton type="button" variant="ghost" size="sm"
+                          onClick={() => { setShow2FA(false); setOtp(''); setError('') }}>
                           Back to sign in
-                        </button>
+                        </BaseButton>
                       </div>
                     </form>
                   </>
@@ -512,39 +512,38 @@ export default function Login() {
                 </p>
 
                 {error && (
-                  <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+                  <BaseMessageBar intent="error" className="mb-4">
+                    {error}
+                  </BaseMessageBar>
                 )}
 
                 <form onSubmit={handleVerifyPIN} className="space-y-5">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2 text-center">
-                      PIN (4–6 digits)
-                    </label>
-                    <input
-                      type="password"
-                      className="input text-center text-2xl font-mono"
-                      style={{ borderRadius: 10, letterSpacing: '0.4em' }}
-                      maxLength={6}
-                      placeholder="••••••"
-                      value={pin}
-                      onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  <button
+                  <BaseInput
+                    label="PIN (4–6 digits)"
+                    type="password"
+                    maxLength={6}
+                    placeholder="••••••"
+                    value={pin}
+                    onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                    autoFocus
+                    input={{ className: 'text-center text-2xl font-mono', style: { letterSpacing: '0.4em' } }}
+                  />
+                  <BaseButton
                     type="submit"
-                    className="w-full py-3 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{ background: 'linear-gradient(135deg, #0c2451 0%, #1a4080 100%)', borderRadius: 10, boxShadow: '0 4px 14px rgba(12,36,81,0.3)' }}
-                    disabled={loading || pin.length < 4}
+                    variant="primary"
+                    className="w-full !py-3"
+                    loading={loading}
+                    loadingLabel="Verifying"
+                    disabled={pin.length < 4}
                   >
-                    {loading ? 'Verifying…' : 'Verify PIN & Continue'}
-                  </button>
+                    Verify PIN &amp; Continue
+                  </BaseButton>
                   <div className="text-center">
-                    <button type="button" onClick={() => { setShowPIN(false); setPin(''); setError('') }}
-                      className="text-xs text-slate-400 hover:text-primary-600 underline">
+                    <BaseButton type="button" variant="ghost" size="sm"
+                      onClick={() => { setShowPIN(false); setPin(''); setError('') }}>
                       Back to sign in
-                    </button>
+                    </BaseButton>
                   </div>
                 </form>
               </>

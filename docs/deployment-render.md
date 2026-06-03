@@ -61,6 +61,10 @@ Set these on **`scdms-api`** (and ensure **`scdms-web`** has the frontend URL).
 |----------|---------|
 | `AUTO_SEED=1` | Run `seed_tracker` on API startup (demo data only; turn off after first boot) |
 | `GUNICORN_WORKERS` | Default `2` |
+| `REDIS_CACHE_URL` | Optional; defaults to Celery URL with DB `1` (Celery uses DB `0`) |
+| `CACHE_ENABLED` | `true` / `false` (default `true`) |
+| `CACHE_REF_LIST_TTL` | Reference list cache seconds (default `120`) |
+| `CACHE_BOOTSTRAP_TTL` | Submission bootstrap cache seconds (default `60`) |
 | `ENABLE_STAFF_CHATBOT` | `true` / `false` (default on in code) |
 
 After changing **`VITE_API_BASE_URL`**, trigger a **manual redeploy** of `scdms-web` (static sites bake env at build time).

@@ -24,6 +24,9 @@ OPSC_UNIT_PRINCIPAL_ROLES: frozenset[str] = frozenset({
     Role.PRINCIPAL_ORG_DEV_ANALYST,
     Role.PRINCIPAL_JOB_ANALYST,
     Role.COMPLIANCE_PRINCIPAL,
+    # compliance_senior: senior analyst assigned by compliance_manager;
+    # can review/assess submissions but cannot approve checklists (manager-only).
+    Role.COMPLIANCE_SENIOR,
 })
 
 # ODU principals and specialist analysts (checklist / assessment work under ODU Manager)

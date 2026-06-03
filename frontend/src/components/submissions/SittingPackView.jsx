@@ -12,6 +12,7 @@ import { X, Loader2, FileText, ClipboardCheck, FileSearch } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
 import ODURestructureChecklistForm from '../../pages/odu/ODURestructureChecklistForm'
+import DynamicFormRenderer from '../shared/DynamicFormRenderer'
 import PSCForm21View from '../../pages/psc/PSCForm21View'
 import PSCForm22View from '../../pages/psc/PSCForm22View'
 
@@ -31,10 +32,13 @@ export default function SittingPackView({
   submission,
   documents = [],
   dynamicForm,
+  dynamicFormFields = [],
   isDedicatedForm,
+  checklistPanel,
   onClose,
 }) {
-  const [leftTab, setLeftTab] = useState(documents.length ? 'documents' : 'form')
+  // Default to form tab so the submission data is visible alongside the checklist
+  const [leftTab, setLeftTab] = useState('form')
   const [activeDocId, setActiveDocId] = useState(documents[0]?.id ?? null)
   const [docUrl, setDocUrl] = useState('')
   const [docType, setDocType] = useState('')
@@ -98,7 +102,7 @@ export default function SittingPackView({
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
-              Sitting Pack — {submission?.reference_number}
+              Review Submission — {submission?.reference_number}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
               {submission?.title}
@@ -111,7 +115,7 @@ export default function SittingPackView({
           className="btn-outline inline-flex items-center gap-1.5 shrink-0"
         >
           <X size={14} />
-          Exit Sitting Pack
+          Exit Review
         </button>
       </div>
 
@@ -237,11 +241,24 @@ export default function SittingPackView({
                   </div>
                 )}
               </div>
-              {/* Digitised form view */}
+              {/* Digitised form view — dedicated forms */}
               {isDedicatedForm && dynamicForm && (
                 <div className="card card-compact">
                   {submission?.form_type_code === 'PSC 2-1' && <PSCForm21View data={dynamicForm} />}
                   {submission?.form_type_code === 'PSC 2-2' && <PSCForm22View data={dynamicForm} />}
+                </div>
+              )}
+              {/* Dynamic form builder form (e.g. ORG 3-1) — read-only view of submitted data */}
+              {!isDedicatedForm && dynamicFormFields.length > 0 && dynamicForm && (
+                <div className="card card-compact">
+                  <DynamicFormRenderer
+                    fields={dynamicFormFields}
+                    values={dynamicForm}
+                    onChange={() => {}}
+                    readOnly
+                    saving={false}
+                    onSave={null}
+                  />
                 </div>
               )}
             </div>
@@ -250,10 +267,9 @@ export default function SittingPackView({
 
         {/* ── Right: checklist ── */}
         <div className="min-h-0 overflow-y-auto p-4 bg-white dark:bg-slate-900">
-          <ODURestructureChecklistForm
-            submissionId={Number(submissionId)}
-            submission={submission}
-          />
+          {checklistPanel ?? (
+            <ODURestructureChecklistForm submissionId={Number(submissionId)} submission={submission} />
+          )}
         </div>
       </div>
     </div>

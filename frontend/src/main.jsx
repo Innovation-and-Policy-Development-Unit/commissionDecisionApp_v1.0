@@ -1,6 +1,8 @@
 import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './api/queryClient.js'
 import App from './App.jsx'
 import ErrorBoundary from './components/shared/ErrorBoundary.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
@@ -27,11 +29,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <ThemeProvider>
           <FluentThemeProvider>
             <AuthProvider>
-              <ToastProvider>
-                <ConfirmProvider>
-                  <App />
-                </ConfirmProvider>
-              </ToastProvider>
+              <QueryClientProvider client={queryClient}>
+                <ToastProvider>
+                  <ConfirmProvider>
+                    <App />
+                  </ConfirmProvider>
+                </ToastProvider>
+              </QueryClientProvider>
             </AuthProvider>
           </FluentThemeProvider>
         </ThemeProvider>

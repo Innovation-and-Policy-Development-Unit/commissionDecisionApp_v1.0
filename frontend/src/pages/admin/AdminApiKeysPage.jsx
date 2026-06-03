@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RefreshCw } from 'lucide-react'
+import BaseButton from '../../components/shared/BaseButton'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { userCanManageRoles } from '../../utils/adminAccess'
@@ -46,15 +47,7 @@ export default function AdminApiKeysPage() {
             Manage programmatic access to the SCDMS API. Keys inherit the permissions of their owner user.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={fetchAll}
-          disabled={loadingData}
-          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
-          aria-label="Refresh data"
-        >
-          <RefreshCw size={15} className={loadingData ? 'animate-spin' : ''} />
-        </button>
+        <BaseButton variant="outline" size="icon" iconOnly onClick={fetchAll} disabled={loadingData} aria-label="Refresh data" icon={<RefreshCw size={15} className={loadingData ? 'animate-spin' : ''} />} />
       </div>
 
       {loadingData ? (

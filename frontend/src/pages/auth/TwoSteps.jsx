@@ -17,6 +17,7 @@ import { ArrowLeft, ShieldCheck, RotateCcw, AlertCircle, Zap } from 'lucide-reac
 import Logo from '../../components/shared/Logo'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
+import BaseButton from '../../components/shared/BaseButton'
 
 export default function TwoSteps() {
   const location    = useLocation()
@@ -210,20 +211,17 @@ export default function TwoSteps() {
               </div>
 
               {/* Verify button */}
-              <button
+              <BaseButton
                 type="submit"
-                disabled={loading || otp.join('').length < 6}
-                className="btn-gradient w-full py-2.5 text-sm disabled:opacity-60"
+                variant="primary"
+                className="w-full !py-2.5"
+                loading={loading}
+                loadingLabel="Verifying"
+                disabled={otp.join('').length < 6}
+                icon={!loading ? <ShieldCheck size={16} /> : undefined}
               >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Verifying…
-                  </span>
-                ) : (
-                  <><ShieldCheck size={16} /> Verify Code</>
-                )}
-              </button>
+                Verify Code
+              </BaseButton>
             </form>
 
             {/* Back link */}

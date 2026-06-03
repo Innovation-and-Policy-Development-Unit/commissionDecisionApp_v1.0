@@ -253,6 +253,31 @@ def notify_subtask_due_soon(
     send_templated_email(slug="subtask_due_soon", to=[email], context=ctx)
 
 
+def send_email_to_user(user: User, *, subject: str, body: str) -> bool:
+    """
+    Send a plain-text transactional email to a single user.
+    Used by Celery tasks for escalation / SLA reminder emails that don't
+    yet have a dedicated template in the database.
+    Falls back gracefully when SMTP is not configured.
+    """
+    import logging
+    from django.core.mail import send_mail
+    from .email_templates import get_from_email
+
+    log = logging.getLogger("scdms.app")
+    email = (getattr(user, "email", None) or "").strip()
+    if not email:
+        log.debug("send_email_to_user | no email for user %s", user.username)
+        return False
+    try:
+        send_mail(subject, body, get_from_email(), [email], fail_silently=True)
+        log.info("EMAIL_SENT | to=%s | subject=%s", email, subject)
+        return True
+    except Exception as exc:
+        log.warning("EMAIL_FAIL | to=%s | %s", email, exc)
+        return False
+
+
 def find_active_user_by_email(email: str) -> User | None:
     """Return an active user with a non-empty email matching `email` (case-insensitive)."""
     normalized = (email or "").strip().lower()

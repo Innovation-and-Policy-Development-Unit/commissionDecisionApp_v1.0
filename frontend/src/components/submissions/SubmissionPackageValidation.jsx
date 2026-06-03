@@ -5,6 +5,7 @@ import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
+import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 
 const SEVERITY_ORDER = ['critical', 'warning', 'info']
 const POLL_MS = 3000
@@ -34,7 +35,7 @@ export default function SubmissionPackageValidation({
   // Director-General's endorsement (DG). NOTE: the conditional return MUST come
   // after every hook below, otherwise React throws "rendered fewer hooks than
   // expected" (#300) when the stage changes while mounted.
-  const canValidate = ['draft', 'pending_dg_endorsement'].includes(
+  const canValidate = ['draft', 'pending_dg_endorsement', 'dg_approved'].includes(
     submission?.current_stage,
   )
 
@@ -52,6 +53,7 @@ export default function SubmissionPackageValidation({
 
     let attempts = 0
     const interval = setInterval(async () => {
+      if (!isTabVisible()) return
       attempts += 1
       if (attempts > POLL_MAX) {
         clearInterval(interval)

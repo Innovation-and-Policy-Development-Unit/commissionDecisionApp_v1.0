@@ -45,6 +45,9 @@ class WorkflowStage(models.TextChoices):
     # ── Ministry pre-submission ─────────────────────────────────────────────
     DRAFT                      = "draft",                      "Draft"
     PENDING_DG_ENDORSEMENT     = "pending_dg_endorsement",     "Submitted to DG (Pending Endorsement)"
+    DG_APPROVED                = "dg_approved",                "Endorsed by DG — Pending HR Submission"
+    PENDING_MANAGER_APPROVAL   = "pending_manager_approval",   "Pending Manager Approval"
+    PENDING_SECOND_APPROVAL    = "pending_second_approval",    "Pending Second Approval"
     SUBMITTED                  = "submitted",                  "Submitted to PSC"
     # ── PSC intake ─────────────────────────────────────────────────────────
     RECEIVED_BY_PSC            = "received_by_psc",            "Received by PSC"
@@ -76,6 +79,7 @@ class WorkflowStage(models.TextChoices):
     DECISION_ENTERED_ASSIGNED  = "decision_entered_assigned",  "Decision Entered and Assigned"
     UNDER_IMPLEMENTATION       = "under_implementation",       "Under Implementation"
     IMPLEMENTATION_REPORT      = "implementation_report",      "Implementation Report"
+    RECALLED                   = "recalled",                   "Recalled by Ministry"
 
 
 class MeetingStatus(models.TextChoices):
@@ -238,6 +242,25 @@ class AgendaSection(models.Model):
             "Empty means fallback to routed unit manager only."
         ),
     )
+    approval_chain = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Ordered list of approval steps required before the submission reaches the Secretary / PSC. "
+            "Each step: {\"stage\": \"pending_manager_approval\", \"roles\": [\"vipam_manager\"], \"label\": \"VIPAM Manager\"}. "
+            "Stages: pending_manager_approval, pending_second_approval."
+        ),
+    )
+    group = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text=(
+            "Dropdown group label shown to users when lodging a submission "
+            "(e.g. 'Appointments', 'Structure'). Sections with the same group "
+            "are listed together. Leave blank to appear ungrouped."
+        ),
+    )
     digitized_form = models.ForeignKey(
         "PSCFormType",
         null=True,
@@ -273,6 +296,25 @@ class FormCategory(models.Model):
         return self.name
 
 
+class PublicHoliday(models.Model):
+    """Admin-configurable Vanuatu public holidays used by add_working_days()."""
+    date  = models.DateField(unique=True)
+    name  = models.CharField(max_length=128)
+    year  = models.PositiveSmallIntegerField(db_index=True)
+
+    class Meta:
+        ordering = ['date']
+        verbose_name        = 'Public Holiday'
+        verbose_name_plural = 'Public Holidays'
+
+    def __str__(self):
+        return f"{self.date} — {self.name}"
+
+    def save(self, *args, **kwargs):
+        self.year = self.date.year
+        super().save(*args, **kwargs)
+
+
 class PSCFormType(models.Model):
     """Registry of PSC form types. Drives the form selector and digitized-form display."""
     code = models.CharField(max_length=64, unique=True)
@@ -299,6 +341,16 @@ class PSCFormType(models.Model):
         on_delete=models.SET_NULL,
         related_name='submission_form_types',
         help_text="Checklist form type attached to this submission form type.",
+    )
+    routed_unit = models.CharField(
+        max_length=16, blank=True, default='',
+        help_text="OPSC unit this form type routes to for checklist review. "
+                  "Leave blank if no auto-routing is needed.",
+    )
+    assessment_deadline_days = models.PositiveSmallIntegerField(
+        default=21,
+        help_text="Working-day assessment deadline for this form type (default 21). "
+                  "Set lower for routine forms, higher for complex matters.",
     )
     display_order = models.IntegerField(default=0)
     agenda_category = models.CharField(
@@ -1220,6 +1272,16 @@ class Submission(models.Model):
     registered_at = models.DateTimeField(null=True, blank=True)
     assessment_started_at = models.DateTimeField(null=True, blank=True)
     assessment_deadline_at = models.DateTimeField(null=True, blank=True)
+    checklist_review_started_at  = models.DateTimeField(null=True, blank=True,
+        help_text="When this submission entered Manager Checklist Review.")
+    checklist_review_deadline_at = models.DateTimeField(null=True, blank=True,
+        help_text="SLA deadline for checklist review (configurable working days).")
+    recalled_at   = models.DateTimeField(null=True, blank=True)
+    recalled_by   = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="recalled_submissions",
+    )
+    recalled_reason = models.TextField(blank=True)
     closing_deadline_at = models.DateTimeField(null=True, blank=True)
     scheduled_meeting = models.ForeignKey(
         Meeting, null=True, blank=True, on_delete=models.SET_NULL,
@@ -1235,9 +1297,17 @@ class Submission(models.Model):
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="assigned_submissions",
-        help_text="Unit principal this submission has been assigned to by the unit manager.",
+        help_text="Primary responsible principal assigned by the unit manager.",
     )
     assigned_at = models.DateTimeField(null=True, blank=True)
+    # Secondary analysts — M2M for concurrent multi-analyst work (e.g. ORG-3.1 restructures)
+    co_assigned_principals = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        through='SubmissionCoAssignment',
+        through_fields=('submission', 'principal'),
+        related_name='co_assigned_submissions',
+        blank=True,
+    )
     # ── Head of Agency endorsement (SOP Stage 1, step 2) ───────────────────
     dg_endorsed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
@@ -1450,14 +1520,33 @@ class Submission(models.Model):
     def __str__(self):
         return f"{self.reference_number} — {self.title}"
 
+    def _assessment_deadline_days(self) -> int:
+        """Return the working-day deadline for this submission's form type (default 21)."""
+        if self.form_type_code:
+            try:
+                ft = PSCFormType.objects.get(code=self.form_type_code)
+                return ft.assessment_deadline_days
+            except PSCFormType.DoesNotExist:
+                pass
+        return 21
+
     def _set_assessment_deadline_from_start(self):
         if not self.assessment_started_at:
             self.assessment_deadline_at = None
             return
         start_local = timezone.localtime(self.assessment_started_at)
-        deadline_date = add_working_days(start_local.date(), 21)
+        deadline_date = add_working_days(start_local.date(), self._assessment_deadline_days())
         tz = timezone.get_current_timezone()
         self.assessment_deadline_at = timezone.make_aware(datetime.combine(deadline_date, time(23, 59, 59)), tz)
+
+    def _set_checklist_review_deadline_from_start(self):
+        """Set the checklist review SLA deadline from checklist_review_started_at."""
+        from django.conf import settings as django_settings
+        sla_days = getattr(django_settings, 'CHECKLIST_REVIEW_SLA_DAYS', 5)
+        if self.checklist_review_started_at:
+            self.checklist_review_deadline_at = add_working_days(
+                self.checklist_review_started_at, sla_days
+            )
 
     @property
     def is_assessment_overdue(self):
@@ -1466,6 +1555,24 @@ class Submission(models.Model):
         if not self.assessment_deadline_at:
             return False
         return timezone.now() > self.assessment_deadline_at
+
+    @property
+    def is_checklist_review_overdue(self):
+        if self.current_stage != WorkflowStage.MANAGER_CHECKLIST_REVIEW:
+            return False
+        if not self.checklist_review_deadline_at:
+            return False
+        return timezone.now() > self.checklist_review_deadline_at
+
+    @property
+    def is_registration_overdue(self):
+        """True when submission has been in SUBMITTED state past the SLA."""
+        if self.current_stage != WorkflowStage.SUBMITTED:
+            return False
+        from django.conf import settings as django_settings
+        sla_days = getattr(django_settings, 'PSC_REGISTRATION_SLA_DAYS', 2)
+        deadline = self.received_at + timedelta(days=sla_days)
+        return timezone.now() > deadline
 
     @property
     def estimated_meeting_date(self):
@@ -1574,6 +1681,47 @@ class DocumentClassificationType(models.TextChoices):
     SUPPORTING_EVIDENCE = "supporting_evidence", "Supporting evidence"
     MINUTES_REPORT = "minutes_report", "Minutes / report"
     OTHER = "other", "Other"
+
+
+class SubmissionCoAssignment(models.Model):
+    """
+    Through-model for Submission.co_assigned_principals M2M.
+
+    Records secondary/concurrent analyst assignments alongside the primary
+    ``assigned_to`` FK. Used when multiple analysts need to work on the same
+    submission concurrently (e.g. large ORG-3.1 restructure submissions).
+
+    The primary ``assigned_to`` remains the responsible officer; co-assignees
+    are collaborators with read/write access to checklist and assessment fields.
+    """
+
+    class Role(models.TextChoices):
+        SECONDARY  = 'secondary',  'Secondary analyst'
+        SPECIALIST = 'specialist', 'Specialist reviewer'
+
+    submission  = models.ForeignKey(
+        'Submission', on_delete=models.CASCADE, related_name='co_assignments',
+    )
+    principal   = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='co_assignment_records',
+    )
+    role        = models.CharField(max_length=16, choices=Role.choices, default=Role.SECONDARY)
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    notes       = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        unique_together = [('submission', 'principal')]
+        ordering = ['assigned_at']
+        verbose_name        = 'Co-Assignment'
+        verbose_name_plural = 'Co-Assignments'
+
+    def __str__(self):
+        return f"{self.principal.get_full_name() or self.principal.username} → {self.submission.reference_number} ({self.role})"
 
 
 class SubmissionDocument(models.Model):
@@ -2197,43 +2345,45 @@ class RoleDefinition(models.Model):
         return self.get_role_display()
 
 
-def add_working_days(start_date, days: int):
-    """Add `days` Mon–Fri working days (including Vanuatu public holidays)."""
-    # 2025/2026 Vanuatu Public Holidays (Approximation for Phase 1)
-    holidays = {
-        # 2025
-        (2025, 1, 1),   # New Year's Day
-        (2025, 2, 21),  # Father Lini Day
-        (2025, 3, 5),   # Custom Chief's Day
-        (2025, 4, 18),  # Good Friday
-        (2025, 4, 21),  # Easter Monday
-        (2025, 5, 1),   # Labour Day
-        (2025, 5, 29),  # Ascension Day
-        (2025, 7, 24),  # Children's Day
-        (2025, 7, 30),  # Independence Day
-        (2025, 8, 15),  # Assumption Day
-        (2025, 10, 5),  # Constitution Day
-        (2025, 11, 29), # Unity Day
-        (2025, 12, 25), # Christmas Day
-        (2025, 12, 26), # Family Day
-        # 2026
-        (2026, 1, 1),
-        (2026, 2, 21),
-        (2026, 3, 5),
-        (2026, 4, 3),   # Good Friday 2026
-        (2026, 4, 6),   # Easter Monday 2026
-        (2026, 5, 1),
-        (2026, 5, 14),  # Ascension 2026
-        (2026, 7, 24),
-        (2026, 7, 30),
-        (2026, 8, 15),
-        (2026, 10, 5),
-        (2026, 11, 29),
-        (2026, 12, 25),
-        (2026, 12, 26),
-    }
+def _load_holiday_set(start_date, end_date=None):
+    """Load public holidays from DB as a set of (year, month, day) tuples.
 
-    d = start_date
+    Falls back to an empty set if the table doesn't exist yet (pre-migration).
+    """
+    if end_date is None:
+        from datetime import date
+        end_date = date(start_date.year + 2, 12, 31)
+    try:
+        from django.db import connection
+        if 'tracker_publicholiday' not in connection.introspection.table_names():
+            return set()
+        return {
+            (h.year, h.date.month, h.date.day)
+            for h in PublicHoliday.objects.filter(
+                date__gte=start_date, date__lte=end_date
+            )
+        }
+    except Exception:
+        return set()
+
+
+def add_working_days(start_date, days: int):
+    """Add ``days`` Mon–Fri working days, skipping Vanuatu public holidays.
+
+    Holidays are read from the ``PublicHoliday`` model so they can be
+    maintained by admins without code changes.
+    """
+    from datetime import date as _date
+    # Normalise to a plain date if a datetime was passed
+    if hasattr(start_date, 'date'):
+        d = start_date.date()
+    else:
+        d = start_date
+
+    # Load holidays for the probable date range (start + days * 2 to be safe)
+    end_estimate = d + timedelta(days=days * 2 + 30)
+    holidays = _load_holiday_set(d, end_estimate)
+
     added = 0
     while added < days:
         d += timedelta(days=1)
