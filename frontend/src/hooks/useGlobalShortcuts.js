@@ -19,7 +19,6 @@ function isTyping() {
  *   n          → new submission
  *   g d        → go to dashboard
  *   g s        → go to submissions
- *   g a        → go to assistant
  *   g r        → go to reports
  *   g m        → go to meeting room
  *   g t        → go to tasks
@@ -68,7 +67,6 @@ export function useGlobalShortcuts({ onToggleShortcuts, navigate }) {
         const destinations = {
           d: '/',
           s: '/submissions',
-          a: '/assistant',
           r: '/reports',
           m: '/secretariat/meeting-room',
           t: '/secretariat/tasks',

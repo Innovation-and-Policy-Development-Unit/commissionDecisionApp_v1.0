@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo, PenLine,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
-  Headphones, Mail, FolderOpen, Bot, BookOpen, Languages, Sparkles,
+  Headphones, Mail, FolderOpen, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, BarChart2, CalendarCheck, AlertCircle,
   ListChecks, Megaphone, Inbox,
 } from 'lucide-react'
@@ -132,7 +132,6 @@ const menuItems = [
     items: [
       { label: 'Smart Report (AI)', labelKey: 'nav.smart_reports', icon: Sparkles, path: '/reports' },
       { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
-      { label: 'Staff Assistant',   labelKey: 'nav.staff_assistant', icon: Bot,   path: '/assistant' },
       { label: 'Analytics',         labelKey: 'nav.analytics',     icon: BarChart2, path: '/analytics',
         audience: 'exclude_compliance' },
     ],

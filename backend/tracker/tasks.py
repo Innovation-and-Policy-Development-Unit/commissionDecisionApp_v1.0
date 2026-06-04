@@ -1367,6 +1367,26 @@ def queue_decision_register_report(report_id: int) -> None:
         generate_decision_register_report(report_id)
 
 
+@shared_task
+def generate_smart_report(report_id: int):
+    """Render a Smart Report (Enterprise Reporting Engine) to Quarto HTML."""
+    from .reports.smart_report import run_smart_report
+
+    run_smart_report(report_id)
+
+
+def queue_smart_report(report_id: int) -> None:
+    try:
+        generate_smart_report.delay(report_id)
+    except Exception as exc:
+        app_log.warning(
+            "SMART_REPORT_QUEUE_FALLBACK | id=%s | %s",
+            report_id,
+            exc,
+        )
+        generate_smart_report(report_id)
+
+
 # ── Submission quality score (A5) ─────────────────────────────────────────────
 
 QUALITY_SCORE_STAGES = frozenset({

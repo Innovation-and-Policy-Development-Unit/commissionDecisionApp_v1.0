@@ -2127,6 +2127,62 @@ class DecisionRegisterReport(models.Model):
         return f"Register report #{self.pk} — {self.title or self.status}"
 
 
+class SmartReport(models.Model):
+    """Enterprise Reporting Engine job — async Quarto HTML report (catalog or ad-hoc NL).
+
+    Generalizes the DecisionRegisterReport pipeline across data domains. The first
+    domain is Submissions; decisions/compliance/meetings/travel follow in later phases.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+
+    class Domain(models.TextChoices):
+        SUBMISSIONS = "submissions", "Submissions"
+        # decisions, compliance, meetings, travel → later phases
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="smart_reports",
+    )
+    domain = models.CharField(
+        max_length=24, choices=Domain.choices, default=Domain.SUBMISSIONS
+    )
+    report_type = models.CharField(
+        max_length=64, default="adhoc",
+        help_text='Catalog key (e.g. "submissions_volume_turnaround") or "adhoc".',
+    )
+    prompt = models.TextField(blank=True, help_text="Ad-hoc natural-language request.")
+    params = models.JSONField(default=dict, blank=True, help_text="Catalog params / filters.")
+    spec = models.JSONField(default=dict, blank=True, help_text="Resolved render spec.")
+    title = models.CharField(max_length=200, blank=True)
+    subtitle = models.CharField(max_length=300, blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    error_message = models.TextField(blank=True)
+    row_count = models.PositiveIntegerField(default=0)
+    html_file = models.FileField(upload_to="smart_reports/%Y/%m/", blank=True)
+    pdf_file = models.FileField(upload_to="smart_reports/%Y/%m/", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["requested_by", "-created_at"], name="smartrep_req_created_idx"),
+            models.Index(fields=["status"], name="smartrep_status_idx"),
+        ]
+
+    def __str__(self):
+        return f"Smart report #{self.pk} — {self.title or self.report_type} ({self.status})"
+
+
 class MeetingBriefingPack(models.Model):
     """C2 — AI-generated Commission sitting briefing pack (Quarto HTML + PDF)."""
 

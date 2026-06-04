@@ -2021,7 +2021,7 @@ export function SettingsTab({ settings, onRefresh }) {
             )}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Powers executive briefs, quality scores, minute drafting, staff assistant, and other AI features.
+            Powers executive briefs, quality scores, minute drafting, and other AI features.
             Get a key at{' '}
             <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="underline">
               console.anthropic.com

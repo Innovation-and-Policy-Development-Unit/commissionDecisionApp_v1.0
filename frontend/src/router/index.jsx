@@ -47,7 +47,6 @@ const TaskManagement = lazy(() => import('../pages/secretariat/TaskManagement'))
 const MinutesIndex = lazy(() => import('../pages/secretariat/MinutesIndex'))
 const MinuteIntake = lazy(() => import('../pages/secretariat/MinuteIntake'))
 const Account = lazy(() => import('../pages/pages/Account'))
-const StaffChatbot = lazy(() => import('../pages/assistant/StaffChatbot'))
 const KnowledgeBaseBrowse = lazy(() => import('../pages/psc/KnowledgeBaseBrowse'))
 const ArticleViewer = lazy(() => import('../pages/psc/ArticleViewer'))
 const ExecutiveDashboard = lazy(() => import('../pages/psc/ExecutiveDashboard'))
@@ -91,8 +90,6 @@ export default function AppRouter() {
           <Route path="/reports" element={<S><SmartReports /></S>} />
           <Route path="/wiki" element={<S><KnowledgeBaseBrowse /></S>} />
           <Route path="/wiki/:slug" element={<S detail><ArticleViewer /></S>} />
-          <Route path="/assistant" element={<S><StaffChatbot /></S>} />
-          <Route path="/status-assistant" element={<Navigate to="/assistant" replace />} />
           <Route path="/meetings/capture" element={<S><RedirectToMinuteIntake /></S>} />
 
           {/* ── P1–P4 New Routes ── */}

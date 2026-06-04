@@ -31,6 +31,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /usr/local /usr/local
 
+# Verify Quarto can discover the Python (Jupyter) kernel used by Smart Reports.
+# Non-fatal: a failure here only means Python-executed reports need attention.
+RUN quarto check jupyter || echo "WARN: 'quarto check jupyter' failed — Smart Report rendering may need attention"
+
 COPY . .
 RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh && \
     chown -R scdms:scdms /app

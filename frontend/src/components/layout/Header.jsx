@@ -11,7 +11,7 @@ import {
   User, LogOut, Lock, CreditCard, HelpCircle, Shield, X,
   CheckCircle2, AlertCircle, Info, ChevronRight, MessageSquare,
   Plus, LayoutDashboard, FileText, Gavel, Headphones, BarChart3,
-  Bot, CalendarDays, ListTodo, Zap, Keyboard,
+  CalendarDays, ListTodo, Zap, Keyboard,
 } from 'lucide-react'
 import BrandLogo from '../shared/BrandLogo'
 import LanguageSwitcher from '../shared/LanguageSwitcher'
@@ -46,15 +46,6 @@ const ALL_QUICK_ACTIONS = [
     icon: FileText,
     path: '/submissions',
     kbd: 'G S',
-    roles: null,
-  },
-  {
-    id: 'assistant',
-    label: 'Staff Assistant',
-    sublabel: 'AI-powered PSC assistant',
-    icon: Bot,
-    path: '/assistant',
-    kbd: 'G A',
     roles: null,
   },
   {

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
@@ -9,12 +9,9 @@ import HorizontalMenu from './HorizontalMenu'
 import SettingsPanel from './SettingsPanel'
 import SecurityNoticesBanner from '../shared/SecurityNoticesBanner'
 import FeedbackPanel from '../shared/FeedbackPanel'
-import StaffChatPanel from '../assistant/StaffChatPanel'
-import StaffChatFab from '../assistant/StaffChatFab'
 import LockOverlay from '../auth/LockOverlay'
 import KeyboardShortcutsModal from '../shared/KeyboardShortcutsModal'
 import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts'
-import { Bot, MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function Layout() {
@@ -29,13 +26,9 @@ export default function Layout() {
     feedbackEnabled
   } = useTheme()
   const { isLocked } = useAuth()
-  const location = useLocation()
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [staffChatOpen, setStaffChatOpen] = useState(false)
-  const [assistantMenuOpen, setAssistantMenuOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const assistantMenuRef = useRef(null)
 
   useGlobalShortcuts({
     navigate,
@@ -47,27 +40,6 @@ export default function Layout() {
     document.addEventListener('psc:shortcuts:open', onOpen)
     return () => document.removeEventListener('psc:shortcuts:open', onOpen)
   }, [])
-
-  useEffect(() => {
-    if (!assistantMenuOpen) return
-    const onDocClick = (event) => {
-      if (assistantMenuRef.current && !assistantMenuRef.current.contains(event.target)) {
-        setAssistantMenuOpen(false)
-      }
-    }
-    const onEsc = (event) => {
-      if (event.key === 'Escape') setAssistantMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onEsc)
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onEsc)
-    }
-  }, [assistantMenuOpen])
-
-  const onAssistantPage = location.pathname === '/assistant'
-  const hideStaffChatFab = onAssistantPage
 
   const handleMenuClick = () => {
     if (window.innerWidth < 1024) {
@@ -133,53 +105,17 @@ export default function Layout() {
         <FeedbackPanel open={feedbackPanelOpen} onClose={closeFeedbackPanel} />
       )}
 
-      <StaffChatPanel
-        open={staffChatOpen}
-        onClose={() => setStaffChatOpen(false)}
-      />
-      {!hideStaffChatFab && (
-        <div ref={assistantMenuRef}>
-          {assistantMenuOpen && (
-            <div className="fixed bottom-24 right-6 z-[78] w-72 card p-2 shadow-card-lg animate-fade-in">
-              <button
-                type="button"
-                onClick={() => {
-                  setAssistantMenuOpen(false)
-                  setStaffChatOpen(true)
-                }}
-                className="w-full flex items-start gap-3 rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left transition-colors"
-              >
-                <Bot size={16} className="mt-0.5 text-indigo-500" />
-                <span>
-                  <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">{t('staff_chat.title')}</span>
-                  <span className="block text-xs text-slate-500 dark:text-slate-400">{t('staff_chat.subtitle')}</span>
-                </span>
-              </button>
-              {feedbackEnabled && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAssistantMenuOpen(false)
-                    if (!feedbackPanelOpen) toggleFeedbackPanel()
-                  }}
-                  className="w-full flex items-start gap-3 rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left transition-colors"
-                >
-                  <MessageSquare size={16} className="mt-0.5 text-primary-500" />
-                  <span>
-                    <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">{t('feedback.open')}</span>
-                    <span className="block text-xs text-slate-500 dark:text-slate-400">{t('feedback.open_panel')}</span>
-                  </span>
-                </button>
-              )}
-            </div>
-          )}
-          <StaffChatFab
-            open={assistantMenuOpen}
-            onClick={() => setAssistantMenuOpen((o) => !o)}
-            hidden={false}
-            label={t('staff_chat.open_fab')}
-          />
-        </div>
+      {/* Feedback launcher — vertical tab pinned to the right edge */}
+      {feedbackEnabled && (
+        <button
+          type="button"
+          onClick={() => { if (!feedbackPanelOpen) toggleFeedbackPanel() }}
+          aria-label={t('feedback.open')}
+          title={t('feedback.open')}
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-[75] px-2 py-4 rounded-l-lg shadow-lg bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold tracking-wide [writing-mode:vertical-rl] rotate-180 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+        >
+          {t('feedback.tab')}
+        </button>
       )}
 
       {/* Lock Screen Overlay */}
