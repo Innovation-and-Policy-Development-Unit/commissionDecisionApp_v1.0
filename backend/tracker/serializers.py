@@ -853,11 +853,6 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "secretary_only",
             "requires_travel_letter",
             "travel_endorsers",
-            "cms_case_closed_at",
-            "cms_case_reference",
-            "cms_dispatched_at",
-            "cms_signoff_at",
-            "cms_signoff_outcome",
             "parent_submission",
             "parent_reference",
             "parent_title",
@@ -1146,14 +1141,13 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             role = profile.role
         except Exception:
             return attrs
-        from .cms_register import CMS_ORIGIN_MESSAGE
-        from .compliance_forms import COMPLIANCE_SUBMITTER_ROLES
+        from .compliance_forms import assert_compliance_may_use_form_type
 
         form_type_code = attrs.get("form_type_code") or ""
-        if role in COMPLIANCE_SUBMITTER_ROLES:
-            raise PermissionDenied(CMS_ORIGIN_MESSAGE)
-        elif form_type_code.startswith("COMP-"):
-            raise PermissionDenied("Only Compliance unit staff may create compliance submission types.")
+        if form_type_code.startswith("COMP-"):
+            # Compliance submissions are created directly in SCDMS by Compliance staff.
+            # Raises PermissionDenied for non-compliance roles or disallowed PSA forms.
+            assert_compliance_may_use_form_type(role, form_type_code)
         from .travel_forms import assert_may_create_secretary_travel_form, normalize_form_type_code
 
         code = normalize_form_type_code(form_type_code)

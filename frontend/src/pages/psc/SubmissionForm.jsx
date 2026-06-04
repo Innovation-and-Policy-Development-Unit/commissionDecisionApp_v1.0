@@ -4,7 +4,7 @@ import PageHeader from '../../components/shared/PageHeader'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import ComplianceCmsGuidance from './ComplianceCmsGuidance'
+import NewComplianceCaseForm from '../compliance/NewComplianceCaseForm'
 import { isComplianceRole } from '../../constants/compliance'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import { X } from 'lucide-react'
@@ -612,10 +612,10 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
       : <div><PageHeader title="New submission" subtitle={msg} /></div>
   }
 
-  // ── Compliance: cases are created in CMS, not in this portal ───────────
+  // ── Compliance: open a compliance case directly in SCDMS ───────────────
   if (isComplianceUser) {
     return (
-      <ComplianceCmsGuidance modal={modal} />
+      <NewComplianceCaseForm modal={modal} onSuccess={onSuccess} onClose={onClose} />
     )
   }
 

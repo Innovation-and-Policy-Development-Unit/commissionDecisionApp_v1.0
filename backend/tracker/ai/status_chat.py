@@ -74,8 +74,6 @@ def _build_submission_block(sub) -> str:
         f"Assigned PSC officer: {sub.assigned_to.get_full_name() or sub.assigned_to.username if sub.assigned_to_id else 'Not yet assigned'}",
         f"Notes on file: {sub.notes[:500] if sub.notes else '—'}",
     ]
-    if sub.cms_case_reference or sub.cms_case_id:
-        lines.append(f"Linked CMS case: {sub.cms_case_reference or sub.cms_case_id}")
 
     missing = list(
         SubmissionChecklistItem.objects.filter(submission=sub, is_present=False)

@@ -1,0 +1,280 @@
+"""
+Compliance Case Management — data models merged into SCDMS.
+
+A compliance matter *is* a :class:`tracker.models.Submission` flowing through the
+existing workflow. These models carry the compliance-specific data that hangs off it:
+
+  - ``Complaint``            — ministry-lodged intake record (write-only for ministries)
+  - ``ComplianceCase``       — one-to-one extension of ``Submission`` (subject-as-person,
+                               case family, status)
+  - ``ComplianceCaseStage``  — statutory SLA timeline rows
+  - ``LitigationRecord``     — litigation & cost tracking (FR-13)
+  - ``CaseNote``             — case-scoped notes
+
+Visibility (enforced by the Phase 4 scoping layer): ministry roles may create a
+``Complaint`` and read only their own; they never see ``ComplianceCase`` / stages /
+litigation / notes. Compliance submissions are ``is_internal=True`` and therefore
+already excluded from ministry-facing submission lists.
+"""
+
+from __future__ import annotations
+
+from django.conf import settings
+from django.db import models, transaction
+from django.utils import timezone
+
+from .models import Ministry, ReferenceCounter, Submission
+
+
+# ── Choice enums ──────────────────────────────────────────────────────────────
+
+class CaseFamily(models.TextChoices):
+    EMPLOYEE_DISCIPLINARY       = "employee_disciplinary",       "Employee Internal Disciplinary"
+    SERIOUS_MISCONDUCT_EMPLOYEE = "serious_misconduct_employee", "Serious Misconduct — Employee"
+    TEMPORARY_SUSPENSION        = "temporary_suspension",        "Temporary Suspension"
+    GRIEVANCE                   = "grievance",                   "Grievance Process"
+    SENIOR_SERIOUS_MISCONDUCT   = "senior_serious_misconduct",   "Senior Executive — Serious Misconduct"
+    SENIOR_POOR_PERFORMANCE     = "senior_poor_performance",     "Senior Executive — Poor Performance"
+    POLICY_REVIEW               = "policy_review",               "Policy / PSA Amendment"
+
+
+class ComplianceCaseStatus(models.TextChoices):
+    ACTIVE   = "active",   "Active"
+    ON_HOLD  = "on_hold",  "On Hold"
+    CLOSED   = "closed",   "Closed"
+    ARCHIVED = "archived", "Archived"
+
+
+class SLAStatus(models.TextChoices):
+    ON_TRACK  = "on_track",  "On Track"
+    AT_RISK   = "at_risk",   "At Risk"
+    OVERDUE   = "overdue",   "Overdue"
+    COMPLETED = "completed", "Completed"
+
+
+class StageStatus(models.TextChoices):
+    PENDING     = "pending",     "Pending"
+    IN_PROGRESS = "in_progress", "In Progress"
+    COMPLETED   = "completed",   "Completed"
+    SKIPPED     = "skipped",     "Skipped"
+
+
+class ComplianceDecisionOutcome(models.TextChoices):
+    REINSTATE         = "reinstate",         "Reinstated"
+    TERMINATE         = "terminate",         "Terminated / Dismissed"
+    WARN              = "warn",              "Formal Warning Issued"
+    DEMOTE            = "demote",            "Demotion"
+    SUSPEND_NO_PAY    = "suspend_no_pay",    "Suspension Without Pay"
+    COMPULSORY_RETIRE = "compulsory_retire", "Compulsory Retirement"
+    NO_ACTION         = "no_action",         "No Further Action"
+    REFERRED_PSDB     = "referred_psdb",     "Referred to PSDB"
+    SETTLED           = "settled",           "Settled (Grievance)"
+    NOT_SETTLED       = "not_settled",       "Not Settled (Grievance)"
+
+
+class ComplaintStatus(models.TextChoices):
+    RECEIVED     = "received",     "Received"
+    UNDER_REVIEW = "under_review", "Under Review"
+    ACCEPTED     = "accepted",     "Accepted"
+    REJECTED     = "rejected",     "Rejected"
+    CONVERTED    = "converted",    "Converted to Case"
+
+
+# ── Reference numbering (shares the global ReferenceCounter, like submissions) ──
+
+def allocate_complaint_reference() -> str:
+    year = timezone.now().year
+    with transaction.atomic():
+        counter, _ = ReferenceCounter.objects.select_for_update().get_or_create(
+            year=year, defaults={"last_seq": 0}
+        )
+        counter.last_seq += 1
+        counter.save(update_fields=["last_seq"])
+        return f"CMP-{year}-{counter.last_seq:05d}"
+
+
+# ── Complaint (ministry-lodged intake) ────────────────────────────────────────
+
+class Complaint(models.Model):
+    """A complaint lodged by a ministry against a public servant.
+
+    Write-only for ministry users: they create it and may read only their own
+    (status + closed_reason). Compliance staff triage it from the Complaints
+    Register; accepting it spawns a :class:`ComplianceCase` (+ Submission).
+    """
+
+    reference_number = models.CharField(max_length=32, unique=True, editable=False)
+    title            = models.CharField(max_length=512)
+    description      = models.TextField(blank=True)
+
+    lodged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="lodged_complaints",
+    )
+    ministry = models.ForeignKey(
+        Ministry, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="complaints",
+    )
+
+    # Subject of the complaint (the public servant the matter is about)
+    subject_name     = models.CharField(max_length=200, blank=True)
+    subject_position = models.CharField(max_length=200, blank=True)
+    subject_ministry = models.CharField(max_length=200, blank=True)
+
+    status = models.CharField(
+        max_length=20, choices=ComplaintStatus.choices, default=ComplaintStatus.RECEIVED,
+    )
+    closed_reason = models.TextField(
+        blank=True, help_text="Reason shown to the lodging ministry if rejected/closed.",
+    )
+
+    # Set when triage accepts the complaint and opens a case.
+    compliance_case = models.ForeignKey(
+        "ComplianceCase", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="source_complaints",
+    )
+    triaged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="triaged_complaints",
+    )
+    triaged_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.reference_number:
+            self.reference_number = allocate_complaint_reference()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.reference_number} — {self.title}"
+
+
+# ── ComplianceCase (Submission extension) ─────────────────────────────────────
+
+class ComplianceCase(models.Model):
+    """Compliance-specific data for a Submission (subject-as-person, family, SLAs)."""
+
+    submission = models.OneToOneField(
+        Submission, on_delete=models.CASCADE, related_name="compliance_case",
+    )
+    case_family = models.CharField(max_length=40, choices=CaseFamily.choices)
+    status = models.CharField(
+        max_length=20, choices=ComplianceCaseStatus.choices,
+        default=ComplianceCaseStatus.ACTIVE,
+    )
+
+    # Subject (the public servant the case is about)
+    subject_name        = models.CharField(max_length=200)
+    subject_position    = models.CharField(max_length=200, blank=True)
+    subject_ministry    = models.CharField(max_length=200, blank=True)
+    is_senior_executive = models.BooleanField(default=False)
+
+    description = models.TextField(blank=True)
+    notes       = models.TextField(blank=True)
+
+    date_received = models.DateField(default=timezone.localdate)
+    date_closed   = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Case {self.submission.reference_number} — {self.get_case_family_display()}"
+
+
+class ComplianceCaseStage(models.Model):
+    """A statutory stage in a case's workflow, with its SLA clock."""
+
+    case = models.ForeignKey(
+        ComplianceCase, on_delete=models.CASCADE, related_name="stages",
+    )
+    stage_name  = models.CharField(max_length=150)
+    stage_code  = models.CharField(max_length=60, blank=True)
+    stage_order = models.PositiveSmallIntegerField()
+
+    responsible_role = models.CharField(max_length=40, blank=True)
+    statutory_ref    = models.CharField(max_length=100, blank=True)
+
+    sla_days         = models.PositiveSmallIntegerField(null=True, blank=True)
+    sla_working_days = models.BooleanField(default=True)
+    due_date         = models.DateField(null=True, blank=True)
+
+    status     = models.CharField(
+        max_length=20, choices=StageStatus.choices, default=StageStatus.PENDING,
+    )
+    sla_status = models.CharField(
+        max_length=20, choices=SLAStatus.choices, default=SLAStatus.ON_TRACK,
+    )
+    is_optional = models.BooleanField(default=False)
+
+    started_at   = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    notes        = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["stage_order"]
+        unique_together = [("case", "stage_order")]
+
+    def __str__(self):
+        return f"{self.case.submission.reference_number} · {self.stage_order}. {self.stage_name}"
+
+
+class LitigationRecord(models.Model):
+    """Litigation matter and associated costs for a case (FR-13)."""
+
+    class LitigationStatus(models.TextChoices):
+        ACTIVE   = "active",   "Active"
+        SETTLED  = "settled",  "Settled"
+        CLOSED   = "closed",   "Closed"
+        APPEALED = "appealed", "Appealed"
+
+    case = models.ForeignKey(
+        ComplianceCase, on_delete=models.CASCADE, related_name="litigation_records",
+    )
+    description     = models.TextField()
+    legal_counsel   = models.CharField(max_length=200, blank=True)
+    court_reference = models.CharField(max_length=100, blank=True)
+    status = models.CharField(
+        max_length=20, choices=LitigationStatus.choices, default=LitigationStatus.ACTIVE,
+    )
+    estimated_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    actual_cost    = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    date_initiated = models.DateField(default=timezone.localdate)
+    date_resolved  = models.DateField(null=True, blank=True)
+    notes          = models.TextField(blank=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date_initiated"]
+
+    def __str__(self):
+        return f"Litigation · {self.case.submission.reference_number} ({self.status})"
+
+
+class CaseNote(models.Model):
+    """A case-scoped note authored by compliance staff."""
+
+    case = models.ForeignKey(
+        ComplianceCase, on_delete=models.CASCADE, related_name="case_notes",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="compliance_case_notes",
+    )
+    text       = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Note · {self.case.submission.reference_number}"

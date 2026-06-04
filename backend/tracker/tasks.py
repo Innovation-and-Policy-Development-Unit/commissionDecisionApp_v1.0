@@ -21,6 +21,22 @@ def run_backup():
         log.error("BACKUP_SCHEDULED | failed: %s", exc)
 
 
+@shared_task
+def recompute_compliance_sla():
+    """Refresh SLA status (on-track / at-risk / overdue) on all active compliance cases."""
+    from .compliance_models import ComplianceCase, ComplianceCaseStatus
+    from .compliance_workflows import recompute_case_sla
+
+    total = 0
+    qs = ComplianceCase.objects.filter(
+        status__in=[ComplianceCaseStatus.ACTIVE, ComplianceCaseStatus.ON_HOLD]
+    ).prefetch_related("stages")
+    for case in qs:
+        total += recompute_case_sla(case)
+    log.info("COMPLIANCE_SLA | recomputed %d stage status change(s)", total)
+    return total
+
+
 SYSTEM_INSTRUCTION = """You are a highly efficient "Executive Secretary" and "Triage Officer" for a high-level Commission Board in Vanuatu. You are an expert in both Bislama and English.
 
 Analyze the provided User Feedback. The feedback may be in Bislama, English, French, or a mix.

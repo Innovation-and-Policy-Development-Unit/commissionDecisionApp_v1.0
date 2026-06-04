@@ -263,7 +263,7 @@ Approximate scale: **~65–90** active users (ministry HR across **13 line minis
 ## 8. Technical interfaces (for integration teams)
 
 - **REST API** under `/api/` with JWT authentication; OpenAPI schema via drf-spectacular.
-- **CMS integration** — `CMS_API_URL`, `CMS_API_KEY`, `CMS_CALLBACK_SECRET`; register case from CMS; webhook sign-off from CMS.
+- **Compliance Case Management** is built **into SCDMS** (the Compliance module: cases, statutory SLAs, complaints register, litigation). There is no separate CMS and no CMS integration — the former bridge has been removed.
 - **No public “employee API”** in SCDMS today — partner systems should plan **new read/write contracts** with IPDU if pre-fill or post-decision feeds are required.
 
 Security expectations: confidential submissions, audit logging, 2FA for privileged roles, secrets via environment variables (not in application repos).

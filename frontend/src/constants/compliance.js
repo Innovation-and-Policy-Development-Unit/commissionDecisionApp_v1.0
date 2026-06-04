@@ -1,15 +1,17 @@
 /**
- * Compliance roles and COMP-* form codes (mirror backend compliance_forms.py).
- * CMS-first: create in CMS → Manager approval → sync to portal → Secretary review.
- * Post-decision tasks in SCDMS; CMS case auto-closes when portal matter is complete.
+ * Compliance roles, COMP-* form codes, and case families (mirror backend
+ * compliance_forms.py / compliance_models.py).
+ *
+ * Compliance is fully merged into SCDMS: cases are created here, run through the
+ * manager-approval chain, then Secretary and Commission stages — no external system.
  */
-
-/** Case Management System URL (configure at build time: VITE_CMS_URL). */
-export const CMS_PORTAL_URL = import.meta.env.VITE_CMS_URL || 'http://localhost:5173'
 
 export const COMPLIANCE_ROLES = ['compliance_senior', 'compliance_principal', 'compliance_manager']
 
 export const COMPLIANCE_PSA_ROLES = ['compliance_principal', 'compliance_manager']
+
+/** Ministry roles that may lodge a complaint with the Compliance unit. */
+export const MINISTRY_LODGE_ROLES = ['head_of_agency', 'ministry_hr', 'dept_admin']
 
 export const COMPLIANCE_FORM_CODES = [
   'COMP-SMDR',
@@ -20,8 +22,23 @@ export const COMPLIANCE_FORM_CODES = [
   'COMP-PSA',
 ]
 
+/** Case families (value → label), mirrors backend CaseFamily. */
+export const CASE_FAMILIES = [
+  { value: 'employee_disciplinary',       label: 'Employee Internal Disciplinary' },
+  { value: 'serious_misconduct_employee', label: 'Serious Misconduct — Employee' },
+  { value: 'temporary_suspension',        label: 'Temporary Suspension' },
+  { value: 'grievance',                   label: 'Grievance Process' },
+  { value: 'senior_serious_misconduct',   label: 'Senior Executive — Serious Misconduct' },
+  { value: 'senior_poor_performance',     label: 'Senior Executive — Poor Performance' },
+  { value: 'policy_review',               label: 'Policy / PSA Amendment' },
+]
+
 export function isComplianceRole(role) {
   return COMPLIANCE_ROLES.includes(role)
+}
+
+export function isMinistryLodgeRole(role) {
+  return MINISTRY_LODGE_ROLES.includes(role)
 }
 
 export function isComplianceFormCode(code) {

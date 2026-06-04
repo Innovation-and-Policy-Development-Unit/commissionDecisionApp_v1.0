@@ -1,11 +1,10 @@
 import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo, PenLine,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
-  Headphones, Mail, FolderOpen, ExternalLink, Bot, BookOpen, Languages, Sparkles,
+  Headphones, Mail, FolderOpen, Bot, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, BarChart2, CalendarCheck, AlertCircle,
-  ListChecks,
+  ListChecks, Megaphone, Inbox,
 } from 'lucide-react'
-import { CMS_PORTAL_URL } from '../constants/compliance'
 import {
   userCanAccessAdminPanel,
   userCanManageRoles,
@@ -25,36 +24,44 @@ import { menuItemVisibleForUser } from '../utils/complianceAccess'
  */
 const menuItems = [
   {
-    group: 'Compliance',
-    groupKey: 'nav.group_compliance',
-    groupIcon: FolderOpen,
-    audience: 'compliance',
-    items: [
-      {
-        label: 'Case Management (CMS)',
-        labelKey: 'nav.cms_cases',
-        icon: ExternalLink,
-        href: CMS_PORTAL_URL,
-        external: true,
-      },
-      {
-        label: 'Registered with Commission',
-        labelKey: 'nav.registered_submissions',
-        icon: FileText,
-        path: '/submissions',
-      },
-      { label: 'Dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard, path: '/' },
-      { label: 'Staff Assistant', labelKey: 'nav.staff_assistant', icon: Bot, path: '/assistant', audience: 'all' },
-    ],
-  },
-  {
     group: 'Submissions',
     groupKey: 'nav.group_submissions',
     groupIcon: FileText,
-    audience: 'exclude_compliance',
+    audience: 'all',
     items: [
       { label: 'Dashboard',   labelKey: 'nav.dashboard',   icon: LayoutDashboard, path: '/' },
       { label: 'Submissions', labelKey: 'nav.submissions', icon: FileText,        path: '/submissions' },
+    ],
+  },
+  {
+    // Group is visible to anyone with at least one permitted item: compliance staff
+    // see Cases + Register; ministry staff see only "Lodge a Complaint".
+    group: 'Compliance',
+    groupKey: 'nav.group_compliance',
+    groupIcon: FolderOpen,
+    audience: 'all',
+    items: [
+      {
+        label: 'Compliance Cases',
+        labelKey: 'nav.compliance_cases',
+        icon: ListChecks,
+        path: '/compliance/cases',
+        audience: 'compliance',
+      },
+      {
+        label: 'Complaints Register',
+        labelKey: 'nav.complaints_register',
+        icon: Inbox,
+        path: '/compliance/complaints',
+        audience: 'compliance',
+      },
+      {
+        label: 'Lodge a Complaint',
+        labelKey: 'nav.lodge_complaint',
+        icon: Megaphone,
+        path: '/compliance/lodge-complaint',
+        roles: ['head_of_agency', 'ministry_hr', 'dept_admin'],
+      },
     ],
   },
   {

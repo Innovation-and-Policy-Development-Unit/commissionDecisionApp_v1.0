@@ -244,21 +244,24 @@ def _submission_queryset_for(user):
         return qs
     profile = _profile(user)
     role = profile.role
+    # Ministry-side roles must never see OPSC-internal submissions (compliance
+    # matters, internal OPSC papers). The is_internal=False guard is the firewall.
     if role in {Role.MINISTRY_HR, Role.HEAD_OF_AGENCY}:
         if not profile.ministry_id:
             return qs.none()
-        return qs.filter(ministry_id=profile.ministry_id)
+        return qs.filter(ministry_id=profile.ministry_id, is_internal=False)
     if role == Role.TRAVELLER:
         if not profile.ministry_id:
-            return qs.filter(created_by=user)
+            return qs.filter(created_by=user, is_internal=False)
         return qs.filter(
             models.Q(created_by=user)
-            | models.Q(secretary_only=True, ministry_id=profile.ministry_id)
+            | models.Q(secretary_only=True, ministry_id=profile.ministry_id),
+            is_internal=False,
         )
     if role == Role.DEPT_ADMIN:
         if not profile.department_id:
             return qs.none()
-        return qs.filter(department_id=profile.department_id)
+        return qs.filter(department_id=profile.department_id, is_internal=False)
     _UNIT_PRINCIPAL_ROLES = {
         Role.ODU_PRINCIPAL,
         Role.PRINCIPAL_ORG_DEV_ANALYST,
@@ -268,10 +271,12 @@ def _submission_queryset_for(user):
         Role.COMPLIANCE_PRINCIPAL,
     }
     if role in {Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL}:
+        # Compliance staff see all OPSC-internal compliance submissions (created
+        # natively in SCDMS — no external case link required).
         return qs.filter(
             form_category__code="COMPLIANCE",
             is_internal=True,
-        ).exclude(cms_case_id="").filter(cms_case_id__isnull=False)
+        )
     if role in _UNIT_PRINCIPAL_ROLES:
         # Principals see only submissions explicitly assigned to them
         return qs.filter(assigned_to=user)
@@ -953,8 +958,23 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.COMPLIANCE_PRINCIPAL,
             Role.COMPLIANCE_MANAGER,
         }:
-            from .cms_register import CMS_ORIGIN_MESSAGE
-            raise PermissionDenied(CMS_ORIGIN_MESSAGE)
+            # Compliance matters are created directly in SCDMS (OPSC-internal,
+            # routed to the Compliance unit). Rich case data (subject, family,
+            # statutory stages) is captured via the compliance case endpoint.
+            from .compliance_forms import assert_compliance_may_use_form_type
+
+            form_code = (self.request.data.get("form_type_code") or "").strip()
+            assert_compliance_may_use_form_type(profile.role, form_code)
+            org = _resolve_opsc_submission_org(profile)
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": True,
+                "routed_unit": RoutedUnit.COMPLIANCE,
+                "ministry_id": org["ministry_id"],
+                "department_id": org["department_id"],
+                "unit_id": org.get("unit_id"),
+            }
+            submission = serializer.save(**kwargs)
 
         elif profile.role in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.RECEPTIONIST}:
             from .travel_forms import (
@@ -1462,23 +1482,6 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if _quality_triggers and submission.current_stage != WorkflowStage.DRAFT:
             sid = submission.id
             transaction.on_commit(lambda: queue_submission_quality_score(sid, force=False))
-
-        # ── Legacy: dispatch to CMS only when portal created submission without CMS link ──
-        if target == WorkflowStage.COMPLIANCE_UNDER_REVIEW and not submission.cms_case_id:
-            from .cms_bridge import dispatch_submission_to_cms
-            transaction.on_commit(lambda: dispatch_submission_to_cms.delay(submission.pk))
-
-        # ── CMS-first: close linked CMS case when SCDMS matter is complete ──
-        if submission.cms_case_id:
-            from .cms_close import maybe_close_cms_case
-            sid = submission.pk
-            transaction.on_commit(
-                lambda: maybe_close_cms_case(
-                    Submission.objects.prefetch_related(
-                        "commission_tasks__subtasks"
-                    ).get(pk=sid)
-                )
-            )
 
         if target == WorkflowStage.APPROVED and submission.requires_travel_letter:
             sid = submission.id
@@ -3335,16 +3338,10 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         raise PermissionDenied("You cannot update this task.")
 
     def _maybe_close_cms_for_task(self, task):
-        sub = task.submission
-        if not sub or not (sub.cms_case_id or "").strip():
-            return
-        from .cms_close import maybe_close_cms_case
-        sub_id = sub.pk
-        transaction.on_commit(
-            lambda: maybe_close_cms_case(
-                Submission.objects.prefetch_related("commission_tasks__subtasks").get(pk=sub_id)
-            )
-        )
+        # Compliance is merged into SCDMS — there is no external case to close.
+        # Retained as a no-op for the post-decision task hooks; the legacy cms_*
+        # fields and these call sites are removed in the Phase 6 cleanup.
+        return
 
     @action(detail=True, methods=["get", "post", "patch", "delete"], url_path="subtasks")
     def subtasks(self, request, pk=None):

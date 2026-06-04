@@ -50,13 +50,13 @@ export function menuItemVisibleForUser(item, user) {
   const audience = item.audience ?? 'all'
   if (audience === 'all') return true
   if (!user) return false
+  // Site admins / superusers see every menu, including compliance.
+  if (userIsAdmin(user)) return true
   if (audience === 'compliance') return userIsComplianceStaff(user)
   if (audience === 'secretariat') {
-    if (userIsAdmin(user)) return true
     return userIsSecretariatStaff(user) && !userIsComplianceStaff(user)
   }
   if (audience === 'commission_decision') {
-    if (userIsAdmin(user)) return true
     return userIsCommissionDecisionOps(user) && !userIsComplianceStaff(user)
   }
   if (audience === 'exclude_compliance') return !userIsComplianceStaff(user)

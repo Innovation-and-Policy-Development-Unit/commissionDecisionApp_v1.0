@@ -57,6 +57,11 @@ const AnalyticsDashboard = lazy(() => import('../pages/psc/AnalyticsDashboard'))
 const WorkloadDashboard = lazy(() => import('../pages/psc/WorkloadDashboard'))
 const PendingDecisions = lazy(() => import('../pages/psc/PendingDecisions'))
 const MinistryPerformance = lazy(() => import('../pages/psc/MinistryPerformance'))
+const ComplianceCases = lazy(() => import('../pages/compliance/ComplianceCases'))
+const ComplianceCaseDetail = lazy(() => import('../pages/compliance/ComplianceCaseDetail'))
+const NewComplianceCaseForm = lazy(() => import('../pages/compliance/NewComplianceCaseForm'))
+const ComplaintsRegister = lazy(() => import('../pages/compliance/ComplaintsRegister'))
+const LodgeComplaint = lazy(() => import('../pages/compliance/LodgeComplaint'))
 
 function RouteFallback({ detail = false }) {
   return <PageSkeleton detailMode={detail} />
@@ -98,6 +103,13 @@ export default function AppRouter() {
           <Route path="/workload"             element={<S><WorkloadDashboard /></S>} />
           <Route path="/pending-decisions"    element={<S><PendingDecisions /></S>} />
           <Route path="/ministry-performance" element={<S><MinistryPerformance /></S>} />
+
+          {/* ── Compliance ── */}
+          <Route path="/compliance/cases"      element={<S><ComplianceCases /></S>} />
+          <Route path="/compliance/cases/new"  element={<S><NewComplianceCaseForm /></S>} />
+          <Route path="/compliance/cases/:id"  element={<S detail><ComplianceCaseDetail /></S>} />
+          <Route path="/compliance/complaints" element={<S><ComplaintsRegister /></S>} />
+          <Route path="/compliance/lodge-complaint" element={<S><LodgeComplaint /></S>} />
 
           {/* ── Admin ── */}
           <Route path="/admin/roles-permissions" element={<S><AdminPanel /></S>} />

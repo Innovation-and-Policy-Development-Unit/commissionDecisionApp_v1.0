@@ -145,28 +145,26 @@ class SubmissionAPITests(TestCase):
         from ..models import Submission, WorkflowEvent, WorkflowStage
 
         sub = Submission.objects.create(
-            title="CMS-linked matter",
+            title="System-event matter",
             form_category=self.form_cat,
             form_type_code="PSC 3.6",
             ministry=self.ministry,
             received_at=timezone.now(),
             created_by=self.user,
-            cms_case_id="cms-75",
-            cms_case_reference="CCMS-SM-2026-0075",
         )
         WorkflowEvent.objects.create(
             submission=sub,
             actor=None,
-            actor_label="CMS / compliance.manager",
+            actor_label="System / compliance.manager",
             previous_stage=WorkflowStage.DRAFT,
             new_stage=WorkflowStage.COMPLIANCE_UNDER_REVIEW,
-            remarks="Registered from CMS",
+            remarks="System-generated event",
         )
         resp = self.client.get(f"/api/submissions/{sub.id}/")
         self.assertEqual(resp.status_code, 200)
         events = resp.json().get("events") or []
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0]["actor_username"], "CMS / compliance.manager")
+        self.assertEqual(events[0]["actor_username"], "System / compliance.manager")
 
     def test_staff_without_profile_can_view_submission_detail(self):
         from django.utils import timezone

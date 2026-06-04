@@ -54,6 +54,15 @@ class TrackerConfig(AppConfig):
                 "Email dispatch schedule could not be synced: %s", exc
             )
 
+        try:
+            from .compliance_scheduler import sync_compliance_sla_scheduler
+            sync_compliance_sla_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger("scdms.security").warning(
+                "Compliance SLA schedule could not be synced: %s", exc
+            )
+
         # Wire up signal handlers for AI feedback analysis
         try:
             import tracker.signals  # noqa: F401

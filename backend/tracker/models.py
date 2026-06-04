@@ -1493,21 +1493,6 @@ class Submission(models.Model):
         blank=True,
         help_text="User IDs for ministry endorsement signers: hod, director, dg, minister.",
     )
-    # ── CMS integration ────────────────────────────────────────────────────
-    cms_case_id        = models.CharField(max_length=50, blank=True, default="",
-        help_text="Primary key of the corresponding Case in the CMS (set after dispatch).")
-    cms_case_reference = models.CharField(max_length=50, blank=True, default="",
-        help_text="Human-readable CMS reference, e.g. CCMS-SM-2026-0001.")
-    cms_dispatched_at  = models.DateTimeField(null=True, blank=True,
-        help_text="When the submission was successfully dispatched to the CMS.")
-    cms_signoff_at     = models.DateTimeField(null=True, blank=True,
-        help_text="When the CMS compliance manager signed off and returned the submission.")
-    cms_signoff_outcome = models.CharField(max_length=255, blank=True, default="",
-        help_text="Outcome note from the CMS sign-off callback.")
-    cms_case_closed_at = models.DateTimeField(
-        null=True, blank=True,
-        help_text="When SCDMS notified CMS to close the linked case after portal completion.",
-    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="submissions_logged"
     )
@@ -3103,3 +3088,23 @@ class DocumentVersion(models.Model):
 
     def __str__(self):
         return f"{self.document} v{self.version_num}"
+
+
+# ── Compliance Case Management models (merged in) ──────────────────────────────
+# Defined in a sibling module and imported here so Django discovers them as part of
+# the ``tracker`` app. The import sits at the bottom of this file because the
+# compliance models reference ``Submission`` / ``Ministry`` / ``ReferenceCounter``
+# defined above.
+from .compliance_models import (  # noqa: E402,F401
+    CaseFamily,
+    CaseNote,
+    Complaint,
+    ComplaintStatus,
+    ComplianceCase,
+    ComplianceCaseStage,
+    ComplianceCaseStatus,
+    ComplianceDecisionOutcome,
+    LitigationRecord,
+    SLAStatus,
+    StageStatus,
+)

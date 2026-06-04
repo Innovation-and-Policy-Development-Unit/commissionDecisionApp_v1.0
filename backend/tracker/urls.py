@@ -2,7 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .views_webhooks import cms_register_submission, cms_signoff_callback
+from .compliance_views import ComplaintViewSet, ComplianceCaseViewSet
 from .staff_chat_views import StaffChatSessionViewSet
 from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
@@ -137,6 +137,9 @@ router.register(r"daily-brief", DailyBriefViewSet, basename="daily-brief")
 # ── P1–P4 New ViewSet Registrations ──────────────────────────────────────────
 router.register(r"push-subscriptions", WebPushSubscriptionViewSet, basename="push-subscription")
 router.register(r"document-versions",  DocumentVersionViewSet,     basename="document-version")
+# ── Compliance module ────────────────────────────────────────────────────────
+router.register(r"compliance/cases",      ComplianceCaseViewSet, basename="compliance-case")
+router.register(r"compliance/complaints", ComplaintViewSet,      basename="compliance-complaint")
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -169,9 +172,6 @@ urlpatterns = [
     path("auth/verify-pin/",      VerifyPinView.as_view(),      name="verify-pin"),
     path("my-signature/",         MySignatureView.as_view(),    name="my-signature"),
     path("search/", global_search_view),
-    # ── Inbound webhooks from external systems ───────────────────────────────
-    path("webhooks/cms-signoff/", cms_signoff_callback, name="cms-signoff-callback"),
-    path("webhooks/cms-register/", cms_register_submission, name="cms-register-submission"),
     # ── P1–P4 New Endpoints ───────────────────────────────────────────────────
     path("dashboard/stats/",                dashboard_stats_view,               name="dashboard-stats"),
     path("submissions/<int:pk>/sla/",       submission_sla_view,                name="submission-sla"),

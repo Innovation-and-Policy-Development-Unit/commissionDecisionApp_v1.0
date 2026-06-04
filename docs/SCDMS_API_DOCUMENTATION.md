@@ -132,15 +132,12 @@ The key is bound to a Django user; **all RBAC rules apply** as that user. Keys a
 
 You may send **either** `Authorization: Bearer …` **or** `X-API-Key`, not both required.
 
-### 3.3 Webhook authentication (CMS only)
+### 3.3 Webhook authentication
 
-Inbound webhooks do **not** use JWT. They require:
-
-```http
-X-CMS-Callback-Key: <CMS_CALLBACK_SECRET>
-```
-
-Configured in environment on both CMS and SCDMS. See §10.
+_None._ Compliance Case Management is built into SCDMS, so the former CMS callback
+webhooks (`/api/webhooks/cms-register/`, `/api/webhooks/cms-signoff/`) and their
+`X-CMS-Callback-Key` secret have been removed. All compliance actions use the standard
+JWT-authenticated REST API under `/api/compliance/`.
 
 ---
 
@@ -490,46 +487,30 @@ Called when SCDMS marks implementation complete (event-driven).
 
 ---
 
-## 9. CMS integration (reference)
+## 9. Compliance module (reference)
 
-Already live between **Case Management System (CMS)** and SCDMS.
+Compliance Case Management is **built into SCDMS** — there is no external CMS and no
+webhooks. Compliance staff create and manage cases directly; ministries lodge
+complaints write-only. All endpoints use standard JWT auth and are scoped by the
+compliance firewall (`tracker/compliance_scoping.py`).
 
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| POST | `/api/webhooks/cms-register/` | `X-CMS-Callback-Key` | Register compliance case → CDP submission |
-| POST | `/api/webhooks/cms-signoff/` | `X-CMS-Callback-Key` | Compliance Manager sign-off → advance stage |
+| Method | Path | Who | Purpose |
+|--------|------|-----|---------|
+| GET/POST | `/api/compliance/cases/` | Compliance staff | List / create a case (Submission + ComplianceCase) |
+| GET | `/api/compliance/cases/{id}/` | Compliance staff | Case detail (stages, litigation, notes) |
+| POST | `/api/compliance/cases/{id}/submit/` | Compliance staff | Submit → Manager approval (or Secretary if Manager) |
+| POST | `/api/compliance/cases/{id}/approve/` | Compliance Manager | Approve → Secretary review |
+| POST | `/api/compliance/cases/{id}/return/` | Compliance Manager | Return to originator for changes |
+| POST | `/api/compliance/cases/{id}/notes/` | Compliance staff | Add a case note |
+| POST | `/api/compliance/cases/{id}/litigation/` | Compliance staff | Add a litigation/cost record |
+| POST | `/api/compliance/cases/{id}/stage/` | Compliance staff | Update a statutory stage status |
+| GET/POST | `/api/compliance/complaints/` | Ministry (own) / Compliance (all) | Lodge / list complaints |
+| POST | `/api/compliance/complaints/{id}/accept/` | Compliance staff | Triage → open a case |
+| POST | `/api/compliance/complaints/{id}/reject/` | Compliance staff | Reject with a reason |
 
-**Webhook security (operations):**
-
-- Rotate `CMS_CALLBACK_KEY` / `X-CMS-Callback-Key` via environment variables on a scheduled basis.
-- Local and CI test suites should simulate production **TLS** and security headers required under the National Cyber Security Strategy 2030 (including self-signed certificates where DCDT endpoints are not yet available).
-- **Planned v1.1.0:** upgrade CMS callbacks from shared secret header to **HMAC-SHA256** request signing for non-repudiation.
-
-**Register payload (example)**
-
-```json
-{
-  "cms_case_id": "CMS-2026-0042",
-  "cms_case_reference": "CMS-2026-0042",
-  "title": "Disciplinary matter — Smith",
-  "case_family": "employee_disciplinary",
-  "form_type_code": "COMP-SMDR",
-  "notes": "",
-  "registered_by": "compliance.manager"
-}
-```
-
-**Register response (201)**
-
-```json
-{
-  "cdp_submission_id": "PSC-2026-00142",
-  "cdp_submission_pk": 901,
-  "cdp_callback_url": "https://<host>/api/webhooks/cms-signoff/",
-  "current_stage": "secretary_review",
-  "cms_case_id": "CMS-2026-0042"
-}
-```
+**Firewall:** ministry users may lodge a complaint and read only their own (status +
+closed reason). They never see a case, its stages, decision, litigation, or the linked
+submission reference.
 
 ---
 
