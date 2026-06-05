@@ -376,22 +376,22 @@ export default function SubmissionLog() {
             {t('submission.view_kanban')}
           </ToggleButton>
         </div>
-        {/* Row 1: free-text search */}
-        <BaseInput
-          hideLabel
-          label={t('submission.filter_placeholder')}
-          type="search"
-          placeholder={t('submission.filter_placeholder')}
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          contentBefore={<Search size={15} className="text-slate-400" />}
-        />
-        {/* Row 2: filters + actions — wraps naturally when space is tight */}
-        <div className="flex flex-wrap gap-2 items-center">
+        {/* Filters arranged in columns (stack only on small screens) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:items-end">
+          <BaseInput
+            hideLabel
+            label={t('submission.filter_placeholder')}
+            type="search"
+            className="lg:col-span-5"
+            placeholder={t('submission.filter_placeholder')}
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            contentBefore={<Search size={15} className="text-slate-400" />}
+          />
           <BaseSelect
             hideLabel
             label="Stage"
-            className="w-48"
+            className="lg:col-span-3"
             placeholder="All stages"
             value={stageFilter}
             options={Object.entries(stageGroups).flatMap(([, codes]) =>
@@ -402,31 +402,33 @@ export default function SubmissionLog() {
           <BaseSelect
             hideLabel
             label="Ministry"
-            className="w-44"
+            className="lg:col-span-2"
             value={ministryFilter}
             placeholder="All ministries"
             options={ministryOptions}
             onChange={(_, value) => { setMinistryFilter(value); setPage(1) }}
           />
-          {isAdmin && selected.size > 0 && (
+          <div className="lg:col-span-2 flex gap-2">
+            {isAdmin && selected.size > 0 && (
+              <BaseButton
+                variant="danger"
+                icon={<Trash2 size={14} />}
+                onClick={handleBulkDelete}
+                className="whitespace-nowrap"
+              >
+                Delete {selected.size}
+              </BaseButton>
+            )}
             <BaseButton
-              variant="danger"
-              icon={<Trash2 size={14} />}
-              onClick={handleBulkDelete}
-              className="whitespace-nowrap"
+              variant="outline"
+              onClick={() => refetchSubmissions()}
+              disabled={refreshing}
+              icon={<RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />}
+              className="flex-1 justify-center whitespace-nowrap"
             >
-              Delete {selected.size}
+              {t('submission.reload')}
             </BaseButton>
-          )}
-          <BaseButton
-            variant="outline"
-            onClick={() => refetchSubmissions()}
-            disabled={refreshing}
-            icon={<RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />}
-            className="whitespace-nowrap"
-          >
-            {t('submission.reload')}
-          </BaseButton>
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <BaseInput
