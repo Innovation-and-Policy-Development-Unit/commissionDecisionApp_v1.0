@@ -1,5 +1,7 @@
 import { Printer } from 'lucide-react'
-import { FLUENT_FONT_FALLBACK } from '../../fluent/syncTypographyToDocument'
+
+// SCDMS base font stack (formerly Fluent's default) — kept for print fidelity.
+const FLUENT_FONT_FALLBACK = "'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif"
 
 const val = (values, key, fallback = '') =>
   (values?.[key] !== undefined && values[key] !== null && values[key] !== '')

@@ -1,6 +1,9 @@
 # Design-System Unification (A1) — Implementation Spec
 
-> **Status:** Proposed (awaiting build approval).
+> **Status:** IMPLEMENTED. `@fluentui/react-components` and `@fluentui/react-icons`
+> fully removed; all components/pages on Tailwind + the in-house `Base*` library;
+> Fluent typography (Segoe UI stack + scale) preserved natively as CSS tokens in
+> `index.css`. Pending: `npm install` + web image rebuild to drop the dependency.
 > **Track:** Enterprise UX/UI — foundational (other UX work depends on it).
 > **Driver:** Production readiness — one consistent, accessible, themeable UI.
 > **One-line goal:** Standardize the frontend on the **existing in-house `Base*`
