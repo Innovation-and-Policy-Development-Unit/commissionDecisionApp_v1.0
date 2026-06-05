@@ -63,8 +63,8 @@ class SmartReportViewSet(viewsets.ViewSet):
         if report.status == SmartReport.Status.READY and report.html_file:
             base = request.build_absolute_uri(f"/api/smart-reports/{report.id}/download/")
             data["downloads"] = {
-                "html": f"{base}?format=html",
-                "view": f"{base}?format=html&inline=1",
+                "html": f"{base}?fmt=html",
+                "view": f"{base}?fmt=html&inline=1",
             }
         return data
 
@@ -121,15 +121,25 @@ class SmartReportViewSet(viewsets.ViewSet):
         report = self._get_for_user(request, pk)
         return Response(self._status_payload(request, report))
 
+    def destroy(self, request, pk=None):
+        self._gate(request.user)
+        report = self._get_for_user(request, pk)
+        if report.html_file:
+            report.html_file.delete(save=False)
+        if report.pdf_file:
+            report.pdf_file.delete(save=False)
+        report.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
         self._gate(request.user)
         report = self._get_for_user(request, pk)
         if report.status != SmartReport.Status.READY or not report.html_file:
             return Response({"detail": "Report is not ready yet."}, status=409)
-        fmt = (request.query_params.get("format") or "html").lower()
+        fmt = (request.query_params.get("fmt") or "html").lower()
         if fmt != "html":
-            return Response({"detail": "Only format=html is supported."}, status=400)
+            return Response({"detail": "Only fmt=html is supported."}, status=400)
         inline = request.query_params.get("inline") == "1"
         fh = report.html_file.open("rb")
         return FileResponse(

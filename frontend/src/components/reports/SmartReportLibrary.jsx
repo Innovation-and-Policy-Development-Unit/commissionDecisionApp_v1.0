@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Eye, Download, RefreshCw, Loader2 } from 'lucide-react'
+import { Eye, Download, RefreshCw, Trash2, Loader2 } from 'lucide-react'
 import Badge from '../shared/Badge'
 import { smartReportsApi } from '../../api/smartReports'
+import { useToast } from '../../context/ToastContext'
 
 const STATUS_VARIANT = {
   ready: 'success',
@@ -13,6 +14,7 @@ const STATUS_VARIANT = {
 
 export default function SmartReportLibrary({ refreshKey, onView, onRerun }) {
   const { t } = useTranslation()
+  const toast = useToast()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -28,6 +30,17 @@ export default function SmartReportLibrary({ refreshKey, onView, onRerun }) {
   }, [])
 
   useEffect(() => { load() }, [load, refreshKey])
+
+  const handleDelete = async (r) => {
+    if (!window.confirm(t('smart_reports.confirm_delete', { title: r.title || t('smart_reports.untitled') }))) return
+    try {
+      await smartReportsApi.remove(r.id)
+      toast.success(t('smart_reports.deleted'))
+      setRows(prev => prev.filter(x => x.id !== r.id))
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('smart_reports.delete_failed'))
+    }
+  }
 
   if (loading) {
     return (
@@ -96,8 +109,17 @@ export default function SmartReportLibrary({ refreshKey, onView, onRerun }) {
                     type="button"
                     className="btn-ghost text-xs flex items-center gap-1"
                     onClick={() => onRerun?.(r.id)}
+                    title={t('smart_reports.rerun')}
                   >
                     <RefreshCw size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost text-xs text-red-600 flex items-center gap-1"
+                    onClick={() => handleDelete(r)}
+                    title={t('smart_reports.delete')}
+                  >
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </td>

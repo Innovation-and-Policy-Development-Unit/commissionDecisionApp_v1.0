@@ -32,10 +32,12 @@ export default function SmartReportViewer({ reportId, onRerun }) {
           try {
             const body = await smartReportsApi.fetchHtml(reportId)
             if (!cancelled) setHtml(body)
+          } catch {
+            // Don't re-poll on a fetch failure once the report is ready.
           } finally {
             if (!cancelled) setLoadingHtml(false)
           }
-          return
+          return  // stop polling — report is ready
         }
         if (data.status === 'failed') return
         timer.current = setTimeout(poll, POLL_MS)

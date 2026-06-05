@@ -45,9 +45,10 @@ def _parse_date(val: Any):
     if not val:
         return None
     try:
-        return datetime.strptime(str(val)[:10], "%Y-%m-%d")
+        dt = datetime.strptime(str(val)[:10], "%Y-%m-%d")
     except (TypeError, ValueError):
         return None
+    return timezone.make_aware(dt) if timezone.is_naive(dt) else dt
 
 
 def _turnaround_days(sub) -> int | None:
@@ -89,6 +90,7 @@ class SubmissionsResolver:
             "ministry_id": "int",
             "form_category_id": "int",
             "stage": "str",
+            "routed_unit": "str",
             "overdue_only": "bool",
         }
 
@@ -110,6 +112,8 @@ class SubmissionsResolver:
             qs = qs.filter(form_category_id=params["form_category_id"])
         if params.get("stage"):
             qs = qs.filter(current_stage=params["stage"])
+        if params.get("routed_unit"):
+            qs = qs.filter(routed_unit=params["routed_unit"])
         if params.get("overdue_only"):
             qs = qs.filter(
                 current_stage=WorkflowStage.UNDER_ASSESSMENT,

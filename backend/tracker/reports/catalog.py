@@ -66,7 +66,7 @@ def vocabulary() -> dict[str, Any]:
         "chart_sources": sorted(LIST_SOURCES),
         "kpi_sources": [{"key": k, "label": KPI_LABELS.get(k, k)} for k in sorted(KPI_SOURCES)],
         "table_columns": list(TABLE_COLUMNS),
-        "param_types": ["date", "ministry", "form_category", "stage", "bool"],
+        "param_types": ["date", "ministry", "form_category", "stage", "routed_unit", "bool"],
     }
 
 

@@ -11,11 +11,13 @@ export const smartReportsApi = {
 
   rerun: (id) => api.post(`/smart-reports/${id}/rerun/`).then(r => r.data),
 
+  remove: (id) => api.delete(`/smart-reports/${id}/`),
+
   /** Self-contained HTML (string) for inline <iframe srcDoc> rendering. */
   fetchHtml: (id) =>
     api
       .get(`/smart-reports/${id}/download/`, {
-        params: { format: 'html', inline: 1 },
+        params: { fmt: 'html', inline: 1 },
         responseType: 'text',
       })
       .then(r => r.data),
@@ -23,7 +25,7 @@ export const smartReportsApi = {
   /** Trigger an authenticated browser download of the report HTML. */
   downloadHtml: async (id, filename) => {
     const res = await api.get(`/smart-reports/${id}/download/`, {
-      params: { format: 'html' },
+      params: { fmt: 'html' },
       responseType: 'blob',
     })
     const url = URL.createObjectURL(res.data)

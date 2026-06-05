@@ -171,6 +171,27 @@ class SmartReportAPITests(TestCase):
         resp = self.client.get("/api/smart-reports/")
         self.assertEqual(resp.status_code, 403)
 
+    def test_download_ready_report(self):
+        # Regression: download uses ?fmt= (not DRF's reserved ?format=) and serves the file.
+        from django.core.files.base import ContentFile
+        self.client.force_authenticate(self.admin)
+        r = SmartReport.objects.create(
+            requested_by=self.admin, report_type="adhoc", prompt="p",
+            status=SmartReport.Status.READY,
+        )
+        r.html_file.save("r.html", ContentFile(b"<html>hi report</html>"), save=True)
+        resp = self.client.get(f"/api/smart-reports/{r.id}/download/?fmt=html")
+        self.assertEqual(resp.status_code, 200)
+        body = b"".join(resp.streaming_content)
+        self.assertIn(b"hi report", body)
+
+    def test_delete_report(self):
+        self.client.force_authenticate(self.admin)
+        r = SmartReport.objects.create(requested_by=self.admin, report_type="adhoc", prompt="p")
+        resp = self.client.delete(f"/api/smart-reports/{r.id}/")
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(SmartReport.objects.filter(id=r.id).exists())
+
     def test_library_scoped_to_owner(self):
         SmartReport.objects.create(requested_by=self.admin, report_type="adhoc", prompt="p")
         other = User.objects.create_user("api_other", password="x")
