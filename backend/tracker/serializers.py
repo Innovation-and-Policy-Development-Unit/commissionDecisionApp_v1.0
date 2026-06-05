@@ -43,6 +43,7 @@ from .models import (
     SystemSetting,
     FeedbackReport,
     FeedbackComment,
+    Comment,
     FormSectionSignature,
     RequiredDocument,
     SubmissionChecklistItem,
@@ -1315,6 +1316,79 @@ class FeedbackCommentSerializer(serializers.ModelSerializer):
         )
 
 
+# ── Collaboration: Comments (A7) ──────────────────────────────────────────────
+
+class CommentSerializer(serializers.ModelSerializer):
+    """Polymorphic discussion comment. `target` is supplied by the view, not the client."""
+
+    author_username = serializers.ReadOnlyField(source="author.username")
+    author_name = serializers.SerializerMethodField()
+    author_role_label = serializers.SerializerMethodField()
+    author_picture = serializers.SerializerMethodField()
+    is_author = serializers.SerializerMethodField()
+    can_moderate = serializers.SerializerMethodField()
+    reply_count = serializers.IntegerField(source="replies.count", read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = (
+            "id", "body", "is_internal", "parent",
+            "author", "author_username", "author_name", "author_role_label", "author_picture",
+            "is_author", "can_moderate",
+            "edited_at", "edit_count", "is_deleted", "reply_count",
+            "created_at", "updated_at",
+        )
+        read_only_fields = (
+            "id", "author", "edited_at", "edit_count",
+            "is_deleted", "created_at", "updated_at",
+        )
+
+    def _profile(self, user):
+        return getattr(user, "psc_profile", None)
+
+    def get_author_name(self, obj):
+        return obj.author.get_full_name() or obj.author.username
+
+    def get_author_role_label(self, obj):
+        p = self._profile(obj.author)
+        if not p:
+            return ""
+        try:
+            return p.get_role_display()
+        except Exception:
+            return p.role or ""
+
+    def get_author_picture(self, obj):
+        from .media_urls import public_media_url
+
+        p = self._profile(obj.author)
+        if not p or not p.profile_picture:
+            return None
+        return public_media_url(p.profile_picture, self.context.get("request"))
+
+    def get_is_author(self, obj):
+        request = self.context.get("request")
+        return bool(request and obj.author_id == request.user.id)
+
+    def get_can_moderate(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return False
+        u = request.user
+        return bool(obj.author_id == u.id or u.is_superuser or u.is_staff)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Tombstone soft-deleted comments — keep the thread structure, drop the content.
+        if instance.is_deleted:
+            data["body"] = ""
+            data["author_name"] = ""
+            data["author_username"] = ""
+            data["author_picture"] = None
+            data["author_role_label"] = ""
+        return data
+
+
 class FeedbackReportSerializer(serializers.ModelSerializer):
     created_by_username = serializers.ReadOnlyField(source="created_by.username")
     assigned_to_username = serializers.ReadOnlyField(source="assigned_to.username")
@@ -1449,6 +1523,7 @@ class AgendaItemSerializer(serializers.ModelSerializer):
 class MeetingSerializer(serializers.ModelSerializer):
     agenda_items = AgendaItemSerializer(many=True, read_only=True)
     agenda_count = serializers.SerializerMethodField()
+    agenda_readiness = serializers.SerializerMethodField()
     decisions_count = serializers.SerializerMethodField()
     agenda_approved_by_name = serializers.SerializerMethodField()
     flying_minute_signatures = serializers.SerializerMethodField()
@@ -1460,6 +1535,10 @@ class MeetingSerializer(serializers.ModelSerializer):
 
     def get_agenda_count(self, obj):
         return obj.agenda_items.count()
+
+    def get_agenda_readiness(self, obj):
+        # Chairman's "enough agenda to convene?" signal.
+        return obj.agenda_readiness()
 
     def get_flying_minute_signatures(self, obj):
         if obj.type != MeetingType.FLYING_MINUTE:
@@ -1483,12 +1562,14 @@ class MeetingSerializer(serializers.ModelSerializer):
             "submission_cutoff",
             "effective_cutoff",
             "max_items",
+            "min_items",
             "agenda_status",
             "agenda_approved_by",
             "agenda_approved_by_name",
             "agenda_approved_at",
             "agenda_items",
             "agenda_count",
+            "agenda_readiness",
             "decisions_count",
             "flying_minute_signatures",
         )

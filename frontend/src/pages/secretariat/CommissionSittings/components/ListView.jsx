@@ -1,6 +1,7 @@
 import { CalendarDays, Clock, MapPin, CheckCircle2, XCircle, MoreVertical } from 'lucide-react'
 import { SITTING_STATUSES, SITTING_TYPES } from '../constants'
 import clsx from 'clsx'
+import AgendaReadinessChip from '../../../../components/shared/AgendaReadinessChip'
 
 export default function ListView({ meetings, onSittingClick, getCapacity }) {
   return (
@@ -65,9 +66,12 @@ export default function ListView({ meetings, onSittingClick, getCapacity }) {
                     </span>
                   </td>
                   <td className="text-center">
-                    <div className="inline-flex flex-col items-center">
+                    <div className="inline-flex flex-col items-center gap-1">
                       <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{m.agenda_count || 0}</span>
                       <span className={`text-[9px] font-bold uppercase text-${capacity.color}-500`}>{capacity.label}</span>
+                      {m.agenda_readiness && m.status !== 'completed' && (
+                        <AgendaReadinessChip readiness={m.agenda_readiness} size="sm" />
+                      )}
                     </div>
                   </td>
                   <td>

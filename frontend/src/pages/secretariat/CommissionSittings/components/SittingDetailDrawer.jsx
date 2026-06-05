@@ -5,6 +5,7 @@ import { Dialog, Transition } from '@headlessui/react'
 import { X, Calendar, Clock, MapPin, ListChecks, FileText, CheckSquare, Users, Trash2, Edit3, ChevronRight, AlertCircle, FileSignature, PenLine } from 'lucide-react'
 import { SITTING_STATUSES } from '../constants'
 import clsx from 'clsx'
+import AgendaReadinessChip from '../../../../components/shared/AgendaReadinessChip'
 
 export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapacity, onOpenLogitechGuide }) {
   const { t } = useTranslation()
@@ -55,6 +56,9 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                             )}>
                               {status.label}
                             </div>
+                            {sitting.agenda_readiness && sitting.status !== 'completed' && (
+                              <AgendaReadinessChip readiness={sitting.agenda_readiness} size="sm" />
+                            )}
                           </div>
                           <Dialog.Title className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-tight">
                             {sitting.title}

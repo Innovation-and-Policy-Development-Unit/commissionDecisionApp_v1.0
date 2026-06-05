@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from .comment_views import CommentViewSet, mention_suggest
 from .compliance_views import ComplaintViewSet, ComplianceCaseViewSet
 from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
@@ -126,6 +127,7 @@ router.register(r"security-notices", SecurityNoticeViewSet,   basename="security
 router.register(r"feedback",         FeedbackViewSet,         basename="feedback")
 router.register(r"feedback-comments", FeedbackCommentViewSet, basename="feedback-comments")
 router.register(r"notifications",    NotificationViewSet,    basename="notification")
+router.register(r"comments",         CommentViewSet,         basename="comment")
 router.register(r"minutes",          MinutesViewSet,          basename="minutes")
 router.register(r"transcripts",      TranscriptViewSet,       basename="transcript")
 router.register(r"doc-annotations",  DocumentAnnotationViewSet, basename="doc-annotation")
@@ -159,6 +161,7 @@ urlpatterns = [
     path("dashboard/", dashboard_view),
     path("reports/stats/", reports_view),
     path("reports/ai-smart-query/", ai_smart_report_view),
+    path("mentions/suggest/", mention_suggest),
     path("intelligence/datasets/", intelligence_datasets),
     path("intelligence/query/", intelligence_query),
     path("intelligence/interpret/", intelligence_interpret),

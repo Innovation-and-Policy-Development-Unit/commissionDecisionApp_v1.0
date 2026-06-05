@@ -3,6 +3,8 @@ import secrets
 from datetime import datetime, time, timedelta
 
 from django.conf import settings
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -583,6 +585,13 @@ class Meeting(models.Model):
             "Items beyond this limit should be deferred to the next meeting."
         ),
     )
+    min_items = models.PositiveIntegerField(
+        default=5,
+        help_text=(
+            "Minimum number of agenda items needed before it is worth convening "
+            "the sitting. Drives the Chairman's agenda-readiness signal."
+        ),
+    )
     # ── Agenda approval gate (SOP Stage 3, steps 2-3) ─────────────────────
     agenda_status = models.CharField(
         max_length=24, choices=AgendaStatus.choices, default=AgendaStatus.DRAFT,
@@ -622,6 +631,40 @@ class Meeting(models.Model):
         cutoff_date = self.date - timedelta(days=self.CUTOFF_DAYS_BEFORE)
         naive = datetime.combine(cutoff_date, datetime.max.time().replace(microsecond=0))
         return timezone.make_aware(naive)
+
+    def agenda_readiness(self, count=None):
+        """
+        Agenda-readiness signal for the Chairman: is there enough on the agenda
+        to be worth convening this sitting?
+
+        `count` lets callers pass a pre-fetched/annotated agenda item count to
+        avoid an extra query; falls back to a COUNT(*) when omitted.
+        Returns a small dict consumed by the API and dashboards.
+        """
+        if count is None:
+            count = self.agenda_items.count()
+        min_items = self.min_items or 0
+        max_items = self.max_items or 0
+        is_ready = count >= min_items and count > 0
+        shortfall = max(0, min_items - count)
+        if count == 0:
+            level = "empty"
+        elif max_items and count > max_items:
+            level = "over"
+        elif max_items and count >= max_items:
+            level = "full"
+        elif is_ready:
+            level = "ready"
+        else:
+            level = "building"
+        return {
+            "count": count,
+            "min_items": min_items,
+            "max_items": max_items,
+            "is_ready": is_ready,
+            "shortfall": shortfall,
+            "level": level,
+        }
 
     def save(self, *args, **kwargs):
         if not self.reference_number:
@@ -2641,6 +2684,94 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"Notification for {self.recipient.username}: {self.title}"
+
+
+class Comment(models.Model):
+    """
+    Polymorphic discussion comment (A7 Collaboration).
+
+    Attached to any collaboratable object (Submission first; Meeting / CommissionTask
+    later) via a GenericForeignKey so the thread is built once and reused. As part of
+    the government record, comments are **soft-deleted only** and edits keep a history
+    counter; every write is mirrored to the AuditLog by the API layer.
+    """
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    target = GenericForeignKey("content_type", "object_id")
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="comments_authored",
+    )
+    body = models.TextField()
+    # One level of threading (replies). Null = top-level comment.
+    parent = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="replies",
+    )
+    # PSC-only note: hidden from ministry-side users even when they can see the object.
+    is_internal = models.BooleanField(
+        default=False,
+        help_text="If true, only PSC staff can see this comment (ministry firewall).",
+    )
+
+    # ── Evidentiary fields (official record) ──────────────────────────────────
+    edited_at = models.DateTimeField(null=True, blank=True)
+    edit_count = models.PositiveIntegerField(default=0)
+    is_deleted = models.BooleanField(default=False)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="comments_deleted",
+    )
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(
+                fields=["content_type", "object_id", "created_at"],
+                name="tracker_com_content_2b9d6e_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Comment {self.pk} by {self.author_id} on {self.content_type_id}:{self.object_id}"
+
+
+class Mention(models.Model):
+    """
+    A staff @mention inside a Comment (A7 P2). Derived from the comment body on save
+    so notifications and rendering are reliable (not re-parsed). Each row that passes
+    the RBAC/firewall check fans out one Notification (in-app + email).
+    """
+
+    comment = models.ForeignKey(
+        Comment, on_delete=models.CASCADE, related_name="mentions",
+    )
+    mentioned_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mentions_received",
+    )
+    notified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("comment", "mentioned_user")
+
+    def __str__(self):
+        return f"Mention of {self.mentioned_user_id} in comment {self.comment_id}"
 
 
 class DeadlineReminderDraft(models.Model):

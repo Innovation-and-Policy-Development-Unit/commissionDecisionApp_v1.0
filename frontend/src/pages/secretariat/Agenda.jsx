@@ -30,6 +30,7 @@ import {
   Send, ThumbsUp, Mail, ChevronsRight, Tablet,
 } from 'lucide-react'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
+import AgendaReadinessChip, { computeReadiness } from '../../components/shared/AgendaReadinessChip'
 
 // Sub-item letters a, b, c … z, aa, ab …
 function subLetter(idx) {
@@ -312,9 +313,13 @@ export default function Agenda() {
   const totalItems   = items.length
   const agendaStatus = selectedMeeting?.agenda_status || 'draft'
   const maxItems     = selectedMeeting?.max_items ?? 30
+  const minItems     = selectedMeeting?.min_items ?? 5
   const capacityPct  = maxItems > 0 ? Math.min(totalItems / maxItems, 1) : 0
   const isOverCapacity = totalItems > maxItems
   const isNearCapacity = !isOverCapacity && capacityPct >= 0.8
+  // Chairman's agenda-readiness signal — recomputed live as items are edited.
+  const readiness    = computeReadiness(totalItems, minItems, maxItems)
+  const belowReadiness = !isCompleted && (readiness.level === 'empty' || readiness.level === 'building')
 
   // Categories that actually have items
   const activeCategories = CATEGORY_ORDER.filter(cat => (grouped[cat] || []).length > 0)
@@ -412,6 +417,7 @@ export default function Agenda() {
                   />
                 </div>
               </div>
+              <AgendaReadinessChip readiness={readiness} size="sm" />
             </div>
           )}
           <div className="flex-1" />
@@ -433,6 +439,31 @@ export default function Agenda() {
           />
         )}
       </div>
+
+      {/* ── Agenda readiness (Chairman: enough to convene?) ─────────────── */}
+      {selectedMeeting && belowReadiness && (
+        <div className="mb-4 print:hidden rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 px-4 py-3 flex items-start gap-3">
+          <ClipboardList size={16} className="text-amber-500 shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-700 dark:text-amber-300">
+            <span className="font-semibold">
+              {readiness.level === 'empty' ? 'No agenda items yet' : 'Not yet ready to convene'}
+            </span>{' '}
+            — {totalItems} of a minimum {minItems} item{minItems !== 1 ? 's' : ''} placed.{' '}
+            {readiness.shortfall > 0 && (
+              <>Add <strong>{readiness.shortfall}</strong> more before calling this sitting.</>
+            )}
+          </div>
+        </div>
+      )}
+      {selectedMeeting && !isCompleted && readiness.is_ready && !isOverCapacity && !isNearCapacity && (
+        <div className="mb-4 print:hidden rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-900/20 px-4 py-3 flex items-start gap-3">
+          <Check size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+          <div className="text-sm text-emerald-700 dark:text-emerald-300">
+            <span className="font-semibold">Ready to convene</span> —{' '}
+            {totalItems} item{totalItems !== 1 ? 's' : ''} on the agenda (minimum {minItems}).
+          </div>
+        </div>
+      )}
 
       {/* ── Capacity overflow warning ─────────────────────────────────── */}
       {selectedMeeting && isOverCapacity && !isCompleted && (
