@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Sparkles, Send, Database, Loader2, Clock, Rows3 } from 'lucide-react'
+import { Loader2, Clock, Rows3, Hash, Tag, CalendarClock } from 'lucide-react'
 import clsx from 'clsx'
 import { intelligenceApi } from '../../api/intelligence'
 import { useToast } from '../../context/ToastContext'
@@ -19,6 +19,37 @@ const DEFAULT_SPEC = {
   row_limit: 1000,
 }
 
+// Normalise UI spec → API spec (split "in" values, drop empty filters).
+function normalize(spec) {
+  return {
+    ...spec,
+    filters: (spec.filters || [])
+      .filter(f => f.val !== '' && f.val != null)
+      .map(f => f.op === 'in'
+        ? { ...f, val: String(f.val).split(',').map(s => s.trim()).filter(Boolean) }
+        : f),
+  }
+}
+
+function FieldChip({ item, icon: Icon, onClick }) {
+  return (
+    <button
+      type="button"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('application/json', JSON.stringify(item))
+        e.dataTransfer.effectAllowed = 'copy'
+      }}
+      onClick={onClick}
+      className="w-full flex items-center gap-2 text-left text-sm px-2 py-1.5 rounded-md cursor-grab border border-transparent hover:border-slate-200 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300"
+      title={item.label}
+    >
+      <Icon size={14} className="text-slate-400 shrink-0" />
+      <span className="truncate">{item.label}</span>
+    </button>
+  )
+}
+
 export default function Intelligence() {
   const { t } = useTranslation()
   const toast = useToast()
@@ -28,7 +59,6 @@ export default function Intelligence() {
   const [spec, setSpec] = useState(DEFAULT_SPEC)
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [prompt, setPrompt] = useState('')
   const [tab, setTab] = useState('chart')
 
   const datasetDef = datasets.find(d => d.key === datasetKey)
@@ -37,7 +67,7 @@ export default function Intelligence() {
     if (!key || !useSpec?.x?.dimension) return
     setLoading(true)
     try {
-      setResult(await intelligenceApi.query(key, useSpec))
+      setResult(await intelligenceApi.query(key, normalize(useSpec)))
     } catch (e) {
       toast.error(e?.response?.data?.detail || t('intelligence.query_failed'))
     } finally {
@@ -69,85 +99,51 @@ export default function Intelligence() {
     runQuery(key, initial)
   }
 
-  const handleAsk = async () => {
-    if (!prompt.trim() || !datasetKey) return
-    setLoading(true)
-    try {
-      const { query_spec } = await intelligenceApi.interpret(datasetKey, prompt.trim())
-      const merged = { ...DEFAULT_SPEC, ...query_spec }
-      setSpec(merged)
-      await runQuery(datasetKey, merged)
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || t('intelligence.ask_failed'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const setX = (key) => {
-    const next = { ...spec, x: { ...spec.x, dimension: key } }
-    setSpec(next)
-    runQuery(datasetKey, next)
-  }
-
-  const columns = [...(datasetDef?.time_dimensions || []), ...(datasetDef?.dimensions || [])]
+  const addMetric = (item) => setSpec(s =>
+    (s.metrics || []).some(m => m.key === item.key) ? s : { ...s, metrics: [...(s.metrics || []), { key: item.key }] })
+  const setX = (item) => setSpec(s => ({ ...s, x: { ...s.x, dimension: item.key } }))
 
   return (
     <div className="max-w-screen-2xl mx-auto space-y-4 pb-10">
       <PageHeader title={t('intelligence.title')} subtitle={t('intelligence.subtitle')} />
 
-      {/* Ask box */}
-      <div className="card p-4 flex items-center gap-3">
-        <Sparkles size={18} className="text-primary-500 shrink-0" />
-        <input
-          className="input flex-1"
-          placeholder={t('intelligence.ask_placeholder')}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
-        />
-        <button className="btn-primary flex items-center gap-2" onClick={handleAsk} disabled={loading}>
-          <Send size={16} /> {t('intelligence.ask')}
-        </button>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left: dataset + fields */}
+        {/* Left: dataset + draggable fields */}
         <div className="lg:col-span-3 space-y-4">
           <div className="card p-3">
-            <label className="block text-xs font-medium text-slate-500 mb-1">{t('intelligence.dataset')}</label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">{t('intelligence.dataset')}</label>
             <select className="input w-full" value={datasetKey} onChange={(e) => changeDataset(e.target.value)}>
               {datasets.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
             </select>
           </div>
+
           <div className="card p-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase mb-2">
-              <Database size={14} /> {t('intelligence.columns')}
-            </div>
-            <div className="space-y-1 max-h-[420px] overflow-auto">
-              {columns.map(c => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => setX(c.key)}
-                  className={clsx(
-                    'w-full text-left text-sm px-2 py-1.5 rounded-md transition-colors',
-                    spec.x?.dimension === c.key
-                      ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-200'
-                      : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300',
-                  )}
-                >
-                  {c.label}
-                  {c.kind === 'time' && <span className="text-[10px] text-slate-400 ml-1">({t('intelligence.time')})</span>}
-                </button>
+            <div className="text-xs font-semibold text-slate-500 uppercase mb-2">{t('intelligence.metrics')}</div>
+            <div className="space-y-1 mb-3">
+              {(datasetDef?.metrics || []).map(m => (
+                <FieldChip key={m.key} item={{ role: 'metric', key: m.key, label: m.label }} icon={Hash}
+                  onClick={() => addMetric({ key: m.key })} />
               ))}
             </div>
+            <div className="text-xs font-semibold text-slate-500 uppercase mb-2">{t('intelligence.columns')}</div>
+            <div className="space-y-1 max-h-[360px] overflow-auto">
+              {(datasetDef?.time_dimensions || []).map(d => (
+                <FieldChip key={d.key} item={{ role: 'time', key: d.key, label: d.label }} icon={CalendarClock}
+                  onClick={() => setX({ key: d.key })} />
+              ))}
+              {(datasetDef?.dimensions || []).map(d => (
+                <FieldChip key={d.key} item={{ role: 'dimension', key: d.key, label: d.label }} icon={Tag}
+                  onClick={() => setX({ key: d.key })} />
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-2">{t('intelligence.drag_hint')}</p>
           </div>
         </div>
 
         {/* Middle: query builder */}
         <div className="lg:col-span-3">
           <div className="card p-4">
+            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">{t('intelligence.query')}</div>
             <QueryBuilder
               datasetDef={datasetDef}
               spec={spec}
