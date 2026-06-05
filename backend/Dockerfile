@@ -14,8 +14,8 @@ WORKDIR /app
 
 RUN groupadd -r scdms --gid=1001 && \
     useradd -r -g scdms --uid=1001 --no-create-home scdms && \
-    mkdir -p /var/log/scdms /var/backups/scdms /var/scdms/media /app/logs && \
-    chown -R scdms:scdms /var/log/scdms /var/backups/scdms /var/scdms/media /app/logs
+    mkdir -p /var/log/scdms /var/backups/scdms /var/scdms/media /app/logs /home/scdms/.cache && \
+    chown -R scdms:scdms /var/log/scdms /var/backups/scdms /var/scdms/media /app/logs /home/scdms
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -40,5 +40,7 @@ RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh && \
     chown -R scdms:scdms /app
 
 EXPOSE 8000
+# Quarto (Deno) writes its cache to $HOME/.cache/quarto — give the non-root user a writable home.
+ENV HOME=/home/scdms
 USER scdms
 ENTRYPOINT ["sh", "./docker-entrypoint.sh"]
