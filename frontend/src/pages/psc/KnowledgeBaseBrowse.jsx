@@ -1,230 +1,123 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Text, 
-  Card, 
-  CardHeader,
-  Input,
-  makeStyles,
-  shorthands,
-  tokens,
-  Divider,
-  Badge,
-  Button
-} from '@fluentui/react-components';
-import { 
-  SearchRegular, 
-  BookOpenRegular, 
-  FolderRegular, 
-  ChevronRightRegular,
-  InfoRegular,
-  LockClosedRegular,
-  SparkleRegular
-} from '@fluentui/react-icons';
-import { useNavigate } from 'react-router-dom';
-import api from '../../api/client';
-import PageHeader from '../../components/shared/PageHeader';
-
-const useStyles = makeStyles({
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '24px',
-    maxWidth: '1200px',
-    ...shorthands.margin('0', 'auto'),
-    paddingBottom: '40px',
-  },
-  searchBox: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.padding('24px'),
-    ...shorthands.borderRadius(tokens.borderRadiusXLarge),
-    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
-    boxShadow: tokens.shadow8,
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
-    columnGap: '24px',
-    rowGap: '24px',
-  },
-  categoryCard: {
-    cursor: 'pointer',
-    transition: 'transform 0.2s ease-in-out',
-    ':hover': {
-      transform: 'translateY(-4px)',
-      boxShadow: tokens.shadow16,
-    }
-  },
-  articleItem: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: '12px',
-    paddingBottom: '12px',
-    cursor: 'pointer',
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground1Hover,
-    },
-    ...shorthands.padding('8px', '12px'),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-  }
-});
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Search, BookOpen, Folder, ChevronRight, Lock } from 'lucide-react'
+import api from '../../api/client'
+import PageHeader from '../../components/shared/PageHeader'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseBadge from '../../components/shared/BaseBadge'
+import BaseButton from '../../components/shared/BaseButton'
 
 export default function KnowledgeBaseBrowse() {
-  const styles = useStyles();
-  const navigate = useNavigate();
-  const [categories, setCategories] = useState([]);
-  const [articles, setArticles] = useState([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [unavailable, setUnavailable] = useState(false);
+  const navigate = useNavigate()
+  const [categories, setCategories] = useState([])
+  const [articles, setArticles] = useState([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [unavailable, setUnavailable] = useState(false)
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    setUnavailable(false);
+    setLoading(true)
+    setUnavailable(false)
     try {
       const [catRes, artRes] = await Promise.all([
         api.get('/knowledge/categories/'),
-        api.get('/knowledge/articles/')
-      ]);
-      setCategories(catRes.data.results || catRes.data);
-      setArticles(artRes.data.results || artRes.data);
+        api.get('/knowledge/articles/'),
+      ])
+      setCategories(catRes.data.results || catRes.data)
+      setArticles(artRes.data.results || artRes.data)
     } catch (error) {
-      console.error('KB Error:', error);
-      if (error?.response?.status === 404) setUnavailable(true);
+      console.error('KB Error:', error)
+      if (error?.response?.status === 404) setUnavailable(true)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData() }, [loadData])
 
-  const filteredArticles = articles.filter(a => 
+  const filteredArticles = articles.filter(a =>
     a.title.toLowerCase().includes(search.toLowerCase()) ||
-    a.category_title.toLowerCase().includes(search.toLowerCase())
-  );
+    a.category_title.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  const articleItem = 'flex items-center justify-between px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50'
 
   if (unavailable) {
     return (
-      <div className={styles.container}>
-        <PageHeader
-          title="OPSC Wiki & Knowledge Base"
-          subtitle="Policies, circulars, and role-based user guides (HR Manager, Unit Manager, Secretary)."
-        />
-        <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--colorNeutralForeground3)' }}>
-          <BookOpenRegular fontSize={48} style={{ opacity: 0.3 }} />
-          <Text block size={400} weight="semibold" style={{ marginTop: '16px' }}>Knowledge Base Coming Soon</Text>
-          <Text block size={200} style={{ marginTop: '8px' }}>
-            This feature is not yet available on this server. Please check back later.
-          </Text>
+      <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
+        <PageHeader title="OPSC Wiki & Knowledge Base" subtitle="Policies, circulars, and role-based user guides (HR Manager, Unit Manager, Secretary)." />
+        <div className="text-center px-6 py-12 text-slate-500">
+          <BookOpen size={48} className="mx-auto opacity-30" />
+          <span className="block text-base font-semibold mt-4 text-slate-700 dark:text-slate-200">Knowledge Base Coming Soon</span>
+          <span className="block text-sm mt-2">This feature is not yet available on this server. Please check back later.</span>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className={styles.container}>
-      <PageHeader
-        title="OPSC Wiki & Knowledge Base"
-        subtitle="Policies, circulars, and role-based user guides (HR Manager, Unit Manager, Secretary)."
-      />
+    <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
+      <PageHeader title="OPSC Wiki & Knowledge Base" subtitle="Policies, circulars, and role-based user guides (HR Manager, Unit Manager, Secretary)." />
 
-      <div className={styles.searchBox}>
-        <Input 
-          size="large"
-          placeholder="Search for policies, circulars, or help guides..."
-          contentBefore={<SearchRegular />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full"
-        />
+      <div className="card p-6">
+        <BaseInput hideLabel label="Search" placeholder="Search for policies, circulars, or help guides..."
+          contentBefore={<Search size={16} className="text-slate-400" />}
+          value={search} onChange={(e) => setSearch(e.target.value)} className="w-full" />
       </div>
 
-      {search ? (
+      {loading ? null : search ? (
         <div className="space-y-4">
-          <Text weight="semibold" size={400}>Search Results ({filteredArticles.length})</Text>
+          <span className="font-semibold text-slate-800 dark:text-slate-100">Search Results ({filteredArticles.length})</span>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredArticles.map(art => (
-              <div 
-                key={art.id} 
-                className={styles.articleItem}
-                onClick={() => navigate(`/wiki/${art.slug}`)}
-              >
+              <div key={art.id} className={`card ${articleItem}`} onClick={() => navigate(`/wiki/${art.slug}`)}>
                 <div className="flex items-center gap-3">
-                  <BookOpenRegular />
+                  <BookOpen size={18} className="text-slate-400" />
                   <div>
-                    <Text weight="semibold">{art.title}</Text>
+                    <span className="font-semibold block text-slate-800 dark:text-slate-100">{art.title}</span>
                     <div className="flex items-center gap-2">
-                       <Text size={100} className="text-slate-400 uppercase tracking-tight">{art.category_title}</Text>
-                       {art.is_internal && <Badge size="small" appearance="outline" icon={<LockClosedRegular />}>Internal</Badge>}
+                      <span className="text-[10px] text-slate-400 uppercase tracking-tight">{art.category_title}</span>
+                      {art.is_internal && <BaseBadge size="small" color="outline" icon={<Lock size={11} />}>Internal</BaseBadge>}
                     </div>
                   </div>
                 </div>
-                <ChevronRightRegular className="text-slate-300" />
+                <ChevronRight size={16} className="text-slate-300" />
               </div>
             ))}
           </div>
         </div>
       ) : (
-        <div className={styles.grid}>
+        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))' }}>
           {categories.map(cat => {
-            const catArticles = articles.filter(a => a.category === cat.id).slice(0, 5);
-            if (catArticles.length === 0) return null;
-
+            const catArticles = articles.filter(a => a.category === cat.id).slice(0, 5)
+            if (catArticles.length === 0) return null
             return (
-              <Card key={cat.id} className={styles.categoryCard}>
-                <CardHeader 
-                  header={
-                    <div className="flex items-center gap-2">
-                      <FolderRegular fontSize={24} primaryFill={tokens.colorBrandForeground1} />
-                      <Text weight="bold" size={500}>{cat.title}</Text>
-                    </div>
-                  }
-                  description={<Text size={200}>{cat.description}</Text>}
-                />
-                
+              <div key={cat.id} className="card card-hover p-4">
+                <div className="flex items-center gap-2">
+                  <Folder size={24} className="text-primary-500" />
+                  <span className="font-bold text-lg text-slate-800 dark:text-slate-100">{cat.title}</span>
+                </div>
+                {cat.description && <p className="text-sm text-slate-500 mt-1">{cat.description}</p>}
+
                 <div className="mt-4 space-y-1">
                   {catArticles.map(art => (
-                    <div 
-                      key={art.id} 
-                      className={styles.articleItem}
-                      onClick={() => navigate(`/wiki/${art.slug}`)}
-                    >
-                      <Text size={200} className="truncate">{art.title}</Text>
-                      {art.is_internal && <LockClosedRegular fontSize={14} className="text-amber-500 shrink-0" />}
+                    <div key={art.id} className={articleItem} onClick={() => navigate(`/wiki/${art.slug}`)}>
+                      <span className="text-sm truncate text-slate-700 dark:text-slate-300">{art.title}</span>
+                      {art.is_internal && <Lock size={14} className="text-amber-500 shrink-0" />}
                     </div>
                   ))}
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <Button 
-                    appearance="subtle" 
-                    size="small" 
-                    icon={<ChevronRightRegular />} 
-                    iconPosition="after"
-                  >
-                    View all {cat.article_count} articles
-                  </Button>
+                  <BaseButton variant="ghost" size="sm" onClick={() => navigate(`/wiki/${catArticles[0].slug}`)}>
+                    View all {cat.article_count} articles <ChevronRight size={14} />
+                  </BaseButton>
                 </div>
-              </Card>
-            );
+              </div>
+            )
           })}
         </div>
       )}
-
-      {/* AI Assistant Tip */}
-      <Card appearance="subtle" className="bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/50 mt-8">
-        <div className="flex items-center gap-4 p-2">
-          <SparkleRegular fontSize={32} primaryFill={tokens.colorBrandForeground1} />
-          <div>
-            <Text weight="bold">Pro Tip: Ask the Staff Assistant</Text>
-            <Text block size={200} className="text-slate-600 dark:text-slate-400">
-              The AI Assistant has read all these documents. You can ask it direct questions like "What is the policy for study leave?" to get instant answers with citations.
-            </Text>
-          </div>
-        </div>
-      </Card>
     </div>
-  );
+  )
 }

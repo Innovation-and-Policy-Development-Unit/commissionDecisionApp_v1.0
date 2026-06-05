@@ -1,25 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import {
-  Text, Card, CardHeader, Button, Spinner, Badge, Table, TableHeader,
-  TableRow, TableHeaderCell, TableBody, TableCell,
-  Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, DialogTrigger,
-  Field, Select, Input,
-  makeStyles, shorthands, tokens,
-} from '@fluentui/react-components'
-import { PeopleRegular, BrainCircuitRegular, PersonAssignRegular } from '@fluentui/react-icons'
+import { useState, useEffect, useCallback } from 'react'
+import { Users, BrainCircuit } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
+import Modal from '../../components/shared/Modal'
+import BaseInput from '../../components/shared/BaseInput'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseBadge from '../../components/shared/BaseBadge'
+import BaseSpinner from '../../components/shared/BaseSpinner'
 import { useToast } from '../../context/ToastContext'
 
-const useStyles = makeStyles({
-  container: {
-    display: 'flex', flexDirection: 'column', rowGap: '24px',
-    maxWidth: '1200px', ...shorthands.margin('0', 'auto'), paddingBottom: '40px',
-  },
-})
-
 export default function WorkloadDashboard() {
-  const styles = useStyles()
   const toast = useToast()
   const [officers, setOfficers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -55,140 +45,84 @@ export default function WorkloadDashboard() {
     }
   }
 
-  const getLoadColor = (count) => {
-    if (count >= 10) return 'danger'
-    if (count >= 6) return 'warning'
-    return 'success'
-  }
+  const getLoadColor = (count) => (count >= 10 ? 'danger' : count >= 6 ? 'warning' : 'success')
 
   return (
-    <div className={styles.container}>
-      <PageHeader
-        title="Workload Dashboard"
-        subtitle="Monitor officer workload and get AI-powered assignment suggestions"
-      />
+    <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
+      <PageHeader title="Workload Dashboard" subtitle="Monitor officer workload and get AI-powered assignment suggestions" />
 
-      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-        <Button
-          icon={<BrainCircuitRegular />}
-          appearance="primary"
-          onClick={() => setAssignDialogOpen(true)}
-        >
-          AI Smart Assignment
-        </Button>
+      <div className="flex gap-3 justify-end">
+        <BaseButton icon={<BrainCircuit size={15} />} variant="primary" onClick={() => setAssignDialogOpen(true)}>AI Smart Assignment</BaseButton>
       </div>
 
-      <Card>
-        <CardHeader header={
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <PeopleRegular fontSize={20} />
-            <Text weight="bold" size={400}>PSC Officer Workload</Text>
-          </div>
-        } />
+      <div className="card overflow-hidden">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
+          <Users size={20} className="text-primary-500" />
+          <span className="font-bold text-slate-800 dark:text-slate-100">PSC Officer Workload</span>
+        </div>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}><Spinner /></div>
+          <div className="text-center p-10"><BaseSpinner /></div>
         ) : (
-          <Table aria-label="Officer workload table">
-            <TableHeader>
-              <TableRow>
-                <TableHeaderCell>Officer</TableHeaderCell>
-                <TableHeaderCell>Role</TableHeaderCell>
-                <TableHeaderCell>Active Submissions</TableHeaderCell>
-                <TableHeaderCell>Load Level</TableHeaderCell>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {officers.map(o => (
-                <TableRow key={o.id}>
-                  <TableCell>
-                    <Text weight="semibold">{o.full_name}</Text>
-                    <Text size={100} block style={{ color: 'var(--colorNeutralForeground3)' }}>@{o.username}</Text>
-                  </TableCell>
-                  <TableCell>
-                    <Text size={200}>{o.role}</Text>
-                  </TableCell>
-                  <TableCell>
-                    <Text weight="bold" size={400}>{o.active_submission_count}</Text>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      appearance="tint"
-                      color={getLoadColor(o.active_submission_count)}
-                      size="small"
-                    >
-                      {o.active_submission_count >= 10 ? 'Overloaded'
-                        : o.active_submission_count >= 6 ? 'Heavy' : 'Available'}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {officers.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4}>
-                    <Text style={{ color: 'var(--colorNeutralForeground3)' }}>No officers found.</Text>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-200 dark:border-slate-700 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Officer</th>
+                  <th className="px-3 py-2">Role</th>
+                  <th className="px-3 py-2">Active Submissions</th>
+                  <th className="px-3 py-2">Load Level</th>
+                </tr>
+              </thead>
+              <tbody>
+                {officers.map(o => (
+                  <tr key={o.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0 text-slate-700 dark:text-slate-300">
+                    <td className="px-3 py-2">
+                      <span className="font-semibold block text-slate-800 dark:text-slate-100">{o.full_name}</span>
+                      <span className="block text-[10px] text-slate-500">@{o.username}</span>
+                    </td>
+                    <td className="px-3 py-2">{o.role}</td>
+                    <td className="px-3 py-2 font-bold text-base text-slate-800 dark:text-slate-100">{o.active_submission_count}</td>
+                    <td className="px-3 py-2">
+                      <BaseBadge color={getLoadColor(o.active_submission_count)} size="small">
+                        {o.active_submission_count >= 10 ? 'Overloaded' : o.active_submission_count >= 6 ? 'Heavy' : 'Available'}
+                      </BaseBadge>
+                    </td>
+                  </tr>
+                ))}
+                {officers.length === 0 && <tr><td colSpan={4} className="p-6 text-slate-500">No officers found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         )}
-      </Card>
+      </div>
 
-      {/* AI Assignment Dialog */}
-      <Dialog open={assignDialogOpen} onOpenChange={(e, d) => setAssignDialogOpen(d.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>AI Smart Assignment</DialogTitle>
-            <DialogContent>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <Text size={200} style={{ color: 'var(--colorNeutralForeground2)' }}>
-                  Enter a submission ID to get an AI-powered assignment recommendation based on form type, ministry, and officer workload.
-                </Text>
-                <Field label="Submission ID" required>
-                  <Input
-                    type="number"
-                    value={submissionId}
-                    onChange={e => setSubmissionId(e.target.value)}
-                    placeholder="Enter submission ID"
-                    style={{ width: '100%' }}
-                  />
-                </Field>
-                <Button
-                  icon={suggestionLoading ? <Spinner size="tiny" /> : <BrainCircuitRegular />}
-                  appearance="primary"
-                  onClick={handleSuggest}
-                  disabled={suggestionLoading}
-                >
-                  {suggestionLoading ? 'Analysing…' : 'Get Suggestion'}
-                </Button>
-                {suggestion && (
-                  <Card appearance="subtle">
-                    <Text weight="bold" size={400}>Recommended Officer</Text>
-                    <Text size={300} weight="semibold" style={{ marginTop: '8px' }}>
-                      {suggestion.recommended_officer || suggestion.officer_username || '—'}
-                    </Text>
-                    {suggestion.reasoning && (
-                      <Text size={200} style={{ marginTop: '8px', color: 'var(--colorNeutralForeground2)' }}>
-                        {suggestion.reasoning}
-                      </Text>
-                    )}
-                    {suggestion.confidence_score != null && (
-                      <Badge appearance="tint" color="success" size="small" style={{ marginTop: '8px' }}>
-                        {suggestion.confidence_score}% confidence
-                      </Badge>
-                    )}
-                  </Card>
-                )}
-              </div>
-            </DialogContent>
-            <DialogActions>
-              <DialogTrigger disableButtonEnhancement>
-                <Button appearance="secondary">Close</Button>
-              </DialogTrigger>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
+      <Modal
+        open={assignDialogOpen}
+        onClose={() => setAssignDialogOpen(false)}
+        title="AI Smart Assignment"
+        footer={<BaseButton variant="secondary" onClick={() => setAssignDialogOpen(false)}>Close</BaseButton>}
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Enter a submission ID to get an AI-powered assignment recommendation based on form type, ministry, and officer workload.
+          </p>
+          <BaseInput label="Submission ID" required type="number" value={submissionId}
+            onChange={e => setSubmissionId(e.target.value)} placeholder="Enter submission ID" />
+          <BaseButton
+            icon={suggestionLoading ? <BaseSpinner size="sm" label="" /> : <BrainCircuit size={15} />}
+            variant="primary" onClick={handleSuggest} disabled={suggestionLoading}>
+            {suggestionLoading ? 'Analysing…' : 'Get Suggestion'}
+          </BaseButton>
+          {suggestion && (
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4">
+              <span className="font-bold text-slate-800 dark:text-slate-100">Recommended Officer</span>
+              <p className="mt-2 font-semibold text-slate-800 dark:text-slate-100">{suggestion.recommended_officer || suggestion.officer_username || '—'}</p>
+              {suggestion.reasoning && <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{suggestion.reasoning}</p>}
+              {suggestion.confidence_score != null && <BaseBadge color="success" size="small" className="mt-2">{suggestion.confidence_score}% confidence</BaseBadge>}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }

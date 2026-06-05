@@ -1,63 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  Text, Card, CardHeader, Spinner, Badge,
-  makeStyles, shorthands, tokens,
-} from '@fluentui/react-components'
-import {
-  DocumentRegular, AlertUrgentRegular, CheckmarkCircleRegular,
-  ClockRegular, PeopleRegular, DataBarVerticalRegular,
-  BrainCircuitRegular, BuildingRegular,
-} from '@fluentui/react-icons'
+import { FileText, AlertTriangle, Clock, BarChart3, BrainCircuit } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import StatCard from '../../components/shared/StatCard'
-
-const useStyles = makeStyles({
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '24px',
-    maxWidth: '1400px',
-    ...shorthands.margin('0', 'auto'),
-    paddingBottom: '40px',
-  },
-  kpiGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-    columnGap: '16px',
-    rowGap: '16px',
-  },
-  twoCol: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    columnGap: '24px',
-    rowGap: '24px',
-    '@media (max-width: 768px)': { gridTemplateColumns: '1fr' },
-  },
-  stageBar: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '8px',
-  },
-  stageRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  stageTrack: {
-    flex: 1,
-    height: '8px',
-    backgroundColor: tokens.colorNeutralBackground3,
-    borderRadius: tokens.borderRadiusMedium,
-    overflow: 'hidden',
-  },
-  stageFill: {
-    height: '100%',
-    backgroundColor: tokens.colorBrandBackground,
-    borderRadius: tokens.borderRadiusMedium,
-  },
-})
+import BaseBadge from '../../components/shared/BaseBadge'
+import BaseSpinner from '../../components/shared/BaseSpinner'
 
 const STAGE_LABELS = {
   draft: 'Draft',
@@ -75,7 +23,6 @@ const STAGE_LABELS = {
 }
 
 export default function ExecutiveDashboard() {
-  const styles = useStyles()
   const navigate = useNavigate()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -103,147 +50,91 @@ export default function ExecutiveDashboard() {
 
   if (loading) {
     return (
-      <div className={styles.container}>
+      <div className="flex flex-col gap-6 max-w-[1400px] mx-auto pb-10">
         <PageHeader title="Executive Dashboard" subtitle="Commission-wide performance overview" />
-        <div style={{ textAlign: 'center', padding: '60px' }}>
-          <Spinner size="large" label="Loading metrics…" />
-        </div>
+        <div className="text-center p-16"><BaseSpinner size="lg" label="Loading metrics…" /></div>
       </div>
     )
   }
 
   return (
-    <div className={styles.container}>
-      <PageHeader
-        title="Executive Dashboard"
-        subtitle="Commission-wide performance at a glance"
-      />
+    <div className="flex flex-col gap-6 max-w-[1400px] mx-auto pb-10">
+      <PageHeader title="Executive Dashboard" subtitle="Commission-wide performance at a glance" />
 
       {/* KPI Row */}
-      <div className={styles.kpiGrid}>
-        <StatCard
-          title="Total Submissions"
-          value={stats?.total_submissions ?? 0}
-          icon={DocumentRegular}
-          color="blue"
-          onClick={() => goToSubmissions('all')}
-        />
-        <StatCard
-          title="Active / Pending"
-          value={stats?.pending_active ?? 0}
-          icon={ClockRegular}
-          color="amber"
-          onClick={() => goToSubmissions('active')}
-        />
-        <StatCard
-          title="Submitted This Week"
-          value={stats?.submitted_this_week ?? 0}
-          icon={DataBarVerticalRegular}
-          color="emerald"
-          onClick={() => goToSubmissions('this_week')}
-        />
-        <StatCard
-          title="Submitted This Month"
-          value={stats?.submitted_this_month ?? 0}
-          icon={DataBarVerticalRegular}
-          color="cyan"
-          onClick={() => goToSubmissions('this_month')}
-        />
-        <StatCard
-          title="Overdue (>30 days)"
-          value={stats?.overdue_count ?? 0}
-          icon={AlertUrgentRegular}
-          color={stats?.overdue_count > 0 ? 'red' : 'emerald'}
-          onClick={() => goToSubmissions('overdue')}
-        />
-        <Card style={{ padding: '16px' }}>
-          <Text weight="semibold" size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>
-            SLA Compliance
-          </Text>
-          <Text weight="bold" size={800} style={{ lineHeight: 1.2 }}>
-            {stats?.sla_compliance_pct ?? 100}%
-          </Text>
-          <Badge appearance="tint" color={slaColor} size="small" style={{ marginTop: '4px' }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <StatCard title="Total Submissions" value={stats?.total_submissions ?? 0} icon={FileText} color="blue" onClick={() => goToSubmissions('all')} />
+        <StatCard title="Active / Pending" value={stats?.pending_active ?? 0} icon={Clock} color="amber" onClick={() => goToSubmissions('active')} />
+        <StatCard title="Submitted This Week" value={stats?.submitted_this_week ?? 0} icon={BarChart3} color="emerald" onClick={() => goToSubmissions('this_week')} />
+        <StatCard title="Submitted This Month" value={stats?.submitted_this_month ?? 0} icon={BarChart3} color="cyan" onClick={() => goToSubmissions('this_month')} />
+        <StatCard title="Overdue (>30 days)" value={stats?.overdue_count ?? 0} icon={AlertTriangle} color={stats?.overdue_count > 0 ? 'red' : 'emerald'} onClick={() => goToSubmissions('overdue')} />
+        <div className="card p-4">
+          <span className="block font-semibold text-xs text-slate-500">SLA Compliance</span>
+          <span className="block font-bold text-3xl leading-tight text-slate-900 dark:text-slate-100">{stats?.sla_compliance_pct ?? 100}%</span>
+          <BaseBadge color={slaColor} size="small" className="mt-1">
             {slaColor === 'success' ? 'On Target' : slaColor === 'warning' ? 'At Risk' : 'Below Target'}
-          </Badge>
-        </Card>
+          </BaseBadge>
+        </div>
       </div>
 
-      <div className={styles.twoCol}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Stage Breakdown */}
-        <Card>
-          <CardHeader header={<Text weight="bold" size={400}>Submissions by Stage</Text>} />
-          <div className={styles.stageBar} style={{ padding: '0 16px 16px' }}>
-            {stageEntries
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 10)
-              .map(([stage, count]) => (
-                <div key={stage} className={styles.stageRow}>
-                  <Text size={200} style={{ width: '180px', flexShrink: 0 }}>
-                    {STAGE_LABELS[stage] || stage}
-                  </Text>
-                  <div className={styles.stageTrack}>
-                    <div
-                      className={styles.stageFill}
-                      style={{ width: `${Math.round((count / maxStageCount) * 100)}%` }}
-                    />
-                  </div>
-                  <Text size={200} style={{ width: '30px', textAlign: 'right' }}>{count}</Text>
+        <div className="card">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-700"><span className="font-bold text-slate-800 dark:text-slate-100">Submissions by Stage</span></div>
+          <div className="flex flex-col gap-2 p-4">
+            {stageEntries.sort((a, b) => b[1] - a[1]).slice(0, 10).map(([stage, count]) => (
+              <div key={stage} className="flex items-center gap-2">
+                <span className="text-sm w-44 shrink-0 text-slate-600 dark:text-slate-300">{STAGE_LABELS[stage] || stage}</span>
+                <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-primary-500 rounded-full" style={{ width: `${Math.round((count / maxStageCount) * 100)}%` }} />
                 </div>
-              ))}
+                <span className="text-sm w-8 text-right text-slate-600 dark:text-slate-300">{count}</span>
+              </div>
+            ))}
           </div>
-        </Card>
+        </div>
 
         {/* Ministry Breakdown */}
-        <Card>
-          <CardHeader header={<Text weight="bold" size={400}>Top Ministries by Volume</Text>} />
+        <div className="card">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-700"><span className="font-bold text-slate-800 dark:text-slate-100">Top Ministries by Volume</span></div>
           {!stats?.ministry_breakdown?.length ? (
-            <Text size={200} style={{ color: 'var(--colorNeutralForeground3)', padding: '0 16px 16px' }}>
-              No data available or access restricted.
-            </Text>
+            <p className="text-sm text-slate-500 p-4">No data available or access restricted.</p>
           ) : (
-            <div className={styles.stageBar} style={{ padding: '0 16px 16px' }}>
+            <div className="flex flex-col gap-2 p-4">
               {stats.ministry_breakdown.map(({ ministry, count }) => {
                 const maxMinistry = Math.max(1, ...stats.ministry_breakdown.map(m => m.count))
                 return (
-                  <div key={ministry} className={styles.stageRow}>
-                    <Text size={200} style={{ width: '200px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {ministry || 'Unknown'}
-                    </Text>
-                    <div className={styles.stageTrack}>
-                      <div
-                        className={styles.stageFill}
-                        style={{ width: `${Math.round((count / maxMinistry) * 100)}%`, backgroundColor: tokens.colorPaletteTealBackground2 }}
-                      />
+                  <div key={ministry} className="flex items-center gap-2">
+                    <span className="text-sm w-52 shrink-0 truncate text-slate-600 dark:text-slate-300">{ministry || 'Unknown'}</span>
+                    <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-teal-500 rounded-full" style={{ width: `${Math.round((count / maxMinistry) * 100)}%` }} />
                     </div>
-                    <Text size={200} style={{ width: '30px', textAlign: 'right' }}>{count}</Text>
+                    <span className="text-sm w-8 text-right text-slate-600 dark:text-slate-300">{count}</span>
                   </div>
                 )
               })}
             </div>
           )}
-        </Card>
+        </div>
       </div>
 
       {/* AI Processing Stats */}
-      <Card>
-        <CardHeader
-          header={<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BrainCircuitRegular fontSize={20} />
-            <Text weight="bold" size={400}>AI Processing Rates</Text>
-          </div>}
-        />
-        <div style={{ display: 'flex', gap: '32px', padding: '0 16px 16px', flexWrap: 'wrap' }}>
+      <div className="card">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
+          <BrainCircuit size={20} className="text-primary-500" />
+          <span className="font-bold text-slate-800 dark:text-slate-100">AI Processing Rates</span>
+        </div>
+        <div className="flex gap-8 p-4 flex-wrap">
           <div>
-            <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>Executive Briefs</Text>
-            <Text weight="bold" size={500}>{stats?.ai_brief_processing_rate ?? 0}%</Text>
+            <span className="block text-sm text-slate-500">Executive Briefs</span>
+            <span className="block font-bold text-xl text-slate-900 dark:text-slate-100">{stats?.ai_brief_processing_rate ?? 0}%</span>
           </div>
           <div>
-            <Text size={200} style={{ color: 'var(--colorNeutralForeground3)' }}>Risk Assessments</Text>
-            <Text weight="bold" size={500}>{stats?.ai_risk_processing_rate ?? 0}%</Text>
+            <span className="block text-sm text-slate-500">Risk Assessments</span>
+            <span className="block font-bold text-xl text-slate-900 dark:text-slate-100">{stats?.ai_risk_processing_rate ?? 0}%</span>
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   )
 }

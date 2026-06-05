@@ -1,53 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import {
-  Text, Card, CardHeader, Badge, Spinner, Button,
-  makeStyles, shorthands, tokens,
-} from '@fluentui/react-components'
-import {
-  CalendarRegular, AlertRegular, TaskListLtrRegular, WarningRegular,
-} from '@fluentui/react-icons'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Calendar, ListChecks, AlertTriangle } from 'lucide-react'
 import api from '../../api/client'
 import { normalizeFieldPayload } from '../../utils/listPayload'
 import PageHeader from '../../components/shared/PageHeader'
-
-const useStyles = makeStyles({
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '24px',
-    maxWidth: '1200px',
-    ...shorthands.margin('0', 'auto'),
-    paddingBottom: '40px',
-  },
-  eventList: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '8px',
-  },
-  eventRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    ...shorthands.padding('12px', '16px'),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    cursor: 'pointer',
-    ':hover': { backgroundColor: tokens.colorNeutralBackground1Hover },
-    borderLeft: '4px solid transparent',
-  },
-  typeTag: {
-    width: '120px',
-    flexShrink: 0,
-  },
-})
+import BaseBadge from '../../components/shared/BaseBadge'
+import BaseButton from '../../components/shared/BaseButton'
+import BaseSpinner from '../../components/shared/BaseSpinner'
 
 const TYPE_CONFIG = {
-  meeting: { color: 'brand', label: 'Meeting', icon: <CalendarRegular /> },
-  task_deadline: { color: 'warning', label: 'Task Deadline', icon: <TaskListLtrRegular /> },
-  sla_warning: { color: 'danger', label: 'SLA Warning', icon: <WarningRegular /> },
+  meeting: { color: 'primary', label: 'Meeting', icon: <Calendar size={13} />, border: 'border-l-primary-500' },
+  task_deadline: { color: 'warning', label: 'Task Deadline', icon: <ListChecks size={13} />, border: 'border-l-amber-500' },
+  sla_warning: { color: 'danger', label: 'SLA Warning', icon: <AlertTriangle size={13} />, border: 'border-l-red-500' },
 }
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function groupByMonth(events) {
   const groups = {}
@@ -62,7 +29,6 @@ function groupByMonth(events) {
 }
 
 export default function CommissionCalendar() {
-  const styles = useStyles()
   const navigate = useNavigate()
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
@@ -83,91 +49,57 @@ export default function CommissionCalendar() {
 
   const filtered = filter === 'all' ? events : events.filter(e => e.type === filter)
   const grouped = groupByMonth(filtered)
-
-  const handleClick = (ev) => {
-    if (ev.url) navigate(ev.url)
-  }
-
+  const handleClick = (ev) => { if (ev.url) navigate(ev.url) }
   const types = ['all', 'meeting', 'task_deadline', 'sla_warning']
 
   return (
-    <div className={styles.container}>
-      <PageHeader
-        title="Commission Calendar"
-        subtitle="Meeting dates, task deadlines, and SLA warnings"
-      />
+    <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
+      <PageHeader title="Commission Calendar" subtitle="Meeting dates, task deadlines, and SLA warnings" />
 
-      {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        {types.map(t => (
-          <Button
-            key={t}
-            size="small"
-            appearance={filter === t ? 'primary' : 'outline'}
-            onClick={() => setFilter(t)}
-          >
-            {t === 'all' ? 'All Events' : TYPE_CONFIG[t]?.label || t}
-          </Button>
+      <div className="flex gap-2 flex-wrap">
+        {types.map(tp => (
+          <BaseButton key={tp} size="sm" variant={filter === tp ? 'primary' : 'outline'} onClick={() => setFilter(tp)}>
+            {tp === 'all' ? 'All Events' : TYPE_CONFIG[tp]?.label || tp}
+          </BaseButton>
         ))}
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px' }}>
-          <Spinner label="Loading calendar…" />
-        </div>
+        <div className="text-center p-16"><BaseSpinner label="Loading calendar…" /></div>
       ) : grouped.length === 0 ? (
-        <Card>
-          <Text style={{ padding: '24px', color: 'var(--colorNeutralForeground3)' }}>
-            No events found.
-          </Text>
-        </Card>
+        <div className="card"><p className="p-6 text-slate-500">No events found.</p></div>
       ) : (
         grouped.map(group => (
-          <Card key={group.label}>
-            <CardHeader header={<Text weight="bold" size={500}>{group.label}</Text>} />
-            <div className={styles.eventList} style={{ padding: '0 8px 16px' }}>
+          <div key={group.label} className="card">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-700"><span className="font-bold text-lg text-slate-800 dark:text-slate-100">{group.label}</span></div>
+            <div className="flex flex-col gap-2 p-2">
               {group.events.map(ev => {
                 const cfg = TYPE_CONFIG[ev.type] || {}
                 const d = ev.date ? new Date(ev.date) : null
                 return (
                   <div
                     key={ev.id}
-                    className={styles.eventRow}
                     onClick={() => handleClick(ev)}
-                    style={{
-                      borderLeftColor: ev.type === 'sla_warning'
-                        ? tokens.colorStatusDangerForeground1
-                        : ev.type === 'task_deadline'
-                          ? tokens.colorStatusWarningForeground1
-                          : tokens.colorBrandForeground1,
-                    }}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer border-l-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 ${cfg.border || 'border-l-transparent'}`}
                   >
-                    <div style={{ width: '48px', textAlign: 'center', flexShrink: 0 }}>
+                    <div className="w-12 text-center shrink-0">
                       {d && (
                         <>
-                          <Text weight="bold" size={500}>{d.getDate()}</Text>
-                          <Text size={100} block style={{ color: 'var(--colorNeutralForeground3)' }}>
-                            {MONTHS[d.getMonth()]}
-                          </Text>
+                          <span className="font-bold text-lg text-slate-800 dark:text-slate-100">{d.getDate()}</span>
+                          <span className="block text-[10px] text-slate-500">{MONTHS[d.getMonth()]}</span>
                         </>
                       )}
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <Text weight="semibold" size={300}>{ev.title}</Text>
-                      {ev.status && (
-                        <Text size={100} block style={{ color: 'var(--colorNeutralForeground3)' }}>
-                          Status: {ev.status}
-                        </Text>
-                      )}
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">{ev.title}</span>
+                      {ev.status && <span className="block text-[10px] text-slate-500">Status: {ev.status}</span>}
                     </div>
-                    <Badge appearance="tint" color={cfg.color} size="small" icon={cfg.icon}>
-                      {cfg.label}
-                    </Badge>
+                    <BaseBadge color={cfg.color} size="small" icon={cfg.icon}>{cfg.label}</BaseBadge>
                   </div>
                 )
               })}
             </div>
-          </Card>
+          </div>
         ))
       )}
     </div>

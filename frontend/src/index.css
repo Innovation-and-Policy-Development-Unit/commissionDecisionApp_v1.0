@@ -73,6 +73,20 @@
   --color-border: 51 65 85;
 }
 
+/* ─── Knowledge-base article markdown (rendered via ReactMarkdown) ──────────── */
+.kb-markdown h1 { font-size: 2.5em; font-weight: 700; margin-bottom: 0.8em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+.kb-markdown h2 { font-size: 1.8em; font-weight: 700; margin-top: 1.5em; margin-bottom: 0.6em; }
+.kb-markdown h3 { font-size: 1.4em; font-weight: 700; margin-top: 1.2em; margin-bottom: 0.5em; }
+.kb-markdown p { margin-bottom: 1.2em; line-height: 1.8; font-size: 1.1em; }
+.kb-markdown ul, .kb-markdown ol { margin-left: 2em; margin-bottom: 1.2em; list-style: revert; }
+.kb-markdown li { margin-bottom: 0.5em; line-height: 1.6; }
+.kb-markdown blockquote { border-left: 4px solid rgb(var(--p-500)); padding-left: 1em; font-style: italic; color: #64748b; margin: 1.5em 0; }
+.kb-markdown code { background-color: #f1f5f9; padding: 0.2em 0.4em; border-radius: 4px; font-family: var(--fontFamilyMonospace); }
+.kb-markdown pre { background-color: #f1f5f9; padding: 1em; border-radius: 8px; overflow-x: auto; margin: 1.5em 0; }
+.kb-markdown table { width: 100%; border-collapse: collapse; margin: 1.5em 0; }
+.kb-markdown th, .kb-markdown td { border: 1px solid #cbd5e1; padding: 0.8em; text-align: left; }
+.kb-markdown th { background-color: #f1f5f9; font-weight: 700; }
+
 /* Blue — #3b82f6 */
 [data-theme="blue"] {
   --p-50:  239 246 255;
