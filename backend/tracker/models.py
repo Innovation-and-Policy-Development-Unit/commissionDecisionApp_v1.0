@@ -2127,6 +2127,43 @@ class DecisionRegisterReport(models.Model):
         return f"Register report #{self.pk} — {self.title or self.status}"
 
 
+class ReportTemplate(models.Model):
+    """Admin-managed, global report template (Reports product).
+
+    A template is a *guided-builder spec* (sections/kpis/charts/table) over a data
+    domain, plus the parameter form to expose at generation time. No code/`.qmd` is
+    ever stored — only validated vocabulary — so there is no code-execution surface.
+    """
+
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=80, unique=True)
+    description = models.TextField(blank=True)
+    domain = models.CharField(max_length=24, default="submissions", help_text="Resolver domain key.")
+    spec = models.JSONField(default=dict, help_text="Validated render spec: sections/kpis/charts/table/narrative.")
+    param_schema = models.JSONField(default=list, blank=True, help_text="Params exposed on the Generate form.")
+    default_params = models.JSONField(default=dict, blank=True)
+    visible_to_all = models.BooleanField(default=True)
+    visible_roles = models.JSONField(default=list, blank=True, help_text="Role codes when not visible to all.")
+    is_active = models.BooleanField(default=True)
+    version = models.PositiveIntegerField(default=1)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="report_templates_created",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="report_templates_updated",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.slug})"
+
+
 class SmartReport(models.Model):
     """Enterprise Reporting Engine job — async Quarto HTML report (catalog or ad-hoc NL).
 
@@ -2149,12 +2186,16 @@ class SmartReport(models.Model):
         on_delete=models.CASCADE,
         related_name="smart_reports",
     )
+    template = models.ForeignKey(
+        "ReportTemplate", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="generated_reports",
+    )
     domain = models.CharField(
         max_length=24, choices=Domain.choices, default=Domain.SUBMISSIONS
     )
     report_type = models.CharField(
         max_length=64, default="adhoc",
-        help_text='Catalog key (e.g. "submissions_volume_turnaround") or "adhoc".',
+        help_text='Template slug or "adhoc".',
     )
     prompt = models.TextField(blank=True, help_text="Ad-hoc natural-language request.")
     params = models.JSONField(default=dict, blank=True, help_text="Catalog params / filters.")

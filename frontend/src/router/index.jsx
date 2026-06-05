@@ -19,7 +19,8 @@ import SubmissionLog from '../pages/psc/SubmissionLog'
 // Large pages stay code-split; fallback is invisible so there's no spinner flash.
 const SubmissionDetail = lazy(() => import('../pages/psc/SubmissionDetail'))
 const SubmissionForm = lazy(() => import('../pages/psc/SubmissionForm'))
-const SmartReports = lazy(() => import('../pages/psc/SmartReports'))
+const ReportBrowse = lazy(() => import('../pages/reports/ReportBrowse'))
+const ReportTemplateManager = lazy(() => import('../pages/reports/ReportTemplateManager'))
 const RedirectToMinuteIntake = lazy(() => import('../pages/meeting/RedirectToMinuteIntake'))
 const AdminPanel = lazy(() => import('../pages/admin/AdminPanel'))
 const MinistriesDepartments = lazy(() => import('../pages/admin/MinistriesDepartments'))
@@ -87,7 +88,8 @@ export default function AppRouter() {
           <Route path="/submissions" element={<SubmissionLog />} />
           <Route path="/submissions/new" element={<S><SubmissionForm /></S>} />
           <Route path="/submissions/:id" element={<S detail><SubmissionDetail /></S>} />
-          <Route path="/reports" element={<S><SmartReports /></S>} />
+          <Route path="/reports" element={<S><ReportBrowse /></S>} />
+          <Route path="/reports/templates" element={<S><ReportTemplateManager /></S>} />
           <Route path="/wiki" element={<S><KnowledgeBaseBrowse /></S>} />
           <Route path="/wiki/:slug" element={<S detail><ArticleViewer /></S>} />
           <Route path="/meetings/capture" element={<S><RedirectToMinuteIntake /></S>} />

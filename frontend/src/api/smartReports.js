@@ -2,8 +2,6 @@ import api from './client'
 
 /** Smart Report (Enterprise Reporting Engine) API client. */
 export const smartReportsApi = {
-  catalog: () => api.get('/smart-reports/catalog/').then(r => r.data),
-
   list: (mine = true) =>
     api.get('/smart-reports/', { params: mine ? { mine: 1 } : {} }).then(r => r.data),
 

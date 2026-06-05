@@ -1,37 +1,52 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Sparkles, Send, Library as LibraryIcon, Plus } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Library as LibraryIcon, Plus, Settings2 } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
+import { reportTemplatesApi } from '../../api/reportTemplates'
 import { smartReportsApi } from '../../api/smartReports'
 import { useToast } from '../../context/ToastContext'
+import { useAuth } from '../../context/AuthContext'
 import PageHeader from '../../components/shared/PageHeader'
 import SmartReportCatalog from '../../components/reports/SmartReportCatalog'
 import SmartReportLibrary from '../../components/reports/SmartReportLibrary'
 import SmartReportViewer from '../../components/reports/SmartReportViewer'
 
-export default function SmartReports() {
+const MANAGER_ROLES = new Set(['psc_admin'])
+
+export default function ReportBrowse() {
   const { t } = useTranslation()
   const toast = useToast()
+  const { user } = useAuth()
 
-  const [tab, setTab] = useState('new')
-  const [catalog, setCatalog] = useState([])
+  const [tab, setTab] = useState('generate')
+  const [templates, setTemplates] = useState([])
   const [ministries, setMinistries] = useState([])
   const [categories, setCategories] = useState([])
-  const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [activeReportId, setActiveReportId] = useState(null)
   const [libraryKey, setLibraryKey] = useState(0)
 
+  const canManage = user?.is_staff || user?.is_superuser || MANAGER_ROLES.has(user?.role)
+
   useEffect(() => {
     let cancelled = false
     Promise.allSettled([
-      smartReportsApi.catalog(),
+      reportTemplatesApi.list(),
       api.get('/ministries/'),
       api.get('/form-categories/'),
-    ]).then(([cat, min, fc]) => {
+    ]).then(([tpl, min, fc]) => {
       if (cancelled) return
-      if (cat.status === 'fulfilled') setCatalog(cat.value?.reports || [])
+      if (tpl.status === 'fulfilled') {
+        // Map templates to the catalog-card shape.
+        setTemplates((tpl.value || []).map(tt => ({
+          key: tt.slug,
+          title: tt.name,
+          description: tt.description,
+          params: tt.param_schema || [],
+        })))
+      }
       if (min.status === 'fulfilled') setMinistries(min.value?.data?.results || min.value?.data || [])
       if (fc.status === 'fulfilled') setCategories(fc.value?.data?.results || fc.value?.data || [])
     })
@@ -44,20 +59,14 @@ export default function SmartReports() {
       const res = await smartReportsApi.create(payload)
       setActiveReportId(res.id)
       setLibraryKey(k => k + 1)
-      setTab('new')
     } catch (e) {
-      toast.error(e?.response?.data?.detail || e?.response?.data?.prompt || t('smart_reports.create_failed'))
+      toast.error(e?.response?.data?.detail || e?.response?.data?.template || t('report_hub.create_failed'))
     } finally {
       setBusy(false)
     }
   }, [t, toast])
 
-  const handleGenerate = (report_type, params) => startReport({ report_type, params })
-
-  const handleAdhoc = () => {
-    if (!query.trim()) return
-    startReport({ report_type: 'adhoc', prompt: query.trim() })
-  }
+  const handleGenerate = (slug, params) => startReport({ template: slug, params })
 
   const handleRerun = async (id) => {
     setBusy(true)
@@ -65,18 +74,14 @@ export default function SmartReports() {
       const res = await smartReportsApi.rerun(id)
       setActiveReportId(res.id)
       setLibraryKey(k => k + 1)
-      setTab('new')
     } catch (e) {
-      toast.error(e?.response?.data?.detail || t('smart_reports.create_failed'))
+      toast.error(e?.response?.data?.detail || t('report_hub.create_failed'))
     } finally {
       setBusy(false)
     }
   }
 
-  const handleView = (id) => {
-    setActiveReportId(id)
-    setTab('new')
-  }
+  const handleView = (id) => { setActiveReportId(id); setTab('generate') }
 
   const TabButton = ({ id, icon: Icon, label }) => (
     <button
@@ -95,65 +100,47 @@ export default function SmartReports() {
 
   return (
     <div className="max-w-screen-2xl mx-auto space-y-6 pb-10">
-      <PageHeader title={t('smart_reports.title')} subtitle={t('smart_reports.subtitle')} />
+      <PageHeader title={t('report_hub.title')} subtitle={t('report_hub.subtitle')} />
 
-      <div className="flex items-center gap-2">
-        <TabButton id="new" icon={Plus} label={t('smart_reports.tab_new')} />
-        <TabButton id="library" icon={LibraryIcon} label={t('smart_reports.tab_library')} />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <TabButton id="generate" icon={Plus} label={t('report_hub.tab_generate')} />
+          <TabButton id="library" icon={LibraryIcon} label={t('report_hub.tab_library')} />
+        </div>
+        {canManage && (
+          <Link to="/reports/templates" className="btn-ghost text-sm flex items-center gap-1">
+            <Settings2 size={16} /> {t('report_hub.manage_templates')}
+          </Link>
+        )}
       </div>
 
-      {tab === 'new' && activeReportId && (
+      {tab === 'generate' && activeReportId && (
         <div className="space-y-3">
           <button
             type="button"
             onClick={() => setActiveReportId(null)}
             className="text-sm text-primary-600 hover:underline"
           >
-            ← {t('smart_reports.new_report')}
+            ← {t('report_hub.back_to_templates')}
           </button>
           <SmartReportViewer reportId={activeReportId} onRerun={handleRerun} />
         </div>
       )}
 
-      {tab === 'new' && !activeReportId && (
-        <div className="space-y-6">
-          {/* Ad-hoc NL */}
-          <div className="card p-6 space-y-3">
-            <div className="flex items-center gap-2">
-              <Sparkles size={18} className="text-primary-500" />
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100">
-                {t('smart_reports.ask_title')}
-              </h3>
-            </div>
-            <div className="flex gap-3">
-              <input
-                className="input flex-1"
-                placeholder={t('smart_reports.ask_placeholder')}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAdhoc()}
-              />
-              <button className="btn-primary flex items-center gap-2" onClick={handleAdhoc} disabled={busy}>
-                <Send size={16} /> {t('smart_reports.generate')}
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 italic">{t('smart_reports.ask_hint')}</p>
+      {tab === 'generate' && !activeReportId && (
+        templates.length ? (
+          <SmartReportCatalog
+            reports={templates}
+            ministries={ministries}
+            categories={categories}
+            busy={busy}
+            onGenerate={handleGenerate}
+          />
+        ) : (
+          <div className="card p-10 text-center text-slate-500 dark:text-slate-400">
+            {t('report_hub.no_templates')}
           </div>
-
-          {/* Catalog */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-100">
-              {t('smart_reports.catalog_title')}
-            </h3>
-            <SmartReportCatalog
-              reports={catalog}
-              ministries={ministries}
-              categories={categories}
-              busy={busy}
-              onGenerate={handleGenerate}
-            />
-          </div>
-        </div>
+        )
       )}
 
       {tab === 'library' && (

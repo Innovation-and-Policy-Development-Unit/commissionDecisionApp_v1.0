@@ -1,12 +1,13 @@
 """
-Smart Report catalog + spec construction/validation (Submissions domain).
+Smart Report spec vocabulary + construction/validation (Submissions domain).
 
-The *spec* is the single source of truth the Quarto renderer consumes. Two paths
-produce it:
+The *spec* is the single source of truth the Quarto renderer consumes. It is produced
+from a `ReportTemplate` (guided builder) via `build_template_spec`, or — internally — from
+an AI proposal that `validate_spec` constrains to the allowed vocabulary below.
 
-  - catalog  → `build_catalog_spec(report_type, params)` — deterministic, no AI.
-  - ad-hoc   → AI proposes a spec, then `validate_spec()` constrains it to the
-               allowed vocabulary below.
+Report *templates* are stored in the database (tracker.models.ReportTemplate); the initial
+set is seeded in migration 0129. This module owns only the validated vocabulary and the
+spec builders — never persisted catalog data.
 """
 
 from __future__ import annotations
@@ -57,89 +58,16 @@ DEFAULT_TABLE_COLUMNS = ["reference_number", "title", "ministry", "stage", "crea
 
 SECTIONS = {"kpis", "charts", "table"}
 
-# ── Catalog definitions ──────────────────────────────────────────────────────
-CATALOG: dict[str, dict[str, Any]] = {
-    "submissions_volume_turnaround": {
-        "domain": "submissions",
-        "title": "Submission Volume & Turnaround",
-        "description": "Monthly submission volume, turnaround distribution, and breakdown by ministry.",
-        "params": [
-            {"key": "date_from", "type": "date", "label": "From"},
-            {"key": "date_to", "type": "date", "label": "To"},
-            {"key": "ministry_id", "type": "ministry", "label": "Ministry", "optional": True},
-        ],
-        "sections": ["kpis", "charts", "table"],
-        "kpis": [
-            {"label": "Total submissions", "source": "total"},
-            {"label": "Active", "source": "active"},
-            {"label": "Avg turnaround (days)", "source": "turnaround_avg"},
-            {"label": "Median turnaround (days)", "source": "turnaround_median"},
-        ],
-        "charts": [
-            {"id": "volume_trend", "type": "line", "title": "Submissions per month", "source": "by_month"},
-            {"id": "by_ministry", "type": "bar", "title": "By ministry", "source": "by_ministry"},
-            {"id": "turnaround", "type": "column", "title": "Turnaround distribution", "source": "turnaround_buckets"},
-        ],
-        "table": {"columns": ["reference_number", "title", "ministry", "stage", "created", "turnaround_days"]},
-    },
-    "submissions_by_ministry": {
-        "domain": "submissions",
-        "title": "Submissions by Ministry",
-        "description": "Volume by ministry and form category, with current workload.",
-        "params": [
-            {"key": "date_from", "type": "date", "label": "From"},
-            {"key": "date_to", "type": "date", "label": "To"},
-            {"key": "stage", "type": "stage", "label": "Stage", "optional": True},
-        ],
-        "sections": ["kpis", "charts", "table"],
-        "kpis": [
-            {"label": "Total submissions", "source": "total"},
-            {"label": "Active", "source": "active"},
-            {"label": "Overdue assessments", "source": "overdue_assessments"},
-        ],
-        "charts": [
-            {"id": "by_ministry", "type": "bar", "title": "By ministry", "source": "by_ministry"},
-            {"id": "by_category", "type": "bar", "title": "By form category", "source": "by_category"},
-        ],
-        "table": {"columns": ["reference_number", "title", "ministry", "category", "stage", "created"]},
-    },
-    "submissions_stage_pipeline": {
-        "domain": "submissions",
-        "title": "Stage Pipeline & Aging",
-        "description": "Where submissions sit in the workflow and how long they have been in scope.",
-        "params": [
-            {"key": "date_from", "type": "date", "label": "From"},
-            {"key": "date_to", "type": "date", "label": "To"},
-            {"key": "ministry_id", "type": "ministry", "label": "Ministry", "optional": True},
-            {"key": "overdue_only", "type": "bool", "label": "Overdue assessments only", "optional": True},
-        ],
-        "sections": ["kpis", "charts", "table"],
-        "kpis": [
-            {"label": "Total submissions", "source": "total"},
-            {"label": "Active", "source": "active"},
-            {"label": "Overdue assessments", "source": "overdue_assessments"},
-        ],
-        "charts": [
-            {"id": "by_stage", "type": "bar", "title": "By stage", "source": "by_stage"},
-            {"id": "turnaround", "type": "column", "title": "Turnaround distribution", "source": "turnaround_buckets"},
-        ],
-        "table": {"columns": ["reference_number", "title", "ministry", "stage", "created", "turnaround_days"]},
-    },
-}
 
-
-def catalog_for_api() -> list[dict[str, Any]]:
-    """Catalog cards + param schemas for the frontend."""
-    return [
-        {
-            "key": key,
-            "domain": entry["domain"],
-            "title": entry["title"],
-            "description": entry.get("description", ""),
-            "params": entry.get("params", []),
-        }
-        for key, entry in CATALOG.items()
-    ]
+def vocabulary() -> dict[str, Any]:
+    """Allowed building blocks for the guided-builder UI."""
+    return {
+        "chart_types": sorted(CHART_TYPES),
+        "chart_sources": sorted(LIST_SOURCES),
+        "kpi_sources": [{"key": k, "label": KPI_LABELS.get(k, k)} for k in sorted(KPI_SOURCES)],
+        "table_columns": list(TABLE_COLUMNS),
+        "param_types": ["date", "ministry", "form_category", "stage", "bool"],
+    }
 
 
 def coerce_params(domain: str, raw: dict[str, Any] | None) -> dict[str, Any]:
@@ -180,30 +108,9 @@ def _date_range_subtitle(params: dict[str, Any]) -> str:
     return "All dates"
 
 
-def build_catalog_spec(report_type: str, raw_params: dict[str, Any] | None) -> dict[str, Any]:
-    """Deterministically build a render spec from a catalog entry + user params."""
-    entry = CATALOG.get(report_type)
-    if not entry:
-        raise KeyError(f"Unknown report type: {report_type}")
-    domain = entry["domain"]
-    params = coerce_params(domain, raw_params)
-    return {
-        "domain": domain,
-        "report_type": report_type,
-        "title": entry["title"],
-        "subtitle": _date_range_subtitle(params),
-        "params": params,
-        "sections": entry.get("sections", list(SECTIONS)),
-        "kpis": entry.get("kpis", []),
-        "charts": entry.get("charts", []),
-        "table": entry.get("table", {"columns": DEFAULT_TABLE_COLUMNS}),
-        "narrative_markdown": "",
-    }
-
-
 def validate_spec(raw: dict[str, Any], *, domain: str = "submissions") -> dict[str, Any]:
-    """Constrain an (AI-proposed) spec to the allowed vocabulary. Never trusts free text
-    for anything executable: only known sources/types/columns survive."""
+    """Constrain a (template- or AI-proposed) spec to the allowed vocabulary. Never trusts
+    free text for anything executable: only known sources/types/columns survive."""
     raw = raw or {}
 
     kpis = []
@@ -238,7 +145,7 @@ def validate_spec(raw: dict[str, Any], *, domain: str = "submissions") -> dict[s
         if bad in narrative.lower():
             narrative = ""
 
-    # Sensible defaults so a sparse AI spec still renders something useful.
+    # Sensible defaults so a sparse spec still renders something useful.
     if not kpis and not charts:
         kpis = [{"label": KPI_LABELS["total"], "source": "total"},
                 {"label": KPI_LABELS["active"], "source": "active"}]
@@ -256,3 +163,16 @@ def validate_spec(raw: dict[str, Any], *, domain: str = "submissions") -> dict[s
         "table": {"columns": cols},
         "narrative_markdown": narrative,
     }
+
+
+def build_template_spec(template, raw_params: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Build a render spec from a ReportTemplate + user-supplied params."""
+    domain = template.domain or "submissions"
+    merged = {**(template.default_params or {}), **(raw_params or {})}
+    params = coerce_params(domain, merged)
+    spec_in = template.spec or {}
+    cleaned = validate_spec({**spec_in, "title": template.name}, domain=domain)
+    cleaned["report_type"] = template.slug
+    cleaned["params"] = params
+    cleaned["subtitle"] = _date_range_subtitle(params)
+    return cleaned

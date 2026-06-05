@@ -1,6 +1,9 @@
 # Smart Reports → Enterprise Reporting Engine — Implementation Spec
 
-> **Status:** Proposed (awaiting build approval).
+> **Status:** P1 IMPLEMENTED (pending `migrate`, image rebuild, and test run in a
+> Python/Quarto environment). Submissions domain; catalog + ad-hoc; Highcharts-in-Quarto
+> with graceful static-table fallback until the proprietary Highcharts bundle is dropped
+> into `tracker/reports/templates/vendor/highcharts.bundle.js`.
 > **Scope of first build:** Submissions domain only. Catalog + ad-hoc NL authoring.
 > Charts: **Highcharts** embedded in a **Python-executed Quarto HTML** document.
 > **Decision on file:** Highcharts license confirmed by product owner for production use.

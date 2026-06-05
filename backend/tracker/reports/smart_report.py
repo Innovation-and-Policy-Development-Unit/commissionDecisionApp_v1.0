@@ -33,14 +33,19 @@ HELPERS_SRC = Path(__file__).resolve().parent / "render_helpers.py"
 
 
 def build_spec(report: SmartReport) -> tuple[dict[str, Any] | None, str | None]:
-    """Catalog → deterministic spec. Ad-hoc → AI-proposed, validated spec."""
-    from .catalog import build_catalog_spec
+    """Template → deterministic spec. Ad-hoc → AI-proposed, validated spec."""
+    from .catalog import build_template_spec
 
-    if report.report_type and report.report_type != "adhoc":
-        try:
-            return build_catalog_spec(report.report_type, report.params or {}), None
-        except KeyError as exc:
-            return None, str(exc)
+    is_template = bool(report.template_id) or (report.report_type and report.report_type != "adhoc")
+    if is_template:
+        from ..models import ReportTemplate
+
+        template = report.template
+        if template is None and report.report_type:
+            template = ReportTemplate.objects.filter(slug=report.report_type).first()
+        if template is None:
+            return None, f"Report template '{report.report_type}' not found."
+        return build_template_spec(template, report.params or {}), None
 
     # Ad-hoc: ground the model with a quick scoped summary, then interpret.
     from ..ai.smart_report_interpret import interpret_submissions_report

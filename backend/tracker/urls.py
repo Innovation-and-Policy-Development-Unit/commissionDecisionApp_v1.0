@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .compliance_views import ComplaintViewSet, ComplianceCaseViewSet
 from .smart_report_views import SmartReportViewSet
+from .report_template_views import ReportTemplateViewSet
 from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
 from .daily_brief.views import DailyBriefViewSet
@@ -127,6 +128,7 @@ router.register(r"doc-signatures",   DocumentSignatureViewSet,  basename="doc-si
 router.register(r"odu-checklists",        ODUChecklistViewSet,        basename="odu-checklist")
 router.register(r"submission-checklists", SubmissionChecklistViewSet, basename="submission-checklist")
 router.register(r"smart-reports", SmartReportViewSet, basename="smart-report")
+router.register(r"report-templates", ReportTemplateViewSet, basename="report-template")
 router.register(
     r"deadline-reminder-drafts",
     DeadlineReminderDraftViewSet,

@@ -720,6 +720,7 @@ class Command(BaseCommand):
         ("manage_users",        "Manage Users",        "administration", "Create, edit, and deactivate user accounts."),
         ("manage_roles",        "Manage Roles & Permissions","administration","Configure role definitions and their permission sets."),
         ("manage_ui_translations", "Manage UI Translations", "administration", "Edit dashboard labels in English, French, and Bislama without changing code."),
+        ("manage_report_templates", "Manage Report Templates", "administration", "Create, edit, and delete report templates used to generate reports."),
         ("view_audit_trail",    "View Audit Trail",    "administration", "Access the full workflow event audit trail for all submissions."),
         # Feedback
         ("feedback_view",       "View Feedback",       "feedback",       "View user submitted feedback reports."),
@@ -737,6 +738,7 @@ class Command(BaseCommand):
             "update_implementation", "view_reports", "export_reports",
             "manage_meetings", "manage_agenda", "manage_notifications",
             "manage_users", "manage_roles", "manage_ui_translations", "view_audit_trail",
+            "manage_report_templates",
             "feedback_view", "feedback_manage", "feedback_respond", "feedback_configure",
         ]),
         ("receptionist", (

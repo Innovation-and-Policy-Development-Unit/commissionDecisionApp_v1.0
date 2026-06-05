@@ -8,9 +8,9 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from .models import SmartReport
+from .models import ReportTemplate, SmartReport
 from .rbac import rbac_user_has_permission
-from .reports.catalog import CATALOG, catalog_for_api
+from .report_template_views import template_visible_to
 from .tasks import queue_smart_report
 
 
@@ -79,30 +79,40 @@ class SmartReportViewSet(viewsets.ViewSet):
 
     def create(self, request):
         self._gate(request.user)
-        report_type = (request.data.get("report_type") or "adhoc").strip()
+        slug = (request.data.get("template") or request.data.get("report_type") or "").strip()
         prompt = (request.data.get("prompt") or "").strip()
         params = request.data.get("params") or {}
         if not isinstance(params, dict):
             raise ValidationError({"params": "params must be an object."})
 
-        if report_type == "adhoc":
+        if not slug or slug == "adhoc":
+            # Internal ad-hoc path (not surfaced in Reports; used by SCDMS Intelligence).
             if not prompt:
                 raise ValidationError({"prompt": "Describe the report you need."})
-            domain = "submissions"
+            report = SmartReport.objects.create(
+                requested_by=request.user,
+                domain="submissions",
+                report_type="adhoc",
+                prompt=prompt,
+                params=params,
+                status=SmartReport.Status.PENDING,
+            )
         else:
-            entry = CATALOG.get(report_type)
-            if not entry:
-                raise ValidationError({"report_type": f"Unknown report type '{report_type}'."})
-            domain = entry["domain"]
-
-        report = SmartReport.objects.create(
-            requested_by=request.user,
-            domain=domain,
-            report_type=report_type,
-            prompt=prompt,
-            params=params,
-            status=SmartReport.Status.PENDING,
-        )
+            tmpl = ReportTemplate.objects.filter(slug=slug, is_active=True).first()
+            if not tmpl:
+                raise ValidationError({"template": f"Unknown or inactive template '{slug}'."})
+            if not template_visible_to(request.user, tmpl):
+                raise PermissionDenied("You cannot generate this report.")
+            allowed = {p.get("key") for p in (tmpl.param_schema or []) if isinstance(p, dict)}
+            clean_params = {k: v for k, v in params.items() if k in allowed}
+            report = SmartReport.objects.create(
+                requested_by=request.user,
+                template=tmpl,
+                domain=tmpl.domain,
+                report_type=tmpl.slug,
+                params=clean_params,
+                status=SmartReport.Status.PENDING,
+            )
         queue_smart_report(report.id)
         return Response(self._status_payload(request, report), status=status.HTTP_202_ACCEPTED)
 
@@ -110,11 +120,6 @@ class SmartReportViewSet(viewsets.ViewSet):
         self._gate(request.user)
         report = self._get_for_user(request, pk)
         return Response(self._status_payload(request, report))
-
-    @action(detail=False, methods=["get"])
-    def catalog(self, request):
-        self._gate(request.user)
-        return Response({"reports": catalog_for_api()})
 
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
