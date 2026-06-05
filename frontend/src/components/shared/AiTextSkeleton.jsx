@@ -1,9 +1,6 @@
-import { Skeleton, SkeletonItem, Text } from '@fluentui/react-components'
 import clsx from 'clsx'
 
-/**
- * Inline text skeleton for AI-generated copy (agenda blurbs, drafts, etc.).
- */
+/** Inline text skeleton for AI-generated copy (Tailwind). */
 export default function AiTextSkeleton({
   lines = 3,
   statusLabel = 'Generating…',
@@ -17,19 +14,17 @@ export default function AiTextSkeleton({
       aria-busy="true"
       aria-label={statusLabel}
     >
-      <Skeleton className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5">
         {Array.from({ length: lines }, (_, i) => (
-          <SkeletonItem
+          <div
             key={i}
-            size={12}
+            className="h-3 rounded bg-slate-200 dark:bg-slate-700 animate-pulse"
             style={{ width: `${Math.max(50, 100 - i * 10)}%` }}
           />
         ))}
-      </Skeleton>
+      </div>
       {statusLabel && (
-        <Text className="text-[10px] text-violet-600 dark:text-violet-400">
-          {statusLabel}
-        </Text>
+        <span className="text-[10px] text-violet-600 dark:text-violet-400">{statusLabel}</span>
       )}
     </div>
   )

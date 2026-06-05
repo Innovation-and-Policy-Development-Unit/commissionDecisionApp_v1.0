@@ -1,5 +1,4 @@
 import { forwardRef, useId } from 'react'
-import { Field, Textarea } from '@fluentui/react-components'
 import clsx from 'clsx'
 
 const BaseTextarea = forwardRef(function BaseTextarea(
@@ -20,41 +19,27 @@ const BaseTextarea = forwardRef(function BaseTextarea(
   const autoId = useId()
   const id = idProp || autoId
 
-  const labelNode = label ? (
-    <>
-      {label}
-      {required && (
-        <span className="text-red-600 dark:text-red-400 ms-0.5" aria-hidden>
-          *
-        </span>
-      )}
-    </>
-  ) : undefined
-
   return (
-    <Field
-      className={clsx('w-full', className)}
-      label={
-        labelNode
-          ? hideLabel
-            ? { children: labelNode, htmlFor: id, className: 'sr-only' }
-            : labelNode
-          : undefined
-      }
-      hint={hint && !error ? hint : undefined}
-      validationMessage={error || undefined}
-      validationState={error ? 'error' : 'none'}
-      required={required}
-    >
-      <Textarea
+    <div className={clsx('w-full', className)}>
+      {label && (
+        <label htmlFor={id} className={clsx('block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1', hideLabel && 'sr-only')}>
+          {label}
+          {required && <span className="text-red-600 dark:text-red-400 ms-0.5" aria-hidden="true">*</span>}
+        </label>
+      )}
+      <textarea
         ref={ref}
         id={id}
         required={required}
         rows={rows}
-        className={clsx('w-full min-w-0', inputClassName)}
+        aria-invalid={error ? true : undefined}
+        className={clsx('input w-full min-w-0', error && '!border-red-400', inputClassName)}
         {...props}
       />
-    </Field>
+      {error
+        ? <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>
+        : hint ? <p className="text-xs text-slate-500 mt-1">{hint}</p> : null}
+    </div>
   )
 })
 

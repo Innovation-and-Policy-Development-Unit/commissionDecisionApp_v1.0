@@ -1,7 +1,6 @@
-import { Field, Text } from '@fluentui/react-components'
 import clsx from 'clsx'
 
-/** Read-only field display — Fluent Field + Text (forms in view mode). */
+/** Read-only field display (Tailwind) — forms in view mode. */
 export default function BaseReadonlyField({
   label,
   hint,
@@ -13,19 +12,16 @@ export default function BaseReadonlyField({
   const isEmpty = value === null || value === undefined || value === ''
 
   return (
-    <Field className={clsx('w-full', className)} label={label} hint={hint}>
-      <Text
-        block
-        className={clsx(
-          'text-sm',
-          multiline && 'whitespace-pre-wrap',
-          isEmpty
-            ? 'text-slate-400 italic'
-            : 'text-slate-800 dark:text-slate-200',
-        )}
-      >
+    <div className={clsx('w-full', className)}>
+      {label && <div className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{label}</div>}
+      <div className={clsx(
+        'text-sm',
+        multiline && 'whitespace-pre-wrap',
+        isEmpty ? 'text-slate-400 italic' : 'text-slate-800 dark:text-slate-200',
+      )}>
         {isEmpty ? emptyLabel : value}
-      </Text>
-    </Field>
+      </div>
+      {hint && <div className="text-xs text-slate-500 mt-1">{hint}</div>}
+    </div>
   )
 }

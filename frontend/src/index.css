@@ -19,6 +19,60 @@
   --p-fg-on-dark: 130 183 230;
 }
 
+/* ─── Typography tokens (self-owned; values = Fluent UI v9 defaults) ─────────
+   Keeps the Fluent font/scale pixel-identical after @fluentui is removed.
+   Tailwind's font family/size/weight scales map to these vars. */
+:root {
+  --fontFamilyBase: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+  --fontFamilyMonospace: Consolas, 'Courier New', monospace;
+
+  --fontSizeBase100: 10px;
+  --fontSizeBase200: 12px;
+  --fontSizeBase300: 14px;
+  --fontSizeBase400: 16px;
+  --fontSizeBase500: 20px;
+  --fontSizeBase600: 24px;
+  --fontSizeHero700: 28px;
+  --fontSizeHero800: 32px;
+  --fontSizeHero900: 40px;
+  --fontSizeHero1000: 68px;
+
+  --lineHeightBase100: 14px;
+  --lineHeightBase200: 16px;
+  --lineHeightBase300: 20px;
+  --lineHeightBase400: 22px;
+  --lineHeightBase500: 28px;
+  --lineHeightBase600: 32px;
+  --lineHeightHero700: 36px;
+  --lineHeightHero800: 40px;
+  --lineHeightHero900: 52px;
+  --lineHeightHero1000: 92px;
+
+  --fontWeightRegular: 400;
+  --fontWeightMedium: 500;
+  --fontWeightSemibold: 600;
+  --fontWeightBold: 700;
+
+  /* Semantic color tokens layered over the --p-* palette + slate. */
+  --color-surface: 255 255 255;
+  --color-surface-2: 248 250 252;
+  --color-text: 15 23 42;
+  --color-text-muted: 100 116 139;
+  --color-border: 226 232 240;
+  --color-success: 16 185 129;
+  --color-warning: 245 158 11;
+  --color-danger: 239 68 68;
+  --color-info: 6 182 212;
+}
+
+.dark {
+  --color-surface: 30 41 59;
+  --color-surface-2: 15 23 42;
+  --color-text: 241 245 249;
+  --color-text-muted: 148 163 184;
+  --color-border: 51 65 85;
+}
+
 /* Blue — #3b82f6 */
 [data-theme="blue"] {
   --p-50:  239 246 255;
