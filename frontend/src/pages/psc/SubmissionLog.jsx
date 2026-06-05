@@ -356,24 +356,22 @@ export default function SubmissionLog() {
         {/* ── Toolbar ── */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-3">
         <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800 w-fit">
-          <ToggleButton
-            appearance="subtle"
-            size="small"
-            checked={viewMode === 'list'}
+          <BaseButton
+            variant={viewMode === 'list' ? 'primary' : 'ghost'}
+            size="sm"
             icon={<LayoutList size={15} />}
             onClick={() => setViewMode('list')}
           >
             {t('submission.view_list')}
-          </ToggleButton>
-          <ToggleButton
-            appearance="subtle"
-            size="small"
-            checked={viewMode === 'kanban'}
+          </BaseButton>
+          <BaseButton
+            variant={viewMode === 'kanban' ? 'primary' : 'ghost'}
+            size="sm"
             icon={<Columns3 size={15} />}
             onClick={() => setViewMode('kanban')}
           >
             {t('submission.view_kanban')}
-          </ToggleButton>
+          </BaseButton>
         </div>
         {/* Filters arranged in columns (stack only on small screens) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:items-end">
