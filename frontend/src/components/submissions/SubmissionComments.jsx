@@ -117,7 +117,7 @@ function CommentItem({ comment, target, onEdit, onDelete, onReply, isReply = fal
   )
 }
 
-export default function SubmissionComments({ submissionId }) {
+export default function SubmissionComments({ submissionId, embedded = false }) {
   const { user } = useAuth()
   const toast = useToast()
   const confirm = useConfirm()
@@ -200,14 +200,16 @@ export default function SubmissionComments({ submissionId }) {
   const liveCount = comments.filter((c) => !c.is_deleted).length
 
   return (
-    <div className="card card-compact">
-      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
-        <MessageSquare size={14} className="text-slate-400" />
-        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Discussion</h3>
-        {liveCount > 0 && (
-          <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">{liveCount}</span>
-        )}
-      </div>
+    <div className={embedded ? '' : 'card card-compact'}>
+      {!embedded && (
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
+          <MessageSquare size={14} className="text-slate-400" />
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Discussion</h3>
+          {liveCount > 0 && (
+            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">{liveCount}</span>
+          )}
+        </div>
+      )}
 
       {/* Composer */}
       <div className="mb-5">

@@ -24,10 +24,10 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Comment, Profile, Submission, Role
+from .models import AuditLog, Comment, Profile, Submission, Role
 from .serializers import CommentSerializer
 from .audit import log_action
-from .mentions import process_comment_mentions
+from .mentions import process_comment_mentions, render_plain
 
 # Ministry-side roles never see / create internal (PSC-only) comments.
 _MINISTRY_SIDE_ROLES = {
@@ -277,3 +277,112 @@ def mention_suggest(request):
             break
 
     return Response(results)
+
+
+# ── Unified Activity Timeline (P3) ──────────────────────────────────────────────
+
+def _actor_name(user, fallback="System"):
+    if not user:
+        return fallback
+    return (user.get_full_name() or "").strip() or user.username
+
+
+# Audit actions excluded from the timeline: READ is noise; DECISION is already shown
+# as a stage transition (with proof); comment/mention writes are surfaced natively.
+_AUDIT_SKIP_ACTIONS = {"READ", "DECISION"}
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def activity_timeline(request):
+    """
+    GET /api/activity/?target=submission:<id>&kind=all|discussion|activity
+
+    A merged, firewall-filtered "story of this submission": comments, workflow stage
+    transitions, and audit events — one chronological feed (newest first). Reuses the
+    existing AuditLog / WorkflowEvent / Comment data; stores nothing new.
+    """
+    raw = request.query_params.get("target")
+    ct, obj, key = authorize_target(request.user, raw)  # raises 400/404
+    kind = (request.query_params.get("kind") or "all").lower()
+    ministry_side = _is_ministry_side(request.user)
+
+    entries = []
+
+    # 1) Comments (+ replies), respecting the internal firewall.
+    if kind in ("all", "comment", "discussion"):
+        cqs = Comment.objects.filter(content_type=ct, object_id=obj.pk).select_related("author")
+        if ministry_side:
+            cqs = cqs.exclude(is_internal=True)
+        for c in cqs:
+            if c.is_deleted:
+                summary, body = "deleted a comment", ""
+            else:
+                summary = "replied" if c.parent_id else "commented"
+                body = render_plain(c.body)
+            entries.append({
+                "id": f"comment-{c.id}",
+                "kind": "comment",
+                "actor": _actor_name(c.author),
+                "summary": summary,
+                "body": body,
+                "is_internal": c.is_internal,
+                "at": c.created_at,
+            })
+
+    # 2) Workflow stage transitions (submission targets).
+    if kind in ("all", "stage", "activity") and key == "submission":
+        from .email_notify import stage_label
+
+        for e in obj.events.select_related("actor").all():
+            new = stage_label(e.new_stage)
+            if e.previous_stage:
+                summary = f"moved to {new}"
+            else:
+                summary = f"created at {new}"
+            entries.append({
+                "id": f"stage-{e.id}",
+                "kind": "stage",
+                "actor": _actor_name(e.actor, fallback=(e.actor_label or "System")),
+                "summary": summary,
+                "body": e.remarks or "",
+                "is_internal": False,
+                "at": e.created_at,
+                "has_proof": bool(e.content_hash),
+            })
+
+    # 3) Audit events scoped to this resource (downloads, edits, etc.).
+    if kind in ("all", "activity"):
+        aqs = (
+            AuditLog.objects.filter(resource_type="Submission", resource_id=str(obj.pk))
+            .exclude(action__in=_AUDIT_SKIP_ACTIONS)
+            .select_related("actor")
+        )
+        for a in aqs:
+            entries.append({
+                "id": f"audit-{a.id}",
+                "kind": "activity",
+                "actor": a.actor_username or "System",
+                "summary": a.get_action_display().lower(),
+                "body": a.description or "",
+                "is_internal": False,
+                "at": a.timestamp,
+            })
+
+    entries.sort(key=lambda x: x["at"], reverse=True)
+
+    try:
+        limit = min(max(int(request.query_params.get("limit", 50)), 1), 200)
+    except (TypeError, ValueError):
+        limit = 50
+    try:
+        offset = max(int(request.query_params.get("offset", 0)), 0)
+    except (TypeError, ValueError):
+        offset = 0
+
+    total = len(entries)
+    page = entries[offset:offset + limit]
+    for e in page:
+        e["at"] = e["at"].isoformat()
+
+    return Response({"count": total, "results": page})

@@ -5,7 +5,7 @@ import SubmissionSubwayMap from '../../components/submissions/SubmissionSubwayMa
 import VisualAuditTrail from '../../components/audit/VisualAuditTrail'
 import VerificationBadge from '../../components/audit/VerificationBadge'
 import SubmissionPresenceBar from '../../components/submissions/SubmissionPresenceBar'
-import SubmissionComments from '../../components/submissions/SubmissionComments'
+import SubmissionActivity from '../../components/submissions/SubmissionActivity'
 import PolicyGuardrailDrawer from '../../components/submissions/PolicyGuardrailDrawer'
 import { policyGuardrailApplies } from '../../utils/policyGuardrail'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
@@ -1280,8 +1280,8 @@ const stageDescriptions = {
             />
           </div>
 
-          {/* ── Discussion (A7 collaboration) ── */}
-          <SubmissionComments submissionId={id} />
+          {/* ── Activity & Discussion (A7 collaboration) ── */}
+          <SubmissionActivity submissionId={id} />
         </div>
 
         {/* ── Right: transition panel ── */}

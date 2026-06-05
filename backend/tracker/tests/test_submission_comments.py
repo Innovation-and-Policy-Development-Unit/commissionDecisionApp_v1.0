@@ -5,7 +5,10 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from tracker.models import Comment, Mention, Ministry, Notification, Profile, Role, Submission
+from tracker.models import (
+    Comment, Mention, Ministry, Notification, Profile, Role, Submission,
+    WorkflowEvent, WorkflowStage,
+)
 
 
 class SubmissionCommentTests(TestCase):
@@ -207,4 +210,76 @@ class MentionTests(TestCase):
         Profile.objects.create(user=outsider, role=Role.MINISTRY_HR, ministry=other_ministry)
         self.client.force_authenticate(user=outsider)
         res = self.client.get("/api/mentions/suggest/", {"target": self.target, "q": "a"})
+        self.assertEqual(res.status_code, 404)
+
+
+class ActivityTimelineTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.ministry = Ministry.objects.create(code="ZZ_ACT_A", name="Activity Ministry A")
+        self.officer = User.objects.create_user(username="psc_officer", password="pass")
+        Profile.objects.create(user=self.officer, role=Role.PSC_OFFICER)
+        self.hr = User.objects.create_user(username="moe_hr", password="pass")
+        Profile.objects.create(user=self.hr, role=Role.MINISTRY_HR, ministry=self.ministry)
+        self.submission = Submission.objects.create(
+            title="Activity matter",
+            received_at=timezone.now(),
+            created_by=self.hr,
+            ministry=self.ministry,
+            is_internal=False,
+        )
+        self.target = f"submission:{self.submission.id}"
+        stages = [s for s, _ in WorkflowStage.choices]
+        WorkflowEvent.objects.create(
+            submission=self.submission,
+            actor=self.officer,
+            previous_stage=stages[0],
+            new_stage=stages[1],
+            remarks="Moved along.",
+        )
+
+    def _kinds(self, results):
+        return {r["kind"] for r in results}
+
+    def test_all_merges_comments_and_stages(self):
+        self.client.force_authenticate(user=self.officer)
+        self.client.post("/api/comments/", {"target": self.target, "body": "a comment"})
+        res = self.client.get("/api/activity/", {"target": self.target, "kind": "all"})
+        self.assertEqual(res.status_code, 200)
+        kinds = self._kinds(res.data["results"])
+        self.assertIn("comment", kinds)
+        self.assertIn("stage", kinds)
+
+    def test_discussion_excludes_stages(self):
+        self.client.force_authenticate(user=self.officer)
+        self.client.post("/api/comments/", {"target": self.target, "body": "a comment"})
+        res = self.client.get("/api/activity/", {"target": self.target, "kind": "discussion"})
+        kinds = self._kinds(res.data["results"])
+        self.assertIn("comment", kinds)
+        self.assertNotIn("stage", kinds)
+
+    def test_activity_excludes_comments(self):
+        self.client.force_authenticate(user=self.officer)
+        self.client.post("/api/comments/", {"target": self.target, "body": "a comment"})
+        res = self.client.get("/api/activity/", {"target": self.target, "kind": "activity"})
+        kinds = self._kinds(res.data["results"])
+        self.assertNotIn("comment", kinds)
+        self.assertIn("stage", kinds)
+
+    def test_internal_comment_excluded_from_ministry_timeline(self):
+        self.client.force_authenticate(user=self.officer)
+        self.client.post(
+            "/api/comments/", {"target": self.target, "body": "psc only", "is_internal": True}
+        )
+        self.client.force_authenticate(user=self.hr)
+        res = self.client.get("/api/activity/", {"target": self.target, "kind": "all"})
+        # Ministry HR sees stage events but not the internal comment.
+        self.assertNotIn("comment", self._kinds(res.data["results"]))
+
+    def test_no_access_returns_404(self):
+        other = Ministry.objects.create(code="ZZ_ACT_B", name="Activity Ministry B")
+        outsider = User.objects.create_user(username="moh_hr", password="pass")
+        Profile.objects.create(user=outsider, role=Role.MINISTRY_HR, ministry=other)
+        self.client.force_authenticate(user=outsider)
+        res = self.client.get("/api/activity/", {"target": self.target, "kind": "all"})
         self.assertEqual(res.status_code, 404)
