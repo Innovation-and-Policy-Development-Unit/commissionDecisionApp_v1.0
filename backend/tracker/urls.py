@@ -5,6 +5,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .compliance_views import ComplaintViewSet, ComplianceCaseViewSet
 from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
+from .intelligence_views import (
+    intelligence_datasets,
+    intelligence_interpret,
+    intelligence_query,
+)
 from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
 from .daily_brief.views import DailyBriefViewSet
@@ -154,6 +159,9 @@ urlpatterns = [
     path("dashboard/", dashboard_view),
     path("reports/stats/", reports_view),
     path("reports/ai-smart-query/", ai_smart_report_view),
+    path("intelligence/datasets/", intelligence_datasets),
+    path("intelligence/query/", intelligence_query),
+    path("intelligence/interpret/", intelligence_interpret),
     path("register/", RegisterView.as_view()),
     # Two-factor authentication (TOTP / Microsoft Authenticator)
     path("auth/totp/setup/", TOTPSetupView.as_view(), name="totp-setup"),

@@ -2,7 +2,7 @@ import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo, PenLine,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, BookOpen, Languages, Sparkles,
-  TrendingUp, Users, History, BarChart2, CalendarCheck, AlertCircle,
+  TrendingUp, Users, History, CalendarCheck, AlertCircle,
   ListChecks, Megaphone, Inbox,
 } from 'lucide-react'
 import {
@@ -130,11 +130,9 @@ const menuItems = [
     groupIcon: Sparkles,
     audience: 'all',
     items: [
+      { label: 'SCDMS Intelligence', labelKey: 'nav.intelligence',     icon: Sparkles,      path: '/intelligence' },
       { label: 'Reports',          labelKey: 'nav.reports',           icon: FileText,      path: '/reports' },
-      { label: 'Report Templates', labelKey: 'nav.report_templates',  icon: ClipboardList, path: '/reports/templates', visibility: 'admin' },
       { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
-      { label: 'Analytics',         labelKey: 'nav.analytics',     icon: BarChart2, path: '/analytics',
-        audience: 'exclude_compliance' },
     ],
   },
   {

@@ -21,6 +21,7 @@ const SubmissionDetail = lazy(() => import('../pages/psc/SubmissionDetail'))
 const SubmissionForm = lazy(() => import('../pages/psc/SubmissionForm'))
 const ReportBrowse = lazy(() => import('../pages/reports/ReportBrowse'))
 const ReportTemplateManager = lazy(() => import('../pages/reports/ReportTemplateManager'))
+const Intelligence = lazy(() => import('../pages/psc/Intelligence'))
 const RedirectToMinuteIntake = lazy(() => import('../pages/meeting/RedirectToMinuteIntake'))
 const AdminPanel = lazy(() => import('../pages/admin/AdminPanel'))
 const MinistriesDepartments = lazy(() => import('../pages/admin/MinistriesDepartments'))
@@ -90,6 +91,7 @@ export default function AppRouter() {
           <Route path="/submissions/:id" element={<S detail><SubmissionDetail /></S>} />
           <Route path="/reports" element={<S><ReportBrowse /></S>} />
           <Route path="/reports/templates" element={<S><ReportTemplateManager /></S>} />
+          <Route path="/intelligence" element={<S><Intelligence /></S>} />
           <Route path="/wiki" element={<S><KnowledgeBaseBrowse /></S>} />
           <Route path="/wiki/:slug" element={<S detail><ArticleViewer /></S>} />
           <Route path="/meetings/capture" element={<S><RedirectToMinuteIntake /></S>} />

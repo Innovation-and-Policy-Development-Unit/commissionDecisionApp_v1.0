@@ -1,6 +1,9 @@
 # SCDMS Intelligence — Interactive Explorer Spec
 
-> **Status:** Proposed (awaiting build approval).
+> **Status:** P1 IMPLEMENTED. Submissions dataset; semantic layer + validated query
+> executor over the RBAC-scoped queryset; NL "Ask" seeding; three-pane explorer.
+> Charts render client-side with **Recharts** (interactive, no licensing/bundle setup);
+> Highcharts can be swapped in later. No DB migration required.
 > **Decision on file:** Bespoke in-house explorer (no Apache Superset service). A
 > Superset-*like* UX built on SCDMS's existing RBAC-scoped data, rendered with Highcharts.
 > **Renames:** the current "Smart Reports" page becomes **SCDMS Intelligence**; route
