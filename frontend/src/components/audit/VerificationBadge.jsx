@@ -1,45 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverSurface,
-  Button,
-  Text,
-  Badge,
-  Spinner,
-  tokens,
-} from '@fluentui/react-components'
-import {
-  ShieldCheckmarkRegular,
-  CopyRegular,
-  CheckmarkCircleRegular,
-  DismissCircleRegular,
-} from '@fluentui/react-icons'
+import { ShieldCheck, Copy, CheckCircle2, XCircle } from 'lucide-react'
 import api from '../../api/client'
+import BaseButton from '../shared/BaseButton'
+import BaseBadge from '../shared/BaseBadge'
+import BaseSpinner from '../shared/BaseSpinner'
 
-/**
- * Tamper-evident verification badge — opens Fluent popover with SHA-256 proof.
- */
-export default function VerificationBadge({
-  submissionId,
-  workflowEventId,
-  contentHash,
-  compact = false,
-}) {
+/** Tamper-evident verification badge — popover with SHA-256 proof. */
+export default function VerificationBadge({ submissionId, workflowEventId, contentHash, compact = false }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [proof, setProof] = useState(null)
   const [copied, setCopied] = useState(false)
+  const ref = useRef(null)
 
   const loadProof = async () => {
     if (!submissionId || !workflowEventId) return
     setLoading(true)
     try {
-      const res = await api.get(
-        `/submissions/${submissionId}/decision-proof/?event_id=${workflowEventId}`,
-      )
+      const res = await api.get(`/submissions/${submissionId}/decision-proof/?event_id=${workflowEventId}`)
       setProof(res.data)
     } catch {
       setProof(null)
@@ -48,12 +28,21 @@ export default function VerificationBadge({
     }
   }
 
-  const onOpenChange = (_e, data) => {
-    setOpen(data.open)
-    if (data.open && !proof) loadProof()
+  useEffect(() => {
+    if (!open) return undefined
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    if (next && !proof) loadProof()
   }
 
   const hashToShow = proof?.content_hash || contentHash || ''
+  const verified = proof?.verification?.verified
 
   const copyHash = async () => {
     if (!hashToShow) return
@@ -61,47 +50,36 @@ export default function VerificationBadge({
       await navigator.clipboard.writeText(hashToShow)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }
 
-  const verified = proof?.verification?.verified
-
   return (
-    <Popover open={open} onOpenChange={onOpenChange} positioning="below-start">
-      <PopoverTrigger disableButtonEnhancement>
-        <Button
-          appearance={compact ? 'subtle' : 'outline'}
-          size="small"
-          icon={<ShieldCheckmarkRegular />}
-          className="shrink-0"
-          style={{ color: tokens.colorPaletteGreenForeground1 }}
-        >
-          {!compact && t('decision_proof.badge_label')}
-        </Button>
-      </PopoverTrigger>
-      <PopoverSurface className="max-w-md p-4">
-        <div className="space-y-3">
+    <div className="relative inline-block" ref={ref}>
+      <BaseButton
+        variant={compact ? 'ghost' : 'outline'}
+        size="sm"
+        icon={<ShieldCheck size={15} className="text-emerald-600" />}
+        onClick={toggle}
+        className="shrink-0"
+        aria-expanded={open}
+      >
+        {!compact && t('decision_proof.badge_label')}
+      </BaseButton>
+
+      {open && (
+        <div className="absolute z-50 mt-1 left-0 w-80 card p-4 shadow-card-lg space-y-3">
           <div className="flex items-start gap-2">
-            <ShieldCheckmarkRegular
-              fontSize={22}
-              style={{ color: tokens.colorBrandForeground1 }}
-            />
+            <ShieldCheck size={22} className="text-primary-600 shrink-0" />
             <div>
-              <Text weight="semibold" block>
-                {t('decision_proof.popover_title')}
-              </Text>
-              <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                {t('decision_proof.popover_subtitle')}
-              </Text>
+              <span className="block font-semibold text-slate-800 dark:text-slate-100">{t('decision_proof.popover_title')}</span>
+              <span className="text-xs text-slate-500">{t('decision_proof.popover_subtitle')}</span>
             </div>
           </div>
 
           {loading && (
             <div className="flex items-center gap-2 py-2">
-              <Spinner size="tiny" />
-              <Text size={200}>{t('decision_proof.verifying')}</Text>
+              <BaseSpinner size="sm" label="" />
+              <span className="text-xs text-slate-500">{t('decision_proof.verifying')}</span>
             </div>
           )}
 
@@ -109,60 +87,35 @@ export default function VerificationBadge({
             <>
               <div className="flex flex-wrap gap-2">
                 {verified ? (
-                  <Badge appearance="filled" color="success" icon={<CheckmarkCircleRegular />}>
-                    {t('decision_proof.status_valid')}
-                  </Badge>
+                  <BaseBadge color="success" icon={<CheckCircle2 size={13} />}>{t('decision_proof.status_valid')}</BaseBadge>
                 ) : (
-                  <Badge appearance="filled" color="danger" icon={<DismissCircleRegular />}>
-                    {t('decision_proof.status_invalid')}
-                  </Badge>
+                  <BaseBadge color="danger" icon={<XCircle size={13} />}>{t('decision_proof.status_invalid')}</BaseBadge>
                 )}
-                <Badge appearance="outline" size="small">
-                  {proof.previous_stage} → {proof.new_stage}
-                </Badge>
+                <BaseBadge color="outline" size="small">{proof.previous_stage} → {proof.new_stage}</BaseBadge>
               </div>
 
-              <Text size={200} block>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
                 {proof.actor_username} ·{' '}
-                {new Date(proof.recorded_at).toLocaleString('en-VU', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </Text>
+                {new Date(proof.recorded_at).toLocaleString('en-VU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </p>
 
-              <div
-                className="rounded-md p-3 font-mono text-[11px] break-all leading-relaxed"
-                style={{
-                  backgroundColor: tokens.colorNeutralBackground3,
-                  color: tokens.colorNeutralForeground1,
-                }}
-              >
+              <div className="rounded-md p-3 font-mono text-[11px] break-all leading-relaxed bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
                 {hashToShow}
               </div>
 
-              <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
-                {proof.verification?.message || t('decision_proof.hash_hint')}
-              </Text>
+              <p className="text-[10px] text-slate-500">{proof.verification?.message || t('decision_proof.hash_hint')}</p>
 
-              <Button
-                appearance="subtle"
-                size="small"
-                icon={<CopyRegular />}
-                onClick={copyHash}
-              >
+              <BaseButton variant="ghost" size="sm" icon={<Copy size={14} />} onClick={copyHash}>
                 {copied ? t('decision_proof.copied') : t('decision_proof.copy_hash')}
-              </Button>
+              </BaseButton>
             </>
           )}
 
           {!loading && !proof && open && (
-            <Text size={200}>{t('decision_proof.load_failed')}</Text>
+            <span className="text-xs text-slate-500">{t('decision_proof.load_failed')}</span>
           )}
         </div>
-      </PopoverSurface>
-    </Popover>
+      )}
+    </div>
   )
 }

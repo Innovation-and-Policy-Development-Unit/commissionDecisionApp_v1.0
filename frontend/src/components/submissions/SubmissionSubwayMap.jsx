@@ -1,16 +1,6 @@
 import { useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Text,
-  Tooltip,
-  tokens,
-} from '@fluentui/react-components'
-import {
-  CheckmarkCircleFilled,
-  CircleRegular,
-  ArrowClockwiseRegular,
-  WarningRegular,
-} from '@fluentui/react-icons'
+import { CheckCircle2, Circle, RefreshCw, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 import { stageLabel } from '../../constants/stages'
 import {
@@ -44,9 +34,7 @@ export default function SubmissionSubwayMap({
   }, [subwayMapProp, currentStage, events])
 
   const currentStationIndex = useMemo(() => {
-    if (typeof subwayMap.current_station_index === 'number') {
-      return subwayMap.current_station_index
-    }
+    if (typeof subwayMap.current_station_index === 'number') return subwayMap.current_station_index
     return stationIndexForStage(currentStage)
   }, [subwayMap.current_station_index, currentStage])
 
@@ -57,7 +45,6 @@ export default function SubmissionSubwayMap({
 
   const pathVariant = subwayMap.path_variant || 'normal'
   const isReturnedPath = pathVariant === 'returned'
-  // Use API-provided context-aware detail, then prop override, then fallback
   const detailText = subwayMap.status_detail || statusDetail || (currentStage ? stageLabel(currentStage, t) : t('subway.in_progress'))
 
   const handleStationClick = useCallback((station) => {
@@ -77,58 +64,38 @@ export default function SubmissionSubwayMap({
     [subwayMap.stations],
   )
 
-  const lineColor = isAlertState || isReturnedPath
-    ? tokens.colorPaletteMarigoldBackground3
-    : tokens.colorBrandBackground
-
-  const progressFraction = stations.length > 1
-    ? currentStationIndex / (stations.length - 1)
-    : 0
+  // Active line colour: amber on alert/returned, brand primary otherwise.
+  const lineColor = isAlertState || isReturnedPath ? '#f59e0b' : 'rgb(var(--p-500))'
+  const progressFraction = stations.length > 1 ? currentStationIndex / (stations.length - 1) : 0
 
   return (
     <section
       className={clsx(
-        'w-full py-8 px-4 rounded-2xl border shadow-sm overflow-x-auto',
-        'bg-white dark:bg-slate-900',
-        isReturnedPath
-          ? 'border-amber-300/80 dark:border-amber-700/50'
-          : 'border-slate-100 dark:border-slate-800',
+        'w-full py-8 px-4 rounded-2xl border shadow-sm overflow-x-auto bg-white dark:bg-slate-900',
+        isReturnedPath ? 'border-amber-300/80 dark:border-amber-700/50' : 'border-slate-100 dark:border-slate-800',
         className,
       )}
       aria-label={t('subway.aria_label')}
     >
       <div className="flex flex-wrap items-center gap-2 mb-6 px-2">
-        <Text weight="semibold" size={400}>{t('subway.title')}</Text>
+        <span className="font-semibold text-base text-slate-800 dark:text-slate-100">{t('subway.title')}</span>
         {pathVariant === 'returned' && (
-          <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-            {t('subway.returned_badge')}
-          </span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">{t('subway.returned_badge')}</span>
         )}
         {pathVariant === 'complete' && (
-          <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-            {t('subway.complete_badge')}
-          </span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">{t('subway.complete_badge')}</span>
         )}
         {typeof subwayMap.progress_percent === 'number' && (
-          <Text size={200} className="ml-auto" style={{ color: tokens.colorNeutralForeground3 }}>
-            {t('subway.progress_hint', { percent: Math.round(subwayMap.progress_percent) })}
-          </Text>
+          <span className="ml-auto text-sm text-slate-400">{t('subway.progress_hint', { percent: Math.round(subwayMap.progress_percent) })}</span>
         )}
       </div>
 
       <div className="flex items-start justify-between min-w-[640px] relative px-4">
-        <div
-          className="absolute top-[18px] left-8 right-8 h-1 z-0 rounded-full"
-          style={{ backgroundColor: tokens.colorNeutralStroke2 }}
-          aria-hidden
-        />
+        <div className="absolute top-[18px] left-8 right-8 h-1 z-0 rounded-full bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
         <div
           className="absolute top-[18px] left-8 h-1 z-0 transition-all duration-700 ease-in-out rounded-full"
-          style={{
-            width: `calc((100% - 4rem) * ${progressFraction})`,
-            backgroundColor: lineColor,
-          }}
-          aria-hidden
+          style={{ width: `calc((100% - 4rem) * ${progressFraction})`, backgroundColor: lineColor }}
+          aria-hidden="true"
         />
 
         {stations.map((station, index) => {
@@ -137,96 +104,50 @@ export default function SubmissionSubwayMap({
           const isSelected = selectedStationId === station.id
           const showAlert = isCurrent && isAlertState
           const substages = station.stages?.map((code) => stageLabel(code, t)).slice(0, 5).join(' · ')
-          // For the active station, show the context-aware detail in the tooltip
-          const tooltipDetail = isCurrent ? detailText : null
+          const tip = [stationLabel(t, station), isCurrent ? detailText : null, substages, t('subway.click_logs')].filter(Boolean).join('\n')
 
           return (
-            <Tooltip
-              key={station.id}
-              content={(
-                <div className="max-w-xs space-y-1">
-                  <Text weight="semibold" size={200}>{stationLabel(t, station)}</Text>
-                  {tooltipDetail && (
-                    <Text size={100} style={{ color: tokens.colorBrandForeground1, fontWeight: 600 }}>
-                      {tooltipDetail}
-                    </Text>
-                  )}
-                  {substages && (
-                    <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
-                      {substages}
-                    </Text>
-                  )}
-                  <Text size={100} style={{ color: tokens.colorBrandForeground1 }}>
-                    {t('subway.click_logs')}
-                  </Text>
-                </div>
-              )}
-              relationship="description"
-            >
-              <div className="relative z-10 flex flex-col items-center flex-1 min-w-0">
-                <button
-                  type="button"
-                  onClick={() => handleStationClick(station)}
+            <div key={station.id} className="relative z-10 flex flex-col items-center flex-1 min-w-0">
+              <button
+                type="button"
+                onClick={() => handleStationClick(station)}
+                title={tip}
+                className={clsx(
+                  'group flex flex-col items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-500 rounded-lg',
+                  isSelected && 'ring-2 ring-offset-2 ring-primary-500/60 rounded-xl',
+                )}
+                aria-current={isCurrent ? 'step' : undefined}
+                aria-pressed={isSelected}
+              >
+                <div
                   className={clsx(
-                    'group flex flex-col items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-lg',
-                    isSelected && 'ring-2 ring-offset-2 ring-primary-500/60 rounded-xl',
+                    'w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm border-4',
+                    isCompleted && 'bg-primary-500 text-white border-white dark:border-slate-900',
+                    showAlert && 'bg-amber-500 text-white border-amber-100 dark:border-slate-900 animate-pulse',
+                    isCurrent && !showAlert && 'scale-110 border-primary-500 text-primary-600 bg-white dark:bg-slate-900',
+                    !isCompleted && !isCurrent && 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-300',
                   )}
-                  style={{ '--tw-ring-color': tokens.colorBrandStroke1 }}
-                  aria-current={isCurrent ? 'step' : undefined}
-                  aria-pressed={isSelected}
                 >
-                  <div
-                    className={clsx(
-                      'w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm border-4',
-                      isCompleted && 'text-white border-white dark:border-slate-900',
-                      showAlert && 'text-white border-amber-100 dark:border-slate-900 animate-pulse',
-                      isCurrent && !showAlert && 'scale-110 border-primary-500 text-primary-600 bg-white dark:bg-slate-900',
-                      !isCompleted && !isCurrent && 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-300',
-                    )}
-                    style={isCompleted ? { backgroundColor: tokens.colorBrandBackground } : undefined}
-                  >
-                    {isCompleted ? (
-                      <CheckmarkCircleFilled fontSize={22} />
-                    ) : showAlert ? (
-                      <WarningRegular fontSize={22} />
-                    ) : isCurrent ? (
-                      <ArrowClockwiseRegular fontSize={22} className="animate-spin-slow" />
-                    ) : (
-                      <CircleRegular fontSize={20} />
-                    )}
-                  </div>
+                  {isCompleted ? <CheckCircle2 size={22} />
+                    : showAlert ? <AlertTriangle size={22} />
+                    : isCurrent ? <RefreshCw size={22} className="animate-spin-slow" />
+                    : <Circle size={20} />}
+                </div>
 
-                  <div className="mt-3 text-center px-1">
-                    <Text
-                      weight={isCurrent ? 'bold' : 'medium'}
-                      size={200}
-                      className={clsx(
-                        'uppercase tracking-wider block',
-                        isCurrent ? 'text-slate-900 dark:text-white' : 'text-slate-400',
-                      )}
-                    >
-                      {stationLabel(t, station)}
-                    </Text>
-
-                    {isCurrent && (
-                      <div className="mt-1 w-36 mx-auto">
-                        <Text
-                          size={100}
-                          className={[
-                            'font-semibold block leading-tight text-center',
-                            showAlert
-                              ? 'text-amber-600 dark:text-amber-400'
-                              : 'text-primary-600 dark:text-primary-400',
-                          ].join(' ')}
-                        >
-                          {detailText}
-                        </Text>
-                      </div>
-                    )}
-                  </div>
-                </button>
-              </div>
-            </Tooltip>
+                <div className="mt-3 text-center px-1">
+                  <span className={clsx('uppercase tracking-wider block text-xs', isCurrent ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400')}>
+                    {stationLabel(t, station)}
+                  </span>
+                  {isCurrent && (
+                    <div className="mt-1 w-36 mx-auto">
+                      <span className={clsx('text-[10px] font-semibold block leading-tight text-center', showAlert ? 'text-amber-600 dark:text-amber-400' : 'text-primary-600 dark:text-primary-400')}>
+                        {detailText}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </button>
+            </div>
           )
         })}
       </div>

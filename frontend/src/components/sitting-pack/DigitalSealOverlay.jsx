@@ -1,9 +1,6 @@
 import { useMemo } from 'react'
-import { Text, tokens } from '@fluentui/react-components'
 
-/**
- * Repeating diagonal watermark shown only during an active Sitting Pack session.
- */
+/** Repeating diagonal watermark shown only during an active Sitting Pack session. */
 export default function DigitalSealOverlay({ session }) {
   const lines = useMemo(() => {
     if (!session?.active) return []
@@ -12,11 +9,7 @@ export default function DigitalSealOverlay({ session }) {
     const viewer = session.viewer_name || ''
     const started = session.started_at
       ? new Date(session.started_at).toLocaleString('en-VU', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
         })
       : ''
     return Array.from({ length: 48 }, (_, i) => (
@@ -29,15 +22,9 @@ export default function DigitalSealOverlay({ session }) {
   if (!session?.active || lines.length === 0) return null
 
   return (
-    <div
-      className="sitting-pack-seal-overlay"
-      aria-hidden
-      style={{ color: tokens.colorNeutralForeground4 }}
-    >
+    <div className="sitting-pack-seal-overlay text-slate-400" aria-hidden>
       <div className="sitting-pack-seal-grid">{lines}</div>
-      <Text className="sitting-pack-seal-badge" size={100}>
-        SEAL {session.seal_code}
-      </Text>
+      <span className="sitting-pack-seal-badge text-[10px]">SEAL {session.seal_code}</span>
     </div>
   )
 }

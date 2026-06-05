@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react'
-import { Delete24Regular, Warning24Regular } from '@fluentui/react-icons'
+import { Trash2, AlertTriangle } from 'lucide-react'
 import Modal from '../components/shared/Modal'
 import BaseButton from '../components/shared/BaseButton'
 
@@ -46,7 +46,7 @@ function ConfirmDialog({ dialog, onResolve }) {
           }`}
           aria-hidden
         >
-          {isDanger ? <Delete24Regular /> : <Warning24Regular />}
+          {isDanger ? <Trash2 size={20} /> : <AlertTriangle size={20} />}
         </span>
         <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed pt-1">
           {message}
