@@ -6,7 +6,7 @@ import BaseInput from './BaseInput'
 import BaseTextarea from './BaseTextarea'
 import BaseSelect from './BaseSelect'
 import BaseCheckbox from './BaseCheckbox'
-import { RadioGroup, Radio } from '@fluentui/react-components'
+import BaseRadioGroup from './BaseRadioGroup'
 
 // ── Page splitter ─────────────────────────────────────────────────────────────
 // A new page starts at any section_header that has start_new_page === true.
@@ -329,18 +329,15 @@ function EditValue({ field, value, onChange, choices, hasError }) {
       )
     case 'radio':
       return (
-        <div>
-          <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-            {field.label}{field.is_required && <span className="text-red-500 ml-0.5">*</span>}
-          </p>
-          <RadioGroup value={value ?? ''} onChange={(_, d) => onChange(d.value)}>
-            {choices.map(c => (
-              <Radio key={c} value={c} label={c} />
-            ))}
-          </RadioGroup>
-          {field.help_text && <p className="mt-1 text-xs text-slate-400">{field.help_text}</p>}
-          {hasError && <p className="mt-1 text-xs text-red-500">This field is required.</p>}
-        </div>
+        <BaseRadioGroup
+          label={field.label}
+          required={field.is_required}
+          hint={field.help_text || undefined}
+          error={hasError ? 'This field is required.' : undefined}
+          value={value ?? ''}
+          options={choices.map(c => ({ value: c, label: c }))}
+          onChange={(v) => onChange(v)}
+        />
       )
     case 'checkbox':
       return (

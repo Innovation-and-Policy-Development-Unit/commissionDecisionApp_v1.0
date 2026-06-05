@@ -1,9 +1,6 @@
-import { Card, CardHeader, CardPreview } from '@fluentui/react-components'
 import clsx from 'clsx'
 
-/**
- * Fluent Card wrapper — optional header and preview slots.
- */
+/** Card wrapper (Tailwind) — optional header and preview slots. */
 export default function BaseCard({
   children,
   className,
@@ -13,16 +10,18 @@ export default function BaseCard({
   preview,
 }) {
   return (
-    <Card className={clsx('shadow-card border border-slate-200 dark:border-slate-700', className)}>
-      {preview && <CardPreview>{preview}</CardPreview>}
+    <div className={clsx('card overflow-hidden', className)}>
+      {preview && <div>{preview}</div>}
       {(title || description) && (
-        <CardHeader
-          header={title ? <span className="font-semibold text-slate-900 dark:text-slate-100">{title}</span> : undefined}
-          description={description}
-          action={headerAction}
-        />
+        <div className="flex items-start justify-between gap-2 p-4 border-b border-slate-100 dark:border-slate-700">
+          <div className="min-w-0">
+            {title && <div className="font-semibold text-slate-900 dark:text-slate-100">{title}</div>}
+            {description && <div className="text-sm text-slate-500 dark:text-slate-400">{description}</div>}
+          </div>
+          {headerAction}
+        </div>
       )}
-      {children}
-    </Card>
+      <div className="p-4">{children}</div>
+    </div>
   )
 }

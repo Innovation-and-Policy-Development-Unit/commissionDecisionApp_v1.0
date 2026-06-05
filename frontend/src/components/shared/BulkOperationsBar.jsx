@@ -1,33 +1,16 @@
-import React, { useState } from 'react'
-import {
-  Button,
-  Text,
-  Menu,
-  MenuTrigger,
-  MenuPopover,
-  MenuList,
-  MenuItem,
-  Spinner,
-} from '@fluentui/react-components'
-import {
-  DismissRegular,
-  ChevronDownRegular,
-  PersonAssignRegular,
-  AlertUrgentRegular,
-  ArrowExportRegular,
-  BrainCircuitRegular,
-} from '@fluentui/react-icons'
+import { useState } from 'react'
+import { X, AlertTriangle, FileDown, BrainCircuit } from 'lucide-react'
+import BaseButton from './BaseButton'
+import BaseSpinner from './BaseSpinner'
 
 /**
  * BulkOperationsBar — appears when submissions are selected.
- * Props:
  *   selectedIds: number[]
  *   onClear: () => void
  *   onBulkAction: (action, extraData?) => Promise<void>
  */
 export default function BulkOperationsBar({ selectedIds = [], onClear, onBulkAction }) {
   const [loading, setLoading] = useState(false)
-
   if (selectedIds.length === 0) return null
 
   const handle = async (action, extra = {}) => {
@@ -40,63 +23,13 @@ export default function BulkOperationsBar({ selectedIds = [], onClear, onBulkAct
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        padding: '10px 16px',
-        background: 'var(--colorBrandBackground2)',
-        borderRadius: '8px',
-        border: '1px solid var(--colorBrandStroke1)',
-        flexWrap: 'wrap',
-      }}
-    >
-      <Text weight="semibold" size={300}>
-        {selectedIds.length} selected
-      </Text>
-
-      {loading && <Spinner size="tiny" />}
-
-      <Button
-        size="small"
-        icon={<AlertUrgentRegular />}
-        appearance="subtle"
-        onClick={() => handle('mark_urgent')}
-        disabled={loading}
-      >
-        Mark Urgent
-      </Button>
-
-      <Button
-        size="small"
-        icon={<BrainCircuitRegular />}
-        appearance="subtle"
-        onClick={() => handle('run_ai_risk')}
-        disabled={loading}
-      >
-        AI Risk Scan
-      </Button>
-
-      <Button
-        size="small"
-        icon={<ArrowExportRegular />}
-        appearance="subtle"
-        onClick={() => handle('export_list')}
-        disabled={loading}
-      >
-        Export List
-      </Button>
-
-      <Button
-        size="small"
-        icon={<DismissRegular />}
-        appearance="subtle"
-        onClick={onClear}
-        disabled={loading}
-      >
-        Clear
-      </Button>
+    <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 rounded-lg border border-primary-200 bg-primary-50 dark:border-primary-800/60 dark:bg-primary-900/20">
+      <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{selectedIds.length} selected</span>
+      {loading && <BaseSpinner size="sm" label="" />}
+      <BaseButton size="sm" variant="ghost" icon={<AlertTriangle size={15} />} onClick={() => handle('mark_urgent')} disabled={loading}>Mark Urgent</BaseButton>
+      <BaseButton size="sm" variant="ghost" icon={<BrainCircuit size={15} />} onClick={() => handle('run_ai_risk')} disabled={loading}>AI Risk Scan</BaseButton>
+      <BaseButton size="sm" variant="ghost" icon={<FileDown size={15} />} onClick={() => handle('export_list')} disabled={loading}>Export List</BaseButton>
+      <BaseButton size="sm" variant="ghost" icon={<X size={15} />} onClick={onClear} disabled={loading}>Clear</BaseButton>
     </div>
   )
 }

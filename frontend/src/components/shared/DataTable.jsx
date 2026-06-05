@@ -1,21 +1,10 @@
 import { useState } from 'react'
-import {
-  Table,
-  TableHeader,
-  TableHeaderCell,
-  TableBody,
-  TableRow,
-  TableCell,
-} from '@fluentui/react-components'
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
 import BaseInput from './BaseInput'
 import BaseButton from './BaseButton'
 
-/**
- * Sortable, paginated table — Fluent Table primitives + sticky header.
- * For very large lists (500+ rows), add virtualization via @fluentui-contrib later.
- */
+/** Sortable, paginated table (Tailwind) + sticky header. */
 export default function DataTable({
   columns,
   data,
@@ -70,68 +59,59 @@ export default function DataTable({
             label="Search table"
             placeholder={searchPlaceholder}
             value={query}
-            onChange={e => {
-              setQuery(e.target.value)
-              setPage(1)
-            }}
+            onChange={e => { setQuery(e.target.value); setPage(1) }}
             className="max-w-xs"
             inputClassName="text-sm"
           />
         </div>
       )}
 
-      <div
-        className="overflow-auto custom-scrollbar"
-        style={{ maxHeight }}
-      >
-        <Table
-          aria-label="Data table"
-          className="w-full min-w-full"
-        >
-          <TableHeader className="sticky top-0 z-10 bg-white dark:bg-slate-800 shadow-[0_1px_0_0_var(--colorNeutralStroke2)]">
-            <TableRow>
+      <div className="overflow-auto custom-scrollbar" style={{ maxHeight }}>
+        <table className="w-full min-w-full text-left">
+          <thead className="sticky top-0 z-10 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <tr>
               {columns.map(col => (
-                <TableHeaderCell
+                <th
                   key={col.key}
                   onClick={() => col.sortable !== false && handleSort(col.key)}
                   className={clsx(
-                    col.sortable !== false &&
-                      'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 select-none',
+                    'px-3 py-2',
+                    col.sortable !== false && 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 select-none',
                   )}
                 >
                   <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
                     {col.label}
                     {col.sortable !== false && sortCol === col.key && (
-                      sortDir === 'asc' ? <ChevronUp size={13} aria-hidden /> : <ChevronDown size={13} aria-hidden />
+                      sortDir === 'asc' ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />
                     )}
                   </div>
-                </TableHeaderCell>
+                </th>
               ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+            </tr>
+          </thead>
+          <tbody>
             {paged.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-10 text-slate-400 dark:text-slate-500">
+              <tr>
+                <td colSpan={columns.length} className="text-center py-10 text-slate-400 dark:text-slate-500">
                   {emptyMessage}
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             ) : (
               paged.map((row, i) => {
                 const key = rowKey ? rowKey(row) : (row.id ?? row.key ?? i)
                 return (
-                  <TableRow key={key} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/30">
+                  <tr key={key} className="border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50/80 dark:hover:bg-slate-700/30">
                     {columns.map(col => (
-                      <TableCell key={col.key} className="text-sm">
+                      <td key={col.key} className="px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
                         {col.render ? col.render(row[col.key], row) : row[col.key]}
-                      </TableCell>
+                      </td>
                     ))}
-                  </TableRow>
+                  </tr>
                 )
               })
             )}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
 
       {totalPages > 1 && (
@@ -141,40 +121,21 @@ export default function DataTable({
             {Math.min(safePage * pageSize, sorted.length)} of {sorted.length}
           </p>
           <div className="flex items-center gap-1">
-            <BaseButton
-              variant="ghost"
-              size="sm"
-              iconOnly
-              icon={<ChevronLeft size={16} />}
-              disabled={safePage === 1}
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              aria-label="Previous page"
-            />
+            <BaseButton variant="ghost" size="sm" iconOnly icon={<ChevronLeft size={16} />}
+              disabled={safePage === 1} onClick={() => setPage(p => Math.max(1, p - 1))} aria-label="Previous page" />
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               let p = i + 1
               if (totalPages > 5 && safePage > 3) p = safePage - 2 + i
               if (p > totalPages) return null
               return (
-                <BaseButton
-                  key={p}
-                  variant={safePage === p ? 'primary' : 'ghost'}
-                  size="sm"
-                  onClick={() => setPage(p)}
-                  className="min-w-8"
-                >
+                <BaseButton key={p} variant={safePage === p ? 'primary' : 'ghost'} size="sm"
+                  onClick={() => setPage(p)} className="min-w-8">
                   {p}
                 </BaseButton>
               )
             })}
-            <BaseButton
-              variant="ghost"
-              size="sm"
-              iconOnly
-              icon={<ChevronRight size={16} />}
-              disabled={safePage === totalPages}
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              aria-label="Next page"
-            />
+            <BaseButton variant="ghost" size="sm" iconOnly icon={<ChevronRight size={16} />}
+              disabled={safePage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} aria-label="Next page" />
           </div>
         </div>
       )}
