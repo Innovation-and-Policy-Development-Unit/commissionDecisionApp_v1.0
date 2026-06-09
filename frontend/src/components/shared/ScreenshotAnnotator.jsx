@@ -148,7 +148,7 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
     <div className="fixed inset-0 z-[90] bg-black flex flex-col select-none">
 
       {/* ── Toolbar ── */}
-      <div className="flex items-center gap-1 bg-slate-900 px-3 h-12 shrink-0 border-b border-slate-700">
+      <div className="flex items-center gap-1 bg-primary-900 px-3 h-12 shrink-0 border-b border-white/10">
 
         {/* Tool buttons */}
         {TOOLS.map(({ id, label, Icon }) => (
@@ -158,8 +158,8 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
             title={label}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               tool === id
-                ? 'bg-primary-600 text-white'
-                : 'text-slate-300 hover:bg-slate-700'
+                ? 'bg-white text-primary-700 shadow-sm'
+                : 'text-primary-100 hover:bg-white/10'
             }`}
           >
             <Icon size={14} />
@@ -167,7 +167,7 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
           </button>
         ))}
 
-        <div className="w-px h-6 bg-slate-700 mx-2" />
+        <div className="w-px h-6 bg-white/15 mx-2" />
 
         {/* Color swatches */}
         {COLORS.map(c => (
@@ -178,19 +178,19 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
             style={{ backgroundColor: c.value }}
             className={`w-5 h-5 rounded-full border transition-transform ${
               color === c.value
-                ? 'ring-2 ring-white ring-offset-1 ring-offset-slate-900 scale-125 border-transparent'
-                : 'border-slate-600 hover:scale-110'
+                ? 'ring-2 ring-white ring-offset-1 ring-offset-primary-900 scale-125 border-transparent'
+                : 'border-white/30 hover:scale-110'
             }`}
           />
         ))}
 
-        <div className="w-px h-6 bg-slate-700 mx-2" />
+        <div className="w-px h-6 bg-white/15 mx-2" />
 
         {/* Undo */}
         <button
           onClick={undo}
           title="Undo last annotation"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-700 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary-100 hover:bg-white/10 transition-colors"
         >
           <RotateCcw size={13} />
           Undo
@@ -201,7 +201,7 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
         {/* Cancel */}
         <button
           onClick={onCancel}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-700 transition-colors mr-1"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary-200 hover:bg-white/10 transition-colors mr-1"
         >
           <X size={14} />
           Cancel
@@ -210,7 +210,7 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
         {/* Done */}
         <button
           onClick={handleDone}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-brand-emerald hover:brightness-110 text-white transition-all"
         >
           <Check size={14} />
           Use Screenshot
@@ -222,7 +222,7 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
         <canvas ref={canvasElRef} className="block" />
 
         {/* Hint pill */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/70 text-slate-300 text-xs px-4 py-1.5 rounded-full pointer-events-none">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-primary-900/85 text-primary-100 ring-1 ring-white/10 text-xs px-4 py-1.5 rounded-full pointer-events-none">
           {hint[tool]}
         </div>
       </div>
