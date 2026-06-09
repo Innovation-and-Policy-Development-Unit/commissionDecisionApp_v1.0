@@ -301,6 +301,9 @@ export default function Agenda() {
 
   const role = user?.role || ''
   const isSecretaryOrAdmin = ['psc_secretary', 'senior_admin_officer', 'psc_admin'].includes(role)
+  // Stage-B agenda chain roles: SAO builds & submits → Secretary reviews & forwards → Chairman endorses.
+  const isAgendaBuilder    = ['senior_admin_officer', 'psc_admin'].includes(role)
+  const isSecretary        = ['psc_secretary', 'psc_admin'].includes(role)
   const isChairperson      = ['chairperson', 'psc_admin'].includes(role)
   const canSittingPack = [
     'psc_commissioner', 'chairperson', 'psc_secretary',
@@ -437,10 +440,13 @@ export default function Agenda() {
             status={agendaStatus}
             isCompleted={isCompleted}
             isSecretaryOrAdmin={isSecretaryOrAdmin}
+            isAgendaBuilder={isAgendaBuilder}
+            isSecretary={isSecretary}
             isChairperson={isChairperson}
             busy={workflowBusy}
             onSubmit={() => doWorkflowAction('submit-agenda',   'Submit to Secretary')}
-            onApprove={() => doWorkflowAction('approve-agenda', 'Approve Agenda')}
+            onForward={() => doWorkflowAction('forward-agenda', 'Forward to Chairman')}
+            onApprove={() => doWorkflowAction('approve-agenda', 'Endorse Agenda')}
             onCirculate={() => doWorkflowAction('circulate-agenda', 'Circulate Agenda')}
           />
         )}
@@ -795,12 +801,13 @@ export default function Agenda() {
 // Agenda workflow status + action bar
 const WORKFLOW_STEPS = [
   { key: 'draft',             label: 'Draft' },
-  { key: 'with_chairman',     label: 'With Secretary' },
-  { key: 'chairman_approved', label: 'Secretary Approved' },
+  { key: 'with_secretary',    label: 'With Secretary' },
+  { key: 'with_chairman',     label: 'With Chairman' },
+  { key: 'chairman_approved', label: 'Chairman Endorsed' },
   { key: 'circulated',        label: 'Circulated' },
 ]
 
-function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isChairperson, busy, onSubmit, onApprove, onCirculate }) {
+function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isAgendaBuilder, isSecretary, isChairperson, busy, onSubmit, onForward, onApprove, onCirculate }) {
   const currentIdx = WORKFLOW_STEPS.findIndex(s => s.key === status)
 
   return (
@@ -841,7 +848,7 @@ function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isChairper
       {/* Action button(s) for current step */}
       {!isCompleted && (
         <div className="flex flex-wrap gap-2">
-          {status === 'draft' && isSecretaryOrAdmin && (
+          {status === 'draft' && isAgendaBuilder && (
             <button
               onClick={onSubmit}
               disabled={busy}
@@ -850,13 +857,22 @@ function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isChairper
               <Send size={14} /> Submit to Secretary
             </button>
           )}
+          {status === 'with_secretary' && isSecretary && (
+            <button
+              onClick={onForward}
+              disabled={busy}
+              className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
+            >
+              <ChevronsRight size={14} /> Forward to Chairman
+            </button>
+          )}
           {status === 'with_chairman' && isChairperson && (
             <button
               onClick={onApprove}
               disabled={busy}
               className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
             >
-              <ThumbsUp size={14} /> Approve Agenda
+              <ThumbsUp size={14} /> Endorse Agenda
             </button>
           )}
           {status === 'chairman_approved' && isSecretaryOrAdmin && (

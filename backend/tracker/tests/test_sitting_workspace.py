@@ -109,3 +109,66 @@ class SittingWorkspaceTests(TestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 400)
+
+
+class AgendaApprovalChainTests(TestCase):
+    """Stage-B chain: SAO builds & submits → Secretary forwards → Chairman endorses."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.meeting = Meeting.objects.create(
+            title="Chain Sitting", date="2026-08-01", time="09:00", venue="Boardroom",
+        )
+        self.sao = self._user("chain_sao", Role.SENIOR_ADMIN_OFFICER)
+        self.secretary = self._user("chain_secretary", Role.PSC_SECRETARY)
+        self.chair = self._user("chain_chair", Role.CHAIRPERSON)
+
+    def _user(self, username, role):
+        user = User.objects.create_user(username=username, password="pass")
+        Profile.objects.create(user=user, role=role)
+        return user
+
+    def _status(self):
+        self.meeting.refresh_from_db()
+        return self.meeting.agenda_status
+
+    def test_full_chain_advances_through_each_party(self):
+        # 1. SAO submits the draft to the Secretary.
+        self.client.force_authenticate(user=self.sao)
+        res = self.client.post(f"/api/meetings/{self.meeting.id}/submit-agenda/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self._status(), "with_secretary")
+
+        # 2. Secretary forwards to the Chairman.
+        self.client.force_authenticate(user=self.secretary)
+        res = self.client.post(f"/api/meetings/{self.meeting.id}/forward-agenda/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self._status(), "with_chairman")
+
+        # 3. Chairman endorses.
+        self.client.force_authenticate(user=self.chair)
+        res = self.client.post(f"/api/meetings/{self.meeting.id}/approve-agenda/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self._status(), "chairman_approved")
+        self.meeting.refresh_from_db()
+        self.assertEqual(self.meeting.agenda_approved_by_id, self.chair.id)
+
+    def test_secretary_cannot_submit_draft(self):
+        self.client.force_authenticate(user=self.secretary)
+        res = self.client.post(f"/api/meetings/{self.meeting.id}/submit-agenda/")
+        self.assertEqual(res.status_code, 403)
+
+    def test_chairman_cannot_endorse_before_secretary_forwards(self):
+        self.client.force_authenticate(user=self.sao)
+        self.client.post(f"/api/meetings/{self.meeting.id}/submit-agenda/")
+        # Still only with_secretary — Chairman endorsement must be blocked.
+        self.client.force_authenticate(user=self.chair)
+        res = self.client.post(f"/api/meetings/{self.meeting.id}/approve-agenda/")
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(self._status(), "with_secretary")
+
+    def test_sao_cannot_forward_to_chairman(self):
+        self.client.force_authenticate(user=self.sao)
+        self.client.post(f"/api/meetings/{self.meeting.id}/submit-agenda/")
+        res = self.client.post(f"/api/meetings/{self.meeting.id}/forward-agenda/")
+        self.assertEqual(res.status_code, 403)

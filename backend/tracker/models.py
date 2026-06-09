@@ -92,9 +92,16 @@ class MeetingStatus(models.TextChoices):
 
 
 class AgendaStatus(models.TextChoices):
+    # Stage-B agenda workflow — a three-party chain:
+    #   draft             — Senior Administration Officer builds the agenda, then submits →
+    #   with_secretary    — PSC Secretary reviews, then forwards →
+    #   with_chairman     — Chairperson endorses →
+    #   chairman_approved — endorsed; ready to circulate →
+    #   circulated        — issued to Commission members.
     DRAFT = "draft", "Draft"
-    WITH_CHAIRMAN = "with_chairman", "With Chairman for Approval"
-    CHAIRMAN_APPROVED = "chairman_approved", "Chairman Approved"
+    WITH_SECRETARY = "with_secretary", "With Secretary for Review"
+    WITH_CHAIRMAN = "with_chairman", "With Chairman for Endorsement"
+    CHAIRMAN_APPROVED = "chairman_approved", "Chairman Endorsed"
     CIRCULATED = "circulated", "Circulated to Members"
 
 class MeetingType(models.TextChoices):
@@ -595,12 +602,12 @@ class Meeting(models.Model):
     # ── Agenda approval gate (SOP Stage 3, steps 2-3) ─────────────────────
     agenda_status = models.CharField(
         max_length=24, choices=AgendaStatus.choices, default=AgendaStatus.DRAFT,
-        help_text="Tracking: draft → with Chairman → Chairman approved → circulated.",
+        help_text="Tracking: draft → with Secretary → with Chairman → endorsed → circulated.",
     )
     agenda_approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="agendas_approved",
-        help_text="Chairperson who reviewed and approved the agenda.",
+        help_text="Chairperson who endorsed the agenda.",
     )
     agenda_approved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

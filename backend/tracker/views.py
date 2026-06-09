@@ -5709,33 +5709,55 @@ class MeetingViewSet(viewsets.ModelViewSet):
         return Response(MinutesSerializer(minutes).data)
 
     @action(detail=True, methods=["post"], url_path="submit-agenda")
-    def submit_agenda_to_chairman(self, request, pk=None):
-        """Senior Admin Officer / Secretary submits the draft agenda to the Chairperson for approval."""
+    def submit_agenda_to_secretary(self, request, pk=None):
+        """Senior Admin Officer submits the draft agenda to the Secretary for review.
+
+        First leg of the Stage-B chain: draft → with_secretary.
+        """
         meeting = self.get_object()
         profile = _profile(request.user)
-        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_SECRETARY, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Senior Admin Officer, Secretary, or Admin can submit the agenda.")
-        if meeting.type == MeetingType.FLYING_MINUTE:
-            meeting.agenda_status = AgendaStatus.WITH_CHAIRMAN
-        else:
-            meeting.agenda_status = AgendaStatus.WITH_CHAIRMAN
+        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Senior Admin Officer can submit the agenda for review.")
+        meeting.agenda_status = AgendaStatus.WITH_SECRETARY
         meeting.save(update_fields=["agenda_status"])
-        return Response({"detail": "Agenda submitted to Chairperson for approval."})
+        return Response({"detail": "Agenda submitted to the Secretary for review."})
+
+    @action(detail=True, methods=["post"], url_path="forward-agenda")
+    def forward_agenda_to_chairman(self, request, pk=None):
+        """PSC Secretary forwards the reviewed agenda to the Chairperson for endorsement.
+
+        Second leg of the Stage-B chain: with_secretary → with_chairman.
+        """
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the PSC Secretary can forward the agenda to the Chairperson.")
+        if meeting.agenda_status != AgendaStatus.WITH_SECRETARY:
+            return Response(
+                {"detail": "Agenda must first be submitted by the Senior Admin Officer for review."},
+                status=400,
+            )
+        meeting.agenda_status = AgendaStatus.WITH_CHAIRMAN
+        meeting.save(update_fields=["agenda_status"])
+        return Response({"detail": "Agenda forwarded to the Chairperson for endorsement."})
 
     @action(detail=True, methods=["post"], url_path="approve-agenda")
     def approve_agenda(self, request, pk=None):
-        """Chairperson approves the agenda for circulation."""
+        """Chairperson endorses the agenda for circulation (final leg of the chain)."""
         meeting = self.get_object()
         profile = _profile(request.user)
         if profile.role not in {Role.CHAIRPERSON, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Chairperson can approve the agenda.")
+            raise PermissionDenied("Only the Chairperson can endorse the agenda.")
         if meeting.agenda_status != AgendaStatus.WITH_CHAIRMAN:
-            return Response({"detail": "Agenda must first be submitted by the Senior Admin Officer."}, status=400)
+            return Response(
+                {"detail": "Agenda must first be forwarded by the Secretary for endorsement."},
+                status=400,
+            )
         meeting.agenda_status = AgendaStatus.CHAIRMAN_APPROVED
         meeting.agenda_approved_by = request.user
         meeting.agenda_approved_at = timezone.now()
         meeting.save(update_fields=["agenda_status", "agenda_approved_by", "agenda_approved_at"])
-        return Response({"detail": "Agenda approved by Chairperson."})
+        return Response({"detail": "Agenda endorsed by the Chairperson."})
 
     def _require_sitting_pack_access(self, request):
         from .sitting_pack import user_can_use_sitting_pack

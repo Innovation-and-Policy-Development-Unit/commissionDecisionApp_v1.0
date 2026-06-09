@@ -27,7 +27,9 @@ import {
   Clock, AlertCircle, GripVertical, ListChecks, ArrowLeft, Building2,
 } from 'lucide-react'
 
-const SECRETARIAT_ROLES = ['psc_secretary', 'senior_admin_officer', 'psc_admin', 'psc_manager']
+// The agenda builder owns this board (Stage-B: SAO builds → Secretary reviews → Chairman endorses).
+// Other roles — including the Secretary, who reviews via the Agenda page — see it read-only.
+const AGENDA_BUILDER_ROLES = ['senior_admin_officer', 'psc_admin']
 
 function daysUntil(dateStr) {
   if (!dateStr) return null
@@ -88,7 +90,7 @@ export default function SittingWorkspace() {
   const [dropTarget, setDropTarget] = useState(null) // section code being hovered
 
   const role = user?.role || ''
-  const canEdit = SECRETARIAT_ROLES.includes(role)
+  const canEdit = AGENDA_BUILDER_ROLES.includes(role)
 
   const fetchWorkspace = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true)
