@@ -1,6 +1,13 @@
 # Sitting Workspace (Meeting-as-Project) — Implementation Spec
 
-> **Status:** Proposed (awaiting build approval).
+> **Status:** Built — P1 (read-only board) + P2 (drag-to-schedule, reorder, move
+> between sections). Page: `frontend/src/pages/secretariat/SittingWorkspace.jsx`
+> at `/secretariat/meetings/:meetingId/workspace`. Endpoint:
+> `GET /api/meetings/{id}/workspace/` (`MeetingViewSet.workspace`); drag moves use
+> the section-aware `POST /api/agenda-items/reorder/`. Tests:
+> `backend/tracker/tests/test_sitting_workspace.py`.
+> P3 (by-stage Kanban toggle, inline AI blurb, one-click approve) and P4
+> (implementation-phase CommissionTasks board) remain.
 > **Track:** Enterprise UX / new feature. A Perfex-style "Projects & Tasks" board where a
 > **Commission sitting is the project** and the **queued submissions are the tasks**.
 > Mostly a new view over existing data — minimal new backend.

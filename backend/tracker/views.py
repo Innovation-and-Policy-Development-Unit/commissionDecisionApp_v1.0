@@ -5199,6 +5199,99 @@ class MeetingViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can schedule meetings.")
         serializer.save()
 
+    @action(detail=True, methods=["get"], url_path="workspace")
+    def workspace(self, request, pk=None):
+        """
+        Sitting Workspace (meeting-as-project) payload — drives SittingWorkspace.jsx.
+
+        Bundles, for one sitting, the meeting header, its placed agenda items
+        (the "tasks", grouped client-side by section), the backlog of
+        commission-ready submissions not yet on this agenda (the "inbox"), the
+        section list (milestone lanes), and a readiness/capacity summary.
+
+        RBAC: the backlog honours the standard submission firewall via
+        `_submission_queryset_for`, so users only ever see submissions they are
+        already allowed to see.
+        """
+        from .agenda_sections import active_agenda_sections, agenda_section_label
+
+        meeting = self.get_object()
+
+        # ── Agenda items already placed on this meeting (the tasks) ──────────
+        items = (
+            AgendaItem.objects
+            .filter(meeting=meeting)
+            .select_related("submission", "submission__ministry")
+            .order_by("category", "sequence", "added_at")
+        )
+        agenda = [
+            {
+                "id": it.id,
+                "submission": it.submission_id,
+                "ref": it.submission.reference_number,
+                "title": it.submission.title,
+                "ministry": it.submission.ministry.name if it.submission.ministry else "",
+                "stage": it.submission.current_stage,
+                "category": it.category or "",
+                "category_display": agenda_section_label(it.category or ""),
+                "sequence": it.sequence,
+                "agenda_blurb": it.agenda_blurb,
+                "agenda_blurb_processed": it.agenda_blurb_processed,
+            }
+            for it in items
+        ]
+        placed_submission_ids = {it.submission_id for it in items}
+
+        # ── Backlog: commission-ready submissions not yet on this agenda ─────
+        backlog_qs = (
+            _submission_queryset_for(request.user)
+            .filter(
+                current_stage=WorkflowStage.FORWARDED_TO_COMMISSION,
+                is_attachment=False,
+            )
+            .exclude(id__in=placed_submission_ids)
+            .order_by("-received_at")
+        )
+        backlog = [
+            {
+                "submission_id": s.id,
+                "ref": s.reference_number,
+                "title": s.title,
+                "ministry": s.ministry.name if s.ministry else "",
+                "stage": s.current_stage,
+                "agenda_category": s.agenda_category or "",
+                "scheduled_here": s.scheduled_meeting_id == meeting.id,
+            }
+            for s in backlog_qs
+        ]
+        # Items already routed to this sitting float to the top of the backlog.
+        backlog.sort(key=lambda r: not r["scheduled_here"])
+
+        # ── Sections (milestone lanes), admin-ordered ───────────────────────
+        sections = [
+            {"code": sec.code, "label": sec.label}
+            for sec in active_agenda_sections()
+        ]
+
+        placed = len(agenda)
+        readiness = meeting.agenda_readiness(count=placed)
+
+        return Response({
+            "meeting": MeetingSerializer(meeting, context={"request": request}).data,
+            "sections": sections,
+            "agenda": agenda,
+            "backlog": backlog,
+            "readiness": {
+                "placed": placed,
+                "capacity": meeting.max_items,
+                "min_items": meeting.min_items,
+                "backlog_ready": len(backlog),
+                "is_ready": readiness["is_ready"],
+                "level": readiness["level"],
+                "shortfall": readiness["shortfall"],
+            },
+        })
+
     @action(detail=False, methods=["post"], url_path="upload")
     def upload_meeting_recording(self, request):
         from django.conf import settings
@@ -5943,7 +6036,16 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="reorder")
     def reorder_agenda(self, request):
-        """Batch-reorder agenda items. Accepts: { "items": [{ "id": 1, "sequence": 1 }, ...] }"""
+        """
+        Batch-reorder agenda items after a drag.
+
+        Accepts: { "items": [{ "id": 1, "sequence": 1, "category": "rec" }, ...] }
+        `category` is optional — when present (e.g. an item dragged into a
+        different section in the Sitting Workspace) the item is also moved to
+        that agenda section. Unknown/inactive section codes are rejected.
+        """
+        from .agenda_sections import validate_agenda_section_code
+
         profile = _profile(request.user)
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             raise PermissionDenied("Only Senior Admin Officer, Secretary, or Admin can reorder the agenda.")
@@ -5956,9 +6058,18 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         for item in items_data:
             row_id = item.get("id")
             new_seq = item.get("sequence")
-            if row_id and new_seq is not None:
-                AgendaItem.objects.filter(id=row_id).update(sequence=new_seq)
-                updated.append({"id": row_id, "sequence": new_seq})
+            if not row_id or new_seq is None:
+                continue
+            fields = {"sequence": new_seq}
+            if "category" in item:
+                try:
+                    fields["category"] = validate_agenda_section_code(
+                        (item.get("category") or "").strip(), allow_inactive=True
+                    )
+                except ValueError as exc:
+                    return Response({"detail": str(exc)}, status=400)
+            AgendaItem.objects.filter(id=row_id).update(**fields)
+            updated.append({"id": row_id, **fields})
 
         return Response({"detail": f"{len(updated)} agenda items reordered.", "items": updated})
 

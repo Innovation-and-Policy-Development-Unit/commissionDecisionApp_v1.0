@@ -43,6 +43,7 @@ const MinutesEditor = lazy(() => import('../pages/secretariat/MinutesEditor'))
 const MeetingRoomHub = lazy(() => import('../pages/meeting/MeetingRoomHub'))
 const Agenda = lazy(() => import('../pages/secretariat/Agenda'))
 const AgendaSittingPack = lazy(() => import('../pages/secretariat/AgendaSittingPack'))
+const SittingWorkspace = lazy(() => import('../pages/secretariat/SittingWorkspace'))
 const Decisions = lazy(() => import('../pages/secretariat/Decisions'))
 const Notifications = lazy(() => import('../pages/secretariat/Notifications'))
 const TaskManagement = lazy(() => import('../pages/secretariat/TaskManagement'))
@@ -137,6 +138,7 @@ export default function AppRouter() {
           <Route path="/secretariat/meeting-room/minutes-pipeline" element={<S><RedirectToMinuteIntake /></S>} />
           <Route path="/secretariat/meetings" element={<S><CommissionSittings /></S>} />
           <Route path="/secretariat/meetings/:meetingId/minutes" element={<S detail><MinutesEditor /></S>} />
+          <Route path="/secretariat/meetings/:meetingId/workspace" element={<S detail><SittingWorkspace /></S>} />
           <Route path="/secretariat/agenda" element={<S><Agenda /></S>} />
           <Route path="/secretariat/minutes" element={<S><MinutesIndex /></S>} />
           <Route path="/secretariat/minute-intake" element={<S detail><MinuteIntake /></S>} />

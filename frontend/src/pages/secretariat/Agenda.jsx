@@ -27,7 +27,7 @@ import { useTranslation } from 'react-i18next'
 import {
   Plus, X, RefreshCw, Printer, Pencil, Check,
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
-  Send, ThumbsUp, Mail, ChevronsRight, Tablet,
+  Send, ThumbsUp, Mail, ChevronsRight, Tablet, LayoutGrid,
 } from 'lucide-react'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import AgendaReadinessChip, { computeReadiness } from '../../components/shared/AgendaReadinessChip'
@@ -336,6 +336,12 @@ export default function Agenda() {
           action={
             selectedMeeting && (
               <div className="flex items-center gap-2 flex-wrap justify-end">
+                <Link
+                  to={`/secretariat/meetings/${selectedId}/workspace`}
+                  className="btn-outline flex items-center gap-2 px-4 py-2"
+                >
+                  <LayoutGrid size={15} /> Workspace
+                </Link>
                 {canSittingPack && (
                   <Link
                     to={`/secretariat/agenda/sitting-pack?meeting=${selectedId}`}

@@ -136,11 +136,29 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                             <FileText size={18} className="text-slate-400" />
                             <h3 className="font-bold text-slate-900 dark:text-slate-100 uppercase text-xs tracking-wider">Sitting Agenda</h3>
                           </div>
-                          <button className="text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline">View Full Agenda</button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose()
+                              navigate(`/secretariat/meetings/${sitting.id}/workspace`)
+                            }}
+                            className="text-xs font-bold text-primary-600 dark:text-primary-400 hover:underline"
+                          >
+                            Open Workspace
+                          </button>
                         </div>
-                        <div className="bg-slate-50 dark:bg-slate-800/30 rounded-2xl p-6 border border-dashed border-slate-200 dark:border-slate-700 text-center">
-                          <p className="text-sm text-slate-500 italic">No agenda items loaded yet for this session.</p>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose()
+                            navigate(`/secretariat/meetings/${sitting.id}/workspace`)
+                          }}
+                          className="w-full bg-slate-50 dark:bg-slate-800/30 rounded-2xl p-6 border border-dashed border-slate-200 dark:border-slate-700 text-center hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+                        >
+                          {sitting.agenda_count
+                            ? <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{sitting.agenda_count} item{sitting.agenda_count !== 1 ? 's' : ''} — open the Sitting Workspace</p>
+                            : <p className="text-sm text-slate-500 italic">No agenda items yet — open the Sitting Workspace to schedule submissions.</p>}
+                        </button>
                       </section>
 
                       {/* Attendance Section */}
