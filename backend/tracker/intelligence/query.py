@@ -9,6 +9,7 @@ ORM-parameterised.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 from django.db.models import Avg, Count, Sum
@@ -37,6 +38,10 @@ DEFAULT_ROW_LIMIT = 1000
 
 
 def _agg_for(metric):
+    # A dataset may supply a custom aggregate (count-distinct, conditional
+    # count, computed duration, …); prefer it over the simple agg/column path.
+    if getattr(metric, "make_agg", None):
+        return metric.make_agg()
     if metric.agg == "count":
         return Count("id")
     if metric.agg == "sum" and metric.column:
@@ -44,6 +49,13 @@ def _agg_for(metric):
     if metric.agg == "avg" and metric.column:
         return Avg(metric.column)
     return Count("id")
+
+
+def _to_days(value):
+    """Convert a duration aggregate (timedelta) to a rounded number of days."""
+    if isinstance(value, timedelta):
+        return round(value.total_seconds() / 86400, 1)
+    return value
 
 
 def _apply_filters(qs, filters, dims, tdims):
@@ -118,9 +130,17 @@ def execute_query(*, user, dataset_key: str, spec: dict[str, Any]) -> dict[str, 
         columns.append({"key": "count", "label": "Count", "role": "metric"})
     primary_metric = next(iter(metric_aggs))
 
+    # Metrics whose aggregate returns a timedelta — converted to days on output.
+    duration_metrics = {
+        mk for mk in metric_aggs
+        if getattr(metrics.get(mk), "value_kind", "number") == "duration_days"
+    }
+
     # ── No grouping → single aggregate (big-number) ────────────────────────────
     if not value_fields:
         agg = qs.aggregate(**metric_aggs)
+        for mk in duration_metrics:
+            agg[mk] = _to_days(agg.get(mk))
         return {
             "columns": [c for c in columns if c["role"] == "metric"],
             "rows": [agg],
@@ -158,6 +178,9 @@ def execute_query(*, user, dataset_key: str, spec: dict[str, Any]) -> dict[str, 
         for d in ([xdim] + breakdown):
             if d in dims and dims[d].choices and out.get(d) is not None:
                 out[d] = dims[d].choices.get(out[d], out[d])
+        for mk in duration_metrics:
+            if mk in out:
+                out[mk] = _to_days(out[mk])
         rows.append(out)
 
     return {

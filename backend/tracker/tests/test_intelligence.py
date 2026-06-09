@@ -1,12 +1,17 @@
 """Tests for SCDMS Intelligence — semantic layer, query executor, and API."""
 
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from ..intelligence.datasets import get_dataset
 from ..intelligence.query import execute_query
-from ..models import FormCategory, Ministry, Profile, Role, Submission, WorkflowStage
+from ..models import (
+    AgendaItem, FormCategory, Meeting, Ministry, Profile, Role, Submission, WorkflowStage,
+)
 
 
 def _total(result):
@@ -15,6 +20,8 @@ def _total(result):
 
 class IntelligenceExecutorTests(TestCase):
     def setUp(self):
+        # Isolate from migration-seeded demo data so counts are deterministic.
+        Submission.objects.all().delete()
         self.min_a = Ministry.objects.create(code="IA", name="Intel A")
         self.min_b = Ministry.objects.create(code="IB", name="Intel B")
         self.cat = FormCategory.objects.create(code="psc_3_6", name="PSC 3.6")
@@ -103,3 +110,182 @@ class IntelligenceAPITests(TestCase):
     def test_permission_gate(self):
         self.client.force_authenticate(self.mhr)  # no view_reports in tests
         self.assertEqual(self.client.get("/api/intelligence/datasets/").status_code, 403)
+
+
+class IntelligenceMetricsTests(TestCase):
+    """Expanded Submissions metrics: count-distinct, conditional count, computed duration."""
+
+    def setUp(self):
+        # Isolate from migration-seeded demo data so counts are deterministic.
+        Submission.objects.all().delete()
+        self.admin = User.objects.create_user("intel_metrics_admin", password="x")
+        Profile.objects.create(user=self.admin, role=Role.PSC_ADMIN)
+        self.min_a = Ministry.objects.create(code="MA", name="Metrics A")
+        self.min_b = Ministry.objects.create(code="MB", name="Metrics B")
+        now = timezone.now()
+        # Two ministries, two distinct form types, each with a 4-day turnaround.
+        Submission.objects.create(
+            title="m1", ministry=self.min_a, form_type_code="psc_5_1",
+            received_at=now - timedelta(days=10), registered_at=now - timedelta(days=6),
+            created_by=self.admin, current_stage=WorkflowStage.SUBMITTED,
+        )
+        Submission.objects.create(
+            title="m2", ministry=self.min_b, form_type_code="psc_3_6",
+            received_at=now - timedelta(days=8), registered_at=now - timedelta(days=4),
+            created_by=self.admin, current_stage=WorkflowStage.SUBMITTED,
+        )
+        # One overdue assessment. Submission.save() forces assessment_deadline_at
+        # to None unless assessment_started_at is set, so push the deadline into
+        # the past via update() (bypassing save) to make it genuinely overdue.
+        m3 = Submission.objects.create(
+            title="m3", ministry=self.min_a, form_type_code="psc_5_1",
+            received_at=now - timedelta(days=20),
+            created_by=self.admin, current_stage=WorkflowStage.UNDER_ASSESSMENT,
+        )
+        Submission.objects.filter(pk=m3.pk).update(assessment_deadline_at=now - timedelta(days=1))
+
+    def _big_number(self, metric_key):
+        res = execute_query(user=self.admin, dataset_key="submissions",
+                            spec={"metrics": [{"key": metric_key}]})
+        self.assertEqual(len(res["rows"]), 1)  # big-number aggregate
+        return res["rows"][0][metric_key]
+
+    def test_distinct_ministries(self):
+        self.assertEqual(self._big_number("distinct_ministries"), 2)
+
+    def test_distinct_form_types(self):
+        self.assertEqual(self._big_number("distinct_form_types"), 2)
+
+    def test_overdue_count(self):
+        self.assertEqual(self._big_number("overdue_count"), 1)
+
+    def test_avg_turnaround_days_converted_to_number(self):
+        # m1 and m2 are each 4 days; m3 has no registered_at so it's excluded.
+        val = self._big_number("avg_turnaround_days")
+        self.assertAlmostEqual(val, 4.0, places=1)
+
+    def test_turnaround_grouped_by_ministry(self):
+        res = execute_query(user=self.admin, dataset_key="submissions",
+                            spec={"x": {"dimension": "ministry__name"},
+                                  "metrics": [{"key": "avg_turnaround_days"}]})
+        # Grouped rows also get the timedelta→days conversion (never a raw timedelta).
+        for row in res["rows"]:
+            self.assertNotIsInstance(row.get("avg_turnaround_days"), timedelta)
+
+    def test_new_metrics_exposed_in_semantic_layer(self):
+        keys = {m["key"] for m in get_dataset("submissions").to_dict()["metrics"]}
+        self.assertTrue(
+            {"count", "distinct_ministries", "distinct_form_types",
+             "overdue_count", "avg_turnaround_days"} <= keys
+        )
+
+
+class IntelligenceMeetingsDatasetTests(TestCase):
+    """Second dataset — Commission sittings, with subquery-annotated agenda load."""
+
+    def setUp(self):
+        # Isolate from migration-seeded meetings/submissions.
+        Meeting.objects.all().delete()
+        Submission.objects.all().delete()
+        self.admin = User.objects.create_user("intel_meet_admin", password="x")
+        Profile.objects.create(user=self.admin, role=Role.PSC_ADMIN)
+        self.ministry = Ministry.objects.create(code="MTG", name="Mtg Ministry")
+        self.m1 = Meeting.objects.create(
+            title="S1", date="2026-07-01", time="09:00", venue="Boardroom",
+        )
+        self.m2 = Meeting.objects.create(
+            title="S2", date="2026-08-01", time="09:00", venue="Hall",
+        )
+        sub = Submission.objects.create(
+            title="agenda sub", received_at=timezone.now(),
+            created_by=self.admin, ministry=self.ministry,  # ministry is NOT NULL
+        )
+        # m1 has one agenda item; m2 has none.
+        AgendaItem.objects.create(meeting=self.m1, submission=sub, sequence=1)
+
+    def test_dataset_registered(self):
+        self.assertIsNotNone(get_dataset("meetings"))
+
+    def test_count_and_agenda_items_total(self):
+        res = execute_query(user=self.admin, dataset_key="meetings",
+                            spec={"metrics": [{"key": "count"}, {"key": "agenda_items_total"}]})
+        row = res["rows"][0]
+        self.assertEqual(row["count"], 2)            # two sittings, not inflated by the join
+        self.assertEqual(row["agenda_items_total"], 1)
+
+    def test_distinct_venues(self):
+        res = execute_query(user=self.admin, dataset_key="meetings",
+                            spec={"metrics": [{"key": "distinct_venues"}]})
+        self.assertEqual(res["rows"][0]["distinct_venues"], 2)
+
+    def test_group_by_status(self):
+        res = execute_query(user=self.admin, dataset_key="meetings",
+                            spec={"x": {"dimension": "status"}, "metrics": [{"key": "count"}]})
+        self.assertEqual(sum(r["count"] for r in res["rows"]), 2)
+
+    def test_avg_agenda_items_is_numeric(self):
+        res = execute_query(user=self.admin, dataset_key="meetings",
+                            spec={"metrics": [{"key": "avg_agenda_items"}]})
+        self.assertAlmostEqual(res["rows"][0]["avg_agenda_items"], 0.5, places=2)
+
+
+class SavedExplorationAPITests(TestCase):
+    """Saved explorations — ownership, sharing visibility, and the permission gate."""
+
+    SPEC = {"x": {"dimension": "current_stage"}, "metrics": [{"key": "count"}]}
+
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user("expl_owner", password="x")
+        Profile.objects.create(user=self.owner, role=Role.PSC_ADMIN)
+        self.other = User.objects.create_user("expl_other", password="x")
+        Profile.objects.create(user=self.other, role=Role.PSC_ADMIN)
+        self.outsider = User.objects.create_user("expl_outsider", password="x")
+        Profile.objects.create(user=self.outsider, role=Role.MINISTRY_HR)  # no view_reports
+
+    def _create(self, name, *, shared=False):
+        return self.client.post(
+            "/api/intelligence/explorations/",
+            {"name": name, "dataset": "submissions", "spec": self.SPEC, "is_shared": shared},
+            format="json",
+        )
+
+    def test_create_and_list_own(self):
+        self.client.force_authenticate(self.owner)
+        r = self._create("Mine")
+        self.assertEqual(r.status_code, 201)
+        self.assertTrue(r.data["is_owner"])
+        listed = self.client.get("/api/intelligence/explorations/")
+        self.assertIn("Mine", {e["name"] for e in listed.data["explorations"]})
+
+    def test_private_hidden_from_others_but_shared_visible(self):
+        self.client.force_authenticate(self.owner)
+        self._create("Private")
+        self._create("Shared", shared=True)
+        self.client.force_authenticate(self.other)
+        names = {e["name"] for e in self.client.get("/api/intelligence/explorations/").data["explorations"]}
+        self.assertNotIn("Private", names)
+        self.assertIn("Shared", names)
+
+    def test_non_owner_cannot_delete(self):
+        self.client.force_authenticate(self.owner)
+        eid = self._create("X", shared=True).data["id"]
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.delete(f"/api/intelligence/explorations/{eid}/").status_code, 403)
+
+    def test_owner_can_delete(self):
+        self.client.force_authenticate(self.owner)
+        eid = self._create("Y").data["id"]
+        self.assertEqual(self.client.delete(f"/api/intelligence/explorations/{eid}/").status_code, 204)
+
+    def test_create_rejects_unknown_dataset(self):
+        self.client.force_authenticate(self.owner)
+        r = self.client.post(
+            "/api/intelligence/explorations/",
+            {"name": "Bad", "dataset": "nope", "spec": self.SPEC}, format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_gate_blocks_user_without_permission(self):
+        self.client.force_authenticate(self.outsider)
+        self.assertEqual(self.client.get("/api/intelligence/explorations/").status_code, 403)

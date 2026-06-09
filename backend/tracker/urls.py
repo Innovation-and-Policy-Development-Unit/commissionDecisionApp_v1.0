@@ -8,6 +8,8 @@ from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
 from .intelligence_views import (
     intelligence_datasets,
+    intelligence_exploration_detail,
+    intelligence_explorations,
     intelligence_interpret,
     intelligence_query,
 )
@@ -166,6 +168,8 @@ urlpatterns = [
     path("intelligence/datasets/", intelligence_datasets),
     path("intelligence/query/", intelligence_query),
     path("intelligence/interpret/", intelligence_interpret),
+    path("intelligence/explorations/", intelligence_explorations),
+    path("intelligence/explorations/<int:pk>/", intelligence_exploration_detail),
     path("register/", RegisterView.as_view()),
     # Two-factor authentication (TOTP / Microsoft Authenticator)
     path("auth/totp/setup/", TOTPSetupView.as_view(), name="totp-setup"),

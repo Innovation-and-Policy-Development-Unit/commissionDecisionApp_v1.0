@@ -3325,6 +3325,39 @@ class DocumentVersion(models.Model):
         return f"{self.document} v{self.version_num}"
 
 
+class SavedExploration(models.Model):
+    """A named SCDMS Intelligence exploration (dataset + query spec).
+
+    Lets users save and reload an explorer view without a long share URL. Each
+    is owned by a user; `is_shared` makes it visible to everyone who can use
+    Intelligence (read-only for non-owners).
+    """
+
+    name = models.CharField(max_length=200)
+    dataset = models.CharField(max_length=64)
+    spec = models.JSONField(default=dict, blank=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="saved_explorations",
+    )
+    is_shared = models.BooleanField(
+        default=False,
+        help_text="Visible to everyone who can use SCDMS Intelligence.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["owner", "-updated_at"], name="intel_saved_owner_upd_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.dataset})"
+
+
 # ── Compliance Case Management models (merged in) ──────────────────────────────
 # Defined in a sibling module and imported here so Django discovers them as part of
 # the ``tracker`` app. The import sits at the bottom of this file because the

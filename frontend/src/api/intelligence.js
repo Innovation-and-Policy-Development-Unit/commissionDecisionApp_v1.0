@@ -9,6 +9,18 @@ export const intelligenceApi = {
 
   interpret: (dataset, prompt) =>
     api.post('/intelligence/interpret/', { dataset, prompt }).then(r => r.data),
+
+  // ── Saved explorations ──────────────────────────────────────────────────
+  explorations: () => api.get('/intelligence/explorations/').then(r => r.data),
+
+  saveExploration: (payload) =>
+    api.post('/intelligence/explorations/', payload).then(r => r.data),
+
+  updateExploration: (id, payload) =>
+    api.patch(`/intelligence/explorations/${id}/`, payload).then(r => r.data),
+
+  deleteExploration: (id) =>
+    api.delete(`/intelligence/explorations/${id}/`),
 }
 
 export default intelligenceApi
