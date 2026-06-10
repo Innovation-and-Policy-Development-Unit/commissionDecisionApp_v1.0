@@ -1976,25 +1976,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         return Response(SubmissionDetailSerializer(submission).data)
 
     def _assign_scheduled_meeting(self, submission):
-        """Set scheduled_meeting based on the next meeting's submission_cutoff."""
-        from .models import Meeting
-        now = timezone.now()
-        next_meeting = Meeting.objects.filter(
-            status__in=("scheduled", "in_progress"),
-            date__gte=now.date(),
-        ).order_by("date").first()
-        if not next_meeting:
-            submission.scheduled_meeting = None
-            return
+        """Queue the submission for the next eligible sitting (carry-over aware).
 
-        if next_meeting.submission_cutoff and now > next_meeting.submission_cutoff:
-            later = Meeting.objects.filter(
-                status="scheduled",
-                date__gt=next_meeting.date,
-            ).order_by("date").first()
-            submission.scheduled_meeting = later or next_meeting
-        else:
-            submission.scheduled_meeting = next_meeting
+        Uses each sitting's *effective* cutoff (manual or the 3-day auto rule), so
+        a submission that becomes ready after the cutoff is automatically rolled to
+        the next sitting — it lands on that sitting's carry-over list.
+        """
+        from .agenda_carryover import compute_scheduled_meeting
+        submission.scheduled_meeting = compute_scheduled_meeting(submission)
 
     def _submission_view_side_effects(self, request, submission):
         """Queue async AI work when a submission is opened (retrieve / bootstrap)."""
@@ -5242,8 +5231,10 @@ class MeetingViewSet(viewsets.ModelViewSet):
         ]
         placed_submission_ids = {it.submission_id for it in items}
 
-        # ── Backlog: commission-ready submissions not yet on this agenda ─────
-        backlog_qs = (
+        # ── Backlog (on-time) vs carry-over list (late) ──────────────────────
+        from .agenda_carryover import is_carryover
+
+        pool_qs = (
             _submission_queryset_for(request.user)
             .filter(
                 current_stage=WorkflowStage.FORWARDED_TO_COMMISSION,
@@ -5252,8 +5243,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
             .exclude(id__in=placed_submission_ids)
             .order_by("-received_at")
         )
-        backlog = [
-            {
+        backlog, carryover = [], []
+        for s in pool_qs:
+            row = {
                 "submission_id": s.id,
                 "ref": s.reference_number,
                 "title": s.title,
@@ -5262,8 +5254,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 "agenda_category": s.agenda_category or "",
                 "scheduled_here": s.scheduled_meeting_id == meeting.id,
             }
-            for s in backlog_qs
-        ]
+            (carryover if is_carryover(s, meeting) else backlog).append(row)
         # Items already routed to this sitting float to the top of the backlog.
         backlog.sort(key=lambda r: not r["scheduled_here"])
 
@@ -5281,6 +5272,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
             "sections": sections,
             "agenda": agenda,
             "backlog": backlog,
+            "carryover": carryover,
             "readiness": {
                 "placed": placed,
                 "capacity": meeting.max_items,
@@ -5291,6 +5283,73 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 "shortfall": readiness["shortfall"],
             },
         })
+
+    @action(detail=True, methods=["post"], url_path="admit-reserve")
+    def admit_reserve(self, request, pk=None):
+        """Chairman admits a carry-over (late) submission into the draft agenda.
+
+        The only sanctioned override of the submission cutoff: allowed for the
+        Chairperson while the agenda is `with_chairman` for endorsement. Audited.
+        """
+        from .agenda_carryover import is_carryover
+
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.CHAIRPERSON, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Chairperson can admit carry-over items.")
+        if meeting.agenda_status != AgendaStatus.WITH_CHAIRMAN:
+            return Response(
+                {"detail": "Carry-over items can be admitted only while the agenda is with the Chairman for endorsement."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            submission = Submission.objects.get(pk=request.data.get("submission"))
+        except Submission.DoesNotExist:
+            raise exceptions.NotFound("Submission not found.")
+        if submission.current_stage != WorkflowStage.FORWARDED_TO_COMMISSION:
+            return Response({"detail": "Only commission-ready submissions can be admitted."}, status=400)
+        if AgendaItem.objects.filter(meeting=meeting, submission=submission).exists():
+            return Response({"detail": "Already on this agenda."}, status=400)
+
+        # Section: honour the requested (dropped-on) section, else auto-detect.
+        from .agenda_sections import validate_agenda_section_code
+        category = (request.data.get("category") or "").strip()
+        if category:
+            try:
+                category = validate_agenda_section_code(category, allow_inactive=True)
+            except ValueError:
+                category = ""
+        if not category:
+            category = submission.agenda_category if (submission.agenda_category and submission.agenda_category != "other") else "other"
+            if category == "other" and submission.form_type_code:
+                try:
+                    ft = PSCFormType.objects.get(code=submission.form_type_code)
+                    if ft.agenda_category and ft.agenda_category != "other":
+                        category = ft.agenda_category
+                except PSCFormType.DoesNotExist:
+                    pass
+
+        last = AgendaItem.objects.filter(meeting=meeting, category=category).order_by("-sequence").first()
+        item = AgendaItem.objects.create(
+            meeting=meeting, submission=submission, category=category,
+            sequence=(last.sequence + 1) if last else 1,
+        )
+        submission.scheduled_meeting = meeting
+        submission.save(update_fields=["scheduled_meeting"])
+
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        late = is_carryover(submission, meeting)
+        _log(request, _AL.Action.UPDATE, resource_type="AgendaItem",
+             resource_label=submission.reference_number,
+             description=(f"Chairman admitted {'late carry-over ' if late else ''}submission "
+                         f"{submission.reference_number} to {meeting.reference_number} agenda (cutoff override)."))
+
+        from .tasks import queue_agenda_item_blurb
+        aid = item.id
+        transaction.on_commit(lambda: queue_agenda_item_blurb(aid))
+        return Response({"detail": "Admitted to the agenda.", "agenda_item": item.id, "category": category})
 
     @action(detail=False, methods=["post"], url_path="upload")
     def upload_meeting_recording(self, request):

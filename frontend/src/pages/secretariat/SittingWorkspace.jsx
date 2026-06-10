@@ -110,7 +110,13 @@ export default function SittingWorkspace() {
   const sections = data?.sections || []
   const agenda = data?.agenda || []
   const backlog = data?.backlog || []
+  const carryover = data?.carryover || []
   const readiness = data?.readiness || {}
+
+  // The Chairman may admit carry-over (late) items into the agenda — only while
+  // it is with them for endorsement.
+  const canAdmit = ['chairperson', 'psc_admin'].includes(role) && meeting?.agenda_status === 'with_chairman'
+  const canDrop = (d) => d && (canEdit || (canAdmit && d.kind === 'carryover'))
 
   // Group agenda items into section lanes, preserving admin section order.
   const lanes = useMemo(() => {
@@ -149,6 +155,17 @@ export default function SittingWorkspace() {
       toast.success('Added to agenda.')
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Could not add to the agenda.')
+    } finally { setBusy(false) }
+  }
+
+  const admitReserve = async (submissionId, category) => {
+    setBusy(true)
+    try {
+      await api.post(`/meetings/${meetingId}/admit-reserve/`, { submission: submissionId, category })
+      await fetchWorkspace({ silent: true })
+      toast.success('Admitted from the carry-over list.')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not admit the item.')
     } finally { setBusy(false) }
   }
 
@@ -206,12 +223,10 @@ export default function SittingWorkspace() {
   // ── Drag & drop ─────────────────────────────────────────────────────────
   const onDropToSection = (code) => {
     setDropTarget(null)
-    if (!drag || !canEdit) { setDrag(null); return }
-    if (drag.kind === 'backlog') {
-      scheduleSubmission(drag.submissionId, code)
-    } else if (drag.kind === 'agenda') {
-      moveItemToSection(drag.item, code)
-    }
+    if (!drag) { return }
+    if (drag.kind === 'backlog' && canEdit) scheduleSubmission(drag.submissionId, code)
+    else if (drag.kind === 'agenda' && canEdit) moveItemToSection(drag.item, code)
+    else if (drag.kind === 'carryover' && canAdmit) admitReserve(drag.submissionId, code)
     setDrag(null)
   }
 
@@ -332,8 +347,9 @@ export default function SittingWorkspace() {
 
       {/* ── Board ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-        {/* Backlog column */}
-        <div className="card p-3 self-start">
+        {/* Left column: backlog + carry-over */}
+        <div className="space-y-4 self-start">
+        <div className="card p-3">
           <div className="flex items-center gap-2 mb-3 px-1">
             <Inbox size={15} className="text-slate-400" />
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Backlog</h2>
@@ -379,6 +395,53 @@ export default function SittingWorkspace() {
           </div>
         </div>
 
+        {/* Carry-over list (late submissions) */}
+        {(carryover.length > 0 || canAdmit) && (
+          <div className="card p-3">
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <Clock size={15} className="text-amber-500" />
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Carry-over list</h2>
+              <span className="ml-auto text-xs text-slate-400">{carryover.length}</span>
+            </div>
+            <p className="px-1 mb-2 text-[11px] text-slate-400">
+              Late (received after the cutoff) — these carry over to the next sitting.
+              {canAdmit && ' Drag one onto a section to admit it before endorsing.'}
+            </p>
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+              {carryover.length === 0 && (
+                <p className="text-xs text-slate-400 italic px-1 py-4 text-center">No carry-over items.</p>
+              )}
+              {carryover.map(s => (
+                <div
+                  key={s.submission_id}
+                  draggable={canAdmit}
+                  onDragStart={() => setDrag({ kind: 'carryover', submissionId: s.submission_id })}
+                  onDragEnd={() => { setDrag(null); setDropTarget(null) }}
+                  className={`rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-900/10 p-2.5 ${
+                    canAdmit ? 'cursor-grab active:cursor-grabbing hover:border-amber-400' : ''
+                  } ${drag?.kind === 'carryover' && drag.submissionId === s.submission_id ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-start gap-1.5">
+                    {canAdmit && <GripVertical size={13} className="text-amber-300 mt-0.5 shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-800 dark:text-slate-100 leading-snug line-clamp-2">{s.title}</p>
+                      <p className="text-[10px] font-mono text-slate-400 mt-0.5">{s.ref}</p>
+                      {s.ministry && (
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1"><Building2 size={10} /> {s.ministry}</p>
+                      )}
+                      <span className="inline-block mt-1 text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">late · carry-over</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {!canAdmit && carryover.length > 0 && (
+              <p className="px-1 mt-2 text-[10px] text-slate-400 italic">Only the Chairman can admit these, during endorsement.</p>
+            )}
+          </div>
+        )}
+        </div>
+
         {/* Agenda board */}
         <div className="space-y-3">
           {lanes.map(lane => {
@@ -386,7 +449,7 @@ export default function SittingWorkspace() {
             return (
               <div
                 key={lane.code || '_blank'}
-                onDragOver={(e) => { if (drag && canEdit) { e.preventDefault(); setDropTarget(lane.code) } }}
+                onDragOver={(e) => { if (canDrop(drag)) { e.preventDefault(); setDropTarget(lane.code) } }}
                 onDragLeave={() => setDropTarget(t => (t === lane.code ? null : t))}
                 onDrop={(e) => { e.preventDefault(); onDropToSection(lane.code) }}
                 className={`rounded-xl border transition-colors ${

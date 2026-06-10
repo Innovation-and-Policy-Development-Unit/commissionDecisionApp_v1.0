@@ -73,3 +73,16 @@ def commission_task_automation(sender, instance, created, raw=False, **kwargs):
 def meeting_automation(sender, instance, created, raw=False, **kwargs):
     if not raw:
         _dispatch_automation("meeting", instance, created)
+
+
+@receiver(post_save, sender="tracker.Meeting")
+def meeting_carryover_reconcile(sender, instance, raw=False, **kwargs):
+    """When a sitting is completed, roll its unplaced carry-over items to the next."""
+    if raw or instance.status != "completed":
+        return
+    try:
+        with transaction.atomic():
+            from .agenda_carryover import reconcile_carryover
+            reconcile_carryover(instance)
+    except Exception:  # noqa: BLE001
+        pass
