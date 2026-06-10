@@ -1825,6 +1825,14 @@ def run_daily_briefs_task():
 
 
 @shared_task
+def run_intelligence_reports_task():
+    """Hourly Celery beat check; runs/sends due SCDMS Intelligence reports & alerts."""
+    from tracker.intelligence.reports import run_due_reports
+
+    run_due_reports()
+
+
+@shared_task
 def generate_document_redaction_preview(document_id: int):
     from .ai.redaction_preview import suggest_redaction_spans
     from .models import SubmissionDocument

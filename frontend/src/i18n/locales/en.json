@@ -98,6 +98,8 @@
     "logout": "Logout",
     "wiki": "OPSC Wiki",
     "intelligence": "SCDMS Intelligence",
+    "dashboards": "Dashboards",
+    "reports_alerts": "Reports & Alerts",
     "report_templates": "Report Templates",
     "knowledge_base": "Knowledge Base",
     "sub_meetings": "Meetings",

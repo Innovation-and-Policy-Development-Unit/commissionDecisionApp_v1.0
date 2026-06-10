@@ -24,7 +24,7 @@ class Dimension:
     choices: dict | None = None     # code → label for coded fields
 
     def to_dict(self) -> dict[str, Any]:
-        return {"key": self.key, "label": self.label, "kind": self.kind}
+        return {"key": self.key, "label": self.label, "kind": self.kind, "choices": self.choices or None}
 
 
 @dataclass

@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Clock, Rows3, Hash, Tag, CalendarClock, Download, ImageDown, Link2, Bookmark, Trash2, Share2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Loader2, Clock, Rows3, Hash, Tag, CalendarClock, Download, ImageDown, Link2, Bookmark, Trash2, Share2, LayoutDashboard, BellRing } from 'lucide-react'
 import clsx from 'clsx'
 import { intelligenceApi } from '../../api/intelligence'
 import { useToast } from '../../context/ToastContext'
+import Modal from '../../components/shared/Modal'
 import PageHeader from '../../components/shared/PageHeader'
 import QueryBuilder from '../../components/intelligence/QueryBuilder'
 import ExplorerChart from '../../components/intelligence/ExplorerChart'
@@ -141,6 +143,12 @@ export default function Intelligence() {
   const [explorations, setExplorations] = useState([])
   const [saveName, setSaveName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [dashboards, setDashboards] = useState([])
+  const [pinOpen, setPinOpen] = useState(false)
+  const [pinTitle, setPinTitle] = useState('')
+  const [pinTarget, setPinTarget] = useState('new')   // 'new' | dashboard id (string)
+  const [pinNewName, setPinNewName] = useState('')
+  const [pinBusy, setPinBusy] = useState(false)
   const chartRef = useRef(null)
 
   const datasetDef = datasets.find(d => d.key === datasetKey)
@@ -238,6 +246,67 @@ export default function Intelligence() {
     }
   }, [datasetKey, spec, toast, t])
 
+  // ── Pin to dashboard ───────────────────────────────────────────────────────
+  const loadDashboards = useCallback(async () => {
+    try {
+      const d = await intelligenceApi.dashboards()
+      setDashboards((d.dashboards || []).filter(b => b.is_owner))
+    } catch { /* non-fatal */ }
+  }, [])
+
+  useEffect(() => { loadDashboards() }, [loadDashboards])
+
+  // A sensible default tile title from the current query (e.g. "Count by Stage").
+  const defaultTileTitle = useCallback(() => {
+    const metricKey = result?.meta?.metric || spec.metrics?.[0]?.key || 'count'
+    const metricLabel = datasetDef?.metrics?.find(m => m.key === metricKey)?.label || 'Count'
+    const xKey = spec.x?.dimension
+    const xLabel =
+      datasetDef?.time_dimensions?.find(d => d.key === xKey)?.label ||
+      datasetDef?.dimensions?.find(d => d.key === xKey)?.label || ''
+    return xLabel ? `${metricLabel} by ${xLabel}` : metricLabel
+  }, [result, spec, datasetDef])
+
+  const openPin = () => {
+    setPinTitle(defaultTileTitle())
+    setPinTarget('new')
+    setPinNewName('')
+    setPinOpen(true)
+  }
+
+  const confirmPin = async () => {
+    if (!datasetKey || !spec.x?.dimension) return
+    setPinBusy(true)
+    const tile = {
+      id: `t${Date.now()}`,
+      title: pinTitle.trim() || defaultTileTitle(),
+      dataset: datasetKey,
+      spec,
+      chart_type: spec.chart_type,
+      width: 'half',
+    }
+    try {
+      let board
+      if (pinTarget === 'new') {
+        const name = pinNewName.trim()
+        if (!name) { setPinBusy(false); return }
+        board = await intelligenceApi.createDashboard({ name, tiles: [tile] })
+      } else {
+        const target = dashboards.find(b => String(b.id) === String(pinTarget))
+        board = await intelligenceApi.updateDashboard(pinTarget, {
+          tiles: [...(target?.tiles || []), tile],
+        })
+      }
+      setPinOpen(false)
+      loadDashboards()
+      toast.success(t('intelligence.pinned', { defaultValue: 'Added to dashboard' }))
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('intelligence.pin_failed', { defaultValue: 'Could not pin to dashboard' }))
+    } finally {
+      setPinBusy(false)
+    }
+  }
+
   const changeDataset = (key) => {
     const def = datasets.find(d => d.key === key)
     const x = def?.time_dimensions?.[0]?.key || def?.dimensions?.[0]?.key || ''
@@ -253,7 +322,15 @@ export default function Intelligence() {
 
   return (
     <div className="max-w-screen-2xl mx-auto space-y-4 pb-10">
-      <PageHeader title={t('intelligence.title')} subtitle={t('intelligence.subtitle')} />
+      <PageHeader
+        title={t('intelligence.title')}
+        subtitle={t('intelligence.subtitle')}
+        action={
+          <Link to="/intelligence/dashboards" className="btn-outline flex items-center gap-2 px-3 py-2 text-sm">
+            <LayoutDashboard size={15} /> {t('intelligence.dashboards', { defaultValue: 'Dashboards' })}
+          </Link>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left: dataset + draggable fields */}
@@ -371,6 +448,26 @@ export default function Intelligence() {
                 {loading && <Loader2 size={15} className="animate-spin text-primary-500" />}
                 <button
                   type="button"
+                  onClick={openPin}
+                  disabled={!datasetKey || !result?.rows?.length}
+                  title={t('intelligence.pin', { defaultValue: 'Pin to dashboard' })}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <LayoutDashboard size={13} />
+                  <span className="hidden md:inline">{t('intelligence.pin', { defaultValue: 'Pin' })}</span>
+                </button>
+                {datasetKey && result?.rows?.length ? (
+                  <Link
+                    to={`/intelligence/reports?ds=${datasetKey}&q=${encodeSpec(spec)}`}
+                    title={t('intelligence.schedule', { defaultValue: 'Schedule report / alert' })}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                  >
+                    <BellRing size={13} />
+                    <span className="hidden md:inline">{t('intelligence.schedule_short', { defaultValue: 'Schedule' })}</span>
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
                   onClick={copyShareLink}
                   disabled={!datasetKey}
                   title={t('intelligence.copy_link', { defaultValue: 'Copy shareable link' })}
@@ -409,6 +506,54 @@ export default function Intelligence() {
           </div>
         </div>
       </div>
+
+      {/* ── Pin to dashboard modal ─────────────────────────────────────────── */}
+      <Modal open={pinOpen} title={t('intelligence.pin_title', { defaultValue: 'Pin to dashboard' })} onClose={() => setPinOpen(false)} size="sm">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+              {t('intelligence.tile_title', { defaultValue: 'Tile title' })}
+            </label>
+            <input className="input w-full" value={pinTitle} onChange={(e) => setPinTitle(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+              {t('intelligence.dashboard', { defaultValue: 'Dashboard' })}
+            </label>
+            <select className="input w-full" value={pinTarget} onChange={(e) => setPinTarget(e.target.value)}>
+              <option value="new">{t('intelligence.new_dashboard', { defaultValue: '+ New dashboard' })}</option>
+              {dashboards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+          {pinTarget === 'new' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">
+                {t('intelligence.dashboard_name', { defaultValue: 'New dashboard name' })}
+              </label>
+              <input
+                className="input w-full"
+                value={pinNewName}
+                onChange={(e) => setPinNewName(e.target.value)}
+                placeholder={t('intelligence.dashboard_name_ph', { defaultValue: 'e.g. Operations overview' })}
+                autoFocus
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={confirmPin}
+              disabled={pinBusy || (pinTarget === 'new' && !pinNewName.trim())}
+              className="btn-primary px-5 py-2 text-sm disabled:opacity-40"
+            >
+              {pinBusy ? '…' : t('intelligence.pin', { defaultValue: 'Pin' })}
+            </button>
+            <button type="button" onClick={() => setPinOpen(false)} className="btn-outline px-5 py-2 text-sm">
+              {t('common.cancel', { defaultValue: 'Cancel' })}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

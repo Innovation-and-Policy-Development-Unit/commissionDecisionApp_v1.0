@@ -63,6 +63,15 @@ class TrackerConfig(AppConfig):
                 "Compliance SLA schedule could not be synced: %s", exc
             )
 
+        try:
+            from .intelligence.reports import sync_intelligence_reports_scheduler
+            sync_intelligence_reports_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger("scdms.security").warning(
+                "Intelligence reports schedule could not be synced: %s", exc
+            )
+
         # Wire up signal handlers for AI feedback analysis
         try:
             import tracker.signals  # noqa: F401

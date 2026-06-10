@@ -131,6 +131,8 @@ const menuItems = [
     audience: 'all',
     items: [
       { label: 'SCDMS Intelligence', labelKey: 'nav.intelligence',     icon: Sparkles,      path: '/intelligence' },
+      { label: 'Dashboards',       labelKey: 'nav.dashboards',        icon: LayoutDashboard, path: '/intelligence/dashboards' },
+      { label: 'Reports & Alerts', labelKey: 'nav.reports_alerts',    icon: Bell,          path: '/intelligence/reports' },
       { label: 'Reports',          labelKey: 'nav.reports',           icon: FileText,      path: '/reports' },
       { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
     ],

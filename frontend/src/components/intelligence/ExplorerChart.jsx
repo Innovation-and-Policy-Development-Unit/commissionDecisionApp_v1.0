@@ -21,7 +21,7 @@ function pivot(rows, xKey, seriesKey, metricKey) {
   return { data, series }
 }
 
-export default function ExplorerChart({ result, chartType = 'bar' }) {
+export default function ExplorerChart({ result, chartType = 'bar', onSelect }) {
   if (!result || !result.rows?.length) {
     return <div className="flex items-center justify-center h-full text-slate-400 text-sm">No data for this query.</div>
   }
@@ -29,6 +29,11 @@ export default function ExplorerChart({ result, chartType = 'bar' }) {
   const xKey = meta.x
   const metricKey = meta.metric
   const breakdownKey = meta.breakdown
+  const interactive = typeof onSelect === 'function'
+  const handleChartClick = interactive
+    ? (state) => { if (state && state.activeLabel != null) onSelect(state.activeLabel) }
+    : undefined
+  const cursor = interactive ? { cursor: 'pointer' } : undefined
 
   if (chartType === 'number') {
     const v = rows[0]?.[metricKey] ?? 0
@@ -68,8 +73,12 @@ export default function ExplorerChart({ result, chartType = 'bar' }) {
     return (
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
-          <Pie data={data} dataKey="value" nameKey="name" outerRadius="80%" label>
-            {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+          <Pie
+            data={data} dataKey="value" nameKey="name" outerRadius="80%" label
+            onClick={interactive ? (d) => d?.name != null && onSelect(d.name) : undefined}
+            style={cursor}
+          >
+            {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} style={cursor} />)}
           </Pie>
           <Tooltip />
           <Legend />
@@ -95,7 +104,7 @@ export default function ExplorerChart({ result, chartType = 'bar' }) {
     const Series = chartType === 'area' ? Area : Line
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <Chart data={data}>
+        <Chart data={data} onClick={handleChartClick} style={cursor}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="name" tick={{ fontSize: 11 }} />
           <YAxis allowDecimals={false} />
@@ -115,7 +124,7 @@ export default function ExplorerChart({ result, chartType = 'bar' }) {
   const horizontal = chartType === 'bar'
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} layout={horizontal ? 'vertical' : 'horizontal'}>
+      <BarChart data={data} layout={horizontal ? 'vertical' : 'horizontal'} onClick={handleChartClick} style={cursor}>
         <CartesianGrid strokeDasharray="3 3" />
         {horizontal
           ? (<><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} /></>)

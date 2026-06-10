@@ -12,8 +12,8 @@ from rest_framework.response import Response
 
 from .intelligence.datasets import DATASETS, get_dataset
 from .intelligence.interpret import interpret_query
-from .intelligence.query import execute_query
-from .models import SavedExploration
+from .intelligence.query import CHART_TYPES, execute_query
+from .models import Dashboard, IntelligenceReport, SavedExploration
 from .rbac import rbac_user_has_permission
 
 
@@ -153,3 +153,302 @@ def intelligence_interpret(request):
     if err:
         return Response({"detail": err}, status=502 if "AI" in err else 400)
     return Response({"query_spec": spec})
+
+
+# ── Dashboards (composed boards of chart tiles) ────────────────────────────────
+
+def _clean_tiles(raw):
+    """Validate/normalise a tiles array — each tile is a self-contained snapshot."""
+    if not isinstance(raw, list):
+        raise ValidationError({"tiles": "tiles must be a list."})
+    cleaned = []
+    for i, t in enumerate(raw):
+        if not isinstance(t, dict):
+            continue
+        dataset = (t.get("dataset") or "").strip()
+        spec = t.get("spec") or {}
+        if not get_dataset(dataset) or not isinstance(spec, dict):
+            continue  # drop tiles referencing unknown datasets / malformed specs
+        chart_type = t.get("chart_type") if t.get("chart_type") in CHART_TYPES else "column"
+        width = t.get("width") if t.get("width") in ("half", "full") else "half"
+        cleaned.append({
+            "id": str(t.get("id") or f"t{i}"),
+            "title": (t.get("title") or "").strip()[:200],
+            "dataset": dataset,
+            "spec": spec,
+            "chart_type": chart_type,
+            "width": width,
+        })
+    return cleaned
+
+
+def _clean_filters(raw):
+    """Validate dashboard native-filter definitions."""
+    if not isinstance(raw, list):
+        raise ValidationError({"filters": "filters must be a list."})
+    cleaned = []
+    for i, f in enumerate(raw):
+        if not isinstance(f, dict):
+            continue
+        ftype = f.get("type")
+        if ftype not in ("category", "time"):
+            continue
+        default = f.get("default")
+        if not isinstance(default, (str, list)):
+            default = None
+        cleaned.append({
+            "id": str(f.get("id") or f"f{i}"),
+            "type": ftype,
+            "col": (f.get("col") or "").strip()[:64],
+            "label": (f.get("label") or "").strip()[:100],
+            "default": default,
+        })
+    return cleaned
+
+
+def _dashboard_payload(d, user):
+    return {
+        "id": d.id,
+        "name": d.name,
+        "description": d.description,
+        "tiles": d.tiles or [],
+        "filters": d.filters or [],
+        "is_shared": d.is_shared,
+        "owner": d.owner_id,
+        "owner_name": d.owner.get_username(),
+        "is_owner": d.owner_id == user.id,
+        "created_at": d.created_at.isoformat(),
+        "updated_at": d.updated_at.isoformat(),
+    }
+
+
+@api_view(["GET", "POST"])
+@permission_classes([permissions.IsAuthenticated])
+def intelligence_dashboards(request):
+    """List the user's own + shared dashboards, or create a new one."""
+    _gate(request.user)
+
+    if request.method == "GET":
+        qs = (
+            Dashboard.objects
+            .filter(Q(owner=request.user) | Q(is_shared=True))
+            .select_related("owner")
+        )
+        return Response({"dashboards": [_dashboard_payload(d, request.user) for d in qs]})
+
+    name = (request.data.get("name") or "").strip()
+    if not name:
+        raise ValidationError({"name": "A name is required."})
+    dashboard = Dashboard.objects.create(
+        owner=request.user,
+        name=name[:200],
+        description=(request.data.get("description") or "").strip(),
+        tiles=_clean_tiles(request.data.get("tiles") or []),
+        filters=_clean_filters(request.data.get("filters") or []),
+        is_shared=bool(request.data.get("is_shared", False)),
+    )
+    return Response(_dashboard_payload(dashboard, request.user), status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def intelligence_dashboard_detail(request, pk):
+    """Retrieve (own/shared), update or delete (owner-only) a dashboard."""
+    _gate(request.user)
+    try:
+        dashboard = Dashboard.objects.select_related("owner").get(pk=pk)
+    except Dashboard.DoesNotExist:
+        raise NotFound("Dashboard not found.")
+
+    is_staff = request.user.is_superuser or request.user.is_staff
+    is_owner = dashboard.owner_id == request.user.id
+
+    if request.method == "GET":
+        if not (is_owner or dashboard.is_shared or is_staff):
+            raise PermissionDenied("You do not have access to this dashboard.")
+        return Response(_dashboard_payload(dashboard, request.user))
+
+    if not (is_owner or is_staff):
+        raise PermissionDenied("Only the owner can modify this dashboard.")
+
+    if request.method == "DELETE":
+        dashboard.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # PATCH — partial update
+    if "name" in request.data:
+        name = (request.data.get("name") or "").strip()
+        if not name:
+            raise ValidationError({"name": "Name cannot be empty."})
+        dashboard.name = name[:200]
+    if "description" in request.data:
+        dashboard.description = (request.data.get("description") or "").strip()
+    if "tiles" in request.data:
+        dashboard.tiles = _clean_tiles(request.data.get("tiles") or [])
+    if "filters" in request.data:
+        dashboard.filters = _clean_filters(request.data.get("filters") or [])
+    if "is_shared" in request.data:
+        dashboard.is_shared = bool(request.data.get("is_shared"))
+    dashboard.save()
+    return Response(_dashboard_payload(dashboard, request.user))
+
+
+# ── Scheduled reports & alerts ─────────────────────────────────────────────────
+
+_REPORT_FREQ = {"daily", "weekly", "monthly"}
+_REPORT_KIND = {"report", "alert"}
+_REPORT_OPS = {"gt", "gte", "lt", "lte"}
+
+
+def _report_payload(r, user):
+    return {
+        "id": r.id,
+        "name": r.name,
+        "kind": r.kind,
+        "dataset": r.dataset,
+        "spec": r.spec,
+        "alert_metric": r.alert_metric,
+        "alert_operator": r.alert_operator,
+        "alert_threshold": r.alert_threshold,
+        "frequency": r.frequency,
+        "hour": r.hour,
+        "day_of_week": r.day_of_week,
+        "day_of_month": r.day_of_month,
+        "recipients": r.recipients or [],
+        "is_active": r.is_active,
+        "last_run_at": r.last_run_at.isoformat() if r.last_run_at else None,
+        "last_status": r.last_status,
+        "last_value": r.last_value,
+        "owner": r.owner_id,
+        "owner_name": r.owner.get_username(),
+        "is_owner": r.owner_id == user.id,
+        "updated_at": r.updated_at.isoformat(),
+    }
+
+
+def _apply_report_fields(report, data, *, creating):
+    if creating or "name" in data:
+        name = (data.get("name") or "").strip()
+        if not name:
+            raise ValidationError({"name": "A name is required."})
+        report.name = name[:200]
+    if creating or "dataset" in data:
+        dataset = (data.get("dataset") or "").strip()
+        if not get_dataset(dataset):
+            raise ValidationError({"dataset": f"Unknown dataset '{dataset}'."})
+        report.dataset = dataset
+    if creating or "spec" in data:
+        spec = data.get("spec") or {}
+        if not isinstance(spec, dict):
+            raise ValidationError({"spec": "spec must be an object."})
+        report.spec = spec
+    if creating or "kind" in data:
+        kind = data.get("kind") or "report"
+        if kind not in _REPORT_KIND:
+            raise ValidationError({"kind": "kind must be 'report' or 'alert'."})
+        report.kind = kind
+    if creating or "frequency" in data:
+        freq = data.get("frequency") or "daily"
+        if freq not in _REPORT_FREQ:
+            raise ValidationError({"frequency": "Invalid frequency."})
+        report.frequency = freq
+    if creating or "hour" in data:
+        try:
+            report.hour = max(0, min(23, int(data.get("hour", 7))))
+        except (TypeError, ValueError):
+            raise ValidationError({"hour": "hour must be an integer 0–23."})
+    if "day_of_week" in data:
+        try:
+            report.day_of_week = max(0, min(6, int(data.get("day_of_week") or 0)))
+        except (TypeError, ValueError):
+            raise ValidationError({"day_of_week": "day_of_week must be 0–6."})
+    if "day_of_month" in data:
+        try:
+            report.day_of_month = max(1, min(28, int(data.get("day_of_month") or 1)))
+        except (TypeError, ValueError):
+            raise ValidationError({"day_of_month": "day_of_month must be 1–28."})
+    if creating or "recipients" in data:
+        rec = data.get("recipients") or []
+        if not isinstance(rec, list):
+            raise ValidationError({"recipients": "recipients must be a list of emails."})
+        report.recipients = [str(e).strip() for e in rec if str(e).strip()]
+    if "is_active" in data:
+        report.is_active = bool(data.get("is_active"))
+    if "alert_metric" in data:
+        report.alert_metric = (data.get("alert_metric") or "").strip()[:64]
+    if "alert_operator" in data:
+        op = (data.get("alert_operator") or "").strip()
+        if op and op not in _REPORT_OPS:
+            raise ValidationError({"alert_operator": "Invalid operator."})
+        report.alert_operator = op
+    if "alert_threshold" in data:
+        thr = data.get("alert_threshold")
+        if thr in (None, ""):
+            report.alert_threshold = None
+        else:
+            try:
+                report.alert_threshold = float(thr)
+            except (TypeError, ValueError):
+                raise ValidationError({"alert_threshold": "Threshold must be a number."})
+    if report.kind == "alert" and (
+        not report.alert_metric or not report.alert_operator or report.alert_threshold is None
+    ):
+        raise ValidationError({"alert": "Alerts need a metric, an operator and a threshold."})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([permissions.IsAuthenticated])
+def intelligence_reports(request):
+    """List the user's reports (staff see all), or create a new report / alert."""
+    _gate(request.user)
+    if request.method == "GET":
+        is_staff = request.user.is_superuser or request.user.is_staff
+        qs = IntelligenceReport.objects.select_related("owner")
+        if not is_staff:
+            qs = qs.filter(owner=request.user)
+        return Response({"reports": [_report_payload(r, request.user) for r in qs]})
+
+    report = IntelligenceReport(owner=request.user)
+    _apply_report_fields(report, request.data, creating=True)
+    report.save()
+    return Response(_report_payload(report, request.user), status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def intelligence_report_detail(request, pk):
+    _gate(request.user)
+    try:
+        report = IntelligenceReport.objects.select_related("owner").get(pk=pk)
+    except IntelligenceReport.DoesNotExist:
+        raise NotFound("Report not found.")
+    is_staff = request.user.is_superuser or request.user.is_staff
+    if report.owner_id != request.user.id and not is_staff:
+        raise PermissionDenied("Only the owner can access this report.")
+
+    if request.method == "GET":
+        return Response(_report_payload(report, request.user))
+    if request.method == "DELETE":
+        report.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    _apply_report_fields(report, request.data, creating=False)
+    report.save()
+    return Response(_report_payload(report, request.user))
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def intelligence_report_run(request, pk):
+    """Run a report immediately (force-send) — to preview/test delivery."""
+    _gate(request.user)
+    try:
+        report = IntelligenceReport.objects.select_related("owner").get(pk=pk)
+    except IntelligenceReport.DoesNotExist:
+        raise NotFound("Report not found.")
+    if report.owner_id != request.user.id and not (request.user.is_superuser or request.user.is_staff):
+        raise PermissionDenied("Only the owner can run this report.")
+
+    from .intelligence.reports import run_report
+    outcome = run_report(report, force=True)
+    return Response({"detail": "Report run.", "result": outcome, "report": _report_payload(report, request.user)})

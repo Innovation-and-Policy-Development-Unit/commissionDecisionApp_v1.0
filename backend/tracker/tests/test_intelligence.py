@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.core import mail
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -266,6 +267,190 @@ class SavedExplorationAPITests(TestCase):
         names = {e["name"] for e in self.client.get("/api/intelligence/explorations/").data["explorations"]}
         self.assertNotIn("Private", names)
         self.assertIn("Shared", names)
+
+
+class DashboardAPITests(TestCase):
+    """Dashboards — tile validation, ownership, sharing visibility, permission gate."""
+
+    TILE = {
+        "id": "t1", "title": "By stage", "dataset": "submissions",
+        "spec": {"x": {"dimension": "current_stage"}, "metrics": [{"key": "count"}]},
+        "chart_type": "column", "width": "half",
+    }
+
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user("dash_owner", password="x")
+        Profile.objects.create(user=self.owner, role=Role.PSC_ADMIN)
+        self.other = User.objects.create_user("dash_other", password="x")
+        Profile.objects.create(user=self.other, role=Role.PSC_ADMIN)
+        self.outsider = User.objects.create_user("dash_outsider", password="x")
+        Profile.objects.create(user=self.outsider, role=Role.MINISTRY_HR)  # no view_reports
+
+    def _create(self, name, *, shared=False, tiles=None):
+        return self.client.post(
+            "/api/intelligence/dashboards/",
+            {"name": name, "is_shared": shared,
+             "tiles": tiles if tiles is not None else [self.TILE]},
+            format="json",
+        )
+
+    def test_create_and_list_own(self):
+        self.client.force_authenticate(self.owner)
+        r = self._create("Ops board")
+        self.assertEqual(r.status_code, 201)
+        self.assertTrue(r.data["is_owner"])
+        self.assertEqual(len(r.data["tiles"]), 1)
+        listed = self.client.get("/api/intelligence/dashboards/")
+        self.assertIn("Ops board", {d["name"] for d in listed.data["dashboards"]})
+
+    def test_invalid_tile_is_dropped(self):
+        self.client.force_authenticate(self.owner)
+        bad = {"title": "bad", "dataset": "nope", "spec": {}}
+        r = self._create("Mixed", tiles=[self.TILE, bad])
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(len(r.data["tiles"]), 1)  # tile with unknown dataset removed
+
+    def test_private_hidden_shared_visible(self):
+        self.client.force_authenticate(self.owner)
+        self._create("Private")
+        self._create("Shared", shared=True)
+        self.client.force_authenticate(self.other)
+        names = {d["name"] for d in self.client.get("/api/intelligence/dashboards/").data["dashboards"]}
+        self.assertNotIn("Private", names)
+        self.assertIn("Shared", names)
+
+    def test_shared_readable_but_only_owner_can_modify(self):
+        self.client.force_authenticate(self.owner)
+        d = self._create("Mine", shared=True).data
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.get(f"/api/intelligence/dashboards/{d['id']}/").status_code, 200)
+        patch = self.client.patch(f"/api/intelligence/dashboards/{d['id']}/",
+                                  {"name": "Hacked"}, format="json")
+        self.assertEqual(patch.status_code, 403)
+
+    def test_permission_gate(self):
+        self.client.force_authenticate(self.outsider)
+        self.assertEqual(self.client.get("/api/intelligence/dashboards/").status_code, 403)
+
+    def test_filters_persist_and_invalid_dropped(self):
+        self.client.force_authenticate(self.owner)
+        r = self.client.post(
+            "/api/intelligence/dashboards/",
+            {"name": "Filtered", "tiles": [self.TILE], "filters": [
+                {"id": "f1", "type": "category", "col": "ministry__name", "label": "Ministry"},
+                {"type": "bogus", "col": "x"},  # invalid type → dropped
+            ]},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(len(r.data["filters"]), 1)
+        self.assertEqual(r.data["filters"][0]["col"], "ministry__name")
+
+    def test_dataset_dimension_exposes_choices(self):
+        self.client.force_authenticate(self.owner)
+        ds = self.client.get("/api/intelligence/datasets/").data["datasets"]
+        subs = next(d for d in ds if d["key"] == "submissions")
+        stage = next(dim for dim in subs["dimensions"] if dim["key"] == "current_stage")
+        self.assertIsInstance(stage["choices"], dict)
+        self.assertIn("submitted", stage["choices"])
+
+
+class IntelligenceReportTests(TestCase):
+    """Scheduled reports & threshold alerts — CRUD, due-logic, and email delivery."""
+
+    BASE = {"name": "Weekly count", "dataset": "submissions",
+            "spec": {"metrics": [{"key": "count"}]},
+            "frequency": "daily", "hour": 7, "recipients": ["ops@example.com"]}
+
+    def setUp(self):
+        Submission.objects.all().delete()  # deterministic alert values
+        self.client = APIClient()
+        self.owner = User.objects.create_user("rep_owner", password="x")
+        Profile.objects.create(user=self.owner, role=Role.PSC_ADMIN)
+        self.outsider = User.objects.create_user("rep_outsider", password="x")
+        Profile.objects.create(user=self.outsider, role=Role.MINISTRY_HR)  # no view_reports
+        self.ministry = Ministry.objects.create(code="RP", name="Report Ministry")
+        for i in range(3):
+            Submission.objects.create(title=f"r{i}", ministry=self.ministry,
+                                      received_at=timezone.now(), created_by=self.owner,
+                                      current_stage=WorkflowStage.SUBMITTED)
+
+    # ── CRUD + validation ───────────────────────────────────────────────────
+    def test_create_and_list_own(self):
+        self.client.force_authenticate(self.owner)
+        r = self.client.post("/api/intelligence/reports/", self.BASE, format="json")
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.data["kind"], "report")
+        listed = self.client.get("/api/intelligence/reports/")
+        self.assertIn("Weekly count", {x["name"] for x in listed.data["reports"]})
+
+    def test_alert_requires_threshold(self):
+        self.client.force_authenticate(self.owner)
+        bad = {**self.BASE, "kind": "alert", "alert_metric": "count", "alert_operator": "gt"}
+        r = self.client.post("/api/intelligence/reports/", bad, format="json")
+        self.assertEqual(r.status_code, 400)
+
+    def test_permission_gate(self):
+        self.client.force_authenticate(self.outsider)
+        self.assertEqual(self.client.get("/api/intelligence/reports/").status_code, 403)
+
+    # ── Due logic ───────────────────────────────────────────────────────────
+    def test_due_logic(self):
+        from tracker.intelligence.reports import report_is_due
+        from tracker.models import IntelligenceReport
+
+        now = timezone.localtime()
+        rpt = IntelligenceReport(is_active=True, frequency="daily", hour=now.hour)
+        self.assertTrue(report_is_due(rpt, now))           # matches hour, never run
+        rpt.last_run_at = timezone.now()
+        self.assertFalse(report_is_due(rpt, now))          # already ran today
+        rpt.last_run_at = None
+        rpt.hour = (now.hour + 1) % 24
+        self.assertFalse(report_is_due(rpt, now))          # wrong hour
+
+    # ── Delivery ────────────────────────────────────────────────────────────
+    def test_run_now_sends_email(self):
+        self.client.force_authenticate(self.owner)
+        rid = self.client.post("/api/intelligence/reports/", self.BASE, format="json").data["id"]
+        mail.outbox = []
+        r = self.client.post(f"/api/intelligence/reports/{rid}/run/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(r.data["report"]["last_status"], "sent")
+
+    def test_alert_triggers_and_sends(self):
+        from tracker.intelligence.reports import run_report
+        from tracker.models import IntelligenceReport
+
+        rpt = IntelligenceReport.objects.create(
+            owner=self.owner, name="Too many", dataset="submissions",
+            spec={"metrics": [{"key": "count"}]}, kind="alert",
+            alert_metric="count", alert_operator="gt", alert_threshold=2,
+            recipients=["ops@example.com"],
+        )
+        mail.outbox = []
+        run_report(rpt)               # 3 > 2 → triggered
+        self.assertEqual(len(mail.outbox), 1)
+        rpt.refresh_from_db()
+        self.assertEqual(rpt.last_status, "triggered")
+        self.assertEqual(rpt.last_value, 3)
+
+    def test_alert_not_triggered_no_email(self):
+        from tracker.intelligence.reports import run_report
+        from tracker.models import IntelligenceReport
+
+        rpt = IntelligenceReport.objects.create(
+            owner=self.owner, name="Quiet", dataset="submissions",
+            spec={"metrics": [{"key": "count"}]}, kind="alert",
+            alert_metric="count", alert_operator="gt", alert_threshold=100,
+            recipients=["ops@example.com"],
+        )
+        mail.outbox = []
+        run_report(rpt)               # 3 > 100 is false → no email
+        self.assertEqual(len(mail.outbox), 0)
+        rpt.refresh_from_db()
+        self.assertEqual(rpt.last_status, "ok")
 
     def test_non_owner_cannot_delete(self):
         self.client.force_authenticate(self.owner)

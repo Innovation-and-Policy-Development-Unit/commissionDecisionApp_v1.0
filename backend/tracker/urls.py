@@ -7,11 +7,16 @@ from .compliance_views import ComplaintViewSet, ComplianceCaseViewSet
 from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
 from .intelligence_views import (
+    intelligence_dashboard_detail,
+    intelligence_dashboards,
     intelligence_datasets,
     intelligence_exploration_detail,
     intelligence_explorations,
     intelligence_interpret,
     intelligence_query,
+    intelligence_report_detail,
+    intelligence_report_run,
+    intelligence_reports,
 )
 from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
@@ -170,6 +175,11 @@ urlpatterns = [
     path("intelligence/interpret/", intelligence_interpret),
     path("intelligence/explorations/", intelligence_explorations),
     path("intelligence/explorations/<int:pk>/", intelligence_exploration_detail),
+    path("intelligence/dashboards/", intelligence_dashboards),
+    path("intelligence/dashboards/<int:pk>/", intelligence_dashboard_detail),
+    path("intelligence/reports/", intelligence_reports),
+    path("intelligence/reports/<int:pk>/", intelligence_report_detail),
+    path("intelligence/reports/<int:pk>/run/", intelligence_report_run),
     path("register/", RegisterView.as_view()),
     # Two-factor authentication (TOTP / Microsoft Authenticator)
     path("auth/totp/setup/", TOTPSetupView.as_view(), name="totp-setup"),

@@ -3358,6 +3358,115 @@ class SavedExploration(models.Model):
         return f"{self.name} ({self.dataset})"
 
 
+class Dashboard(models.Model):
+    """A composed board of SCDMS Intelligence chart tiles.
+
+    Each tile is a self-contained snapshot — ``{id, title, dataset, spec,
+    chart_type, width}`` — so a dashboard keeps working even if the saved
+    exploration it was pinned from is later edited or deleted. Owned by a user;
+    ``is_shared`` makes it visible (read-only) to everyone who can use
+    Intelligence.
+    """
+
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    tiles = models.JSONField(default=list, blank=True)
+    # Native filter definitions: [{id, type: "category"|"time", col, label, default}].
+    # Applied across every tile whose dataset has the referenced column.
+    filters = models.JSONField(default=list, blank=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="intelligence_dashboards",
+    )
+    is_shared = models.BooleanField(
+        default=False,
+        help_text="Visible to everyone who can use SCDMS Intelligence.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["owner", "-updated_at"], name="intel_dash_owner_upd_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({len(self.tiles or [])} tiles)"
+
+
+class IntelligenceReport(models.Model):
+    """A scheduled SCDMS Intelligence report or threshold alert.
+
+    Runs a saved query (as its owner, so RBAC scoping applies) on a
+    daily / weekly / monthly cadence and emails the result table with a link to
+    the live chart. For ``kind="alert"`` the email is only sent when the chosen
+    metric crosses a threshold.
+    """
+
+    class Kind(models.TextChoices):
+        REPORT = "report", "Scheduled report"
+        ALERT = "alert", "Alert"
+
+    class Frequency(models.TextChoices):
+        DAILY = "daily", "Daily"
+        WEEKLY = "weekly", "Weekly"
+        MONTHLY = "monthly", "Monthly"
+
+    class Operator(models.TextChoices):
+        GT = "gt", "greater than"
+        GTE = "gte", "at least"
+        LT = "lt", "less than"
+        LTE = "lte", "at most"
+
+    class Status(models.TextChoices):
+        SENT = "sent", "Sent"
+        TRIGGERED = "triggered", "Alert triggered"
+        OK = "ok", "Checked — no alert"
+        SKIPPED = "skipped", "Skipped"
+        FAILED = "failed", "Failed"
+
+    name = models.CharField(max_length=200)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="intelligence_reports",
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.REPORT)
+    dataset = models.CharField(max_length=64)
+    spec = models.JSONField(default=dict, blank=True)
+
+    # Alert condition (used when kind == "alert"): metric total vs threshold.
+    alert_metric = models.CharField(max_length=64, blank=True)
+    alert_operator = models.CharField(max_length=8, choices=Operator.choices, blank=True)
+    alert_threshold = models.FloatField(null=True, blank=True)
+
+    # Schedule — evaluated in Pacific/Efate local time.
+    frequency = models.CharField(max_length=16, choices=Frequency.choices, default=Frequency.DAILY)
+    hour = models.PositiveSmallIntegerField(default=7, help_text="Hour (0–23) to send.")
+    day_of_week = models.PositiveSmallIntegerField(default=0, help_text="Weekly: 0=Mon … 6=Sun.")
+    day_of_month = models.PositiveSmallIntegerField(default=1, help_text="Monthly: 1–28.")
+    recipients = models.JSONField(default=list, blank=True, help_text="List of email addresses.")
+
+    is_active = models.BooleanField(default=True)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    last_status = models.CharField(max_length=16, choices=Status.choices, blank=True)
+    last_value = models.FloatField(null=True, blank=True)
+    last_error = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [
+            models.Index(fields=["is_active", "frequency"], name="intel_report_active_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} [{self.kind}]"
+
+
 # ── Compliance Case Management models (merged in) ──────────────────────────────
 # Defined in a sibling module and imported here so Django discovers them as part of
 # the ``tracker`` app. The import sits at the bottom of this file because the

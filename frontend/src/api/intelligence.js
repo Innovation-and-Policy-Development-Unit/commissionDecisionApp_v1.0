@@ -21,6 +21,35 @@ export const intelligenceApi = {
 
   deleteExploration: (id) =>
     api.delete(`/intelligence/explorations/${id}/`),
+
+  // ── Dashboards (composed boards of chart tiles) ─────────────────────────
+  dashboards: () => api.get('/intelligence/dashboards/').then(r => r.data),
+
+  dashboard: (id) => api.get(`/intelligence/dashboards/${id}/`).then(r => r.data),
+
+  createDashboard: (payload) =>
+    api.post('/intelligence/dashboards/', payload).then(r => r.data),
+
+  updateDashboard: (id, payload) =>
+    api.patch(`/intelligence/dashboards/${id}/`, payload).then(r => r.data),
+
+  deleteDashboard: (id) =>
+    api.delete(`/intelligence/dashboards/${id}/`),
+
+  // ── Scheduled reports & alerts ──────────────────────────────────────────
+  reports: () => api.get('/intelligence/reports/').then(r => r.data),
+
+  createReport: (payload) =>
+    api.post('/intelligence/reports/', payload).then(r => r.data),
+
+  updateReport: (id, payload) =>
+    api.patch(`/intelligence/reports/${id}/`, payload).then(r => r.data),
+
+  deleteReport: (id) =>
+    api.delete(`/intelligence/reports/${id}/`),
+
+  runReport: (id) =>
+    api.post(`/intelligence/reports/${id}/run/`).then(r => r.data),
 }
 
 export default intelligenceApi
