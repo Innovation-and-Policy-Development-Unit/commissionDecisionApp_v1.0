@@ -119,4 +119,4 @@ class AutomationAPITests(TestCase):
         self.client.force_authenticate(self.admin)
         resp = self.client.get("/api/automations/runs/export/")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp["Content-Type"], "text/csv")
+        self.assertTrue(resp["Content-Type"].startswith("text/csv"))
