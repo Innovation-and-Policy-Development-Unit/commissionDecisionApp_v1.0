@@ -17,7 +17,7 @@ export default function DashboardTile({ tile, refreshKey = 0, onSelect }) {
     let cancelled = false
     setLoading(true)
     setError('')
-    intelligenceApi.query(tile.dataset, tile.spec)
+    intelligenceApi.query(tile.dataset, tile.spec, { noCache: refreshKey > 0 })
       .then(r => { if (!cancelled) setResult(r) })
       .catch(e => { if (!cancelled) setError(e?.response?.data?.detail || 'Query failed') })
       .finally(() => { if (!cancelled) setLoading(false) })

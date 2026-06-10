@@ -17,8 +17,9 @@ import { useTranslation } from 'react-i18next'
 import {
   LayoutDashboard, Plus, Trash2, Share2, RefreshCw, ArrowLeft, Compass,
   ChevronLeft, ChevronRight, Maximize2, Minimize2, Pencil, Check, Loader2, Lock,
-  Filter, X, Layers, CalendarClock,
+  Filter, X, Layers, CalendarClock, Star, StickyNote, Tag as TagIcon,
 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import { intelligenceApi } from '../../api/intelligence'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
@@ -78,6 +79,8 @@ function DashboardList() {
   const [loading, setLoading] = useState(true)
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
+  const [view, setView] = useState('all')        // 'all' | 'fav'
+  const [activeTag, setActiveTag] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -105,6 +108,18 @@ function DashboardList() {
     catch { toast.error(t('intelligence.dash_delete_failed', { defaultValue: 'Could not delete dashboard' })) }
   }
 
+  const toggleFav = async (board, ev) => {
+    ev.preventDefault(); ev.stopPropagation()
+    try {
+      const r = board.is_favorite ? await intelligenceApi.unfavoriteDashboard(board.id) : await intelligenceApi.favoriteDashboard(board.id)
+      setBoards(bs => bs.map(b => (b.id === board.id ? { ...b, is_favorite: r.is_favorite } : b)))
+    } catch { toast.error(t('intelligence.fav_failed', { defaultValue: 'Could not update favourite' })) }
+  }
+
+  const allTags = [...new Set(boards.flatMap(b => b.tags || []))].sort()
+  const visible = boards.filter(b =>
+    (view !== 'fav' || b.is_favorite) && (!activeTag || (b.tags || []).includes(activeTag)))
+
   return (
     <div className="max-w-screen-xl mx-auto space-y-4 pb-10">
       <PageHeader
@@ -119,16 +134,29 @@ function DashboardList() {
           <Plus size={16} /> {t('intelligence.new_dashboard_btn', { defaultValue: 'New dashboard' })}
         </button>
       </div>
+
+      {/* Favourites + tag filter */}
+      {boards.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          <button onClick={() => setView('all')} className={`px-2.5 py-1 rounded-lg ${view === 'all' ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-200' : 'text-slate-500'}`}>{t('intelligence.all', { defaultValue: 'All' })}</button>
+          <button onClick={() => setView('fav')} className={`flex items-center gap-1 px-2.5 py-1 rounded-lg ${view === 'fav' ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'text-slate-500'}`}><Star size={13} /> {t('intelligence.favorites', { defaultValue: 'Favourites' })}</button>
+          {allTags.length > 0 && <span className="w-px h-4 bg-slate-200 dark:bg-slate-700" />}
+          {allTags.map(tag => (
+            <button key={tag} onClick={() => setActiveTag(activeTag === tag ? '' : tag)} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${activeTag === tag ? 'bg-primary-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}><TagIcon size={10} /> {tag}</button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
-      ) : boards.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-slate-400">
           <LayoutDashboard size={32} className="mb-3 opacity-40" />
-          <p className="text-sm">{t('intelligence.no_dashboards', { defaultValue: 'No dashboards yet. Create one above, then pin charts from the Explorer.' })}</p>
+          <p className="text-sm">{boards.length === 0 ? t('intelligence.no_dashboards', { defaultValue: 'No dashboards yet. Create one above, then pin charts from the Explorer.' }) : t('intelligence.no_match', { defaultValue: 'No dashboards match this filter.' })}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {boards.map(b => (
+          {visible.map(b => (
             <Link key={b.id} to={`/intelligence/dashboards/${b.id}`} className="card p-4 hover:border-primary-300 transition-colors group">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -139,10 +167,18 @@ function DashboardList() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={(e) => toggleFav(b, e)} title={t('intelligence.favorite', { defaultValue: 'Favourite' })} className={b.is_favorite ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'}>
+                    <Star size={15} fill={b.is_favorite ? 'currentColor' : 'none'} />
+                  </button>
                   {b.is_shared && <Share2 size={13} className="text-primary-500" title="Shared" />}
                   {b.is_owner && <button onClick={(e) => remove(b, e)} className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500"><Trash2 size={14} /></button>}
                 </div>
               </div>
+              {(b.tags || []).length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {b.tags.map(tag => <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">{tag}</span>)}
+                </div>
+              )}
             </Link>
           ))}
         </div>
@@ -172,6 +208,9 @@ function DashboardDetail({ id }) {
   const [autoRefresh, setAutoRefresh] = useState(0)
   const [tileX, setTileX] = useState({})                 // tileId → drill X dimension
   const [addingFilter, setAddingFilter] = useState(false)
+  const [activeTab, setActiveTab] = useState('')         // '' = all tabs
+  const [tagInput, setTagInput] = useState('')
+  const [mdEdit, setMdEdit] = useState(null)             // { idx, title, content }
   const timerRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -193,6 +232,7 @@ function DashboardDetail({ id }) {
         dims: new Set((d.dimensions || []).map(x => x.key)),
         tdims: (d.time_dimensions || []).map(x => x.key),
         dimList: d.dimensions || [],
+        tdimList: d.time_dimensions || [],
         choices: Object.fromEntries((d.dimensions || []).filter(x => x.choices).map(x => [x.key, x.choices])),
       }
     }
@@ -309,6 +349,43 @@ function DashboardDetail({ id }) {
   }
   const saveName = () => { const name = nameDraft.trim(); if (name) { setEditingName(false); patch({ name }, { name }) } }
   const toggleShared = () => patch({ is_shared: !board.is_shared }, { is_shared: !board.is_shared })
+
+  // ── Phase C: favourite, tabs, tags, markdown ────────────────────────────────
+  const toggleFavorite = async () => {
+    try {
+      const r = board.is_favorite ? await intelligenceApi.unfavoriteDashboard(id) : await intelligenceApi.favoriteDashboard(id)
+      setBoard(b => ({ ...b, is_favorite: r.is_favorite }))
+    } catch { toast.error(t('intelligence.fav_failed', { defaultValue: 'Could not update favourite' })) }
+  }
+  const addTab = () => {
+    const tabs = [...(board.tabs || []), { id: `tab${Date.now()}`, label: `Tab ${(board.tabs?.length || 0) + 1}` }]
+    patch({ tabs }, { tabs })
+  }
+  const removeTab = (tabId) => {
+    const tabs = (board.tabs || []).filter(tb => tb.id !== tabId)
+    const tiles = (board.tiles || []).map(t => (t.tab === tabId ? { ...t, tab: '' } : t))
+    if (activeTab === tabId) setActiveTab('')
+    patch({ tabs, tiles }, { tabs, tiles })
+  }
+  const setTileTab = (idx, tabId) => patchTiles(board.tiles.map((t, i) => (i === idx ? { ...t, tab: tabId } : t)))
+  const addNote = () => {
+    const tile = { id: `t${Date.now()}`, type: 'markdown', title: 'Note', content: '_Edit me — write **markdown** here._', width: 'full', tab: activeTab || '' }
+    patchTiles([...(board.tiles || []), tile])
+  }
+  const saveMd = () => {
+    if (!mdEdit) return
+    const tiles = board.tiles.map((t, i) => (i === mdEdit.idx ? { ...t, title: mdEdit.title, content: mdEdit.content } : t))
+    setMdEdit(null)
+    patchTiles(tiles)
+  }
+  const addTag = (raw) => {
+    const tag = raw.trim()
+    setTagInput('')
+    if (!tag || (board.tags || []).some(x => x.toLowerCase() === tag.toLowerCase())) return
+    const tags = [...(board.tags || []), tag]
+    patch({ tags }, { tags })
+  }
+  const removeTag = (tag) => patch({ tags: (board.tags || []).filter(x => x !== tag) }, { tags: (board.tags || []).filter(x => x !== tag) })
   const deleteBoard = async () => {
     const ok = await confirm({ title: t('intelligence.delete_dashboard', { defaultValue: 'Delete dashboard?' }), message: board.name, confirmLabel: t('common.delete', { defaultValue: 'Delete' }) })
     if (!ok) return
@@ -358,18 +435,52 @@ function DashboardDetail({ id }) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={toggleFavorite} title={t('intelligence.favorite', { defaultValue: 'Favourite' })} className={`p-2 ${board.is_favorite ? 'text-amber-400' : 'text-slate-400 hover:text-amber-400'}`}>
+            <Star size={17} fill={board.is_favorite ? 'currentColor' : 'none'} />
+          </button>
           <select value={autoRefresh} onChange={(e) => setAutoRefresh(Number(e.target.value))} className="input py-1.5 text-sm" title={t('intelligence.auto_refresh', { defaultValue: 'Auto-refresh' })}>
             {REFRESH_OPTS.map(o => <option key={o.value} value={o.value}>⟳ {o.label}</option>)}
           </select>
           <button onClick={() => setRefreshKey(k => k + 1)} className="btn-outline flex items-center gap-2 px-3 py-2 text-sm"><RefreshCw size={14} /> {t('intelligence.refresh', { defaultValue: 'Refresh' })}</button>
           {canEdit && (
             <>
+              <button onClick={addNote} className="btn-outline flex items-center gap-2 px-3 py-2 text-sm" title={t('intelligence.add_note', { defaultValue: 'Add note' })}><StickyNote size={14} /> {t('intelligence.note', { defaultValue: 'Note' })}</button>
               <button onClick={toggleShared} className={`btn-outline flex items-center gap-2 px-3 py-2 text-sm ${board.is_shared ? 'text-primary-700 border-primary-300 dark:text-primary-200' : ''}`}><Share2 size={14} /> {board.is_shared ? t('intelligence.shared', { defaultValue: 'Shared' }) : t('intelligence.share', { defaultValue: 'Share' })}</button>
               <button onClick={deleteBoard} className="btn-outline flex items-center gap-2 px-3 py-2 text-sm text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20"><Trash2 size={14} /></button>
             </>
           )}
         </div>
       </div>
+
+      {/* Tags */}
+      {((board.tags || []).length > 0 || canEdit) && (
+        <div className="flex items-center gap-1.5 flex-wrap text-xs -mt-1">
+          <TagIcon size={13} className="text-slate-400" />
+          {(board.tags || []).map(tag => (
+            <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+              {tag}{canEdit && <button onClick={() => removeTag(tag)} className="hover:text-red-500"><X size={11} /></button>}
+            </span>
+          ))}
+          {canEdit && (
+            <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addTag(tagInput) }}
+              placeholder={t('intelligence.add_tag', { defaultValue: '+ tag' })} className="input py-0.5 px-2 text-xs w-24" />
+          )}
+        </div>
+      )}
+
+      {/* Tabs */}
+      {((board.tabs || []).length > 0 || canEdit) && (
+        <div className="flex items-center gap-1 flex-wrap border-b border-slate-200 dark:border-slate-700">
+          <button onClick={() => setActiveTab('')} className={`px-3 py-1.5 text-sm -mb-px border-b-2 ${activeTab === '' ? 'border-primary-500 text-primary-700 dark:text-primary-300 font-medium' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{t('intelligence.all', { defaultValue: 'All' })}</button>
+          {(board.tabs || []).map(tb => (
+            <span key={tb.id} className="inline-flex items-center -mb-px">
+              <button onClick={() => setActiveTab(tb.id)} className={`px-3 py-1.5 text-sm border-b-2 ${activeTab === tb.id ? 'border-primary-500 text-primary-700 dark:text-primary-300 font-medium' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{tb.label}</button>
+              {canEdit && activeTab === tb.id && <button onClick={() => removeTab(tb.id)} className="text-slate-300 hover:text-red-500 pr-1"><X size={12} /></button>}
+            </span>
+          ))}
+          {canEdit && <button onClick={addTab} className="px-2 py-1.5 text-slate-400 hover:text-primary-500" title={t('intelligence.add_tab_btn', { defaultValue: 'Add tab' })}><Plus size={14} /></button>}
+        </div>
+      )}
 
       {/* Filter bar */}
       {board.tiles.length > 0 && (
@@ -431,39 +542,59 @@ function DashboardDetail({ id }) {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {board.tiles.map((tile, idx) => {
+            if (activeTab && (tile.tab || '') !== activeTab) return null   // tab filter (keep original idx)
             const meta = datasetMeta[tile.dataset]
-            const effTile = { ...tile, spec: effectiveSpec(tile) }
+            const isMd = tile.type === 'markdown'
+            const ownerControls = (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {canEdit && (board.tabs || []).length > 0 && (
+                  <select value={tile.tab || ''} onChange={(e) => setTileTab(idx, e.target.value)} className="bg-transparent text-xs text-slate-400 focus:outline-none cursor-pointer" title={t('intelligence.move_to_tab', { defaultValue: 'Move to tab' })}>
+                    <option value="">— {t('intelligence.no_tab', { defaultValue: 'no tab' })} —</option>
+                    {(board.tabs || []).map(tb => <option key={tb.id} value={tb.id}>{tb.label}</option>)}
+                  </select>
+                )}
+                {!isMd && meta?.dimList?.length > 0 && tile.chart_type !== 'number' && (
+                  <span className="inline-flex items-center gap-1 text-slate-400" title={t('intelligence.break_down_by', { defaultValue: 'Break down by' })}>
+                    <Layers size={13} />
+                    <select value={tileX[tile.id] || tile.spec?.x?.dimension || ''} onChange={(e) => setTileX(s => ({ ...s, [tile.id]: e.target.value }))} className="bg-transparent text-xs text-slate-500 dark:text-slate-400 focus:outline-none cursor-pointer max-w-[110px]">
+                      {[...(meta.tdimList || []), ...meta.dimList].map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+                    </select>
+                  </span>
+                )}
+                {canEdit && (
+                  <div className="flex items-center gap-0.5 text-slate-400">
+                    {isMd && <button onClick={() => setMdEdit({ idx, title: tile.title || '', content: tile.content || '' })} className="p-1 rounded hover:text-primary-500"><Pencil size={14} /></button>}
+                    <button onClick={() => moveTile(idx, 'left')} disabled={idx === 0} className="p-1 rounded hover:text-slate-600 disabled:opacity-20"><ChevronLeft size={15} /></button>
+                    <button onClick={() => moveTile(idx, 'right')} disabled={idx === board.tiles.length - 1} className="p-1 rounded hover:text-slate-600 disabled:opacity-20"><ChevronRight size={15} /></button>
+                    <button onClick={() => toggleWidth(idx)} className="p-1 rounded hover:text-primary-500">{tile.width === 'full' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
+                    <button onClick={() => removeTile(idx)} className="p-1 rounded hover:text-red-500"><Trash2 size={14} /></button>
+                  </div>
+                )}
+              </div>
+            )
             return (
               <div key={tile.id || idx} className={`card p-0 overflow-hidden flex flex-col ${tile.width === 'full' ? 'lg:col-span-2' : ''}`}>
                 <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-slate-200 dark:border-slate-700">
-                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{tile.title || t('intelligence.untitled', { defaultValue: 'Untitled' })}</h3>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Drill: break down by */}
-                    {meta?.dimList?.length > 0 && tile.chart_type !== 'number' && (
-                      <span className="inline-flex items-center gap-1 text-slate-400" title={t('intelligence.break_down_by', { defaultValue: 'Break down by' })}>
-                        <Layers size={13} />
-                        <select
-                          value={tileX[tile.id] || tile.spec?.x?.dimension || ''}
-                          onChange={(e) => setTileX(s => ({ ...s, [tile.id]: e.target.value }))}
-                          className="bg-transparent text-xs text-slate-500 dark:text-slate-400 focus:outline-none cursor-pointer max-w-[110px]"
-                        >
-                          {meta.dimList.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-                        </select>
-                      </span>
-                    )}
-                    {canEdit && (
-                      <div className="flex items-center gap-0.5 text-slate-400">
-                        <button onClick={() => moveTile(idx, 'left')} disabled={idx === 0} className="p-1 rounded hover:text-slate-600 disabled:opacity-20"><ChevronLeft size={15} /></button>
-                        <button onClick={() => moveTile(idx, 'right')} disabled={idx === board.tiles.length - 1} className="p-1 rounded hover:text-slate-600 disabled:opacity-20"><ChevronRight size={15} /></button>
-                        <button onClick={() => toggleWidth(idx)} className="p-1 rounded hover:text-primary-500">{tile.width === 'full' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
-                        <button onClick={() => removeTile(idx)} className="p-1 rounded hover:text-red-500"><Trash2 size={14} /></button>
-                      </div>
-                    )}
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate flex items-center gap-1.5">{isMd && <StickyNote size={13} className="text-slate-400" />}{tile.title || t('intelligence.untitled', { defaultValue: 'Untitled' })}</h3>
+                  {ownerControls}
+                </div>
+                {isMd ? (
+                  mdEdit?.idx === idx ? (
+                    <div className="p-3 space-y-2">
+                      <input value={mdEdit.title} onChange={(e) => setMdEdit(m => ({ ...m, title: e.target.value }))} className="input w-full text-sm" placeholder={t('intelligence.note_title', { defaultValue: 'Title' })} />
+                      <textarea value={mdEdit.content} onChange={(e) => setMdEdit(m => ({ ...m, content: e.target.value }))} rows={8} className="input w-full text-sm font-mono" />
+                      <div className="flex gap-2"><button onClick={saveMd} className="btn-primary px-4 py-1.5 text-sm">{t('common.save', { defaultValue: 'Save' })}</button><button onClick={() => setMdEdit(null)} className="btn-outline px-4 py-1.5 text-sm">{t('common.cancel', { defaultValue: 'Cancel' })}</button></div>
+                    </div>
+                  ) : (
+                    <div className="p-4 overflow-auto text-sm text-slate-700 dark:text-slate-200 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mb-1.5 [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-primary-600 [&_a]:underline [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:px-1 [&_code]:rounded" style={{ maxHeight: '320px' }}>
+                      <ReactMarkdown>{tile.content || ''}</ReactMarkdown>
+                    </div>
+                  )
+                ) : (
+                  <div className="p-3 flex-1" style={{ height: '320px' }}>
+                    <DashboardTile tile={{ ...tile, spec: effectiveSpec(tile) }} refreshKey={refreshKey} onSelect={(label) => onTileSelect(tile, label)} />
                   </div>
-                </div>
-                <div className="p-3 flex-1" style={{ height: '320px' }}>
-                  <DashboardTile tile={effTile} refreshKey={refreshKey} onSelect={(label) => onTileSelect(tile, label)} />
-                </div>
+                )}
               </div>
             )
           })}

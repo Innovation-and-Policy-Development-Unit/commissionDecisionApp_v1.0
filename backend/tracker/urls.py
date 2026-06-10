@@ -8,6 +8,7 @@ from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
 from .intelligence_views import (
     intelligence_dashboard_detail,
+    intelligence_dashboard_favorite,
     intelligence_dashboards,
     intelligence_datasets,
     intelligence_exploration_detail,
@@ -177,6 +178,7 @@ urlpatterns = [
     path("intelligence/explorations/<int:pk>/", intelligence_exploration_detail),
     path("intelligence/dashboards/", intelligence_dashboards),
     path("intelligence/dashboards/<int:pk>/", intelligence_dashboard_detail),
+    path("intelligence/dashboards/<int:pk>/favorite/", intelligence_dashboard_favorite),
     path("intelligence/reports/", intelligence_reports),
     path("intelligence/reports/<int:pk>/", intelligence_report_detail),
     path("intelligence/reports/<int:pk>/run/", intelligence_report_run),

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 import {
   BarChart3, BarChartHorizontal, LineChart, AreaChart, PieChart, Table, Hash, Play, X,
+  Grid3x3, CircleDot, Boxes, Filter, Gauge,
 } from 'lucide-react'
 
 const CHART_TYPES = [
@@ -12,7 +13,18 @@ const CHART_TYPES = [
   { key: 'area', icon: AreaChart },
   { key: 'pie', icon: PieChart },
   { key: 'table', icon: Table },
+  { key: 'pivot', icon: Grid3x3 },
+  { key: 'scatter', icon: CircleDot },
+  { key: 'treemap', icon: Boxes },
+  { key: 'funnel', icon: Filter },
+  { key: 'gauge', icon: Gauge },
   { key: 'number', icon: Hash },
+]
+const TRANSFORMS = [
+  { value: '', label: 'transform_none' },
+  { value: 'cumulative', label: 'transform_cumulative' },
+  { value: 'rolling', label: 'transform_rolling' },
+  { value: 'pct_change', label: 'transform_pct' },
 ]
 const TIME_GRAINS = ['day', 'week', 'month', 'quarter', 'year']
 const FILTER_OPS = ['=', '!=', 'in', 'contains', 'gte', 'lte']
@@ -161,6 +173,25 @@ export default function QueryBuilder({ datasetDef, spec, onChange, onRun, busy }
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Advanced transform (time-series) */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">{t('intelligence.transform', { defaultValue: 'Transform' })}</label>
+        <div className="flex gap-2">
+          <select
+            className="input flex-1 text-sm"
+            value={spec.transform?.type || ''}
+            onChange={(e) => patch({ transform: e.target.value ? { type: e.target.value, window: spec.transform?.window || 3 } : undefined })}
+          >
+            {TRANSFORMS.map(o => <option key={o.value} value={o.value}>{t(`intelligence.${o.label}`, { defaultValue: o.label.replace('transform_', '') })}</option>)}
+          </select>
+          {spec.transform?.type === 'rolling' && (
+            <input type="number" min="2" max="52" className="input w-20 text-sm" value={spec.transform?.window || 3}
+              onChange={(e) => patch({ transform: { type: 'rolling', window: Number(e.target.value) || 3 } })} />
+          )}
+        </div>
+        <p className="text-[11px] text-slate-400 mt-1">{t('intelligence.transform_hint', { defaultValue: 'Applies to time-series charts.' })}</p>
       </div>
 
       <button type="button" className="btn-primary w-full flex items-center justify-center gap-2" onClick={onRun} disabled={busy}>

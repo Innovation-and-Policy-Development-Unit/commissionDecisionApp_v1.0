@@ -4,8 +4,8 @@ import api from './client'
 export const intelligenceApi = {
   datasets: () => api.get('/intelligence/datasets/').then(r => r.data),
 
-  query: (dataset, query_spec) =>
-    api.post('/intelligence/query/', { dataset, query_spec }).then(r => r.data),
+  query: (dataset, query_spec, { noCache = false } = {}) =>
+    api.post('/intelligence/query/', { dataset, query_spec, no_cache: noCache }).then(r => r.data),
 
   interpret: (dataset, prompt) =>
     api.post('/intelligence/interpret/', { dataset, prompt }).then(r => r.data),
@@ -35,6 +35,12 @@ export const intelligenceApi = {
 
   deleteDashboard: (id) =>
     api.delete(`/intelligence/dashboards/${id}/`),
+
+  favoriteDashboard: (id) =>
+    api.post(`/intelligence/dashboards/${id}/favorite/`).then(r => r.data),
+
+  unfavoriteDashboard: (id) =>
+    api.delete(`/intelligence/dashboards/${id}/favorite/`).then(r => r.data),
 
   // ── Scheduled reports & alerts ──────────────────────────────────────────
   reports: () => api.get('/intelligence/reports/').then(r => r.data),

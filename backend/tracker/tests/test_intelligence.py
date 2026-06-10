@@ -1,11 +1,12 @@
 """Tests for SCDMS Intelligence — semantic layer, query executor, and API."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.contrib.auth.models import User
 from django.core import mail
 from django.test import TestCase
 from django.utils import timezone
+from django.utils.timezone import make_aware
 from rest_framework.test import APIClient
 
 from ..intelligence.datasets import get_dataset
@@ -107,6 +108,23 @@ class IntelligenceAPITests(TestCase):
         self.client.force_authenticate(self.admin)
         resp = self.client.post("/api/intelligence/query/", {"dataset": "bogus", "query_spec": {}}, format="json")
         self.assertEqual(resp.status_code, 400)
+
+    def test_query_result_caching(self):
+        from django.core.cache import caches
+        from django.core.cache.backends.dummy import DummyCache
+
+        self.client.force_authenticate(self.admin)
+        body = {"dataset": "submissions", "query_spec": {"x": {"dimension": "current_stage"}}}
+        r1 = self.client.post("/api/intelligence/query/", body, format="json")
+        self.assertIn("cached", r1.data["meta"])
+        if isinstance(caches["default"], DummyCache):
+            self.assertFalse(r1.data["meta"]["cached"])
+            return
+        caches["default"].clear()
+        self.assertFalse(self.client.post("/api/intelligence/query/", body, format="json").data["meta"]["cached"])
+        self.assertTrue(self.client.post("/api/intelligence/query/", body, format="json").data["meta"]["cached"])
+        bypass = {**body, "no_cache": True}
+        self.assertFalse(self.client.post("/api/intelligence/query/", bypass, format="json").data["meta"]["cached"])
 
     def test_permission_gate(self):
         self.client.force_authenticate(self.mhr)  # no view_reports in tests
@@ -268,6 +286,29 @@ class SavedExplorationAPITests(TestCase):
         self.assertNotIn("Private", names)
         self.assertIn("Shared", names)
 
+    def test_non_owner_cannot_delete(self):
+        self.client.force_authenticate(self.owner)
+        eid = self._create("X", shared=True).data["id"]
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.delete(f"/api/intelligence/explorations/{eid}/").status_code, 403)
+
+    def test_owner_can_delete(self):
+        self.client.force_authenticate(self.owner)
+        eid = self._create("Y").data["id"]
+        self.assertEqual(self.client.delete(f"/api/intelligence/explorations/{eid}/").status_code, 204)
+
+    def test_create_rejects_unknown_dataset(self):
+        self.client.force_authenticate(self.owner)
+        r = self.client.post(
+            "/api/intelligence/explorations/",
+            {"name": "Bad", "dataset": "nope", "spec": self.SPEC}, format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_gate_blocks_user_without_permission(self):
+        self.client.force_authenticate(self.outsider)
+        self.assertEqual(self.client.get("/api/intelligence/explorations/").status_code, 403)
+
 
 class DashboardAPITests(TestCase):
     """Dashboards — tile validation, ownership, sharing visibility, permission gate."""
@@ -354,6 +395,36 @@ class DashboardAPITests(TestCase):
         stage = next(dim for dim in subs["dimensions"] if dim["key"] == "current_stage")
         self.assertIsInstance(stage["choices"], dict)
         self.assertIn("submitted", stage["choices"])
+
+    def test_markdown_tile_and_tab_persisted(self):
+        self.client.force_authenticate(self.owner)
+        md = {"id": "m1", "type": "markdown", "title": "Notes", "content": "# Hello", "width": "full", "tab": "tab1"}
+        r = self._create("Doc", tiles=[md, self.TILE])
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(len(r.data["tiles"]), 2)
+        mt = next(t for t in r.data["tiles"] if t["type"] == "markdown")
+        self.assertEqual(mt["content"], "# Hello")
+        self.assertEqual(mt["tab"], "tab1")
+
+    def test_tabs_and_tags_persist_dedup(self):
+        self.client.force_authenticate(self.owner)
+        r = self.client.post("/api/intelligence/dashboards/", {
+            "name": "Org", "tiles": [self.TILE],
+            "tabs": [{"id": "t1", "label": "Overview"}, {"label": "Detail"}],
+            "tags": ["Ops", "weekly", "ops"],  # case-insensitive dup dropped
+        }, format="json")
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(len(r.data["tabs"]), 2)
+        self.assertEqual(r.data["tags"], ["Ops", "weekly"])
+
+    def test_favorite_toggle(self):
+        self.client.force_authenticate(self.owner)
+        d = self._create("Fav", shared=True).data
+        self.assertFalse(d["is_favorite"])
+        self.assertTrue(self.client.post(f"/api/intelligence/dashboards/{d['id']}/favorite/").data["is_favorite"])
+        listed = self.client.get("/api/intelligence/dashboards/").data["dashboards"]
+        self.assertTrue(next(x for x in listed if x["id"] == d["id"])["is_favorite"])
+        self.assertFalse(self.client.delete(f"/api/intelligence/dashboards/{d['id']}/favorite/").data["is_favorite"])
 
 
 class IntelligenceReportTests(TestCase):
@@ -452,25 +523,37 @@ class IntelligenceReportTests(TestCase):
         rpt.refresh_from_db()
         self.assertEqual(rpt.last_status, "ok")
 
-    def test_non_owner_cannot_delete(self):
-        self.client.force_authenticate(self.owner)
-        eid = self._create("X", shared=True).data["id"]
-        self.client.force_authenticate(self.other)
-        self.assertEqual(self.client.delete(f"/api/intelligence/explorations/{eid}/").status_code, 403)
 
-    def test_owner_can_delete(self):
-        self.client.force_authenticate(self.owner)
-        eid = self._create("Y").data["id"]
-        self.assertEqual(self.client.delete(f"/api/intelligence/explorations/{eid}/").status_code, 204)
+class IntelligenceTransformTests(TestCase):
+    """Advanced analytics transforms on a time series (Jan=2, Feb=1)."""
 
-    def test_create_rejects_unknown_dataset(self):
-        self.client.force_authenticate(self.owner)
-        r = self.client.post(
-            "/api/intelligence/explorations/",
-            {"name": "Bad", "dataset": "nope", "spec": self.SPEC}, format="json",
-        )
-        self.assertEqual(r.status_code, 400)
+    def setUp(self):
+        Submission.objects.all().delete()
+        self.admin = User.objects.create_user("xform_admin", password="x")
+        Profile.objects.create(user=self.admin, role=Role.PSC_ADMIN)
+        self.ministry = Ministry.objects.create(code="XF", name="Xform Ministry")
+        for dt, n in [(make_aware(datetime(2026, 1, 15, 9)), 2), (make_aware(datetime(2026, 2, 15, 9)), 1)]:
+            for i in range(n):
+                Submission.objects.create(
+                    title=f"x{dt.month}-{i}", ministry=self.ministry, received_at=dt,
+                    created_by=self.admin, current_stage=WorkflowStage.SUBMITTED,
+                )
 
-    def test_gate_blocks_user_without_permission(self):
-        self.client.force_authenticate(self.outsider)
-        self.assertEqual(self.client.get("/api/intelligence/explorations/").status_code, 403)
+    def _series(self, transform):
+        res = execute_query(user=self.admin, dataset_key="submissions", spec={
+            "x": {"dimension": "received_at", "time_grain": "month"},
+            "metrics": [{"key": "count"}], "transform": transform,
+        })
+        return [r["count"] for r in res["rows"]]
+
+    def test_no_transform(self):
+        self.assertEqual(self._series(None), [2, 1])
+
+    def test_cumulative(self):
+        self.assertEqual(self._series({"type": "cumulative"}), [2, 3])
+
+    def test_rolling_average(self):
+        self.assertEqual(self._series({"type": "rolling", "window": 3}), [2, 1.5])
+
+    def test_pct_change(self):
+        self.assertEqual(self._series({"type": "pct_change"}), [0.0, -50.0])

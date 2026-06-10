@@ -32,9 +32,56 @@ TRUNC = {
 }
 TIME_GRAINS = set(TRUNC)
 FILTER_OPS = {"=", "!=", "in", "contains", "gte", "lte"}
-CHART_TYPES = {"bar", "column", "line", "area", "pie", "table", "number"}
+CHART_TYPES = {
+    "bar", "column", "line", "area", "pie", "table", "number",
+    "pivot", "scatter", "treemap", "funnel", "gauge",
+}
+TRANSFORMS = {"cumulative", "rolling", "pct_change"}
 MAX_ROWS = 5000
 DEFAULT_ROW_LIMIT = 1000
+
+
+def _apply_transform(rows, metric, breakdown_key, transform):
+    """Post-process a time-series metric: cumulative sum, rolling mean, or % change.
+
+    Applied per breakdown series, in row order. Mutates and returns ``rows``.
+    """
+    if not isinstance(transform, dict):
+        return rows
+    ttype = transform.get("type")
+    if ttype not in TRANSFORMS:
+        return rows
+    try:
+        window = max(1, int(transform.get("window") or 3))
+    except (TypeError, ValueError):
+        window = 3
+
+    groups, order = {}, []
+    for r in rows:
+        gk = r.get(breakdown_key) if breakdown_key else "_"
+        if gk not in groups:
+            groups[gk] = []
+            order.append(gk)
+        groups[gk].append(r)
+
+    for gk in order:
+        series = groups[gk]
+        vals = [(r.get(metric) or 0) for r in series]
+        if ttype == "cumulative":
+            acc = 0
+            for r, v in zip(series, vals):
+                acc += v
+                r[metric] = acc
+        elif ttype == "rolling":
+            for i, r in enumerate(series):
+                w = vals[max(0, i - window + 1): i + 1]
+                r[metric] = round(sum(w) / len(w), 2) if w else 0
+        elif ttype == "pct_change":
+            prev = None
+            for r, v in zip(series, vals):
+                r[metric] = 0.0 if (prev in (None, 0)) else round((v - prev) / prev * 100, 1)
+                prev = v
+    return rows
 
 
 def _agg_for(metric):
@@ -182,6 +229,10 @@ def execute_query(*, user, dataset_key: str, spec: dict[str, Any]) -> dict[str, 
             if mk in out:
                 out[mk] = _to_days(out[mk])
         rows.append(out)
+
+    # Advanced analytics transforms apply only to ordered time-series results.
+    if x_out == "x_bucket":
+        _apply_transform(rows, primary_metric, breakdown[0] if breakdown else None, spec.get("transform"))
 
     return {
         "columns": columns,

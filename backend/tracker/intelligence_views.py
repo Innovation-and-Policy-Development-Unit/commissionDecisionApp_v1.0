@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 import time
 
+from django.core.cache import cache
 from django.db.models import Q
 from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
@@ -13,7 +17,7 @@ from rest_framework.response import Response
 from .intelligence.datasets import DATASETS, get_dataset
 from .intelligence.interpret import interpret_query
 from .intelligence.query import CHART_TYPES, execute_query
-from .models import Dashboard, IntelligenceReport, SavedExploration
+from .models import Dashboard, IntelligenceFavorite, IntelligenceReport, SavedExploration
 from .rbac import rbac_user_has_permission
 
 
@@ -34,6 +38,15 @@ def intelligence_datasets(request):
     return Response({"datasets": [ds.to_dict() for ds in DATASETS.values()]})
 
 
+INTEL_CACHE_TTL = int(os.getenv("INTELLIGENCE_CACHE_TTL", "60"))
+
+
+def _query_cache_key(user, dataset, spec):
+    # Scope by user so the RBAC-filtered result is never shared across users.
+    blob = json.dumps({"u": user.id, "d": dataset, "s": spec}, sort_keys=True, default=str)
+    return "intel:q:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def intelligence_query(request):
@@ -44,12 +57,31 @@ def intelligence_query(request):
         raise ValidationError({"dataset": f"Unknown dataset '{dataset}'."})
     if not isinstance(spec, dict):
         raise ValidationError({"query_spec": "query_spec must be an object."})
+
+    no_cache = bool(request.data.get("no_cache"))
+    key = _query_cache_key(request.user, dataset, spec)
     started = time.monotonic()
+
+    if not no_cache:
+        try:
+            cached = cache.get(key)
+        except Exception:  # noqa: BLE001 — cache outage must never break a query
+            cached = None
+        if cached is not None:
+            cached = {**cached, "meta": {**cached["meta"], "cached": True,
+                                         "ms": int((time.monotonic() - started) * 1000)}}
+            return Response(cached)
+
     try:
         result = execute_query(user=request.user, dataset_key=dataset, spec=spec)
     except ValueError as exc:
         raise ValidationError({"detail": str(exc)})
     result["meta"]["ms"] = int((time.monotonic() - started) * 1000)
+    result["meta"]["cached"] = False
+    try:
+        cache.set(key, result, INTEL_CACHE_TTL)
+    except Exception:  # noqa: BLE001
+        pass
     return Response(result)
 
 
@@ -158,28 +190,52 @@ def intelligence_interpret(request):
 # ── Dashboards (composed boards of chart tiles) ────────────────────────────────
 
 def _clean_tiles(raw):
-    """Validate/normalise a tiles array — each tile is a self-contained snapshot."""
+    """Validate/normalise a tiles array — chart snapshots or markdown notes."""
     if not isinstance(raw, list):
         raise ValidationError({"tiles": "tiles must be a list."})
     cleaned = []
     for i, t in enumerate(raw):
         if not isinstance(t, dict):
             continue
+        ttype = t.get("type") if t.get("type") in ("chart", "markdown") else "chart"
+        width = t.get("width") if t.get("width") in ("half", "full") else "half"
+        tab = (t.get("tab") or "").strip()[:64]
+        base = {"id": str(t.get("id") or f"t{i}"), "width": width, "tab": tab,
+                "title": (t.get("title") or "").strip()[:200]}
+        if ttype == "markdown":
+            cleaned.append({**base, "type": "markdown", "content": str(t.get("content") or "")[:5000]})
+            continue
         dataset = (t.get("dataset") or "").strip()
         spec = t.get("spec") or {}
         if not get_dataset(dataset) or not isinstance(spec, dict):
-            continue  # drop tiles referencing unknown datasets / malformed specs
+            continue  # drop chart tiles referencing unknown datasets / malformed specs
         chart_type = t.get("chart_type") if t.get("chart_type") in CHART_TYPES else "column"
-        width = t.get("width") if t.get("width") in ("half", "full") else "half"
-        cleaned.append({
-            "id": str(t.get("id") or f"t{i}"),
-            "title": (t.get("title") or "").strip()[:200],
-            "dataset": dataset,
-            "spec": spec,
-            "chart_type": chart_type,
-            "width": width,
-        })
+        cleaned.append({**base, "type": "chart", "dataset": dataset, "spec": spec, "chart_type": chart_type})
     return cleaned
+
+
+def _clean_tabs(raw):
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for i, tb in enumerate(raw):
+        if not isinstance(tb, dict):
+            continue
+        out.append({"id": str(tb.get("id") or f"tab{i}"),
+                    "label": (tb.get("label") or "").strip()[:60] or f"Tab {i + 1}"})
+    return out
+
+
+def _clean_tags(raw):
+    if not isinstance(raw, list):
+        return []
+    seen, out = set(), []
+    for x in raw:
+        s = str(x).strip()[:40]
+        if s and s.lower() not in seen:
+            seen.add(s.lower())
+            out.append(s)
+    return out[:20]
 
 
 def _clean_filters(raw):
@@ -206,13 +262,16 @@ def _clean_filters(raw):
     return cleaned
 
 
-def _dashboard_payload(d, user):
+def _dashboard_payload(d, user, is_favorite=False):
     return {
         "id": d.id,
         "name": d.name,
         "description": d.description,
         "tiles": d.tiles or [],
         "filters": d.filters or [],
+        "tabs": d.tabs or [],
+        "tags": d.tags or [],
+        "is_favorite": is_favorite,
         "is_shared": d.is_shared,
         "owner": d.owner_id,
         "owner_name": d.owner.get_username(),
@@ -234,7 +293,10 @@ def intelligence_dashboards(request):
             .filter(Q(owner=request.user) | Q(is_shared=True))
             .select_related("owner")
         )
-        return Response({"dashboards": [_dashboard_payload(d, request.user) for d in qs]})
+        fav_ids = set(
+            IntelligenceFavorite.objects.filter(user=request.user).values_list("dashboard_id", flat=True)
+        )
+        return Response({"dashboards": [_dashboard_payload(d, request.user, d.id in fav_ids) for d in qs]})
 
     name = (request.data.get("name") or "").strip()
     if not name:
@@ -245,6 +307,8 @@ def intelligence_dashboards(request):
         description=(request.data.get("description") or "").strip(),
         tiles=_clean_tiles(request.data.get("tiles") or []),
         filters=_clean_filters(request.data.get("filters") or []),
+        tabs=_clean_tabs(request.data.get("tabs") or []),
+        tags=_clean_tags(request.data.get("tags") or []),
         is_shared=bool(request.data.get("is_shared", False)),
     )
     return Response(_dashboard_payload(dashboard, request.user), status=status.HTTP_201_CREATED)
@@ -263,10 +327,13 @@ def intelligence_dashboard_detail(request, pk):
     is_staff = request.user.is_superuser or request.user.is_staff
     is_owner = dashboard.owner_id == request.user.id
 
+    def _is_fav():
+        return IntelligenceFavorite.objects.filter(user=request.user, dashboard=dashboard).exists()
+
     if request.method == "GET":
         if not (is_owner or dashboard.is_shared or is_staff):
             raise PermissionDenied("You do not have access to this dashboard.")
-        return Response(_dashboard_payload(dashboard, request.user))
+        return Response(_dashboard_payload(dashboard, request.user, _is_fav()))
 
     if not (is_owner or is_staff):
         raise PermissionDenied("Only the owner can modify this dashboard.")
@@ -287,10 +354,34 @@ def intelligence_dashboard_detail(request, pk):
         dashboard.tiles = _clean_tiles(request.data.get("tiles") or [])
     if "filters" in request.data:
         dashboard.filters = _clean_filters(request.data.get("filters") or [])
+    if "tabs" in request.data:
+        dashboard.tabs = _clean_tabs(request.data.get("tabs") or [])
+    if "tags" in request.data:
+        dashboard.tags = _clean_tags(request.data.get("tags") or [])
     if "is_shared" in request.data:
         dashboard.is_shared = bool(request.data.get("is_shared"))
     dashboard.save()
-    return Response(_dashboard_payload(dashboard, request.user))
+    return Response(_dashboard_payload(dashboard, request.user, _is_fav()))
+
+
+@api_view(["POST", "DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def intelligence_dashboard_favorite(request, pk):
+    """Star / unstar a dashboard for the current user."""
+    _gate(request.user)
+    try:
+        dashboard = Dashboard.objects.get(pk=pk)
+    except Dashboard.DoesNotExist:
+        raise NotFound("Dashboard not found.")
+    is_staff = request.user.is_superuser or request.user.is_staff
+    if not (dashboard.owner_id == request.user.id or dashboard.is_shared or is_staff):
+        raise PermissionDenied("You do not have access to this dashboard.")
+
+    if request.method == "DELETE":
+        IntelligenceFavorite.objects.filter(user=request.user, dashboard=dashboard).delete()
+        return Response({"is_favorite": False})
+    IntelligenceFavorite.objects.get_or_create(user=request.user, dashboard=dashboard)
+    return Response({"is_favorite": True})
 
 
 # ── Scheduled reports & alerts ─────────────────────────────────────────────────

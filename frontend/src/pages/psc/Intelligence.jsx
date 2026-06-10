@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { Loader2, Clock, Rows3, Hash, Tag, CalendarClock, Download, ImageDown, Link2, Bookmark, Trash2, Share2, LayoutDashboard, BellRing } from 'lucide-react'
+import { Loader2, Clock, Rows3, Hash, Tag, CalendarClock, Download, ImageDown, Link2, Bookmark, Trash2, Share2, LayoutDashboard, BellRing, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import { intelligenceApi } from '../../api/intelligence'
 import { useToast } from '../../context/ToastContext'
@@ -443,6 +443,11 @@ export default function Intelligence() {
                   <>
                     <span className="flex items-center gap-1"><Rows3 size={13} /> {result.meta.row_count}</span>
                     {result.meta.ms != null && <span className="flex items-center gap-1"><Clock size={13} /> {result.meta.ms} ms</span>}
+                    {result.meta.cached && (
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300" title={t('intelligence.cached_hint', { defaultValue: 'Served from cache' })}>
+                        <Zap size={11} /> {t('intelligence.cached', { defaultValue: 'cached' })}
+                      </span>
+                    )}
                   </>
                 )}
                 {loading && <Loader2 size={15} className="animate-spin text-primary-500" />}

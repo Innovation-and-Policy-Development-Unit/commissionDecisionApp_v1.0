@@ -3374,6 +3374,9 @@ class Dashboard(models.Model):
     # Native filter definitions: [{id, type: "category"|"time", col, label, default}].
     # Applied across every tile whose dataset has the referenced column.
     filters = models.JSONField(default=list, blank=True)
+    # Organisation: tabs [{id, label}] (tiles carry a `tab` id) and free-text tags.
+    tabs = models.JSONField(default=list, blank=True)
+    tags = models.JSONField(default=list, blank=True)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -3394,6 +3397,25 @@ class Dashboard(models.Model):
 
     def __str__(self):
         return f"{self.name} ({len(self.tiles or [])} tiles)"
+
+
+class IntelligenceFavorite(models.Model):
+    """A user's starred dashboard."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="intelligence_favorites",
+    )
+    dashboard = models.ForeignKey(
+        Dashboard, on_delete=models.CASCADE, related_name="favorited_by",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "dashboard")
+        indexes = [models.Index(fields=["user"], name="intel_fav_user_idx")]
+
+    def __str__(self):
+        return f"{self.user_id} ★ {self.dashboard_id}"
 
 
 class IntelligenceReport(models.Model):
@@ -3465,6 +3487,85 @@ class IntelligenceReport(models.Model):
 
     def __str__(self):
         return f"{self.name} [{self.kind}]"
+
+
+class SubmissionRule(models.Model):
+    """A FlagGuard-style rule that flags at-risk submissions.
+
+    Conditions are a flat list of ``{field, op, value}`` leaves combined with
+    ``match`` (all=AND / any=OR). The evaluator translates each leaf into a
+    validated ORM ``Q`` (whitelist only — no raw SQL), so rules inherit the same
+    safety posture as SCDMS Intelligence.
+    """
+
+    class Level(models.TextChoices):
+        CRITICAL = "critical", "Critical"
+        AT_RISK = "at_risk", "At risk"
+        MONITORING = "monitoring", "Monitoring"
+
+    class Match(models.TextChoices):
+        ALL = "all", "Match all (AND)"
+        ANY = "any", "Match any (OR)"
+
+    name = models.CharField(max_length=200)
+    description = models.CharField(max_length=300, blank=True)
+    level = models.CharField(max_length=16, choices=Level.choices, default=Level.AT_RISK)
+    conditions = models.JSONField(default=list, blank=True)
+    match = models.CharField(max_length=4, choices=Match.choices, default=Match.ALL)
+
+    is_active = models.BooleanField(default=True)
+    is_builtin = models.BooleanField(default=False, help_text="Seeded rule migrated from SLA/escalation logic.")
+    test_mode = models.BooleanField(default=False, help_text="Evaluate and flag, but send no alert emails.")
+    cooldown_minutes = models.PositiveIntegerField(default=60)
+
+    notify_assignee = models.BooleanField(default=True)
+    notify_roles = models.JSONField(default=list, blank=True, help_text="Profile role keys to alert.")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="submission_rules",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.name} [{self.level}]"
+
+
+class SubmissionFlag(models.Model):
+    """An open/acknowledged/cleared flag raised by a SubmissionRule on a submission."""
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+        CLEARED = "cleared", "Cleared"
+
+    rule = models.ForeignKey(SubmissionRule, on_delete=models.CASCADE, related_name="flags")
+    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name="flags")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+    opened_at = models.DateTimeField(auto_now_add=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="acknowledged_flags",
+    )
+    cleared_at = models.DateTimeField(null=True, blank=True)
+    last_alerted_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-opened_at"]
+        unique_together = ("rule", "submission")
+        indexes = [
+            models.Index(fields=["status"], name="subflag_status_idx"),
+            models.Index(fields=["rule", "status"], name="subflag_rule_status_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.rule_id}→{self.submission_id} ({self.status})"
 
 
 # ── Compliance Case Management models (merged in) ──────────────────────────────
