@@ -2831,3 +2831,49 @@ def remind_unacknowledged_decision_services():
 
     app_log.info('DECISION_ACK_REMINDER | Reminded %d service(s)', processed)
     return processed
+
+
+# ── Annual Report statistics chapter ─────────────────────────────────────────
+
+@shared_task
+def generate_annual_report_statistics():
+    """
+    Yearly beat task (15 January): freeze and render the previous calendar
+    year's Annual Report statistics chapter, then notify the Secretariat.
+
+    Idempotent per year: skips if a scheduled report already exists.
+    """
+    from django.utils import timezone
+
+    from .models import AnnualReport, Notification
+    from .reports.annual_report import render_annual_report_pdf
+
+    year = timezone.localdate().year - 1
+    if AnnualReport.objects.filter(year=year, requested_by__isnull=True).exists():
+        app_log.info('ANNUAL_REPORT | %s already generated — skipping', year)
+        return None
+
+    report = AnnualReport.objects.create(year=year)
+    render_annual_report_pdf(report)
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    recipients = User.objects.filter(
+        psc_profile__role__in=['psc_secretary', 'psc_admin', 'senior_admin_officer'],
+        is_active=True,
+    )
+    decided = (report.dataset.get("decisions") or {}).get("total_decided", 0)
+    for user in recipients:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.BOTH,
+            title=f'Annual Report statistics ready — {year}',
+            body=(
+                f'The {year} statistics chapter has been generated '
+                f'({decided} decision(s) recorded). '
+                f'Find it under Operations → Annual Report.'
+            ),
+        )
+
+    app_log.info('ANNUAL_REPORT | Generated %s (report #%s)', year, report.id)
+    return report.id

@@ -68,6 +68,8 @@
   },
   "nav": {
     "implementation_dashboard": "Implementation",
+    "annual_report": "Annual Report",
+    "trash_bin": "Trash Bin",
     "group_submissions": "Submissions",
     "group_commission": "Commission Decision",
     "group_admin": "Administration",
@@ -807,7 +809,16 @@
     "select_item": "Select an agenda item to view the executive brief.",
     "session_active": "Active session",
     "session_failed": "Could not start Sitting Pack session.",
-    "ai_draft_badge": "AI draft"
+    "ai_draft_badge": "AI draft",
+    "papers_tab": "Papers",
+    "brief_tab": "Brief",
+    "papers_panel": "Papers as filed",
+    "papers_empty": "No documents are attached to this item.",
+    "papers_unavailable": "This document could not be loaded.",
+    "papers_no_preview": "Preview is not available for this file type.",
+    "choose_meeting": "Choose a sitting",
+    "choose_meeting_hint": "Tap a sitting to open its pack. Recent and upcoming sittings are listed.",
+    "no_upcoming": "No recent or upcoming sittings."
   },
   "subway": {
     "aria_label": "Submission journey map",

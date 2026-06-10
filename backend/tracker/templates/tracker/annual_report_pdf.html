@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PSC Annual Report {{ d.year }} — Statistics</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2.2cm 1.8cm;
+      @bottom-center {
+        content: "PSC Annual Report {{ d.year }} — Statistics chapter — page " counter(page) " of " counter(pages);
+        font-size: 8px;
+        color: #888;
+      }
+    }
+    body {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 11pt;
+      line-height: 1.5;
+      color: #000;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 2px solid #000;
+      padding-bottom: 12px;
+      margin-bottom: 22px;
+    }
+    .header h1 {
+      font-size: 16pt;
+      margin: 0 0 2px 0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .header .badge {
+      display: inline-block;
+      border: 1px solid #000;
+      padding: 2px 14px;
+      font-size: 11pt;
+      font-weight: bold;
+      margin-top: 6px;
+    }
+    .section { margin-bottom: 20px; }
+    .section h2 {
+      font-size: 12pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 3px;
+      margin-bottom: 8px;
+    }
+    .kpi-row { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+    .kpi-row td {
+      border: 1px solid #bbb;
+      text-align: center;
+      padding: 8px 4px;
+    }
+    .kpi-value { font-size: 15pt; font-weight: bold; display: block; }
+    .kpi-label { font-size: 7.5pt; text-transform: uppercase; color: #444; }
+    table.data { width: 100%; border-collapse: collapse; font-size: 9pt; }
+    table.data th {
+      border-bottom: 1.5px solid #000;
+      text-align: left;
+      padding: 4px 6px;
+      font-size: 8pt;
+      text-transform: uppercase;
+    }
+    table.data td { border-bottom: 0.5px solid #ccc; padding: 3.5px 6px; }
+    table.data td.num, table.data th.num { text-align: right; }
+    .note { font-size: 8.5pt; color: #555; margin-top: 6px; }
+    .methodology { font-size: 8.5pt; color: #444; }
+    .methodology li { margin-bottom: 3px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Republic of Vanuatu</h1>
+  <h1>Public Service Commission</h1>
+  <h2 style="font-size:13pt; margin-top:8px;">ANNUAL REPORT — STATISTICS CHAPTER</h2>
+  <div class="badge">Calendar year {{ d.year }}</div>
+</div>
+
+<div class="section">
+  <h2>1. Year at a Glance</h2>
+  <table class="kpi-row">
+    <tr>
+      <td><span class="kpi-value">{{ d.intake.total_received }}</span><span class="kpi-label">Submissions received</span></td>
+      <td><span class="kpi-value">{{ d.sittings.total }}</span><span class="kpi-label">Commission sittings</span></td>
+      <td><span class="kpi-value">{{ d.decisions.total_decided }}</span><span class="kpi-label">Decisions recorded</span></td>
+      <td><span class="kpi-value">{{ d.decisions.approval_rate }}%</span><span class="kpi-label">Approval rate</span></td>
+      <td><span class="kpi-value">{% if d.timeliness.median_days_to_decision is not None %}{{ d.timeliness.median_days_to_decision }}{% else %}—{% endif %}</span><span class="kpi-label">Median days to decision</span></td>
+      <td><span class="kpi-value">{{ d.implementation.overall.pct_within_target }}%</span><span class="kpi-label">Implemented within target</span></td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>2. Submissions Received</h2>
+  <table class="data">
+    <thead>
+      <tr>{% for m in monthly %}<th class="num">{{ m.name }}</th>{% endfor %}<th class="num">Total</th></tr>
+    </thead>
+    <tbody>
+      <tr>{% for m in monthly %}<td class="num">{{ m.count }}</td>{% endfor %}<td class="num"><strong>{{ d.intake.total_received }}</strong></td></tr>
+    </tbody>
+  </table>
+  {% if d.intake.by_category %}
+  <p class="note" style="margin-top:10px; font-weight:bold;">By category:</p>
+  <table class="data">
+    <thead><tr><th>Category</th><th class="num">Received</th></tr></thead>
+    <tbody>
+      {% for c in d.intake.by_category %}
+      <tr><td>{{ c.category }}</td><td class="num">{{ c.count }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="section">
+  <h2>3. Commission Sittings</h2>
+  {% if d.sittings.by_type %}
+  <table class="data">
+    <thead><tr><th>Sitting type</th><th class="num">Held</th></tr></thead>
+    <tbody>
+      {% for t in d.sittings.by_type %}
+      <tr><td>{{ t.type }}</td><td class="num">{{ t.count }}</td></tr>
+      {% endfor %}
+      <tr><td><strong>Total completed sittings</strong></td><td class="num"><strong>{{ d.sittings.total }}</strong></td></tr>
+    </tbody>
+  </table>
+  {% else %}
+  <p class="note">No completed sittings recorded in {{ d.year }}.</p>
+  {% endif %}
+</div>
+
+<div class="section">
+  <h2>4. Decisions and Outcomes</h2>
+  <table class="kpi-row">
+    <tr>
+      <td><span class="kpi-value">{{ d.decisions.approved }}</span><span class="kpi-label">Approved</span></td>
+      <td><span class="kpi-value">{{ d.decisions.rejected }}</span><span class="kpi-label">Rejected</span></td>
+      <td><span class="kpi-value">{{ d.decisions.returned }}</span><span class="kpi-label">Returned</span></td>
+      <td><span class="kpi-value">{{ d.decisions.approval_rate }}%</span><span class="kpi-label">Approval rate</span></td>
+    </tr>
+  </table>
+  <p class="note">
+    Median time from receipt to Commission decision:
+    {% if d.timeliness.median_days_to_decision is not None %}{{ d.timeliness.median_days_to_decision }} days
+    (average {{ d.timeliness.avg_days_to_decision }} days over {{ d.timeliness.decisions_measured }} decisions).
+    {% else %}not measurable for this period.{% endif %}
+  </p>
+</div>
+
+<div class="section">
+  <h2>5. Activity by Ministry</h2>
+  {% if d.ministries %}
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Ministry</th>
+        <th class="num">Received</th>
+        <th class="num">Decided</th>
+        <th class="num">Approved</th>
+        <th class="num">Rejected</th>
+        <th class="num">Returned</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in d.ministries %}
+      <tr>
+        <td>{{ m.ministry }}</td>
+        <td class="num">{{ m.received }}</td>
+        <td class="num">{{ m.decided }}</td>
+        <td class="num">{{ m.approved }}</td>
+        <td class="num">{{ m.rejected }}</td>
+        <td class="num">{{ m.returned }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="note">No ministry activity recorded in {{ d.year }}.</p>
+  {% endif %}
+</div>
+
+<div class="section">
+  <h2>6. Implementation of Decisions</h2>
+  <table class="kpi-row">
+    <tr>
+      <td><span class="kpi-value">{{ d.implementation.overall.total }}</span><span class="kpi-label">Approved decisions</span></td>
+      <td><span class="kpi-value">{{ d.implementation.overall.implemented }}</span><span class="kpi-label">Implemented</span></td>
+      <td><span class="kpi-value">{{ d.implementation.overall.pct_within_target }}%</span><span class="kpi-label">Within {{ d.implementation.target_days }}-day target</span></td>
+      <td><span class="kpi-value">{{ d.implementation.overall.overdue }}</span><span class="kpi-label">Overdue at year report</span></td>
+    </tr>
+  </table>
+  {% if d.implementation.by_ministry %}
+  <table class="data" style="margin-top:8px;">
+    <thead>
+      <tr>
+        <th>Ministry</th>
+        <th class="num">Decisions</th>
+        <th class="num">Implemented</th>
+        <th class="num">% within target</th>
+        <th class="num">Overdue</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in d.implementation.by_ministry %}
+      <tr>
+        <td>{{ m.ministry }}</td>
+        <td class="num">{{ m.total }}</td>
+        <td class="num">{{ m.implemented }}</td>
+        <td class="num">{{ m.pct_within_target }}%</td>
+        <td class="num">{{ m.overdue }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="note">Ministries listed worst-first by % implemented within target.</p>
+  {% endif %}
+</div>
+
+<div class="section">
+  <h2>7. Post-Decision Administration</h2>
+  <table class="kpi-row">
+    <tr>
+      <td><span class="kpi-value">{{ d.tasks.created }}</span><span class="kpi-label">Action items raised</span></td>
+      <td><span class="kpi-value">{{ d.tasks.completed }}</span><span class="kpi-label">Action items completed</span></td>
+      <td><span class="kpi-value">{{ d.decision_service.served }}</span><span class="kpi-label">Decisions formally served</span></td>
+      <td><span class="kpi-value">{{ d.decision_service.pct_acknowledged }}%</span><span class="kpi-label">Service acknowledged</span></td>
+      <td><span class="kpi-value">{% if d.decision_service.median_days_to_acknowledge is not None %}{{ d.decision_service.median_days_to_acknowledge }}{% else %}—{% endif %}</span><span class="kpi-label">Median days to acknowledge</span></td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>8. Methodology</h2>
+  <ul class="methodology">
+    <li>All figures are derived from the SCDMS workflow record; each decision and stage change is timestamped at the moment it was recorded.</li>
+    <li><strong>Submissions received</strong> counts papers lodged with the Commission in the calendar year, excluding attachments to parent submissions.</li>
+    <li><strong>Decisions recorded</strong> counts the first Commission decision (approved / rejected / returned) entered for each submission during the year.</li>
+    <li><strong>Days to decision</strong> measures receipt by PSC to the recorded Commission decision, in calendar days.</li>
+    <li><strong>Implemented within target</strong> uses each submission's explicit implementation due date where set, otherwise {{ d.implementation.target_days }} calendar days from Commission approval.</li>
+    <li><strong>Formally served</strong> refers to outcome letters served through the system's decision-service record, each protected by a SHA-256 integrity hash.</li>
+    <li>Dataset frozen on {{ generated_on|date:"d F Y" }}; figures are reproducible from the stored snapshot.</li>
+  </ul>
+</div>
+
+</body>
+</html>

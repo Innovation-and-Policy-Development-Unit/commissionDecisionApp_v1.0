@@ -704,17 +704,17 @@ const stageDescriptions = {
 
   const handleDeleteSubmission = async () => {
     const ok = await confirm({
-      title: 'Delete Submission',
-      message: `Delete ${submission?.reference_number}? This cannot be undone.`,
-      confirmLabel: 'Delete',
+      title: 'Move to Trash',
+      message: `Move ${submission?.reference_number} to the trash bin? Nothing is destroyed — PSC Admin can restore it from Admin → Trash Bin.`,
+      confirmLabel: 'Move to trash',
     })
     if (!ok) return
     try {
       await api.delete(`/submissions/${id}/`)
-      toast.success('Submission deleted.')
+      toast.success('Submission moved to the trash bin.')
       navigate('/submissions')
     } catch {
-      toast.error('Failed to delete submission.')
+      toast.error('Failed to move the submission to trash.')
     }
   }
 

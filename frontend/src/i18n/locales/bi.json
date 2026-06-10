@@ -50,6 +50,8 @@
   },
   "nav": {
     "implementation_dashboard": "Implimentesen",
+    "annual_report": "Ripot blong Yia",
+    "trash_bin": "Trash Bin",
     "group_submissions": "Ol Submisen",
     "group_commission": "Desisen blong Komisin",
     "group_admin": "Administresen",

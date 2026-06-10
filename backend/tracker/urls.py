@@ -121,6 +121,12 @@ from .views import (
     implementation_report_list_view,
     implementation_report_generate_view,
     implementation_report_download_view,
+    annual_report_preview_view,
+    annual_report_list_view,
+    annual_report_generate_view,
+    annual_report_download_view,
+    trash_list_view,
+    trash_restore_view,
     workload_officers_view,
     workload_summary_view,
     workload_suggest_assignment_view,
@@ -269,6 +275,14 @@ urlpatterns = [
     path("analytics/implementation/reports/",          implementation_report_list_view,     name="implementation-reports"),
     path("analytics/implementation/reports/generate/", implementation_report_generate_view, name="implementation-report-generate"),
     path("analytics/implementation/reports/<int:pk>/download/", implementation_report_download_view, name="implementation-report-download"),
+    # Trash Bin (soft delete + restore)
+    path("admin/trash/",                   trash_list_view,                    name="trash-list"),
+    path("admin/trash/restore/",           trash_restore_view,                 name="trash-restore"),
+    # Annual Report (statistics chapter)
+    path("reports/annual/",                annual_report_list_view,            name="annual-reports"),
+    path("reports/annual/preview/",        annual_report_preview_view,         name="annual-report-preview"),
+    path("reports/annual/generate/",       annual_report_generate_view,        name="annual-report-generate"),
+    path("reports/annual/<int:pk>/download/", annual_report_download_view,     name="annual-report-download"),
     # Workload
     path("workload/officers/",             workload_officers_view,             name="workload-officers"),
     path("workload/summary/",              workload_summary_view,              name="workload-summary"),

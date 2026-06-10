@@ -241,9 +241,9 @@ export default function SubmissionLog() {
   const handleBulkDelete = async () => {
     const count = selected.size
     const ok = await confirm({
-      title: `Delete ${count} Submission${count !== 1 ? 's' : ''}`,
-      message: `Permanently delete ${count} selected submission${count !== 1 ? 's' : ''}? This cannot be undone.`,
-      confirmLabel: 'Delete',
+      title: `Move ${count} Submission${count !== 1 ? 's' : ''} to Trash`,
+      message: `Move ${count} selected submission${count !== 1 ? 's' : ''} to the trash bin? Nothing is destroyed — PSC Admin can restore from Admin → Trash Bin.`,
+      confirmLabel: 'Move to trash',
     })
     if (!ok) return
     const ids = [...selected]
@@ -272,9 +272,9 @@ export default function SubmissionLog() {
 
   const handleDelete = async (row) => {
     const ok = await confirm({
-      title: 'Delete Submission',
-      message: `Delete ${row.reference_number}? This cannot be undone.`,
-      confirmLabel: 'Delete',
+      title: 'Move to Trash',
+      message: `Move ${row.reference_number} to the trash bin? Nothing is destroyed — PSC Admin can restore it from Admin → Trash Bin.`,
+      confirmLabel: 'Move to trash',
     })
     if (!ok) return
     try {

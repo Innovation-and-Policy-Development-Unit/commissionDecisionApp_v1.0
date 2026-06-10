@@ -1058,16 +1058,53 @@ class SubmissionViewSet(viewsets.ModelViewSet):
              description=f"Submission updated: {submission.title}")
 
     def destroy(self, request, *args, **kwargs):
+        """Move a submission to the trash bin (soft delete).
+
+        Nothing is destroyed: the row is stamped deleted_at/by and hidden by
+        the default manager; PSC Admin can restore it from Admin → Trash Bin.
+        Ministry-side roles may only trash their own drafts; PSC Admin may
+        trash anything.
+        """
         from .audit import log_action as _log
         from .models import AuditLog as _AL
+
         submission = self.get_object()
-        ref = submission.reference_number
-        title = submission.title
-        resp = super().destroy(request, *args, **kwargs)
+        profile = _profile(request.user)
+        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_staff or request.user.is_superuser
+        if not is_admin:
+            if profile.role not in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
+                raise PermissionDenied("Only PSC Admin or the submitting ministry may delete submissions.")
+            if submission.current_stage != WorkflowStage.DRAFT:
+                raise PermissionDenied(
+                    "A submission can only be deleted while it is a draft. "
+                    "Ask the Secretariat if it must be withdrawn after submission."
+                )
+
+        reason = ""
+        try:
+            reason = (request.data.get("reason") or "").strip()
+        except Exception:
+            pass
+
+        now = timezone.now()
+        # Trash the submission together with its attached child submissions —
+        # the same timestamp groups them for joint restore.
+        ids = [submission.id] + list(
+            submission.attached_submissions.values_list("id", flat=True)
+        )
+        Submission.all_objects.filter(id__in=ids).update(
+            deleted_at=now, deleted_by=request.user, delete_reason=reason,
+        )
+
         _log(request, _AL.Action.DELETE,
-             resource_type="Submission", resource_label=ref,
-             description=f"Submission deleted: {title}")
-        return resp
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Submission moved to trash: {submission.title}"
+                         + (f" | {reason}" if reason else ""),
+             extra_data={"trashed_ids": ids})
+
+        invalidate_submission(submission.id)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def retrieve(self, request, *args, **kwargs):
         from .audit import log_action as _log
@@ -9046,6 +9083,225 @@ def implementation_report_download_view(request, pk):
     if profile.role not in _IMPL_DASHBOARD_OPS_ROLES and not request.user.is_staff:
         raise PermissionDenied("PSC staff only.")
     report = get_object_or_404(ImplementationDashboardReport, pk=pk)
+    if not report.pdf_file:
+        return Response({"detail": "PDF file is missing."}, status=404)
+    return FileResponse(
+        report.pdf_file.open("rb"),
+        as_attachment=True,
+        filename=report.pdf_file.name.split("/")[-1],
+        content_type="application/pdf",
+    )
+
+
+# ── Trash Bin (soft delete + restore) ──────────────────────────────────────────
+
+
+def _assert_trash_admin(request):
+    profile = _profile(request.user)
+    if profile.role != Role.PSC_ADMIN and not request.user.is_staff and not request.user.is_superuser:
+        raise PermissionDenied("Only PSC Admin may manage the trash bin.")
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def trash_list_view(request):
+    """Everything soft-removed and restorable: trashed submissions and
+    archived documents, newest first."""
+    _assert_trash_admin(request)
+
+    submissions = (
+        Submission.all_objects.filter(deleted_at__isnull=False)
+        .select_related("ministry", "deleted_by")
+        .order_by("-deleted_at")[:200]
+    )
+    documents = (
+        SubmissionDocument.all_objects.filter(archived_at__isnull=False)
+        .select_related("submission", "archived_by")
+        .order_by("-archived_at")[:200]
+    )
+    return Response({
+        "submissions": [
+            {
+                "id": s.id,
+                "reference_number": s.reference_number,
+                "title": s.title,
+                "ministry": s.ministry.name if s.ministry_id else None,
+                "stage": s.current_stage,
+                "is_attachment": s.is_attachment,
+                "deleted_at": s.deleted_at,
+                "deleted_by": (
+                    s.deleted_by.get_full_name() or s.deleted_by.username
+                ) if s.deleted_by_id else None,
+                "delete_reason": s.delete_reason,
+            }
+            for s in submissions
+        ],
+        "documents": [
+            {
+                "id": d.id,
+                "original_name": d.original_name,
+                "submission_id": d.submission_id,
+                "submission_reference": d.submission.reference_number,
+                "archived_at": d.archived_at,
+                "archived_by": (
+                    d.archived_by.get_full_name() or d.archived_by.username
+                ) if d.archived_by_id else None,
+            }
+            for d in documents
+        ],
+    })
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def trash_restore_view(request):
+    """Restore a trashed submission (with attachments trashed alongside it)
+    or un-archive a document. POST {"type": "submission"|"document", "id": N}."""
+    from .audit import log_action as _log
+    from .models import AuditLog as _AL
+
+    _assert_trash_admin(request)
+    kind = request.data.get("type")
+    try:
+        pk = int(request.data.get("id"))
+    except (TypeError, ValueError):
+        return Response({"detail": "id must be an integer."}, status=400)
+
+    if kind == "submission":
+        submission = get_object_or_404(
+            Submission.all_objects.filter(deleted_at__isnull=False), pk=pk,
+        )
+        # Restore attachments trashed in the same action (same timestamp).
+        restored = list(
+            Submission.all_objects.filter(
+                models.Q(pk=submission.pk)
+                | models.Q(parent_submission=submission, deleted_at=submission.deleted_at),
+            ).values_list("id", flat=True)
+        )
+        Submission.all_objects.filter(id__in=restored).update(
+            deleted_at=None, deleted_by=None, delete_reason="",
+        )
+        _log(request, _AL.Action.RESTORE,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Submission restored from trash: {submission.title}",
+             extra_data={"restored_ids": restored})
+        invalidate_submission(submission.id)
+        return Response({"detail": "Submission restored.", "restored_ids": restored})
+
+    if kind == "document":
+        doc = get_object_or_404(
+            SubmissionDocument.all_objects.filter(archived_at__isnull=False), pk=pk,
+        )
+        doc.archived_at = None
+        doc.archived_by = None
+        doc.save(update_fields=["archived_at", "archived_by"])
+        _log(request, _AL.Action.RESTORE,
+             resource_type="SubmissionDocument", resource_id=doc.id,
+             resource_label=doc.original_name,
+             description=f"Document restored from archive: {doc.original_name} "
+                         f"on {doc.submission.reference_number}")
+        invalidate_submission(doc.submission_id)
+        return Response({"detail": "Document restored."})
+
+    return Response({"detail": 'type must be "submission" or "document".'}, status=400)
+
+
+# ── Annual Report (statistics chapter) ─────────────────────────────────────────
+
+_ANNUAL_REPORT_ROLES = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
+
+
+def _assert_annual_report_access(request):
+    profile = _profile(request.user)
+    if profile.role not in _ANNUAL_REPORT_ROLES and not request.user.is_staff:
+        raise PermissionDenied("Only the Secretariat may work with the Annual Report.")
+
+
+def _annual_report_payload(report, request):
+    return {
+        "id": report.id,
+        "year": report.year,
+        "created_at": report.created_at,
+        "requested_by": (
+            report.requested_by.get_full_name() or report.requested_by.username
+        ) if report.requested_by_id else None,
+        "summary": {
+            "total_received": (report.dataset.get("intake") or {}).get("total_received"),
+            "total_decided": (report.dataset.get("decisions") or {}).get("total_decided"),
+            "approval_rate": (report.dataset.get("decisions") or {}).get("approval_rate"),
+            "pct_within_target": ((report.dataset.get("implementation") or {}).get("overall") or {}).get("pct_within_target"),
+        },
+        "download_url": request.build_absolute_uri(
+            f"/api/reports/annual/{report.id}/download/"
+        ) if report.pdf_file else None,
+    }
+
+
+def _parse_report_year(raw):
+    try:
+        year = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return year if 2000 <= year <= 2100 else None
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def annual_report_preview_view(request):
+    """Live (unfrozen) statistics dataset for a year — on-screen preview.
+    ?year=2026; defaults to the previous calendar year."""
+    from .reports.annual_report import build_annual_report_dataset
+
+    _assert_annual_report_access(request)
+    year = _parse_report_year(request.query_params.get("year")) \
+        or timezone.localdate().year - 1
+    return Response(build_annual_report_dataset(year))
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def annual_report_list_view(request):
+    from .models import AnnualReport
+
+    _assert_annual_report_access(request)
+    reports = AnnualReport.objects.select_related("requested_by")[:24]
+    return Response({"reports": [_annual_report_payload(r, request) for r in reports]})
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def annual_report_generate_view(request):
+    """Freeze the dataset and render the statistics-chapter PDF.
+    POST {"year": 2026}; defaults to the previous calendar year."""
+    from .audit import log_action as _log
+    from .models import AnnualReport, AuditLog as _AL
+    from .reports.annual_report import render_annual_report_pdf
+
+    _assert_annual_report_access(request)
+    year = _parse_report_year(request.data.get("year")) \
+        or timezone.localdate().year - 1
+
+    report = AnnualReport.objects.create(year=year, requested_by=request.user)
+    render_annual_report_pdf(report)
+
+    _log(request, _AL.Action.EXPORT,
+         resource_type="AnnualReport", resource_id=report.id,
+         resource_label=f"Annual Report statistics {year}",
+         description=f"Annual Report statistics chapter generated for {year}")
+
+    return Response(_annual_report_payload(report, request), status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def annual_report_download_view(request, pk):
+    from django.http import FileResponse
+
+    from .models import AnnualReport
+
+    _assert_annual_report_access(request)
+    report = get_object_or_404(AnnualReport, pk=pk)
     if not report.pdf_file:
         return Response({"detail": "PDF file is missing."}, status=404)
     return FileResponse(

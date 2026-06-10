@@ -36,6 +36,7 @@ const DailyBriefAdmin = lazy(() => import('../pages/admin/DailyBriefAdmin'))
 const AdminEmailTemplatesPage = lazy(() => import('../pages/admin/AdminEmailTemplatesPage'))
 const AdminTranslationsPage = lazy(() => import('../pages/admin/AdminTranslationsPage'))
 const AdminBackupRestorePage = lazy(() => import('../pages/admin/AdminBackupRestorePage'))
+const AdminTrashPage = lazy(() => import('../pages/admin/AdminTrashPage'))
 const AdminSecurityPage = lazy(() => import('../pages/admin/AdminSecurityPage'))
 const FeedbackManagementPage = lazy(() => import('../pages/admin/FeedbackManagementPage'))
 const FormTypesAdmin = lazy(() => import('../pages/admin/FormTypesAdmin'))
@@ -65,6 +66,7 @@ const WorkloadDashboard = lazy(() => import('../pages/psc/WorkloadDashboard'))
 const PendingDecisions = lazy(() => import('../pages/psc/PendingDecisions'))
 const MinistryPerformance = lazy(() => import('../pages/psc/MinistryPerformance'))
 const ImplementationDashboard = lazy(() => import('../pages/psc/ImplementationDashboard'))
+const AnnualReport = lazy(() => import('../pages/psc/AnnualReport'))
 const ComplianceCases = lazy(() => import('../pages/compliance/ComplianceCases'))
 const ComplianceCaseDetail = lazy(() => import('../pages/compliance/ComplianceCaseDetail'))
 const NewComplianceCaseForm = lazy(() => import('../pages/compliance/NewComplianceCaseForm'))
@@ -118,6 +120,7 @@ export default function AppRouter() {
           <Route path="/pending-decisions"    element={<S><PendingDecisions /></S>} />
           <Route path="/ministry-performance" element={<S><MinistryPerformance /></S>} />
           <Route path="/implementation"       element={<S><ImplementationDashboard /></S>} />
+          <Route path="/annual-report"        element={<S><AnnualReport /></S>} />
 
           {/* ── Compliance ── */}
           <Route path="/compliance/cases"      element={<S><ComplianceCases /></S>} />
@@ -143,6 +146,7 @@ export default function AppRouter() {
           <Route path="/admin/knowledge-base/new" element={<S detail><KnowledgeArticleEditor /></S>} />
           <Route path="/admin/knowledge-base/edit/:slug" element={<S detail><KnowledgeArticleEditor /></S>} />
           <Route path="/admin/backup-restore" element={<S><AdminBackupRestorePage /></S>} />
+          <Route path="/admin/trash" element={<S><AdminTrashPage /></S>} />
           <Route path="/admin-panel" element={<Navigate to="/admin/roles-permissions?tab=users" replace />} />
 
           {/* ── Secretariat ── */}

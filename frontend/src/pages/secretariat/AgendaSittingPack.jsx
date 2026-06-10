@@ -10,6 +10,7 @@ import { buildSittingPackRows } from '../../utils/agendaGrouping'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import DigitalSealOverlay from '../../components/sitting-pack/DigitalSealOverlay'
 import ExecutiveBriefPanel from '../../components/sitting-pack/ExecutiveBriefPanel'
+import SittingPackPapersPanel from '../../components/sitting-pack/SittingPackPapersPanel'
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseBadge from '../../components/shared/BaseBadge'
@@ -36,6 +37,8 @@ export default function AgendaSittingPack() {
   const [session, setSession] = useState(null)
   const [selectedItemId, setSelectedItemId] = useState(null)
   const [sessionError, setSessionError] = useState(null)
+  const [rightTab, setRightTab] = useState('papers')
+  const [upcomingMeetings, setUpcomingMeetings] = useState(null)
 
   const role = user?.role || ''
   const canRegenerateBrief = ['psc_secretary', 'senior_admin_officer', 'psc_admin', 'psc_manager'].includes(role)
@@ -127,12 +130,66 @@ export default function AgendaSittingPack() {
 
   const rootCls = 'fixed inset-0 z-50 flex flex-col bg-slate-50 dark:bg-slate-900 overflow-hidden'
 
+  // No meeting selected: a tap-friendly picker of recent and upcoming
+  // sittings, so commissioners never need the agenda-builder page.
+  useEffect(() => {
+    if (meetingId) return undefined
+    let cancelled = false
+    api.get('/meetings/', { params: { ordering: '-date' } })
+      .then((r) => {
+        if (cancelled) return
+        const list = normalizeListPayload(r.data)
+        const cutoff = new Date()
+        cutoff.setDate(cutoff.getDate() - 14)
+        setUpcomingMeetings(
+          list
+            .filter((m) => m.status !== 'cancelled' && new Date(`${m.date}T00:00`) >= cutoff)
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(0, 12),
+        )
+      })
+      .catch(() => { if (!cancelled) setUpcomingMeetings([]) })
+    return () => { cancelled = true }
+  }, [meetingId])
+
   if (!meetingId) {
     return (
       <div className={rootCls}>
-        <div className="flex flex-col items-center justify-center flex-1 gap-4 p-8">
-          <span className="text-slate-600 dark:text-slate-300">{t('sitting_pack.no_meeting')}</span>
-          <BaseButton variant="primary" onClick={() => navigate('/secretariat/agenda')}>{t('sitting_pack.back_agenda')}</BaseButton>
+        <header className="shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+          <Tablet size={20} className="text-primary-500" />
+          <span className="font-semibold text-slate-800 dark:text-slate-100">{t('sitting_pack.title')}</span>
+        </header>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-xl mx-auto">
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">{t('sitting_pack.choose_meeting')}</h2>
+            <p className="text-sm text-slate-500 mb-5">{t('sitting_pack.choose_meeting_hint')}</p>
+            {upcomingMeetings === null ? (
+              <div className="space-y-3">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="h-16 rounded-xl bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                ))}
+              </div>
+            ) : upcomingMeetings.length === 0 ? (
+              <p className="text-slate-500">{t('sitting_pack.no_upcoming')}</p>
+            ) : (
+              <div className="space-y-3">
+                {upcomingMeetings.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => navigate(`/secretariat/agenda/sitting-pack?meeting=${m.id}`)}
+                    className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-4 hover:border-primary-400 hover:shadow transition-all"
+                  >
+                    <span className="font-semibold block text-slate-800 dark:text-slate-100">{m.reference_number} — {m.title}</span>
+                    <span className="text-sm text-slate-500">{formatMeetingHeader(m)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="mt-6 text-center">
+              <BaseButton variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => navigate('/')}>{t('sitting_pack.exit')}</BaseButton>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -217,7 +274,33 @@ export default function AgendaSittingPack() {
         </div>
 
         <div className="min-h-0 overflow-hidden flex flex-col">
-          <ExecutiveBriefPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} canRegenerate={canRegenerateBrief} />
+          <div className="shrink-0 flex gap-1 mb-2">
+            {[
+              { key: 'papers', label: t('sitting_pack.papers_tab') },
+              { key: 'brief', label: t('sitting_pack.brief_tab') },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setRightTab(tab.key)}
+                className={clsx(
+                  'px-4 py-2 rounded-lg text-sm font-semibold transition-colors',
+                  rightTab === tab.key
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700',
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            {rightTab === 'papers' ? (
+              <SittingPackPapersPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} />
+            ) : (
+              <ExecutiveBriefPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} canRegenerate={canRegenerateBrief} />
+            )}
+          </div>
         </div>
       </div>
     </div>

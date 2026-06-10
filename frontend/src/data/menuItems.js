@@ -2,7 +2,7 @@ import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo, PenLine,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, BookOpen, Languages, Sparkles,
-  TrendingUp, Users, History, CalendarCheck, AlertCircle,
+  TrendingUp, Users, History, CalendarCheck, AlertCircle, Tablet, Trash2,
   ListChecks, Megaphone, Inbox, Flag, SlidersHorizontal, Zap,
 } from 'lucide-react'
 import {
@@ -78,6 +78,7 @@ const menuItems = [
         children: [
           { label: 'Meeting room',  labelKey: 'nav.meeting_room', icon: Headphones,   path: '/secretariat/meeting-room', audience: 'secretariat' },
           { label: 'Meetings',      labelKey: 'nav.meetings',     icon: CalendarDays, path: '/secretariat/meetings',     audience: 'secretariat' },
+          { label: 'Sitting Pack',  labelKey: 'sitting_pack.enter', icon: Tablet,     path: '/secretariat/agenda/sitting-pack', audience: 'secretariat' },
         ],
       },
       {
@@ -123,6 +124,7 @@ const menuItems = [
       { label: 'Pending Decisions',     labelKey: 'nav.pending_decisions',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
       { label: 'Ministry Performance',  labelKey: 'nav.ministry_performance',  icon: Building2,       path: '/ministry-performance', visibility: 'ops' },
       { label: 'Implementation',        labelKey: 'nav.implementation_dashboard', icon: ListChecks,   path: '/implementation',       visibility: 'ops' },
+      { label: 'Annual Report',         labelKey: 'nav.annual_report',         icon: BookOpen,        path: '/annual-report',        visibility: 'ops' },
     ],
   },
   {
@@ -179,6 +181,7 @@ const menuItems = [
           { label: 'System Config',   labelKey: 'nav.system_config', icon: Settings,  path: '/admin/system-config', visibility: 'roles' },
           { label: 'Audit Trail',     labelKey: 'nav.audit_trail',   icon: History,   path: '/audit-trail',         visibility: 'audit' },
           { label: 'Backup & Restore',labelKey: 'nav.backup_restore',icon: HardDrive, path: '/admin/backup-restore',visibility: 'roles' },
+          { label: 'Trash Bin',       labelKey: 'nav.trash_bin',     icon: Trash2,    path: '/admin/trash',         visibility: 'roles' },
         ],
       },
       { label: 'Security',    labelKey: 'nav.security', icon: ShieldAlert,   path: '/admin/security', visibility: 'audit' },
