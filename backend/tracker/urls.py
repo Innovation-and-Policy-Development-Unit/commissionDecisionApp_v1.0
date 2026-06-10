@@ -29,6 +29,14 @@ from .rules_views import (
     rules,
     rules_run_now,
 )
+from .automation_views import (
+    automation_detail,
+    automation_fields,
+    automation_run_now,
+    automation_runs,
+    automation_test,
+    automations,
+)
 from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
 from .daily_brief.views import DailyBriefViewSet
@@ -201,6 +209,13 @@ urlpatterns = [
     path("flags/", flags),
     path("flags/<int:pk>/acknowledge/", flag_acknowledge),
     path("flags/<int:pk>/clear/", flag_clear),
+    # ── Act (Automation) engine ──────────────────────────────────────────────
+    path("automations/", automations),
+    path("automations/fields/", automation_fields),
+    path("automations/test/", automation_test),
+    path("automations/runs/", automation_runs),
+    path("automations/<int:pk>/", automation_detail),
+    path("automations/<int:pk>/run/", automation_run_now),
     path("register/", RegisterView.as_view()),
     # Two-factor authentication (TOTP / Microsoft Authenticator)
     path("auth/totp/setup/", TOTPSetupView.as_view(), name="totp-setup"),

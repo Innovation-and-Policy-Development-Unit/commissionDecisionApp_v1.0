@@ -81,6 +81,15 @@ class TrackerConfig(AppConfig):
                 "Submission rules schedule could not be synced: %s", exc
             )
 
+        try:
+            from .automation.scheduler import sync_automation_scheduler
+            sync_automation_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger("scdms.security").warning(
+                "Automation schedule could not be synced: %s", exc
+            )
+
         # Wire up signal handlers for AI feedback analysis
         try:
             import tracker.signals  # noqa: F401

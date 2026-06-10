@@ -3,7 +3,7 @@ import {
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, CalendarCheck, AlertCircle,
-  ListChecks, Megaphone, Inbox, Flag, SlidersHorizontal,
+  ListChecks, Megaphone, Inbox, Flag, SlidersHorizontal, Zap,
 } from 'lucide-react'
 import {
   userCanAccessAdminPanel,
@@ -135,6 +135,7 @@ const menuItems = [
       { label: 'Reports & Alerts', labelKey: 'nav.reports_alerts',    icon: Bell,          path: '/intelligence/reports' },
       { label: 'Flag Monitor',     labelKey: 'nav.flag_monitor',      icon: Flag,          path: '/intelligence/flags' },
       { label: 'Alert Rules',      labelKey: 'nav.alert_rules',       icon: SlidersHorizontal, path: '/intelligence/rules' },
+      { label: 'Automations',      labelKey: 'nav.automations',       icon: Zap,           path: '/intelligence/automations' },
       { label: 'Reports',          labelKey: 'nav.reports',           icon: FileText,      path: '/reports' },
       { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
     ],

@@ -70,8 +70,12 @@ class _Adapter:
             users[u.id] = u
         return list(users.values())
 
-    def payload(self, flag):
+    def describe(self, obj):
+        """Normalised {ref, title, context, state, link, entity_id} for one object."""
         raise NotImplementedError
+
+    def payload(self, flag):
+        return self.describe(getattr(flag, self.flag_fk))
 
 
 class SubmissionAdapter(_Adapter):
@@ -94,8 +98,7 @@ class SubmissionAdapter(_Adapter):
     def entity_users(self, rule, obj):
         return [obj.assigned_to] if obj.assigned_to_id else []
 
-    def payload(self, flag):
-        s = flag.submission
+    def describe(self, s):
         return {
             "ref": s.reference_number, "title": s.title,
             "context": s.ministry.name if s.ministry_id else "",
@@ -135,8 +138,7 @@ class CommissionTaskAdapter(_Adapter):
         users.extend(obj.assigned_staff_m2m.all())
         return users
 
-    def payload(self, flag):
-        tk = flag.commission_task
+    def describe(self, tk):
         return {
             "ref": tk.decision_number or f"Task #{tk.id}", "title": tk.title,
             "context": (tk.assigned_manager.get_username() if tk.assigned_manager_id else ""),
@@ -165,8 +167,7 @@ class MeetingAdapter(_Adapter):
     def entity_users(self, rule, obj):
         return []  # meetings are PSC-internal; alert by role only
 
-    def payload(self, flag):
-        m = flag.meeting
+    def describe(self, m):
         return {
             "ref": m.reference_number, "title": m.title,
             "context": str(m.date) if m.date else "",

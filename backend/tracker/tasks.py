@@ -1842,6 +1842,14 @@ def run_submission_rules_task():
 
 
 @shared_task
+def run_automations_task():
+    """Hourly Celery beat tick: run schedule-triggered automations."""
+    from tracker.automation.engine import run_scheduled
+
+    run_scheduled()
+
+
+@shared_task
 def generate_document_redaction_preview(document_id: int):
     from .ai.redaction_preview import suggest_redaction_spans
     from .models import SubmissionDocument
