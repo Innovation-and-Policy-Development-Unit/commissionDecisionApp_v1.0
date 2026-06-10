@@ -3,7 +3,7 @@ import {
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, CalendarCheck, AlertCircle,
-  ListChecks, Megaphone, Inbox,
+  ListChecks, Megaphone, Inbox, Flag, SlidersHorizontal,
 } from 'lucide-react'
 import {
   userCanAccessAdminPanel,
@@ -133,6 +133,8 @@ const menuItems = [
       { label: 'SCDMS Intelligence', labelKey: 'nav.intelligence',     icon: Sparkles,      path: '/intelligence' },
       { label: 'Dashboards',       labelKey: 'nav.dashboards',        icon: LayoutDashboard, path: '/intelligence/dashboards' },
       { label: 'Reports & Alerts', labelKey: 'nav.reports_alerts',    icon: Bell,          path: '/intelligence/reports' },
+      { label: 'Flag Monitor',     labelKey: 'nav.flag_monitor',      icon: Flag,          path: '/intelligence/flags' },
+      { label: 'Alert Rules',      labelKey: 'nav.alert_rules',       icon: SlidersHorizontal, path: '/intelligence/rules' },
       { label: 'Reports',          labelKey: 'nav.reports',           icon: FileText,      path: '/reports' },
       { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
     ],

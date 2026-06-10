@@ -24,6 +24,8 @@ const ReportTemplateManager = lazy(() => import('../pages/reports/ReportTemplate
 const Intelligence = lazy(() => import('../pages/psc/Intelligence'))
 const Dashboards = lazy(() => import('../pages/psc/Dashboards'))
 const IntelligenceReports = lazy(() => import('../pages/psc/IntelligenceReports'))
+const FlagMonitor = lazy(() => import('../pages/psc/FlagMonitor'))
+const AlertRules = lazy(() => import('../pages/psc/AlertRules'))
 const RedirectToMinuteIntake = lazy(() => import('../pages/meeting/RedirectToMinuteIntake'))
 const AdminPanel = lazy(() => import('../pages/admin/AdminPanel'))
 const MinistriesDepartments = lazy(() => import('../pages/admin/MinistriesDepartments'))
@@ -98,6 +100,8 @@ export default function AppRouter() {
           <Route path="/intelligence/dashboards" element={<S><Dashboards /></S>} />
           <Route path="/intelligence/dashboards/:id" element={<S detail><Dashboards /></S>} />
           <Route path="/intelligence/reports" element={<S><IntelligenceReports /></S>} />
+          <Route path="/intelligence/flags" element={<S><FlagMonitor /></S>} />
+          <Route path="/intelligence/rules" element={<S><AlertRules /></S>} />
           <Route path="/wiki" element={<S><KnowledgeBaseBrowse /></S>} />
           <Route path="/wiki/:slug" element={<S detail><ArticleViewer /></S>} />
           <Route path="/meetings/capture" element={<S><RedirectToMinuteIntake /></S>} />

@@ -19,6 +19,16 @@ from .intelligence_views import (
     intelligence_report_run,
     intelligence_reports,
 )
+from .rules_views import (
+    flag_acknowledge,
+    flag_clear,
+    flags,
+    rule_detail,
+    rule_fields,
+    rule_test,
+    rules,
+    rules_run_now,
+)
 from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
 from .daily_brief.views import DailyBriefViewSet
@@ -182,6 +192,15 @@ urlpatterns = [
     path("intelligence/reports/", intelligence_reports),
     path("intelligence/reports/<int:pk>/", intelligence_report_detail),
     path("intelligence/reports/<int:pk>/run/", intelligence_report_run),
+    # ── Rule Engine & Flag Monitor ───────────────────────────────────────────
+    path("rules/", rules),
+    path("rules/fields/", rule_fields),
+    path("rules/test/", rule_test),
+    path("rules/run/", rules_run_now),
+    path("rules/<int:pk>/", rule_detail),
+    path("flags/", flags),
+    path("flags/<int:pk>/acknowledge/", flag_acknowledge),
+    path("flags/<int:pk>/clear/", flag_clear),
     path("register/", RegisterView.as_view()),
     # Two-factor authentication (TOTP / Microsoft Authenticator)
     path("auth/totp/setup/", TOTPSetupView.as_view(), name="totp-setup"),

@@ -1322,6 +1322,7 @@ class Submission(models.Model):
     registered_at = models.DateTimeField(null=True, blank=True)
     assessment_started_at = models.DateTimeField(null=True, blank=True)
     assessment_deadline_at = models.DateTimeField(null=True, blank=True)
+    tags = models.JSONField(default=list, blank=True, help_text="Free-text tags (set manually or by automations).")
     checklist_review_started_at  = models.DateTimeField(null=True, blank=True,
         help_text="When this submission entered Manager Checklist Review.")
     checklist_review_deadline_at = models.DateTimeField(null=True, blank=True,
@@ -2121,6 +2122,7 @@ class CommissionTask(models.Model):
         blank=True,
         help_text="AI-drafted subtask suggestions (verify before creating).",
     )
+    tags = models.JSONField(default=list, blank=True, help_text="Free-text tags (set manually or by automations).")
 
     class Meta:
         ordering = ["-created_at"]
@@ -3507,8 +3509,14 @@ class SubmissionRule(models.Model):
         ALL = "all", "Match all (AND)"
         ANY = "any", "Match any (OR)"
 
+    class Entity(models.TextChoices):
+        SUBMISSION = "submission", "Submission"
+        COMMISSION_TASK = "commission_task", "Commission task"
+        MEETING = "meeting", "Meeting / minutes"
+
     name = models.CharField(max_length=200)
     description = models.CharField(max_length=300, blank=True)
+    entity = models.CharField(max_length=20, choices=Entity.choices, default=Entity.SUBMISSION)
     level = models.CharField(max_length=16, choices=Level.choices, default=Level.AT_RISK)
     conditions = models.JSONField(default=list, blank=True)
     match = models.CharField(max_length=4, choices=Match.choices, default=Match.ALL)
@@ -3544,7 +3552,13 @@ class SubmissionFlag(models.Model):
         CLEARED = "cleared", "Cleared"
 
     rule = models.ForeignKey(SubmissionRule, on_delete=models.CASCADE, related_name="flags")
-    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name="flags")
+    # Exactly one entity FK is set, per the rule's entity type.
+    submission = models.ForeignKey(
+        Submission, null=True, blank=True, on_delete=models.CASCADE, related_name="flags")
+    commission_task = models.ForeignKey(
+        "CommissionTask", null=True, blank=True, on_delete=models.CASCADE, related_name="flags")
+    meeting = models.ForeignKey(
+        "Meeting", null=True, blank=True, on_delete=models.CASCADE, related_name="flags")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
     opened_at = models.DateTimeField(auto_now_add=True)
     acknowledged_at = models.DateTimeField(null=True, blank=True)
@@ -3558,14 +3572,87 @@ class SubmissionFlag(models.Model):
 
     class Meta:
         ordering = ["-opened_at"]
-        unique_together = ("rule", "submission")
         indexes = [
             models.Index(fields=["status"], name="subflag_status_idx"),
             models.Index(fields=["rule", "status"], name="subflag_rule_status_idx"),
         ]
 
     def __str__(self):
-        return f"{self.rule_id}→{self.submission_id} ({self.status})"
+        return f"{self.rule_id} ({self.status})"
+
+
+class Automation(models.Model):
+    """Act engine: trigger → conditions → actions on an entity.
+
+    Reuses the Watch condition layer (same field catalogs / Q translator). Actions
+    are a safe set (notify / escalate / comment / tag / create task / remind /
+    shift due date). Stage transitions are intentionally not auto-applied here.
+    """
+
+    class Entity(models.TextChoices):
+        SUBMISSION = "submission", "Submission"
+        COMMISSION_TASK = "commission_task", "Commission task"
+        MEETING = "meeting", "Meeting / minutes"
+
+    class Trigger(models.TextChoices):
+        CREATED = "created", "On create"
+        UPDATED = "updated", "On update"
+        SCHEDULE = "schedule", "On schedule (periodic)"
+
+    class Match(models.TextChoices):
+        ALL = "all", "Match all (AND)"
+        ANY = "any", "Match any (OR)"
+
+    name = models.CharField(max_length=200)
+    description = models.CharField(max_length=300, blank=True)
+    entity = models.CharField(max_length=20, choices=Entity.choices, default=Entity.SUBMISSION)
+    trigger = models.CharField(max_length=16, choices=Trigger.choices, default=Trigger.UPDATED)
+    conditions = models.JSONField(default=list, blank=True)
+    match = models.CharField(max_length=4, choices=Match.choices, default=Match.ALL)
+    actions = models.JSONField(default=list, blank=True, help_text="Ordered [{type, params}] actions.")
+
+    is_active = models.BooleanField(default=True)
+    test_mode = models.BooleanField(default=False, help_text="Simulate — log actions but make no changes.")
+    cooldown_minutes = models.PositiveIntegerField(default=60)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="automations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        indexes = [models.Index(fields=["is_active", "entity", "trigger"], name="automation_active_idx")]
+
+    def __str__(self):
+        return f"{self.name} [{self.entity}/{self.trigger}]"
+
+
+class AutomationRun(models.Model):
+    """Immutable log of an automation firing on one entity."""
+
+    class Status(models.TextChoices):
+        RAN = "ran", "Ran"
+        SIMULATED = "simulated", "Simulated"
+        FAILED = "failed", "Failed"
+
+    automation = models.ForeignKey(Automation, on_delete=models.CASCADE, related_name="runs")
+    submission = models.ForeignKey(Submission, null=True, blank=True, on_delete=models.CASCADE, related_name="automation_runs")
+    commission_task = models.ForeignKey("CommissionTask", null=True, blank=True, on_delete=models.CASCADE, related_name="automation_runs")
+    meeting = models.ForeignKey("Meeting", null=True, blank=True, on_delete=models.CASCADE, related_name="automation_runs")
+    trigger = models.CharField(max_length=16, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.RAN)
+    detail = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["automation", "-created_at"], name="automationrun_idx")]
+
+    def __str__(self):
+        return f"{self.automation_id} {self.status} @ {self.created_at:%Y-%m-%d}"
 
 
 # ── Compliance Case Management models (merged in) ──────────────────────────────

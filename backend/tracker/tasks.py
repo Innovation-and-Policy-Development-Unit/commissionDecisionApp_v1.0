@@ -1833,6 +1833,15 @@ def run_intelligence_reports_task():
 
 
 @shared_task
+def run_submission_rules_task():
+    """Hourly Celery beat tick: evaluate Submission rules, reconcile flags, alert."""
+    from tracker.rules.engine import evaluate_all, maybe_send_digest
+
+    evaluate_all()
+    maybe_send_digest()
+
+
+@shared_task
 def generate_document_redaction_preview(document_id: int):
     from .ai.redaction_preview import suggest_redaction_spans
     from .models import SubmissionDocument

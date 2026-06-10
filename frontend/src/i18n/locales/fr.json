@@ -58,6 +58,8 @@
     "intelligence": "SCDMS Intelligence",
     "dashboards": "Tableaux de bord",
     "reports_alerts": "Rapports et alertes",
+    "flag_monitor": "Moniteur d'alertes",
+    "alert_rules": "Règles d'alerte",
     "report_templates": "Modèles de rapport",
     "meeting_room": "Salle de réunion",
     "meetings": "Réunions",

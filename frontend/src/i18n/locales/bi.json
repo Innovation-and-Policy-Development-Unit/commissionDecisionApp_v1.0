@@ -58,6 +58,8 @@
     "intelligence": "SCDMS Intelligence",
     "dashboards": "Ol Dashboard",
     "reports_alerts": "Ripot mo Alert",
+    "flag_monitor": "Flag Monitor",
+    "alert_rules": "Ol Rul blong Alert",
     "report_templates": "Ol Ripot Templet",
     "meeting_room": "Rum blong Mitin",
     "meetings": "Ol Mitin",
