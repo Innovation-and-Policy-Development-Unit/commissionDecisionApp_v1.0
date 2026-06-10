@@ -122,6 +122,7 @@ from .views import (
     implementation_report_generate_view,
     implementation_report_download_view,
     workload_officers_view,
+    workload_summary_view,
     workload_suggest_assignment_view,
     pending_decisions_view,
     ministry_performance_view,
@@ -270,6 +271,7 @@ urlpatterns = [
     path("analytics/implementation/reports/<int:pk>/download/", implementation_report_download_view, name="implementation-report-download"),
     # Workload
     path("workload/officers/",             workload_officers_view,             name="workload-officers"),
+    path("workload/summary/",              workload_summary_view,              name="workload-summary"),
     path("workload/suggest-assignment/",   workload_suggest_assignment_view,   name="workload-suggest-assignment"),
     # Operations — Commissioners & Secretary
     path("ops/pending-decisions/",         pending_decisions_view,             name="pending-decisions"),

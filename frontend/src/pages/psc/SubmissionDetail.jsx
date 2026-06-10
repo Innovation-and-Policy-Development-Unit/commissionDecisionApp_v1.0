@@ -17,11 +17,12 @@ import {
   stageLabel, stageBadgeClass, stageDotClass, stageMeta,
   needsHrAction, isTerminal, STAGE_LABELS,
 } from '../../constants/stages'
-import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X } from 'lucide-react'
+import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
 import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
+import DecisionServicePanel from '../../components/submissions/DecisionServicePanel'
 import SubmissionPackageValidation from '../../components/submissions/SubmissionPackageValidation'
 import DeadlineReminderDrafts from '../../components/submissions/DeadlineReminderDrafts'
 import DocumentAnnotatorModal from '../../components/shared/DocumentAnnotatorModal'
@@ -152,6 +153,8 @@ export default function SubmissionDetail() {
   const [documents, setDocuments]   = useState([])
   const [uploadBusy, setUploadBusy] = useState(false)
   const [uploadDesc, setUploadDesc] = useState('')
+  const [versionsOpenFor, setVersionsOpenFor] = useState(null)  // doc id with history expanded
+  const [versionsByDoc, setVersionsByDoc] = useState({})        // { docId: [versions] }
   const [annotatorDoc, setAnnotatorDoc] = useState(null)
   const [annotationCounts, setAnnotationCounts] = useState({})
   const [signerDoc, setSignerDoc] = useState(null)
@@ -508,11 +511,65 @@ export default function SubmissionDetail() {
     }
   }
 
+  const handleReplaceDoc = async (e, doc) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setUploadBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      await api.post(`/submissions/${id}/documents/${doc.id}/replace/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      await fetchDocuments()
+      setVersionsByDoc(prev => ({ ...prev, [doc.id]: undefined }))
+      toast.success(`New version of "${doc.original_name}" uploaded — the previous file is kept on record.`)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Replace failed.')
+    } finally {
+      setUploadBusy(false)
+    }
+  }
+
+  const toggleVersions = async (doc) => {
+    if (versionsOpenFor === doc.id) {
+      setVersionsOpenFor(null)
+      return
+    }
+    setVersionsOpenFor(doc.id)
+    if (!versionsByDoc[doc.id]) {
+      try {
+        const r = await api.get(`/submissions/${id}/documents/${doc.id}/versions/`)
+        setVersionsByDoc(prev => ({ ...prev, [doc.id]: r.data.versions || [] }))
+      } catch {
+        toast.error('Could not load version history.')
+        setVersionsOpenFor(null)
+      }
+    }
+  }
+
+  const downloadVersion = (doc, version) => {
+    api.get(`/submissions/${id}/documents/${doc.id}/versions/${version.id}/download/`, { responseType: 'blob' })
+      .then(r => {
+        const url = URL.createObjectURL(new Blob([r.data], { type: r.headers['content-type'] }))
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `v${version.version_num}_${version.filename}`
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(url), 5000)
+      })
+      .catch(() => toast.error('Could not download this version.'))
+  }
+
   const handleDeleteDoc = async (doc) => {
+    const isDraft = submission?.current_stage === 'draft'
     const ok = await confirm({
-      title: 'Delete Document',
-      message: `Delete "${doc.original_name}"? This cannot be undone.`,
-      confirmLabel: 'Delete',
+      title: isDraft ? 'Delete Document' : 'Remove Document',
+      message: isDraft
+        ? `Delete "${doc.original_name}"? This cannot be undone.`
+        : `Remove "${doc.original_name}" from this submission? It will be archived on record — nothing is destroyed once a submission is in the workflow.`,
+      confirmLabel: isDraft ? 'Delete' : 'Remove',
     })
     if (!ok) return
     try {
@@ -524,9 +581,9 @@ export default function SubmissionDetail() {
         await api.patch(`/submissions/${id}/checklist/${linkedItem.id}/`, { is_present: false })
         setChecklist(prev => prev.map(i => i.id === linkedItem.id ? { ...i, is_present: false } : i))
       }
-      toast.success('Document deleted.')
+      toast.success(isDraft ? 'Document deleted.' : 'Document removed and archived on record.')
     } catch {
-      toast.error('Failed to delete document.')
+      toast.error('Failed to remove document.')
     }
   }
 
@@ -1141,6 +1198,25 @@ const stageDescriptions = {
                     )}
                   </BaseButton>
                 )}
+                {canUploadDocs && (
+                  <label
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      uploadBusy
+                        ? 'text-slate-400 cursor-not-allowed'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer'
+                    }`}
+                    title="Upload a new version — the current file is kept on record"
+                  >
+                    <RefreshCw size={13} /> Replace
+                    <input
+                      type="file"
+                      className="sr-only"
+                      disabled={uploadBusy}
+                      onChange={e => handleReplaceDoc(e, doc)}
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                    />
+                  </label>
+                )}
                 {(canUploadDocs || user?.role === 'psc_admin') && (
                   <BaseButton variant="ghost" size="icon" iconOnly aria-label="Delete document" icon={<Trash2 size={13} />} onClick={() => handleDeleteDoc(doc)} />
                 )}
@@ -1167,7 +1243,14 @@ const stageDescriptions = {
                       <li key={doc.id} className="flex items-start gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5">
                         <File size={16} className="text-slate-400 shrink-0 mt-0.5" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{doc.original_name}</p>
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+                            {doc.original_name}
+                            {doc.version_num > 1 && (
+                              <span className="ml-2 inline-flex rounded-full bg-sky-100 dark:bg-sky-900/40 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-200 align-middle">
+                                v{doc.version_num}
+                              </span>
+                            )}
+                          </p>
                           {doc.document_type && doc.document_type !== 'unclassified' && (
                             <span className="inline-flex mt-1 rounded-full bg-violet-100 dark:bg-violet-900/40 px-2 py-0.5 text-[10px] font-semibold text-violet-800 dark:text-violet-200">
                               {doc.document_type_display || doc.document_type}
@@ -1182,6 +1265,42 @@ const stageDescriptions = {
                           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                             {formatBytes(doc.file_size)}{doc.file_size ? ' · ' : ''}{doc.uploaded_by_username} · {new Date(doc.uploaded_at).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </p>
+                          {doc.version_count > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleVersions(doc)}
+                              className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 dark:text-sky-300 hover:underline"
+                            >
+                              <History size={11} />
+                              {versionsOpenFor === doc.id ? 'Hide version history' : `Version history (${doc.version_count})`}
+                            </button>
+                          )}
+                          {versionsOpenFor === doc.id && (
+                            <ul className="mt-2 space-y-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2">
+                              {!versionsByDoc[doc.id] ? (
+                                <li className="text-[11px] text-slate-400 px-1">Loading…</li>
+                              ) : versionsByDoc[doc.id].length === 0 ? (
+                                <li className="text-[11px] text-slate-400 px-1">No previous versions.</li>
+                              ) : versionsByDoc[doc.id].map(v => (
+                                <li key={v.id} className="flex items-center justify-between gap-2 px-1">
+                                  <span className="text-[11px] text-slate-600 dark:text-slate-300 truncate">
+                                    <span className="font-semibold">v{v.version_num}</span> · {v.filename}
+                                    {' · '}{v.uploaded_by_username || 'unknown'}
+                                    {' · '}{new Date(v.uploaded_at).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                    {v.notes && <span className="italic"> — {v.notes}</span>}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadVersion(doc, v)}
+                                    className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-primary-600 dark:hover:text-primary-400"
+                                    title="Download this version exactly as it was filed"
+                                  >
+                                    <Download size={11} /> Download
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                           <DocumentFactsPanel
                             submissionId={id}
                             doc={doc}
@@ -1228,6 +1347,9 @@ const stageDescriptions = {
               </div>
             )
           })()}
+
+          {/* ── Formal decision service + acknowledgement ── */}
+          {submission && <DecisionServicePanel submission={submission} />}
 
           {/* ── Required Documents Checklist (AI autofill) ── */}
           {showChecklist && checklist.length > 0 && (
@@ -1368,9 +1490,20 @@ const stageDescriptions = {
                   { value: '', label: 'Select an officer…' },
                   ...officers
                     .filter(o => o.id !== submission.assigned_to && !submission.co_assignments?.some(ca => ca.id === o.id))
-                    .map(o => ({ value: String(o.id), label: `${o.full_name} — ${(o.role || '').replace(/_/g, ' ')}` })),
+                    .map(o => ({
+                      value: String(o.id),
+                      label: `${o.full_name} — ${(o.role || '').replace(/_/g, ' ')}`
+                        + (o.weighted_load != null
+                          ? ` · ${o.active_count} active${o.open_tasks ? `, ${o.open_tasks} task(s)` : ''} (load ${o.weighted_load})`
+                          : ''),
+                    })),
                 ]}
               />
+              {officers.length > 0 && officers[0].weighted_load != null && (
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 -mt-1">
+                  Officers are listed lightest plate first; "load" weights older work more heavily.
+                </p>
+              )}
               <div className="flex gap-2">
                 <BaseButton type="button" variant="primary" className="flex-1"
                   loading={allocateBusy} loadingLabel="Saving"

@@ -922,6 +922,11 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
     document_type_display = serializers.CharField(
         source='get_document_type_display', read_only=True,
     )
+    version_count = serializers.SerializerMethodField()
+
+    def get_version_count(self, obj):
+        """Superseded versions on record (0 = never replaced)."""
+        return obj.versions.count()
 
     def get_file_size(self, obj):
         try:
@@ -944,6 +949,7 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'original_name', 'description', 'uploaded_by_username',
             'uploaded_at', 'file_size', 'content_type',
+            'version_num', 'version_count', 'archived_at',
             'ocr_status', 'ocr_status_display', 'extracted_text', 'extracted_facts',
             'ocr_error', 'ocr_processed_at',
             'document_type', 'document_type_display', 'document_type_confidence',
@@ -2521,17 +2527,58 @@ class WebPushSubscriptionSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_at", "updated_at")
 
 
+class DecisionServiceSerializer(serializers.ModelSerializer):
+    served_by_name = serializers.SerializerMethodField()
+    acknowledged_by_name = serializers.SerializerMethodField()
+    outcome_label = serializers.SerializerMethodField()
+    has_pdf = serializers.SerializerMethodField()
+
+    def get_served_by_name(self, obj):
+        return obj.served_by.get_full_name() or obj.served_by.username
+
+    def get_acknowledged_by_name(self, obj):
+        if not obj.acknowledged_by_id:
+            return None
+        return obj.acknowledged_by.get_full_name() or obj.acknowledged_by.username
+
+    def get_outcome_label(self, obj):
+        from .models import WorkflowStage
+        return dict(WorkflowStage.choices).get(obj.decision_outcome, obj.decision_outcome)
+
+    def get_has_pdf(self, obj):
+        return bool(obj.letter_pdf)
+
+    class Meta:
+        from .models import DecisionService
+        model = DecisionService
+        fields = (
+            "id", "decision_outcome", "outcome_label",
+            "letter_subject", "letter_body", "content_hash", "has_pdf",
+            "served_by_name", "served_at",
+            "acknowledged_by_name", "acknowledged_at", "acknowledgement_note",
+            "superseded", "reminder_count", "last_reminder_at",
+        )
+        read_only_fields = fields
+
+
 class DocumentVersionSerializer(serializers.ModelSerializer):
     uploaded_by_username = serializers.CharField(source="uploaded_by.username", read_only=True, allow_null=True)
+    file_size = serializers.SerializerMethodField()
+
+    def get_file_size(self, obj):
+        try:
+            return obj.file.size
+        except Exception:
+            return None
 
     class Meta:
         from .models import DocumentVersion
         model = DocumentVersion
         fields = (
-            "id", "document", "version_num", "file", "filename",
+            "id", "document", "version_num", "filename", "file_size",
             "uploaded_by", "uploaded_by_username", "uploaded_at", "notes", "is_current",
         )
-        read_only_fields = ("id", "version_num", "uploaded_by", "uploaded_by_username", "uploaded_at", "is_current")
+        read_only_fields = fields
 
 
 class ChecklistFormFieldSerializer(serializers.ModelSerializer):

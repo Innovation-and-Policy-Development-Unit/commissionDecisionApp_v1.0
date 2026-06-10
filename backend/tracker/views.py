@@ -1778,7 +1778,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         allowed_roles = manager_allowed_staff_roles(
             profile.role if is_unit_manager else None
         )
-        officers = (
+        officers = list(
             User.objects.filter(
                 is_active=True,
                 psc_profile__role__in=allowed_roles,
@@ -1786,15 +1786,27 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             .select_related("psc_profile")
             .order_by("first_name", "username")
         )
+
+        # Surface each candidate's current load so the allocation decision is
+        # made with the numbers in view; lightest plate first.
+        from .reports.workload import officer_load_index
+        loads = officer_load_index(user_ids={u.id for u in officers})
+
         data = [
             {
                 "id": u.id,
                 "full_name": (u.get_full_name() or u.username),
                 "username": u.username,
                 "role": getattr(u.psc_profile, "role", ""),
+                "active_count": loads.get(u.id, {}).get("active_count", 0),
+                "co_assigned_count": loads.get(u.id, {}).get("co_assigned_count", 0),
+                "weighted_load": loads.get(u.id, {}).get("weighted_load", 0.0),
+                "open_tasks": loads.get(u.id, {}).get("open_tasks", 0),
+                "overdue_tasks": loads.get(u.id, {}).get("overdue_tasks", 0),
             }
             for u in officers
         ]
+        data.sort(key=lambda o: (o["weighted_load"], o["active_count"], o["full_name"]))
         return Response(data)
 
     @action(detail=True, methods=["post"], url_path="assign")
@@ -2563,13 +2575,42 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         doc = get_object_or_404(SubmissionDocument, id=doc_id, submission=submission)
 
         if request.method == "DELETE":
+            from .audit import log_action as _log
+            from .models import AuditLog as _AL
+
             profile = _profile(request.user)
             if profile.role not in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.PSC_ADMIN}:
                 raise PermissionDenied("Only the submitting ministry or PSC Admin may delete documents.")
             from .transitions import assert_can_edit_submission
             assert_can_edit_submission(profile.role, submission)
-            doc.file.delete(save=False)
-            doc.delete()
+
+            # Evidence preservation: once the submission has entered the
+            # workflow, documents are archived (hidden but recoverable),
+            # never destroyed. True deletion is only allowed while the
+            # paper is still a private draft.
+            still_private_draft = (
+                submission.current_stage == WorkflowStage.DRAFT
+                and not submission.events.exists()
+            )
+            if still_private_draft:
+                for version in doc.versions.all():
+                    version.file.delete(save=False)
+                doc.file.delete(save=False)
+                doc.delete()
+                _log(request, _AL.Action.DELETE,
+                     resource_type="SubmissionDocument", resource_id=doc_id,
+                     resource_label=doc.original_name,
+                     description=f"Document deleted (draft): {doc.original_name} "
+                                 f"on {submission.reference_number}")
+            else:
+                doc.archived_at = timezone.now()
+                doc.archived_by = request.user
+                doc.save(update_fields=["archived_at", "archived_by"])
+                _log(request, _AL.Action.DELETE,
+                     resource_type="SubmissionDocument", resource_id=doc.id,
+                     resource_label=doc.original_name,
+                     description=f"Document archived (soft-removed): {doc.original_name} "
+                                 f"on {submission.reference_number}")
             invalidate_submission(submission.id)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -2587,6 +2628,271 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         disposition = 'inline' if is_pdf else 'attachment'
         response['Content-Disposition'] = f'{disposition}; filename="{doc.original_name}"'
         return response
+
+    @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/replace")
+    def document_replace(self, request, pk=None, doc_id=None):
+        """Upload a new version of a document.
+
+        The superseded file is snapshotted into DocumentVersion before the
+        replacement is saved — clarification rounds preserve exactly what the
+        Commission saw at each pass.
+        """
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL, DocumentOcrStatus, DocumentVersion
+
+        submission = self.get_object()
+        doc = get_object_or_404(SubmissionDocument, id=doc_id, submission=submission)
+        profile = _profile(request.user)
+        _replace_allowed_roles = {
+            Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY,
+            Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY,
+            Role.CSU_MANAGER, Role.ODU_MANAGER,
+        }
+        if profile.role not in _replace_allowed_roles:
+            raise PermissionDenied("Only ministry HR, PSC staff, or OPSC unit staff may replace documents.")
+        from .transitions import assert_can_edit_submission
+        assert_can_edit_submission(profile.role, submission)
+
+        uploaded = request.FILES.get("file")
+        if not uploaded:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        if uploaded.size > 20 * 1024 * 1024:
+            return Response(
+                {"detail": f"File '{uploaded.name}' exceeds the 20 MB limit."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        notes = (request.data.get("notes") or "").strip()
+        superseded_version = doc.version_num
+
+        with transaction.atomic():
+            # Snapshot the current file: the version row takes over the
+            # existing storage path — no copy, nothing destroyed.
+            snapshot = DocumentVersion.objects.create(
+                document=doc,
+                version_num=doc.version_num,
+                file=doc.file.name,
+                filename=doc.original_name,
+                uploaded_by=doc.uploaded_by,
+                notes=notes,
+                is_current=False,
+            )
+            # Preserve the original upload time (auto_now_add stamped "now").
+            DocumentVersion.objects.filter(pk=snapshot.pk).update(uploaded_at=doc.uploaded_at)
+
+            doc.file = uploaded  # saves to a fresh path; old blob stays with the snapshot
+            doc.original_name = uploaded.name
+            doc.uploaded_by = request.user
+            doc.uploaded_at = timezone.now()
+            doc.version_num += 1
+            # The content changed — reset extraction state and requeue.
+            doc.ocr_status = DocumentOcrStatus.PENDING
+            doc.extracted_text = ""
+            doc.extracted_facts = {}
+            doc.ocr_error = ""
+            doc.ocr_processed_at = None
+            doc.save()
+
+        from .tasks import queue_document_classification, queue_document_extraction
+        queue_document_extraction(doc.id)
+        queue_document_classification(doc.id)
+
+        _log(request, _AL.Action.UPDATE,
+             resource_type="SubmissionDocument", resource_id=doc.id,
+             resource_label=doc.original_name,
+             description=f"Document replaced (v{superseded_version} → v{doc.version_num}): "
+                         f"{doc.original_name} on {submission.reference_number}"
+                         + (f" | {notes}" if notes else ""))
+
+        invalidate_submission(submission.id)
+        return Response(SubmissionDocumentSerializer(doc).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"], url_path="documents/(?P<doc_id>[0-9]+)/versions")
+    def document_versions(self, request, pk=None, doc_id=None):
+        """Version history of a document (newest first). Works for archived
+        documents too — the chain stays inspectable."""
+        from .serializers import DocumentVersionSerializer
+
+        submission = self.get_object()
+        doc = get_object_or_404(SubmissionDocument.all_objects, id=doc_id, submission=submission)
+        versions = doc.versions.select_related("uploaded_by").order_by("-version_num")
+        return Response({
+            "document_id": doc.id,
+            "current_version": doc.version_num,
+            "archived_at": doc.archived_at,
+            "versions": DocumentVersionSerializer(versions, many=True).data,
+        })
+
+    @action(
+        detail=True, methods=["get"],
+        url_path="documents/(?P<doc_id>[0-9]+)/versions/(?P<version_id>[0-9]+)/download",
+    )
+    def document_version_download(self, request, pk=None, doc_id=None, version_id=None):
+        """Download a superseded version exactly as it was filed."""
+        import mimetypes
+
+        from django.http import FileResponse
+
+        from .models import DocumentVersion
+
+        submission = self.get_object()
+        doc = get_object_or_404(SubmissionDocument.all_objects, id=doc_id, submission=submission)
+        version = get_object_or_404(DocumentVersion, id=version_id, document=doc)
+
+        try:
+            file_handle = version.file.open("rb")
+        except Exception:
+            return Response({"detail": "File not found on server."}, status=status.HTTP_404_NOT_FOUND)
+
+        content_type, _ = mimetypes.guess_type(version.filename)
+        response = FileResponse(file_handle, content_type=content_type or "application/octet-stream")
+        response["Content-Disposition"] = (
+            f'attachment; filename="v{version.version_num}_{version.filename}"'
+        )
+        return response
+
+    # ── Formal decision service + acknowledgement ───────────────────────────
+
+    def _assert_decision_service_viewer(self, request, submission):
+        """Secretariat sees everything; ministry-side roles only their own
+        ministry's services."""
+        profile = _profile(request.user)
+        secretariat = {
+            Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
+            Role.PSC_OFFICER, Role.PSC_MANAGER, Role.PSC_COMMISSIONER, Role.CHAIRPERSON,
+        }
+        if profile.role in secretariat or request.user.is_staff:
+            return profile
+        from .decision_service import MINISTRY_ACK_ROLES
+        if profile.role in MINISTRY_ACK_ROLES and profile.ministry_id == submission.ministry_id:
+            return profile
+        raise PermissionDenied("You do not have access to this decision service record.")
+
+    @action(detail=True, methods=["get"], url_path="decision-service")
+    def decision_service_status(self, request, pk=None):
+        """All service records for this submission, newest first."""
+        from .serializers import DecisionServiceSerializer
+
+        submission = self.get_object()
+        self._assert_decision_service_viewer(request, submission)
+        services = submission.decision_services.select_related(
+            "served_by", "acknowledged_by",
+        )
+        return Response({
+            "services": DecisionServiceSerializer(services, many=True).data,
+        })
+
+    @action(detail=True, methods=["post"], url_path="serve-decision")
+    def serve_decision(self, request, pk=None):
+        """Formally serve the Commission's decision on the ministry.
+
+        Body: { letter_subject?, letter_body? } — defaults to the F3 outcome
+        letter draft. Creates an immutable snapshot (text + PDF + SHA-256)
+        and notifies the ministry's HR and Head of Agency.
+        """
+        from .audit import log_action as _log
+        from .decision_service import SERVABLE_STAGES, serve_decision as _serve
+        from .models import AuditLog as _AL
+        from .serializers import DecisionServiceSerializer
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER} \
+                and not request.user.is_staff:
+            raise PermissionDenied("Only the Secretariat may serve decisions.")
+        if submission.current_stage not in SERVABLE_STAGES:
+            return Response(
+                {"detail": "A decision can only be served after the Commission has decided "
+                           "(approved/rejected and post-decision stages)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        letter_subject = (request.data.get("letter_subject") or "").strip() \
+            or submission.ai_letter_subject
+        letter_body = (request.data.get("letter_body") or "").strip() \
+            or submission.ai_letter_content
+        if not letter_body.strip():
+            return Response(
+                {"detail": "letter_body is required (no F3 outcome letter draft to fall back on). "
+                           "Generate the outcome letter first or provide the text."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = _serve(
+            submission, served_by=request.user,
+            letter_subject=letter_subject, letter_body=letter_body,
+        )
+
+        _log(request, _AL.Action.DECISION,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Decision formally served on {submission.ministry.name} "
+                         f"(service #{service.id})",
+             extra_data={"content_hash": service.content_hash,
+                         "decision_service_id": service.id})
+
+        invalidate_submission(submission.id)
+        return Response(DecisionServiceSerializer(service).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="acknowledge-decision")
+    def acknowledge_decision(self, request, pk=None):
+        """Ministry acknowledges receipt of the served decision.
+        Body: { note? }. Timestamped and audited."""
+        from .audit import log_action as _log
+        from .decision_service import MINISTRY_ACK_ROLES, acknowledge_service
+        from .models import AuditLog as _AL
+        from .serializers import DecisionServiceSerializer
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in MINISTRY_ACK_ROLES or profile.ministry_id != submission.ministry_id:
+            raise PermissionDenied(
+                "Only the served ministry's HR officers or Head of Agency may acknowledge."
+            )
+
+        service = submission.decision_services.filter(
+            acknowledged_at__isnull=True, superseded=False,
+        ).first()
+        if not service:
+            return Response(
+                {"detail": "No decision service is awaiting acknowledgement."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        note = (request.data.get("note") or "").strip()
+        acknowledge_service(service, user=request.user, note=note)
+
+        _log(request, _AL.Action.DECISION,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Decision service #{service.id} acknowledged by "
+                         f"{request.user.get_full_name() or request.user.username} "
+                         f"({submission.ministry.name})"
+                         + (f" | {note}" if note else ""),
+             extra_data={"decision_service_id": service.id})
+
+        invalidate_submission(submission.id)
+        return Response(DecisionServiceSerializer(service).data)
+
+    @action(
+        detail=True, methods=["get"],
+        url_path="decision-service/(?P<service_id>[0-9]+)/letter",
+    )
+    def decision_service_letter(self, request, pk=None, service_id=None):
+        """Download the served letter PDF exactly as filed."""
+        from django.http import FileResponse
+
+        submission = self.get_object()
+        self._assert_decision_service_viewer(request, submission)
+        service = get_object_or_404(submission.decision_services, pk=service_id)
+        if not service.letter_pdf:
+            return Response({"detail": "Letter PDF is missing."}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(
+            service.letter_pdf.open("rb"),
+            as_attachment=True,
+            filename=service.letter_pdf.name.split("/")[-1],
+            content_type="application/pdf",
+        )
 
     @action(detail=True, methods=["get", "post", "put"], url_path="form37")
     def form37(self, request, pk=None):
@@ -8752,6 +9058,26 @@ def implementation_report_download_view(request, pk):
 
 # ── Workload Views ─────────────────────────────────────────────────────────────
 
+_WORKLOAD_VIEWER_ROLES = {
+    Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_MANAGER,
+    Role.VIPAM_MANAGER, Role.HR_UNIT_MANAGER, Role.ODU_MANAGER,
+    Role.COMPLIANCE_MANAGER, Role.CSU_MANAGER,
+}
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def workload_summary_view(request):
+    """Age-weighted staff workload: submissions and tasks per officer/unit,
+    plus review-duration averages. Powers the Workload Dashboard."""
+    from .reports.workload import build_workload_summary
+
+    profile = _profile(request.user)
+    if profile.role not in _WORKLOAD_VIEWER_ROLES and not request.user.is_staff:
+        raise PermissionDenied("Secretariat and unit managers only.")
+    return Response(build_workload_summary())
+
+
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def workload_officers_view(request):
@@ -8912,12 +9238,22 @@ class WebPushSubscriptionViewSet(viewsets.ModelViewSet):
 
 class DocumentVersionViewSet(
     mixins.ListModelMixin,
-    mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
 ):
-    """List and upload new versions of submission documents."""
+    """Read-only version history for PSC staff (cross-submission audit view).
+
+    Versions are created exclusively by the document replace endpoint
+    (POST /submissions/{id}/documents/{doc_id}/replace/), never directly.
+    Per-submission history with RBAC lives on the SubmissionViewSet
+    documents/{doc_id}/versions/ action.
+    """
     permission_classes = [permissions.IsAuthenticated]
+
+    _STAFF_ROLES = {
+        Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
+        Role.PSC_OFFICER, Role.PSC_MANAGER,
+    }
 
     def get_serializer_class(self):
         from .serializers import DocumentVersionSerializer
@@ -8925,20 +9261,14 @@ class DocumentVersionViewSet(
 
     def get_queryset(self):
         from .models import DocumentVersion
+        profile = _profile(self.request.user)
+        if profile.role not in self._STAFF_ROLES and not self.request.user.is_staff:
+            return DocumentVersion.objects.none()
         qs = DocumentVersion.objects.select_related("document", "uploaded_by")
         doc_id = self.request.query_params.get("document")
         if doc_id:
             qs = qs.filter(document_id=doc_id)
         return qs
-
-    def perform_create(self, serializer):
-        from .models import DocumentVersion, SubmissionDocument
-        doc_id = self.request.data.get("document")
-        doc = get_object_or_404(SubmissionDocument, pk=doc_id)
-        last = DocumentVersion.objects.filter(document=doc).order_by("-version_num").first()
-        next_num = (last.version_num + 1) if last else 1
-        DocumentVersion.objects.filter(document=doc, is_current=True).update(is_current=False)
-        serializer.save(document=doc, version_num=next_num, uploaded_by=self.request.user, is_current=True)
 
 
 # ── Submission Checklist Response ─────────────────────────────────────────────

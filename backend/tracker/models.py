@@ -2500,6 +2500,66 @@ class WorkflowEvent(models.Model):
         return f"{self.submission.reference_number}: {self.previous_stage} → {self.new_stage}"
 
 
+class DecisionService(models.Model):
+    """Formal service of a Commission decision on the responsible ministry.
+
+    Created when the Secretariat serves the outcome letter; the ministry must
+    acknowledge receipt in-system. The served letter is an immutable snapshot
+    (text + PDF + SHA-256), so "we never received it" and "that's not what we
+    were sent" are both answerable from the record.
+    """
+
+    submission = models.ForeignKey(
+        Submission, on_delete=models.CASCADE, related_name="decision_services",
+    )
+    ministry = models.ForeignKey(
+        Ministry, on_delete=models.PROTECT, related_name="decision_services",
+    )
+    decision_outcome = models.CharField(
+        max_length=48, blank=True,
+        help_text="Workflow stage of the decision at serve time (approved / rejected / …).",
+    )
+    letter_subject = models.CharField(max_length=255, blank=True)
+    letter_body = models.TextField(
+        help_text="Letter text exactly as served — never edited after service.",
+    )
+    letter_pdf = models.FileField(
+        upload_to="decision_service/%Y/%m/", blank=True,
+    )
+    content_hash = models.CharField(
+        max_length=64, blank=True, db_index=True,
+        help_text="SHA-256 of the canonical service snapshot (proof_payload).",
+    )
+    proof_payload = models.JSONField(
+        default=dict, blank=True,
+        help_text="Immutable JSON snapshot used to verify content_hash.",
+    )
+    served_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="decisions_served",
+    )
+    served_at = models.DateTimeField(auto_now_add=True)
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="decisions_acknowledged",
+    )
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledgement_note = models.TextField(blank=True)
+    superseded = models.BooleanField(
+        default=False,
+        help_text="True when a corrected letter was re-served after this one.",
+    )
+    reminder_count = models.PositiveSmallIntegerField(default=0)
+    last_reminder_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-served_at"]
+
+    def __str__(self):
+        state = "acknowledged" if self.acknowledged_at else "pending acknowledgement"
+        return f"Service of {self.submission.reference_number} ({state})"
+
+
 class PermissionCategory(models.TextChoices):
     SUBMISSIONS    = "submissions",    "Submissions"
     WORKFLOW       = "workflow",       "Workflow & Transitions"

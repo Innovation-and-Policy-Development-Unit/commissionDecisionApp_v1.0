@@ -2749,3 +2749,85 @@ def generate_quarterly_implementation_report():
 
     app_log.info('IMPL_REPORT | Generated %s (report #%s)', label, report.id)
     return report.id
+
+
+# ── Decision service acknowledgement reminders ───────────────────────────────
+
+@shared_task
+def remind_unacknowledged_decision_services():
+    """
+    Daily task: remind the ministry when a formally served decision has not
+    been acknowledged after DECISION_ACK_REMINDER_DAYS days; reminders repeat
+    at the same interval. The Secretariat server is CC'd in-app from the
+    second reminder onward.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .decision_service import ministry_recipients
+    from .email_notify import send_email_to_user
+    from .models import DecisionService, Notification, SystemSetting
+
+    interval_days = SystemSetting.get_int("DECISION_ACK_REMINDER_DAYS", 5)
+    if interval_days <= 0:
+        interval_days = 5
+    now = timezone.now()
+    threshold = now - timedelta(days=interval_days)
+
+    due = DecisionService.objects.filter(
+        acknowledged_at__isnull=True,
+        superseded=False,
+        served_at__lt=threshold,
+    ).select_related("submission", "submission__ministry", "served_by")
+
+    processed = 0
+    for service in due:
+        if service.last_reminder_at and service.last_reminder_at > threshold:
+            continue
+
+        submission = service.submission
+        days_waiting = (now - service.served_at).days
+        for user in ministry_recipients(submission):
+            Notification.objects.create(
+                recipient=user,
+                submission=submission,
+                channel=Notification.Channel.BOTH,
+                title=f'Acknowledgement outstanding: {submission.reference_number}',
+                body=(
+                    f'The Commission decision on "{submission.title}" was served '
+                    f'{days_waiting} day(s) ago and has not been acknowledged. '
+                    f'Please acknowledge receipt in SCDMS.'
+                ),
+            )
+            send_email_to_user(
+                user,
+                subject=f'[REMINDER] Acknowledge decision service — {submission.reference_number}',
+                body=(
+                    f'Dear {user.get_full_name() or user.username},\n\n'
+                    f'The Public Service Commission served its decision on '
+                    f'"{submission.title}" ({submission.reference_number}) '
+                    f'{days_waiting} day(s) ago. Receipt has not yet been acknowledged.\n\n'
+                    f'Please log in to SCDMS and acknowledge receipt of the outcome letter.'
+                ),
+            )
+
+        if service.reminder_count >= 1:
+            Notification.objects.create(
+                recipient=service.served_by,
+                submission=submission,
+                channel=Notification.Channel.IN_APP,
+                title=f'Ministry has not acknowledged: {submission.reference_number}',
+                body=(
+                    f'{submission.ministry.name} has not acknowledged the decision '
+                    f'served {days_waiting} day(s) ago (reminder #{service.reminder_count + 1}).'
+                ),
+            )
+
+        service.reminder_count += 1
+        service.last_reminder_at = now
+        service.save(update_fields=["reminder_count", "last_reminder_at"])
+        processed += 1
+
+    app_log.info('DECISION_ACK_REMINDER | Reminded %d service(s)', processed)
+    return processed

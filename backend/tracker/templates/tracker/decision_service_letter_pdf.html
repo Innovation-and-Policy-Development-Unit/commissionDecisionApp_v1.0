@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Decision Service — {{ submission.reference_number }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2.5cm 2cm;
+      @bottom-center {
+        content: "Service record {{ service.id }} — integrity hash {{ service.content_hash }}";
+        font-size: 7px;
+        color: #999;
+      }
+    }
+    body {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+      line-height: 1.6;
+      color: #000;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 2px solid #000;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      font-size: 16pt;
+      margin: 0 0 2px 0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .meta table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .meta td { padding: 2px 8px; font-size: 11pt; vertical-align: top; }
+    .meta td:first-child { font-weight: bold; width: 170px; }
+    .outcome-badge {
+      display: inline-block;
+      border: 1.5px solid #000;
+      padding: 2px 14px;
+      font-size: 11pt;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .letter-body {
+      margin: 24px 0;
+      white-space: pre-wrap;
+    }
+    .service-block {
+      margin-top: 36px;
+      border-top: 1px solid #ccc;
+      padding-top: 12px;
+      font-size: 10pt;
+    }
+    .ack-note {
+      margin-top: 12px;
+      border: 1px solid #999;
+      padding: 8px 12px;
+      font-size: 9.5pt;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Republic of Vanuatu</h1>
+  <h1>Public Service Commission</h1>
+  <h2 style="font-size:13pt; margin-top:8px;">FORMAL SERVICE OF COMMISSION DECISION</h2>
+</div>
+
+<div class="meta">
+  <table>
+    <tr><td>Reference:</td><td>{{ submission.reference_number }}</td></tr>
+    <tr><td>Subject matter:</td><td>{{ submission.title }}</td></tr>
+    <tr><td>Ministry served:</td><td>{{ service.ministry.name }}</td></tr>
+    <tr><td>Decision outcome:</td><td><span class="outcome-badge">{{ outcome_label }}</span></td></tr>
+    <tr><td>Served on:</td><td>{{ served_on|date:"d F Y" }} at {{ served_on|date:"H:i" }}</td></tr>
+    <tr><td>Served by:</td><td>{{ service.served_by.get_full_name|default:service.served_by.username }}, Office of the Public Service Commission</td></tr>
+  </table>
+</div>
+
+{% if service.letter_subject %}
+<p><strong>RE: {{ service.letter_subject }}</strong></p>
+{% endif %}
+
+<div class="letter-body">{{ service.letter_body }}</div>
+
+<div class="service-block">
+  <p>
+    This letter was formally served through the Submission &amp; Commission Decision
+    Management System (SCDMS). The ministry is required to acknowledge receipt
+    in-system; the acknowledgement is recorded with the acknowledging officer's
+    name and a timestamp.
+  </p>
+  <div class="ack-note">
+    Integrity: this document is an immutable snapshot of the decision as served.
+    Its canonical content is protected by SHA-256 hash
+    <strong>{{ service.content_hash }}</strong>, verifiable in SCDMS against the
+    stored service record.
+  </div>
+</div>
+
+</body>
+</html>
