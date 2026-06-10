@@ -8,7 +8,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  Flag, AlertOctagon, AlertTriangle, Eye, Loader2, RefreshCw, Check, X, SlidersHorizontal,
+  Flag, AlertOctagon, AlertTriangle, Eye, Loader2, RefreshCw, Check, X, SlidersHorizontal, Download,
 } from 'lucide-react'
 import { rulesApi } from '../../api/rules'
 import { useToast } from '../../context/ToastContext'
@@ -75,6 +75,23 @@ export default function FlagMonitor() {
     catch { toast.error(t('rules.clear_failed', { defaultValue: 'Could not clear' })) }
   }
 
+  const exportCsv = async () => {
+    try {
+      const params = {}
+      if (level) params.level = level
+      if (entity) params.entity = entity
+      if (ruleId) params.rule = ruleId
+      if (statusF) params.status = statusF
+      const blob = await rulesApi.exportFlags(params)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `scdms-flags-${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+    } catch { toast.error(t('rules.export_failed', { defaultValue: 'Could not export' })) }
+  }
+
   const summary = data.summary || {}
 
   return (
@@ -84,6 +101,7 @@ export default function FlagMonitor() {
         subtitle={t('rules.flag_monitor_sub', { defaultValue: 'At-risk submissions raised by the rule engine.' })}
         action={
           <div className="flex items-center gap-2">
+            <button onClick={exportCsv} disabled={!data.flags?.length} className="btn-outline flex items-center gap-2 px-3 py-2 text-sm disabled:opacity-40"><Download size={14} /> {t('rules.export', { defaultValue: 'Export CSV' })}</button>
             {isAdmin && <Link to="/intelligence/rules" className="btn-outline flex items-center gap-2 px-3 py-2 text-sm"><SlidersHorizontal size={15} /> {t('rules.rules', { defaultValue: 'Rules' })}</Link>}
             {isAdmin && <button onClick={runNow} disabled={busy} className="btn-outline flex items-center gap-2 px-3 py-2 text-sm disabled:opacity-50"><RefreshCw size={14} className={busy ? 'animate-spin' : ''} /> {t('rules.run_now', { defaultValue: 'Run now' })}</button>}
           </div>
@@ -131,6 +149,18 @@ export default function FlagMonitor() {
           <option value="acknowledged">{t('rules.status_ack', { defaultValue: 'Acknowledged' })}</option>
         </select>
       </div>
+
+      {/* Top firing rules */}
+      {data.by_rule?.length > 0 && (
+        <div className="card p-3 flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-slate-400 font-semibold uppercase">{t('rules.top_rules', { defaultValue: 'Top rules' })}</span>
+          {data.by_rule.map(b => (
+            <span key={b.rule} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+              {b.rule} <strong className="text-slate-800 dark:text-slate-100">{b.count}</strong>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Table */}
       <div className="card p-0 overflow-hidden">

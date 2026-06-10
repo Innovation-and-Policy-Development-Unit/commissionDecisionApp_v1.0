@@ -10,6 +10,7 @@ export const automationApi = {
   test: (entity, conditions, match) => api.post('/automations/test/', { entity, conditions, match }).then(r => r.data),
   runNow: (id) => api.post(`/automations/${id}/run/`).then(r => r.data),
   runs: (automation) => api.get('/automations/runs/', { params: automation ? { automation } : {} }).then(r => r.data),
+  exportRuns: (automation) => api.get('/automations/runs/export/', { params: automation ? { automation } : {}, responseType: 'blob' }).then(r => r.data),
 }
 
 export default automationApi

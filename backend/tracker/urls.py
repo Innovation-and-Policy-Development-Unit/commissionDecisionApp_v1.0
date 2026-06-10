@@ -23,6 +23,7 @@ from .rules_views import (
     flag_acknowledge,
     flag_clear,
     flags,
+    flags_export,
     rule_detail,
     rule_fields,
     rule_test,
@@ -34,6 +35,7 @@ from .automation_views import (
     automation_fields,
     automation_run_now,
     automation_runs,
+    automation_runs_export,
     automation_test,
     automations,
 )
@@ -207,6 +209,7 @@ urlpatterns = [
     path("rules/run/", rules_run_now),
     path("rules/<int:pk>/", rule_detail),
     path("flags/", flags),
+    path("flags/export/", flags_export),
     path("flags/<int:pk>/acknowledge/", flag_acknowledge),
     path("flags/<int:pk>/clear/", flag_clear),
     # ── Act (Automation) engine ──────────────────────────────────────────────
@@ -214,6 +217,7 @@ urlpatterns = [
     path("automations/fields/", automation_fields),
     path("automations/test/", automation_test),
     path("automations/runs/", automation_runs),
+    path("automations/runs/export/", automation_runs_export),
     path("automations/<int:pk>/", automation_detail),
     path("automations/<int:pk>/run/", automation_run_now),
     path("register/", RegisterView.as_view()),

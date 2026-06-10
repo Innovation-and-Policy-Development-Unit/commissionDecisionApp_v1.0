@@ -22,7 +22,7 @@ const ENTITY_LABEL = { submission: 'Submission', commission_task: 'Commission ta
 const EMPTY = {
   id: null, name: '', description: '', entity: 'submission', level: 'at_risk', match: 'all',
   conditions: [{ field: '', op: '', value: '' }],
-  notify_assignee: true, notify_roles: '', test_mode: false, cooldown_minutes: 60, is_active: true,
+  notify_assignee: true, notify_roles: '', test_mode: false, realert: false, cooldown_minutes: 60, is_active: true,
 }
 
 export default function AlertRules() {
@@ -37,7 +37,7 @@ export default function AlertRules() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
-  const [matchCount, setMatchCount] = useState(null)
+  const [testRes, setTestRes] = useState(null)
 
   const catalog = catalogs[form.entity] || { fields: [], ops: {} }
   const fieldsByKey = Object.fromEntries((catalog.fields || []).map(f => [f.key, f]))
@@ -68,19 +68,19 @@ export default function AlertRules() {
 
   const opsFor = (fieldKey) => (catalog.ops?.[fieldsByKey[fieldKey]?.kind]) || []
 
-  const openCreate = () => { setForm(EMPTY); setMatchCount(null); ensureCatalog('submission'); setOpen(true) }
+  const openCreate = () => { setForm(EMPTY); setTestRes(null); ensureCatalog('submission'); setOpen(true) }
   const openEdit = (r) => {
     setForm({
       id: r.id, name: r.name, description: r.description || '', entity: r.entity, level: r.level, match: r.match,
       conditions: (r.conditions?.length ? r.conditions : [{ field: '', op: '', value: '' }]),
       notify_assignee: r.notify_assignee, notify_roles: (r.notify_roles || []).join(', '),
-      test_mode: r.test_mode, cooldown_minutes: r.cooldown_minutes, is_active: r.is_active,
+      test_mode: r.test_mode, realert: r.realert, cooldown_minutes: r.cooldown_minutes, is_active: r.is_active,
     })
-    setMatchCount(null); ensureCatalog(r.entity); setOpen(true)
+    setTestRes(null); ensureCatalog(r.entity); setOpen(true)
   }
   const changeEntity = (entity) => {
     setForm(f => ({ ...f, entity, conditions: [{ field: '', op: '', value: '' }] }))
-    setMatchCount(null); ensureCatalog(entity)
+    setTestRes(null); ensureCatalog(entity)
   }
 
   const setCond = (i, patch) => setForm(f => ({ ...f, conditions: f.conditions.map((c, j) => j === i ? { ...c, ...patch } : c) }))
@@ -99,7 +99,7 @@ export default function AlertRules() {
     })
 
   const dryRun = async () => {
-    try { setMatchCount((await rulesApi.testRule(cleanConditions(), form.match, form.entity)).match_count) }
+    try { setTestRes(await rulesApi.testRule(cleanConditions(), form.match, form.entity)) }
     catch { toast.error(t('rules.test_failed', { defaultValue: 'Could not test rule' })) }
   }
 
@@ -109,7 +109,7 @@ export default function AlertRules() {
       name: form.name.trim(), description: form.description, entity: form.entity, level: form.level, match: form.match,
       conditions: cleanConditions(), notify_assignee: form.notify_assignee,
       notify_roles: form.notify_roles.split(',').map(s => s.trim()).filter(Boolean),
-      test_mode: form.test_mode, cooldown_minutes: Number(form.cooldown_minutes) || 0, is_active: form.is_active,
+      test_mode: form.test_mode, realert: form.realert, cooldown_minutes: Number(form.cooldown_minutes) || 0, is_active: form.is_active,
     }
     setSaving(true)
     try {
@@ -232,12 +232,20 @@ export default function AlertRules() {
               })}
               <button onClick={addCond} className="text-xs text-primary-600 hover:underline flex items-center gap-1"><Plus size={12} /> {t('rules.add_condition', { defaultValue: 'Add condition' })}</button>
             </div>
-            <button onClick={dryRun} className="btn-outline flex items-center gap-2 px-3 py-1.5 text-sm mt-2"><FlaskConical size={14} /> {t('rules.test_rule', { defaultValue: 'Test' })}{matchCount != null && <span className="font-semibold text-primary-600">· {matchCount} {t('rules.match', { defaultValue: 'match' })}</span>}</button>
+            <div className="mt-2">
+              <button onClick={dryRun} className="btn-outline flex items-center gap-2 px-3 py-1.5 text-sm"><FlaskConical size={14} /> {t('rules.test_rule', { defaultValue: 'Test' })}{testRes && <span className="font-semibold text-primary-600">· {testRes.match_count} {t('rules.match', { defaultValue: 'match' })}</span>}</button>
+              {testRes?.sample?.length > 0 && (
+                <ul className="mt-2 text-xs text-slate-500 dark:text-slate-400 space-y-0.5 max-h-32 overflow-auto">
+                  {testRes.sample.map((s, i) => <li key={i} className="truncate"><span className="font-mono text-slate-400">{s.ref}</span> — {s.title} <span className="text-slate-300">({String(s.state || '').replace(/_/g, ' ')})</span></li>)}
+                </ul>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 pt-1">
             <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={form.notify_assignee} onChange={(e) => setForm(f => ({ ...f, notify_assignee: e.target.checked }))} /> {t('rules.notify_assignee', { defaultValue: 'Notify assignee' })}</label>
             <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={form.test_mode} onChange={(e) => setForm(f => ({ ...f, test_mode: e.target.checked }))} /> {t('rules.test_mode_no_email', { defaultValue: 'Test mode (no emails)' })}</label>
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={form.realert} onChange={(e) => setForm(f => ({ ...f, realert: e.target.checked }))} /> {t('rules.realert', { defaultValue: 'Re-alert each cooldown' })}</label>
             <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">{t('rules.notify_roles', { defaultValue: 'Notify roles' })}</label>
               <input className="input w-full text-sm" value={form.notify_roles} placeholder="psc_manager, senior_admin_officer" onChange={(e) => setForm(f => ({ ...f, notify_roles: e.target.value }))} /></div>
             <div><label className="block text-xs font-semibold text-slate-500 uppercase mb-1">{t('rules.cooldown', { defaultValue: 'Cooldown (min)' })}</label>

@@ -3525,6 +3525,10 @@ class SubmissionRule(models.Model):
     is_builtin = models.BooleanField(default=False, help_text="Seeded rule migrated from SLA/escalation logic.")
     test_mode = models.BooleanField(default=False, help_text="Evaluate and flag, but send no alert emails.")
     cooldown_minutes = models.PositiveIntegerField(default=60)
+    realert = models.BooleanField(
+        default=False,
+        help_text="Re-alert an open flag every cooldown window (anti-spam); off = alert once.",
+    )
 
     notify_assignee = models.BooleanField(default=True)
     notify_roles = models.JSONField(default=list, blank=True, help_text="Profile role keys to alert.")

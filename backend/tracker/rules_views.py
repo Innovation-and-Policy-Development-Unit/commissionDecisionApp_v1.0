@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import csv
+
 from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
@@ -81,6 +84,8 @@ def _apply_rule_fields(rule, data, *, creating):
             rule.cooldown_minutes = max(0, int(data.get("cooldown_minutes")))
         except (TypeError, ValueError):
             raise ValidationError({"cooldown_minutes": "Must be an integer."})
+    if "realert" in data:
+        rule.realert = bool(data.get("realert"))
     if "notify_assignee" in data:
         rule.notify_assignee = bool(data.get("notify_assignee"))
     if "notify_roles" in data:
@@ -95,10 +100,15 @@ def _rule_payload(r, open_count=None):
         "id": r.id, "name": r.name, "description": r.description,
         "entity": r.entity, "level": r.level, "conditions": r.conditions or [], "match": r.match,
         "is_active": r.is_active, "is_builtin": r.is_builtin, "test_mode": r.test_mode,
-        "cooldown_minutes": r.cooldown_minutes, "notify_assignee": r.notify_assignee,
-        "notify_roles": r.notify_roles or [], "open_flags": open_count,
-        "updated_at": r.updated_at.isoformat(),
+        "cooldown_minutes": r.cooldown_minutes, "realert": r.realert,
+        "notify_assignee": r.notify_assignee, "notify_roles": r.notify_roles or [],
+        "open_flags": open_count, "updated_at": r.updated_at.isoformat(),
     }
+
+
+def _sample(adapter, ids, limit=8):
+    objs = adapter.base_qs().filter(id__in=list(ids)[:limit])
+    return [{k: d[k] for k in ("ref", "title", "state", "context")} for d in (adapter.describe(o) for o in objs)]
 
 
 def _flag_payload(f):
@@ -185,7 +195,8 @@ def rule_test(request):
         entity=entity, match=(request.data.get("match") if request.data.get("match") in _MATCH else "all"),
         conditions=_clean_conditions(request.data.get("conditions") or [], entity),
     )
-    return Response({"match_count": len(adapter.matched_ids(probe, timezone.now()))})
+    ids = adapter.matched_ids(probe, timezone.now())
+    return Response({"match_count": len(ids), "sample": _sample(adapter, ids)})
 
 
 @api_view(["POST"])
@@ -214,7 +225,22 @@ def _scoped_flags(user):
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def flags(request):
-    qs = _scoped_flags(request.user)
+    qs = _filter_flags(request, _scoped_flags(request.user))
+    summary = dict(qs.values("rule__level").annotate(n=Count("id")).values_list("rule__level", "n"))
+    by_rule = list(qs.values("rule__name").annotate(n=Count("id")).order_by("-n")[:8])
+    return Response({
+        "flags": [_flag_payload(f) for f in qs.order_by("rule__level", "-opened_at")[:500]],
+        "summary": {
+            "critical": summary.get("critical", 0),
+            "at_risk": summary.get("at_risk", 0),
+            "monitoring": summary.get("monitoring", 0),
+            "total": sum(summary.values()),
+        },
+        "by_rule": [{"rule": r["rule__name"], "count": r["n"]} for r in by_rule],
+    })
+
+
+def _filter_flags(request, qs):
     p = request.query_params
     if p.get("level"):
         qs = qs.filter(rule__level=p["level"])
@@ -224,17 +250,23 @@ def flags(request):
         qs = qs.filter(rule_id=p["rule"])
     if p.get("status"):
         qs = qs.filter(status=p["status"])
+    return qs
 
-    summary = dict(qs.values("rule__level").annotate(n=Count("id")).values_list("rule__level", "n"))
-    return Response({
-        "flags": [_flag_payload(f) for f in qs.order_by("rule__level", "-opened_at")[:500]],
-        "summary": {
-            "critical": summary.get("critical", 0),
-            "at_risk": summary.get("at_risk", 0),
-            "monitoring": summary.get("monitoring", 0),
-            "total": sum(summary.values()),
-        },
-    })
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def flags_export(request):
+    """CSV of the scoped, filtered flags (reporting)."""
+    qs = _filter_flags(request, _scoped_flags(request.user)).order_by("rule__level", "-opened_at")
+    resp = HttpResponse(content_type="text/csv")
+    resp["Content-Disposition"] = 'attachment; filename="scdms-flags.csv"'
+    w = csv.writer(resp)
+    w.writerow(["Level", "Type", "Reference", "Title", "Context", "State", "Rule", "Status", "Opened"])
+    for f in qs[:5000]:
+        pl = _flag_payload(f)
+        w.writerow([pl["level"], pl["entity"], pl["ref"], pl["title"], pl["context"],
+                    pl["state"], pl["rule_name"], pl["status"], pl["opened_at"]])
+    return resp
 
 
 def _get_scoped_flag(request, pk):

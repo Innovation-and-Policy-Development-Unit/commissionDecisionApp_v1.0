@@ -86,6 +86,21 @@ class RuleEngineTests(TestCase):
         evaluate_all(timezone.now())
         self.assertEqual(len(mail.outbox), 0)  # in-app only
 
+    def test_realert_re_notifies_after_cooldown(self):
+        self.s1.assigned_to = self.admin
+        self.s1.save(update_fields=["assigned_to"])
+        self._rule([{"field": "is_overdue", "op": "is_true"}], notify_assignee=True, realert=True, cooldown_minutes=60)
+        now = timezone.now()
+        mail.outbox = []
+        evaluate_all(now)
+        self.assertEqual(len(mail.outbox), 1)          # first alert
+        mail.outbox = []
+        evaluate_all(now)
+        self.assertEqual(len(mail.outbox), 0)          # within cooldown → no re-alert
+        mail.outbox = []
+        evaluate_all(now + timedelta(minutes=61))
+        self.assertEqual(len(mail.outbox), 1)          # cooldown elapsed → re-alert
+
 
 class FlagMonitorAPITests(TestCase):
     def setUp(self):
@@ -129,12 +144,21 @@ class FlagMonitorAPITests(TestCase):
         self.client.force_authenticate(self.hr)
         self.assertEqual(self.client.get("/api/rules/").status_code, 403)
 
-    def test_rule_dry_run_match_count(self):
+    def test_rule_dry_run_match_count_and_sample(self):
         self.client.force_authenticate(self.admin)
         r = self.client.post("/api/rules/test/",
                              {"conditions": [{"field": "is_overdue", "op": "is_true"}], "match": "all"}, format="json")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.data["match_count"], 2)
+        self.assertTrue(len(r.data["sample"]) >= 1)
+        self.assertIn("ref", r.data["sample"][0])
+
+    def test_flags_export_csv(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get("/api/flags/export/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "text/csv")
+        self.assertIn("Reference", resp.content.decode())
 
 
 class BuiltinRulesTests(TestCase):

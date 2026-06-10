@@ -6,6 +6,7 @@ export const rulesApi = {
   flags: (params = {}) => api.get('/flags/', { params }).then(r => r.data),
   acknowledgeFlag: (id) => api.post(`/flags/${id}/acknowledge/`).then(r => r.data),
   clearFlag: (id) => api.post(`/flags/${id}/clear/`),
+  exportFlags: (params = {}) => api.get('/flags/export/', { params, responseType: 'blob' }).then(r => r.data),
 
   // Rules (admin)
   rules: () => api.get('/rules/').then(r => r.data),

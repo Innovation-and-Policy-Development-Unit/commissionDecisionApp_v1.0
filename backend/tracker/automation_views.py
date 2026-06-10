@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import csv
+
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
@@ -164,7 +167,10 @@ def automation_test(request):
         entity=entity, match=(request.data.get("match") if request.data.get("match") in _MATCH else "all"),
         conditions=_clean_conditions(request.data.get("conditions") or [], entity),
     )
-    return Response({"match_count": len(adapter.matched_ids(probe, timezone.now()))})
+    ids = adapter.matched_ids(probe, timezone.now())
+    sample = [{k: d[k] for k in ("ref", "title", "state", "context")}
+              for d in (adapter.describe(o) for o in adapter.base_qs().filter(id__in=list(ids)[:8]))]
+    return Response({"match_count": len(ids), "sample": sample})
 
 
 @api_view(["POST"])
@@ -190,3 +196,24 @@ def automation_runs(request):
         "trigger": r.trigger, "status": r.status, "detail": r.detail,
         "created_at": r.created_at.isoformat(),
     } for r in qs[:200]]})
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def automation_runs_export(request):
+    """CSV of the automation run log (reporting)."""
+    _require_admin(request.user)
+    qs = AutomationRun.objects.select_related("automation")
+    if request.query_params.get("automation"):
+        qs = qs.filter(automation_id=request.query_params["automation"])
+    resp = HttpResponse(content_type="text/csv")
+    resp["Content-Disposition"] = 'attachment; filename="scdms-automation-runs.csv"'
+    w = csv.writer(resp)
+    w.writerow(["When", "Automation", "Trigger", "Status", "Item", "Actions"])
+    for r in qs[:5000]:
+        actions = " ".join(
+            f"{a.get('type')}:{'ok' if a.get('ok') else 'fail'}" for a in (r.detail.get("actions") or [])
+        )
+        w.writerow([r.created_at.isoformat(), r.automation.name, r.trigger, r.status,
+                    r.detail.get("ref", ""), actions])
+    return resp

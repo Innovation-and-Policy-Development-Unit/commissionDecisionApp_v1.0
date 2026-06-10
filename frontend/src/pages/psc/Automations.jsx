@@ -31,7 +31,7 @@ export default function Automations() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
-  const [matchCount, setMatchCount] = useState(null)
+  const [testRes, setTestRes] = useState(null)
   const [runsFor, setRunsFor] = useState(null)
   const [runs, setRuns] = useState([])
 
@@ -67,16 +67,16 @@ export default function Automations() {
 
   const opsFor = (fk) => (catalog.ops?.[fieldsByKey[fk]?.kind]) || []
 
-  const openCreate = () => { setForm({ ...EMPTY, conditions: [{ field: '', op: '', value: '' }] }); setMatchCount(null); ensureCatalog('submission'); setOpen(true) }
+  const openCreate = () => { setForm({ ...EMPTY, conditions: [{ field: '', op: '', value: '' }] }); setTestRes(null); ensureCatalog('submission'); setOpen(true) }
   const openEdit = (a) => {
     setForm({
       id: a.id, name: a.name, description: a.description || '', entity: a.entity, trigger: a.trigger, match: a.match,
       conditions: (a.conditions?.length ? a.conditions : [{ field: '', op: '', value: '' }]),
       actions: a.actions || [], is_active: a.is_active, test_mode: a.test_mode, cooldown_minutes: a.cooldown_minutes,
     })
-    setMatchCount(null); ensureCatalog(a.entity); setOpen(true)
+    setTestRes(null); ensureCatalog(a.entity); setOpen(true)
   }
-  const changeEntity = (entity) => { setForm(f => ({ ...f, entity, conditions: [{ field: '', op: '', value: '' }], actions: [] })); setMatchCount(null); ensureCatalog(entity) }
+  const changeEntity = (entity) => { setForm(f => ({ ...f, entity, conditions: [{ field: '', op: '', value: '' }], actions: [] })); setTestRes(null); ensureCatalog(entity) }
 
   // Conditions
   const setCond = (i, p) => setForm(f => ({ ...f, conditions: f.conditions.map((c, j) => j === i ? { ...c, ...p } : c) }))
@@ -111,7 +111,7 @@ export default function Automations() {
   })
 
   const dryRun = async () => {
-    try { setMatchCount((await automationApi.test(form.entity, cleanConditions(), form.match)).match_count) }
+    try { setTestRes(await automationApi.test(form.entity, cleanConditions(), form.match)) }
     catch { toast.error(t('auto.test_failed', { defaultValue: 'Could not test' })) }
   }
 
@@ -142,6 +142,15 @@ export default function Automations() {
     catch { toast.error(t('auto.run_failed', { defaultValue: 'Could not run' })) }
   }
   const showRuns = async (a) => { setRunsFor(a); try { setRuns((await automationApi.runs(a.id)).runs || []) } catch { setRuns([]) } }
+  const exportRuns = async () => {
+    if (!runsFor) return
+    try {
+      const blob = await automationApi.exportRuns(runsFor.id)
+      const url = URL.createObjectURL(blob); const a = document.createElement('a')
+      a.href = url; a.download = `scdms-automation-runs-${runsFor.id}.csv`
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+    } catch { toast.error(t('auto.export_failed', { defaultValue: 'Could not export' })) }
+  }
 
   if (denied) return (
     <div className="card flex flex-col items-center justify-center py-16 text-slate-400">
@@ -228,7 +237,14 @@ export default function Automations() {
               })}
               <button onClick={addCond} className="text-xs text-primary-600 hover:underline flex items-center gap-1"><Plus size={12} /> {t('auto.add_condition', { defaultValue: 'Add condition' })}</button>
             </div>
-            <button onClick={dryRun} className="btn-outline flex items-center gap-2 px-3 py-1.5 text-sm mt-2"><FlaskConical size={14} /> {t('auto.test_rule', { defaultValue: 'Test' })}{matchCount != null && <span className="font-semibold text-primary-600">· {matchCount}</span>}</button>
+            <div className="mt-2">
+              <button onClick={dryRun} className="btn-outline flex items-center gap-2 px-3 py-1.5 text-sm"><FlaskConical size={14} /> {t('auto.test_rule', { defaultValue: 'Test' })}{testRes && <span className="font-semibold text-primary-600">· {testRes.match_count}</span>}</button>
+              {testRes?.sample?.length > 0 && (
+                <ul className="mt-2 text-xs text-slate-500 dark:text-slate-400 space-y-0.5 max-h-28 overflow-auto">
+                  {testRes.sample.map((s, i) => <li key={i} className="truncate"><span className="font-mono text-slate-400">{s.ref}</span> — {s.title}</li>)}
+                </ul>
+              )}
+            </div>
           </div>
 
           {/* Actions */}
@@ -282,6 +298,11 @@ export default function Automations() {
       {/* Run log */}
       <Modal open={!!runsFor} title={`${t('auto.run_log', { defaultValue: 'Run log' })} — ${runsFor?.name || ''}`} onClose={() => setRunsFor(null)} size="md">
         <div className="max-h-[60vh] overflow-auto text-sm">
+          {runs.length > 0 && (
+            <div className="flex justify-end mb-2">
+              <button onClick={exportRuns} className="btn-outline flex items-center gap-1.5 px-2.5 py-1 text-xs"><History size={12} /> {t('auto.export', { defaultValue: 'Export CSV' })}</button>
+            </div>
+          )}
           {runs.length === 0 ? <p className="text-slate-400 py-6 text-center">{t('auto.no_runs', { defaultValue: 'No runs yet.' })}</p> : (
             <table className="w-full">
               <thead><tr className="text-left text-slate-400 border-b border-slate-200 dark:border-slate-700"><th className="px-2 py-1">{t('auto.when', { defaultValue: 'When' })}</th><th className="px-2 py-1">{t('auto.status', { defaultValue: 'Status' })}</th><th className="px-2 py-1">{t('auto.item', { defaultValue: 'Item' })}</th><th className="px-2 py-1">{t('auto.actions', { defaultValue: 'Actions' })}</th></tr></thead>

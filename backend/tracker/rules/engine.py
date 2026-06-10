@@ -8,9 +8,11 @@ meetings/minutes are all watched through the same engine.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from django.conf import settings as dj_settings
 from django.core.mail import EmailMultiAlternatives
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.html import escape
 
@@ -119,9 +121,15 @@ def evaluate_all(now=None):
         summary["cleared"] += cleared
         if rule.test_mode:
             continue  # flags only — no alerts in test mode
+        # Alert flags that have never been alerted; if `realert`, also re-alert
+        # open flags whose last alert is older than the rule's cooldown window.
+        alert_filter = Q(last_alerted_at__isnull=True)
+        if rule.realert and rule.cooldown_minutes:
+            alert_filter |= Q(last_alerted_at__lt=now - timedelta(minutes=rule.cooldown_minutes))
         to_alert = (
             SubmissionFlag.objects
-            .filter(rule=rule, status=SubmissionFlag.Status.OPEN, last_alerted_at__isnull=True)
+            .filter(rule=rule, status=SubmissionFlag.Status.OPEN)
+            .filter(alert_filter)
             .select_related("submission", "submission__ministry", "commission_task",
                             "commission_task__assigned_manager", "meeting")
         )

@@ -107,3 +107,16 @@ class AutomationAPITests(TestCase):
         self.assertEqual(r.status_code, 201)
         self.assertEqual(len(r.data["actions"]), 1)
         self.assertEqual(r.data["actions"][0]["type"], "escalate")
+
+    def test_test_endpoint_shape(self):
+        self.client.force_authenticate(self.admin)
+        r = self.client.post("/api/automations/test/",
+                             {"entity": "submission", "conditions": [], "match": "all"}, format="json")
+        self.assertIn("match_count", r.data)
+        self.assertIn("sample", r.data)
+
+    def test_runs_export_csv(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.get("/api/automations/runs/export/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "text/csv")

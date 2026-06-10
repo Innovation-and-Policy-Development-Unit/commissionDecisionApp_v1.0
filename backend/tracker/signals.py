@@ -46,9 +46,13 @@ def compliance_case_post_save(sender, instance, created, **kwargs):
 # Tag/shift actions use queryset.update() (no signal) so there's no recursion.
 
 def _dispatch_automation(entity, instance, created):
+    # Savepoint: if the Automation table is absent (early migrations) or an
+    # automation errors, the rollback is contained and never poisons the outer
+    # transaction (or the request).
     try:
-        from .automation.engine import run_event
-        run_event(entity, instance, "created" if created else "updated")
+        with transaction.atomic():
+            from .automation.engine import run_event
+            run_event(entity, instance, "created" if created else "updated")
     except Exception:  # noqa: BLE001
         pass
 
