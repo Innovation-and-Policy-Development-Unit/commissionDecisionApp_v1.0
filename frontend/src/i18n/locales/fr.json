@@ -49,6 +49,7 @@
     "bislama": "Bichelamar"
   },
   "nav": {
+    "implementation_dashboard": "Mise en œuvre",
     "group_submissions": "Soumissions",
     "group_commission": "Décisions de la Commission",
     "group_admin": "Administration",

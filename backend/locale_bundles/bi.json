@@ -14,6 +14,7 @@
     "bislama": "Bislama"
   },
   "nav": {
+    "implementation_dashboard": "Implimentesen",
     "group_submissions": "Ol Submisen",
     "group_commission": "Desisen blong Komisin",
     "group_admin": "Administresen",

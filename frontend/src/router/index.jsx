@@ -64,6 +64,7 @@ const AnalyticsDashboard = lazy(() => import('../pages/psc/AnalyticsDashboard'))
 const WorkloadDashboard = lazy(() => import('../pages/psc/WorkloadDashboard'))
 const PendingDecisions = lazy(() => import('../pages/psc/PendingDecisions'))
 const MinistryPerformance = lazy(() => import('../pages/psc/MinistryPerformance'))
+const ImplementationDashboard = lazy(() => import('../pages/psc/ImplementationDashboard'))
 const ComplianceCases = lazy(() => import('../pages/compliance/ComplianceCases'))
 const ComplianceCaseDetail = lazy(() => import('../pages/compliance/ComplianceCaseDetail'))
 const NewComplianceCaseForm = lazy(() => import('../pages/compliance/NewComplianceCaseForm'))
@@ -116,6 +117,7 @@ export default function AppRouter() {
           <Route path="/workload"             element={<S><WorkloadDashboard /></S>} />
           <Route path="/pending-decisions"    element={<S><PendingDecisions /></S>} />
           <Route path="/ministry-performance" element={<S><MinistryPerformance /></S>} />
+          <Route path="/implementation"       element={<S><ImplementationDashboard /></S>} />
 
           {/* ── Compliance ── */}
           <Route path="/compliance/cases"      element={<S><ComplianceCases /></S>} />

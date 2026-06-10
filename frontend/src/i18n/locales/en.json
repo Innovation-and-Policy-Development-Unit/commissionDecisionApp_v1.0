@@ -67,6 +67,7 @@
     "bislama": "Bislama"
   },
   "nav": {
+    "implementation_dashboard": "Implementation",
     "group_submissions": "Submissions",
     "group_commission": "Commission Decision",
     "group_admin": "Administration",

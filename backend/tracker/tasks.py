@@ -2691,3 +2691,61 @@ def notify_overdue_implementation_reports():
 
     app_log.info('IMPL_OVERDUE | Processed %d overdue report(s)', processed)
     return processed
+
+
+# ── Quarterly implementation dashboard PDF ────────────────────────────────────
+
+@shared_task
+def generate_quarterly_implementation_report():
+    """
+    Quarterly beat task (1 Jan/Apr/Jul/Oct): render the previous quarter's
+    implementation rollup PDF and notify the Secretariat.
+
+    Idempotent per quarter: skips if a scheduled report for the label exists.
+    """
+    from .models import ImplementationDashboardReport, Notification
+    from .reports.implementation_rollup import (
+        previous_quarter,
+        quarter_bounds,
+        render_implementation_report_pdf,
+    )
+
+    year, quarter = previous_quarter()
+    label = f"Q{quarter} {year}"
+
+    if ImplementationDashboardReport.objects.filter(
+        label=label, requested_by__isnull=True
+    ).exists():
+        app_log.info('IMPL_REPORT | %s already generated — skipping', label)
+        return None
+
+    period_start, period_end = quarter_bounds(year, quarter)
+    report = ImplementationDashboardReport.objects.create(
+        label=label,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    render_implementation_report_pdf(report)
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    recipients = User.objects.filter(
+        psc_profile__role__in=['psc_secretary', 'psc_admin', 'senior_admin_officer'],
+        is_active=True,
+    )
+    pct = report.summary.get('pct_within_target', 0)
+    total = report.summary.get('total', 0)
+    for user in recipients:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.BOTH,
+            title=f'Quarterly implementation report ready — {label}',
+            body=(
+                f'{total} decision(s) approved in {label}; '
+                f'{pct}% implemented within target. '
+                f'The PDF is available under Operations → Implementation Dashboard.'
+            ),
+        )
+
+    app_log.info('IMPL_REPORT | Generated %s (report #%s)', label, report.id)
+    return report.id

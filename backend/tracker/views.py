@@ -8592,6 +8592,164 @@ def analytics_trends_view(request):
     return Response({"weekly_trends": weeks})
 
 
+# ── Implementation Dashboard ───────────────────────────────────────────────────
+
+_IMPL_DASHBOARD_OPS_ROLES = {
+    Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
+    Role.PSC_OFFICER, Role.PSC_MANAGER, Role.PSC_COMMISSIONER, Role.CHAIRPERSON,
+}
+_IMPL_DASHBOARD_MINISTRY_ROLES = {
+    Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY,
+}
+
+
+def _impl_dashboard_scope(request):
+    """Return the ministry_id filter for this user (None = all ministries).
+
+    Secretariat/ops roles see everything; ministry roles are forced to their
+    own ministry. Everyone else is denied.
+    """
+    profile = _profile(request.user)
+    if profile.role in _IMPL_DASHBOARD_OPS_ROLES or request.user.is_staff:
+        ministry_param = request.query_params.get("ministry")
+        try:
+            return int(ministry_param) if ministry_param else None
+        except (TypeError, ValueError):
+            return None
+    if profile.role in _IMPL_DASHBOARD_MINISTRY_ROLES and profile.ministry_id:
+        return profile.ministry_id
+    raise PermissionDenied("You do not have access to the implementation dashboard.")
+
+
+def _parse_date_param(request, key):
+    from datetime import datetime
+
+    raw = request.query_params.get(key)
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def implementation_dashboard_view(request):
+    """Decision implementation rollup: % implemented within target, by
+    ministry, over time. ?date_from=&date_to=&ministry= (dates filter on
+    Commission approval date)."""
+    from .reports.implementation_rollup import build_implementation_rollup
+
+    ministry_id = _impl_dashboard_scope(request)
+    rollup = build_implementation_rollup(
+        date_from=_parse_date_param(request, "date_from"),
+        date_to=_parse_date_param(request, "date_to"),
+        ministry_id=ministry_id,
+    )
+    return Response(rollup)
+
+
+def _impl_report_payload(report, request):
+    return {
+        "id": report.id,
+        "label": report.label,
+        "period_start": report.period_start,
+        "period_end": report.period_end,
+        "target_days": report.target_days,
+        "summary": report.summary,
+        "created_at": report.created_at,
+        "requested_by": (
+            report.requested_by.get_full_name() or report.requested_by.username
+        ) if report.requested_by_id else None,
+        "download_url": request.build_absolute_uri(
+            f"/api/analytics/implementation/reports/{report.id}/download/"
+        ) if report.pdf_file else None,
+    }
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def implementation_report_list_view(request):
+    """Stored implementation rollup PDFs (quarterly + on demand), newest first."""
+    from .models import ImplementationDashboardReport
+
+    profile = _profile(request.user)
+    if profile.role not in _IMPL_DASHBOARD_OPS_ROLES and not request.user.is_staff:
+        raise PermissionDenied("PSC staff only.")
+    reports = ImplementationDashboardReport.objects.select_related("requested_by")[:24]
+    return Response({"reports": [_impl_report_payload(r, request) for r in reports]})
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def implementation_report_generate_view(request):
+    """Generate an implementation rollup PDF now.
+
+    POST {"year": 2026, "quarter": 1} for a specific quarter, or no body for
+    the previous (most recently completed) quarter.
+    """
+    from .models import ImplementationDashboardReport
+    from .reports.implementation_rollup import (
+        previous_quarter, quarter_bounds, render_implementation_report_pdf,
+    )
+
+    profile = _profile(request.user)
+    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
+    if profile.role not in ALLOWED and not request.user.is_staff:
+        raise PermissionDenied("Only the Secretariat can generate implementation reports.")
+
+    try:
+        year = int(request.data.get("year") or 0)
+        quarter = int(request.data.get("quarter") or 0)
+    except (TypeError, ValueError):
+        return Response({"detail": "year and quarter must be integers."}, status=400)
+    if not (year and quarter):
+        year, quarter = previous_quarter()
+    if quarter not in (1, 2, 3, 4) or not (2000 <= year <= 2100):
+        return Response({"detail": "Invalid year/quarter."}, status=400)
+
+    period_start, period_end = quarter_bounds(year, quarter)
+    report = ImplementationDashboardReport.objects.create(
+        label=f"Q{quarter} {year}",
+        period_start=period_start,
+        period_end=period_end,
+        requested_by=request.user,
+    )
+    render_implementation_report_pdf(report)
+
+    from .audit import log_action as _log
+    from .models import AuditLog as _AL
+    _log(request, _AL.Action.EXPORT,
+         resource_type="ImplementationDashboardReport", resource_id=report.id,
+         resource_label=report.label,
+         description=f"Implementation rollup PDF generated for {report.label}")
+
+    return Response(_impl_report_payload(report, request), status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def implementation_report_download_view(request, pk):
+    """Stream a stored implementation rollup PDF."""
+    from django.http import FileResponse
+
+    from .models import ImplementationDashboardReport
+
+    profile = _profile(request.user)
+    if profile.role not in _IMPL_DASHBOARD_OPS_ROLES and not request.user.is_staff:
+        raise PermissionDenied("PSC staff only.")
+    report = get_object_or_404(ImplementationDashboardReport, pk=pk)
+    if not report.pdf_file:
+        return Response({"detail": "PDF file is missing."}, status=404)
+    return FileResponse(
+        report.pdf_file.open("rb"),
+        as_attachment=True,
+        filename=report.pdf_file.name.split("/")[-1],
+        content_type="application/pdf",
+    )
+
+
 # ── Workload Views ─────────────────────────────────────────────────────────────
 
 @api_view(["GET"])

@@ -63,6 +63,35 @@ def submission_automation(sender, instance, created, raw=False, **kwargs):
         _dispatch_automation("submission", instance, created)
 
 
+@receiver(post_save, sender="tracker.Submission")
+def stamp_implementation_milestones(sender, instance, raw=False, **kwargs):
+    """Stamp the implementation-rollup timestamps the first time each
+    milestone is reached. Uses queryset.update() so it works regardless of
+    the caller's update_fields and never re-triggers signals."""
+    if raw:
+        return
+    from django.utils import timezone
+    from .models import ImplementationStatus, Submission, WorkflowStage
+
+    updates = {}
+    if (
+        instance.current_stage == WorkflowStage.APPROVED
+        and instance.commission_approved_at is None
+    ):
+        updates["commission_approved_at"] = timezone.now()
+    if (
+        instance.implementation_status == ImplementationStatus.IMPLEMENTED
+        and instance.implementation_completed_at is None
+    ):
+        updates["implementation_completed_at"] = timezone.now()
+    if updates:
+        Submission.objects.filter(
+            pk=instance.pk, **{f"{field}__isnull": True for field in updates}
+        ).update(**updates)
+        for field, value in updates.items():
+            setattr(instance, field, value)
+
+
 @receiver(post_save, sender="tracker.CommissionTask")
 def commission_task_automation(sender, instance, created, raw=False, **kwargs):
     if not raw:

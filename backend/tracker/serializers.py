@@ -838,6 +838,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "scheduled_meeting",
             "implementation_status",
             "implementation_due_date",
+            "commission_approved_at",
+            "implementation_completed_at",
             "notes",
             "logged_by",
             "created_by",
@@ -885,6 +887,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "subway_map",
+            "commission_approved_at",
+            "implementation_completed_at",
             "ai_policy_observations",
             "ai_policy_confidence",
             "ai_policy_summary",

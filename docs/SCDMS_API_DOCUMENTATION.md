@@ -366,6 +366,10 @@ Travel submissions in `draft` → `submitted` require **required endorsements** 
 |--------|------|-------------|
 | GET/POST | `/api/commission-tasks/` | Tasks after Commission decision |
 | GET | `/api/reports/stats/` | Aggregated reporting (privileged roles) |
+| GET | `/api/analytics/implementation/` | Implementation rollup: % of approved decisions implemented within target, by ministry and by quarter. `?date_from=&date_to=&ministry=` (dates filter on Commission approval date). Ministry-side roles are auto-scoped to their own ministry. |
+| GET | `/api/analytics/implementation/reports/` | Stored quarterly implementation PDFs |
+| POST | `/api/analytics/implementation/reports/generate/` | Generate the rollup PDF for a quarter (`{"year": 2026, "quarter": 1}`; defaults to the previous quarter). Secretariat only. |
+| GET | `/api/analytics/implementation/reports/{id}/download/` | Download a stored implementation PDF |
 
 ---
 

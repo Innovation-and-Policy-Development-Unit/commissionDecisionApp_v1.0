@@ -117,6 +117,10 @@ from .views import (
     calendar_events_view,
     analytics_overview_view,
     analytics_trends_view,
+    implementation_dashboard_view,
+    implementation_report_list_view,
+    implementation_report_generate_view,
+    implementation_report_download_view,
     workload_officers_view,
     workload_suggest_assignment_view,
     pending_decisions_view,
@@ -260,6 +264,10 @@ urlpatterns = [
     # Analytics
     path("analytics/overview/",            analytics_overview_view,            name="analytics-overview"),
     path("analytics/trends/",              analytics_trends_view,              name="analytics-trends"),
+    path("analytics/implementation/",      implementation_dashboard_view,      name="analytics-implementation"),
+    path("analytics/implementation/reports/",          implementation_report_list_view,     name="implementation-reports"),
+    path("analytics/implementation/reports/generate/", implementation_report_generate_view, name="implementation-report-generate"),
+    path("analytics/implementation/reports/<int:pk>/download/", implementation_report_download_view, name="implementation-report-download"),
     # Workload
     path("workload/officers/",             workload_officers_view,             name="workload-officers"),
     path("workload/suggest-assignment/",   workload_suggest_assignment_view,   name="workload-suggest-assignment"),

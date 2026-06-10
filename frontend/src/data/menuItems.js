@@ -122,6 +122,7 @@ const menuItems = [
       { label: 'Commission Calendar',   labelKey: 'nav.calendar',              icon: CalendarCheck,   path: '/calendar',             visibility: 'ops' },
       { label: 'Pending Decisions',     labelKey: 'nav.pending_decisions',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
       { label: 'Ministry Performance',  labelKey: 'nav.ministry_performance',  icon: Building2,       path: '/ministry-performance', visibility: 'ops' },
+      { label: 'Implementation',        labelKey: 'nav.implementation_dashboard', icon: ListChecks,   path: '/implementation',       visibility: 'ops' },
     ],
   },
   {
