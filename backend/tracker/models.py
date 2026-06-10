@@ -1769,8 +1769,24 @@ class SubmissionCoAssignment(models.Model):
         return f"{self.principal.get_full_name() or self.principal.username} → {self.submission.reference_number} ({self.role})"
 
 
+class ActiveDocumentManager(models.Manager):
+    """Default manager: hides archived (soft-removed) documents everywhere —
+    document lists, AI context, checklists, decision-proof fingerprints."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(archived_at__isnull=True)
+
+
 class SubmissionDocument(models.Model):
-    """A file uploaded to a submission (DG-endorsed letter, position desc, etc.)."""
+    """A file uploaded to a submission (DG-endorsed letter, position desc, etc.).
+
+    Evidence-preservation rules:
+    - Replacing a file snapshots the superseded file into DocumentVersion
+      (version chain) instead of overwriting it.
+    - Once a submission has entered the workflow, documents are archived
+      (archived_at set), never hard-deleted — what the Commission saw is
+      always recoverable.
+    """
     submission = models.ForeignKey(
         'Submission', on_delete=models.CASCADE, related_name='documents',
     )
@@ -1781,6 +1797,21 @@ class SubmissionDocument(models.Model):
         'auth.User', on_delete=models.SET_NULL, null=True,
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    version_num = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Current version number; superseded files live in DocumentVersion.",
+    )
+    archived_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Soft-removal timestamp — archived documents are hidden, not destroyed.",
+    )
+    archived_by = models.ForeignKey(
+        'auth.User', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='archived_documents',
+    )
+
+    objects = ActiveDocumentManager()
+    all_objects = models.Manager()
     ocr_status = models.CharField(
         max_length=16,
         choices=DocumentOcrStatus.choices,

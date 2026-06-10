@@ -53,6 +53,7 @@ class Command(BaseCommand):
         buf = StringIO()
         call_command(
             "dumpdata",
+            "--all",  # base managers — include soft-archived rows (e.g. archived documents)
             "--natural-foreign",
             "--natural-primary",
             "--indent=2",
