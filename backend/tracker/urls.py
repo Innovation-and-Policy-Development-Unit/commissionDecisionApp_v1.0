@@ -127,6 +127,8 @@ from .views import (
     annual_report_download_view,
     trash_list_view,
     trash_restore_view,
+    trash_purge_view,
+    trash_empty_view,
     workload_officers_view,
     workload_summary_view,
     workload_suggest_assignment_view,
@@ -278,6 +280,8 @@ urlpatterns = [
     # Trash Bin (soft delete + restore)
     path("admin/trash/",                   trash_list_view,                    name="trash-list"),
     path("admin/trash/restore/",           trash_restore_view,                 name="trash-restore"),
+    path("admin/trash/purge/",             trash_purge_view,                   name="trash-purge"),
+    path("admin/trash/empty/",             trash_empty_view,                   name="trash-empty"),
     # Annual Report (statistics chapter)
     path("reports/annual/",                annual_report_list_view,            name="annual-reports"),
     path("reports/annual/preview/",        annual_report_preview_view,         name="annual-report-preview"),

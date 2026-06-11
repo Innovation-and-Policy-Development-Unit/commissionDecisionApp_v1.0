@@ -159,6 +159,65 @@ class TrashBinTests(TestCase):
         )
         self.assertEqual(resp.status_code, 400)
 
+    # ── Permanent purge ──────────────────────────────────────────────────────
+
+    def test_purge_permanently_deletes_trashed_submission_with_attachments(self):
+        parent = self._submission(title="Parent")
+        child = self._submission(title="Child", is_attachment=True, parent_submission=parent)
+        self.client.force_authenticate(user=self.admin)
+        self.client.delete(f"/api/submissions/{parent.id}/")
+
+        resp = self.client.post(
+            "/api/admin/trash/purge/", {"type": "submission", "id": parent.id}, format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(set(resp.json()["purged_ids"]), {parent.id, child.id})
+        self.assertFalse(Submission.all_objects.filter(pk__in=[parent.pk, child.pk]).exists())
+
+    def test_purge_refuses_active_submission(self):
+        sub = self._submission()
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            "/api/admin/trash/purge/", {"type": "submission", "id": sub.id}, format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(Submission.objects.filter(pk=sub.pk).exists())
+
+    def test_purge_requires_admin(self):
+        sub = self._submission()
+        self.client.force_authenticate(user=self.admin)
+        self.client.delete(f"/api/submissions/{sub.id}/")
+        self.client.force_authenticate(user=self.officer)
+        resp = self.client.post(
+            "/api/admin/trash/purge/", {"type": "submission", "id": sub.id}, format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(Submission.all_objects.filter(pk=sub.pk).exists())
+
+    def test_empty_trash_purges_everything(self):
+        s1 = self._submission(title="One")
+        s2 = self._submission(title="Two")
+        doc = SubmissionDocument.objects.create(
+            submission=self._submission(title="Keeper"),
+            file=SimpleUploadedFile("old.pdf", b"%PDF-1.4"),
+            original_name="old.pdf",
+            uploaded_by=self.hr,
+        )
+        SubmissionDocument.all_objects.filter(pk=doc.pk).update(archived_at=timezone.now())
+
+        self.client.force_authenticate(user=self.admin)
+        self.client.delete(f"/api/submissions/{s1.id}/")
+        self.client.delete(f"/api/submissions/{s2.id}/")
+
+        resp = self.client.post("/api/admin/trash/empty/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.json()["submissions_purged"], 2)
+        self.assertEqual(resp.json()["documents_purged"], 1)
+        self.assertFalse(Submission.all_objects.filter(deleted_at__isnull=False).exists())
+        self.assertFalse(SubmissionDocument.all_objects.filter(archived_at__isnull=False).exists())
+        # Untrashed records are untouched.
+        self.assertTrue(Submission.objects.filter(title="Keeper").exists())
+
     # ── Analytics integration ────────────────────────────────────────────────
 
     def test_trashed_submission_excluded_from_rollups(self):

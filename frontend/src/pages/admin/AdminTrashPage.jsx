@@ -56,6 +56,48 @@ export default function AdminTrashPage() {
     }
   }
 
+  const purge = async (type, item, label) => {
+    const ok = await confirm({
+      title: 'Delete Forever',
+      message: `Permanently delete ${label}? This is the only action in SCDMS that truly destroys data — files, history, and audit context for this record are removed and CANNOT be recovered.`,
+      confirmLabel: 'Delete forever',
+    })
+    if (!ok) return
+    setBusyId(`${type}-${item.id}`)
+    try {
+      await api.post('/admin/trash/purge/', { type, id: item.id })
+      await load()
+      toast.success('Permanently deleted.')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Permanent deletion failed.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const emptyTrash = async () => {
+    const total = (data?.submissions?.length ?? 0) + (data?.documents?.length ?? 0)
+    if (!total) return
+    const ok = await confirm({
+      title: 'Empty Trash Bin',
+      message: `Permanently delete all ${total} item(s) in the trash bin? Files, history, and audit context for these records are removed and CANNOT be recovered.`,
+      confirmLabel: 'Empty trash bin',
+    })
+    if (!ok) return
+    setBusyId('empty')
+    try {
+      const r = await api.post('/admin/trash/empty/')
+      await load()
+      toast.success(
+        `Trash emptied — ${r.data.submissions_purged} submission(s) and ${r.data.documents_purged} document(s) permanently deleted.`,
+      )
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not empty the trash bin.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const submissions = data?.submissions ?? []
   const documents = data?.documents ?? []
 
@@ -65,15 +107,26 @@ export default function AdminTrashPage() {
         title="Trash Bin"
         subtitle="Nothing is ever destroyed — trashed submissions and archived documents are listed here and can be restored."
         action={
-          <button
-            type="button"
-            className="btn-outline flex items-center gap-2 py-2 px-3 text-sm"
-            onClick={load}
-            disabled={loading}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn-outline flex items-center gap-2 py-2 px-3 text-sm"
+              onClick={load}
+              disabled={loading}
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 py-2 px-3 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={emptyTrash}
+              disabled={loading || busyId === 'empty' || ((data?.submissions?.length ?? 0) + (data?.documents?.length ?? 0)) === 0}
+            >
+              <Trash2 size={14} />
+              {busyId === 'empty' ? 'Emptying…' : 'Empty trash bin'}
+            </button>
+          </div>
         }
       />
 
@@ -124,14 +177,25 @@ export default function AdminTrashPage() {
                     <td className="text-sm">{s.deleted_by || '—'}</td>
                     <td className="text-xs text-slate-500 max-w-[200px] truncate" title={s.delete_reason}>{s.delete_reason || '—'}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn-outline btn-sm flex items-center gap-1.5"
-                        onClick={() => restore('submission', s, `"${s.reference_number} — ${s.title}"`)}
-                        disabled={busyId === `submission-${s.id}`}
-                      >
-                        <RotateCcw size={13} /> Restore
-                      </button>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          type="button"
+                          className="btn-outline btn-sm flex items-center gap-1.5"
+                          onClick={() => restore('submission', s, `"${s.reference_number} — ${s.title}"`)}
+                          disabled={busyId === `submission-${s.id}`}
+                        >
+                          <RotateCcw size={13} /> Restore
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-sm flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => purge('submission', s, `"${s.reference_number} — ${s.title}"`)}
+                          disabled={busyId === `submission-${s.id}`}
+                          title="Permanently delete — cannot be recovered"
+                        >
+                          <Trash2 size={13} /> Delete forever
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -172,14 +236,25 @@ export default function AdminTrashPage() {
                     <td className="text-sm">{fmt(d.archived_at)}</td>
                     <td className="text-sm">{d.archived_by || '—'}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn-outline btn-sm flex items-center gap-1.5"
-                        onClick={() => restore('document', d, `"${d.original_name}"`)}
-                        disabled={busyId === `document-${d.id}`}
-                      >
-                        <RotateCcw size={13} /> Restore
-                      </button>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          type="button"
+                          className="btn-outline btn-sm flex items-center gap-1.5"
+                          onClick={() => restore('document', d, `"${d.original_name}"`)}
+                          disabled={busyId === `document-${d.id}`}
+                        >
+                          <RotateCcw size={13} /> Restore
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-sm flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => purge('document', d, `"${d.original_name}"`)}
+                          disabled={busyId === `document-${d.id}`}
+                          title="Permanently delete — cannot be recovered"
+                        >
+                          <Trash2 size={13} /> Delete forever
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

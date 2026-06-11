@@ -9207,6 +9207,114 @@ def trash_restore_view(request):
     return Response({"detail": 'type must be "submission" or "document".'}, status=400)
 
 
+def _purge_document(doc) -> None:
+    """Permanently delete a document: version blobs, current blob, row."""
+    for version in doc.versions.all():
+        version.file.delete(save=False)
+    doc.file.delete(save=False)
+    doc.delete()
+
+
+def _purge_submission(submission) -> list[int]:
+    """Permanently delete a trashed submission (and any attachments trashed
+    with it): all document/version blobs, served letter PDFs, then the rows
+    (WorkflowEvents, checklist items, etc. cascade). Returns purged ids."""
+    targets = [submission] + list(
+        Submission.all_objects.filter(
+            parent_submission=submission, deleted_at__isnull=False,
+        )
+    )
+    purged = []
+    for sub in targets:
+        for doc in SubmissionDocument.all_objects.filter(submission=sub):
+            _purge_document(doc)
+        for service in sub.decision_services.all():
+            service.letter_pdf.delete(save=False)
+        purged.append(sub.id)
+        sub.delete()
+    return purged
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def trash_purge_view(request):
+    """Permanently delete one trashed item — the only true deletion in the
+    system, admin-only and audit-logged.
+    POST {"type": "submission"|"document", "id": N}."""
+    from .audit import log_action as _log
+    from .models import AuditLog as _AL
+
+    _assert_trash_admin(request)
+    kind = request.data.get("type")
+    try:
+        pk = int(request.data.get("id"))
+    except (TypeError, ValueError):
+        return Response({"detail": "id must be an integer."}, status=400)
+
+    if kind == "submission":
+        submission = get_object_or_404(
+            Submission.all_objects.filter(deleted_at__isnull=False), pk=pk,
+        )
+        ref, title = submission.reference_number, submission.title
+        purged = _purge_submission(submission)
+        _log(request, _AL.Action.DELETE,
+             resource_type="Submission", resource_id=pk, resource_label=ref,
+             description=f"Submission PERMANENTLY deleted from trash: {title}",
+             extra_data={"purged_ids": purged})
+        return Response({"detail": "Submission permanently deleted.", "purged_ids": purged})
+
+    if kind == "document":
+        doc = get_object_or_404(
+            SubmissionDocument.all_objects.filter(archived_at__isnull=False), pk=pk,
+        )
+        name, sub_id = doc.original_name, doc.submission_id
+        _purge_document(doc)
+        _log(request, _AL.Action.DELETE,
+             resource_type="SubmissionDocument", resource_id=pk, resource_label=name,
+             description=f"Archived document PERMANENTLY deleted from trash: {name}")
+        invalidate_submission(sub_id)
+        return Response({"detail": "Document permanently deleted."})
+
+    return Response({"detail": 'type must be "submission" or "document".'}, status=400)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def trash_empty_view(request):
+    """Permanently delete everything in the trash bin. Admin-only."""
+    from .audit import log_action as _log
+    from .models import AuditLog as _AL
+
+    _assert_trash_admin(request)
+
+    purged_submissions = 0
+    # Top-level first; trashed attachments purge with their parent. Any
+    # orphaned trashed attachments are swept in the second pass.
+    for submission in list(
+        Submission.all_objects.filter(deleted_at__isnull=False, is_attachment=False)
+    ):
+        _purge_submission(submission)
+        purged_submissions += 1
+    for orphan in list(Submission.all_objects.filter(deleted_at__isnull=False)):
+        _purge_submission(orphan)
+        purged_submissions += 1
+
+    purged_documents = 0
+    for doc in list(SubmissionDocument.all_objects.filter(archived_at__isnull=False)):
+        _purge_document(doc)
+        purged_documents += 1
+
+    _log(request, _AL.Action.DELETE,
+         resource_type="TrashBin", resource_label="Empty trash bin",
+         description=f"Trash bin emptied: {purged_submissions} submission(s) and "
+                     f"{purged_documents} archived document(s) PERMANENTLY deleted.")
+    return Response({
+        "detail": "Trash bin emptied.",
+        "submissions_purged": purged_submissions,
+        "documents_purged": purged_documents,
+    })
+
+
 # ── Annual Report (statistics chapter) ─────────────────────────────────────────
 
 _ANNUAL_REPORT_ROLES = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
