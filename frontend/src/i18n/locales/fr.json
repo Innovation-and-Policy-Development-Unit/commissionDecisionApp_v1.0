@@ -966,7 +966,17 @@
     "save_failed": "Échec de l'enregistrement.",
     "format_failed": "Échec du formatage.",
     "format_all_failed": "Échec du formatage global.",
-    "apply_failed": "Échec de l'application."
+    "apply_failed": "Échec de l'application.",
+    "context_show": "Afficher le panneau de soumission",
+    "context_hide": "Masquer le panneau de soumission",
+    "context_view_submission": "Voir la soumission",
+    "context_no_submission": "Aucune soumission liée à ce point de l'ordre du jour.",
+    "context_accordion": "Soumission et pièces jointes",
+    "context_details_failed": "Échec du chargement des détails de la soumission.",
+    "context_ministry": "Ministère",
+    "context_stage": "Étape",
+    "context_open_full": "Ouvrir la soumission complète",
+    "context_close": "Fermer"
   },
   "accessibility": {
     "skip_to_content": "Aller au contenu principal",

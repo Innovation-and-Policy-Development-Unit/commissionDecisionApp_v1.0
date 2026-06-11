@@ -6159,7 +6159,19 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting.agenda_approved_by = request.user
         meeting.agenda_approved_at = timezone.now()
         meeting.save(update_fields=["agenda_status", "agenda_approved_by", "agenda_approved_at"])
+        self._queue_agenda_briefs(meeting)
         return Response({"detail": "Agenda endorsed by the Chairperson."})
+
+    @staticmethod
+    def _queue_agenda_briefs(meeting):
+        """Pre-generate executive briefs for all agenda submissions so the
+        minute-intake split view is instant during the sitting. The task skips
+        submissions whose brief is still fresh (context-key cache)."""
+        from .tasks import queue_submission_brief
+
+        for item in meeting.agenda_items.select_related("submission"):
+            if item.submission_id:
+                queue_submission_brief(item.submission_id)
 
     def _require_sitting_pack_access(self, request):
         from .sitting_pack import user_can_use_sitting_pack
@@ -6225,6 +6237,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Agenda must be approved by the Chairperson first."}, status=400)
         meeting.agenda_status = AgendaStatus.CIRCULATED
         meeting.save(update_fields=["agenda_status"])
+        self._queue_agenda_briefs(meeting)
         return Response({"detail": "Agenda circulated to Commission members."})
 
     @action(detail=True, methods=["post"], url_path="flying-minute/sign")

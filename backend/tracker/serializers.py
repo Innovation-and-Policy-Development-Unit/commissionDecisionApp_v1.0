@@ -2070,6 +2070,9 @@ class MinuteAgendaIntakeSerializer(serializers.ModelSerializer):
     category = serializers.CharField(source="agenda_item.category", read_only=True)
     category_display = serializers.SerializerMethodField()
     submission_ref = serializers.SerializerMethodField()
+    submission_id = serializers.IntegerField(
+        source="agenda_item.submission_id", read_only=True, default=None,
+    )
 
     def get_category_display(self, obj):
         from .agenda_sections import agenda_section_label
@@ -2085,6 +2088,7 @@ class MinuteAgendaIntakeSerializer(serializers.ModelSerializer):
             "category",
             "category_display",
             "submission_ref",
+            "submission_id",
             "agenda_title",
             "agenda_description",
             "discussion_notes",

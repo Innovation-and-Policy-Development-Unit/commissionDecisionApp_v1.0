@@ -1226,7 +1226,17 @@
     "save_failed": "Failed to save draft.",
     "format_failed": "Formatting failed.",
     "format_all_failed": "Format all failed.",
-    "apply_failed": "Failed to apply to minutes."
+    "apply_failed": "Failed to apply to minutes.",
+    "context_show": "Show submission panel",
+    "context_hide": "Hide submission panel",
+    "context_view_submission": "View submission",
+    "context_no_submission": "No linked submission for this agenda item.",
+    "context_accordion": "Submission & attachments",
+    "context_details_failed": "Failed to load submission details.",
+    "context_ministry": "Ministry",
+    "context_stage": "Stage",
+    "context_open_full": "Open full submission",
+    "context_close": "Close"
   },
   "accessibility": {
     "skip_to_content": "Skip to main content",

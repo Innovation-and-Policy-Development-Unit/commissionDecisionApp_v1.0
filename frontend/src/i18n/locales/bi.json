@@ -1005,7 +1005,17 @@
     "save_failed": "No save sevem draft.",
     "format_failed": "Formatem i fael.",
     "format_all_failed": "Formatem evriwan i fael.",
-    "apply_failed": "No save putum long ol minit."
+    "apply_failed": "No save putum long ol minit.",
+    "context_show": "Soem panel blong sabmisen",
+    "context_hide": "Haedem panel blong sabmisen",
+    "context_view_submission": "Luk sabmisen",
+    "context_no_submission": "I no gat sabmisen we i joen long ajenda aetem ia.",
+    "context_accordion": "Sabmisen mo ol atajmen",
+    "context_details_failed": "No save lod ol detel blong sabmisen.",
+    "context_ministry": "Ministri",
+    "context_stage": "Stej",
+    "context_open_full": "Openem ful sabmisen",
+    "context_close": "Klosem"
   },
   "accessibility": {
     "skip_to_content": "Go stret long konten",

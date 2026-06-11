@@ -3,15 +3,17 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft, Save, Sparkles, Loader2, AlertCircle, CheckCircle2,
-  ChevronDown, ChevronRight, FileText,
+  ChevronDown, ChevronRight, FileText, Eye, X, PanelRightOpen, PanelRightClose,
 } from 'lucide-react'
 import clsx from 'clsx'
 import PageHeader from '../../components/shared/PageHeader'
+import SubmissionContextPanel from '../../components/minute-intake/SubmissionContextPanel'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
 import { normalizeListPayload, normalizeFieldPayload } from '../../utils/listPayload'
 
 const INTAKE_AGENDA_STATUSES = new Set(['chairman_approved', 'circulated'])
+const CONTEXT_PANEL_PREF = 'minute_intake.context_panel'
 
 function IntakeItemCard({
   item,
@@ -20,33 +22,57 @@ function IntakeItemCard({
   onChange,
   onFormat,
   formatting,
+  active,
+  onSelect,
+  onViewSubmission,
 }) {
   const { t } = useTranslation()
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          {expanded
-            ? <ChevronDown size={14} className="text-slate-400 shrink-0" />
-            : <ChevronRight size={14} className="text-slate-400 shrink-0" />}
-          <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
-            {item.submission_ref || `#${item.sequence}`}
-          </span>
-          <span className="text-xs text-slate-500 truncate hidden sm:inline">
-            — {item.agenda_title}
-          </span>
-        </div>
-        {item.has_formatted && (
-          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 shrink-0 ml-2">
-            {t('minute_intake.formatted_badge')}
-          </span>
+    <div
+      onClick={onSelect}
+      onFocusCapture={onSelect}
+      className={clsx(
+        'border rounded-2xl overflow-hidden transition-shadow',
+        active
+          ? 'border-primary-300 dark:border-primary-700 ring-1 ring-primary-200 dark:ring-primary-800'
+          : 'border-slate-200 dark:border-slate-700',
+      )}
+    >
+      <div className="w-full flex items-center bg-slate-50 dark:bg-slate-800/50">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex-1 min-w-0 flex items-center justify-between px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {expanded
+              ? <ChevronDown size={14} className="text-slate-400 shrink-0" />
+              : <ChevronRight size={14} className="text-slate-400 shrink-0" />}
+            <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
+              {item.submission_ref || `#${item.sequence}`}
+            </span>
+            <span className="text-xs text-slate-500 truncate hidden sm:inline">
+              — {item.agenda_title}
+            </span>
+          </div>
+          {item.has_formatted && (
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 shrink-0 ml-2">
+              {t('minute_intake.formatted_badge')}
+            </span>
+          )}
+        </button>
+        {item.submission_id && (
+          <button
+            type="button"
+            onClick={onViewSubmission}
+            className="xl:hidden mx-3 inline-flex items-center gap-1.5 text-xs font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors whitespace-nowrap"
+          >
+            <Eye size={13} />
+            {t('minute_intake.context_view_submission')}
+          </button>
         )}
-      </button>
+      </div>
       {expanded && (
         <div className="p-4 space-y-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/20">
           <div>
@@ -172,11 +198,30 @@ export default function MinuteIntake() {
   const [success, setSuccess] = useState('')
   const [expanded, setExpanded] = useState({})
 
+  // Split view: the right pane follows the agenda item being worked on.
+  const [activeItemId, setActiveItemId] = useState(null)
+  const [panelOpen, setPanelOpen] = useState(
+    () => localStorage.getItem(CONTEXT_PANEL_PREF) !== 'closed',
+  )
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  const togglePanel = () => {
+    setPanelOpen(open => {
+      localStorage.setItem(CONTEXT_PANEL_PREF, open ? 'closed' : 'open')
+      return !open
+    })
+  }
+
   const activeMeetingId = meetingId || pickerId
 
   const eligibleMeetings = useMemo(
     () => meetings.filter(m => INTAKE_AGENDA_STATUSES.has(m.agenda_status)),
     [meetings],
+  )
+
+  const activeItem = useMemo(
+    () => items.find(it => it.agenda_item_id === activeItemId) || null,
+    [items, activeItemId],
   )
 
   const loadMeetings = useCallback(async () => {
@@ -209,6 +254,11 @@ export default function MinuteIntake() {
         exp[it.agenda_item_id] = true
       }
       setExpanded(exp)
+      setActiveItemId(prev => {
+        const list = data.items || []
+        if (prev && list.some(it => it.agenda_item_id === prev)) return prev
+        return list[0]?.agenda_item_id ?? null
+      })
     } catch (err) {
       setError(formatApiError(err, t('minute_intake.load_failed')))
       setPayload(null)
@@ -440,6 +490,14 @@ export default function MinuteIntake() {
           {applying ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
           {t('minute_intake.apply_to_minutes')}
         </button>
+        <button
+          type="button"
+          onClick={togglePanel}
+          className="btn-outline hidden xl:flex items-center gap-2 ml-auto"
+        >
+          {panelOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
+          {panelOpen ? t('minute_intake.context_hide') : t('minute_intake.context_show')}
+        </button>
       </div>
 
       {loading ? (
@@ -447,24 +505,69 @@ export default function MinuteIntake() {
           <Loader2 size={28} className="animate-spin text-slate-400" />
         </div>
       ) : (
-        <div className="space-y-4">
-          {items.map(item => (
-            <IntakeItemCard
-              key={item.agenda_item_id}
-              item={item}
-              expanded={expanded[item.agenda_item_id] !== false}
-              onToggle={() => setExpanded(prev => ({
-                ...prev,
-                [item.agenda_item_id]: !prev[item.agenda_item_id],
-              }))}
-              onChange={updateItem}
-              onFormat={formatItem}
-              formatting={formattingId === item.agenda_item_id}
-            />
-          ))}
-          {items.length === 0 && !loading && (
-            <p className="text-sm text-slate-500">{t('minute_intake.empty_items')}</p>
+        <div className="flex flex-col xl:flex-row gap-6 items-start">
+          <div className="flex-1 min-w-0 w-full space-y-4">
+            {items.map(item => (
+              <IntakeItemCard
+                key={item.agenda_item_id}
+                item={item}
+                expanded={expanded[item.agenda_item_id] !== false}
+                onToggle={() => setExpanded(prev => ({
+                  ...prev,
+                  [item.agenda_item_id]: !prev[item.agenda_item_id],
+                }))}
+                onChange={updateItem}
+                onFormat={formatItem}
+                formatting={formattingId === item.agenda_item_id}
+                active={item.agenda_item_id === activeItemId}
+                onSelect={() => setActiveItemId(item.agenda_item_id)}
+                onViewSubmission={() => {
+                  setActiveItemId(item.agenda_item_id)
+                  setDrawerOpen(true)
+                }}
+              />
+            ))}
+            {items.length === 0 && !loading && (
+              <p className="text-sm text-slate-500">{t('minute_intake.empty_items')}</p>
+            )}
+          </div>
+
+          {panelOpen && items.length > 0 && (
+            <div className="hidden xl:block w-[42%] shrink-0 sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto">
+              <SubmissionContextPanel
+                submissionId={activeItem?.submission_id || null}
+                itemLabel={activeItem ? `${activeItem.submission_ref || `#${activeItem.sequence}`} — ${activeItem.agenda_title}` : ''}
+              />
+            </div>
           )}
+        </div>
+      )}
+
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 xl:hidden" onClick={() => setDrawerOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute right-0 top-0 h-full w-full max-w-lg bg-slate-100 dark:bg-slate-900 shadow-2xl overflow-y-auto p-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
+                {activeItem ? `${activeItem.submission_ref || `#${activeItem.sequence}`} — ${activeItem.agenda_title}` : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors shrink-0"
+                aria-label={t('minute_intake.context_close')}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <SubmissionContextPanel
+              submissionId={activeItem?.submission_id || null}
+              itemLabel={activeItem ? `${activeItem.submission_ref || `#${activeItem.sequence}`} — ${activeItem.agenda_title}` : ''}
+            />
+          </div>
         </div>
       )}
     </div>
