@@ -3151,6 +3151,7 @@ class AgendaItemRestriction(models.Model):
     )
     visible_to = models.ManyToManyField(
         settings.AUTH_USER_MODEL, through="AgendaAccessGrant",
+        through_fields=("restriction", "user"),
         related_name="visible_agenda_restrictions", blank=True,
     )
     created_at = models.DateTimeField(auto_now_add=True)

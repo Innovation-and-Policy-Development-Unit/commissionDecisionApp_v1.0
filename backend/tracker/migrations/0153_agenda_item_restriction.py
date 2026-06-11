@@ -87,7 +87,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="agendaitemrestriction",
             name="visible_to",
-            field=models.ManyToManyField(blank=True, related_name="visible_agenda_restrictions", through="tracker.AgendaAccessGrant", to=settings.AUTH_USER_MODEL),
+            field=models.ManyToManyField(blank=True, related_name="visible_agenda_restrictions", through="tracker.AgendaAccessGrant", through_fields=("restriction", "user"), to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddConstraint(
             model_name="agendaitemrestriction",
