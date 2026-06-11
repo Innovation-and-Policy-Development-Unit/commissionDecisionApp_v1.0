@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Eye,
 } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
@@ -227,18 +228,28 @@ export default function MinutesIndex() {
                       : '—'}
                   </td>
                   <td className="text-end">
-                    <Link
-                      to={`/secretariat/meetings/${row.meeting}/minutes`}
-                      className={clsx(
-                        'inline-flex items-center gap-1.5 text-sm font-medium',
-                        'text-primary-600 dark:text-primary-400 hover:underline',
-                      )}
-                    >
-                      <PenSquare size={14} aria-hidden="true" />
-                      {row.status === 'signed'
-                        ? t('secretariat.minutes_action_view')
-                        : t('secretariat.minutes_action_edit')}
-                    </Link>
+                    <div className="inline-flex items-center gap-4">
+                      <Link
+                        to={`/secretariat/meetings/${row.meeting}/minutes?mode=view`}
+                        className={clsx(
+                          'inline-flex items-center gap-1.5 text-sm font-medium',
+                          'text-primary-600 dark:text-primary-400 hover:underline',
+                        )}
+                      >
+                        <Eye size={14} aria-hidden="true" />
+                        {t('secretariat.minutes_action_view')}
+                      </Link>
+                      <Link
+                        to={`/secretariat/meetings/${row.meeting}/minutes`}
+                        className={clsx(
+                          'inline-flex items-center gap-1.5 text-sm font-medium',
+                          'text-slate-500 dark:text-slate-400 hover:underline',
+                        )}
+                      >
+                        <PenSquare size={14} aria-hidden="true" />
+                        {t('secretariat.minutes_action_edit')}
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -716,6 +716,9 @@ class Command(BaseCommand):
         ("manage_meetings",     "Manage Commission Meetings", "secretariat", "Schedule and administer commission sitting meetings."),
         ("manage_agenda",       "Manage Meeting Agenda",      "secretariat", "Add, order, and manage agenda items for each sitting."),
         ("manage_notifications","Manage Decision Notifications","secretariat","Draft and issue formal decision notification letters."),
+        ("manage_minute_access", "Restrict & Share Minute Agenda Items", "secretariat",
+         "Lock specific agenda items inside signed minutes, share them with specific users, "
+         "and approve or deny access requests."),
         # Administration
         ("manage_users",        "Manage Users",        "administration", "Create, edit, and deactivate user accounts."),
         ("manage_roles",        "Manage Roles & Permissions","administration","Configure role definitions and their permission sets."),
@@ -736,7 +739,7 @@ class Command(BaseCommand):
             "export_submissions", "transition_workflow", "assess_submission",
             "forward_commission", "record_decision", "allocate_decision", "assign_task",
             "update_implementation", "view_reports", "export_reports",
-            "manage_meetings", "manage_agenda", "manage_notifications",
+            "manage_meetings", "manage_agenda", "manage_notifications", "manage_minute_access",
             "manage_users", "manage_roles", "manage_ui_translations", "view_audit_trail",
             "manage_report_templates",
             "feedback_view", "feedback_manage", "feedback_respond", "feedback_configure",
@@ -757,7 +760,7 @@ class Command(BaseCommand):
         ("psc_secretary", "Manages commission meetings, agendas, decisions, and formal notifications.", [
             "view_dashboard", "view_submissions", "export_submissions", "transition_workflow",
             "forward_commission", "record_decision",
-            "manage_meetings", "manage_agenda", "manage_notifications",
+            "manage_meetings", "manage_agenda", "manage_notifications", "manage_minute_access",
             "view_reports", "view_audit_trail",
             "feedback_view", "feedback_respond",
         ]),

@@ -3122,6 +3122,124 @@ class MinuteAgendaIntake(models.Model):
         return f"Intake — {self.meeting.reference_number} / {self.agenda_title[:40]}"
 
 
+class AgendaItemRestriction(models.Model):
+    """Visibility lock on one agenda item inside signed (endorsed) minutes.
+
+    Everyone who can open the minutes still sees the document; a restricted
+    item renders as a locked placeholder unless the viewer holds the
+    ``manage_minute_access`` permission or has been granted access.
+    """
+
+    minutes = models.ForeignKey(
+        Minutes, on_delete=models.CASCADE, related_name="agenda_restrictions",
+    )
+    item_key = models.CharField(
+        max_length=64,
+        help_text=(
+            "Stable key of the agenda block in Minutes.content: 'ai-<agenda_item_id>' "
+            "for intake-derived items, or a generated 'k-…' key for manual items."
+        ),
+    )
+    item_title = models.CharField(
+        max_length=512, blank=True,
+        help_text="Denormalised agenda title at restrict time (for lists and notifications).",
+    )
+    reason = models.TextField(blank=True)
+    restricted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="agenda_restrictions_created",
+    )
+    visible_to = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, through="AgendaAccessGrant",
+        related_name="visible_agenda_restrictions", blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["minutes_id", "item_key"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["minutes", "item_key"],
+                name="uniq_restriction_per_minutes_item",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Restriction — {self.minutes.meeting.reference_number} / {self.item_key}"
+
+
+class AgendaAccessGrant(models.Model):
+    """Allowlist entry: one user granted sight of one restricted agenda item."""
+
+    restriction = models.ForeignKey(
+        AgendaItemRestriction, on_delete=models.CASCADE, related_name="grants",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="agenda_access_grants",
+    )
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="agenda_access_grants_given",
+    )
+    granted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-granted_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["restriction", "user"],
+                name="uniq_agenda_grant_per_user",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Grant — {self.user.username} on {self.restriction_id}"
+
+
+class AgendaAccessRequestStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    APPROVED = "approved", "Approved"
+    DENIED = "denied", "Denied"
+
+
+class AgendaAccessRequest(models.Model):
+    """A user's request to see a restricted agenda item (Secretary/Admin decide)."""
+
+    restriction = models.ForeignKey(
+        AgendaItemRestriction, on_delete=models.CASCADE, related_name="access_requests",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="agenda_access_requests",
+    )
+    message = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=16, choices=AgendaAccessRequestStatus.choices,
+        default=AgendaAccessRequestStatus.PENDING,
+    )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="agenda_access_requests_decided",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["restriction", "requested_by"],
+                condition=models.Q(status="pending"),
+                name="uniq_pending_agenda_request_per_user",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Access request — {self.requested_by.username} ({self.get_status_display()})"
+
+
 class MeetingTranscript(models.Model):
     """AI-generated transcript and structured analysis of a meeting recording."""
 

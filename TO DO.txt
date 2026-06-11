@@ -1,0 +1,42 @@
+Medium efforts (infrastructure DRFMS visibly lacks):
+
+Email subsystem — SCDMS reads SMTP config from the database at runtime (email_backend.py), has admin-editable email templates with code-defined defaults (email_templates.py + email_template_defaults.py), a dispatch queue, and a Resend API fallback. DRFMS notifications are in-app only; this is the single biggest operational gap, since reminders and digests all depend on it.
+
+Rules engine + flags + digest — rules/engine.py evaluates admin-defined conditions across entities, opens/clears "flags" (critical / at-risk / monitoring), and emails managers a 7 a.m. digest. For DRFMS: overdue workflow actions, records approaching retention, shares about to expire, stale drafts. The adapter pattern (rules/entities.py) ports cleanly onto DRFMS's separate apps.
+
+Daily brief — personalized morning summary (your pending approvals, mentions, deadlines) built from per-user querysets. Pairs with #5 and #6.
+
+Digital signatures & PDF annotation - Fabric.js + PDF.js annotation layer, stored signature images, signature placement endpoints. DRFMS's WorkflowAction.is_digital_signed is currently just a boolean with nothing behind it — this would make approval steps actually signable.
+
+Report catalog with PDF output - SCDMS generates WeasyPrint PDFs from a report catalog (decision register, workload, annual report) plus admin-editable report templates. DRFMS analytics is dashboard-only; a printable "records register" and disposition report are standard registry deliverables.
+Bigger bets (high value, real projects):
+
+AI document intelligence - SCDMS's ai/ module is the most portable-by-design part: a shared claude_client.py, a feature_registry.py with per-feature toggles, a policy guardrail, and an AI_STANDARDS.md. The features that map best to DRFMS: auto-classification of uploads (suggest document type/series — A2), text extraction to feed full-text search, duplicate detection on intake (A4), record summaries, and redaction preview. I'd port the registry/client/guardrail pattern wholesale and add features incrementally.
+
+Trilingual i18n — SCDMS ships English/French/Bislama locale bundles served from the backend (locale_bundles/, ui_translation_views.py) with i18next on the frontend. DRFMS is English-only; for a Vanuatu government system this matters and is cheaper to do now than after the UI grows further.
+Dynamic form builder — no-code form types/fields with a multi-page renderer and server-side validation. In DRFMS this would become per-document-type metadata templates or structured correspondence intake forms. Only worth it if structured intake is on the roadmap.
+
+
+
+High value, build into the core (concept note material)
+
+File versioning with version history — The single most important borrow. Every file overwrite creates a new version row rather than replacing the blob; users can view history, compare metadata, and restore. In Django this is just a DocumentVersion model (FK to Document, version number, file path, uploaded_by, timestamp, checksum). For a records system this isn't a nice-to-have — it's evidentiary integrity. Pairs naturally with the AuditLog pattern you already have in SCDMS.
+Checksums and integrity verification — MEGA and OpenCloud both verify file integrity. Compute SHA-256 on upload, store it, re-verify on download or on a scheduled Celery task. This gives you tamper-evidence, which Saperion replacements get scrutinized on. Cheap to implement, big credibility win in the concept note.
+Granular link sharing with expiry and password — MEGA's model: internal share links scoped to a document or folder, optional password, optional expiry date, view-only vs download permission. A ShareLink model with a UUID token, expiry datetime, and permission flags. Critical for the CSU use case of sending a document to a ministry contact without giving them an account.
+Spaces / team data rooms (OpenCloud) — Rather than one giant folder tree, top-level "Spaces" with their own membership and roles — maps perfectly to your ministry/unit structure and to the RLS thinking you already did for the Superset evaluation. Each Space gets owner/editor/viewer roles; your HasProfilePermission pattern extends here directly.
+Full-text search inside documents — Drive's killer feature. PostgreSQL gives you this nearly free: extract text on upload (Apache Tika or pdfminer/python-docx in a Celery task), store it in a tsvector column with a GIN index. Searching inside PDFs and Word files is the feature that will make users abandon Saperion willingly.
+
+Medium value, version 1.x
+
+Trash/recycle bin with retention window — Soft-delete with a 30-day (or policy-defined) restore window before a Celery job hard-deletes. Standard deleted_at field plus scheduled purge. Prevents the "permanent deletion by accident" incident that every DMS eventually has.
+File request / upload links — Nextcloud's "file drop": a link an external party can use to upload into a folder without seeing its contents. Very useful for ministries submitting documents to CSU — solves inbound document intake without email attachments.
+Activity feed per document/Space — Drive and Nextcloud both surface "who did what, when" to end users, not just admins. You'll already have the data in AuditLog; this is just a read-only React view filtered to the document. Low effort, high perceived polish.
+Workflow/automation rules (Nextcloud Files Automated Tagging) — Rules like "PDFs uploaded to Space X are auto-tagged 'Commission Paper' and routed to registry." You've already designed exactly this pattern for SCDMS (the flag/alert rule engine) — reuse the architecture.
+OnlyOffice/Collabora integration for in-browser editing — This is what makes Nextcloud feel like Drive. Both are open-source and self-hostable on the R750, integrate via WOPI protocol. I'd flag it in the concept note as a Phase 2 item rather than v1 — it's an infrastructure dependency, but it's the feature that eliminates the "download, edit, re-upload, now there are four copies" problem.
+
+Borrow the concept, not the implementation
+
+Client-side encryption (MEGA) — Don't do zero-knowledge encryption; it breaks full-text search, server-side preview, and admin recovery, which a government registry needs. Instead: TLS in transit + encryption at rest at the disk/database level (LUKS on the R750, or pgcrypto for sensitive fields). State this explicitly in the concept note so the security section reads as a deliberate design choice rather than an omission.
+Delta sync (OpenCloud) — Clever, but you don't need a sync client for v1. DRFMS is a web-first registry, not a Dropbox replacement. Skip it; mention desktop sync as out-of-scope.
+
+Document preview/thumbnails — Drive-style inline preview of PDFs and images without downloading. PDF.js in React handles PDFs natively; thumbnails via a Celery task with pdf2image/Pillow. Worth doing — preview is half of why Drive feels fast.

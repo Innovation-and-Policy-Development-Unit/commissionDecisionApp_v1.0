@@ -2020,6 +2020,7 @@ class MinutesSerializer(serializers.ModelSerializer):
     meeting_date = serializers.DateField(source="meeting.date", read_only=True)
     signed_by_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
+    access_control = serializers.SerializerMethodField()
 
     class Meta:
         model = Minutes
@@ -2029,12 +2030,38 @@ class MinutesSerializer(serializers.ModelSerializer):
             "signed_by", "signed_by_name", "signed_at",
             "circulated_at", "minutes_due_at",
             "created_by", "created_by_name",
-            "created_at", "updated_at",
+            "created_at", "updated_at", "access_control",
         )
         read_only_fields = ("id", "created_at", "updated_at", "created_by")
 
     def get_signed_by_name(self, obj):
         return obj.signed_by.username if obj.signed_by else None
+
+    def _request_user(self):
+        from django.contrib.auth.models import AnonymousUser
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated:
+            return user
+        # No request context — treat as uncleared so locked items never leak.
+        return AnonymousUser()
+
+    def get_access_control(self, obj):
+        from .minutes_access import access_control_payload
+
+        return access_control_payload(obj, self._request_user())
+
+    def to_representation(self, instance):
+        from .minutes_access import redact_content
+
+        data = super().to_representation(instance)
+        content, fully_cleared = redact_content(instance, self._request_user())
+        data["content"] = content
+        if not fully_cleared:
+            # The stored PDF holds the full minutes; only fully-cleared users get it.
+            data["pdf_version"] = None
+        return data
 
 
 class MinuteAgendaIntakeSerializer(serializers.ModelSerializer):
