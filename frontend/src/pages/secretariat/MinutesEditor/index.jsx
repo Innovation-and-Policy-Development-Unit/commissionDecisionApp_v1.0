@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import PageHeader from '../../../components/shared/PageHeader'
 import api from '../../../api/client'
 import { useAuth } from '../../../context/AuthContext'
+import { userCanEditMinutes } from '../../../utils/minutesAccess'
 import clsx from 'clsx'
 
 const MINUTES_STATUS = {
@@ -507,7 +508,9 @@ export default function MinutesEditor() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const viewMode = searchParams.get('mode') === 'view'
+  const canEditMinutes = userCanEditMinutes(user)
+  // Non-editors (OPSC viewers of endorsed minutes) always get the read-only view.
+  const viewMode = !canEditMinutes || searchParams.get('mode') === 'view'
 
   const [meeting, setMeeting] = useState(null)
   const [minutes, setMinutes] = useState(null)
@@ -780,14 +783,16 @@ export default function MinutesEditor() {
           <ReadOnlySection label="Next Meeting Date" value={content.next_meeting_date} />
 
           <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
-            <button
-              type="button"
-              onClick={() => setSearchParams({})}
-              className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2"
-            >
-              <PenSquare size={16} />
-              Open Editor
-            </button>
+            {canEditMinutes ? (
+              <button
+                type="button"
+                onClick={() => setSearchParams({})}
+                className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2"
+              >
+                <PenSquare size={16} />
+                Open Editor
+              </button>
+            ) : <span />}
             {minutes?.id && (
               <button onClick={downloadPdf} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
                 <Download size={16} />

@@ -265,6 +265,38 @@ class MinutesLockTests(TestCase):
             SECRET_TEXT,
         )
 
+    # ── visibility scope ────────────────────────────────────────────────────
+
+    def test_opsc_staff_see_signed_minutes_only(self):
+        self.minutes.status = MinutesStatus.DRAFT
+        self.minutes.save(update_fields=["status"])
+
+        # Draft hidden from OPSC staff (manager/officer)…
+        for user in (self.manager, self.officer):
+            self.client.force_authenticate(user=user)
+            self.assertEqual(
+                self.client.get(f"/api/minutes/{self.minutes.id}/").status_code, 404,
+            )
+            self.assertEqual(self.client.get("/api/minutes/").data, [])
+        # …but the Secretariat still sees it.
+        self.client.force_authenticate(user=self.secretary)
+        self.assertEqual(self.client.get(f"/api/minutes/{self.minutes.id}/").status_code, 200)
+
+        # Once signed, OPSC staff see it.
+        self.minutes.status = MinutesStatus.SIGNED
+        self.minutes.save(update_fields=["status"])
+        self.client.force_authenticate(user=self.manager)
+        self.assertEqual(self.client.get(f"/api/minutes/{self.minutes.id}/").status_code, 200)
+
+    def test_ministry_side_users_never_see_minutes(self):
+        ministry_user = User.objects.create_user(username="lock_ministry", password="pass")
+        Profile.objects.create(user=ministry_user, role=Role.MINISTRY_HR)
+        self.client.force_authenticate(user=ministry_user)
+        self.assertEqual(self.client.get("/api/minutes/").data, [])
+        self.assertEqual(
+            self.client.get(f"/api/minutes/{self.minutes.id}/").status_code, 404,
+        )
+
     def test_shareable_users_gate(self):
         self.client.force_authenticate(user=self.officer)
         res = self.client.get(f"/api/minutes/{self.minutes.id}/shareable-users/?q=olive")
