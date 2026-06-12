@@ -109,7 +109,11 @@ export default function Agenda() {
     setLoading(true)
     try {
       const r = await api.get('/meetings/')
-      const data = normalizeListPayload(r.data)
+      let data = normalizeListPayload(r.data)
+      if (endorsedOnlyViewer) {
+        // Read-only OPSC viewers only ever see endorsed / circulated agendas.
+        data = data.filter(m => ['chairman_approved', 'circulated'].includes(m.agenda_status))
+      }
       setMeetings(data)
       if (data.length > 0 && !selectedId) setSelectedId(String(data[0].id))
     } catch { /* handled below */ }
@@ -300,19 +304,28 @@ export default function Agenda() {
   // ── Role helpers ─────────────────────────────────────────────────────────
 
   const role = user?.role || ''
-  const isSecretaryOrAdmin = ['psc_secretary', 'senior_admin_officer', 'psc_admin'].includes(role)
+  const isAdminUser = Boolean(user?.is_superuser || user?.is_staff)
+  const isSecretaryOrAdmin = isAdminUser
+    || ['psc_secretary', 'senior_admin_officer', 'psc_admin'].includes(role)
   // Stage-B agenda chain roles: SAO builds & submits → Secretary reviews & forwards → Chairman endorses.
-  const isAgendaBuilder    = ['senior_admin_officer', 'psc_admin'].includes(role)
-  const isSecretary        = ['psc_secretary', 'psc_admin'].includes(role)
-  const isChairperson      = ['chairperson', 'psc_admin'].includes(role)
-  const canSittingPack = [
+  const isAgendaBuilder    = ['senior_admin_officer', 'psc_admin'].includes(role) || isAdminUser
+  const isSecretary        = ['psc_secretary', 'psc_admin'].includes(role) || isAdminUser
+  const isChairperson      = ['chairperson', 'psc_admin'].includes(role) || isAdminUser
+  const canSittingPack = isAdminUser || [
     'psc_commissioner', 'chairperson', 'psc_secretary',
     'senior_admin_officer', 'psc_admin', 'psc_manager',
   ].includes(role)
+  // Everyone else within OPSC (unit managers, principals, officers…) is a
+  // read-only viewer who may only see Chairman-endorsed / circulated agendas.
+  const canManageAgenda = isSecretaryOrAdmin
+  const isCommissionMember = ['psc_commissioner', 'chairperson'].includes(role)
+  const endorsedOnlyViewer = !canManageAgenda && !isCommissionMember
 
   // ── Render helpers ───────────────────────────────────────────────────────
 
   const isCompleted  = selectedMeeting?.status === 'completed'
+  // Read-only: completed sittings for everyone; always for non-secretariat viewers.
+  const readOnly     = isCompleted || !canManageAgenda
   const totalItems   = items.length
   const agendaStatus = selectedMeeting?.agenda_status || 'draft'
   const maxItems     = selectedMeeting?.max_items ?? 30
@@ -339,12 +352,14 @@ export default function Agenda() {
           action={
             selectedMeeting && (
               <div className="flex items-center gap-2 flex-wrap justify-end">
-                <Link
-                  to={`/secretariat/meetings/${selectedId}/workspace`}
-                  className="btn-outline flex items-center gap-2 px-4 py-2"
-                >
-                  <LayoutGrid size={15} /> Workspace
-                </Link>
+                {canManageAgenda && (
+                  <Link
+                    to={`/secretariat/meetings/${selectedId}/workspace`}
+                    className="btn-outline flex items-center gap-2 px-4 py-2"
+                  >
+                    <LayoutGrid size={15} /> Workspace
+                  </Link>
+                )}
                 {canSittingPack && (
                   <Link
                     to={`/secretariat/agenda/sitting-pack?meeting=${selectedId}`}
@@ -362,7 +377,7 @@ export default function Agenda() {
                   <Printer size={15} /> Print / Export
                 </button>
                 )}
-                {!isCompleted && (
+                {!readOnly && (
                 <button
                   onClick={() => { fetchSubmissions(); setModalOpen(true) }}
                   className="btn-primary flex items-center gap-2"
@@ -384,7 +399,11 @@ export default function Agenda() {
               value={selectedId}
               onChange={e => setSelectedId(e.target.value)}
             >
-              {meetings.length === 0 && <option value="">No meetings scheduled</option>}
+              {meetings.length === 0 && (
+                <option value="">
+                  {endorsedOnlyViewer ? 'No endorsed agendas yet' : 'No meetings scheduled'}
+                </option>
+              )}
               {meetings.map(m => (
                 <option key={m.id} value={m.id}>
                   {m.reference_number} — {m.title} ({new Date(m.date + 'T00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })})
@@ -543,7 +562,7 @@ export default function Agenda() {
                             <span className="mr-2">{subLetter(idx)}.</span>
                             {item.submission_title}
                           </p>
-                          {!isCompleted && (
+                          {!readOnly && (
                             <button onClick={() => handleRemove(item.id)} className="opacity-0 group-hover:opacity-100 p-0.5 text-red-400 print:hidden">
                               <X size={10} />
                             </button>
@@ -583,7 +602,7 @@ export default function Agenda() {
                       <MattersArisingRow
                         key={item.id}
                         item={item}
-                        isCompleted={isCompleted}
+                        isCompleted={readOnly}
                         canDefer={isSecretaryOrAdmin}
                         onRemove={handleRemove}
                         onMoveUp={() => handleMove(item, 'up')}
@@ -609,7 +628,7 @@ export default function Agenda() {
                     <StandardRow
                       key={item.id}
                       item={item}
-                      isCompleted={isCompleted}
+                      isCompleted={readOnly}
                       canDefer={isSecretaryOrAdmin}
                       editingItem={editingItem}
                       setEditingItem={setEditingItem}

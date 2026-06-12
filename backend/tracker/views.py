@@ -5531,6 +5531,18 @@ class MeetingViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can schedule meetings.")
         serializer.save()
 
+    def perform_update(self, serializer):
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can edit meetings.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can delete meetings.")
+        instance.delete()
+
     @action(detail=True, methods=["get"], url_path="workspace")
     def workspace(self, request, pk=None):
         """
@@ -6361,12 +6373,29 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = AgendaItemSerializer
 
+    _AGENDA_MANAGER_ROLES = {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}
+
+    def _require_agenda_manager(self):
+        profile = _profile(self.request.user)
+        if profile.role not in self._AGENDA_MANAGER_ROLES:
+            raise PermissionDenied(
+                "Only PSC Secretary, Senior Admin Officer, or Admins can manage agenda items."
+            )
+
     def get_queryset(self):
         qs = super().get_queryset()
         meeting_id = self.request.query_params.get("meeting")
         if meeting_id:
             qs = qs.filter(meeting_id=meeting_id)
         return qs.order_by("sequence", "id")
+
+    def perform_update(self, serializer):
+        self._require_agenda_manager()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_agenda_manager()
+        instance.delete()
 
     def perform_create(self, serializer):
         profile = _profile(self.request.user)

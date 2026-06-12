@@ -14,16 +14,16 @@ export function userIsComplianceStaff(user) {
   return Boolean(user && isComplianceRole(user.role))
 }
 
+// True secretariat / Commission roles only. OPSC unit managers, principals,
+// officers, and post-decision staff are NOT secretariat: they see endorsed
+// minutes & agenda (audience 'opsc_internal') and their task register, but
+// never the meeting/agenda-building or minute-intake workflow.
 const SECRETARIAT_ROLES = new Set([
   'psc_admin',
   'psc_secretary',
   'senior_admin_officer',
   'psc_commissioner',
   'chairperson',
-  'psc_officer',
-  'psc_manager',
-  'principal_officer',
-  'senior_officer',
 ])
 
 /** Full secretariat workflow (meetings, minute intake, allocate tasks). */
