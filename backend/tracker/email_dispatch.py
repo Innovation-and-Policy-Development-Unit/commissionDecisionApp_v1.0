@@ -6,7 +6,7 @@ import logging
 
 from django.core.mail import send_mail
 
-from .email_templates import get_from_email
+from .email_templates import get_from_email, get_frontend_base_url
 from .models import Notification
 
 logger = logging.getLogger("scdms.app")
@@ -49,6 +49,8 @@ def dispatch_pending_emails() -> dict[str, int]:
             continue
 
         body = (notif.body or "").strip() or notif.title
+        if notif.link:
+            body += f"\n\nOpen in SCDMS: {get_frontend_base_url()}{notif.link}"
         try:
             send_mail(
                 notif.title,

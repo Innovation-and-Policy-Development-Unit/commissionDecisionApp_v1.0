@@ -255,6 +255,28 @@ class MinutesLockTests(TestCase):
             SECRET_TEXT,
         )
 
+    def test_access_request_notifies_secretary_and_superuser(self):
+        from tracker.models import Notification
+
+        boss = User.objects.create_superuser(
+            username="lock_root", password="pass", email="root@psc.gov.vu",
+        )
+        self._restrict_sensitive()
+        self.client.force_authenticate(user=self.officer)
+        res = self.client.post(
+            f"/api/minutes/{self.minutes.id}/request-access/",
+            {"item_key": "ai-102"}, format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+
+        notifs = Notification.objects.filter(title__startswith="Agenda access request")
+        recipients = set(notifs.values_list("recipient__username", flat=True))
+        self.assertIn(self.secretary.username, recipients)
+        self.assertIn(boss.username, recipients)
+        # channel=BOTH → the scheduled email dispatcher will send these by email.
+        for n in notifs:
+            self.assertEqual(n.channel, Notification.Channel.BOTH)
+
     def test_revoke_and_unrestrict(self):
         restriction = self._restrict_sensitive(share_with=[self.manager])
         self.client.force_authenticate(user=self.secretary)

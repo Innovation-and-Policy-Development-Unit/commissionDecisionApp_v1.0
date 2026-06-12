@@ -204,12 +204,15 @@ def access_control_payload(minutes: Minutes, user) -> dict:
 
 
 def minute_access_deciders() -> list[User]:
-    """Users notified of new access requests (Secretary / Admin profiles)."""
+    """Users notified of new access requests: Secretary / Admin profiles plus superusers."""
+    from django.db.models import Q
+
     return list(
         User.objects.filter(
+            Q(psc_profile__role__in=[Role.PSC_SECRETARY, Role.PSC_ADMIN])
+            | Q(is_superuser=True),
             is_active=True,
-            psc_profile__role__in=[Role.PSC_SECRETARY, Role.PSC_ADMIN],
-        )
+        ).distinct()
     )
 
 
