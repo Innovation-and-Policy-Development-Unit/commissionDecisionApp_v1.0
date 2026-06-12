@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import {
   Save, CheckCircle2, AlertCircle, ArrowLeft,
   ChevronDown, ChevronRight, Plus, Trash2, Loader2, PenSquare, Download,
-  Lock, Share2, X, Search, Clock,
+  Lock,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../../components/shared/PageHeader'
@@ -32,7 +32,7 @@ function SectionEditor({ label, value, onChange, placeholder }) {
   )
 }
 
-function AgendaItemEditor({ item, index, onChange, restricted, canManageAccess, onManageAccess }) {
+function AgendaItemEditor({ item, index, onChange }) {
   const [expanded, setExpanded] = useState(true)
 
   return (
@@ -49,11 +49,6 @@ function AgendaItemEditor({ item, index, onChange, restricted, canManageAccess, 
               {item.submission_ref || `Item ${index + 1}`}
             </span>
             {item.title && <span className="text-xs text-slate-500 ml-1">— {item.title}</span>}
-            {restricted && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-                <Lock size={9} /> Restricted
-              </span>
-            )}
           </div>
           <span className={clsx(
             'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full',
@@ -67,16 +62,6 @@ function AgendaItemEditor({ item, index, onChange, restricted, canManageAccess, 
             {item.decision_type || 'Pending'}
           </span>
         </button>
-        {canManageAccess && (
-          <button
-            type="button"
-            onClick={() => onManageAccess(item, index)}
-            className="mx-3 inline-flex items-center gap-1.5 text-xs font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors whitespace-nowrap"
-          >
-            {restricted ? <Share2 size={13} /> : <Lock size={13} />}
-            {restricted ? 'Manage access' : 'Restrict'}
-          </button>
-        )}
       </div>
       {expanded && (
         <div className="p-4 space-y-3 border-t border-slate-100 dark:border-slate-700">
@@ -144,273 +129,19 @@ function AgendaItemEditor({ item, index, onChange, restricted, canManageAccess, 
   )
 }
 
-function RestrictedAgendaItem({ item, index, onRequestAccess, requesting }) {
-  const status = item.my_request_status
+function RestrictedAgendaItem({ item, index }) {
   return (
     <div className="border border-amber-200 dark:border-amber-800 rounded-2xl px-4 py-3 bg-amber-50/60 dark:bg-amber-900/10">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Lock size={14} className="text-amber-500" />
-          <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-            {item.submission_ref || `Item ${index + 1}`}
-          </span>
-          {item.title && <span className="text-xs text-slate-500 ml-1">— {item.title}</span>}
-        </div>
-        {status === 'pending' ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-            <Clock size={9} /> Request pending
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => onRequestAccess(item)}
-            disabled={requesting}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors disabled:opacity-60"
-          >
-            {requesting ? <Loader2 size={13} className="animate-spin" /> : <Share2 size={13} />}
-            {status === 'denied' ? 'Request again' : 'Request access'}
-          </button>
-        )}
+      <div className="flex items-center gap-2">
+        <Lock size={14} className="text-amber-500" />
+        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+          {item.submission_ref || `Item ${index + 1}`}
+        </span>
+        {item.title && <span className="text-xs text-slate-500 ml-1">— {item.title}</span>}
       </div>
       <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-        This agenda item is restricted by the Secretariat.
-        {status === 'denied' && ' Your previous request was declined.'}
+        This agenda item relates to another OPSC unit and is not visible to you.
       </p>
-    </div>
-  )
-}
-
-function UserSearchPicker({ minutesId, selected, onChange, excludeIds = [] }) {
-  const [q, setQ] = useState('')
-  const [results, setResults] = useState([])
-  const [searching, setSearching] = useState(false)
-  const timer = useRef(null)
-
-  useEffect(() => {
-    if (!q.trim()) { setResults([]); return undefined }
-    clearTimeout(timer.current)
-    timer.current = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const res = await api.get(`/minutes/${minutesId}/shareable-users/`, { params: { q } })
-        setResults(res.data)
-      } catch {
-        setResults([])
-      } finally {
-        setSearching(false)
-      }
-    }, 300)
-    return () => clearTimeout(timer.current)
-  }, [q, minutesId])
-
-  const hidden = new Set([...excludeIds, ...selected.map(u => u.id)])
-  const visible = results.filter(u => !hidden.has(u.id))
-
-  return (
-    <div>
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {selected.map(u => (
-            <span key={u.id} className="inline-flex items-center gap-1 text-xs font-semibold bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 rounded-full px-2.5 py-1">
-              {u.full_name || u.username}
-              <button type="button" onClick={() => onChange(selected.filter(s => s.id !== u.id))} className="hover:text-primary-900">
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="relative">
-        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          className="input text-sm pl-8"
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          placeholder="Search users by name..."
-        />
-      </div>
-      {(visible.length > 0 || searching) && (
-        <div className="mt-1 border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-700 max-h-44 overflow-y-auto">
-          {searching && <div className="px-3 py-2 text-xs text-slate-400">Searching…</div>}
-          {visible.map(u => (
-            <button
-              key={u.id}
-              type="button"
-              onClick={() => { onChange([...selected, u]); setQ('') }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              <span className="font-semibold text-slate-700 dark:text-slate-200">{u.full_name || u.username}</span>
-              {u.role && <span className="text-xs text-slate-400 ml-2">{u.role}</span>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ManageAccessModal({ minutes, item, index, restriction, onClose, onUpdated, onError }) {
-  const [reason, setReason] = useState(restriction?.reason || '')
-  const [toShare, setToShare] = useState([])
-  const [busy, setBusy] = useState(false)
-
-  const call = async (path, payload) => {
-    setBusy(true)
-    try {
-      const res = await api.post(`/minutes/${minutes.id}/${path}/`, payload)
-      onUpdated(res.data)
-      return true
-    } catch (err) {
-      onError(err.response?.data?.detail || 'Action failed.')
-      return false
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const restrictNow = async () => {
-    const ok = await call('restrict-item', { index, reason, user_ids: toShare.map(u => u.id) })
-    if (ok) onClose()
-  }
-  const shareNow = async () => {
-    if (!toShare.length) return
-    const ok = await call('grant-access', { restriction_id: restriction.id, user_ids: toShare.map(u => u.id) })
-    if (ok) setToShare([])
-  }
-
-  const grantedIds = (restriction?.visible_to || []).map(u => u.id)
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center text-amber-600">
-              <Lock size={18} />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100">
-                {restriction ? 'Manage access' : 'Restrict agenda item'}
-              </h3>
-              <p className="text-xs text-slate-500">
-                {item.submission_ref || `Item ${index + 1}`}{item.title ? ` — ${item.title}` : ''}
-              </p>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors">
-            <X size={16} />
-          </button>
-        </div>
-
-        {!restriction && (
-          <>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-              Everyone who can open these minutes will see this item as locked. Only the
-              Secretary, Administrator, and people you share it with can read it.
-            </p>
-            <div className="mb-4">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Reason (optional)</label>
-              <textarea className="input min-h-[60px] resize-y text-sm" value={reason} onChange={e => setReason(e.target.value)} placeholder="Why is this item restricted?" />
-            </div>
-            <div className="mb-5">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Share with (optional)</label>
-              <UserSearchPicker minutesId={minutes.id} selected={toShare} onChange={setToShare} />
-            </div>
-            <button type="button" onClick={restrictNow} disabled={busy} className="btn-gradient w-full py-2.5 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60">
-              {busy ? <Loader2 size={15} className="animate-spin" /> : <Lock size={15} />}
-              Restrict this item
-            </button>
-          </>
-        )}
-
-        {restriction && (
-          <>
-            {restriction.reason && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 italic">Reason: {restriction.reason}</p>
-            )}
-
-            {(restriction.pending_requests || []).length > 0 && (
-              <div className="mb-5">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Pending access requests</label>
-                <div className="space-y-2">
-                  {restriction.pending_requests.map(req => (
-                    <div key={req.id} className="flex items-center justify-between gap-3 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{req.requested_by_name}</p>
-                        {req.message && <p className="text-xs text-slate-500 truncate">{`"${req.message}"`}</p>}
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => call('decide-request', { request_id: req.id, approve: true })}
-                          className="text-xs font-bold text-emerald-600 hover:text-emerald-700 px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 transition-colors disabled:opacity-60"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => call('decide-request', { request_id: req.id, approve: false })}
-                          className="text-xs font-bold text-red-500 hover:text-red-600 px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 transition-colors disabled:opacity-60"
-                        >
-                          Deny
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mb-5">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">People with access</label>
-              {(restriction.visible_to || []).length === 0 && (
-                <p className="text-xs text-slate-400 mb-2">Only the Secretary and Administrator can see this item.</p>
-              )}
-              <div className="space-y-1.5">
-                {(restriction.visible_to || []).map(u => (
-                  <div key={u.id} className="flex items-center justify-between gap-3 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{u.full_name || u.username}</span>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => call('revoke-access', { restriction_id: restriction.id, user_id: u.id })}
-                      className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors disabled:opacity-60"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Share with more people</label>
-              <UserSearchPicker minutesId={minutes.id} selected={toShare} onChange={setToShare} excludeIds={grantedIds} />
-              {toShare.length > 0 && (
-                <button type="button" onClick={shareNow} disabled={busy} className="btn-primary btn-sm mt-2 inline-flex items-center gap-1.5 disabled:opacity-60">
-                  <Share2 size={13} /> Share
-                </button>
-              )}
-            </div>
-
-            <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  const ok = await call('unrestrict-item', { restriction_id: restriction.id })
-                  if (ok) onClose()
-                }}
-                className="text-sm font-bold text-red-500 hover:text-red-600 transition-colors disabled:opacity-60"
-              >
-                Remove restriction — make visible to everyone
-              </button>
-            </div>
-          </>
-        )}
-      </div>
     </div>
   )
 }
@@ -425,7 +156,7 @@ function ReadOnlySection({ label, value }) {
   )
 }
 
-function ReadOnlyAgendaItem({ item, index, restricted, canManageAccess, onManageAccess }) {
+function ReadOnlyAgendaItem({ item, index }) {
   return (
     <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
       <div className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800/50">
@@ -434,11 +165,6 @@ function ReadOnlyAgendaItem({ item, index, restricted, canManageAccess, onManage
             {item.submission_ref || `Item ${index + 1}`}
           </span>
           {item.title && <span className="text-xs text-slate-500 truncate">— {item.title}</span>}
-          {restricted && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 whitespace-nowrap">
-              <Lock size={9} /> Restricted
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <span className={clsx(
@@ -452,16 +178,6 @@ function ReadOnlyAgendaItem({ item, index, restricted, canManageAccess, onManage
           )}>
             {item.decision_type || 'Pending'}
           </span>
-          {canManageAccess && (
-            <button
-              type="button"
-              onClick={() => onManageAccess(item, index)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors whitespace-nowrap"
-            >
-              {restricted ? <Share2 size={13} /> : <Lock size={13} />}
-              {restricted ? 'Manage access' : 'Restrict'}
-            </button>
-          )}
         </div>
       </div>
       <div className="p-4 space-y-3 border-t border-slate-100 dark:border-slate-700">
@@ -498,9 +214,6 @@ function ReadOnlyAgendaItem({ item, index, restricted, canManageAccess, onManage
     </div>
   )
 }
-
-const itemKeyOf = (item) =>
-  item?.agenda_item_id ? `ai-${item.agenda_item_id}` : (item?.item_key || null)
 
 export default function MinutesEditor() {
   const { t } = useTranslation()
@@ -562,52 +275,6 @@ export default function MinutesEditor() {
       items[index] = { ...items[index], [field]: value }
       return { ...prev, agenda_items: items }
     })
-  }
-
-  // ── Per-item visibility locks (restrict / share / request access) ─────────
-  const [manageTarget, setManageTarget] = useState(null) // { item, index }
-  const [requestingKey, setRequestingKey] = useState(null)
-
-  const accessControl = minutes?.access_control || { can_manage: false, restrictions: [] }
-  const restrictionByKey = Object.fromEntries(
-    (accessControl.restrictions || []).map(r => [r.item_key, r]),
-  )
-  const canManageAccess = Boolean(accessControl.can_manage) && minutes?.status === 'signed'
-
-  const refreshFromResponse = (data) => {
-    setMinutes(data)
-    if (data?.content && typeof data.content === 'object') setContent(data.content)
-  }
-
-  // Deep link from a notification: ?item=<item_key> opens the manage-access
-  // modal for that agenda item (Secretary/Admin only), once, after load.
-  const deepLinkHandled = useRef(false)
-  useEffect(() => {
-    if (deepLinkHandled.current || !minutes?.id || !canManageAccess) return
-    const itemKey = searchParams.get('item')
-    if (!itemKey) return
-    const list = content.agenda_items || []
-    const idx = list.findIndex(it => itemKeyOf(it) === itemKey)
-    if (idx === -1) return
-    deepLinkHandled.current = true
-    setManageTarget({ item: list[idx], index: idx })
-  }, [minutes?.id, canManageAccess, searchParams, content.agenda_items])
-
-  const requestAccess = async (item) => {
-    const key = itemKeyOf(item)
-    if (!key || !minutes?.id) return
-    setRequestingKey(key)
-    setError('')
-    setSuccess('')
-    try {
-      const res = await api.post(`/minutes/${minutes.id}/request-access/`, { item_key: key })
-      refreshFromResponse(res.data)
-      setSuccess('Access request sent to the Secretariat.')
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to request access.')
-    } finally {
-      setRequestingKey(null)
-    }
   }
 
   const saveMinutes = async () => {
@@ -773,20 +440,9 @@ export default function MinutesEditor() {
             {(content.agenda_items || []).map((item, idx) => (
               <div key={idx} className="mb-3">
                 {item.restricted ? (
-                  <RestrictedAgendaItem
-                    item={item}
-                    index={idx}
-                    onRequestAccess={requestAccess}
-                    requesting={requestingKey === itemKeyOf(item)}
-                  />
+                  <RestrictedAgendaItem item={item} index={idx} />
                 ) : (
-                  <ReadOnlyAgendaItem
-                    item={item}
-                    index={idx}
-                    restricted={Boolean(restrictionByKey[itemKeyOf(item)])}
-                    canManageAccess={canManageAccess}
-                    onManageAccess={(it, i) => setManageTarget({ item: it, index: i })}
-                  />
+                  <ReadOnlyAgendaItem item={item} index={idx} />
                 )}
               </div>
             ))}
@@ -828,21 +484,9 @@ export default function MinutesEditor() {
           {(content.agenda_items || []).map((item, idx) => (
             <div key={idx} className="mb-3">
               {item.restricted ? (
-                <RestrictedAgendaItem
-                  item={item}
-                  index={idx}
-                  onRequestAccess={requestAccess}
-                  requesting={requestingKey === itemKeyOf(item)}
-                />
+                <RestrictedAgendaItem item={item} index={idx} />
               ) : (
-                <AgendaItemEditor
-                  item={item}
-                  index={idx}
-                  onChange={handleAgendaChange}
-                  restricted={Boolean(restrictionByKey[itemKeyOf(item)])}
-                  canManageAccess={canManageAccess}
-                  onManageAccess={(it, i) => setManageTarget({ item: it, index: i })}
-                />
+                <AgendaItemEditor item={item} index={idx} onChange={handleAgendaChange} />
               )}
             </div>
           ))}
@@ -907,18 +551,6 @@ export default function MinutesEditor() {
         )}
       </div>
       </>
-      )}
-
-      {manageTarget && minutes?.id && (
-        <ManageAccessModal
-          minutes={minutes}
-          item={manageTarget.item}
-          index={manageTarget.index}
-          restriction={restrictionByKey[itemKeyOf(manageTarget.item)] || null}
-          onClose={() => setManageTarget(null)}
-          onUpdated={refreshFromResponse}
-          onError={setError}
-        />
       )}
 
       {showPinModal && (

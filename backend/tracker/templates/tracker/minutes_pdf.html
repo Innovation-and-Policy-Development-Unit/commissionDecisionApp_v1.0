@@ -154,7 +154,7 @@
   <div class="agenda-item">
     <h3>Item {{ forloop.counter }}: {{ item.submission_ref }} — {{ item.title }}</h3>
     {% if item.restricted %}
-    <p><em>This agenda item is restricted by the Secretariat and has been omitted from this copy.</em></p>
+    <p><em>This agenda item relates to another OPSC unit and has been omitted from this copy.</em></p>
     {% endif %}
     {% if item.discussion %}
     <p><strong>Discussion:</strong> {{ item.discussion|linebreaks }}</p>

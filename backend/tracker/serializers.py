@@ -2021,7 +2021,6 @@ class MinutesSerializer(serializers.ModelSerializer):
     meeting_date = serializers.DateField(source="meeting.date", read_only=True)
     signed_by_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
-    access_control = serializers.SerializerMethodField()
 
     class Meta:
         model = Minutes
@@ -2031,7 +2030,7 @@ class MinutesSerializer(serializers.ModelSerializer):
             "signed_by", "signed_by_name", "signed_at",
             "circulated_at", "minutes_due_at",
             "created_by", "created_by_name",
-            "created_at", "updated_at", "access_control",
+            "created_at", "updated_at",
         )
         read_only_fields = ("id", "created_at", "updated_at", "created_by")
 
@@ -2045,13 +2044,8 @@ class MinutesSerializer(serializers.ModelSerializer):
         user = getattr(request, "user", None)
         if user is not None and user.is_authenticated:
             return user
-        # No request context — treat as uncleared so locked items never leak.
+        # No request context — treat as uncleared so unit items never leak.
         return AnonymousUser()
-
-    def get_access_control(self, obj):
-        from .minutes_access import access_control_payload
-
-        return access_control_payload(obj, self._request_user())
 
     def to_representation(self, instance):
         from .minutes_access import redact_content
