@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
+import { useAuth } from '../../context/AuthContext'
+import { userCanEditMinutes } from '../../utils/minutesAccess'
 import { normalizeListPayload } from '../../utils/listPayload'
 
 const STATUS_META = {
@@ -71,6 +73,8 @@ function SummaryBar({ minutes }) {
 
 export default function MinutesIndex() {
   const { t, i18n } = useTranslation()
+  const { user } = useAuth()
+  const canEdit = userCanEditMinutes(user)
   const locale = LOCALE_MAP[i18n.resolvedLanguage] || LOCALE_MAP[i18n.language] || 'en-GB'
   const [minutes, setMinutes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -239,16 +243,18 @@ export default function MinutesIndex() {
                         <Eye size={14} aria-hidden="true" />
                         {t('secretariat.minutes_action_view')}
                       </Link>
-                      <Link
-                        to={`/secretariat/meetings/${row.meeting}/minutes`}
-                        className={clsx(
-                          'inline-flex items-center gap-1.5 text-sm font-medium',
-                          'text-slate-500 dark:text-slate-400 hover:underline',
-                        )}
-                      >
-                        <PenSquare size={14} aria-hidden="true" />
-                        {t('secretariat.minutes_action_edit')}
-                      </Link>
+                      {canEdit && (
+                        <Link
+                          to={`/secretariat/meetings/${row.meeting}/minutes`}
+                          className={clsx(
+                            'inline-flex items-center gap-1.5 text-sm font-medium',
+                            'text-slate-500 dark:text-slate-400 hover:underline',
+                          )}
+                        >
+                          <PenSquare size={14} aria-hidden="true" />
+                          {t('secretariat.minutes_action_edit')}
+                        </Link>
+                      )}
                     </div>
                   </td>
                 </tr>

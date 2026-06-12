@@ -7840,7 +7840,12 @@ class FeedbackStatusView(APIView):
 
 
 class MinutesViewSet(viewsets.ModelViewSet):
-    """CRUD for meeting minutes documents, plus AI generation actions."""
+    """CRUD for meeting minutes documents, plus AI generation actions.
+
+    Visibility: the Secretariat and Commission see every status; all other
+    OPSC-internal staff see endorsed (signed) minutes only — with locked agenda
+    items redacted by the serializer; ministry-side users see none.
+    """
 
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
     queryset = Minutes.objects.select_related(
@@ -7848,12 +7853,29 @@ class MinutesViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = MinutesSerializer
 
+    _FULL_ACCESS_ROLES = {
+        Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.CHAIRPERSON,
+        Role.PSC_COMMISSIONER, Role.SENIOR_ADMIN_OFFICER,
+    }
+
     def get_queryset(self):
+        from .opsc_access import MINISTRY_SIDE_ROLES
+
         qs = super().get_queryset()
         meeting_id = self.request.query_params.get("meeting")
         if meeting_id:
             qs = qs.filter(meeting_id=meeting_id)
-        return qs
+
+        user = self.request.user
+        if user.is_superuser or user.is_staff:
+            return qs
+        profile = _profile(user)
+        if profile.role in self._FULL_ACCESS_ROLES:
+            return qs
+        if profile.role in MINISTRY_SIDE_ROLES:
+            return qs.none()
+        # All other OPSC-internal staff: endorsed minutes only.
+        return qs.filter(status=MinutesStatus.SIGNED)
 
     def perform_create(self, serializer):
         profile = _profile(self.request.user)

@@ -75,6 +75,14 @@ MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES: dict[str, set[str]] = {
     Role.CSU_MANAGER: {Role.SENIOR_OFFICER},
 }
 
+# Ministry-side roles — external to OPSC; never see Commission minutes.
+MINISTRY_SIDE_ROLES: frozenset[str] = frozenset({
+    Role.HEAD_OF_AGENCY,
+    Role.MINISTRY_HR,
+    Role.DEPT_ADMIN,
+    Role.TRAVELLER,
+})
+
 # Roles that may be assigned as commission-task managers (secretariat allocates)
 COMMISSION_TASK_MANAGER_ROLES: frozenset[str] = OPSC_UNIT_MANAGER_ROLES | frozenset({Role.PSC_MANAGER})
 
