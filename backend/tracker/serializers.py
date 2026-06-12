@@ -1922,6 +1922,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             "channel",
             "title",
             "body",
+            "link",
             "is_read",
             "emailed",
             "created_at",

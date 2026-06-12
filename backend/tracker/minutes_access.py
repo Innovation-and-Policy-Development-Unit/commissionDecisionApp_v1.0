@@ -213,6 +213,14 @@ def minute_access_deciders() -> list[User]:
     )
 
 
+def _minutes_view_link(restriction: AgendaItemRestriction, *, manage: bool = False) -> str:
+    """In-app path to the minutes view; ``manage`` deep-links the access modal."""
+    link = f"/secretariat/meetings/{restriction.minutes.meeting_id}/minutes?mode=view"
+    if manage:
+        link += f"&item={restriction.item_key}"
+    return link
+
+
 def notify_access_request(restriction: AgendaItemRestriction, requester) -> None:
     ref = restriction.minutes.meeting.reference_number
     title = restriction.item_title or restriction.item_key
@@ -228,6 +236,7 @@ def notify_access_request(restriction: AgendaItemRestriction, requester) -> None
                 f'{requester_name} requested access to the restricted agenda item '
                 f'"{title}" in the minutes of {ref}. Open the minutes to approve or deny.'
             ),
+            link=_minutes_view_link(restriction, manage=True),
         )
 
 
@@ -248,6 +257,7 @@ def notify_access_decision(request_row) -> None:
             f"was {'approved' if approved else 'declined'}."
             + (f' Note: "{note}"' if note else "")
         ),
+        link=_minutes_view_link(restriction),
     )
 
 
@@ -263,4 +273,5 @@ def notify_access_granted(restriction: AgendaItemRestriction, user, granted_by) 
             f'{granter} shared the restricted agenda item "{title}" '
             f"from the minutes of {ref} with you."
         ),
+        link=_minutes_view_link(restriction),
     )

@@ -33,6 +33,21 @@ export function userHasCommissionDecisionView(user) {
   return Boolean(user?.role && COMMISSION_DECISION_VIEW_ROLES.has(user.role))
 }
 
+/** Ministry-side roles — external to OPSC (mirrors backend MINISTRY_SIDE_ROLES). */
+export const MINISTRY_SIDE_ROLES = new Set([
+  'head_of_agency',
+  'ministry_hr',
+  'dept_admin',
+  'traveller',
+])
+
+/** Any OPSC-internal staff role — sees endorsed Commission minutes. */
+export function userIsOpscInternal(user) {
+  if (!user) return false
+  if (user.is_superuser || user.is_staff) return true
+  return Boolean(user.role && !MINISTRY_SIDE_ROLES.has(user.role))
+}
+
 export function userIsOpscUnitManager(user) {
   return Boolean(user?.role && OPSC_UNIT_MANAGER_ROLES.has(user.role))
 }

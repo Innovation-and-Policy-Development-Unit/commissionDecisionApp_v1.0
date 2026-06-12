@@ -13,11 +13,12 @@ import { isTabVisible } from './useVisibilityAwareInterval'
 const POLL_MS = 45_000
 
 function mapApiRow(row) {
-  const path = row.submission
-    ? `/submissions/${row.submission}`
-    : row.title?.toLowerCase().includes('task')
-      ? '/secretariat/tasks'
-      : '/submissions'
+  const path = row.link
+    || (row.submission
+      ? `/submissions/${row.submission}`
+      : row.title?.toLowerCase().includes('task')
+        ? '/secretariat/tasks'
+        : '/submissions')
   return {
     id: row.id,
     type: inferNotificationType(row.title),

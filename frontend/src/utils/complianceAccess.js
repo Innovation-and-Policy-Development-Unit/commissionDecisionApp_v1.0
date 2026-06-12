@@ -1,6 +1,10 @@
 import { COMPLIANCE_ROLES } from '../constants/compliance'
 import { userIsAdmin } from './adminAccess'
-import { COMMISSION_DECISION_VIEW_ROLES, userHasCommissionDecisionView } from './opscAccess'
+import {
+  COMMISSION_DECISION_VIEW_ROLES,
+  userHasCommissionDecisionView,
+  userIsOpscInternal,
+} from './opscAccess'
 
 export function isComplianceRole(role) {
   return COMPLIANCE_ROLES.includes(role)
@@ -58,6 +62,10 @@ export function menuItemVisibleForUser(item, user) {
   }
   if (audience === 'commission_decision') {
     return userIsCommissionDecisionOps(user) && !userIsComplianceStaff(user)
+  }
+  if (audience === 'opsc_internal') {
+    // All OPSC staff (endorsed minutes etc.); compliance keeps its own menu.
+    return userIsOpscInternal(user) && !userIsComplianceStaff(user)
   }
   if (audience === 'exclude_compliance') return !userIsComplianceStaff(user)
   return true

@@ -2868,6 +2868,10 @@ class Notification(models.Model):
     channel = models.CharField(max_length=10, choices=Channel.choices, default=Channel.BOTH)
     title = models.CharField(max_length=255)
     body = models.TextField(blank=True)
+    link = models.CharField(
+        max_length=512, blank=True, default="",
+        help_text="In-app path opened when the notification is clicked (falls back to the submission page).",
+    )
     is_read = models.BooleanField(default=False)
     emailed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

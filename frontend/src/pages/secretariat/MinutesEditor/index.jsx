@@ -579,6 +579,20 @@ export default function MinutesEditor() {
     if (data?.content && typeof data.content === 'object') setContent(data.content)
   }
 
+  // Deep link from a notification: ?item=<item_key> opens the manage-access
+  // modal for that agenda item (Secretary/Admin only), once, after load.
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (deepLinkHandled.current || !minutes?.id || !canManageAccess) return
+    const itemKey = searchParams.get('item')
+    if (!itemKey) return
+    const list = content.agenda_items || []
+    const idx = list.findIndex(it => itemKeyOf(it) === itemKey)
+    if (idx === -1) return
+    deepLinkHandled.current = true
+    setManageTarget({ item: list[idx], index: idx })
+  }, [minutes?.id, canManageAccess, searchParams, content.agenda_items])
+
   const requestAccess = async (item) => {
     const key = itemKeyOf(item)
     if (!key || !minutes?.id) return

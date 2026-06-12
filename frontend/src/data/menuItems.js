@@ -68,7 +68,7 @@ const menuItems = [
     group: 'Commission Decision',
     groupKey: 'nav.group_commission',
     groupIcon: Gavel,
-    audience: 'commission_decision',
+    audience: 'opsc_internal',
     items: [
       {
         label: 'Meetings',
@@ -87,7 +87,7 @@ const menuItems = [
         icon: FileText,
         children: [
           { label: 'Agenda',        labelKey: 'nav.agenda',        icon: ScrollText, path: '/secretariat/agenda',        audience: 'secretariat' },
-          { label: 'Minutes',       labelKey: 'nav.minutes',       icon: FileText,   path: '/secretariat/minutes',       audience: 'commission_decision' },
+          { label: 'Minutes',       labelKey: 'nav.minutes',       icon: FileText,   path: '/secretariat/minutes',       audience: 'opsc_internal' },
           { label: 'Minute intake', labelKey: 'nav.minute_intake', icon: PenLine,    path: '/secretariat/minute-intake', audience: 'secretariat' },
         ],
       },

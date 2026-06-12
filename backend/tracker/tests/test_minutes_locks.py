@@ -104,6 +104,10 @@ class MinutesLockTests(TestCase):
         self.assertEqual(res.status_code, 200)
         return res.data
 
+    def _list_minutes(self):
+        data = self.client.get("/api/minutes/").data
+        return data["results"] if isinstance(data, dict) else data
+
     # ── redaction ────────────────────────────────────────────────────────────
 
     def test_unrestricted_minutes_fully_visible(self):
@@ -213,6 +217,16 @@ class MinutesLockTests(TestCase):
         self.assertEqual(res.status_code, 200)
         req = AgendaAccessRequest.objects.get(restriction__minutes=self.minutes)
         self.assertEqual(req.status, AgendaAccessRequestStatus.PENDING)
+
+        # Deciders are notified with a deep link to the manage-access modal.
+        from tracker.models import Notification
+        decider_notif = Notification.objects.filter(
+            recipient=self.secretary, title__startswith="Agenda access request",
+        ).latest("created_at")
+        self.assertEqual(
+            decider_notif.link,
+            f"/secretariat/meetings/{self.meeting.id}/minutes?mode=view&item=ai-102",
+        )
         # Duplicate pending request rejected.
         res = self.client.post(
             f"/api/minutes/{self.minutes.id}/request-access/",
@@ -277,7 +291,7 @@ class MinutesLockTests(TestCase):
             self.assertEqual(
                 self.client.get(f"/api/minutes/{self.minutes.id}/").status_code, 404,
             )
-            self.assertEqual(self.client.get("/api/minutes/").data, [])
+            self.assertEqual(self._list_minutes(), [])
         # …but the Secretariat still sees it.
         self.client.force_authenticate(user=self.secretary)
         self.assertEqual(self.client.get(f"/api/minutes/{self.minutes.id}/").status_code, 200)
@@ -292,7 +306,7 @@ class MinutesLockTests(TestCase):
         ministry_user = User.objects.create_user(username="lock_ministry", password="pass")
         Profile.objects.create(user=ministry_user, role=Role.MINISTRY_HR)
         self.client.force_authenticate(user=ministry_user)
-        self.assertEqual(self.client.get("/api/minutes/").data, [])
+        self.assertEqual(self._list_minutes(), [])
         self.assertEqual(
             self.client.get(f"/api/minutes/{self.minutes.id}/").status_code, 404,
         )
