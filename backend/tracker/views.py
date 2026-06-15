@@ -274,7 +274,7 @@ def _submission_queryset_for(user):
         # Compliance staff see all OPSC-internal compliance submissions (created
         # natively in SCDMS — no external case link required).
         return qs.filter(
-            form_category__code="COMPLIANCE",
+            form_category__code__in=["COMPLIANCE", "discipline_compliance"],
             is_internal=True,
         )
     if role in _UNIT_PRINCIPAL_ROLES:
@@ -3576,6 +3576,18 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return _commission_task_queryset_for(self.request.user)
+
+    @action(detail=False, methods=["get"], url_path="unallocated-decisions")
+    def unallocated_decisions(self, request):
+        """Decided items in signed minutes that have no task yet.
+
+        Prefill data for the manual Allocate-task modal — covers decisions the
+        post-signing automation could not allocate (e.g. no unit manager)."""
+        if not rbac_user_has_permission(request.user, "allocate_decision"):
+            raise PermissionDenied("You do not have permission to allocate commission tasks.")
+        from .decision_allocation import pending_decision_allocations
+
+        return Response(pending_decision_allocations())
 
     def perform_create(self, serializer):
         if not rbac_user_has_permission(self.request.user, "allocate_decision"):

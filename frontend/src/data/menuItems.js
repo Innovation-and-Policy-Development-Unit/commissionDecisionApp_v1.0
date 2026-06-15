@@ -55,7 +55,8 @@ const menuItems = [
         labelKey: 'nav.compliance_intake',
         icon: Inbox,
         children: [
-          { label: 'Complaints Register', labelKey: 'nav.complaints_register', icon: Inbox, path: '/compliance/complaints', audience: 'compliance' },
+          { label: 'Complaints Register', labelKey: 'nav.complaints_register', icon: Inbox,     path: '/compliance/complaints',     audience: 'compliance' },
+          { label: 'Lodge a Complaint',   labelKey: 'nav.lodge_complaint',     icon: Megaphone, path: '/compliance/lodge-complaint', roles: ['head_of_agency', 'ministry_hr', 'dept_admin'] },
         ],
       },
       {
@@ -137,7 +138,7 @@ const menuItems = [
     group: 'Intelligence',
     groupKey: 'nav.group_intelligence',
     groupIcon: Sparkles,
-    audience: 'all',
+    audience: 'exclude_compliance',
     items: [
       { label: 'SCDMS Intelligence', labelKey: 'nav.intelligence',     icon: Sparkles,      path: '/intelligence' },
       { label: 'Dashboards',       labelKey: 'nav.dashboards',        icon: LayoutDashboard, path: '/intelligence/dashboards' },

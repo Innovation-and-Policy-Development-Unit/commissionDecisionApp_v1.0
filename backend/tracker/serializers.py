@@ -1,5 +1,6 @@
 from urllib.parse import urlparse
 from django.contrib.auth.models import User
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
 from .models import (
@@ -357,6 +358,7 @@ class CommissionTaskSerializer(serializers.ModelSerializer):
             "submission",
             "submission_reference_number",
             "submission_title",
+            "agenda_item",
             # ── Task fields ───────────────────────────────────────────────
             "title",
             "description",
@@ -402,11 +404,30 @@ class CommissionTaskSerializer(serializers.ModelSerializer):
         super().__init__(*args, **kwargs)
         if self.instance is not None:
             self.fields["submission"].read_only = True
+            self.fields["agenda_item"].read_only = True
 
     def validate(self, attrs):
         if self.instance is None:
             sub = attrs.get("submission")
-            if sub and sub.current_stage not in _TASK_LINK_STAGES:
+            agenda_item = attrs.get("agenda_item")
+            if agenda_item is not None:
+                if CommissionTask.objects.filter(agenda_item=agenda_item).exists():
+                    raise serializers.ValidationError(
+                        {"agenda_item": "This decision has already been allocated to a task."}
+                    )
+                if sub is not None and agenda_item.submission_id != sub.pk:
+                    raise serializers.ValidationError(
+                        {"agenda_item": "Agenda item does not belong to the linked submission."}
+                    )
+            # A decision recorded in signed minutes is post-decision by
+            # definition, even if the submission's workflow stage was never
+            # advanced — allow the link in that case.
+            try:
+                minutes = agenda_item.meeting.minutes if agenda_item else None
+            except ObjectDoesNotExist:
+                minutes = None
+            from_signed_minutes = getattr(minutes, "status", "") == "signed"
+            if sub and not from_signed_minutes and sub.current_stage not in _TASK_LINK_STAGES:
                 raise serializers.ValidationError(
                     {
                         "submission": (

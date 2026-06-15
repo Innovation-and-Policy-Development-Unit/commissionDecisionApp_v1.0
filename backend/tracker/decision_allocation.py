@@ -50,6 +50,24 @@ _DECISION_TYPE_TO_OUTCOME: dict[str, str] = {
 }
 
 
+def _effective_routed_unit(submission) -> str:
+    """Submission's routed unit, falling back to the intake form-type mapping.
+
+    Submissions that reached the Commission without passing through checklist
+    review never get ``routed_unit`` set, which used to force manual allocation
+    of their decisions. The form type → unit mapping (admin-configurable on
+    PSCFormType) is just as authoritative, so use it as a fallback.
+    """
+    if submission is None:
+        return ""
+    if submission.routed_unit:
+        return submission.routed_unit
+
+    from .intake_routing import routed_unit_for_form_type
+
+    return routed_unit_for_form_type(submission.form_type_code) or ""
+
+
 def unit_manager_for(routed_unit: str) -> User | None:
     role = ROUTED_UNIT_TO_MANAGER_ROLE.get(routed_unit or "")
     if not role:
@@ -102,7 +120,12 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
 
         agenda_item = agenda_items[agenda_item_id]
         submission = agenda_item.submission
-        routed_unit = (submission.routed_unit or "") if submission else ""
+        routed_unit = _effective_routed_unit(submission)
+        if submission and routed_unit and not submission.routed_unit:
+            # Persist the form-type-derived unit so the rest of the app
+            # (checklists, unit dashboards) sees the same routing.
+            submission.routed_unit = routed_unit
+            submission.save(update_fields=["routed_unit"])
         manager = unit_manager_for(routed_unit)
         if manager is None:
             unallocated.append(
@@ -162,6 +185,68 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
         meeting.reference_number, getattr(actor, "username", "?"), stats,
     )
     return stats
+
+
+def pending_decision_allocations() -> list[dict]:
+    """Decided agenda items from signed minutes that still have no task.
+
+    Same selection rules as ``allocate_decision_tasks`` (decision text present,
+    linked agenda item, no existing CommissionTask). Powers the "prefill from a
+    pending decision" picker in the manual Allocate-task modal, so the
+    Secretariat never retypes what the signed minutes already contain.
+    """
+    pending: list[dict] = []
+    for minutes in Minutes.objects.filter(status="signed").select_related("meeting"):
+        meeting = minutes.meeting
+        blocks = [
+            b
+            for b in ((minutes.content or {}).get("agenda_items") or [])
+            if isinstance(b, dict)
+        ]
+        agenda_ids = [b.get("agenda_item_id") for b in blocks if b.get("agenda_item_id")]
+        agenda_items = {
+            row.id: row
+            for row in AgendaItem.objects.filter(id__in=agenda_ids).select_related("submission")
+        }
+        tasked = set(
+            CommissionTask.objects.filter(agenda_item_id__in=agenda_ids)
+            .values_list("agenda_item_id", flat=True)
+        )
+
+        for index, block in enumerate(blocks, start=1):
+            decision_text = (block.get("decision") or "").strip()
+            agenda_item_id = block.get("agenda_item_id")
+            if not decision_text or agenda_item_id in tasked:
+                continue
+            agenda_item = agenda_items.get(agenda_item_id)
+            if agenda_item is None:
+                continue
+
+            submission = agenda_item.submission
+            routed_unit = _effective_routed_unit(submission)
+            title = block.get("title") or block.get("submission_ref") or f"Item {index}"
+            pending.append(
+                {
+                    "agenda_item": agenda_item_id,
+                    "meeting": meeting.id,
+                    "meeting_reference": meeting.reference_number or "",
+                    "meeting_date": meeting.date.isoformat() if meeting.date else None,
+                    "minute_reference": f"Item {block.get('sequence') or index}",
+                    "item_title": title,
+                    "suggested_task_title": f"Action Commission decision — {title}"[:255],
+                    "decision_detail": decision_text,
+                    "description": (block.get("discussion") or "")[:2000],
+                    "decision_outcome": _DECISION_TYPE_TO_OUTCOME.get(
+                        (block.get("decision_type") or "").lower(), ""
+                    ),
+                    "action_unit": ROUTED_UNIT_TO_ACTION_UNIT.get(routed_unit, ""),
+                    "submission": submission.id if submission else None,
+                    "submission_reference": (
+                        submission.reference_number if submission else ""
+                    ),
+                }
+            )
+    return pending
 
 
 def queue_post_signing_automation(minutes: Minutes) -> None:

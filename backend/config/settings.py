@@ -250,6 +250,10 @@ AXES_FAILURE_LIMIT = int(os.getenv('AXES_FAILURE_LIMIT', '5'))
 AXES_COOLOFF_TIME = timedelta(hours=int(os.getenv('AXES_COOLOFF_HOURS', '1')))
 AXES_RESET_ON_SUCCESS = True                       # reset counter on good login
 AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
+# Behind Caddy → nginx, REMOTE_ADDR is always the web container's docker IP,
+# so every visitor shared one lockout bucket (a stranger's 5 failures locked
+# the real user out globally). Resolve the client from X-Forwarded-For instead.
+AXES_CLIENT_IP_CALLABLE = 'config.client_ip.axes_client_ip'
 AXES_ENABLED = True
 AXES_HANDLER = 'axes.handlers.database.AxesDatabaseHandler'
 

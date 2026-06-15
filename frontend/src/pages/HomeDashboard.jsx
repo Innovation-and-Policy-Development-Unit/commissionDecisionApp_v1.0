@@ -4,6 +4,8 @@ import { LayoutDashboard, Building2 } from 'lucide-react'
 import PscDashboard from './psc/PscDashboard'
 import { useAuth } from '../context/AuthContext'
 import { PageSkeleton } from '../components/shared/Skeleton'
+import { isComplianceRole } from '../constants/compliance'
+import ComplianceDashboardPanel from './psc/ComplianceDashboardPanel'
 
 // The ministry dashboard is code-split — only loaded for ministry / admin users.
 const MinistryDashboard = lazy(() => import('./ministry/MinistryDashboard'))
@@ -36,6 +38,10 @@ export default function HomeDashboard() {
 
   // Both ministry roles share the same scoped ministry dashboard.
   if (role === 'head_of_agency' || role === 'ministry_hr') return renderView('ministry')
+
+  // Compliance roles see the same dashboard layout as PSC staff,
+  // but the backend scopes all data to compliance submissions only.
+  if (isComplianceRole(role)) return <PscDashboard />
 
   // Non-admin PSC/internal users: the default dashboard only.
   if (!isAdmin) return <PscDashboard />

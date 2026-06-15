@@ -959,6 +959,43 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  // Pending decisions from signed minutes that auto-allocation could not place
+  const [pendingDecisions, setPendingDecisions] = useState([])
+  const [pendingId, setPendingId] = useState('')
+  const [agendaItemId, setAgendaItemId] = useState(null)
+  const [extraSubmission, setExtraSubmission] = useState(null)
+
+  useEffect(() => {
+    api.get('/commission-tasks/unallocated-decisions/')
+      .then(r => setPendingDecisions(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setPendingDecisions([]))
+  }, [])
+
+  const applyPendingDecision = id => {
+    setPendingId(id)
+    const p = pendingDecisions.find(x => String(x.agenda_item) === String(id))
+    if (!p) { setAgendaItemId(null); setExtraSubmission(null); return }
+    setAgendaItemId(p.agenda_item)
+    setTitle(p.suggested_task_title || '')
+    setDescription(p.description || '')
+    setDecisionDetail(p.decision_detail || '')
+    setDecisionOutcome(p.decision_outcome || '')
+    setActionUnit(p.action_unit || '')
+    setMeetingReference(p.meeting_reference || '')
+    setMeetingDate(p.meeting_date || '')
+    setMinuteReference(p.minute_reference || '')
+    if (p.submission) {
+      setSubmissionId(String(p.submission))
+      // The submission may not be in the post-decision-stage choices yet
+      setExtraSubmission(
+        submissionChoices.some(s => s.id === p.submission)
+          ? null
+          : { id: p.submission, reference_number: p.submission_reference, title: p.item_title }
+      )
+    }
+  }
+
+  const submissionOptions = extraSubmission ? [...submissionChoices, extraSubmission] : submissionChoices
 
   const submit = async e => {
     e.preventDefault(); setErr('')
@@ -967,6 +1004,7 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
     try {
       await api.post('/commission-tasks/', {
         submission: submissionId ? Number(submissionId) : null,
+        agenda_item: agendaItemId,
         assigned_manager: Number(managerId),
         title: title.trim(),
         description,
@@ -1006,6 +1044,24 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
       <form onSubmit={submit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
         {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
 
+        {pendingDecisions.length > 0 && (
+          <div className="p-3 rounded-xl border border-primary-200 dark:border-primary-700 bg-primary-50/50 dark:bg-primary-900/10">
+            <BaseSelect
+              label={`Prefill from a pending decision (${pendingDecisions.length} awaiting allocation)`}
+              placeholder="— Start from scratch —"
+              value={pendingId}
+              options={pendingDecisions.map(p => ({
+                value: String(p.agenda_item),
+                label: `${p.meeting_reference} ${p.minute_reference} — ${p.item_title.slice(0, 70)}`,
+              }))}
+              onChange={(_, v) => applyPendingDecision(v)}
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Decisions in signed minutes that have not been allocated yet. Selecting one fills the form — you only pick the manager.
+            </p>
+          </div>
+        )}
+
         <DecisionRegisterFields {...{ decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }} />
 
         <div className="pt-2 border-t border-slate-100 dark:border-slate-700">
@@ -1024,7 +1080,7 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
                 label="Submission (optional)"
                 placeholder="— No linked submission —"
                 value={submissionId ? String(submissionId) : ''}
-                options={submissionChoices.map(s => ({ value: String(s.id), label: `${s.reference_number} — ${s.title.slice(0, 60)}` }))}
+                options={submissionOptions.map(s => ({ value: String(s.id), label: `${s.reference_number} — ${s.title.slice(0, 60)}` }))}
                 onChange={(_, v) => setSubmissionId(v)}
               />
               <p className="text-[11px] text-slate-400 mt-1">Only post-decision / implementation stage items listed.</p>
