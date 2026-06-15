@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Inbox, RefreshCw, Check, X } from 'lucide-react'
+import { Inbox, RefreshCw, Check, X, Megaphone } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import { CASE_FAMILIES } from '../../constants/compliance'
+import { LodgeComplaintModal } from './LodgeComplaint'
 
 const STATUS_COLORS = {
   received:     'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
@@ -19,6 +20,7 @@ export default function ComplaintsRegister() {
   const [busyId, setBusyId] = useState(null)
   const [acceptFor, setAcceptFor] = useState(null)
   const [family, setFamily] = useState('employee_disciplinary')
+  const [showLodge, setShowLodge] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -62,9 +64,14 @@ export default function ComplaintsRegister() {
         title="Complaints Register"
         subtitle="Complaints lodged by ministries — triage into a case or reject with a reason"
         action={
-          <button type="button" className="btn-outline flex items-center gap-2 py-2 px-3 text-sm" onClick={load} disabled={loading}>
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" className="btn-primary flex items-center gap-2 py-2 px-3 text-sm" onClick={() => setShowLodge(true)}>
+              <Megaphone size={15} /> Lodge a Complaint
+            </button>
+            <button type="button" className="btn-outline flex items-center gap-2 py-2 px-3 text-sm" onClick={load} disabled={loading}>
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh
+            </button>
+          </div>
         }
       />
       {error && <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
@@ -128,6 +135,13 @@ export default function ComplaintsRegister() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {showLodge && (
+        <LodgeComplaintModal
+          onClose={() => setShowLodge(false)}
+          onLodged={() => { setShowLodge(false); load() }}
+        />
       )}
 
       {acceptFor && (

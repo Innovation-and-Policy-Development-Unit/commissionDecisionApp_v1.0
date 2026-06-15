@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Megaphone, Send, RefreshCw } from 'lucide-react'
+import { Megaphone, Send, RefreshCw, X } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 
@@ -13,15 +13,120 @@ const STATUS_COLORS = {
 
 const EMPTY = { title: '', description: '', subject_name: '', subject_position: '', subject_ministry: '' }
 
-export default function LodgeComplaint() {
+/**
+ * LodgeComplaintForm — reusable form used both in the modal and the standalone page.
+ * onSuccess() is called after a complaint is successfully lodged.
+ */
+export function LodgeComplaintForm({ onSuccess }) {
   const [form, setForm] = useState(EMPTY)
-  const [mine, setMine] = useState([])
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!form.title.trim()) { setError('A title is required.'); return }
+    setSaving(true); setError(''); setOk('')
+    try {
+      await api.post('/compliance/complaints/', form)
+      setOk('Complaint lodged. The Compliance unit will review it shortly.')
+      setForm(EMPTY)
+      onSuccess?.()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not lodge the complaint.')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      {error && <div className="rounded-lg bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {ok    && <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{ok}</div>}
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Complaint title *</label>
+        <input className="form-input w-full" value={form.title} onChange={set('title')} placeholder="e.g. Repeated unexplained absence" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Details</label>
+        <textarea className="form-input w-full" rows={4} value={form.description} onChange={set('description')}
+          placeholder="Describe the conduct or performance concern, dates, and any context." />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Subject name</label>
+          <input className="form-input w-full" value={form.subject_name} onChange={set('subject_name')} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Subject position</label>
+          <input className="form-input w-full" value={form.subject_position} onChange={set('subject_position')} />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Subject ministry / agency</label>
+        <input className="form-input w-full" value={form.subject_ministry} onChange={set('subject_ministry')} />
+      </div>
+      <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
+        <Send size={15} /> {saving ? 'Lodging…' : 'Lodge complaint'}
+      </button>
+      <p className="text-xs text-slate-400">
+        The Compliance unit handles complaints confidentially. You will receive a reference number and can track the status in the Complaints Register.
+      </p>
+    </form>
+  )
+}
+
+/**
+ * Modal wrapper — rendered by ComplaintsRegister.
+ */
+export function LodgeComplaintModal({ onClose, onLodged }) {
+  const handleSuccess = () => {
+    onLodged?.()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-xl bg-white dark:bg-slate-800 shadow-2xl flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal header */}
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-4 shrink-0">
+          <div className="flex items-center gap-2">
+            <Megaphone size={18} className="text-primary-600 dark:text-primary-400" />
+            <div>
+              <h2 className="font-semibold text-slate-800 dark:text-slate-100">Lodge a Complaint</h2>
+              <p className="text-xs text-slate-400">Refer a conduct or performance concern to the Compliance unit</p>
+            </div>
+          </div>
+          <button
+            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Modal body */}
+        <div className="overflow-y-auto px-5 py-4">
+          <LodgeComplaintForm onSuccess={handleSuccess} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Standalone page — kept so the /compliance/lodge-complaint route still works.
+ * Shows the form alongside the user's own complaint history.
+ */
+export default function LodgeComplaint() {
+  const [mine, setMine] = useState([])
+  const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -33,64 +138,21 @@ export default function LodgeComplaint() {
 
   useEffect(() => { load() }, [load])
 
-  const submit = async (e) => {
-    e.preventDefault()
-    if (!form.title.trim()) { setError('A title is required.'); return }
-    setSaving(true); setError(''); setOk('')
-    try {
-      await api.post('/compliance/complaints/', form)
-      setOk('Complaint lodged with the Compliance unit. You will see its status below.')
-      setForm(EMPTY)
-      await load()
-    } catch (e) {
-      setError(e.response?.data?.detail || 'Could not lodge the complaint.')
-    } finally { setSaving(false) }
-  }
-
   return (
     <div>
       <PageHeader title="Lodge a Complaint" subtitle="Refer a conduct or performance concern to the OPSC Compliance unit" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <form onSubmit={submit} className="space-y-4">
-          {error && <div className="rounded-lg bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
-          {ok && <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{ok}</div>}
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Complaint title *</label>
-            <input className="form-input w-full" value={form.title} onChange={set('title')} placeholder="e.g. Repeated unexplained absence" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Details</label>
-            <textarea className="form-input w-full" rows={5} value={form.description} onChange={set('description')}
-              placeholder="Describe the conduct or performance concern, dates, and any context." />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Subject name</label>
-              <input className="form-input w-full" value={form.subject_name} onChange={set('subject_name')} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Subject position</label>
-              <input className="form-input w-full" value={form.subject_position} onChange={set('subject_position')} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Subject ministry / agency</label>
-            <input className="form-input w-full" value={form.subject_ministry} onChange={set('subject_ministry')} />
-          </div>
-          <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
-            <Send size={16} /> {saving ? 'Lodging…' : 'Lodge complaint'}
-          </button>
-          <p className="text-xs text-slate-400">
-            The Compliance unit handles complaints confidentially. You will see only the status of your own complaint, not the case that may follow.
-          </p>
-        </form>
+        <LodgeComplaintForm onSuccess={load} />
 
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2"><Megaphone size={16} /> My complaints</h3>
-            <button type="button" className="text-slate-400 hover:text-slate-600" onClick={load}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
+            <h3 className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+              <Megaphone size={16} /> My complaints
+            </h3>
+            <button type="button" className="text-slate-400 hover:text-slate-600" onClick={load}>
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            </button>
           </div>
           {loading ? (
             <div className="py-8 text-center text-slate-400 text-sm">Loading…</div>

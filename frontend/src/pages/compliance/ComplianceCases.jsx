@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, RefreshCw, AlertCircle, Clock, CheckCircle2, CircleDot, Plus, Send, Check } from 'lucide-react'
+import { ShieldCheck, RefreshCw, AlertCircle, Clock, CheckCircle2, CircleDot, Plus, Send, Check, Search, X } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import { useAuth } from '../../context/AuthContext'
+import { CASE_FAMILIES } from '../../constants/compliance'
+import NewComplianceCaseForm from './NewComplianceCaseForm'
 
 const MANAGER_ROLES = ['compliance_manager', 'psc_admin']
 
@@ -45,6 +47,10 @@ export default function ComplianceCases() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [search, setSearch] = useState('')
+  const [filterFamily, setFilterFamily] = useState('')
+  const [filterSla, setFilterSla] = useState('')
+  const [showNewCase, setShowNewCase] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -60,6 +66,25 @@ export default function ComplianceCases() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const filtered = useMemo(() => {
+    let out = cases
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      out = out.filter((c) =>
+        c.subject_name?.toLowerCase().includes(q) ||
+        c.reference_number?.toLowerCase().includes(q) ||
+        c.subject_ministry?.toLowerCase().includes(q)
+      )
+    }
+    if (filterFamily) out = out.filter((c) => c.case_family === filterFamily)
+    if (filterSla === 'overdue') out = out.filter((c) => (c.sla_summary?.overdue ?? 0) > 0)
+    if (filterSla === 'at_risk')  out = out.filter((c) => (c.sla_summary?.at_risk  ?? 0) > 0)
+    if (filterSla === 'on_track') out = out.filter((c) => (c.sla_summary?.overdue ?? 0) === 0 && (c.sla_summary?.at_risk ?? 0) === 0)
+    return out
+  }, [cases, search, filterFamily, filterSla])
+
+  const hasFilters = search || filterFamily || filterSla
 
   const act = async (c, verb) => {
     setBusyId(c.id)
@@ -81,7 +106,7 @@ export default function ComplianceCases() {
             <button
               type="button"
               className="btn-primary flex items-center gap-2 py-2 px-3 text-sm"
-              onClick={() => navigate('/compliance/cases/new')}
+              onClick={() => setShowNewCase(true)}
             >
               <Plus size={16} /> New Case
             </button>
@@ -103,6 +128,35 @@ export default function ComplianceCases() {
         </div>
       )}
 
+      {/* Filter bar */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            className="form-input pl-8 py-1.5 text-sm w-full"
+            placeholder="Search by name, reference, ministry…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <select className="form-input py-1.5 text-sm" value={filterFamily} onChange={(e) => setFilterFamily(e.target.value)}>
+          <option value="">All case families</option>
+          {CASE_FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+        </select>
+        <select className="form-input py-1.5 text-sm" value={filterSla} onChange={(e) => setFilterSla(e.target.value)}>
+          <option value="">All SLA statuses</option>
+          <option value="overdue">Overdue</option>
+          <option value="at_risk">At risk</option>
+          <option value="on_track">On track</option>
+        </select>
+        {hasFilters && (
+          <button className="btn-outline py-1.5 px-3 text-sm flex items-center gap-1" onClick={() => { setSearch(''); setFilterFamily(''); setFilterSla('') }}>
+            <X size={13} /> Clear
+          </button>
+        )}
+        <span className="self-center text-xs text-slate-400 ml-auto">{filtered.length} of {cases.length}</span>
+      </div>
+
       {loading ? (
         <div className="py-16 text-center text-slate-400">Loading…</div>
       ) : cases.length === 0 ? (
@@ -110,6 +164,8 @@ export default function ComplianceCases() {
           <ShieldCheck size={40} className="mx-auto mb-3 opacity-50" />
           No compliance cases yet.
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-12 text-center text-slate-400">No cases match the current filters.</div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
           <table className="min-w-full text-sm">
@@ -125,7 +181,7 @@ export default function ComplianceCases() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              {cases.map((c) => (
+              {filtered.map((c) => (
                 <tr key={c.id} onClick={() => navigate(`/compliance/cases/${c.id}`)}
                   className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
                   <td className="px-4 py-3 font-mono text-xs text-primary-600 dark:text-primary-400">{c.reference_number}</td>
@@ -169,6 +225,38 @@ export default function ComplianceCases() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showNewCase && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowNewCase(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-xl bg-white dark:bg-slate-800 shadow-2xl flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-4 shrink-0">
+              <div>
+                <h2 className="font-semibold text-slate-800 dark:text-slate-100">New Compliance Case</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Open a statutory disciplinary, suspension, or grievance matter</p>
+              </div>
+              <button
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                onClick={() => setShowNewCase(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-5 py-5">
+              <NewComplianceCaseForm
+                modal
+                onSuccess={() => { setShowNewCase(false); load() }}
+                onClose={() => setShowNewCase(false)}
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>

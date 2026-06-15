@@ -72,6 +72,9 @@ const ComplianceCaseDetail = lazy(() => import('../pages/compliance/ComplianceCa
 const NewComplianceCaseForm = lazy(() => import('../pages/compliance/NewComplianceCaseForm'))
 const ComplaintsRegister = lazy(() => import('../pages/compliance/ComplaintsRegister'))
 const LodgeComplaint = lazy(() => import('../pages/compliance/LodgeComplaint'))
+const ComplianceDashboard = lazy(() => import('../pages/compliance/ComplianceDashboard'))
+const ComplianceReports = lazy(() => import('../pages/compliance/ComplianceReports'))
+const LitigationTracker = lazy(() => import('../pages/compliance/LitigationTracker'))
 
 function RouteFallback({ detail = false }) {
   return <PageSkeleton detailMode={detail} />
@@ -123,11 +126,14 @@ export default function AppRouter() {
           <Route path="/annual-report"        element={<S><AnnualReport /></S>} />
 
           {/* ── Compliance ── */}
-          <Route path="/compliance/cases"      element={<S><ComplianceCases /></S>} />
-          <Route path="/compliance/cases/new"  element={<S><NewComplianceCaseForm /></S>} />
-          <Route path="/compliance/cases/:id"  element={<S detail><ComplianceCaseDetail /></S>} />
-          <Route path="/compliance/complaints" element={<S><ComplaintsRegister /></S>} />
+          <Route path="/compliance/dashboard"      element={<S><ComplianceDashboard /></S>} />
+          <Route path="/compliance/cases"          element={<S><ComplianceCases /></S>} />
+          <Route path="/compliance/cases/new"      element={<S><NewComplianceCaseForm /></S>} />
+          <Route path="/compliance/cases/:id"      element={<S detail><ComplianceCaseDetail /></S>} />
+          <Route path="/compliance/complaints"     element={<S><ComplaintsRegister /></S>} />
           <Route path="/compliance/lodge-complaint" element={<S><LodgeComplaint /></S>} />
+          <Route path="/compliance/reports"        element={<S><ComplianceReports /></S>} />
+          <Route path="/compliance/litigation"     element={<S><LitigationTracker /></S>} />
 
           {/* ── Admin ── */}
           <Route path="/admin/roles-permissions" element={<S><AdminPanel /></S>} />

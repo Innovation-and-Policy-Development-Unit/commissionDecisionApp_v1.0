@@ -3,7 +3,7 @@ import {
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Headphones, Mail, FolderOpen, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, CalendarCheck, AlertCircle, Tablet, Trash2,
-  ListChecks, Megaphone, Inbox, Flag, SlidersHorizontal, Zap,
+  ListChecks, Megaphone, Inbox, Flag, SlidersHorizontal, Zap, Scale,
 } from 'lucide-react'
 import {
   userCanAccessAdminPanel,
@@ -34,33 +34,39 @@ const menuItems = [
     ],
   },
   {
-    // Group is visible to anyone with at least one permitted item: compliance staff
-    // see Cases + Register; ministry staff see only "Lodge a Complaint".
+    // Compliance staff see the full case management sub-menus.
+    // Ministry staff see only "Lodge a Complaint" inside Case Intake.
     group: 'Compliance',
     groupKey: 'nav.group_compliance',
     groupIcon: FolderOpen,
     audience: 'all',
     items: [
       {
-        label: 'Compliance Cases',
-        labelKey: 'nav.compliance_cases',
-        icon: ListChecks,
-        path: '/compliance/cases',
+        label: 'Overview',
+        labelKey: 'nav.compliance_overview',
+        icon: LayoutDashboard,
         audience: 'compliance',
+        children: [
+          { label: 'Compliance Cases', labelKey: 'nav.compliance_cases', icon: ListChecks, path: '/compliance/cases', audience: 'compliance' },
+        ],
       },
       {
-        label: 'Complaints Register',
-        labelKey: 'nav.complaints_register',
+        label: 'Case Intake',
+        labelKey: 'nav.compliance_intake',
         icon: Inbox,
-        path: '/compliance/complaints',
-        audience: 'compliance',
+        children: [
+          { label: 'Complaints Register', labelKey: 'nav.complaints_register', icon: Inbox, path: '/compliance/complaints', audience: 'compliance' },
+        ],
       },
       {
-        label: 'Lodge a Complaint',
-        labelKey: 'nav.lodge_complaint',
-        icon: Megaphone,
-        path: '/compliance/lodge-complaint',
-        roles: ['head_of_agency', 'ministry_hr', 'dept_admin'],
+        label: 'Reports & Litigation',
+        labelKey: 'nav.compliance_reports_lit',
+        icon: BarChart3,
+        audience: 'compliance',
+        children: [
+          { label: 'Case Reports',       labelKey: 'nav.compliance_reports',   icon: BarChart3, path: '/compliance/reports',    audience: 'compliance' },
+          { label: 'Litigation Tracker', labelKey: 'nav.compliance_litigation', icon: Scale,    path: '/compliance/litigation', audience: 'compliance' },
+        ],
       },
     ],
   },
