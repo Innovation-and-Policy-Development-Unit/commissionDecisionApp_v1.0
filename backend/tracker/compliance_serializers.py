@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.utils import timezone as tz
 from rest_framework import serializers
 
 from .compliance_models import (
@@ -70,6 +71,10 @@ class ComplianceCaseListSerializer(serializers.ModelSerializer):
     case_family_display = serializers.CharField(source="get_case_family_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     sla_summary = serializers.SerializerMethodField()
+    days_open = serializers.SerializerMethodField()
+    next_action_due = serializers.SerializerMethodField()
+    latest_note = serializers.SerializerMethodField()
+    year_group = serializers.SerializerMethodField()
 
     class Meta:
         model = ComplianceCase
@@ -78,10 +83,30 @@ class ComplianceCaseListSerializer(serializers.ModelSerializer):
             "case_family", "case_family_display",
             "subject_name", "subject_position", "subject_ministry", "is_senior_executive",
             "status", "status_display", "date_received", "created_at", "sla_summary",
+            "days_open", "next_action_due", "latest_note", "year_group",
         )
 
     def get_sla_summary(self, obj):
         return _sla_summary(obj)
+
+    def get_days_open(self, obj):
+        if not obj.date_received:
+            return None
+        return (tz.localdate() - obj.date_received).days
+
+    def get_next_action_due(self, obj):
+        from .compliance_models import StageStatus
+        pending = [s for s in obj.stages.all() if s.status != StageStatus.COMPLETED and s.due_date]
+        if not pending:
+            return None
+        return str(min(s.due_date for s in pending))
+
+    def get_latest_note(self, obj):
+        notes = sorted(obj.case_notes.all(), key=lambda n: n.created_at, reverse=True)
+        return notes[0].text[:250] if notes else None
+
+    def get_year_group(self, obj):
+        return obj.date_received.year if obj.date_received else None
 
 
 class ComplianceCaseDetailSerializer(ComplianceCaseListSerializer):
