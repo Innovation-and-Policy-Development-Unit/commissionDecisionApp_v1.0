@@ -1,9 +1,30 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldPlus } from 'lucide-react'
+import { ShieldPlus, ArrowRight } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
-import { CASE_FAMILIES, COMPLIANCE_FORM_CODES } from '../../constants/compliance'
+import { CASE_FAMILIES, COMPLIANCE_FORM_CODES, WORKFLOW_ROUTES } from '../../constants/compliance'
+
+function WorkflowPreview({ family }) {
+  const route = WORKFLOW_ROUTES[family]
+  if (!route || !route.milestones.length) return null
+  return (
+    <div className="rounded-lg border border-primary-200 bg-primary-50 dark:border-primary-900/40 dark:bg-primary-950/20 px-4 py-3">
+      <p className="text-xs font-semibold text-primary-700 dark:text-primary-400 uppercase tracking-wide mb-2">Workflow stages that will be created</p>
+      <div className="flex flex-wrap items-center gap-1">
+        {route.milestones.map((m, i) => (
+          <span key={m.code} className="flex items-center gap-1">
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${m.optional ? 'border border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-400' : 'bg-primary-600 text-white'}`}>
+              {m.label}{m.optional ? ' *' : ''}
+            </span>
+            {i < route.milestones.length - 1 && <ArrowRight size={10} className="text-slate-400 shrink-0" />}
+          </span>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[10px] text-slate-400">* optional stage</p>
+    </div>
+  )
+}
 
 export default function NewComplianceCaseForm({ modal = false, onSuccess, onClose }) {
   const navigate = useNavigate()
@@ -56,6 +77,8 @@ export default function NewComplianceCaseForm({ modal = false, onSuccess, onClos
             {CASE_FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
           </select>
         </div>
+
+        <WorkflowPreview family={form.case_family} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>

@@ -5,7 +5,7 @@
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, AlertCircle, Clock, CheckCircle2, Users, ArrowRight } from 'lucide-react'
+import { ShieldCheck, AlertCircle, Clock, CheckCircle2, Users, ArrowRight, Download, RefreshCw } from 'lucide-react'
 import api from '../../api/client'
 
 const FAMILY_COLORS = {
@@ -33,8 +33,10 @@ export default function ComplianceDashboardPanel({ userRole }) {
   const [cases, setCases] = useState([])
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(async () => {
+    setLoading(true)
     try {
       const res = await api.get('/compliance/cases/')
       setCases(res.data?.results ?? res.data ?? [])
@@ -46,6 +48,24 @@ export default function ComplianceDashboardPanel({ userRole }) {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const handleExport = useCallback(async () => {
+    setExporting(true)
+    try {
+      const res = await api.get('/compliance/cases/export-pptx/', { responseType: 'blob' })
+      const url  = URL.createObjectURL(new Blob([res.data]))
+      const a    = document.createElement('a')
+      const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      a.href     = url
+      a.download = `PSC_Compliance_Cases_${today}.pptx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Export failed', e)
+    } finally {
+      setExporting(false)
+    }
+  }, [])
 
   if (failed) return null  // silently hide if user has no access
 
@@ -75,12 +95,26 @@ export default function ComplianceDashboardPanel({ userRole }) {
           <ShieldCheck size={16} className="text-primary-600 dark:text-primary-400" />
           <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Compliance Overview</h3>
         </div>
-        <button
-          className="text-xs text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-0.5"
-          onClick={() => navigate('/compliance/dashboard')}
-        >
-          Full dashboard <ArrowRight size={11} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={load}
+            disabled={loading}
+            className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+            title="Refresh"
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={exporting || loading}
+            className="inline-flex items-center gap-1 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 px-2.5 py-1 rounded transition-colors"
+            title="Download PowerPoint report"
+          >
+            <Download size={12} />
+            {exporting ? 'Generating…' : 'Export PPTX'}
+          </button>
+        </div>
       </div>
 
       {loading ? (

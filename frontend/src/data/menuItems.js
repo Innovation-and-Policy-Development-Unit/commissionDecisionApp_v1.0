@@ -41,24 +41,9 @@ const menuItems = [
     groupIcon: FolderOpen,
     audience: 'all',
     items: [
-      {
-        label: 'Overview',
-        labelKey: 'nav.compliance_overview',
-        icon: LayoutDashboard,
-        audience: 'compliance',
-        children: [
-          { label: 'Compliance Cases', labelKey: 'nav.compliance_cases', icon: ListChecks, path: '/compliance/cases', audience: 'compliance' },
-        ],
-      },
-      {
-        label: 'Case Intake',
-        labelKey: 'nav.compliance_intake',
-        icon: Inbox,
-        children: [
-          { label: 'Complaints Register', labelKey: 'nav.complaints_register', icon: Inbox,     path: '/compliance/complaints',     audience: 'compliance' },
-          { label: 'Lodge a Complaint',   labelKey: 'nav.lodge_complaint',     icon: Megaphone, path: '/compliance/lodge-complaint', roles: ['head_of_agency', 'ministry_hr', 'dept_admin'] },
-        ],
-      },
+      { label: 'Compliance Cases',    labelKey: 'nav.compliance_cases',    icon: ListChecks, path: '/compliance/cases',          audience: 'compliance' },
+      { label: 'Complaints Register', labelKey: 'nav.complaints_register', icon: Inbox,      path: '/compliance/complaints',     audience: 'compliance' },
+      { label: 'Lodge a Complaint',   labelKey: 'nav.lodge_complaint',     icon: Megaphone,  path: '/compliance/lodge-complaint', roles: ['head_of_agency', 'ministry_hr', 'dept_admin'] },
       {
         label: 'Reports & Litigation',
         labelKey: 'nav.compliance_reports_lit',

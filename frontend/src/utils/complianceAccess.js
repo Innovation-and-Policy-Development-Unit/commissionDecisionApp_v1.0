@@ -1,4 +1,4 @@
-import { COMPLIANCE_ROLES } from '../constants/compliance'
+import { COMPLIANCE_ROLES, COMPLIANCE_STAFF_ROLES } from '../constants/compliance'
 import { userIsAdmin } from './adminAccess'
 import {
   COMMISSION_DECISION_VIEW_ROLES,
@@ -10,7 +10,13 @@ export function isComplianceRole(role) {
   return COMPLIANCE_ROLES.includes(role)
 }
 
+/** Full compliance unit staff — read/write access */
 export function userIsComplianceStaff(user) {
+  return Boolean(user && COMPLIANCE_STAFF_ROLES.includes(user.role))
+}
+
+/** Any role with compliance visibility (staff + read-only adjacent roles) */
+export function userHasComplianceAccess(user) {
   return Boolean(user && isComplianceRole(user.role))
 }
 
@@ -56,7 +62,7 @@ export function menuItemVisibleForUser(item, user) {
   if (!user) return false
   // Site admins / superusers see every menu, including compliance.
   if (userIsAdmin(user)) return true
-  if (audience === 'compliance') return userIsComplianceStaff(user)
+  if (audience === 'compliance') return userHasComplianceAccess(user)
   if (audience === 'secretariat') {
     return userIsSecretariatStaff(user) && !userIsComplianceStaff(user)
   }
@@ -67,6 +73,6 @@ export function menuItemVisibleForUser(item, user) {
     // All OPSC staff (endorsed minutes etc.); compliance keeps its own menu.
     return userIsOpscInternal(user) && !userIsComplianceStaff(user)
   }
-  if (audience === 'exclude_compliance') return !userIsComplianceStaff(user)
+  if (audience === 'exclude_compliance') return !userHasComplianceAccess(user)
   return true
 }

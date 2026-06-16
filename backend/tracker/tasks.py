@@ -37,6 +37,130 @@ def recompute_compliance_sla():
     return total
 
 
+@shared_task
+def send_compliance_deadline_notifications():
+    """
+    FR-09: Create in-app Notification rows for compliance stages that are
+    at-risk or overdue.  Runs after recompute_compliance_sla so sla_status
+    is always fresh.  Guards (at_risk_notified / overdue_notified) prevent
+    duplicate alerts for the same stage event.
+    """
+    from django.contrib.auth import get_user_model
+    from .compliance_models import (
+        ComplianceCase, ComplianceCaseStatus, ComplianceCaseStage, SLAStatus, StageStatus,
+    )
+    from .models import Notification, Role
+
+    User = get_user_model()
+
+    # Roles that receive compliance deadline alerts
+    ALERTED_ROLES = {
+        Role.COMPLIANCE_MANAGER,
+        Role.COMPLIANCE_SENIOR,
+        Role.COMPLIANCE_PRINCIPAL,
+        Role.PSC_ADMIN,
+        Role.SECRETARY_OPSC,
+    }
+
+    # Build a role → user list map (only active users)
+    role_users: dict[str, list] = {}
+    for u in (
+        User.objects.filter(psc_profile__role__in=ALERTED_ROLES, is_active=True)
+        .select_related("psc_profile")
+    ):
+        r = u.psc_profile.role
+        role_users.setdefault(r, []).append(u)
+
+    active_stages = (
+        ComplianceCaseStage.objects
+        .filter(
+            case__status__in=[ComplianceCaseStatus.ACTIVE, ComplianceCaseStatus.ON_HOLD],
+            sla_status__in=[SLAStatus.AT_RISK, SLAStatus.OVERDUE],
+        )
+        .exclude(status=StageStatus.COMPLETED)
+        .select_related("case__submission")
+    )
+
+    at_risk_created = overdue_created = 0
+    bulk_notifications = []
+
+    for stage in active_stages:
+        ref  = stage.case.submission.reference_number
+        link = f"/compliance/cases/{stage.case_id}/"
+
+        if stage.sla_status == SLAStatus.AT_RISK and not stage.at_risk_notified:
+            title = f"Deadline approaching — {ref}"
+            body  = (
+                f'Stage "{stage.stage_name}" on case {ref} is at risk of breaching '
+                f'its SLA deadline{(" (" + str(stage.due_date) + ")") if stage.due_date else ""}. '
+                "Please review and take action."
+            )
+            recipients = _compliance_stage_recipients(stage, role_users)
+            for user in recipients:
+                bulk_notifications.append(Notification(
+                    recipient=user, channel=Notification.Channel.IN_APP,
+                    title=title, body=body, link=link,
+                ))
+            stage.at_risk_notified = True
+            at_risk_created += len(recipients)
+
+        elif stage.sla_status == SLAStatus.OVERDUE and not stage.overdue_notified:
+            title = f"Stage overdue — {ref}"
+            body  = (
+                f'Stage "{stage.stage_name}" on case {ref} has exceeded its statutory '
+                f'deadline{(" (" + str(stage.due_date) + ")") if stage.due_date else ""}. '
+                "Immediate action required."
+            )
+            recipients = _compliance_stage_recipients(stage, role_users)
+            for user in recipients:
+                bulk_notifications.append(Notification(
+                    recipient=user, channel=Notification.Channel.IN_APP,
+                    title=title, body=body, link=link,
+                ))
+            stage.overdue_notified = True
+            overdue_created += len(recipients)
+
+    if bulk_notifications:
+        Notification.objects.bulk_create(bulk_notifications, ignore_conflicts=True)
+
+    # Persist notification guard flags in one query per flag type
+    at_risk_ids = [
+        s.id for s in active_stages
+        if s.sla_status == SLAStatus.AT_RISK and s.at_risk_notified
+    ]
+    overdue_ids = [
+        s.id for s in active_stages
+        if s.sla_status == SLAStatus.OVERDUE and s.overdue_notified
+    ]
+    if at_risk_ids:
+        ComplianceCaseStage.objects.filter(id__in=at_risk_ids).update(at_risk_notified=True)
+    if overdue_ids:
+        ComplianceCaseStage.objects.filter(id__in=overdue_ids).update(overdue_notified=True)
+
+    log.info(
+        "COMPLIANCE_NOTIFY | at_risk=%d overdue=%d notification(s) created",
+        at_risk_created, overdue_created,
+    )
+    return {"at_risk": at_risk_created, "overdue": overdue_created}
+
+
+def _compliance_stage_recipients(stage, role_users: dict) -> list:
+    """
+    Return the users to notify for a given stage.
+    Priority: responsible_role first; fall back to all compliance managers.
+    """
+    from .models import Role
+
+    responsible = stage.responsible_role
+    if responsible and responsible in role_users:
+        return role_users[responsible]
+    # Fall back: compliance managers + admin always get notified
+    fallback = set()
+    for r in (Role.COMPLIANCE_MANAGER, Role.PSC_ADMIN):
+        fallback.update(role_users.get(r, []))
+    return list(fallback)
+
+
 SYSTEM_INSTRUCTION = """You are a highly efficient "Executive Secretary" and "Triage Officer" for a high-level Commission Board in Vanuatu. You are an expert in both Bislama and English.
 
 Analyze the provided User Feedback. The feedback may be in Bislama, English, French, or a mix.

@@ -38,51 +38,79 @@ def _s(order, name, code, sla_days, is_working_days, responsible_role,
 
 
 # 1. EMPLOYEE INTERNAL DISCIPLINARY (PSC Reg. 27–32)
+# NAB FR-03 statutory deadlines applied:
+#   - Subject response to Notice of Allegation: 5 working days
+#   - MDC preliminary assessment: 5 working days (1 week)
+#   - SMDR referral by DG to OPSC: 5 working days
+#   - Investigation panel: 21 calendar days
+#   - Panel report to Commission: 7 calendar days
+#   - PSDB notice period: 28 calendar days (≥28 days per Public Service Act)
+#   - Commission confirmation of PSDB order: 45 calendar days
 _EMPLOYEE_DISCIPLINARY = [
-    _s(1, "Notice of Allegation Served", "allegation_notice", 5, True, "compliance_unit", "PSC Reg. 28(1)", "Written notice of allegation served on the subject employee within 5 working days of case registration."),
-    _s(2, "Subject Response Period", "subject_response", 5, True, "employee_subject", "PSC Reg. 28(2)", "Subject has 5 working days to lodge a written response to the allegation notice."),
-    _s(3, "Investigation Committee Appointed", "committee_appointed", 5, True, "compliance_unit", "PSC Reg. 29(1)", "An Investigation Committee of three members is constituted within 5 working days of the response deadline."),
-    _s(4, "Investigation Conducted", "investigation", 21, True, "compliance_unit", "PSC Reg. 29(2)", "Committee conducts its investigation and interviews within 21 working days of appointment."),
-    _s(5, "Investigation Report Submitted", "investigation_report", 5, True, "compliance_unit", "PSC Reg. 30(1)", "Committee submits a written report with findings and recommendations within 5 working days of completing the investigation."),
-    _s(6, "Head of Department / PSC Decision", "hod_decision", 10, True, "secretary_opsc", "PSC Reg. 31(1)", "Appointing authority reviews the report and makes a disciplinary decision within 10 working days."),
-    _s(7, "Outcome Letter Issued to Subject", "outcome_letter", 3, True, "compliance_unit", "PSC Reg. 32(1)", "Written outcome letter issued to the subject within 3 working days of the decision."),
+    _s(1,  "Notice of Allegation Served",          "allegation_notice",     5,  True,  "compliance_unit",  "PSC Reg. 28(1)",    "Written notice of allegation served on the subject employee within 5 working days of case registration."),
+    _s(2,  "Subject Response Period",               "subject_response",      5,  True,  "employee_subject", "PSC Reg. 28(2)",    "Subject has 5 working days to lodge a written response to the allegation notice."),
+    _s(3,  "MDC Preliminary Assessment",            "mdc_assessment",        5,  True,  "mdc_panel_mediator","PSC Reg. 29(1)",   "Ministerial Disciplinary Committee (MDC) conducts preliminary assessment within 5 working days (1 week) of receiving the subject's response."),
+    _s(4,  "SMDR Referral by DG to OPSC",           "smdr_referral",         5,  True,  "director_general", "PSC Reg. 29(2)",    "Director General submits the Staff Member Discipline Report (PSC Form 6-1) to OPSC within 5 working days of the MDC assessment."),
+    _s(5,  "OPSC Case Assessment",                  "opsc_assessment",       5,  True,  "compliance_unit",  "PSC Reg. 30(1)",    "Compliance Unit assesses the SMDR and supporting documents within 5 working days of receipt."),
+    _s(6,  "Investigation Panel Appointed",         "committee_appointed",   5,  True,  "compliance_unit",  "PSC Reg. 30(2)",    "An independent Investigation Panel of three members is constituted within 5 working days of OPSC case assessment."),
+    _s(7,  "Investigation Conducted",               "investigation",         21, False, "compliance_unit",  "PSC Reg. 31(1)",    "Panel conducts its investigation and interviews within 21 calendar days of appointment."),
+    _s(8,  "Investigation Report Submitted",        "investigation_report",  7,  False, "compliance_unit",  "PSC Reg. 31(2)",    "Panel submits written report with findings and recommendations to the Commission within 7 calendar days of completing the investigation."),
+    _s(9,  "PSDB Notice Period",                    "psdb_notice",           28, False, "secretary_opsc",   "PSC Act s.18(1)",   "Minimum 28 calendar days notice must be given to the subject before a PSDB hearing can be convened, per the Public Service Act."),
+    _s(10, "PSDB Hearing",                          "psdb_hearing",          10, True,  "secretary_opsc",   "PSC Reg. 32(1)",    "PSDB conducts a formal disciplinary hearing within 10 working days of the notice period expiry."),
+    _s(11, "PSDB Order Issued",                     "psdb_order",            5,  True,  "secretary_opsc",   "PSC Reg. 32(2)",    "PSDB issues a written order (warning, demotion, suspension without pay, compulsory retirement, or dismissal) within 5 working days of the hearing."),
+    _s(12, "Commission Confirmation of PSDB Order", "commission_confirmation",45, False, "commission_member","PSC Act s.20(1)",  "Commission must confirm, vary, or set aside the PSDB order within 45 calendar days. The order has no effect until confirmed."),
+    _s(13, "Outcome Letter Issued to Subject",      "outcome_letter",        3,  True,  "compliance_unit",  "PSC Reg. 33(1)",    "Written outcome letter issued to the subject within 3 working days of Commission confirmation."),
 ]
 
 # 2. SERIOUS MISCONDUCT — EMPLOYEE (PSC Reg. 33–42)
+# NAB FR-03 statutory deadlines applied:
+#   - Investigation panel: 21 calendar days (not 30 working days)
+#   - Panel report to Commission: 7 calendar days (not 5 working days)
+#   - PSDB notice period: 28 calendar days
+#   - Commission confirmation of PSDB order: 45 calendar days
 _SERIOUS_MISCONDUCT_EMPLOYEE = [
-    _s(1, "Show-Cause Notice Issued", "show_cause_notice", 2, True, "compliance_unit", "PSC Reg. 33(1)", "A show-cause notice is issued to the subject within 2 working days of the allegation being substantiated."),
-    _s(2, "Subject Show-Cause Response", "show_cause_response", 5, True, "employee_subject", "PSC Reg. 33(2)", "Subject must provide a written response to the show-cause notice within 5 working days."),
-    _s(3, "Interim Suspension Decision", "interim_suspension", 2, True, "secretary_opsc", "PSC Reg. 34(1)", "Appointing authority decides whether to impose interim suspension pending investigation.", is_optional=True),
-    _s(4, "Independent Investigator Appointed", "investigator_appointed", 5, True, "compliance_unit", "PSC Reg. 35(1)", "An independent investigator or panel is appointed within 5 working days of the show-cause deadline."),
-    _s(5, "Investigation Conducted", "investigation", 30, True, "compliance_unit", "PSC Reg. 35(2)", "Full disciplinary investigation conducted and completed within 30 working days of appointment."),
-    _s(6, "Investigation Report to OPSC", "investigation_report", 5, True, "compliance_unit", "PSC Reg. 36(1)", "Investigator submits a written report with findings to the OPSC within 5 working days."),
-    _s(7, "PSC Preliminary Assessment", "psc_assessment", 5, True, "secretary_opsc", "PSC Reg. 37(1)", "PSC conducts a preliminary review of the investigation report to determine whether a formal hearing is warranted."),
-    _s(8, "PSDB Referral", "psdb_referral", 5, True, "secretary_opsc", "PSC Reg. 38(1)", "If the subject contests the findings, the matter may be referred to the PSDB.", is_optional=True),
-    _s(9, "Formal PSC / PSDB Hearing", "psc_hearing", 10, True, "secretary_opsc", "PSC Reg. 39(1)", "Formal hearing conducted where both parties present their case, within 10 working days of the assessment."),
-    _s(10, "PSC Decision & Sanction Issued", "psc_decision", 5, True, "secretary_opsc", "PSC Reg. 40(1)", "PSC issues a written decision and applies the appropriate sanction within 5 working days of the hearing."),
-    _s(11, "Outcome Letter Issued to Subject", "outcome_letter", 3, True, "compliance_unit", "PSC Reg. 41(1)", "Written outcome letter formally notifying the subject of the decision and sanction within 3 working days."),
+    _s(1,  "Show-Cause Notice Issued",              "show_cause_notice",     2,  True,  "compliance_unit",  "PSC Reg. 33(1)",  "A show-cause notice is issued to the subject within 2 working days of the allegation being substantiated."),
+    _s(2,  "Subject Show-Cause Response",           "show_cause_response",   5,  True,  "employee_subject", "PSC Reg. 33(2)",  "Subject must provide a written response to the show-cause notice within 5 working days."),
+    _s(3,  "Interim Suspension Decision",           "interim_suspension",    2,  True,  "secretary_opsc",   "PSC Reg. 34(1)",  "Appointing authority decides whether to impose interim suspension pending investigation.", is_optional=True),
+    _s(4,  "Independent Investigator Appointed",    "investigator_appointed",5,  True,  "compliance_unit",  "PSC Reg. 35(1)",  "An independent investigator or panel is appointed within 5 working days of the show-cause deadline."),
+    _s(5,  "Investigation Conducted",               "investigation",         21, False, "compliance_unit",  "PSC Reg. 35(2)",  "Full disciplinary investigation conducted and completed within 21 calendar days of appointment."),
+    _s(6,  "Investigation Report to Commission",    "investigation_report",  7,  False, "compliance_unit",  "PSC Reg. 36(1)",  "Investigator submits a written report with findings to the Commission within 7 calendar days of completing the investigation."),
+    _s(7,  "PSC Preliminary Assessment",            "psc_assessment",        5,  True,  "secretary_opsc",   "PSC Reg. 37(1)",  "PSC conducts a preliminary review of the investigation report to determine whether a formal hearing is warranted."),
+    _s(8,  "PSDB Notice Period",                    "psdb_notice",           28, False, "secretary_opsc",   "PSC Act s.18(1)", "Minimum 28 calendar days notice must be given to the subject before a PSDB hearing, per the Public Service Act.", is_optional=True),
+    _s(9,  "PSDB Referral & Hearing",               "psdb_hearing",          10, True,  "secretary_opsc",   "PSC Reg. 38(1)",  "Formal PSDB hearing conducted within 10 working days of the notice period expiry.", is_optional=True),
+    _s(10, "PSC Decision & Sanction Issued",        "psc_decision",          5,  True,  "secretary_opsc",   "PSC Reg. 40(1)",  "PSC issues a written decision and applies the appropriate sanction within 5 working days of the hearing."),
+    _s(11, "Commission Confirmation of PSDB Order", "commission_confirmation",45, False, "commission_member","PSC Act s.20(1)", "Commission must confirm, vary, or set aside the PSDB order within 45 calendar days."),
+    _s(12, "Outcome Letter Issued to Subject",      "outcome_letter",        3,  True,  "compliance_unit",  "PSC Reg. 41(1)",  "Written outcome letter formally notifying the subject of the decision within 3 working days of Commission confirmation."),
 ]
 
 # 3. TEMPORARY SUSPENSION (PSC Reg. 43–47)
+# NAB FR-03 statutory deadlines applied:
+#   - SMDR (allegation notice) issued to staff member: 3 CALENDAR days from suspension (not working days)
+#   - Staff response to OPSC: 3 CALENDAR days (not 5 working days)
+#   - Maximum suspension period: 2 months on half salary
 _TEMPORARY_SUSPENSION = [
-    _s(1, "Suspension Order Issued", "suspension_order", 1, True, "secretary_opsc", "PSC Reg. 43(1)", "The appointing authority issues a written suspension order within 1 working day of the trigger event."),
-    _s(2, "Formal Allegation Notice Served", "allegation_notice", 3, True, "compliance_unit", "PSC Reg. 43(2)", "A formal notice of allegation detailing the grounds for suspension is served within 3 working days."),
-    _s(3, "Subject Response Period", "subject_response", 5, True, "employee_subject", "PSC Reg. 44(1)", "Subject has 5 working days to respond in writing to the formal allegation notice."),
-    _s(4, "Review by Appointing Authority", "authority_review", 5, True, "secretary_opsc", "PSC Reg. 45(1)", "The appointing authority reviews the subject's response and available evidence within 5 working days."),
-    _s(5, "Decision: Continue or Reinstate", "continuation_decision", 3, True, "secretary_opsc", "PSC Reg. 46(1)", "A formal decision is made to continue the suspension and escalate, or reinstate the employee."),
-    _s(6, "Outcome Communicated to Subject", "outcome_letter", 2, True, "compliance_unit", "PSC Reg. 47(1)", "Written notice of the decision is communicated to the subject within 2 working days."),
+    _s(1, "Suspension Order Issued",           "suspension_order",      1,  True,  "secretary_opsc",   "PSC Reg. 43(1)", "The appointing authority issues a written suspension order within 1 working day of the trigger event."),
+    _s(2, "SMDR / Allegation Notice Served",   "allegation_notice",     3,  False, "compliance_unit",  "PSC Reg. 43(2)", "Staff Member Discipline Report (PSC Form 6-1) and formal notice of allegation served within 3 CALENDAR days of the suspension order. Subject is placed on half salary from date of suspension."),
+    _s(3, "Subject Response to OPSC",          "subject_response",      3,  False, "employee_subject", "PSC Reg. 44(1)", "Subject has 3 CALENDAR days to respond in writing to the allegation notice / SMDR."),
+    _s(4, "Review by Appointing Authority",    "authority_review",      5,  True,  "secretary_opsc",   "PSC Reg. 45(1)", "The appointing authority reviews the subject's response and available evidence within 5 working days."),
+    _s(5, "Decision: Continue or Reinstate",   "continuation_decision", 3,  True,  "secretary_opsc",   "PSC Reg. 46(1)", "A formal decision is made to continue the suspension and escalate the matter, or reinstate the employee. Maximum suspension period is 2 months on half salary."),
+    _s(6, "Outcome Communicated to Subject",   "outcome_letter",        2,  True,  "compliance_unit",  "PSC Reg. 47(1)", "Written notice of the decision communicated to the subject within 2 working days."),
 ]
 
 # 4. GRIEVANCE PROCESS (PSC Reg. 48–56 / Employment Act s.57)
+# NAB FR-03 statutory deadlines applied:
+#   - Mediator appointed: within 5 calendar days of complaint
+#   - Mediation resolution: within 10 working days of appointment (not 21)
 _GRIEVANCE = [
-    _s(1, "Grievance Lodged & Acknowledged", "grievance_lodged", 2, True, "compliance_unit", "PSC Reg. 48(1)", "Grievance is formally received and an acknowledgement letter issued to the complainant within 2 working days."),
-    _s(2, "MDC Assessment", "mdc_assessment", 5, True, "mdc_panel_mediator", "PSC Reg. 49(1) / Employment Act s.57", "The Mediation & Dispute Committee conducts an initial assessment within 5 working days."),
-    _s(3, "Conciliation / Mediation Conducted", "mediation", 21, True, "mdc_panel_mediator", "PSC Reg. 50(1)", "MDC-facilitated conciliation or mediation conducted; up to 21 working days to reach a settlement."),
-    _s(4, "Mediation Outcome Documented", "mediation_outcome", 3, True, "mdc_panel_mediator", "PSC Reg. 51(1)", "The mediator documents the outcome (settled or not settled) within 3 working days of the final session."),
-    _s(5, "Referral to PSDB (if unresolved)", "psdb_referral", 5, True, "compliance_unit", "PSC Reg. 52(1)", "If mediation fails, the grievance is referred to the PSDB within 5 working days.", is_optional=True),
-    _s(6, "PSDB Hearing", "psdb_hearing", 14, True, "secretary_opsc", "PSC Reg. 53(1)", "PSDB schedules and conducts a formal grievance hearing within 14 working days of referral.", is_optional=True),
-    _s(7, "PSDB Determination Issued", "psdb_determination", 5, True, "secretary_opsc", "PSC Reg. 54(1)", "PSDB issues a written determination within 5 working days of the hearing.", is_optional=True),
-    _s(8, "Outcome Letter Issued", "outcome_letter", 3, True, "compliance_unit", "PSC Reg. 55(1)", "Final outcome letter issued to all parties within 3 working days of the determination or settled mediation."),
+    _s(1, "Grievance Lodged & Acknowledged", "grievance_lodged",   2,  True,  "compliance_unit",     "PSC Reg. 48(1)",                  "Grievance is formally received and an acknowledgement letter issued to the complainant within 2 working days."),
+    _s(2, "Mediator Appointed",              "mediator_appointed", 5,  False, "compliance_unit",     "PSC Reg. 49(1)",                  "A mediator is appointed within 5 CALENDAR days of the complaint being lodged, per the NAB statutory requirement."),
+    _s(3, "MDC Assessment",                  "mdc_assessment",     5,  True,  "mdc_panel_mediator",  "PSC Reg. 49(2) / Employment Act s.57", "The Mediation & Dispute Committee / mediator conducts an initial assessment within 5 working days of appointment."),
+    _s(4, "Conciliation / Mediation",        "mediation",          10, True,  "mdc_panel_mediator",  "PSC Reg. 50(1)",                  "MDC-facilitated conciliation or mediation conducted; must reach a settlement outcome within 10 WORKING days of mediator appointment."),
+    _s(5, "Mediation Outcome Documented",    "mediation_outcome",  3,  True,  "mdc_panel_mediator",  "PSC Reg. 51(1)",                  "The mediator documents the outcome (settled or not settled) and completes PSC Form 6.8 (Memorandum of Mediation) within 3 working days."),
+    _s(6, "Referral to PSDB (if unresolved)","psdb_referral",      5,  True,  "compliance_unit",     "PSC Reg. 52(1)",                  "If mediation fails, the grievance is referred to the PSDB within 5 working days.", is_optional=True),
+    _s(7, "PSDB Hearing",                    "psdb_hearing",       14, True,  "secretary_opsc",      "PSC Reg. 53(1)",                  "PSDB schedules and conducts a formal grievance hearing within 14 working days of referral.", is_optional=True),
+    _s(8, "PSDB Determination Issued",       "psdb_determination", 5,  True,  "secretary_opsc",      "PSC Reg. 54(1)",                  "PSDB issues a written determination within 5 working days of the hearing.", is_optional=True),
+    _s(9, "Outcome Letter Issued",           "outcome_letter",     3,  True,  "compliance_unit",     "PSC Reg. 55(1)",                  "Final outcome letter issued to all parties within 3 working days of the determination or settled mediation."),
 ]
 
 # 5. SENIOR EXECUTIVE — SERIOUS MISCONDUCT (PSC Act s.22–29)
@@ -93,8 +121,8 @@ _SENIOR_SERIOUS_MISCONDUCT = [
     _s(4, "Executive Response Period", "executive_response", 5, True, "employee_subject", "PSC Act s.23(2)", "Senior executive has 5 working days to lodge a written response to the notice of allegation."),
     _s(5, "Interim Suspension (if warranted)", "interim_suspension", 3, True, "secretary_opsc", "PSC Act s.24(1)", "Commission may recommend interim suspension pending the inquiry outcome.", is_optional=True),
     _s(6, "Independent Investigator Appointed", "investigator_appointed", 5, True, "commission_member", "PSC Act s.25(1)", "Commission appoints an independent investigator within 5 working days of the response deadline."),
-    _s(7, "Investigation Conducted", "investigation", 45, True, "compliance_unit", "PSC Act s.25(2)", "Full independent investigation conducted within 45 working days of investigator appointment."),
-    _s(8, "Investigation Report to Commission", "investigation_report", 5, True, "compliance_unit", "PSC Act s.26(1)", "Investigator submits the full report to the Commission within 5 working days of completion."),
+    _s(7, "Investigation Conducted",           "investigation",        21, False, "compliance_unit", "PSC Act s.25(2)", "Full independent investigation conducted within 21 calendar days of investigator appointment."),
+    _s(8, "Investigation Report to Commission","investigation_report",  7, False, "compliance_unit", "PSC Act s.26(1)", "Investigator submits the full report to the Commission within 7 calendar days of completing the investigation."),
     _s(9, "Commission Deliberation", "commission_deliberation", 21, False, "commission_member", "PSC Act s.27(1)", "Commission deliberates and prepares its determination over a statutory 21 calendar days."),
     _s(10, "Commission Determination Issued", "commission_determination", 10, True, "commission_member", "PSC Act s.27(2)", "Commission issues its formal written determination within 10 working days of deliberation."),
     _s(11, "Commission Confirmation Period", "commission_confirmation", 45, False, "commission_member", "PSC Act s.28(1)", "A 45-calendar-day confirmation period during which the executive may appeal before the sanction takes effect."),

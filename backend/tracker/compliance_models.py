@@ -219,6 +219,10 @@ class ComplianceCaseStage(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     notes        = models.TextField(blank=True)
 
+    # Notification guards — prevent duplicate in-app alerts for the same event
+    at_risk_notified = models.BooleanField(default=False)
+    overdue_notified = models.BooleanField(default=False)
+
     class Meta:
         ordering = ["stage_order"]
         unique_together = [("case", "stage_order")]
@@ -239,24 +243,69 @@ class LitigationRecord(models.Model):
     case = models.ForeignKey(
         ComplianceCase, on_delete=models.CASCADE, related_name="litigation_records",
     )
-    description     = models.TextField()
-    legal_counsel   = models.CharField(max_length=200, blank=True)
-    court_reference = models.CharField(max_length=100, blank=True)
+    description      = models.TextField()
+    court_name       = models.CharField(max_length=200, blank=True)
+    court_reference  = models.CharField(max_length=100, blank=True)
+    legal_counsel    = models.CharField(max_length=200, blank=True)
+    opposing_counsel = models.CharField(max_length=200, blank=True)
     status = models.CharField(
         max_length=20, choices=LitigationStatus.choices, default=LitigationStatus.ACTIVE,
     )
     estimated_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     actual_cost    = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     date_initiated = models.DateField(default=timezone.localdate)
-    date_resolved  = models.DateField(null=True, blank=True)
-    notes          = models.TextField(blank=True)
-    created_at     = models.DateTimeField(auto_now_add=True)
+    next_court_date = models.DateField(null=True, blank=True)
+    date_resolved   = models.DateField(null=True, blank=True)
+    notes           = models.TextField(blank=True)
+    created_at      = models.DateTimeField(auto_now_add=True)
+    updated_at      = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-date_initiated"]
 
     def __str__(self):
         return f"Litigation · {self.case.submission.reference_number} ({self.status})"
+
+
+# ── FR-11: Grievance mediator appointment ─────────────────────────────────────
+
+class GrievanceMediatorAppointment(models.Model):
+    """Tracks the mediator appointed for a grievance case (FR-11)."""
+
+    class MediationOutcome(models.TextChoices):
+        PENDING     = "pending",     "Pending"
+        SETTLED     = "settled",     "Settled"
+        NOT_SETTLED = "not_settled", "Not Settled"
+
+    case = models.OneToOneField(
+        ComplianceCase, on_delete=models.CASCADE, related_name="mediator_appointment",
+    )
+    mediator_name         = models.CharField(max_length=200)
+    mediator_organisation = models.CharField(max_length=200, blank=True)
+    mediator_contact      = models.CharField(max_length=200, blank=True)
+    appointment_date      = models.DateField()
+    mediation_start_date  = models.DateField(null=True, blank=True)
+    mediation_end_date    = models.DateField(null=True, blank=True)
+
+    outcome = models.CharField(
+        max_length=20, choices=MediationOutcome.choices, default=MediationOutcome.PENDING,
+    )
+    mom_reference  = models.CharField(max_length=200, blank=True,
+                                      help_text="Reference / file number of the Form 6.8 MoM")
+    outcome_notes  = models.TextField(blank=True)
+
+    appointed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="grievance_mediator_appointments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-appointment_date"]
+
+    def __str__(self):
+        return f"Mediator · {self.case.submission.reference_number} · {self.mediator_name}"
 
 
 class CaseNote(models.Model):
@@ -278,3 +327,53 @@ class CaseNote(models.Model):
 
     def __str__(self):
         return f"Note · {self.case.submission.reference_number}"
+
+
+class DecisionBody(models.TextChoices):
+    COMMISSION  = "commission",  "PSC Commission"
+    PSDB        = "psdb",        "PSDB"
+    HOD         = "hod",         "Head of Department"
+    MINISTER    = "minister",    "Minister"
+    SECRETARY   = "secretary",   "Secretary OPSC"
+
+
+TERMINAL_OUTCOMES = {
+    ComplianceDecisionOutcome.REINSTATE,
+    ComplianceDecisionOutcome.TERMINATE,
+    ComplianceDecisionOutcome.WARN,
+    ComplianceDecisionOutcome.DEMOTE,
+    ComplianceDecisionOutcome.SUSPEND_NO_PAY,
+    ComplianceDecisionOutcome.COMPULSORY_RETIRE,
+    ComplianceDecisionOutcome.NO_ACTION,
+    ComplianceDecisionOutcome.SETTLED,
+    ComplianceDecisionOutcome.NOT_SETTLED,
+}
+
+
+class ComplianceCaseDecision(models.Model):
+    """A structured decision (Commission/PSDB/HOD) recorded against a case."""
+
+    case = models.ForeignKey(
+        ComplianceCase, on_delete=models.CASCADE, related_name="decisions",
+    )
+    outcome = models.CharField(
+        max_length=30, choices=ComplianceDecisionOutcome.choices,
+    )
+    decision_body = models.CharField(
+        max_length=20, choices=DecisionBody.choices, default=DecisionBody.COMMISSION,
+    )
+    decision_date  = models.DateField()
+    narrative      = models.TextField(blank=True)
+    stage_reference = models.CharField(max_length=60, blank=True)
+
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="compliance_decisions_recorded",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-decision_date", "-created_at"]
+
+    def __str__(self):
+        return f"Decision · {self.case.submission.reference_number} · {self.get_outcome_display()}"
