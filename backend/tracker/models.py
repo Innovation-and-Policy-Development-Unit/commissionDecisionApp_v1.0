@@ -41,6 +41,11 @@ class Role(models.TextChoices):
     PRINCIPAL_ORG_DEV_ANALYST = "principal_org_dev_analyst", "Principal Organization Development Analyst"
     PRINCIPAL_JOB_ANALYST     = "principal_job_analyst",     "Principal Job Analyst"
     COMPLIANCE_PRINCIPAL  = "compliance_principal",  "Compliance Principal"
+    # ── FR-05: Additional compliance-adjacent roles ─────────────────────────
+    SECRETARY_OPSC    = "secretary_opsc",    "Secretary, OPSC"
+    DG_DIRECTOR       = "dg_director",       "DG / Director (Ministry)"
+    COMMISSION_MEMBER = "commission_member", "Commission Member"
+    PANEL_MEMBER      = "panel_member",      "Investigation Panel Member"
 
 
 class WorkflowStage(models.TextChoices):

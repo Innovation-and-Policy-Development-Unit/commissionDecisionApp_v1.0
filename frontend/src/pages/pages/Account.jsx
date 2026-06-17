@@ -72,6 +72,10 @@ const ROLE_LABELS = {
   compliance_manager:  'Compliance Manager',
   compliance_senior:   'Compliance Senior Officer',
   compliance_principal:'Compliance Principal',
+  secretary_opsc:      'Secretary, OPSC',
+  dg_director:         'DG / Director (Ministry)',
+  commission_member:   'Commission Member',
+  panel_member:        'Investigation Panel Member',
 }
 
 const ROLE_COLORS = {
@@ -87,6 +91,10 @@ const ROLE_COLORS = {
   compliance_manager:  'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
   compliance_senior:   'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-300',
   compliance_principal:'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+  secretary_opsc:      'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+  dg_director:         'bg-slate-100 text-slate-700 dark:bg-slate-700/40 dark:text-slate-300',
+  commission_member:   'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+  panel_member:        'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
 }
 
 function SuccessAlert({ msg, onClear }) {

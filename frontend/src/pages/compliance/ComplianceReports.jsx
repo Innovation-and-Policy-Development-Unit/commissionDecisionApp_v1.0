@@ -6,12 +6,13 @@
  * Tab 4: Aggregate Stats        (inline — aggregate charts + PDF, existing behaviour)
  */
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart3, RefreshCw, AlertCircle, Clock, CheckCircle2, Download, Loader2, FileText, TrendingDown, ClipboardList } from 'lucide-react'
+import { BarChart3, RefreshCw, AlertCircle, Clock, CheckCircle2, Download, Loader2, FileText, TrendingDown, ClipboardList, TrendingUp } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import ReportSummary     from './ReportSummary'
 import ReportDisciplinary from './ReportDisciplinary'
 import ReportNSDP        from './ReportNSDP'
+import ReportAnalytics   from './ReportAnalytics'
 
 const FAMILY_LABELS = {
   employee_disciplinary:       'Employee Disciplinary',
@@ -40,6 +41,7 @@ const TABS = [
   { key: 'disciplinary',  label: 'Disciplinary Tracker', icon: ClipboardList },
   { key: 'nsdp',          label: 'Annual Trend (NSDP)',  icon: TrendingDown },
   { key: 'aggregate',     label: 'Aggregate Stats',     icon: BarChart3 },
+  { key: 'analytics',    label: 'Live Analytics',      icon: TrendingUp },
 ]
 
 function BarRow({ label, value, max, colorCls = 'bg-primary-500' }) {
@@ -268,6 +270,7 @@ export default function ComplianceReports() {
           {activeTab === 'summary'      && <ReportSummary cases={cases} />}
           {activeTab === 'disciplinary' && <ReportDisciplinary cases={cases} onRefresh={load} />}
           {activeTab === 'nsdp'         && <ReportNSDP cases={cases} />}
+          {activeTab === 'analytics'    && <ReportAnalytics />}
           {activeTab === 'aggregate'    && (
             <div>
               <div className="flex justify-end mb-4">

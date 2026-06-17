@@ -10,7 +10,9 @@ from .compliance_models import (
     CaseNote,
     Complaint,
     ComplianceCase,
+    ComplianceCaseDecision,
     ComplianceCaseStage,
+    GrievanceMediatorAppointment,
     LitigationRecord,
 )
 from .compliance_forms import COMPLIANCE_FORM_CODES
@@ -37,10 +39,33 @@ class LitigationRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = LitigationRecord
         fields = (
-            "id", "description", "legal_counsel", "court_reference",
+            "id", "description",
+            "court_name", "court_reference", "legal_counsel", "opposing_counsel",
             "status", "status_display", "estimated_cost", "actual_cost",
-            "date_initiated", "date_resolved", "notes", "created_at",
+            "date_initiated", "next_court_date", "date_resolved", "notes",
+            "created_at", "updated_at",
         )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+
+class GrievanceMediatorSerializer(serializers.ModelSerializer):
+    outcome_display  = serializers.CharField(source="get_outcome_display", read_only=True)
+    appointed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GrievanceMediatorAppointment
+        fields = (
+            "id", "mediator_name", "mediator_organisation", "mediator_contact",
+            "appointment_date", "mediation_start_date", "mediation_end_date",
+            "outcome", "outcome_display", "mom_reference", "outcome_notes",
+            "appointed_by", "appointed_by_name", "created_at", "updated_at",
+        )
+        read_only_fields = ("id", "appointed_by", "created_at", "updated_at")
+
+    def get_appointed_by_name(self, obj):
+        if not obj.appointed_by:
+            return None
+        return obj.appointed_by.get_full_name() or obj.appointed_by.username
 
 
 class CaseNoteSerializer(serializers.ModelSerializer):
@@ -109,14 +134,38 @@ class ComplianceCaseListSerializer(serializers.ModelSerializer):
         return obj.date_received.year if obj.date_received else None
 
 
+class ComplianceCaseDecisionSerializer(serializers.ModelSerializer):
+    outcome_display      = serializers.CharField(source="get_outcome_display", read_only=True)
+    decision_body_display = serializers.CharField(source="get_decision_body_display", read_only=True)
+    decided_by_name      = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ComplianceCaseDecision
+        fields = (
+            "id", "outcome", "outcome_display",
+            "decision_body", "decision_body_display",
+            "decision_date", "narrative", "stage_reference",
+            "decided_by", "decided_by_name", "created_at",
+        )
+        read_only_fields = ("id", "decided_by", "created_at")
+
+    def get_decided_by_name(self, obj):
+        if not obj.decided_by:
+            return None
+        return obj.decided_by.get_full_name() or obj.decided_by.username
+
+
 class ComplianceCaseDetailSerializer(ComplianceCaseListSerializer):
-    stages = ComplianceCaseStageSerializer(many=True, read_only=True)
+    stages             = ComplianceCaseStageSerializer(many=True, read_only=True)
     litigation_records = LitigationRecordSerializer(many=True, read_only=True)
-    case_notes = CaseNoteSerializer(many=True, read_only=True)
+    case_notes         = CaseNoteSerializer(many=True, read_only=True)
+    decisions          = ComplianceCaseDecisionSerializer(many=True, read_only=True)
+    mediator_appointment = GrievanceMediatorSerializer(read_only=True)
 
     class Meta(ComplianceCaseListSerializer.Meta):
         fields = ComplianceCaseListSerializer.Meta.fields + (
-            "description", "notes", "stages", "litigation_records", "case_notes",
+            "description", "notes", "stages", "litigation_records",
+            "case_notes", "decisions", "mediator_appointment",
         )
 
 
