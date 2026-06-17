@@ -29,6 +29,11 @@ const STATUS_META = {
     cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
     icon: AlertCircle,
   },
+  awaiting_signature: {
+    i18nKey: 'secretariat.minutes_status_awaiting_signature',
+    cls: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300',
+    icon: PenSquare,
+  },
   signed: {
     i18nKey: 'secretariat.minutes_status_signed',
     cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
@@ -56,6 +61,7 @@ function SummaryBar({ minutes }) {
     { key: 'all', label: t('secretariat.minutes_stat_total'), value: minutes.length },
     { key: 'draft', label: t('secretariat.minutes_status_draft'), value: minutes.filter(m => m.status === 'draft').length },
     { key: 'reviewed', label: t('secretariat.minutes_status_reviewed'), value: minutes.filter(m => m.status === 'reviewed').length },
+    { key: 'awaiting_signature', label: t('secretariat.minutes_status_awaiting_signature'), value: minutes.filter(m => m.status === 'awaiting_signature').length },
     { key: 'signed', label: t('secretariat.minutes_status_signed'), value: minutes.filter(m => m.status === 'signed').length },
   ]
 
@@ -158,6 +164,7 @@ export default function MinutesIndex() {
             <option value="">{t('secretariat.minutes_filter_all_statuses')}</option>
             <option value="draft">{t('secretariat.minutes_status_draft')}</option>
             <option value="reviewed">{t('secretariat.minutes_status_reviewed')}</option>
+            <option value="awaiting_signature">{t('secretariat.minutes_status_awaiting_signature')}</option>
             <option value="signed">{t('secretariat.minutes_status_signed')}</option>
           </select>
           <button

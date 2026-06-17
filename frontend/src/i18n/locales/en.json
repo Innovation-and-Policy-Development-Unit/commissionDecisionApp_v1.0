@@ -305,6 +305,7 @@
     "minutes_filter_all_statuses": "All statuses",
     "minutes_status_draft": "Draft",
     "minutes_status_reviewed": "Reviewed",
+    "minutes_status_awaiting_signature": "Awaiting Signature",
     "minutes_status_signed": "Signed",
     "minutes_stat_total": "Total records",
     "minutes_col_sitting": "Sitting ref.",

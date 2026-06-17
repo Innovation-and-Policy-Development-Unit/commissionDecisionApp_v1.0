@@ -467,6 +467,8 @@ export default function Agenda() {
             onForward={() => doWorkflowAction('forward-agenda', 'Forward to Chairman')}
             onApprove={() => doWorkflowAction('approve-agenda', 'Endorse Agenda')}
             onCirculate={() => doWorkflowAction('circulate-agenda', 'Circulate Agenda')}
+            onAdopt={() => doWorkflowAction('adopt-agenda', 'Adopt Agenda')}
+            agendaAdopted={Boolean(selectedMeeting?.agenda_adopted_at)}
           />
         )}
       </div>
@@ -826,7 +828,7 @@ const WORKFLOW_STEPS = [
   { key: 'circulated',        label: 'Circulated' },
 ]
 
-function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isAgendaBuilder, isSecretary, isChairperson, busy, onSubmit, onForward, onApprove, onCirculate }) {
+function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isAgendaBuilder, isSecretary, isChairperson, busy, onSubmit, onForward, onApprove, onCirculate, onAdopt, agendaAdopted }) {
   const currentIdx = WORKFLOW_STEPS.findIndex(s => s.key === status)
 
   return (
@@ -903,9 +905,26 @@ function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isAgendaBu
               <Mail size={14} /> Circulate to Members
             </button>
           )}
-          {status === 'circulated' && (
+          {status === 'circulated' && !agendaAdopted && (
+            <>
+              <span className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                <Check size={14} /> Agenda circulated to Commission members.
+              </span>
+              {isChairperson && (
+                <button
+                  onClick={onAdopt}
+                  disabled={busy}
+                  className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
+                  title="Adopt the agenda (including any Other Matters added) so the sitting can begin"
+                >
+                  <ThumbsUp size={14} /> Adopt Agenda &amp; Begin Sitting
+                </button>
+              )}
+            </>
+          )}
+          {status === 'circulated' && agendaAdopted && (
             <span className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-              <Check size={14} /> Agenda has been circulated to Commission members.
+              <Check size={14} /> Agenda adopted — the sitting may proceed.
             </span>
           )}
         </div>

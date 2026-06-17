@@ -280,6 +280,7 @@
     "minutes_filter_all_statuses": "Tous les statuts",
     "minutes_status_draft": "Brouillon",
     "minutes_status_reviewed": "Révisé",
+    "minutes_status_awaiting_signature": "En attente de signature",
     "minutes_status_signed": "Signé",
     "minutes_stat_total": "Total des dossiers",
     "minutes_col_sitting": "Réf. séance",

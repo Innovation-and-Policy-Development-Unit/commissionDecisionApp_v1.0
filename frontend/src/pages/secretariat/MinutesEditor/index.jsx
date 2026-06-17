@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import {
   Save, CheckCircle2, AlertCircle, ArrowLeft,
@@ -15,8 +15,14 @@ import clsx from 'clsx'
 const MINUTES_STATUS = {
   draft:    { label: 'Draft',    bg: 'bg-amber-100 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
   reviewed: { label: 'Reviewed', bg: 'bg-blue-100 dark:bg-blue-900/20',  text: 'text-blue-700 dark:text-blue-300',  border: 'border-blue-200 dark:border-blue-800'  },
+  awaiting_signature: { label: 'Awaiting Signature', bg: 'bg-violet-100 dark:bg-violet-900/20', text: 'text-violet-700 dark:text-violet-300', border: 'border-violet-200 dark:border-violet-800' },
   signed:   { label: 'Signed',   bg: 'bg-emerald-100 dark:bg-emerald-900/20', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
 }
+
+// Roles permitted to upload the scanned, manually-signed minutes (and thereby
+// move them to the decision/task workflow). Mirrors the backend gate.
+const SIGNED_UPLOAD_ROLES = new Set(['senior_admin_officer', 'psc_admin'])
+const SEND_FOR_SIGNATURE_ROLES = new Set(['senior_admin_officer', 'psc_secretary', 'psc_admin'])
 
 function SectionEditor({ label, value, onChange, placeholder }) {
   return (
@@ -302,19 +308,52 @@ export default function MinutesEditor() {
   const [showPinModal, setShowPinModal] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState('')
+  const signedFileRef = useRef(null)
 
   const changeStatus = async (action, pin) => {
     setSaving(true)
     setError('')
     setSuccess('')
     try {
-      const method = action === 'sign' ? 'sign' : 'mark-reviewed'
+      const methodMap = {
+        sign: 'sign',
+        review: 'mark-reviewed',
+        send_for_signature: 'mark-for-signature',
+      }
+      const method = methodMap[action] || 'mark-reviewed'
       const payload = action === 'sign' ? { pin } : {}
       const res = await api.post(`/minutes/${minutes.id}/${method}/`, payload)
       setMinutes(res.data)
-      setSuccess(action === 'sign' ? 'Minutes signed.' : 'Minutes marked as reviewed.')
+      const messages = {
+        sign: 'Minutes signed.',
+        review: 'Minutes marked as reviewed.',
+        send_for_signature: 'Minutes sent for signature — print and obtain signatures at the next sitting.',
+      }
+      setSuccess(messages[action] || 'Minutes updated.')
     } catch (err) {
       setError(err.response?.data?.detail || `Failed to ${action} minutes.`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Upload the scanned, manually (wet-ink) signed minutes. This single action
+  // marks the minutes Signed and dispatches the post-decision workflow.
+  const uploadSignedMinutes = async (file) => {
+    if (!file) return
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      const form = new FormData()
+      form.append('signed_document', file)
+      const res = await api.post(`/minutes/${minutes.id}/upload-signed/`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setMinutes(res.data)
+      setSuccess('Signed minutes uploaded and moved to decisions & task allocation.')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to upload signed minutes.')
     } finally {
       setSaving(false)
     }
@@ -526,18 +565,33 @@ export default function MinutesEditor() {
                   Mark Reviewed
                 </button>
               )}
-              {minutes.status === 'reviewed' && (
+              {minutes.status === 'reviewed' && SEND_FOR_SIGNATURE_ROLES.has(user?.role) && (
+                <button onClick={() => changeStatus('send_for_signature')} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-violet-500/20 disabled:opacity-60">
+                  <PenSquare size={16} />
+                  Send for Signature
+                </button>
+              )}
+              {minutes.status === 'awaiting_signature' && (
                 <>
-                  {!user?.signature && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs">
-                      <PenSquare size={14} />
-                      <span>No signature uploaded — <a href="/pages/account" className="underline font-semibold">add one in Account settings</a> so it appears on the signed PDF.</span>
-                    </div>
-                  )}
-                  <button onClick={handleSignClick} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60">
-                    <CheckCircle2 size={16} />
-                    Sign Minutes
+                  <button onClick={downloadPdf} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2">
+                    <Download size={16} />
+                    Download for Signature
                   </button>
+                  {SIGNED_UPLOAD_ROLES.has(user?.role) && (
+                    <>
+                      <input
+                        ref={signedFileRef}
+                        type="file"
+                        accept="application/pdf,image/*"
+                        className="hidden"
+                        onChange={e => { uploadSignedMinutes(e.target.files?.[0]); e.target.value = '' }}
+                      />
+                      <button onClick={() => signedFileRef.current?.click()} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60">
+                        <CheckCircle2 size={16} />
+                        Upload Signed Minutes
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </>

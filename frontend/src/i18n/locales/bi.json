@@ -280,6 +280,7 @@
     "minutes_filter_all_statuses": "Evri status",
     "minutes_status_draft": "Draet",
     "minutes_status_reviewed": "Riviu finis",
+    "minutes_status_awaiting_signature": "Weiting blong saen",
     "minutes_status_signed": "Saen finis",
     "minutes_stat_total": "Total rekod",
     "minutes_col_sitting": "Ref blong mitin",
