@@ -236,8 +236,12 @@ _STAGE_GRAPH = {
     ],
     WorkflowStage.COMMISSION_SITTING: [
         WorkflowStage.APPROVED,
+        WorkflowStage.NOTED,
+        WorkflowStage.NOT_APPROVED,
         WorkflowStage.REJECTED,
         WorkflowStage.DEFERRED_BACK_TO_HR,
+        WorkflowStage.DEFERRED_BACK_TO_UNIT,
+        WorkflowStage.MATTERS_ARISING,        # deferred to next meeting
         WorkflowStage.TABLED,
         WorkflowStage.AWAITING_LEGAL_ADVICE,
         WorkflowStage.MINUTES_DRAFTED_SIGNED,
@@ -255,6 +259,23 @@ _STAGE_GRAPH = {
     WorkflowStage.REJECTED: [
         WorkflowStage.MINUTES_DRAFTED_SIGNED,
         WorkflowStage.DECISION_ENTERED_ASSIGNED,
+    ],
+    # Noted / Not Approved are recorded outcomes that close the item into the
+    # minutes and decision register, like a rejection.
+    WorkflowStage.NOTED: [
+        WorkflowStage.MINUTES_DRAFTED_SIGNED,
+        WorkflowStage.DECISION_ENTERED_ASSIGNED,
+    ],
+    WorkflowStage.NOT_APPROVED: [
+        WorkflowStage.MINUTES_DRAFTED_SIGNED,
+        WorkflowStage.DECISION_ENTERED_ASSIGNED,
+    ],
+    # Deferred back to the responsible OPSC unit for further work, then it can
+    # return to the Commission or be carried as Matters Arising.
+    WorkflowStage.DEFERRED_BACK_TO_UNIT: [
+        WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+        WorkflowStage.MATTERS_ARISING,
     ],
     # ── Post-decision ─────────────────────────────────────────────────────
     WorkflowStage.MINUTES_DRAFTED_SIGNED: [
@@ -345,8 +366,12 @@ _UNIT_PRINCIPAL_STAGES = {
 
 _COMMISSIONER_TARGETS = {
     WorkflowStage.APPROVED,
+    WorkflowStage.NOTED,
+    WorkflowStage.NOT_APPROVED,
     WorkflowStage.REJECTED,
     WorkflowStage.DEFERRED_BACK_TO_HR,
+    WorkflowStage.DEFERRED_BACK_TO_UNIT,
+    WorkflowStage.MATTERS_ARISING,        # defer to next meeting
     WorkflowStage.TABLED,
     WorkflowStage.AWAITING_LEGAL_ADVICE,
     WorkflowStage.MINUTES_DRAFTED_SIGNED,

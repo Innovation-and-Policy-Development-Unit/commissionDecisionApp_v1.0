@@ -78,9 +78,12 @@ class WorkflowStage(models.TextChoices):
     COMMISSION_SITTING         = "commission_sitting",         "Commission Sitting"
     MATTERS_ARISING            = "matters_arising",            "Matters Arising"
     APPROVED                   = "approved",                   "Approved"
+    NOTED                      = "noted",                      "Noted"
+    NOT_APPROVED               = "not_approved",               "Not Approved"
     REJECTED                   = "rejected",                   "Rejected"
     RETURNED                   = "returned",                   "Returned"
     DEFERRED_BACK_TO_HR        = "deferred_back_to_hr",        "Deferred Back to HR"
+    DEFERRED_BACK_TO_UNIT      = "deferred_back_to_unit",      "Deferred Back to Unit"
     # ── Internal submission (OPSC-only, Secretary review) ─────────────────
     SECRETARY_REVIEW           = "secretary_review",           "Secretary Review"
     # ── Post-decision ──────────────────────────────────────────────────────
@@ -617,6 +620,17 @@ class Meeting(models.Model):
         help_text="Chairperson who endorsed the agenda.",
     )
     agenda_approved_at = models.DateTimeField(null=True, blank=True)
+    # ── In-sitting adoption gate (SOP Stage 3) ────────────────────────────
+    # The circulated agenda may still be amended at the start of the sitting
+    # (e.g. commissioners adding items under "Other Matters"). The Chairperson
+    # formally adopts the agenda before deliberations begin; the meeting cannot
+    # move to "In Progress" until it has been adopted.
+    agenda_adopted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="agendas_adopted",
+        help_text="Chairperson who adopted the agenda at the start of the sitting.",
+    )
+    agenda_adopted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -721,6 +735,39 @@ class AgendaItem(models.Model):
 
         label = agenda_section_label(self.category or "")
         return f"{self.meeting.reference_number} [{label}] #{self.sequence}: {self.submission.reference_number}"
+
+
+class MeetingOtherMatter(models.Model):
+    """
+    Ad-hoc "Other Matters" item raised by a commissioner during the sitting,
+    not backed by a formal submission.
+
+    Distinct from AgendaItem (which is always tied to a Submission): these are
+    items added live under category 15 (Other Matters) when the agenda is
+    amended at the start of, or during, a sitting. They surface on the agenda
+    and feed the minutes "any other business" block.
+    """
+
+    meeting = models.ForeignKey(
+        Meeting, on_delete=models.CASCADE, related_name="other_matters",
+    )
+    title = models.CharField(max_length=512)
+    detail = models.TextField(blank=True)
+    raised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="raised_other_matters",
+    )
+    sequence = models.PositiveIntegerField(default=0)
+    decision_text = models.TextField(
+        blank=True, help_text="Outcome/decision recorded for this item during the sitting.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sequence", "created_at"]
+
+    def __str__(self):
+        return f"Other Matter — {self.meeting.reference_number}: {self.title[:48]}"
 
 
 class SittingPackSession(models.Model):
@@ -2055,10 +2102,14 @@ class CommissionTaskDecisionType(models.TextChoices):
 
 
 class CommissionDecisionOutcome(models.TextChoices):
-    APPROVED       = "approved",       "Approved"
-    DEFERRED_NEXT  = "deferred_next",  "Deferred To Next Meeting"
-    DEFERRED_INFO  = "deferred_info",  "Deferred — Need more information"
-    REJECTED       = "rejected",       "Rejected"
+    APPROVED              = "approved",              "Approved"
+    NOTED                 = "noted",                 "Noted"
+    NOT_APPROVED          = "not_approved",          "Not Approved"
+    REJECTED              = "rejected",              "Rejected"
+    DEFERRED_BACK_TO_UNIT = "deferred_back_to_unit", "Deferred Back to Unit"
+    DEFERRED_NEXT         = "deferred_next",         "Deferred To Next Meeting"
+    # Retained for back-compatibility with existing decision-register rows.
+    DEFERRED_INFO         = "deferred_info",         "Deferred — Need more information"
 
 
 class CommissionActionUnit(models.TextChoices):
@@ -3048,6 +3099,10 @@ class DeadlineReminderDraft(models.Model):
 class MinutesStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
     REVIEWED = "reviewed", "Reviewed"
+    # Minutes have been finalised and printed for manual (wet-ink) signature at
+    # the next sitting; awaiting the scanned signed copy. Interim state until the
+    # DCDT digital-signature policy is in force.
+    AWAITING_SIGNATURE = "awaiting_signature", "Awaiting Signature"
     SIGNED = "signed", "Signed"
 
 
@@ -3055,7 +3110,7 @@ class Minutes(models.Model):
     """Formal minutes document for a Commission sitting."""
 
     meeting = models.OneToOneField(Meeting, on_delete=models.CASCADE, related_name="minutes")
-    status = models.CharField(max_length=16, choices=MinutesStatus.choices, default=MinutesStatus.DRAFT)
+    status = models.CharField(max_length=20, choices=MinutesStatus.choices, default=MinutesStatus.DRAFT)
     content = models.JSONField(
         default=dict, blank=True,
         help_text=(
@@ -3066,7 +3121,21 @@ class Minutes(models.Model):
     )
     pdf_version = models.FileField(
         upload_to="minutes/", null=True, blank=True,
-        help_text="Generated PDF version of the signed minutes.",
+        help_text="Generated (unsigned) PDF used for printing and for digital signing.",
+    )
+    # ── Manual (wet-ink) signature, interim until DCDT digital-signature policy ──
+    # The formatted minutes are printed, signed on paper by the Chairperson and
+    # Commissioners at the next sitting, then the scanned signed copy is uploaded
+    # here for reference. Kept separate from ``pdf_version`` so the generated
+    # print copy is never overwritten.
+    signed_document = models.FileField(
+        upload_to="minutes/signed/", null=True, blank=True,
+        help_text="Scanned copy of the manually (wet-ink) signed minutes.",
+    )
+    signed_uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="uploaded_signed_minutes",
+        help_text="Senior Admin Officer who uploaded the scanned signed minutes.",
     )
     signed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,

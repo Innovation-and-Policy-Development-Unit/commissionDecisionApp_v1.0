@@ -1200,6 +1200,31 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # ── Returning a submission for clarification requires a comment ────────
+        # Any "return to the unit / originator" move must carry an explanation so
+        # the recipient knows what to fix. Covers the Secretary returning an item
+        # from the approval gate back to the assessing unit, and the generic
+        # RETURNED_FOR_CLARIFICATION transitions used elsewhere in the workflow.
+        _RETURN_TRANSITIONS = {
+            (WorkflowStage.PENDING_SECRETARY_APPROVAL, WorkflowStage.UNDER_ASSESSMENT),
+        }
+        if (
+            (
+                target == WorkflowStage.RETURNED_FOR_CLARIFICATION
+                or (prev, target) in _RETURN_TRANSITIONS
+            )
+            and not (remarks or "").strip()
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Please add a comment explaining why you are returning this "
+                        "submission to the unit."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # ── Warn when a non-draft submission has no form type ─────────────────
         # Admins can override with acknowledge_no_form_type=true in the payload.
         if (
@@ -1462,6 +1487,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 submission.recalled_at = timezone.now()
                 submission.recalled_by = request.user
                 submission.recalled_reason = remarks
+
+            # ── Defer to next meeting: carry onto the next sitting's Matters Arising ──
+            if prev == WorkflowStage.COMMISSION_SITTING and target == WorkflowStage.MATTERS_ARISING:
+                self._carry_to_matters_arising(submission)
 
             submission.save(update_fields=_updated_fields(submission, prev, target))
 
@@ -2044,6 +2073,40 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         """
         from .agenda_carryover import compute_scheduled_meeting
         submission.scheduled_meeting = compute_scheduled_meeting(submission)
+
+    def _carry_to_matters_arising(self, submission):
+        """Carry a 'deferred to next meeting' item onto the next sitting's agenda
+        under Matters Arising, so it is automatically re-tabled. Idempotent."""
+        from .agenda_carryover import compute_scheduled_meeting
+        from .models import AgendaCategory, AgendaItem, Submission
+
+        # The sitting it was just deliberated in (most recent placement).
+        source_item = (
+            submission.agenda_placements.select_related("meeting")
+            .order_by("-meeting__date", "-added_at")
+            .first()
+        )
+        source_meeting = source_item.meeting if source_item else submission.scheduled_meeting
+        target_meeting = compute_scheduled_meeting(submission, exclude_meeting=source_meeting)
+        if not target_meeting or (source_meeting and target_meeting.id == source_meeting.id):
+            return
+        next_seq = (
+            AgendaItem.objects.filter(
+                meeting=target_meeting, category=AgendaCategory.MATTERS_ARISING,
+            ).aggregate(models.Max("sequence")).get("sequence__max") or 0
+        ) + 1
+        AgendaItem.objects.get_or_create(
+            meeting=target_meeting,
+            submission=submission,
+            defaults={
+                "category": AgendaCategory.MATTERS_ARISING,
+                "sequence": next_seq,
+                "matters_arising_meeting_ref": source_meeting.reference_number if source_meeting else "",
+                "matters_arising_agenda_no": str(source_item.sequence) if source_item else "",
+            },
+        )
+        submission.scheduled_meeting = target_meeting
+        Submission.objects.filter(pk=submission.pk).update(scheduled_meeting=target_meeting)
 
     def _submission_view_side_effects(self, request, submission):
         """Queue async AI work when a submission is opened (retrieve / bootstrap)."""
@@ -5560,6 +5623,18 @@ class MeetingViewSet(viewsets.ModelViewSet):
         profile = _profile(self.request.user)
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can edit meetings.")
+        # ── Adoption gate: a sitting cannot begin until the Chairperson has
+        # adopted the agenda. Admins may override.
+        target_status = serializer.validated_data.get("status")
+        if (
+            target_status == MeetingStatus.IN_PROGRESS
+            and serializer.instance.status != MeetingStatus.IN_PROGRESS
+            and not serializer.instance.agenda_adopted_at
+            and profile.role != Role.PSC_ADMIN
+        ):
+            raise PermissionDenied(
+                "The agenda must be adopted by the Chairperson before the sitting can begin."
+            )
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -6276,6 +6351,83 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting.save(update_fields=["agenda_status"])
         self._queue_agenda_briefs(meeting)
         return Response({"detail": "Agenda circulated to Commission members."})
+
+    @action(detail=True, methods=["post"], url_path="adopt-agenda")
+    def adopt_agenda(self, request, pk=None):
+        """Chairperson adopts the (possibly amended) agenda at the start of the
+        sitting. The meeting cannot begin until the agenda is adopted.
+
+        The agenda may be amended right up to adoption — e.g. commissioners
+        adding items under "Other Matters" via ``other-matters``.
+        """
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.CHAIRPERSON, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Chairperson can adopt the agenda.")
+        if meeting.agenda_status != AgendaStatus.CIRCULATED and profile.role != Role.PSC_ADMIN:
+            return Response(
+                {"detail": "The agenda must be circulated to members before it can be adopted."},
+                status=400,
+            )
+        meeting.agenda_adopted_by = request.user
+        meeting.agenda_adopted_at = timezone.now()
+        meeting.save(update_fields=["agenda_adopted_by", "agenda_adopted_at"])
+        return Response({
+            "detail": "Agenda adopted. The sitting can now begin.",
+            "agenda_adopted_at": meeting.agenda_adopted_at,
+        })
+
+    @action(detail=True, methods=["get", "post"], url_path="other-matters")
+    def other_matters(self, request, pk=None):
+        """List, or add (live), ad-hoc 'Other Matters' items for a sitting.
+
+        Commissioners and the Chairperson raise items under Other Matters when
+        the agenda is amended at the start of, or during, the sitting; the
+        Secretary / Senior Admin Officer may also record them on their behalf.
+        """
+        from .models import MeetingOtherMatter
+
+        meeting = self.get_object()
+
+        if request.method == "GET":
+            items = meeting.other_matters.select_related("raised_by").all()
+            return Response([self._other_matter_payload(m) for m in items])
+
+        profile = _profile(request.user)
+        allowed = {
+            Role.CHAIRPERSON, Role.PSC_COMMISSIONER, Role.COMMISSION_MEMBER,
+            Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN,
+        }
+        if profile.role not in allowed:
+            raise PermissionDenied(
+                "Only Commissioners, the Chairperson, or the Secretariat can add Other Matters."
+            )
+        title = (request.data.get("title") or "").strip()
+        if not title:
+            return Response({"detail": "A title is required for an Other Matters item."}, status=400)
+        next_seq = (
+            meeting.other_matters.aggregate(models.Max("sequence")).get("sequence__max") or 0
+        ) + 1
+        item = MeetingOtherMatter.objects.create(
+            meeting=meeting,
+            title=title,
+            detail=(request.data.get("detail") or "").strip(),
+            raised_by=request.user,
+            sequence=next_seq,
+        )
+        return Response(self._other_matter_payload(item), status=status.HTTP_201_CREATED)
+
+    @staticmethod
+    def _other_matter_payload(item):
+        return {
+            "id": item.id,
+            "title": item.title,
+            "detail": item.detail,
+            "sequence": item.sequence,
+            "decision_text": item.decision_text,
+            "raised_by": (item.raised_by.get_full_name() or item.raised_by.username) if item.raised_by else "",
+            "created_at": item.created_at,
+        }
 
     @action(detail=True, methods=["post"], url_path="flying-minute/sign")
     def flying_minute_sign(self, request, pk=None):
@@ -8154,17 +8306,7 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
         # Post-signing automation: allocate decisions to unit managers, run AI
         # decision extraction, and queue outcome-letter drafts for the Secretariat.
-        from .decision_allocation import allocate_decision_tasks, queue_post_signing_automation
-
-        try:
-            allocate_decision_tasks(minutes, request.user)
-            queue_post_signing_automation(minutes)
-        except Exception:
-            import logging as _logging_mod
-
-            _logging_mod.getLogger("scdms.app").exception(
-                "POST_SIGN_AUTOMATION_FAIL | minutes=%s", minutes.id
-            )
+        self._run_post_signing_automation(minutes, request.user)
 
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
@@ -8179,6 +8321,93 @@ class MinutesViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Cannot review signed minutes."}, status=400)
         minutes.status = MinutesStatus.REVIEWED
         minutes.save()
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @staticmethod
+    def _run_post_signing_automation(minutes, user):
+        """Allocate decisions to unit managers, run AI decision extraction, and
+        queue outcome-letter drafts. Shared by the digital ``sign`` path and the
+        manual ``upload-signed`` path so both produce the same downstream effects."""
+        from .decision_allocation import allocate_decision_tasks, queue_post_signing_automation
+
+        try:
+            allocate_decision_tasks(minutes, user)
+            queue_post_signing_automation(minutes)
+        except Exception:
+            import logging as _logging_mod
+
+            _logging_mod.getLogger("scdms.app").exception(
+                "POST_SIGN_AUTOMATION_FAIL | minutes=%s", minutes.id
+            )
+
+    @action(detail=True, methods=["post"], url_path="mark-for-signature")
+    def mark_for_signature(self, request, pk=None):
+        """Finalise reviewed minutes and mark them as printed/out for manual
+        (wet-ink) signature at the next sitting.
+
+        Interim flow until the DCDT digital-signature policy is in force.
+        """
+        minutes = self.get_object()
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_SECRETARY, Role.PSC_ADMIN}:
+            raise PermissionDenied(
+                "Only the Senior Admin Officer, Secretary, or an Admin can send minutes for signature."
+            )
+        if minutes.status == MinutesStatus.SIGNED:
+            return Response({"detail": "Minutes are already signed."}, status=400)
+        if minutes.status not in {MinutesStatus.REVIEWED, MinutesStatus.AWAITING_SIGNATURE} and profile.role != Role.PSC_ADMIN:
+            return Response(
+                {"detail": "Minutes must be reviewed before they can be sent for signature."},
+                status=400,
+            )
+        minutes.status = MinutesStatus.AWAITING_SIGNATURE
+        minutes.save(update_fields=["status", "updated_at"])
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="upload-signed")
+    def upload_signed(self, request, pk=None):
+        """Upload the scanned, manually-signed minutes and, in the same action,
+        finalise them and dispatch the post-decision workflow.
+
+        Per the interim manual-signature process: the minutes are printed,
+        signed on paper by the Chairperson and Commissioners at the next sitting,
+        then the Senior Admin Officer uploads the signed scan here. Uploading
+        marks the minutes SIGNED and immediately runs decision allocation,
+        minute-decision tasks, and task allocation.
+
+        Minutes remain editable after signing (Secretary / Chairperson / Admin),
+        and a corrected signed scan may be re-uploaded.
+        """
+        minutes = self.get_object()
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            raise PermissionDenied(
+                "Only the Senior Admin Officer can upload signed minutes and move them to the next steps."
+            )
+        signed_file = request.FILES.get("signed_document") or request.FILES.get("file")
+        if not signed_file:
+            return Response(
+                {"detail": "Attach the scanned signed minutes (field 'signed_document')."},
+                status=400,
+            )
+
+        already_signed = minutes.status == MinutesStatus.SIGNED
+        minutes.signed_document.save(
+            f"minutes_{minutes.meeting.reference_number}_signed_scan.{signed_file.name.rsplit('.', 1)[-1].lower()}",
+            signed_file,
+            save=False,
+        )
+        minutes.status = MinutesStatus.SIGNED
+        minutes.signed_uploaded_by = request.user
+        if not minutes.signed_at:
+            minutes.signed_at = timezone.now()
+        minutes.save()
+
+        # Run downstream automation only on the first signing so re-uploading a
+        # corrected scan does not duplicate decision tasks.
+        if not already_signed:
+            self._run_post_signing_automation(minutes, request.user)
+
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], url_path="pdf")

@@ -18,7 +18,11 @@ from .models import WorkflowStage
 # Stages that constitute a formal Commission / secretariat decision on the matter
 DECISION_PROOF_STAGES = frozenset({
     WorkflowStage.APPROVED,
+    WorkflowStage.NOTED,
+    WorkflowStage.NOT_APPROVED,
     WorkflowStage.REJECTED,
+    WorkflowStage.DEFERRED_BACK_TO_HR,
+    WorkflowStage.DEFERRED_BACK_TO_UNIT,
     WorkflowStage.RETURNED,
     WorkflowStage.RETURNED_FOR_CLARIFICATION,
     WorkflowStage.SECRETARY_REVIEW,  # internal fast-track approval path

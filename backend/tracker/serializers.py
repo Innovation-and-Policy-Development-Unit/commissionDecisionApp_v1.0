@@ -1561,8 +1561,13 @@ class MeetingSerializer(serializers.ModelSerializer):
     # Effective submission deadline: manual cutoff if set, else auto 3-day rule
     effective_cutoff = serializers.DateTimeField(read_only=True)
 
+    agenda_adopted_by_name = serializers.SerializerMethodField()
+
     def get_agenda_approved_by_name(self, obj):
         return obj.agenda_approved_by.username if obj.agenda_approved_by else None
+
+    def get_agenda_adopted_by_name(self, obj):
+        return obj.agenda_adopted_by.username if obj.agenda_adopted_by else None
 
     def get_agenda_count(self, obj):
         return obj.agenda_items.count()
@@ -1598,6 +1603,9 @@ class MeetingSerializer(serializers.ModelSerializer):
             "agenda_approved_by",
             "agenda_approved_by_name",
             "agenda_approved_at",
+            "agenda_adopted_by",
+            "agenda_adopted_by_name",
+            "agenda_adopted_at",
             "agenda_items",
             "agenda_count",
             "agenda_readiness",
@@ -2041,6 +2049,7 @@ class MinutesSerializer(serializers.ModelSerializer):
     meeting_reference = serializers.CharField(source="meeting.reference_number", read_only=True)
     meeting_date = serializers.DateField(source="meeting.date", read_only=True)
     signed_by_name = serializers.SerializerMethodField()
+    signed_uploaded_by_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
 
     class Meta:
@@ -2048,15 +2057,22 @@ class MinutesSerializer(serializers.ModelSerializer):
         fields = (
             "id", "meeting", "meeting_title", "meeting_reference", "meeting_date",
             "status", "content", "pdf_version",
+            "signed_document", "signed_uploaded_by", "signed_uploaded_by_name",
             "signed_by", "signed_by_name", "signed_at",
             "circulated_at", "minutes_due_at",
             "created_by", "created_by_name",
             "created_at", "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at", "created_by")
+        read_only_fields = (
+            "id", "created_at", "updated_at", "created_by",
+            "signed_document", "signed_uploaded_by",
+        )
 
     def get_signed_by_name(self, obj):
         return obj.signed_by.username if obj.signed_by else None
+
+    def get_signed_uploaded_by_name(self, obj):
+        return obj.signed_uploaded_by.username if obj.signed_uploaded_by else None
 
     def _request_user(self):
         from django.contrib.auth.models import AnonymousUser
@@ -2075,8 +2091,9 @@ class MinutesSerializer(serializers.ModelSerializer):
         content, fully_cleared = redact_content(instance, self._request_user())
         data["content"] = content
         if not fully_cleared:
-            # The stored PDF holds the full minutes; only fully-cleared users get it.
+            # The stored PDFs hold the full minutes; only fully-cleared users get them.
             data["pdf_version"] = None
+            data["signed_document"] = None
         return data
 
 

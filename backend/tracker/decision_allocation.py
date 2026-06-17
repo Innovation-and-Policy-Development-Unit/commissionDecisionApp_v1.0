@@ -45,7 +45,10 @@ ROUTED_UNIT_TO_ACTION_UNIT: dict[str, str] = {
 
 _DECISION_TYPE_TO_OUTCOME: dict[str, str] = {
     "approved": CommissionDecisionOutcome.APPROVED,
+    "noted": CommissionDecisionOutcome.NOTED,
+    "not_approved": CommissionDecisionOutcome.NOT_APPROVED,
     "rejected": CommissionDecisionOutcome.REJECTED,
+    "deferred_back_to_unit": CommissionDecisionOutcome.DEFERRED_BACK_TO_UNIT,
     "deferred": CommissionDecisionOutcome.DEFERRED_NEXT,
 }
 
