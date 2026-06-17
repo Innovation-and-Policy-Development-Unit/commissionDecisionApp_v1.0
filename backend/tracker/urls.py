@@ -114,6 +114,7 @@ from .views import (
     get_ai_noa,
     trigger_ai_letter,
     get_ai_letter,
+    generate_submission_letter,
     calendar_events_view,
     analytics_overview_view,
     analytics_trends_view,
@@ -266,8 +267,9 @@ urlpatterns = [
     path("submissions/<int:pk>/ai-outcome/",           get_ai_outcome,         name="get-ai-outcome"),
     path("submissions/<int:pk>/trigger-ai-noa/",       trigger_ai_noa,         name="trigger-ai-noa"),
     path("submissions/<int:pk>/ai-noa/",               get_ai_noa,             name="get-ai-noa"),
-    path("submissions/<int:pk>/trigger-ai-letter/",    trigger_ai_letter,      name="trigger-ai-letter"),
-    path("submissions/<int:pk>/ai-letter/",            get_ai_letter,          name="get-ai-letter"),
+    path("submissions/<int:pk>/trigger-ai-letter/",    trigger_ai_letter,         name="trigger-ai-letter"),
+    path("submissions/<int:pk>/ai-letter/",            get_ai_letter,             name="get-ai-letter"),
+    path("submissions/<int:pk>/generate-letter/",      generate_submission_letter, name="generate-letter"),
     # Calendar
     path("calendar/events/",               calendar_events_view,               name="calendar-events"),
     # Analytics

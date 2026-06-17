@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Secondment Submission Paper — content-only (trimmed)
+  Public Service Commission — Human Resource Management (HRM)
+  Legislative basis: Public Service Staff Manual (PSSM) Chapter 4, Section 6.3 — Secondment.
+
+  Removed from the original because the system already records them:
+    • Cover admin:  meeting_number, item_number, submitted_by, action_officer,
+                    prepared_by, date_prepared, date_received, subject(=title)
+    • Endorsement:  psc_secretary_name, psc_secretary_date  (captured from the
+                    approving user + transition timestamp)
+    • Decision:     psc_decision_date  (recorded by the Commission decision)
+  Also removed as redundant/duplicated (re-add if you need them):
+    • current_ministry  → Submission.ministry / department (auto from profile)
+    • attachments_list  → real file uploads (SubmissionDocument)
+-->
+<fields>
+
+  <!-- ═══════════════════════════════════════════════════════
+       REQUEST DETAILS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Request Details</label>
+    <field_key>section_request</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+
+  <field>
+    <label>Type of Request</label>
+    <field_key>request_type</field_key>
+    <field_type>select</field_type>
+    <choices>New Secondment
+Reinstatement from Secondment
+Extension of Secondment</choices>
+    <is_required>true</is_required>
+    <display_order>20</display_order>
+  </field>
+
+  <field>
+    <label>Officer Name</label>
+    <field_key>officer_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Full name of the officer</placeholder>
+    <help_text>Secondment is available to permanent officers only (PSSM 6.3(g)).</help_text>
+    <is_required>true</is_required>
+    <display_order>30</display_order>
+  </field>
+
+  <field>
+    <label>Receiving Organisation</label>
+    <field_key>receiving_organisation</field_key>
+    <field_type>text</field_type>
+    <placeholder>Department / Public Sector Organisation / institution the officer is seconded to</placeholder>
+    <help_text>The body to which the officer is (or was) released on loan.</help_text>
+    <is_required>true</is_required>
+    <display_order>40</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       EMPLOYMENT HISTORY
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Employment History</label>
+    <field_key>section_employment_history</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>50</display_order>
+  </field>
+
+  <field>
+    <label>Employment History</label>
+    <field_key>employment_history</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Set out the officer's employment history (substantive post, appointment dates, prior postings, and any prior secondment periods).</placeholder>
+    <help_text>Include details that establish the officer's permanent status and continuity of service.</help_text>
+    <is_required>true</is_required>
+    <display_order>60</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ISSUE
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Issue</label>
+    <field_key>section_issue</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>70</display_order>
+  </field>
+
+  <field>
+    <label>Issue</label>
+    <field_key>issue</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Whether the request for secondment (or reinstatement from secondment) of (insert name) complies with the PSSM.</placeholder>
+    <help_text>State the question the Commission is being asked to determine.</help_text>
+    <is_required>true</is_required>
+    <display_order>80</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PUBLIC SERVICE RULES (reference)
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Public Service Rules — PSSM Ch.4 s.6.3 (Secondment)</label>
+    <field_key>section_rules</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>90</display_order>
+  </field>
+
+  <field>
+    <label>Applicable Provision — confirm compliance with PSSM 6.3</label>
+    <field_key>applicable_provision</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Note which limbs of PSSM 6.3 (a)–(g) apply and how the request meets them.</placeholder>
+    <help_text>PSSM Ch.4 s.6.3 — Secondment: (a) PSC-initiated release of a permanent officer; (b) director/DG recommendation, max 5 years, gov-to-gov, prior PSC approval; (c) officer stays a public servant and returns at end; (d) vacated post filled; (e) receiving body pays salary/benefits unless PSC decides otherwise; (f) service continuity &amp; leave accrual; (g) permanent officers only.</help_text>
+    <is_required>false</is_required>
+    <display_order>100</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       DISCUSSION
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Discussion</label>
+    <field_key>section_discussion</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>110</display_order>
+  </field>
+
+  <field>
+    <label>Discussion</label>
+    <field_key>discussion</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Analyse the request against PSSM s.6.3: basis of the initiative, period sought, salary/benefit responsibility, arrangements for the vacated post, and continuity of service.</placeholder>
+    <help_text>Address each relevant limb of Section 6.3 as it applies to this request.</help_text>
+    <is_required>true</is_required>
+    <display_order>120</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       RECOMMENDATIONS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Recommendations</label>
+    <field_key>section_recommendation</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>130</display_order>
+  </field>
+
+  <field>
+    <label>Recommendations</label>
+    <field_key>recommendation</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>It is recommended that the Commission … (insert recommended action, including period and conditions).</placeholder>
+    <is_required>true</is_required>
+    <display_order>140</display_order>
+  </field>
+
+</fields>

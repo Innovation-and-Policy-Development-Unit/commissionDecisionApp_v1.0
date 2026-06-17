@@ -178,12 +178,12 @@ const STAGE_ACTIONS = {
 
   under_assessment: [
     {
-      id: 'forward_commission',
-      label: 'Forward to Commission',
-      description: 'Assessment complete — place on Commission agenda',
+      id: 'submit_to_secretary',
+      label: 'Submit to Secretary',
+      description: 'Assessment complete — submit to PSC Secretary for approval',
       icon: ArrowRight,
       variant: 'primary',
-      transitionTo: 'forwarded_to_commission',
+      transitionTo: 'pending_secretary_approval',
       requiresNote: false,
     },
     {
@@ -207,6 +207,42 @@ const STAGE_ACTIONS = {
       requiresNote: true,
       notePlaceholder: 'Describe what clarification is needed…',
       noteLabel: 'Clarification request',
+    },
+  ],
+
+  // Secretary reviews completed assessment before forwarding to Commission.
+  // Only psc_secretary / psc_admin will have 'forwarded_to_commission' in their allowed list.
+  pending_secretary_approval: [
+    {
+      id: 'forward_commission',
+      label: 'Forward to Commission',
+      description: 'Approve assessment — forward to Commission queue',
+      icon: ArrowRight,
+      variant: 'primary',
+      transitionTo: 'forwarded_to_commission',
+      requiresNote: false,
+    },
+    {
+      id: 'return_to_assessment',
+      label: 'Return to Assessment',
+      description: 'Send back to OPSC unit for further review',
+      icon: RotateCcw,
+      variant: 'outline',
+      transitionTo: 'under_assessment',
+      requiresNote: true,
+      notePlaceholder: 'Describe what needs to be addressed before forwarding…',
+      noteLabel: 'Return reason',
+    },
+    {
+      id: 'defer_sec',
+      label: 'Defer',
+      description: 'Hold pending further information or decision',
+      icon: Clock,
+      variant: 'outline',
+      transitionTo: 'deferred',
+      requiresNote: true,
+      notePlaceholder: 'Reason for deferral…',
+      noteLabel: 'Deferral reason',
     },
   ],
 

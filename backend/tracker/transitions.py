@@ -194,9 +194,17 @@ _STAGE_GRAPH = {
     ],
     # ── Assessment ─────────────────────────────────────────────────────────
     WorkflowStage.UNDER_ASSESSMENT: [
-        WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,
         WorkflowStage.RETURNED_FOR_CLARIFICATION,
         WorkflowStage.AWAITING_LEGAL_ADVICE,
+        WorkflowStage.DEFERRED,
+    ],
+    # ── Secretary approval gate ────────────────────────────────────────────
+    # Secretary reviews completed assessment before forwarding to Commission.
+    WorkflowStage.PENDING_SECRETARY_APPROVAL: [
+        WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.UNDER_ASSESSMENT,  # return for further work
+        WorkflowStage.DEFERRED,
     ],
     # ── Hold / deferral states ────────────────────────────────────────────
     WorkflowStage.DEFERRED: [
@@ -214,6 +222,7 @@ _STAGE_GRAPH = {
     ],
     WorkflowStage.AWAITING_LEGAL_ADVICE: [
         WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,
         WorkflowStage.FORWARDED_TO_COMMISSION,
         WorkflowStage.COMMISSION_SITTING,
         WorkflowStage.DEFERRED,
@@ -354,6 +363,7 @@ _COMMISSIONER_SOURCES = {
 _OFFICER_FORBIDDEN = {
     WorkflowStage.APPROVED,
     WorkflowStage.REJECTED,
+    WorkflowStage.PENDING_SECRETARY_APPROVAL,
     WorkflowStage.FORWARDED_TO_COMMISSION,
     WorkflowStage.COMMISSION_SITTING,
     WorkflowStage.MINUTES_DRAFTED_SIGNED,
@@ -559,6 +569,13 @@ def assert_transition_allowed(
     if role == Role.PSC_SECRETARY:
         if target_stage in {WorkflowStage.APPROVED, WorkflowStage.REJECTED}:
             raise PermissionDenied("Recording approval or rejection is for Commissioners.")
+        # Secretary is the only role that can approve from the Secretary Approval Gate.
+        # Principals cannot forward directly to Commission — they submit to Secretary first.
+        if current_stage != WorkflowStage.PENDING_SECRETARY_APPROVAL and target_stage == WorkflowStage.FORWARDED_TO_COMMISSION:
+            raise PermissionDenied(
+                "Submissions must pass through the Secretary Approval Gate "
+                "(Pending Secretary Approval) before being forwarded to the Commission."
+            )
         return
 
     # ── Senior Administration Officer (SOP Section 6) ──────────────────────

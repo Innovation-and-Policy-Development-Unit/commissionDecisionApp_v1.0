@@ -126,6 +126,9 @@ def _build_status_detail(submission) -> str:
             return f"Awaiting assignment by {_unit_label(unit)} Manager"
         return "Under assessment"
 
+    if stage == WorkflowStage.PENDING_SECRETARY_APPROVAL:
+        return "Assessment complete — awaiting PSC Secretary approval"
+
     if stage == WorkflowStage.COMPLIANCE_UNDER_REVIEW:
         return "Compliance review in progress (CMS)"
 
@@ -203,6 +206,7 @@ SUBWAY_STATION_DEFS: list[dict[str, Any]] = [
             WorkflowStage.REGISTERED_ROUTED,
             WorkflowStage.MANAGER_CHECKLIST_REVIEW,
             WorkflowStage.UNDER_ASSESSMENT,
+            WorkflowStage.PENDING_SECRETARY_APPROVAL,
             WorkflowStage.COMPLIANCE_UNDER_REVIEW,
             WorkflowStage.DEFERRED,
             WorkflowStage.AWAITING_LEGAL_ADVICE,

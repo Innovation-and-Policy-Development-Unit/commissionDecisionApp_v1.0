@@ -57,6 +57,8 @@ class WorkflowStage(models.TextChoices):
     REGISTERED_ROUTED          = "registered_routed",          "Registered and Routed"
     MANAGER_CHECKLIST_REVIEW   = "manager_checklist_review",   "Manager Checklist Review"
     UNDER_ASSESSMENT           = "under_assessment",           "Under Assessment"
+    # ── Secretary approval gate (assessment → commission) ──────────────────
+    PENDING_SECRETARY_APPROVAL = "pending_secretary_approval", "Pending Secretary Approval"
     # ── CMS compliance routing ─────────────────────────────────────────────
     COMPLIANCE_UNDER_REVIEW    = "compliance_under_review",    "Compliance Under Review (CMS)"
     # ── Hold / deferral states ─────────────────────────────────────────────

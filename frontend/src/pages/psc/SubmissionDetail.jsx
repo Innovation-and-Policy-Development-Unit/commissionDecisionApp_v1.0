@@ -19,7 +19,7 @@ import {
 } from '../../constants/stages'
 import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
-import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel } from '../../components/submissions/AiAnalysisPanels'
+import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
 import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
 import DecisionServicePanel from '../../components/submissions/DecisionServicePanel'
@@ -106,7 +106,7 @@ const DYNAMIC_CHECKLIST_VIEW_ROLES = [
 ]
 const DYNAMIC_CHECKLIST_EDIT_STAGE   = 'manager_checklist_review'
 const DYNAMIC_CHECKLIST_VIEW_STAGES  = [
-  'under_assessment', 'secretary_review', 'returned_for_clarification', 'deferred', 'tabled',
+  'under_assessment', 'pending_secretary_approval', 'secretary_review', 'returned_for_clarification', 'deferred', 'tabled',
   'awaiting_legal_advice', 'awaiting_cabinet_decision', 'resubmitted', 'forwarded_to_commission',
   'commission_sitting', 'matters_arising', 'approved', 'rejected', 'returned',
   'deferred_back_to_hr', 'minutes_drafted_signed', 'decision_entered_assigned',
@@ -1604,6 +1604,7 @@ const stageDescriptions = {
             <AiOutcomePanel submissionId={id} />
             <AiNoaPanel submissionId={id} />
             <AiLetterPanel submissionId={id} suggestedOutcome={submission.ai_outcome_recommendation || ''} />
+            <StructuredLetterPanel submissionId={id} formTypeCode={submission?.form_type_code || ''} />
           </div>
         </details>
       </div>

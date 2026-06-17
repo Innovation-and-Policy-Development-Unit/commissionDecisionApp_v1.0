@@ -1,0 +1,276 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Special Skills Allowance Approval Letter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 60px;
+            min-height: 100vh;
+        }
+        .letterhead {
+            border-bottom: 3px solid #004578;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+        .letterhead .logo {
+            font-weight: 700;
+            font-size: 10pt;
+            letter-spacing: 0.05em;
+            color: #005A9E;
+            margin-bottom: 2px;
+        }
+        .letterhead .title {
+            font-size: 9.5pt;
+            color: #323130;
+        }
+        .letterhead .address {
+            font-size: 9pt;
+            color: #605E5C;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+        .metadata {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10pt;
+            color: #605E5C;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #E5E5E5;
+            padding-bottom: 12px;
+        }
+        .recipient {
+            margin-bottom: 20px;
+            font-size: 11pt;
+        }
+        .recipient .label {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .recipient .address-block {
+            line-height: 1.6;
+        }
+        .salutation {
+            margin-bottom: 16px;
+            font-size: 11pt;
+        }
+        .body {
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .body p {
+            margin-bottom: 12px;
+            text-align: justify;
+        }
+        .body .numbered-list {
+            margin-left: 20px;
+            margin-bottom: 12px;
+        }
+        .body .numbered-list li {
+            margin-bottom: 8px;
+        }
+        .section-title {
+            font-weight: 700;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            color: #004578;
+        }
+        .highlight-box {
+            background: #EFF6FC;
+            border-left: 4px solid #0078D4;
+            padding: 12px 16px;
+            margin: 16px 0;
+            font-size: 11pt;
+        }
+        .highlight-box strong {
+            color: #005A9E;
+        }
+        .closing {
+            margin-top: 32px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+            font-size: 11pt;
+        }
+        .signature-block {
+            margin-top: 48px;
+            font-size: 11pt;
+        }
+        .signature-line {
+            border-bottom: 1px solid #333;
+            width: 280px;
+            margin-bottom: 4px;
+            margin-top: 48px;
+        }
+        .signature-title {
+            font-weight: 600;
+            margin-top: 4px;
+        }
+        .cc {
+            margin-top: 24px;
+            padding-top: 12px;
+            border-top: 1px solid #E5E5E5;
+            font-size: 10.5pt;
+            color: #605E5C;
+        }
+        .cc-label {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .footer {
+            margin-top: 32px;
+            padding-top: 12px;
+            border-top: 1px solid #E5E5E5;
+            font-size: 9pt;
+            color: #A19F9D;
+            text-align: center;
+        }
+        @media print {
+            body { margin: 0; padding: 0; }
+            .container { padding: 40px 60px; }
+            a { color: inherit; text-decoration: none; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- Letterhead -->
+    <div class="letterhead">
+        <div class="logo">GOVERNMENT OF THE REPUBLIC OF VANUATU</div>
+        <div class="title">PUBLIC SERVICE COMMISSION</div>
+        <div class="address">
+            PMB 9017, Port Vila, Vanuatu<br>
+            Tel: +678 33360 | Email: pscinfo@vanuatu.gov.vu<br>
+            www.psc.gov.vu
+        </div>
+    </div>
+
+    <!-- Metadata -->
+    <div class="metadata">
+        <div>
+            <strong>PSC File:</strong> {{ submission.psc_file|default:"[To be assigned]" }}<br>
+            <strong>PSC Decision No:</strong> {{ decision_number|default:"[To be assigned]" }}
+        </div>
+        <div style="text-align: right;">
+            <strong>Date:</strong> {{ approval_date|date:"d F Y" }}
+        </div>
+    </div>
+
+    <!-- Recipient -->
+    <div class="recipient">
+        <div class="label">To:</div>
+        <div class="address-block">
+            {{ officer_name }}<br>
+            {% if current_position %}
+            {{ current_position }}<br>
+            {% endif %}
+            {% if ministry %}
+            {{ ministry }}<br>
+            {% endif %}
+            Port Vila, Vanuatu
+        </div>
+    </div>
+
+    <!-- Salutation -->
+    <div class="salutation">Dear {{ officer_name|default:"Sir/Madam" }},</div>
+
+    <!-- Body -->
+    <div class="body">
+        <p><strong>RE: APPROVAL OF SPECIAL SKILLS ALLOWANCE</strong></p>
+
+        <p>We are pleased to inform you that the Public Service Commission, at its meeting held on {{ decision_date|date:"d F Y" }}, has approved the payment of a Special Skills Allowance in recognition of the specialized expertise, skills, and exceptional responsibilities you have undertaken in your assignment as {{ assignment_title|default:"[position title]" }} in the {{ assignment_ministry|default:"[ministry/organization]" }}.</p>
+
+        <div class="section-title">Allowance Details</div>
+        <div class="highlight-box">
+            <strong>Allowance Amount:</strong> VT {{ allowance_amount|default:"[amount]" }} per {{ allowance_frequency|default:"annum" }}<br>
+            <strong>Allowance Period:</strong> {{ allowance_start_date|date:"d F Y" }} to {{ allowance_end_date|date:"d F Y" }}<br>
+            <strong>Basis:</strong> PSSM Chapter 4, Section 4.2.10 (Special Skills Allowance)<br>
+            <strong>Point Matrix Band:</strong> {{ matrix_band|default:"[band]" }}
+        </div>
+
+        <div class="section-title">Specialized Duties Recognized</div>
+        <p>The Commission recognizes that your assignment involved exceptional responsibilities and the application of specialized expertise beyond the normal scope of routine duties, including but not limited to:</p>
+        <ul class="numbered-list">
+            {% if specialized_duties %}
+                {{ specialized_duties|safe }}
+            {% else %}
+                <li>Institutional establishment and governance development</li>
+                <li>Policy and legislative development</li>
+                <li>Executive leadership during critical transition periods</li>
+                <li>Coordination with central agencies and development partners</li>
+                <li>Strategic advisory and project management</li>
+            {% endif %}
+        </ul>
+
+        <p>These duties required specialized expertise in institutional reform, executive leadership, and strategic governance that significantly exceeded routine Director General functions and were critical to the effective establishment and operational readiness of the organization.</p>
+
+        <div class="section-title">Payment Terms and Conditions</div>
+        <ol class="numbered-list">
+            <li><strong>Cost Recovery:</strong> The Special Skills Allowance is to be funded by {{ funding_source|default:"the requesting organization" }}. The Commission notes your confirmation that the cost will be met from {{ funding_ministry|default:"organizational" }} resources.</li>
+
+            <li><strong>Time-Bound:</strong> The allowance is finite and time-bound to the period specified above. It does not create an ongoing financial commitment beyond {{ allowance_end_date|date:"d F Y" }}.</li>
+
+            <li><strong>Payment Schedule:</strong> The allowance shall be processed through the regular payroll system for {{ allowance_frequency|default:"monthly" }} payment, commencing from {{ allowance_start_date|date:"d F Y" }}.</li>
+
+            <li><strong>Taxation:</strong> The allowance is subject to all applicable tax and statutory deductions in accordance with Vanuatu tax law.</li>
+
+            <li><strong>Policy Compliance:</strong> The approval is consistent with the Public Service Commission Act [CAP 246] and the Public Service Staff Manual (PSSM), particularly Chapter 4, Section 4.2.10 governing Special Skills Allowances.</li>
+
+            <li><strong>Cessation:</strong> The allowance will automatically cease on {{ allowance_end_date|date:"d F Y" }} unless formally extended by further PSC decision.</li>
+        </ol>
+
+        <div class="section-title">Value for Money</div>
+        <p>The Commission notes that the approved allowance represents significant value for money to Government. The equivalent cost of engaging an external consultant to undertake comparable work would substantially exceed the approved allowance amount, demonstrating the cost-effectiveness of this arrangement.</p>
+
+        <div class="section-title">Performance Expectations</div>
+        <p>The Commission trusts that you will continue to execute these specialized responsibilities with the same professionalism, diligence, and excellence that have characterized your distinguished tenure in the public service. The Commission places on record its confidence in your abilities and your commitment to achieving the organizational objectives outlined in your assignment.</p>
+    </div>
+
+    <!-- Closing -->
+    <div class="closing">
+        <p>We wish to acknowledge your exceptional contribution to the public service and thank you for your dedication and commitment to advancing the Government's strategic priorities.</p>
+
+        <p>Should you have any questions regarding this approval, please do not hesitate to contact the Public Service Commission.</p>
+    </div>
+
+    <!-- Signature Block -->
+    <div class="signature-block">
+        <p>Yours sincerely,</p>
+        <div class="signature-line"></div>
+        <div class="signature-title">
+            {{ secretary_name|default:"[PSC Secretary Name]" }}<br>
+            <span style="font-weight: normal; font-size: 10pt;">Secretary, Public Service Commission</span>
+        </div>
+    </div>
+
+    <!-- CC / Distribution -->
+    <div class="cc">
+        <div class="cc-label">Copy to:</div>
+        <ul style="margin-left: 20px; font-size: 10.5pt;">
+            <li>Director, Finance (for payroll processing)</li>
+            <li>{{ assignment_ministry|default:"[Ministry]" }} (for record and budget tracking)</li>
+            <li>Human Resources Unit, PSC</li>
+            <li>File</li>
+        </ul>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Public Service Commission — Commission de la Fonction Publique — Pablik Sevis Komisen</p>
+        <p style="margin-top: 8px;">This letter is an official record of the PSC decision. Please retain for payroll and personnel records.</p>
+    </div>
+
+</div>
+</body>
+</html>

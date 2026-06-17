@@ -1,7 +1,7 @@
 /**
  * AiAnalysisPanels.jsx
  * Reusable AI result + trigger panels for SubmissionDetail.
- * Exports: AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel
+ * Exports: AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel
  */
 import { useState, useEffect, useCallback } from 'react'
 import { BrainCircuit, Copy, RefreshCw, CheckCircle2, XCircle, AlertTriangle, FileText } from 'lucide-react'
@@ -393,6 +393,86 @@ export function AiLetterPanel({ submissionId, suggestedOutcome = '' }) {
                 <ul className="mt-1 ml-4 list-disc text-sm text-slate-600 dark:text-slate-300">{actionItems.map((item, i) => <li key={i}>{item}</li>)}</ul>
               </div>
             )}
+          </>
+        )}
+      </div>
+    </AiPanelShell>
+  )
+}
+
+// ── Structured Outcome Letter (Cessation / Recruitment / Secondment / Leave Payout) ──
+
+const STRUCTURED_LETTER_CODES = new Set([
+  'CESSATION-AGE', 'CESSATION-NOTICE-AGE', 'CESSATION-MEDICAL',
+  'CESSATION-DEATH', 'CESSATION-REDUNDANCY', 'CESSATION-RESIGNATION',
+  'RECRUIT-PROBATION', 'RECRUIT-CONFIRM', 'RECRUIT-DIRECT',
+  'RECRUIT-TEMPORARY', 'RECRUIT-CONTRACT',
+  'SECONDMENT', 'LEAVE-PAYOUT',
+])
+
+export function StructuredLetterPanel({ submissionId, formTypeCode }) {
+  const toast = useToast()
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  if (!STRUCTURED_LETTER_CODES.has(formTypeCode)) return null
+
+  const generate = async () => {
+    setLoading(true)
+    try {
+      const res = await api.post(`/submissions/${submissionId}/generate-letter/`)
+      setResult(res.data)
+      toast.success('Letter generated.')
+    } catch (err) {
+      const msg = err?.response?.data?.error || 'Failed to generate letter.'
+      toast.error(msg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copyToClipboard = () => {
+    const text = result?.body_text || ''
+    if (text) { navigator.clipboard.writeText(text); toast.success('Copied to clipboard.') }
+  }
+
+  return (
+    <AiPanelShell
+      title="Generate Outcome Letter"
+      icon={<FileText size={20} className="text-primary-500" />}
+      onTrigger={generate}
+      loading={loading}
+      lastRun={null}
+    >
+      <div className="py-2 flex flex-col gap-3">
+        {!result ? (
+          <span className="text-sm text-slate-500">
+            Click Run to generate a structured outcome letter from the form data.
+          </span>
+        ) : (
+          <>
+            {result.subject && (
+              <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">
+                Subject: {result.subject}
+              </span>
+            )}
+            <div className="relative">
+              {result.body_html ? (
+                <div
+                  className="border rounded bg-white dark:bg-slate-900 p-3 text-sm overflow-auto max-h-96"
+                  dangerouslySetInnerHTML={{ __html: result.body_html }}
+                />
+              ) : (
+                <BaseTextarea
+                  hideLabel label="Letter" value={result.body_text || ''}
+                  readOnly rows={14} inputClassName="font-mono text-[13px]"
+                />
+              )}
+              <BaseButton variant="ghost" size="sm" icon={<Copy size={14} />}
+                onClick={copyToClipboard} className="absolute top-2 right-2">
+                Copy
+              </BaseButton>
+            </div>
           </>
         )}
       </div>

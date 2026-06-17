@@ -639,6 +639,17 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         title = f"Resubmitted: {submission.reference_number}"
         body = f"{submission.title} has been resubmitted after clarification."
 
+    elif target == WorkflowStage.PENDING_SECRETARY_APPROVAL:
+        recipients = User.objects.filter(
+            psc_profile__role=Role.PSC_SECRETARY,
+            is_active=True,
+        )
+        title = f"Secretary Approval Required: {submission.reference_number}"
+        body = (
+            f"{submission.title} has completed assessment and is awaiting your approval "
+            f"before being forwarded to the Commission."
+        )
+
     elif target == WorkflowStage.FORWARDED_TO_COMMISSION:
         recipients = User.objects.filter(
             psc_profile__role__in=[
@@ -730,7 +741,7 @@ _ACTIVE_DASHBOARD_STAGES = [
     "pending_manager_approval", "pending_second_approval",
     "submitted", "received_by_psc", "registered_routed",
     "returned_for_clarification", "manager_checklist_review",
-    "under_assessment", "forwarded_to_commission",
+    "under_assessment", "pending_secretary_approval", "forwarded_to_commission",
     "commission_sitting", "secretary_review",
 ]
 
@@ -4340,6 +4351,7 @@ def _reports_snapshot_for_user(user):
         WorkflowStage.REGISTERED_ROUTED,
         WorkflowStage.MANAGER_CHECKLIST_REVIEW,
         WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,
         WorkflowStage.DEFERRED,
         WorkflowStage.RESUBMITTED,
         WorkflowStage.FORWARDED_TO_COMMISSION,
@@ -4395,6 +4407,7 @@ def reports_view(request):
         WorkflowStage.REGISTERED_ROUTED,
         WorkflowStage.MANAGER_CHECKLIST_REVIEW,
         WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,
         WorkflowStage.DEFERRED,
         WorkflowStage.RESUBMITTED,
         WorkflowStage.FORWARDED_TO_COMMISSION,
@@ -8613,6 +8626,7 @@ def dashboard_stats_view(request):
         WorkflowStage.RETURNED_FOR_CLARIFICATION,
         WorkflowStage.MANAGER_CHECKLIST_REVIEW,
         WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,
         WorkflowStage.FORWARDED_TO_COMMISSION,
         WorkflowStage.COMMISSION_SITTING,
         WorkflowStage.SECRETARY_REVIEW,
@@ -8667,7 +8681,7 @@ def submission_sla_view(request, pk):
     active_stages = [
         WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
         WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
-        WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL, WorkflowStage.FORWARDED_TO_COMMISSION,
     ]
     is_active = submission.current_stage in active_stages
     if not is_active:
@@ -8837,6 +8851,28 @@ def get_ai_letter(request, pk):
     return Response(AiLetterResultSerializer(submission).data)
 
 
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def generate_submission_letter(request, pk):
+    """Generate a structured outcome letter for cessation, recruitment, secondment, or leave payout submissions."""
+    from .letters import generate_letter
+    submission = get_object_or_404(Submission, pk=pk)
+    try:
+        result = generate_letter(submission)
+    except ValueError as exc:
+        return Response({"error": str(exc)}, status=400)
+
+    # Store in ai_letter fields so the existing AiLetterPanel can display it
+    submission.ai_letter_subject = result["subject"]
+    submission.ai_letter_content = result["body_html"] or result["body_text"]
+    submission.save(update_fields=["ai_letter_subject", "ai_letter_content"])
+    return Response({
+        "subject": result["subject"],
+        "body_text": result["body_text"],
+        "body_html": result["body_html"],
+    })
+
+
 # ── Calendar Events ────────────────────────────────────────────────────────────
 
 @api_view(["GET"])
@@ -8959,7 +8995,8 @@ def ministry_performance_view(request):
         WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED,
         WorkflowStage.RECEIVED_BY_PSC, WorkflowStage.REGISTERED_ROUTED,
         WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
-        WorkflowStage.FORWARDED_TO_COMMISSION, WorkflowStage.COMMISSION_SITTING,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL, WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.COMMISSION_SITTING,
     ]
 
     from .models import Ministry
@@ -9557,7 +9594,7 @@ def workload_officers_view(request):
     active_stages = [
         WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
         WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
-        WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL, WorkflowStage.FORWARDED_TO_COMMISSION,
     ]
 
     officers = AuthUser.objects.filter(
@@ -9748,6 +9785,7 @@ CHECKLIST_EDIT_ROLES   = frozenset({
 # Roles that can view the completed checklist in later stages
 CHECKLIST_VIEW_STAGES  = frozenset({
     WorkflowStage.UNDER_ASSESSMENT,
+    WorkflowStage.PENDING_SECRETARY_APPROVAL,
     WorkflowStage.SECRETARY_REVIEW,
     WorkflowStage.RETURNED_FOR_CLARIFICATION,
     WorkflowStage.DEFERRED,

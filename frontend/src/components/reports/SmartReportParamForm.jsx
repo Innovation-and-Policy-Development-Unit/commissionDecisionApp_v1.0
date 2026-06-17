@@ -10,6 +10,7 @@ const STAGE_OPTIONS = [
   { value: 'registered_routed', label: 'Registered and Routed' },
   { value: 'manager_checklist_review', label: 'Manager Checklist Review' },
   { value: 'under_assessment', label: 'Under Assessment' },
+  { value: 'pending_secretary_approval', label: 'Pending Secretary Approval' },
   { value: 'forwarded_to_commission', label: 'Forwarded to Commission' },
   { value: 'commission_sitting', label: 'Commission Sitting' },
   { value: 'approved', label: 'Approved' },

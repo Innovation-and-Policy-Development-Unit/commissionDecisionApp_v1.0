@@ -172,8 +172,8 @@ export default function ComplianceCases() {
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-3">Reference</th>
-                <th className="px-4 py-3">Subject</th>
-                <th className="px-4 py-3">Case family</th>
+                <th className="px-4 py-3">Officer</th>
+                <th className="px-4 py-3">Nature of Offence</th>
                 <th className="px-4 py-3">Stage</th>
                 <th className="px-4 py-3">SLA</th>
                 <th className="px-4 py-3">Status</th>

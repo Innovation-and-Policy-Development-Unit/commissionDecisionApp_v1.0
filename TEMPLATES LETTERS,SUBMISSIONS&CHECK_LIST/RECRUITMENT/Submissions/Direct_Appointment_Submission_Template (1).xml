@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Direct Appointment — Recruitment Submission Paper (intake form)
+  Public Service Commission — Human Resource Management (HRM)
+  Import into Form Builder via Import (.xml) on the linked PSC form type.
+  Legal basis: Public Service Act s.25; PSSM Chapter 3, Section 2.9.
+  Note: submitter, timestamps, meeting/item number, endorsement and
+  approval/deferral are handled by the workflow and are not intake fields.
+-->
+<fields>
+
+  <!-- ═══════════════════════════════════════════════════════
+       OFFICER AND POSITION
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Officer and Position</label>
+    <field_key>section_position</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>10</display_order>
+  </field>
+
+  <field>
+    <label>Officer Name</label>
+    <field_key>officer_name</field_key>
+    <field_type>text</field_type>
+    <placeholder>Full name of the officer</placeholder>
+    <is_required>true</is_required>
+    <display_order>20</display_order>
+  </field>
+
+  <field>
+    <label>Position Title</label>
+    <field_key>position_title</field_key>
+    <field_type>text</field_type>
+    <placeholder>Title of the position being appointed to</placeholder>
+    <is_required>true</is_required>
+    <display_order>30</display_order>
+  </field>
+
+  <field>
+    <label>Post Number</label>
+    <field_key>post_number</field_key>
+    <field_type>text</field_type>
+    <placeholder>Post No.</placeholder>
+    <is_required>true</is_required>
+    <display_order>40</display_order>
+  </field>
+
+  <field>
+    <label>Department</label>
+    <field_key>department</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of Department</placeholder>
+    <is_required>true</is_required>
+    <display_order>50</display_order>
+  </field>
+
+  <field>
+    <label>Ministry</label>
+    <field_key>ministry</field_key>
+    <field_type>text</field_type>
+    <placeholder>Name of Ministry</placeholder>
+    <is_required>true</is_required>
+    <display_order>60</display_order>
+  </field>
+
+  <field>
+    <label>Salary Scale / Grade</label>
+    <field_key>salary_scale</field_key>
+    <field_type>text</field_type>
+    <placeholder>e.g. PS 4.1</placeholder>
+    <is_required>false</is_required>
+    <display_order>70</display_order>
+  </field>
+
+  <field>
+    <label>Annual Salary (VT)</label>
+    <field_key>annual_salary</field_key>
+    <field_type>text</field_type>
+    <placeholder>VT figure</placeholder>
+    <is_required>false</is_required>
+    <display_order>80</display_order>
+  </field>
+
+  <field>
+    <label>Current Substantive Position (if different)</label>
+    <field_key>substantive_position</field_key>
+    <field_type>text</field_type>
+    <placeholder>Officer's substantive post, if different from the appointment post</placeholder>
+    <is_required>false</is_required>
+    <display_order>90</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ACTING SERVICE AND PERFORMANCE
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Acting Service and Performance</label>
+    <field_key>section_service</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>100</display_order>
+  </field>
+
+  <field>
+    <label>Acting / Temporary — Start Date</label>
+    <field_key>acting_start_date</field_key>
+    <field_type>date</field_type>
+    <help_text>Date the officer commenced acting in the position on a temporary basis.</help_text>
+    <is_required>false</is_required>
+    <display_order>110</display_order>
+  </field>
+
+  <field>
+    <label>Acting / Temporary — End Date</label>
+    <field_key>acting_end_date</field_key>
+    <field_type>date</field_type>
+    <is_required>false</is_required>
+    <display_order>120</display_order>
+  </field>
+
+  <field>
+    <label>Annual Performance Rating</label>
+    <field_key>performance_rating</field_key>
+    <field_type>text</field_type>
+    <placeholder>Most recent performance appraisal rating</placeholder>
+    <is_required>false</is_required>
+    <display_order>130</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       BACKGROUND
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Background</label>
+    <field_key>section_background</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>140</display_order>
+  </field>
+
+  <field>
+    <label>Background / Justification</label>
+    <field_key>background</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>State why the services of this position are necessary, the location of the position, and the basis for the appointment. (Duties are set out in the attached Job Description.)</placeholder>
+    <is_required>true</is_required>
+    <display_order>150</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ISSUE
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Issue</label>
+    <field_key>section_issue</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>160</display_order>
+  </field>
+
+  <field>
+    <label>Issue</label>
+    <field_key>issue</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Whether the recruitment and selection of this officer is done on the grounds of merit.</placeholder>
+    <is_required>true</is_required>
+    <display_order>170</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       LEGAL AND POLICY BASIS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Legal and Policy Basis</label>
+    <field_key>section_basis</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>180</display_order>
+  </field>
+
+  <field>
+    <label>Applicable Provisions — PS Act s.25 and PSSM Chapter 3, Section 2.9</label>
+    <field_key>legal_policy_basis</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Confirm or annotate the provisions relied upon for this direct appointment.</placeholder>
+    <help_text>PUBLIC SERVICE ACT — Section 25 (Appointments to Public Service):
+(1) Any appointment to or within the Public Service is to be made by the Commission.
+(2) The Commission must, prior to making an appointment, consult with and take into consideration the views and requirements of a director-general affected by the appointment. The director-general must consult with and take into account the views and requirements of a director affected.
+(3) Subject to Article 57(2) of the Constitution, where a position becomes available in the Public Service, whether new or existing, any person from within or outside the Public Service may be appointed to that position.
+(4) Where a person is first appointed to the Public Service, that appointment may, in the discretion of the Commission, be on probation.
+
+PSSM CHAPTER 3, SECTION 2.9 — Permanent appointment of a staff member to a higher post without advertising the vacancy:
+(a) Where a permanent officer has been acting in a higher post for a continuous period of at least 6 months, the Commission may appoint that officer to the post on a permanent basis if satisfied that the merit and equity criteria have been met (s.25(3) and (4) of the PS Act). A financial visa must also be obtained.
+(b) Such an appointment is generally only approved where the officer was transferred into a higher post during the right-sizing exercise (with a copy of the transfer letter), or where a position substantively occupied by a permanent officer is up-graded but the salary level of the former position is within the range of the up-graded position. The Director and Director-General must demonstrate that merit and equity criteria have been satisfied.
+(c) Where a daily rated worker or temporary salaried employee has been acting in a higher post (to which originally appointed) for a continuous period of at least 6 months, the Commission may appoint that person permanently where: merit and equity criteria are satisfied; it is appropriate in the circumstances (work of a permanent rather than fluctuating or special nature); the staff member was transferred into the position during right-sizing (with transfer letter); and a financial visa is provided.
+(d) An appointment under this section requires the recommendation of the staff member's Director and Director-General as set out in the Permanent Appointment Report (PSC Form 3.6).
+(e) All Director and Director-General positions must be advertised and are not subject to Section 2.9.</help_text>
+    <is_required>false</is_required>
+    <display_order>190</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       DISCUSSION
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Discussion</label>
+    <field_key>section_discussion</field_key>
+    <field_type>section_header</field_type>
+    <start_new_page>true</start_new_page>
+    <is_required>false</is_required>
+    <display_order>200</display_order>
+  </field>
+
+  <field>
+    <label>Discussion</label>
+    <field_key>discussion</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Set out the temporary service history, the Director's recommendation, the performance assessment, and why the officer adds value to the Department.</placeholder>
+    <is_required>true</is_required>
+    <display_order>210</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       RECOMMENDATION
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Recommendation</label>
+    <field_key>section_recommendation</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>220</display_order>
+  </field>
+
+  <field>
+    <label>Recommendation</label>
+    <field_key>recommendation</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>It is recommended that the PSC directly appoint (officer) to (position title), Post No. (#), at (ministry), on salary scale (grade), VT (figure) per annum.</placeholder>
+    <is_required>true</is_required>
+    <display_order>230</display_order>
+  </field>
+
+  <!-- ═══════════════════════════════════════════════════════
+       ATTACHMENTS
+       ═══════════════════════════════════════════════════════ -->
+  <field>
+    <label>Attachments</label>
+    <field_key>section_attachments</field_key>
+    <field_type>section_header</field_type>
+    <is_required>false</is_required>
+    <display_order>240</display_order>
+  </field>
+
+  <field>
+    <label>Attachments List</label>
+    <field_key>attachments_list</field_key>
+    <field_type>textarea</field_type>
+    <placeholder>Director's cover letter; Performance Appraisal Report; Job Description.</placeholder>
+    <is_required>false</is_required>
+    <display_order>250</display_order>
+  </field>
+
+</fields>

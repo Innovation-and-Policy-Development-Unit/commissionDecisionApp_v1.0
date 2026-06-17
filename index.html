@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSC Vanuatu — CDMS Workflow &amp; Status Report</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI','Segoe UI Web (West European)',Segoe,-apple-system,BlinkMacSystemFont,Roboto,'Helvetica Neue',Arial,sans-serif;background:var(--fn-white);color:var(--fn-dark);font-size:12px}
+
+:root{
+  --fn-darkest:#201F1E; --fn-dark:#323130; --fn-mid:#605E5C; --fn-light:#A19F9D;
+  --fn-lighter:#C8C6C4; --fn-lightest:#EDEBE9; --fn-bg:#F3F2F1; --fn-bgAlt:#FAF9F8; --fn-white:#FFFFFF;
+  --fp-darkest:#004578; --fp-dark:#005A9E; --fp-mid:#106EBE; --fp-primary:#0078D4;
+  --fp-light:#C7E0F4; --fp-lighter:#DEECF9; --fp-lightest:#EFF6FC;
+  --fs-success:#107C10; --fs-succL:#DFF6DD; --fs-warning:#C19C00; --fs-warnL:#FFF4CE;
+  --fs-error:#A4262C; --fs-errL:#FDE7E9; --fs-severe:#D83B01; --fs-sevL:#FDEDE8;
+  --fsh-teal:#008272; --fsh-tealL:#E7F8F7; --fsh-berry:#8764B8; --fsh-berryL:#F4EFFE;
+  --fsh-slate:#4F52B2; --fsh-slateL:#EEF0FB; --fsh-violet:#7160E8; --fsh-violetL:#F0EFFE;
+}
+
+/* ── Print cover page ──────────────────────────────────────── */
+.print-cover{display:none}
+@media print{
+  .print-cover{display:flex;flex-direction:column;justify-content:center;align-items:center;
+    height:100vh;text-align:center;page-break-after:always;border:3px solid var(--fp-primary);
+    padding:60px;gap:20px}
+  .print-cover .pc-org{font-size:14px;font-weight:700;color:var(--fp-dark);letter-spacing:.08em;text-transform:uppercase}
+  .print-cover .pc-title{font-size:28px;font-weight:700;color:var(--fn-darkest);margin-top:16px}
+  .print-cover .pc-sub{font-size:14px;color:var(--fn-mid);margin-top:8px}
+  .print-cover .pc-meta{margin-top:40px;display:flex;flex-direction:column;gap:8px;font-size:11px;color:var(--fn-mid);border-top:1px solid var(--fn-lightest);padding-top:24px;width:100%}
+  .print-cover .pc-meta span{display:block}
+  .print-cover .pc-stamp{margin-top:20px;padding:6px 18px;border:2px solid var(--fs-severe);color:var(--fs-severe);font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;border-radius:2px}
+  .no-print{display:none!important}
+  .tab-nav{display:none!important}
+  .tab-pane{display:block!important}
+  .stage-panel,.stage-overlay{display:none!important}
+  .section-hdr{page-break-before:always}
+  .section-hdr:first-of-type{page-break-before:avoid}
+  .doc-section{page-break-before:always}
+  body{font-size:10px}
+  .container{padding:8px 12px}
+}
+
+/* ── Layout ────────────────────────────────────────────────── */
+.container{min-width:900px;max-width:1400px;margin:0 auto;padding:20px 28px}
+
+/* ── Header ────────────────────────────────────────────────── */
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.header-left .title{font-size:18px;font-weight:700;color:var(--fn-darkest)}
+.header-left .subtitle{font-size:11px;color:var(--fn-mid);margin-top:2px}
+.header-right{text-align:right;font-size:10px;color:var(--fn-light);line-height:1.6}
+.psc-logo{font-size:13px;font-weight:700;color:var(--fp-dark);letter-spacing:.04em}
+.divider-line{height:3px;background:linear-gradient(90deg,var(--fp-primary) 0%,var(--fsh-berry) 60%,var(--fn-lightest) 100%);border-radius:2px;margin:10px 0 0}
+
+/* ── Tab navigation ────────────────────────────────────────── */
+.tab-nav{display:flex;gap:0;border-bottom:2px solid var(--fn-lightest);margin-bottom:16px;margin-top:10px}
+.tab-btn{padding:8px 20px;font-size:12px;font-weight:600;font-family:inherit;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;color:var(--fn-mid);margin-bottom:-2px;transition:color .15s,border-color .15s}
+.tab-btn:hover{color:var(--fp-primary);background:var(--fp-lightest)}
+.tab-btn.active{color:var(--fp-primary);border-bottom-color:var(--fp-primary)}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* ── Print button ──────────────────────────────────────────── */
+.btn-print{display:inline-flex;align-items:center;gap:6px;padding:6px 20px;border-radius:2px;font-size:12px;font-weight:600;font-family:inherit;background:var(--fp-primary);color:var(--fn-white);border:1px solid var(--fp-primary);cursor:pointer;margin-bottom:14px}
+.btn-print:hover{background:var(--fp-mid);border-color:var(--fp-mid)}
+
+/* ── Stage detail panel (drawer) ─────────────────────────── */
+.stage-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:100}
+.stage-panel{position:fixed;top:0;right:-420px;width:400px;height:100vh;background:var(--fn-white);z-index:101;
+  box-shadow:-4px 0 24px rgba(0,0,0,.18);transition:right .25s ease;overflow-y:auto;display:flex;flex-direction:column}
+.stage-panel.open{right:0}
+.sp-header{padding:16px 18px;background:var(--fp-primary);color:var(--fn-white);display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0}
+.sp-header .sp-title{font-size:14px;font-weight:700}
+.sp-header .sp-close{background:none;border:none;color:var(--fn-white);font-size:18px;cursor:pointer;line-height:1;padding:0 2px;font-family:inherit}
+.sp-body{padding:16px 18px;display:flex;flex-direction:column;gap:14px;flex:1}
+.sp-section h4{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--fn-mid);margin-bottom:6px}
+.sp-section ul{padding-left:14px;display:flex;flex-direction:column;gap:4px}
+.sp-section li{font-size:11px;color:var(--fn-dark);line-height:1.4}
+.sp-section .sp-tag{display:inline-block;padding:2px 8px;border-radius:2px;font-size:10.5px;font-weight:600;margin:2px 3px 2px 0}
+.sp-section p{font-size:11px;color:var(--fn-mid);line-height:1.5}
+.sp-pill-preview{padding:6px 14px;border-radius:2px;font-size:11px;font-weight:600;display:inline-block;border-width:1.5px;border-style:solid;margin-bottom:4px}
+.sp-divider{height:1px;background:var(--fn-lightest)}
+
+/* ── Progress Dashboard ────────────────────────────────────── */
+.progress-section{margin-bottom:20px;padding:16px 20px;background:var(--fn-bgAlt);border:1px solid var(--fn-lightest);border-radius:2px}
+.progress-section h2{font-size:13px;font-weight:700;color:var(--fn-darkest);margin-bottom:2px}
+.progress-section .ps-subtitle{font-size:10.5px;color:var(--fn-mid);margin-bottom:14px}
+.ps-top{display:flex;gap:16px;align-items:stretch;margin-bottom:14px;flex-wrap:wrap}
+.ps-overall{flex:0 0 150px;background:var(--fp-primary);color:var(--fn-white);border-radius:2px;padding:14px 16px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+.ps-overall .ov-pct{font-size:36px;font-weight:700;line-height:1}
+.ps-overall .ov-label{font-size:10px;font-weight:600;color:var(--fp-light);margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
+.ps-overall .ov-sub{font-size:9px;color:var(--fp-lighter);margin-top:6px}
+.ps-cards{display:flex;gap:10px;flex:1;flex-wrap:wrap}
+.ps-card{flex:1;min-width:110px;background:var(--fn-white);border:1px solid var(--fn-lightest);border-radius:2px;padding:10px 12px;display:flex;flex-direction:column;gap:3px}
+.ps-card .card-num{font-size:22px;font-weight:700;line-height:1}
+.ps-card .card-label{font-size:9.5px;font-weight:600;color:var(--fn-mid);text-transform:uppercase;letter-spacing:.04em}
+.ps-card .card-sub{font-size:9px;color:var(--fn-light)}
+.ps-card.done .card-num{color:var(--fs-success)}
+.ps-card.part .card-num{color:var(--fs-warning)}
+.ps-card.todo .card-num{color:var(--fs-error)}
+.ps-card.prog .card-num{color:var(--fp-primary)}
+.ps-bars{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px}
+.ps-bar-row{display:flex;align-items:center;gap:8px}
+.ps-bar-label{font-size:10px;font-weight:600;color:var(--fn-dark);white-space:nowrap;width:160px;flex-shrink:0}
+.ps-bar-track{flex:1;height:10px;background:var(--fn-lightest);border-radius:2px;overflow:hidden;min-width:60px}
+.ps-bar-fill{height:100%;border-radius:2px}
+.ps-bar-pct{font-size:10px;font-weight:700;width:32px;text-align:right;flex-shrink:0}
+.fill-green{background:var(--fs-success)} .fill-blue{background:var(--fp-primary)}
+.fill-amber{background:var(--fs-warning)} .fill-red{background:var(--fs-error)}
+.ps-legend{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap}
+.ps-leg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--fn-mid)}
+.ps-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.ps-next{margin-top:12px;padding:10px 14px;background:var(--fp-lightest);border:1px solid var(--fp-light);border-radius:2px}
+.ps-next h3{font-size:10.5px;font-weight:700;color:var(--fp-dark);margin-bottom:5px}
+.ps-next-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px}
+.ps-next-item{font-size:10px;color:var(--fp-darkest);display:flex;gap:5px;align-items:baseline}
+.ps-next-item .ni-num{font-weight:700;color:var(--fp-primary);flex-shrink:0}
+
+/* ── Live pipeline ─────────────────────────────────────────── */
+.pipeline-section{margin-top:16px}
+.pipeline-section h3{font-size:11px;font-weight:700;color:var(--fn-dark);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.pipeline-section h3 .live-badge{font-size:9px;padding:1px 6px;border-radius:2px;background:var(--fs-sevL);color:var(--fs-severe);border:1px solid var(--fs-severe);font-weight:700;letter-spacing:.04em}
+.pipeline-grid{display:flex;gap:10px;flex-wrap:wrap}
+.pip-card{flex:1;min-width:100px;background:var(--fn-white);border:1px solid var(--fn-lightest);border-radius:2px;padding:8px 12px;display:flex;flex-direction:column;gap:2px;cursor:pointer;transition:border-color .15s}
+.pip-card:hover{border-color:var(--fp-primary)}
+.pip-card .pc-num{font-size:24px;font-weight:700;color:var(--fp-primary);line-height:1}
+.pip-card .pc-num.alert{color:var(--fs-severe)}
+.pip-card .pc-num.warn{color:var(--fs-warning)}
+.pip-card .pc-stage{font-size:9.5px;font-weight:600;color:var(--fn-mid);text-transform:uppercase;letter-spacing:.03em;margin-top:2px}
+.pip-card .pc-hint{font-size:9px;color:var(--fn-light)}
+.pip-note{margin-top:8px;font-size:9.5px;color:var(--fn-light);font-style:italic}
+
+/* ── Legend ────────────────────────────────────────────────── */
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:16px;padding:10px 14px;background:var(--fn-bgAlt);border:1px solid var(--fn-lightest);border-radius:2px;align-items:center}
+.legend-title{font-weight:700;font-size:11px;color:var(--fn-dark);margin-right:4px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--fn-mid)}
+.lbox{width:13px;height:13px;border-radius:2px;flex-shrink:0;border-width:1.5px;border-style:solid}
+.legend-sep{width:1px;height:18px;background:var(--fn-lightest);margin:0 4px}
+.legend-hint{font-size:10px;color:var(--fp-mid);background:var(--fp-lightest);padding:3px 8px;border-radius:2px;border:1px solid var(--fp-light);margin-left:auto}
+
+/* ── Workflow grid ─────────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:140px 1fr;gap:0;border-radius:2px;overflow:hidden;border:1px solid var(--fn-lightest);box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.section-hdr{grid-column:1/-1;background:var(--fn-darkest);padding:5px 14px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fn-lightest)}
+.section-hdr.new{background:var(--fp-darkest)}
+.lane-label{background:var(--fn-bgAlt);border-top:1px solid var(--fn-lightest);border-right:1px solid var(--fn-lightest);padding:10px 12px;font-weight:600;font-size:10.5px;display:flex;flex-direction:column;justify-content:center;gap:3px;color:var(--fn-darkest);min-height:68px}
+.lane-label .roles{font-weight:400;font-size:9.5px;color:var(--fn-mid);line-height:1.5;margin-top:2px}
+.lane-body{border-top:1px solid var(--fn-lightest);padding:10px 14px;display:flex;align-items:center;flex-wrap:wrap;gap:5px 6px;min-height:68px;background:var(--fn-white)}
+.lane-body.shaded{background:var(--fn-bgAlt)}
+
+/* ── Pills ─────────────────────────────────────────────────── */
+.pill{display:inline-flex;align-items:center;gap:3px;padding:4px 10px;border-radius:2px;font-size:10.5px;font-weight:600;white-space:nowrap;border-width:1.5px;border-style:solid;cursor:pointer;transition:filter .12s,transform .1s}
+.pill:hover{filter:brightness(.93);transform:translateY(-1px)}
+.c-draft   {background:var(--fn-bg);      border-color:var(--fn-lighter);  color:var(--fn-dark)}
+.c-blue    {background:var(--fp-lightest); border-color:var(--fp-primary);  color:var(--fp-dark)}
+.c-teal    {background:var(--fsh-tealL);   border-color:var(--fsh-teal);    color:#005B5B}
+.c-orange  {background:var(--fs-sevL);     border-color:var(--fs-severe);   color:#8E2D04}
+.c-indigo  {background:var(--fsh-slateL);  border-color:var(--fsh-slate);   color:#2B2D7D}
+.c-violet  {background:var(--fsh-violetL); border-color:var(--fsh-violet);  color:#4B3AB0}
+.c-amber   {background:var(--fs-warnL);    border-color:var(--fs-warning);  color:#7A6100}
+.c-purple  {background:var(--fsh-berryL);  border-color:var(--fsh-berry);   color:#5C2E91}
+.c-emerald {background:var(--fs-succL);    border-color:var(--fs-success);  color:#054B16}
+.c-red     {background:var(--fs-errL);     border-color:var(--fs-error);    color:#6B0A10}
+.c-rose    {background:var(--fs-errL);     border-color:#C50F1F;            color:#6B0A10}
+.c-green   {background:var(--fs-succL);    border-color:var(--fs-success);  color:#054B16}
+.c-terminal{background:var(--fn-darkest);  border-color:var(--fn-darkest);  color:var(--fn-bgAlt)}
+.c-impl-end{background:var(--fs-succL);    border-color:var(--fs-success);  color:#054B16}
+.c-sky     {background:var(--fp-lighter);  border-color:var(--fp-mid);      color:var(--fp-darkest)}
+.c-new     {background:var(--fsh-berryL);  border-color:var(--fsh-berry);   color:#5C2E91}
+
+/* ── Arrows / helpers ──────────────────────────────────────── */
+.arrow{color:var(--fn-lighter);font-size:15px;padding:0 1px;flex-shrink:0}
+.arrow-back{color:var(--fs-severe);font-size:15px;padding:0 1px;flex-shrink:0}
+.split{display:flex;flex-direction:column;gap:4px;align-self:center}
+.split-or{font-size:9px;color:var(--fn-light);text-align:center;line-height:1}
+.note{font-size:9.5px;color:var(--fn-mid);padding:2px 7px;background:var(--fn-bgAlt);border-radius:2px;border:1px dashed var(--fn-lighter);white-space:nowrap}
+.note.highlight{background:var(--fsh-berryL);border-color:var(--fsh-berry);color:#5C2E91;font-weight:600}
+.spacer{width:10px;flex-shrink:0}
+.break{flex-basis:100%;height:4px}
+
+/* ── Document inventory ────────────────────────────────────── */
+.doc-section{margin-top:0}
+.doc-section h2{font-size:14px;font-weight:700;color:var(--fn-darkest);margin-bottom:4px}
+.doc-section .doc-subtitle{font-size:11px;color:var(--fn-mid);margin-bottom:12px}
+.doc-table{width:100%;border-collapse:collapse;font-size:10.5px}
+.doc-table th{background:var(--fn-darkest);color:var(--fn-lightest);padding:5px 10px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.doc-table td{padding:5px 10px;border-bottom:1px solid var(--fn-bg);vertical-align:top;color:var(--fn-dark)}
+.doc-table tr:nth-child(even) td{background:var(--fn-bgAlt)}
+.doc-table tr:hover td{background:var(--fn-bg)}
+.tag{display:inline-block;padding:1px 6px;border-radius:2px;font-size:9.5px;font-weight:600;white-space:nowrap}
+.tag-yes {background:var(--fs-succL);color:#054B16;border:1px solid var(--fs-success)}
+.tag-no  {background:var(--fs-errL); color:#6B0A10;border:1px solid var(--fs-error)}
+.tag-part{background:var(--fs-warnL);color:#7A6100;border:1px solid var(--fs-warning)}
+.tag-na  {background:var(--fn-bg);   color:var(--fn-mid);border:1px solid var(--fn-lighter)}
+.doc-cat{background:var(--fsh-slateL);color:#2B2D7D;padding:4px 10px;font-weight:700;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.missing-box{margin-top:14px;padding:12px 16px;background:var(--fs-sevL);border:1px solid var(--fs-severe);border-radius:2px}
+.missing-box h3{font-size:11px;font-weight:700;color:var(--fs-severe);margin-bottom:6px}
+.missing-box ul{padding-left:16px;font-size:10.5px;color:#8E2D04;line-height:2}
+
+/* ── Footer ────────────────────────────────────────────────── */
+.footer{margin-top:18px;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--fn-light);border-top:1px solid var(--fn-lightest);padding-top:10px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Print cover (screen: hidden; print: page 1) -->
+<div class="print-cover">
+  <div class="pc-org">Office of the Public Service Commission — Vanuatu</div>
+  <div class="pc-title">Commission Decision Management System</div>
+  <div class="pc-sub">Submission Workflow &amp; Document Status Report</div>
+  <div class="pc-meta">
+    <span>Prepared for: <strong>OPSC Manager &amp; PSC Secretary</strong></span>
+    <span>Reference: PSSM / PSC Act / PS Act</span>
+    <span>System: CDMS (scdms) — Version 2026</span>
+    <span>Date: <span class="js-date"></span></span>
+  </div>
+  <div class="pc-stamp">Internal — Confidential</div>
+</div>
+
+<button class="btn-print no-print" onclick="window.print()">🖨 Print / Save as PDF</button>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <div class="psc-logo">OFFICE OF THE PUBLIC SERVICE COMMISSION — VANUATU</div>
+    <div class="title">CDMS — Workflow &amp; Status Report</div>
+    <div class="subtitle">Submission workflow, project progress, and document inventory — Commission Decision Management System</div>
+  </div>
+  <div class="header-right">
+    <div>Version: 2026</div>
+    <div>Ref: PSSM / PSC Act</div>
+    <div>System: CDMS (scdms)</div>
+    <div><span class="js-date"></span></div>
+  </div>
+</div>
+<div class="divider-line"></div>
+
+<!-- Tabs -->
+<div class="tab-nav no-print">
+  <button class="tab-btn active" onclick="switchTab('progress',this)">📊 Project Progress</button>
+  <button class="tab-btn" onclick="switchTab('workflow',this)">🔄 Workflow Diagram</button>
+  <button class="tab-btn" onclick="switchTab('documents',this)">📋 Document Inventory</button>
+  <button class="tab-btn" onclick="switchTab('units',this)">🏢 Submissions by Unit</button>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 1 — PROJECT PROGRESS
+═══════════════════════════════════════════ -->
+<div class="tab-pane active" id="tab-progress">
+
+  <div class="progress-section">
+    <h2>CDMS Project Progress — Status Report</h2>
+    <p class="ps-subtitle">Prepared for: <strong>OPSC Manager &amp; PSC Secretary</strong> &nbsp;·&nbsp; As at: <span class="js-date"></span> &nbsp;·&nbsp; Ref: Commission Decision Management System (CDMS)</p>
+
+    <div class="ps-top">
+      <div class="ps-overall">
+        <div class="ov-pct">62%</div>
+        <div class="ov-label">Overall Complete</div>
+        <div class="ov-sub">Across all modules &amp; document types</div>
+      </div>
+      <div class="ps-cards">
+        <div class="ps-card done"><div class="card-num">5</div><div class="card-label">Fully Built</div><div class="card-sub">Paper + checklist + letter</div></div>
+        <div class="ps-card part"><div class="card-num">8</div><div class="card-label">Partially Done</div><div class="card-sub">Form + letter — checklist pending</div></div>
+        <div class="ps-card todo"><div class="card-num">10</div><div class="card-label">Not Started</div><div class="card-sub">Zero digitization</div></div>
+        <div class="ps-card done"><div class="card-num">1</div><div class="card-label">Just Completed</div><div class="card-sub">Secretary Approval Gate ✓</div></div>
+      </div>
+    </div>
+
+    <div class="ps-bars">
+      <div class="ps-bar-row"><span class="ps-bar-label">Workflow Engine &amp; Stages</span><div class="ps-bar-track"><div class="ps-bar-fill fill-green" style="width:95%"></div></div><span class="ps-bar-pct" style="color:var(--fs-success)">95%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Recruitment Submissions</span><div class="ps-bar-track"><div class="ps-bar-fill fill-green" style="width:100%"></div></div><span class="ps-bar-pct" style="color:var(--fs-success)">100%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Agenda &amp; Meeting Management</span><div class="ps-bar-track"><div class="ps-bar-fill fill-blue" style="width:80%"></div></div><span class="ps-bar-pct" style="color:var(--fp-primary)">80%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Cessation / Separation</span><div class="ps-bar-track"><div class="ps-bar-fill fill-amber" style="width:65%"></div></div><span class="ps-bar-pct" style="color:var(--fs-warning)">65%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Post-Decision &amp; Implementation</span><div class="ps-bar-track"><div class="ps-bar-fill fill-blue" style="width:85%"></div></div><span class="ps-bar-pct" style="color:var(--fp-primary)">85%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Secondment &amp; Leave Payout</span><div class="ps-bar-track"><div class="ps-bar-fill fill-amber" style="width:60%"></div></div><span class="ps-bar-pct" style="color:var(--fs-warning)">60%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Letters &amp; Notifications</span><div class="ps-bar-track"><div class="ps-bar-fill fill-green" style="width:75%"></div></div><span class="ps-bar-pct" style="color:var(--fs-success)">75%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">ODU / Restructure</span><div class="ps-bar-track"><div class="ps-bar-fill fill-blue" style="width:72%"></div></div><span class="ps-bar-pct" style="color:var(--fp-primary)">72%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Reports &amp; Audit Trail</span><div class="ps-bar-track"><div class="ps-bar-fill fill-green" style="width:80%"></div></div><span class="ps-bar-pct" style="color:var(--fs-success)">80%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Travel Submissions</span><div class="ps-bar-track"><div class="ps-bar-fill fill-amber" style="width:20%"></div></div><span class="ps-bar-pct" style="color:var(--fs-warning)">20%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Supporting PSC Forms (3-x, 10-x)</span><div class="ps-bar-track"><div class="ps-bar-fill fill-red" style="width:0%"></div></div><span class="ps-bar-pct" style="color:var(--fs-error)">0%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Discipline Submissions (PSC 6-x)</span><div class="ps-bar-track"><div class="ps-bar-fill fill-red" style="width:0%"></div></div><span class="ps-bar-pct" style="color:var(--fs-error)">0%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Housing Allowance (PSC 8-x)</span><div class="ps-bar-track"><div class="ps-bar-fill fill-red" style="width:0%"></div></div><span class="ps-bar-pct" style="color:var(--fs-error)">0%</span></div>
+      <div class="ps-bar-row"><span class="ps-bar-label">Education &amp; Training (PSC 5-x)</span><div class="ps-bar-track"><div class="ps-bar-fill fill-red" style="width:0%"></div></div><span class="ps-bar-pct" style="color:var(--fs-error)">0%</span></div>
+    </div>
+
+    <div class="ps-legend">
+      <div class="ps-leg-item"><div class="ps-dot" style="background:var(--fs-success)"></div> Complete (100%)</div>
+      <div class="ps-leg-item"><div class="ps-dot" style="background:var(--fp-primary)"></div> Largely complete (75–90%)</div>
+      <div class="ps-leg-item"><div class="ps-dot" style="background:var(--fs-warning)"></div> Partially built (20–40%)</div>
+      <div class="ps-leg-item"><div class="ps-dot" style="background:var(--fs-error)"></div> Not started (0%)</div>
+    </div>
+
+    <!-- Live pipeline -->
+    <div class="pipeline-section">
+      <h3>Current Pipeline <span class="live-badge">MOCK DATA</span></h3>
+      <div class="pipeline-grid">
+        <div class="pip-card"><div class="pc-num">12</div><div class="pc-stage">Under Assessment</div><div class="pc-hint">Within 21-day SLA</div></div>
+        <div class="pip-card"><div class="pc-num alert">3</div><div class="pc-stage">Pending Secretary Approval</div><div class="pc-hint">★ New gate — awaiting action</div></div>
+        <div class="pip-card"><div class="pc-num">7</div><div class="pc-stage">Forwarded to Commission</div><div class="pc-hint">Ready for agenda</div></div>
+        <div class="pip-card"><div class="pc-num warn">2</div><div class="pc-stage">Awaiting Legal Advice</div><div class="pc-hint">On hold</div></div>
+        <div class="pip-card"><div class="pc-num warn">4</div><div class="pc-stage">Deferred</div><div class="pc-hint">Pending further info</div></div>
+        <div class="pip-card"><div class="pc-num">18</div><div class="pc-stage">Under Implementation</div><div class="pc-hint">Post-decision execution</div></div>
+        <div class="pip-card"><div class="pc-num alert">5</div><div class="pc-stage">Overdue (21+ days)</div><div class="pc-hint">SLA breach — action needed</div></div>
+      </div>
+      <p class="pip-note">⚠ Mock data shown — connect pipeline cards to /api/dashboard/ for live counts.</p>
+    </div>
+
+    <div class="ps-next">
+      <h3>Immediate Next Steps (Priority Order)</h3>
+      <div class="ps-next-grid">
+        <div class="ps-next-item"><span class="ni-num">1.</span> <strong>✓ DONE:</strong> Secretary Approval Gate fully implemented and deployed</div>
+        <div class="ps-next-item"><span class="ni-num">2.</span> <strong>CRITICAL:</strong> Digitize Discipline submission (PSC 6-1 to 6-8) — 0% complete, 8 form codes</div>
+        <div class="ps-next-item"><span class="ni-num">3.</span> Build Cessation checklists (6 types — form fields &amp; XMLs done)</div>
+        <div class="ps-next-item"><span class="ni-num">4.</span> Build Secondment &amp; Leave Payout checklists + frontend forms</div>
+        <div class="ps-next-item"><span class="ni-num">5.</span> Add Promotion &amp; Acting appointment submission papers (recruitment gap)</div>
+        <div class="ps-next-item"><span class="ni-num">6.</span> Build Travel submission form fields &amp; approval letter</div>
+        <div class="ps-next-item"><span class="ni-num">7.</span> Digitize supporting PSC Forms 3-2 to 3-7 (online fill &amp; auto-attach)</div>
+        <div class="ps-next-item"><span class="ni-num">8.</span> Build Housing Allowance (PSC 8-x) &amp; Education/Training (PSC 5-x) modules</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 2 — WORKFLOW DIAGRAM
+═══════════════════════════════════════════ -->
+<div class="tab-pane" id="tab-workflow">
+
+  <div class="legend">
+    <span class="legend-title">Phase:</span>
+    <div class="legend-item"><div class="lbox" style="background:var(--fn-bg);border-color:var(--fn-lighter)"></div>Draft</div>
+    <div class="legend-item"><div class="lbox" style="background:var(--fp-lightest);border-color:var(--fp-primary)"></div>Pre-submission</div>
+    <div class="legend-item"><div class="lbox" style="background:var(--fsh-slateL);border-color:var(--fsh-slate)"></div>PSC Intake</div>
+    <div class="legend-item"><div class="lbox" style="background:var(--fsh-violetL);border-color:var(--fsh-violet)"></div>Assessment</div>
+    <div class="legend-item"><div class="lbox" style="background:var(--fs-warnL);border-color:var(--fs-warning)"></div>On Hold</div>
+    <div class="legend-item"><div class="lbox" style="background:var(--fsh-berryL);border-color:var(--fsh-berry)"></div>Secretary / Commission</div>
+    <div class="legend-item"><div class="lbox" style="background:var(--fs-succL);border-color:var(--fs-success)"></div>Decision / Implementation</div>
+    <div class="legend-item"><div class="lbox" style="background:var(--fs-sevL);border-color:var(--fs-severe)"></div>Returned</div>
+    <div class="legend-item"><div class="lbox" style="background:var(--fn-darkest);border-color:var(--fn-darkest)"></div>Terminal</div>
+    <div class="legend-sep"></div>
+    <div class="legend-item"><span style="color:var(--fn-lighter);font-size:14px">→</span> Main flow</div>
+    <div class="legend-item"><span style="color:var(--fs-severe);font-size:14px">↩</span> Return</div>
+    <span class="legend-hint no-print">💡 Click any stage pill for details</span>
+  </div>
+
+  <div class="grid">
+
+    <div class="section-hdr">1 — PRE-SUBMISSION &nbsp;(Ministry Side)</div>
+    <div class="lane-label">Ministry HR / Dept Admin<span class="roles">ministry_hr · dept_admin</span></div>
+    <div class="lane-body">
+      <span class="pill c-draft" onclick="openStage('draft')">Draft</span>
+      <span class="arrow">→</span>
+      <span class="pill c-blue" onclick="openStage('pending_dg_endorsement')">Submitted to DG</span>
+      <span class="spacer"></span>
+      <span class="note">If DG returns → back to Draft &nbsp;<span style="color:var(--fs-severe)">↩</span></span>
+      <div class="break"></div>
+      <span class="note" style="background:var(--fp-lightest);border-color:var(--fp-light);color:var(--fp-dark)">After DG endorses → HR formally submits to PSC</span>
+      <span class="arrow">→</span>
+      <span class="pill c-blue" onclick="openStage('submitted')">Submitted to PSC</span>
+      <span class="arrow-back">↩</span>
+      <span class="pill c-orange" onclick="openStage('returned_for_clarification')">Returned for Clarification</span>
+    </div>
+
+    <div class="lane-label">Director-General<span class="roles">head_of_agency</span></div>
+    <div class="lane-body shaded">
+      <span class="pill c-blue" onclick="openStage('pending_dg_endorsement')">Submitted to DG</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-teal" onclick="openStage('dg_approved')">Endorsed by DG ✓</span>
+        <span class="split-or">or</span>
+        <span class="pill c-draft" onclick="openStage('draft')">Return → Draft</span>
+      </span>
+      <span class="spacer"></span>
+      <span class="note">View-only on submission content</span>
+    </div>
+
+    <div class="lane-label">Receptionist<span class="roles">receptionist</span></div>
+    <div class="lane-body">
+      <span class="note">Scanned / walk-in paper lodgement</span>
+      <span class="arrow">→</span>
+      <span class="pill c-draft" onclick="openStage('draft')">Draft</span>
+      <span class="arrow">→</span>
+      <span class="pill c-indigo" onclick="openStage('manager_checklist_review')">Mgr Checklist Review</span>
+      <span class="spacer"></span>
+      <span class="note">Bypasses DG gate</span>
+    </div>
+
+    <div class="section-hdr">2 — PSC INTAKE &amp; ASSESSMENT &nbsp;(OPSC Staff)</div>
+    <div class="lane-label">PSC Officer / Sr Admin Officer<span class="roles">psc_officer · senior_admin_officer</span></div>
+    <div class="lane-body shaded">
+      <span class="pill c-blue" onclick="openStage('received_by_psc')">Received by PSC</span>
+      <span class="arrow">→</span>
+      <span class="pill c-indigo" onclick="openStage('registered_routed')">Registered &amp; Routed</span>
+      <span class="arrow">→</span>
+      <span class="pill c-indigo" onclick="openStage('manager_checklist_review')">Mgr Checklist Review</span>
+      <span class="arrow-back">↩</span>
+      <span class="pill c-orange" onclick="openStage('returned_for_clarification')">Returned for Clarification</span>
+    </div>
+
+    <div class="lane-label">OPSC Unit Managers<span class="roles">vipam_manager · odu_manager<br>csu_manager · hr_unit_manager<br>compliance_manager</span></div>
+    <div class="lane-body">
+      <span class="pill c-indigo" onclick="openStage('manager_checklist_review')">Mgr Checklist Review</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-violet" onclick="openStage('under_assessment')">Under Assessment</span>
+        <span class="split-or">or</span>
+        <span class="pill c-indigo" onclick="openStage('compliance_under_review')">Compliance Under Review</span>
+        <span class="split-or">or</span>
+        <span class="pill c-orange" onclick="openStage('returned_for_clarification')">Return for Clarification</span>
+      </span>
+    </div>
+
+    <div class="lane-label">OPSC Principals / Analysts<span class="roles">vipam_principal · odu_principal<br>hr_unit_principal<br>compliance_principal · compliance_senior</span></div>
+    <div class="lane-body shaded">
+      <span class="pill c-violet" onclick="openStage('under_assessment')">Under Assessment</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-new" onclick="openStage('pending_secretary_approval')">★ Submit to Secretary</span>
+        <span class="split-or">or</span>
+        <span class="pill c-amber" onclick="openStage('awaiting_legal_advice')">Awaiting Legal Advice</span>
+        <span class="split-or">or</span>
+        <span class="pill c-orange" onclick="openStage('returned_for_clarification')">Return for Clarification</span>
+        <span class="split-or">or</span>
+        <span class="pill c-amber" onclick="openStage('deferred')">Defer</span>
+      </span>
+      <span class="spacer"></span>
+      <span class="note highlight">Assessment complete → Secretary reviews before forwarding to Commission</span>
+    </div>
+
+    <div class="lane-label">Compliance Unit<span class="roles">compliance_manager<br>compliance_senior · compliance_principal</span></div>
+    <div class="lane-body">
+      <span class="pill c-indigo" onclick="openStage('compliance_under_review')">Compliance Under Review</span>
+      <span class="arrow">→</span>
+      <span class="pill c-teal" onclick="openStage('secretary_review')">Secretary Review</span>
+      <span class="spacer"></span>
+      <span class="note">Outcome via CMS webhook</span>
+    </div>
+
+    <div class="section-hdr new">3 — SECRETARY APPROVAL GATE &nbsp;★ NEW — Before forwarding to Commission</div>
+    <div class="lane-label">PSC Secretary<span class="roles">psc_secretary</span></div>
+    <div class="lane-body">
+      <span class="pill c-new" onclick="openStage('pending_secretary_approval')">★ Pending Secretary Approval</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-purple" onclick="openStage('forwarded_to_commission')">✓ Forward to Commission</span>
+        <span class="split-or">or</span>
+        <span class="pill c-violet" onclick="openStage('under_assessment')">↩ Return to Assessment</span>
+        <span class="split-or">or</span>
+        <span class="pill c-amber" onclick="openStage('deferred')">Defer</span>
+      </span>
+      <span class="spacer"></span>
+      <span class="note highlight">Secretary reviews, then decides: approve for Commission or return</span>
+    </div>
+
+    <div class="section-hdr">4 — ON HOLD / DEFERRED STATES</div>
+    <div class="lane-label">PSC Secretary / Officers<span class="roles">psc_secretary · psc_officer</span></div>
+    <div class="lane-body shaded">
+      <span class="pill c-amber" onclick="openStage('deferred')">Deferred</span>
+      <span class="arrow">→</span>
+      <span class="pill c-indigo" onclick="openStage('manager_checklist_review')">Mgr Checklist Review</span>
+      <span class="spacer"></span>
+      <span class="pill c-amber" onclick="openStage('tabled')">Tabled</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-purple" onclick="openStage('commission_sitting')">Commission Sitting</span>
+        <span class="split-or">or</span>
+        <span class="pill c-amber" onclick="openStage('awaiting_legal_advice')">Awaiting Legal Advice</span>
+        <span class="split-or">or</span>
+        <span class="pill c-purple" onclick="openStage('matters_arising')">Matters Arising</span>
+      </span>
+      <span class="spacer"></span>
+      <span class="pill c-amber" onclick="openStage('awaiting_cabinet_decision')">Awaiting Cabinet Decision</span>
+    </div>
+
+    <div class="section-hdr">5 — AGENDA PREPARATION &nbsp;(Senior Admin Officer → Secretary → Chairman)</div>
+    <div class="lane-label">Sr Admin Officer<span class="roles">senior_admin_officer</span></div>
+    <div class="lane-body">
+      <span class="pill c-purple" onclick="openStage('forwarded_to_commission')">Forwarded to Commission</span>
+      <span class="arrow">→</span>
+      <span class="note">Picks up all commission-ready submissions</span>
+      <span class="arrow">→</span>
+      <span class="pill c-sky" onclick="openStage('agenda_draft')">Agenda: Draft</span>
+      <span class="arrow">→</span>
+      <span class="pill c-sky" onclick="openStage('agenda_with_secretary')">Agenda: Submit to Secretary</span>
+    </div>
+
+    <div class="lane-label">PSC Secretary<span class="roles">psc_secretary</span></div>
+    <div class="lane-body shaded">
+      <span class="pill c-sky" onclick="openStage('agenda_with_secretary')">Agenda: With Secretary</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-sky" onclick="openStage('agenda_with_chairman')">Agenda: Forward to Chairman</span>
+        <span class="split-or">or</span>
+        <span class="pill c-orange" onclick="openStage('returned_for_clarification')">↩ Return to SAO for revision</span>
+      </span>
+    </div>
+
+    <div class="lane-label">Chairperson<span class="roles">chairperson</span></div>
+    <div class="lane-body">
+      <span class="pill c-sky" onclick="openStage('agenda_with_chairman')">Agenda: With Chairman</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-emerald" onclick="openStage('agenda_endorsed')">✓ Agenda Endorsed</span>
+        <span class="split-or">or</span>
+        <span class="pill c-orange" onclick="openStage('returned_for_clarification')">↩ Return for Revision</span>
+      </span>
+      <span class="arrow">→</span>
+      <span class="pill c-sky" onclick="openStage('agenda_circulated')">Agenda: Circulated to Members</span>
+    </div>
+
+    <div class="section-hdr">6 — COMMISSION SITTING &nbsp;(Chairman &amp; Commissioners)</div>
+    <div class="lane-label">PSC Secretary<span class="roles">psc_secretary</span></div>
+    <div class="lane-body">
+      <span class="pill c-purple" onclick="openStage('forwarded_to_commission')">Forwarded to Commission</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-purple" onclick="openStage('commission_sitting')">Commission Sitting</span>
+        <span class="split-or">or</span>
+        <span class="pill c-amber" onclick="openStage('tabled')">Tabled</span>
+        <span class="split-or">or</span>
+        <span class="pill c-violet" onclick="openStage('under_assessment')">Back to Assessment</span>
+        <span class="split-or">or</span>
+        <span class="pill c-amber" onclick="openStage('deferred')">Deferred</span>
+      </span>
+      <span class="spacer"></span>
+      <span class="pill c-purple" onclick="openStage('matters_arising')">Matters Arising</span>
+      <span class="arrow">→</span>
+      <span class="pill c-purple" onclick="openStage('commission_sitting')">Commission Sitting</span>
+    </div>
+
+    <div class="lane-label">Chairperson / Commissioners<span class="roles">chairperson · psc_commissioner</span></div>
+    <div class="lane-body shaded">
+      <span class="pill c-purple" onclick="openStage('commission_sitting')">Commission Sitting</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-emerald" onclick="openStage('approved')">✓ Approved</span>
+        <span class="split-or">or</span>
+        <span class="pill c-red" onclick="openStage('rejected')">✗ Rejected</span>
+        <span class="split-or">or</span>
+        <span class="pill c-orange" onclick="openStage('deferred_back_to_hr')">Deferred Back to HR</span>
+        <span class="split-or">or</span>
+        <span class="pill c-amber" onclick="openStage('tabled')">Tabled / Legal Advice</span>
+        <span class="split-or">or</span>
+        <span class="pill c-teal" onclick="openStage('minutes_drafted_signed')">Minutes Drafted &amp; Signed</span>
+      </span>
+    </div>
+
+    <div class="section-hdr">7 — POST-DECISION &amp; IMPLEMENTATION</div>
+    <div class="lane-label">PSC Secretary<span class="roles">psc_secretary</span></div>
+    <div class="lane-body">
+      <span class="pill c-emerald" onclick="openStage('approved')">Approved / Rejected</span>
+      <span class="arrow">→</span>
+      <span class="pill c-teal" onclick="openStage('minutes_drafted_signed')">Minutes Drafted &amp; Signed</span>
+      <span class="arrow">→</span>
+      <span class="pill c-teal" onclick="openStage('decision_entered_assigned')">Decision Entered &amp; Assigned</span>
+      <span class="arrow">→</span>
+      <span class="pill c-green" onclick="openStage('under_implementation')">Under Implementation</span>
+    </div>
+
+    <div class="lane-label">OPSC Manager / Senior Officer<span class="roles">psc_manager · senior_officer</span></div>
+    <div class="lane-body shaded">
+      <span class="pill c-teal" onclick="openStage('decision_entered_assigned')">Decision Entered &amp; Assigned</span>
+      <span class="arrow">→</span>
+      <span class="pill c-green" onclick="openStage('under_implementation')">Under Implementation</span>
+      <span class="arrow">→</span>
+      <span class="pill c-impl-end" onclick="openStage('implementation_report')">Implementation Report ✓ (terminal)</span>
+    </div>
+
+    <div class="lane-label">Ministry HR (deferred back)<span class="roles">ministry_hr · head_of_agency</span></div>
+    <div class="lane-body">
+      <span class="pill c-orange" onclick="openStage('deferred_back_to_hr')">Deferred Back to HR</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-blue" onclick="openStage('submitted')">Resubmit to PSC</span>
+        <span class="split-or">or</span>
+        <span class="pill c-draft" onclick="openStage('draft')">Back to Draft</span>
+        <span class="split-or">or</span>
+        <span class="pill c-purple" onclick="openStage('matters_arising')">Matters Arising</span>
+      </span>
+    </div>
+
+    <div class="section-hdr">8 — TERMINAL STATES</div>
+    <div class="lane-label">Ministry HR / DG<span class="roles">ministry_hr · head_of_agency</span></div>
+    <div class="lane-body shaded">
+      <span class="pill c-terminal" onclick="openStage('recalled')">⬛ Recalled by Ministry</span>
+      <span class="spacer"></span>
+      <span class="note">Can recall from: Draft · Pending DG · DG Approved · Submitted to PSC</span>
+    </div>
+
+    <div class="lane-label">OPSC Manager<span class="roles">psc_manager · senior_officer</span></div>
+    <div class="lane-body">
+      <span class="pill c-impl-end" onclick="openStage('implementation_report')">Implementation Report ✓</span>
+      <span class="spacer"></span>
+      <span class="note">Terminal — loop back to Under Implementation only if correction needed</span>
+    </div>
+
+    <div class="section-hdr">9 — SPECIAL / PARALLEL WORKFLOW TRACKS</div>
+    <div class="lane-label">OPSC Internal Submissions<span class="roles">csu_manager · odu_manager<br>vipam_principal</span></div>
+    <div class="lane-body shaded">
+      <span class="pill c-draft" onclick="openStage('draft')">Draft</span>
+      <span class="arrow">→</span>
+      <span class="pill c-blue" onclick="openStage('pending_dg_endorsement')">Chain Approvals</span>
+      <span class="note" style="font-size:9px">(pending_manager → pending_second)</span>
+      <span class="arrow">→</span>
+      <span class="pill c-blue" onclick="openStage('submitted')">Submitted (internal)</span>
+      <span class="arrow">→</span>
+      <span class="pill c-teal" onclick="openStage('secretary_review')">Secretary Review</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-emerald" onclick="openStage('approved')">Approved</span>
+        <span class="split-or">or</span>
+        <span class="pill c-red" onclick="openStage('rejected')">Rejected</span>
+      </span>
+    </div>
+
+    <div class="lane-label">Travel — Secretarial<br>(Forms 4.4–4.6)<span class="roles">ministry_hr · psc_officer<br>psc_secretary</span></div>
+    <div class="lane-body">
+      <span class="pill c-draft" onclick="openStage('draft')">Draft</span>
+      <span class="arrow">→</span>
+      <span class="pill c-blue" onclick="openStage('submitted')">Submitted</span>
+      <span class="arrow">→</span>
+      <span class="pill c-indigo" onclick="openStage('manager_checklist_review')">Mgr Checklist Review</span>
+      <span class="arrow">→</span>
+      <span class="pill c-teal" onclick="openStage('secretary_review')">Secretary Review</span>
+      <span class="arrow">→</span>
+      <span class="split">
+        <span class="pill c-emerald" onclick="openStage('approved')">Approved</span>
+        <span class="split-or">or</span>
+        <span class="pill c-red" onclick="openStage('rejected')">Rejected</span>
+        <span class="split-or">or</span>
+        <span class="pill c-orange" onclick="openStage('returned_for_clarification')">Returned</span>
+      </span>
+    </div>
+
+    <div class="lane-label">PSC Administrator<span class="roles">psc_admin</span></div>
+    <div class="lane-body shaded">
+      <span class="note" style="font-size:11px;padding:5px 10px">⚠ Superuser — can perform <strong>any transition</strong> in any workflow track. Bypasses all role restrictions. Use with care.</span>
+    </div>
+
+  </div><!-- /grid -->
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 3 — DOCUMENT INVENTORY
+═══════════════════════════════════════════ -->
+<div class="tab-pane" id="tab-documents">
+  <div class="doc-section">
+    <h2>Document &amp; Form Inventory — Per Submission Type</h2>
+    <p class="doc-subtitle">★ = fully digitized &nbsp;·&nbsp; ◑ = letter template only, no form fields &nbsp;·&nbsp; ✗ = not built &nbsp;·&nbsp; Notifications column shows who is emailed at completion</p>
+
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th style="width:18%">Submission / Document</th>
+          <th style="width:9%">Form Code</th>
+          <th style="width:10%">Digitized?</th>
+          <th style="width:11%">Checklist</th>
+          <th style="width:11%">Letter Template</th>
+          <th style="width:18%">Notified on Completion</th>
+          <th style="width:23%">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="doc-cat" colspan="7">RECRUITMENT</td></tr>
+        <tr>
+          <td><strong>Appointment on Probation</strong></td>
+          <td>RECRUIT-PROBATION</td>
+          <td><span class="tag tag-yes">★ Digitized</span></td>
+          <td><span class="tag tag-yes">✓ 13 items</span></td>
+          <td><span class="tag tag-yes">✓ Offer of Employment</span></td>
+          <td>Ministry HR, DG, Recommended Candidate</td>
+          <td>PSC Forms 3-3, 3-4, 3-5 required as attachments. Max 6-month probation.</td>
+        </tr>
+        <tr>
+          <td><strong>Confirmation of Appointment</strong></td>
+          <td>RECRUIT-CONFIRM</td>
+          <td><span class="tag tag-yes">★ Digitized</span></td>
+          <td><span class="tag tag-yes">✓ 3 items</span></td>
+          <td><span class="tag tag-yes">✓ Confirmation Letter</span></td>
+          <td>Ministry HR, Officer</td>
+          <td>PA rating ≥ 3.5 required (PSSM 3.5). Supervisor recommendation mandatory.</td>
+        </tr>
+        <tr>
+          <td><strong>Direct Appointment</strong></td>
+          <td>RECRUIT-DIRECT</td>
+          <td><span class="tag tag-yes">★ Digitized</span></td>
+          <td><span class="tag tag-yes">✓ 7 items</span></td>
+          <td><span class="tag tag-yes">✓ Direct Appointment Letter</span></td>
+          <td>Ministry HR, Officer, DG</td>
+          <td>Officer must have acted ≥6 months (PSSM Ch.3 s.2.9). PA rating ≥ 3.2. PSC Form 3-6 required.</td>
+        </tr>
+        <tr>
+          <td><strong>Temporary Appointment</strong></td>
+          <td>RECRUIT-TEMPORARY</td>
+          <td><span class="tag tag-yes">★ Digitized</span></td>
+          <td><span class="tag tag-yes">✓ 6 items</span></td>
+          <td><span class="tag tag-yes">✓ Temporary Appointment Letter</span></td>
+          <td>Ministry HR, Officer</td>
+          <td>Max 6 months (PS Act s.30(2)). PSC Form 3-7 required.</td>
+        </tr>
+        <tr>
+          <td><strong>Contract Employment</strong></td>
+          <td>RECRUIT-CONTRACT</td>
+          <td><span class="tag tag-yes">★ Digitized</span></td>
+          <td><span class="tag tag-yes">✓ 9 items</span></td>
+          <td><span class="tag tag-yes">✓ Contract Employment Letter</span></td>
+          <td>Ministry HR, Officer, Finance</td>
+          <td>Max 6 months. Break-in-service required for extensions. PSC Form 3-7 + TOR/JD + unsigned Agreement of Service.</td>
+        </tr>
+        <tr>
+          <td><strong>Promotion</strong></td>
+          <td>RECRUIT-PROMOTION</td>
+          <td><span class="tag tag-no">✗ Missing</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>—</td>
+          <td>Merit-based promotion submission paper not yet digitized. PSSM Section 3.</td>
+        </tr>
+        <tr>
+          <td><strong>Acting Appointment</strong></td>
+          <td>RECRUIT-ACTING</td>
+          <td><span class="tag tag-no">✗ Missing</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>—</td>
+          <td>Acting-in-higher-grade submission and acting allowance letter not in system.</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">CESSATION / SEPARATION</td></tr>
+        <tr>
+          <td><strong>Age Retirement</strong></td>
+          <td>CESSATION-AGE</td>
+          <td><span class="tag tag-part">◑ Template only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-yes">✓ Age Retirement Letter</span></td>
+          <td>Ministry HR, Officer, Finance, PSC Secretary</td>
+          <td>Submission paper form fields not yet digitized.</td>
+        </tr>
+        <tr>
+          <td><strong>Notice of Age Retirement</strong></td>
+          <td>CESSATION-NOTICE-AGE</td>
+          <td><span class="tag tag-part">◑ Template only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-yes">✓ Notice Letter</span></td>
+          <td>Ministry HR, Officer</td>
+          <td>Advance notice letter exists. Submission paper not digitized.</td>
+        </tr>
+        <tr>
+          <td><strong>Medical Retirement</strong></td>
+          <td>CESSATION-MEDICAL</td>
+          <td><span class="tag tag-part">◑ Template only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-yes">✓ Medical Retirement Letter</span></td>
+          <td>Ministry HR, Officer, Finance</td>
+          <td>Requires medical board report. Submission paper not digitized.</td>
+        </tr>
+        <tr>
+          <td><strong>Death in Service</strong></td>
+          <td>CESSATION-DEATH</td>
+          <td><span class="tag tag-part">◑ Template only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-yes">✓ Notification Letter</span></td>
+          <td>Next of Kin, Ministry HR, Finance</td>
+          <td>Next-of-kin notification letter exists. No checklist.</td>
+        </tr>
+        <tr>
+          <td><strong>Redundancy</strong></td>
+          <td>CESSATION-REDUNDANCY</td>
+          <td><span class="tag tag-part">◑ Template only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-yes">✓ Redundancy Letter</span></td>
+          <td>Ministry HR, Officer, Finance</td>
+          <td>Submission paper form fields not digitized.</td>
+        </tr>
+        <tr>
+          <td><strong>Voluntary Resignation</strong></td>
+          <td>CESSATION-RESIGNATION</td>
+          <td><span class="tag tag-part">◑ Template only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-yes">✓ Resignation Acceptance</span></td>
+          <td>Ministry HR, Officer</td>
+          <td>Submission paper form fields not digitized.</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">TERMS &amp; CONDITIONS / ALLOWANCES</td></tr>
+        <tr>
+          <td><strong>Secondment</strong></td>
+          <td>SECONDMENT</td>
+          <td><span class="tag tag-part">◑ Template only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-yes">✓ Secondment Approval Letter</span></td>
+          <td>Ministry HR, Host Ministry, Officer</td>
+          <td>MOU/agreement attachment not tracked. Submission paper not digitized.</td>
+        </tr>
+        <tr>
+          <td><strong>Annual Leave Payout</strong></td>
+          <td>LEAVE-PAYOUT</td>
+          <td><span class="tag tag-part">◑ Template only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-yes">✓ Leave Payout Letter</span></td>
+          <td>Ministry HR, Finance, Officer</td>
+          <td>Leave balance calculation not integrated. Submission paper not digitized.</td>
+        </tr>
+        <tr>
+          <td><strong>Housing Allowance</strong></td>
+          <td>PSC 8-1 to 8-4</td>
+          <td><span class="tag tag-no">✗ Missing</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>—</td>
+          <td>4 form codes catalogued but fully absent from CDMS.</td>
+        </tr>
+        <tr>
+          <td><strong>Travel Authority</strong></td>
+          <td>PSC 4-4 to 4-6</td>
+          <td><span class="tag tag-part">◑ Workflow only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>Ministry HR, Traveller</td>
+          <td>Travel workflow track exists. No digitized form fields or approval letter.</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">DISCIPLINE &amp; COMPLIANCE</td></tr>
+        <tr>
+          <td><strong>Discipline Submission</strong></td>
+          <td>PSC 6-1 to 6-8</td>
+          <td><span class="tag tag-no">✗ Missing</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>—</td>
+          <td>8 form codes catalogued. Zero digitization. <strong>Highest priority gap.</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Compliance Review</strong></td>
+          <td>(CMS internal)</td>
+          <td><span class="tag tag-part">◑ Workflow only</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>PSC Secretary (via webhook)</td>
+          <td>Routes via CMS webhook. No structured checklist or compliance report form.</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">ORGANISATIONAL DEVELOPMENT (ODU)</td></tr>
+        <tr>
+          <td><strong>Organisational Restructure / Review</strong></td>
+          <td>PSC 2-1</td>
+          <td><span class="tag tag-part">◑ Checklist model only</span></td>
+          <td><span class="tag tag-yes">✓ 20-item Section B</span></td>
+          <td><span class="tag tag-no">✗ No XML</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>ODURestructureChecklist model exists (Submission Completeness, Structure Compliance, JD Verification, Financial Implications). No submission paper form, XML, or outcome letter.</td>
+        </tr>
+        <tr>
+          <td><strong>Job Description — New / Review</strong></td>
+          <td>PSC 2-2</td>
+          <td><span class="tag tag-no">✗ Not digitized</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No XML</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>Letter and JD attachment only — no structured submission form or checklist.</td>
+        </tr>
+        <tr>
+          <td><strong>Salary Upgrade / Grade Review</strong></td>
+          <td>PSC 2-3</td>
+          <td><span class="tag tag-no">✗ Not digitized</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No XML</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>Letter and JD attachment only — salary analysis and justification not structured.</td>
+        </tr>
+        <tr>
+          <td><strong>Special Skills / Allowance Request</strong></td>
+          <td>PSC 2-4</td>
+          <td><span class="tag tag-no">✗ Not digitized</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No XML</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>Special skills / allowance submission paper not digitized.</td>
+        </tr>
+        <tr>
+          <td><strong>Business Plan</strong></td>
+          <td>PSC 2-5</td>
+          <td><span class="tag tag-no">✗ Not digitized</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No XML</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>Department business plan review — attachment-based, no structured form.</td>
+        </tr>
+        <tr>
+          <td><strong>Corporate Plan</strong></td>
+          <td>PSC 2-6</td>
+          <td><span class="tag tag-no">✗ Not digitized</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No XML</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>Corporate / ministry strategic plan review — attachment-based, no structured form.</td>
+        </tr>
+        <tr>
+          <td><strong>Annual Report Review</strong></td>
+          <td>PSC 2-7</td>
+          <td><span class="tag tag-no">✗ Not digitized</span></td>
+          <td><span class="tag tag-no">✗ Not built</span></td>
+          <td><span class="tag tag-no">✗ No XML</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td>Annual report review — attachment-based, no structured form.</td>
+        </tr>
+        <tr>
+          <td><strong>Special Skills Allowance</strong></td>
+          <td>PSC 2-8</td>
+          <td><span class="tag tag-yes">★ Digitized</span></td>
+          <td><span class="tag tag-yes">✓ 15 items</span></td>
+          <td><span class="tag tag-yes">✓ XML generated</span></td>
+          <td><span class="tag tag-yes">✓ Approval letter</span></td>
+          <td><strong>100% COMPLETE</strong> — Form with Point Matrix assessment, 15-item checklist (4 sections: submission docs, officer info, assignment context, financial compliance), and approval letter template all created.</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">SUPPORTING PSC FORMS (physical attachments — not submission papers)</td></tr>
+        <tr><td>Job Application</td><td>PSC 3-2</td><td><span class="tag tag-no">✗ Not digitized</span></td><td><span class="tag tag-na">N/A</span></td><td><span class="tag tag-na">N/A</span></td><td>—</td><td>Required in all recruitment types. Physical form only.</td></tr>
+        <tr><td>Short-listing / Interview Assessment</td><td>PSC 3-3</td><td><span class="tag tag-no">✗ Not digitized</span></td><td><span class="tag tag-na">N/A</span></td><td><span class="tag tag-na">N/A</span></td><td>—</td><td>Required for RECRUIT-PROBATION. Physical form only.</td></tr>
+        <tr><td>Comparative Assessment</td><td>PSC 3-4</td><td><span class="tag tag-no">✗ Not digitized</span></td><td><span class="tag tag-na">N/A</span></td><td><span class="tag tag-na">N/A</span></td><td>—</td><td>Required for RECRUIT-PROBATION. Physical form only.</td></tr>
+        <tr><td>Selection Outcome Report</td><td>PSC 3-5</td><td><span class="tag tag-no">✗ Not digitized</span></td><td><span class="tag tag-na">N/A</span></td><td><span class="tag tag-na">N/A</span></td><td>—</td><td>Required for RECRUIT-PROBATION. Physical form only.</td></tr>
+        <tr><td>Permanent Appointment Report</td><td>PSC 3-6</td><td><span class="tag tag-no">✗ Not digitized</span></td><td><span class="tag tag-na">N/A</span></td><td><span class="tag tag-na">N/A</span></td><td>—</td><td>Required for RECRUIT-DIRECT. Physical form only.</td></tr>
+        <tr><td>Request to Employ Temp/Contract</td><td>PSC 3-7</td><td><span class="tag tag-no">✗ Not digitized</span></td><td><span class="tag tag-na">N/A</span></td><td><span class="tag tag-na">N/A</span></td><td>—</td><td>Required for RECRUIT-TEMPORARY and RECRUIT-CONTRACT. Physical form only.</td></tr>
+        <tr><td>Performance Appraisal</td><td>PSC 10-1 to 10-6</td><td><span class="tag tag-no">✗ Not digitized</span></td><td><span class="tag tag-na">N/A</span></td><td><span class="tag tag-na">N/A</span></td><td>—</td><td>Referenced as required attachment in confirmation / direct appointment. Not digital.</td></tr>
+        <tr><td>Education &amp; Training Forms</td><td>PSC 5-1, 5-2</td><td><span class="tag tag-no">✗ Not digitized</span></td><td><span class="tag tag-na">N/A</span></td><td><span class="tag tag-na">N/A</span></td><td>—</td><td>Form category catalogued. No submission paper or checklist in CDMS.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="missing-box">
+      <h3>⚠ Documents Needed but Not Yet Present in CDMS (Priority Order)</h3>
+      <ul>
+        <li><strong>DISCIPLINE (PSC 6-1 to 6-8)</strong> — 8 form codes with zero digitization; no submission paper, checklist, or outcome letter — <strong>highest priority</strong></li>
+        <li><strong>RECRUIT-PROMOTION &amp; RECRUIT-ACTING</strong> — Promotion and acting appointment submission papers, checklists, and outcome letters</li>
+        <li><strong>CESSATION submission papers</strong> — All 6 cessation types have letter templates but no digitized submission form fields or checklists</li>
+        <li><strong>SECONDMENT &amp; LEAVE-PAYOUT submission papers</strong> — Letter templates exist; submission form fields and checklists not built</li>
+        <li><strong>HOUSING (PSC 8-1 to 8-4)</strong> — Housing allowance forms fully absent from CDMS</li>
+        <li><strong>TRAVEL submission paper &amp; approval letter</strong> — Workflow track exists but no digitized form fields or letter template</li>
+        <li><strong>ODU New Job Description</strong> — PSC Form 2-2 as a standalone submission not in CDMS</li>
+        <li><strong>PSC Forms 3-2, 3-3, 3-4, 3-5, 3-6, 3-7</strong> — All supporting forms are physical only; digitizing allows online fill and auto-attach</li>
+        <li><strong>Performance Appraisal (PSC 10-x)</strong> — Referenced in multiple submission types but not digitized</li>
+        <li><strong>Education &amp; Training (PSC 5-1, 5-2)</strong> — Category catalogued but no submission paper or checklist in CDMS</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 4 — SUBMISSIONS BY UNIT
+═══════════════════════════════════════════ -->
+<div class="tab-pane" id="tab-units">
+  <div class="doc-section">
+    <h2>Submission Digitization Status — Per OPSC Unit</h2>
+    <p class="doc-subtitle">Form fields ✓ = digitized · ◑ = partial/template only · ✗ = not started &nbsp;·&nbsp; Checklist ✓ = built · ✗ = not built &nbsp;·&nbsp; XML = submission paper template</p>
+
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th style="width:16%">OPSC Unit</th>
+          <th style="width:24%">Submissions Handled</th>
+          <th style="width:10%">Form Fields</th>
+          <th style="width:10%">Checklist</th>
+          <th style="width:8%">XML</th>
+          <th style="width:8%">Letters</th>
+          <th style="width:24%">Status &amp; Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="doc-cat" colspan="7">RECRUITMENT UNIT (VIPAM)</td></tr>
+        <tr>
+          <td><strong>VIPAM Manager &amp; Principals</strong></td>
+          <td>Probation, Confirmation, Direct, Temporary, Contract</td>
+          <td><span class="tag tag-yes">✓ All 5 types</span></td>
+          <td><span class="tag tag-yes">✓ 35+ items total</span></td>
+          <td><span class="tag tag-yes">✓ 5 XMLs</span></td>
+          <td><span class="tag tag-yes">✓ 5 letters</span></td>
+          <td><strong>100% COMPLETE</strong> — All recruitment submissions fully digitized with forms, checklists, letters, and templates.</td>
+        </tr>
+        <tr>
+          <td colspan="7" style="background:var(--fn-bgAlt);padding:4px 10px;font-size:10px;color:var(--fn-mid)"><strong>Still needed:</strong> Promotion &amp; Acting Appointment (2 types) — forms and checklists not yet built</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">CESSATION UNIT (HR)</td></tr>
+        <tr>
+          <td><strong>HR Unit Manager &amp; Principals</strong></td>
+          <td>Age Retirement, Notice Age, Medical, Death in Service, Redundancy, Voluntary Resignation</td>
+          <td><span class="tag tag-part">◑ 6 types — forms defined</span></td>
+          <td><span class="tag tag-no">✗ 0 checklists built</span></td>
+          <td><span class="tag tag-yes">✓ 6 XMLs generated</span></td>
+          <td><span class="tag tag-yes">✓ 6 letters exist</span></td>
+          <td><strong>65% COMPLETE</strong> — Form field definitions in migration 0156. XML templates generated. Checklists and inline form UI still needed.</td>
+        </tr>
+        <tr>
+          <td colspan="7" style="background:var(--fn-bgAlt);padding:4px 10px;font-size:10px;color:var(--fn-mid)"><strong>Next steps:</strong> Build SubmissionChecklistItem definitions for each cessation type; generate frontend form from migration fields</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">TERMS &amp; CONDITIONS (HR Unit — Secondary)</td></tr>
+        <tr>
+          <td><strong>HR Unit / Compliance</strong></td>
+          <td>Secondment, Annual Leave Payout</td>
+          <td><span class="tag tag-part">◑ 2 types — forms defined</span></td>
+          <td><span class="tag tag-no">✗ 0 checklists built</span></td>
+          <td><span class="tag tag-yes">✓ 2 XMLs generated</span></td>
+          <td><span class="tag tag-yes">✓ 2 letters exist</span></td>
+          <td><strong>60% COMPLETE</strong> — Form field definitions in migration 0156. XML templates generated. Checklists pending.</td>
+        </tr>
+        <tr>
+          <td colspan="7" style="background:var(--fn-bgAlt);padding:4px 10px;font-size:10px;color:var(--fn-mid)"><strong>Still needed:</strong> Medical Claim (Allowances) form digitization — docx template exists but no fields extracted</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">ORGANISATIONAL DEVELOPMENT (ODU)</td></tr>
+        <tr>
+          <td><strong>ODU Manager &amp; Principals</strong></td>
+          <td><strong>8 submissions:</strong> Restructure (2-1), JD Review (2-2), Salary Upgrade (2-3), Special Skills (2-4), Business Plan (2-5), Corporate Plan (2-6), Annual Report (2-7), plus other submissions</td>
+          <td><span class="tag tag-yes">★ 4 types digitized</span></td>
+          <td><span class="tag tag-yes">✓ 2-1, 2-4, 2-5, 2-6, 2-7</span></td>
+          <td><span class="tag tag-yes">✓ 5 XMLs done</span></td>
+          <td><span class="tag tag-yes">✓ Special Skills letter + others pending</span></td>
+          <td><strong>72% COMPLETE</strong> — Completed: Restructure (2-1) checklist + XML, Special Skills (2-4) full suite, Business Plan (2-5) enhanced form with M&E framework + cash flow + procurement, Corporate Plan (2-6) enhanced form with programs + strategic framework, Annual Report (2-7) enhanced form with all statutory reporting sections. Pending: JD Review (2-2), Salary Upgrade (2-3), outcome letters for 2-5/2-6/2-7.</td>
+        </tr>
+        <tr>
+          <td colspan="7" style="background:var(--fn-bgAlt);padding:4px 10px;font-size:10px;color:var(--fn-mid)"><strong>✓ OPTION 1 &amp; OPTION 2 COMPLETE:</strong> Enhanced XML templates created for 2-5, 2-6, 2-7 incorporating detailed field definitions from government guidelines. Business Plan template (5 key components: Executive Summary, Program/Activity M&amp;E Framework, HR Operational Plan, Cash Flow Projection, Procurement Plan). Corporate Plan template (7 sections: Strategic Framework, Programs, Org Structure, Financial Planning, Capacity Building, Risk Management, Issue/Discussion/Recommendation). Annual Report template (20 sections: Leadership Statements, Corporate Overview, Performance Reporting, Policy &amp; Legislative, HR Data, Financial Statements, Auditor General Reports, Ombudsman, RTI, Court Decisions, Complaints). Ready for migration deployment and frontend integration.</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">COMPLIANCE / LEGAL (Compliance Unit)</td></tr>
+        <tr>
+          <td><strong>Compliance Manager &amp; Principals</strong></td>
+          <td>Compliance Review (CMS-routed submissions), Discipline (PSC 6-1 to 6-8)</td>
+          <td><span class="tag tag-no">✗ Discipline: 0% started</span></td>
+          <td><span class="tag tag-no">✗ Discipline: 0 checklists</span></td>
+          <td><span class="tag tag-no">✗ No XMLs</span></td>
+          <td><span class="tag tag-no">✗ No outcome letters</span></td>
+          <td><strong>0% COMPLETE</strong> — Discipline submission (8 form codes) is the <strong>highest priority gap</strong>. Compliance review route exists but no structured form.</td>
+        </tr>
+        <tr>
+          <td colspan="7" style="background:var(--fn-bgAlt);padding:4px 10px;font-size:10px;color:var(--fn-mid)"><strong>Critical:</strong> Discipline submissions must be digitized — 8 form codes (PSC 6-1 to 6-8) catalogued but zero implementation</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">TRAVEL / INTERNAL SUBMISSIONS (CSU)</td></tr>
+        <tr>
+          <td><strong>CSU Manager &amp; Officers</strong></td>
+          <td>Travel Authority (PSC 4-4 to 4-6), Internal chain approvals</td>
+          <td><span class="tag tag-no">✗ Travel: no forms</span></td>
+          <td><span class="tag tag-no">✗ Travel: no checklist</span></td>
+          <td><span class="tag tag-no">✗ No XML</span></td>
+          <td><span class="tag tag-no">✗ No letter</span></td>
+          <td><strong>20% COMPLETE</strong> — Workflow track exists (Draft → Submitted → Secretary Review → Approved/Rejected). No digitized form fields or approval letter.</td>
+        </tr>
+        <tr>
+          <td colspan="7" style="background:var(--fn-bgAlt);padding:4px 10px;font-size:10px;color:var(--fn-mid)"><strong>Next steps:</strong> Define travel form fields (destination, cost, purpose); create XML; build approval letter; set up checklist</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">SUPPORTING FORMS (Cross-unit)</td></tr>
+        <tr>
+          <td><strong>All Units</strong></td>
+          <td>PSC Forms 3-2 to 3-7, 5-1 to 5-2, 8-1 to 8-4, 10-1 to 10-6</td>
+          <td><span class="tag tag-no">✗ All physical only</span></td>
+          <td><span class="tag tag-na">N/A</span></td>
+          <td><span class="tag tag-no">✗ No templates</span></td>
+          <td><span class="tag tag-na">N/A</span></td>
+          <td><strong>0% COMPLETE</strong> — All supporting forms are physical PDFs only. Digitizing would allow online fill and auto-attach to submissions.</td>
+        </tr>
+        <tr>
+          <td colspan="7" style="background:var(--fn-bgAlt);padding:4px 10px;font-size:10px;color:var(--fn-mid)"><strong>Opportunity:</strong> Converting PSC Forms 3-2 to 3-7 to online would streamline recruitment (Job Application, Assessment, Selection Report, etc.)</td>
+        </tr>
+
+        <tr><td class="doc-cat" colspan="7">UNIT COMPLETION SUMMARY</td></tr>
+        <tr>
+          <td style="font-weight:700">Rank</td>
+          <td style="font-weight:700">Unit</td>
+          <td style="font-weight:700">Overall %</td>
+          <td colspan="4" style="font-weight:700">Key Remaining Work</td>
+        </tr>
+        <tr>
+          <td>🥇 1st</td>
+          <td><strong>VIPAM (Recruitment)</strong></td>
+          <td><span class="tag tag-yes">100%</span></td>
+          <td colspan="4">All 5 core types complete. Add: Promotion &amp; Acting Appointment (2 types).</td>
+        </tr>
+        <tr>
+          <td>🥈 2nd</td>
+          <td><strong>HR Unit (Cessation)</strong></td>
+          <td><span class="tag tag-part">65%</span></td>
+          <td colspan="4">6 types: Forms defined, XML done. Build: Checklists + frontend form UI.</td>
+        </tr>
+        <tr>
+          <td>🥉 3rd</td>
+          <td><strong>HR Unit (Terms &amp; Conditions)</strong></td>
+          <td><span class="tag tag-part">60%</span></td>
+          <td colspan="4">2 types: Forms defined, XML done. Add: Checklists. Pending: Medical Claim digitization.</td>
+        </tr>
+        <tr>
+          <td>4th</td>
+          <td><strong>CSU (Travel)</strong></td>
+          <td><span class="tag tag-part">20%</span></td>
+          <td colspan="4">3 travel forms: Workflow exists. Missing: Form fields, checklist, letter.</td>
+        </tr>
+        <tr>
+          <td>5th</td>
+          <td><strong>ODU (Organisational Dev)</strong></td>
+          <td><span class="tag tag-part">15%</span></td>
+          <td colspan="4">7 types total: Only Restructure (2-1) has checklist. JD Review, Salary Upgrade, Special Skills, Business/Corporate Plans, Annual Report all attachment-based. Need: Form fields, XML, outcome letters for all.</td>
+        </tr>
+        <tr>
+          <td>❌ Last</td>
+          <td><strong>Compliance (Discipline)</strong></td>
+          <td><span class="tag tag-no">0%</span></td>
+          <td colspan="4"><strong>HIGHEST PRIORITY:</strong> 8 form codes (PSC 6-1 to 6-8) with zero implementation. Must build forms, checklists, XML, letters.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <div>Office of the Public Service Commission — Commission Decision Management System (CDMS) &nbsp;·&nbsp; Internal — Confidential</div>
+  <div>Generated: <span class="js-date"></span></div>
+</div>
+
+</div><!-- /container -->
+
+<!-- ══════════════════════════════════════════
+     STAGE DETAIL PANEL (DRAWER)
+═══════════════════════════════════════════ -->
+<div class="stage-overlay" id="stage-overlay" onclick="closePanel()"></div>
+<div class="stage-panel" id="stage-panel">
+  <div class="sp-header">
+    <div>
+      <div style="font-size:10px;color:var(--fp-light);margin-bottom:4px">Stage Details</div>
+      <div class="sp-title" id="sp-title">—</div>
+    </div>
+    <button class="sp-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="sp-body" id="sp-body"></div>
+</div>
+
+<script>
+// ── Date ──────────────────────────────────────────────────────
+const d = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+document.querySelectorAll('.js-date').forEach(el => el.textContent = d);
+
+// ── Tabs ──────────────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Stage panel ───────────────────────────────────────────────
+const STAGES = {
+  draft: {
+    label:'Draft', cls:'c-draft',
+    trigger:'Ministry HR / Dept Admin — creates and fills the submission',
+    permissions:['create_submission','edit_submission'],
+    notifications:['None — internal only until submitted'],
+    docs:['Submission paper (varies by type)','Supporting attachments per checklist'],
+    next:['Submitted to DG (standard)','Mgr Checklist Review (receptionist / internal)'],
+    note:'Ministry can recall from this stage at any time.'
+  },
+  pending_dg_endorsement: {
+    label:'Submitted to DG', cls:'c-blue',
+    trigger:'Ministry HR submits to Director-General for endorsement',
+    permissions:['create_submission'],
+    notifications:['DG / Head of Agency notified by email'],
+    docs:['Complete submission package as prepared by HR'],
+    next:['Endorsed by DG → DG Approved','Rejected by DG → back to Draft'],
+    note:'DG has view-only access — cannot edit content.'
+  },
+  dg_approved: {
+    label:'Endorsed by DG', cls:'c-teal',
+    trigger:'Director-General endorses the submission',
+    permissions:['view_submissions (head_of_agency)'],
+    notifications:['Ministry HR notified to formally submit to PSC'],
+    docs:['DG endorsement letter (physical or digital)'],
+    next:['Ministry HR formally submits to PSC → Submitted to PSC'],
+    note:'After DG endorses, HR must take the additional step of formally submitting.'
+  },
+  submitted: {
+    label:'Submitted to PSC', cls:'c-blue',
+    trigger:'Ministry HR formally submits the endorsed package to PSC',
+    permissions:['create_submission'],
+    notifications:['PSC Officer / Receptionist notified','PSC Secretary notified'],
+    docs:['Full submission package with DG endorsement'],
+    next:['Received by PSC → PSC officer acknowledges receipt'],
+    note:'Submission enters the PSC queue. Ministry can still recall at this point.'
+  },
+  received_by_psc: {
+    label:'Received by PSC', cls:'c-blue',
+    trigger:'PSC Officer or Receptionist acknowledges receipt',
+    permissions:['transition_workflow'],
+    notifications:['Ministry HR notified of receipt'],
+    docs:['Stamped receipt / registration log entry'],
+    next:['Registered & Routed'],
+    note:'Physical submissions scanned and uploaded at this stage.'
+  },
+  registered_routed: {
+    label:'Registered & Routed', cls:'c-indigo',
+    trigger:'PSC Officer registers submission and routes to appropriate OPSC unit',
+    permissions:['transition_workflow'],
+    notifications:['OPSC Unit Manager notified of new submission'],
+    docs:['PSC registration number assigned'],
+    next:['Manager Checklist Review'],
+    note:'Reference number assigned. Unit determined by submission type.'
+  },
+  manager_checklist_review: {
+    label:'Manager Checklist Review', cls:'c-indigo',
+    trigger:'OPSC Unit Manager reviews submission completeness against checklist',
+    permissions:['transition_workflow','assess_submission'],
+    notifications:['Unit Principal/Analyst notified when routed for assessment'],
+    docs:['Completed checklist (SubmissionChecklistItem records)'],
+    next:['Under Assessment (if complete)','Return for Clarification (if incomplete)','Compliance Under Review (if CMS referral)'],
+    note:'Checklist is visible to Manager and when assigned to Principal (under review).'
+  },
+  under_assessment: {
+    label:'Under Assessment', cls:'c-violet',
+    trigger:'OPSC Principal / Analyst conducts formal 21-working-day assessment',
+    permissions:['assess_submission','transition_workflow'],
+    notifications:['SLA warning sent at day 15; breach alert at day 21'],
+    docs:['Assessment notes','Checklist view (read-only)','Any supporting legal or technical advice'],
+    next:['★ Submit to Secretary (NEW)','Awaiting Legal Advice','Return for Clarification','Defer'],
+    note:'21-working-day SLA applies from date received by PSC.'
+  },
+  compliance_under_review: {
+    label:'Compliance Under Review', cls:'c-indigo',
+    trigger:'Compliance Unit reviews submission against CMS compliance framework',
+    permissions:['transition_workflow (compliance roles)'],
+    notifications:['Compliance outcome sent via CMS callback/webhook'],
+    docs:['CMS compliance report'],
+    next:['Secretary Review (on completion)'],
+    note:'External CMS system integration. Outcome triggers webhook callback.'
+  },
+  pending_secretary_approval: {
+    label:'Pending Secretary Approval ★ NEW', cls:'c-new',
+    trigger:'OPSC Principal/Analyst submits completed assessment to PSC Secretary',
+    permissions:['assess_submission (to submit)','forward_commission (Secretary to approve)'],
+    notifications:['PSC Secretary notified by email with assessment summary'],
+    docs:['Assessment report','Completed checklist','Supporting legal advice (if obtained)'],
+    next:['Forward to Commission (Secretary approves)','Return to Assessment (Secretary returns)','Defer'],
+    note:'NEW STAGE — currently not implemented. Sits between Under Assessment and Forwarded to Commission. Secretary reviews the assessment before it enters the Commission pipeline.'
+  },
+  forwarded_to_commission: {
+    label:'Forwarded to Commission', cls:'c-purple',
+    trigger:'PSC Secretary approves and forwards to Commission (after new approval gate)',
+    permissions:['forward_commission (psc_secretary, psc_admin)'],
+    notifications:['PSC Secretary notified','PSC Commissioners notified','Senior Admin Officer notified to prepare agenda'],
+    docs:['Commission-ready submission package','Checklist (read-only)'],
+    next:['Commission Sitting (via agenda)','Tabled','Back to Assessment','Deferred'],
+    note:'Once here, Senior Admin Officer can add submission to a meeting agenda.'
+  },
+  agenda_draft: {
+    label:'Agenda: Draft', cls:'c-sky',
+    trigger:'Senior Administration Officer builds the meeting agenda',
+    permissions:['manage_agenda','manage_meetings'],
+    notifications:['None at this stage'],
+    docs:['Draft agenda document','List of FORWARDED_TO_COMMISSION submissions'],
+    next:['Agenda: Submit to Secretary'],
+    note:'SAO selects submissions from the FORWARDED_TO_COMMISSION pool and arranges them in agenda sections.'
+  },
+  agenda_with_secretary: {
+    label:'Agenda: With Secretary', cls:'c-sky',
+    trigger:'Senior Admin Officer submits draft agenda to PSC Secretary for review',
+    permissions:['manage_agenda'],
+    notifications:['PSC Secretary notified of draft agenda awaiting review'],
+    docs:['Draft agenda with all supporting submission packages'],
+    next:['Agenda: Forward to Chairman','Return to SAO for revision'],
+    note:'Secretary checks agenda content, order, and completeness before escalating.'
+  },
+  agenda_with_chairman: {
+    label:'Agenda: With Chairman', cls:'c-sky',
+    trigger:'PSC Secretary forwards reviewed agenda to Chairperson for endorsement',
+    permissions:['manage_agenda (psc_secretary)'],
+    notifications:['Chairperson notified of agenda awaiting endorsement'],
+    docs:['Finalised agenda document'],
+    next:['Agenda Endorsed → Circulated','Return for Revision'],
+    note:'Chairman may request changes before endorsing.'
+  },
+  agenda_endorsed: {
+    label:'Agenda: Chairman Endorsed', cls:'c-emerald',
+    trigger:'Chairperson endorses the agenda',
+    permissions:['manage_agenda (chairperson)'],
+    notifications:['PSC Secretary notified','SAO notified to circulate'],
+    docs:['Signed agenda'],
+    next:['Agenda: Circulated to Members'],
+    note:'Once endorsed, agenda is ready for circulation to all Commission members.'
+  },
+  agenda_circulated: {
+    label:'Agenda: Circulated', cls:'c-sky',
+    trigger:'PSC Secretary / SAO circulates endorsed agenda to Commission members',
+    permissions:['manage_meetings','manage_notifications'],
+    notifications:['All PSC Commissioners notified','PSC Secretary, Chairperson, SAO receive copy'],
+    docs:['Circulated agenda + submission packages'],
+    next:['Commission Sitting'],
+    note:'All submissions on the agenda move to COMMISSION_SITTING at the time of sitting.'
+  },
+  commission_sitting: {
+    label:'Commission Sitting', cls:'c-purple',
+    trigger:'Commission deliberates on the submission at a formal sitting',
+    permissions:['view_submissions (commissioners, chairperson)'],
+    notifications:['PSC Secretary notified of outcomes'],
+    docs:['Agenda','Submission package','Minutes draft'],
+    next:['Approved','Rejected','Deferred Back to HR','Tabled','Matters Arising','Minutes Drafted & Signed'],
+    note:'Commissioners and Chairperson deliberate. Secretary records the formal outcome.'
+  },
+  approved: {
+    label:'Approved', cls:'c-emerald',
+    trigger:'Commission formally approves the submission',
+    permissions:['record_decision (psc_secretary)'],
+    notifications:['Ministry HR notified of approval','Officer notified (where applicable)','OPSC Manager notified for implementation'],
+    docs:['Commission decision minute','Outcome letter (generated from template)'],
+    next:['Minutes Drafted & Signed → Decision Entered & Assigned → Under Implementation'],
+    note:'Terminal decision. Triggers letter generation and implementation assignment.'
+  },
+  rejected: {
+    label:'Rejected', cls:'c-red',
+    trigger:'Commission formally rejects the submission',
+    permissions:['record_decision (psc_secretary)'],
+    notifications:['Ministry HR notified of rejection with reasons','DG notified'],
+    docs:['Commission decision minute','Rejection letter'],
+    next:['Minutes Drafted & Signed'],
+    note:'Terminal decision. Ministry may resubmit with corrections if grounds addressed.'
+  },
+  minutes_drafted_signed: {
+    label:'Minutes Drafted & Signed', cls:'c-teal',
+    trigger:'PSC Secretary drafts and signs the formal minutes of the Commission sitting',
+    permissions:['record_decision (psc_secretary, chairperson, psc_admin)'],
+    notifications:['Chairperson notified to sign minutes','OPSC Manager notified'],
+    docs:['Signed Commission minutes','Decision records'],
+    next:['Decision Entered & Assigned'],
+    note:'Minutes can be edited by Secretary, Chairman, and Admin even after signing — they are not locked.'
+  },
+  decision_entered_assigned: {
+    label:'Decision Entered & Assigned', cls:'c-teal',
+    trigger:'PSC Secretary enters the formal decision into CDMS and assigns to OPSC Manager',
+    permissions:['allocate_decision (psc_secretary)'],
+    notifications:['OPSC Manager notified of allocation','Principal Officers notified of assigned tasks'],
+    docs:['Decision record','Task allocation'],
+    next:['Under Implementation'],
+    note:'OPSC Manager then assigns specific execution tasks to Principal Officers.'
+  },
+  under_implementation: {
+    label:'Under Implementation', cls:'c-green',
+    trigger:'OPSC Manager / Principal Officer executes the Commission decision',
+    permissions:['update_implementation','assign_task'],
+    notifications:['Ministry HR notified of implementation progress','PSC Secretary notified on completion'],
+    docs:['Implementation progress notes','Generated outcome letters (offer, confirmation, etc.)'],
+    next:['Implementation Report (terminal)'],
+    note:'SLA of 30 days applies from decision date.'
+  },
+  implementation_report: {
+    label:'Implementation Report', cls:'c-impl-end',
+    trigger:'OPSC Manager files implementation completion report',
+    permissions:['update_implementation (psc_manager)'],
+    notifications:['PSC Secretary notified','Ministry HR notified'],
+    docs:['Implementation completion report'],
+    next:['Terminal — loop back to Under Implementation only if correction required'],
+    note:'Terminal stage. Closes the submission lifecycle.'
+  },
+  deferred: {
+    label:'Deferred', cls:'c-amber',
+    trigger:'PSC Secretary or Officer defers pending further information',
+    permissions:['transition_workflow'],
+    notifications:['Ministry HR notified of deferral with reason'],
+    docs:['Deferral notice with stated reason'],
+    next:['Manager Checklist Review (when reactivated)'],
+    note:'Reason for deferral is mandatory. Ministry must provide additional information.'
+  },
+  tabled: {
+    label:'Tabled', cls:'c-amber',
+    trigger:'Commission tables the submission for a future sitting',
+    permissions:['transition_workflow (psc_secretary)'],
+    notifications:['Ministry HR notified'],
+    docs:['Tabling notice'],
+    next:['Commission Sitting','Awaiting Legal Advice','Matters Arising'],
+    note:'Submission held without decision — placed on a future agenda.'
+  },
+  awaiting_legal_advice: {
+    label:'Awaiting Legal Advice', cls:'c-amber',
+    trigger:'PSC Secretary or Commission refers for external legal opinion',
+    permissions:['transition_workflow (psc_secretary)'],
+    notifications:['PSC Secretary monitors; Ministry HR notified of hold'],
+    docs:['Legal referral notice','Legal opinion (when received)'],
+    next:['Under Assessment (returned for further review)','Commission Sitting (when advice received)'],
+    note:'No SLA clock during legal advice hold. Manual reactivation required.'
+  },
+  awaiting_cabinet_decision: {
+    label:'Awaiting Cabinet Decision', cls:'c-amber',
+    trigger:'Matter escalated to Cabinet; Commission awaits Cabinet direction',
+    permissions:['transition_workflow (psc_secretary)'],
+    notifications:['PSC Secretary monitors'],
+    docs:['Cabinet referral record'],
+    next:['Commission Sitting (on Cabinet direction)'],
+    note:'Rare hold state for matters requiring Cabinet-level policy decision.'
+  },
+  returned_for_clarification: {
+    label:'Returned for Clarification', cls:'c-orange',
+    trigger:'PSC Officer or Unit Manager returns submission to Ministry for missing/incorrect information',
+    permissions:['transition_workflow'],
+    notifications:['Ministry HR notified with specific clarification request','DG notified'],
+    docs:['Clarification request notice with listed deficiencies'],
+    next:['Resubmitted → back to Mgr Checklist Review','Draft (if major rework needed)'],
+    note:'Clarification reason is mandatory. SLA clock pauses while awaiting Ministry response.'
+  },
+  deferred_back_to_hr: {
+    label:'Deferred Back to HR', cls:'c-orange',
+    trigger:'Commission defers back to Ministry HR for further action or policy alignment',
+    permissions:['record_decision (psc_secretary)'],
+    notifications:['Ministry HR notified','DG notified with Commission direction'],
+    docs:['Commission deferral direction letter'],
+    next:['Resubmit to PSC','Back to Draft','Matters Arising'],
+    note:'Ministry must address Commission directions before resubmitting.'
+  },
+  matters_arising: {
+    label:'Matters Arising', cls:'c-purple',
+    trigger:'Commission raises matters arising from a previous sitting for follow-up',
+    permissions:['transition_workflow (psc_secretary)'],
+    notifications:['PSC Secretary tracks; Ministry HR notified'],
+    docs:['Matters arising minutes entry'],
+    next:['Commission Sitting (at next sitting)'],
+    note:'Placed on the next agenda for resolution or update.'
+  },
+  secretary_review: {
+    label:'Secretary Review', cls:'c-teal',
+    trigger:'PSC Secretary reviews internal submissions or travel requests',
+    permissions:['transition_workflow (psc_secretary)'],
+    notifications:['PSC Secretary notified','Ministry HR notified (for travel/internal)'],
+    docs:['Secretary review notes'],
+    next:['Approved','Rejected','Returned for Clarification'],
+    note:'Used for OPSC internal submissions and travel authority (secretarial-only track).'
+  },
+  recalled: {
+    label:'Recalled by Ministry', cls:'c-terminal',
+    trigger:'Ministry HR recalls the submission before PSC makes a decision',
+    permissions:['transition_workflow (ministry_hr, head_of_agency)'],
+    notifications:['PSC Secretary notified','PSC Officer notified'],
+    docs:['Recall notice'],
+    next:['Terminal — no further action'],
+    note:'Can recall from: Draft, Pending DG, DG Approved, Submitted to PSC only.'
+  },
+};
+
+function openStage(key) {
+  const s = STAGES[key];
+  if (!s) return;
+  document.getElementById('sp-title').textContent = s.label;
+  const pillHtml = `<span class="sp-pill-preview pill ${s.cls}">${s.label}</span>`;
+  let html = pillHtml + '<div class="sp-divider" style="margin-top:10px"></div>';
+
+  html += section('Who triggers this stage', s.trigger, 'text');
+  html += section('Required permissions', s.permissions, 'list');
+  html += section('Notifications fired', s.notifications, 'list');
+  html += section('Documents at this stage', s.docs, 'list');
+  html += section('What comes next', s.next, 'list');
+  if (s.note) html += section('Note', s.note, 'text');
+
+  document.getElementById('sp-body').innerHTML = html;
+  document.getElementById('stage-panel').classList.add('open');
+  document.getElementById('stage-overlay').style.display = 'block';
+}
+
+function section(title, content, type) {
+  let inner = '';
+  if (type === 'text') {
+    inner = `<p>${content}</p>`;
+  } else {
+    inner = '<ul>' + content.map(i => `<li>${i}</li>`).join('') + '</ul>';
+  }
+  return `<div class="sp-section"><h4>${title}</h4>${inner}</div><div class="sp-divider"></div>`;
+}
+
+function closePanel() {
+  document.getElementById('stage-panel').classList.remove('open');
+  document.getElementById('stage-overlay').style.display = 'none';
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+</script>
+</body>
+</html>

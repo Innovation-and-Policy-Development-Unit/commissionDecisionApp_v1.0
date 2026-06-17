@@ -24,6 +24,7 @@ export const SUBWAY_STATIONS = [
       'registered_routed',
       'manager_checklist_review',
       'under_assessment',
+      'pending_secretary_approval',
       'compliance_under_review',
       'deferred',
       'awaiting_legal_advice',
