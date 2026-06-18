@@ -342,6 +342,82 @@ def send_password_reset_email(*, user: User, reset_url: str, to_email: str) -> b
         return False
 
 
+def _superuser_emails() -> list[str]:
+    """Active super administrators' email addresses (for security alerts)."""
+    return list(
+        User.objects.filter(is_superuser=True, is_active=True)
+        .exclude(email="")
+        .values_list("email", flat=True)
+    )
+
+
+def notify_account_locked(user: User, *, ip: str = "", hard: bool = False, minutes: int = 0) -> None:
+    """
+    Notify the affected user and all super administrators that an account was
+    locked — temporarily (after the failure limit) or permanently (after a
+    repeat lockout). Best-effort; never raises.
+    """
+    import logging
+    from django.utils import timezone
+
+    log = logging.getLogger("scdms.security")
+    base = get_frontend_base_url()
+    when = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M %Z")
+
+    if hard:
+        lock_summary = (
+            "Your account has been permanently locked after repeated failed "
+            "sign-in attempts."
+        )
+        unlock_instructions = (
+            "For your security, only a system administrator can unlock it. "
+            "Please contact your SCDMS administrator."
+        )
+        admin_summary = "permanently locked (repeat failed attempts)"
+    else:
+        lock_summary = (
+            f"Your account has been temporarily locked for {minutes} minutes "
+            "after several failed sign-in attempts."
+        )
+        unlock_instructions = (
+            f"You can try again after {minutes} minutes. If this was not you, "
+            "or you need access sooner, contact your SCDMS administrator."
+        )
+        admin_summary = f"temporarily locked for {minutes} min"
+
+    # 1) The affected user.
+    user_email = (user.email or "").strip()
+    if user_email:
+        ctx = merge_recipient_context(
+            user,
+            lock_summary=lock_summary,
+            unlock_instructions=unlock_instructions,
+            ip_address=ip or "unknown",
+            attempt_time=when,
+            login_url=f"{base}/auth/login",
+        )
+        send_templated_email(slug="account_locked_user", to=[user_email], context=ctx)
+
+    # 2) Super administrators.
+    admin_emails = _superuser_emails()
+    if admin_emails:
+        admin_ctx = merge_recipient_context(
+            None,
+            target_username=user.username,
+            target_email=user_email or "—",
+            lock_summary=admin_summary,
+            ip_address=ip or "unknown",
+            attempt_time=when,
+            admin_url=f"{base}/admin",
+        )
+        send_templated_email(slug="account_locked_admin", to=admin_emails, context=admin_ctx)
+
+    log.info(
+        "ACCOUNT_LOCK_NOTIFIED | username=%s | hard=%s | user_email=%s | admins=%d",
+        user.username, hard, bool(user_email), len(admin_emails),
+    )
+
+
 def sample_context_for_slug(slug: str) -> dict[str, str]:
     from .email_template_defaults import SAMPLE_RECIPIENT
 

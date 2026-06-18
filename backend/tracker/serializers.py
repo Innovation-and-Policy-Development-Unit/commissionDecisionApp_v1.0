@@ -1289,6 +1289,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     unit_name       = serializers.SerializerMethodField()
     # Security — lockout info injected from view context (batch-loaded, no N+1)
     is_locked       = serializers.SerializerMethodField()
+    hard_locked     = serializers.SerializerMethodField()
     failed_attempts = serializers.SerializerMethodField()
     two_factor_enabled = serializers.SerializerMethodField()
 
@@ -1298,7 +1299,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "id", "username", "email", "is_active", "date_joined",
             "role", "ministry_id", "ministry_name", "department_id", "department_name",
             "unit_id", "unit_name",
-            "is_locked", "failed_attempts", "two_factor_enabled",
+            "is_locked", "hard_locked", "failed_attempts", "two_factor_enabled",
         )
 
     def _profile(self, obj):
@@ -1336,8 +1337,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return p.unit.name if p and p.unit else None
 
     def get_is_locked(self, obj):
-        """True if axes has locked this username out."""
-        return obj.username in self.context.get("locked_usernames", set())
+        """True if axes has locked this username out, or it is permanently locked."""
+        if obj.username in self.context.get("locked_usernames", set()):
+            return True
+        p = self._profile(obj)
+        return bool(p and p.hard_locked)
+
+    def get_hard_locked(self, obj):
+        """True if the account is permanently locked (superuser unlock only)."""
+        p = self._profile(obj)
+        return bool(p and p.hard_locked)
 
     def get_failed_attempts(self, obj):
         """Number of consecutive failed attempts recorded by axes."""

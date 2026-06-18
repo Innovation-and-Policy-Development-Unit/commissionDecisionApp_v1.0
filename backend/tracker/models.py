@@ -923,6 +923,20 @@ class Profile(models.Model):
         default=False,
         help_text="Require user to change password at first sign-in.",
     )
+    password_changed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the password was last changed; drives password-expiry enforcement.",
+    )
+    # ── Two-tier account lockout (NCSS 2030 brute-force escalation) ──────────
+    temp_lock_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Temporary lockouts in the current cycle; reset on a successful login.",
+    )
+    hard_locked = models.BooleanField(
+        default=False,
+        help_text="Permanently locked after a repeat lockout; only a superuser can unlock.",
+    )
+    hard_locked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "PSC profiles"

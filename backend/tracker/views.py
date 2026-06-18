@@ -4236,9 +4236,9 @@ def change_password_view(request):
     user.save(update_fields=["password"])
     try:
         profile = user.psc_profile
-        if profile.force_password_change:
-            profile.force_password_change = False
-            profile.save(update_fields=["force_password_change"])
+        profile.force_password_change = False
+        profile.password_changed_at = timezone.now()
+        profile.save(update_fields=["force_password_change", "password_changed_at"])
     except Exception:
         pass
     _security_log.info("PASSWORD_CHANGED | username=%s", user.username)
@@ -4792,9 +4792,9 @@ def _axes_lockout_context(usernames=None):
     try:
         from axes.models import AccessAttempt
         from django.db.models import Max as _Max
-        from django.conf import settings as _settings
+        from .axes_config import current_failure_limit
 
-        limit = getattr(_settings, "AXES_FAILURE_LIMIT", 5)
+        limit = current_failure_limit()
         qs = AccessAttempt.objects.all()
         if usernames is not None:
             qs = qs.filter(username__in=usernames)
@@ -4807,6 +4807,45 @@ def _axes_lockout_context(usernames=None):
         return {"locked_usernames": locked_usernames, "attempts_map": attempts_map}
     except Exception:  # axes not ready during migrate, etc.
         return {"locked_usernames": set(), "attempts_map": {}}
+
+
+def _axes_failures_for(username):
+    """Max consecutive failed-login count django-axes has recorded for *username*."""
+    if not username:
+        return 0
+    try:
+        from axes.models import AccessAttempt
+        from django.db.models import Max as _Max
+        row = AccessAttempt.objects.filter(username=username).aggregate(m=_Max("failures_since_start"))
+        return row["m"] or 0
+    except Exception:
+        return 0
+
+
+def _enforce_password_expiry(profile):
+    """
+    Flag *profile* for a forced password change when its password is older than
+    PASSWORD_MAX_AGE_DAYS. A value of 0 (default) disables expiry. Legacy users
+    without a recorded change date have the clock started on this sign-in.
+    """
+    from .models import SystemSetting
+    max_age = SystemSetting.get_int("PASSWORD_MAX_AGE_DAYS", 0)
+    if max_age <= 0:
+        return
+    changed_at = profile.password_changed_at
+    if changed_at is None:
+        # Start the clock for accounts created before expiry tracking existed.
+        profile.password_changed_at = timezone.now()
+        profile.save(update_fields=["password_changed_at"])
+        return
+    if profile.force_password_change:
+        return
+    if timezone.now() - changed_at >= timedelta(days=max_age):
+        profile.force_password_change = True
+        profile.save(update_fields=["force_password_change"])
+        _security_log.info(
+            "PASSWORD_EXPIRED | username=%s | age_days>=%d", profile.user.username, max_age
+        )
 
 
 from .serializers import AgendaDeferralSerializer, DecisionLetterSerializer  # noqa: E402
@@ -5192,17 +5231,28 @@ class UserAdminViewSet(
     def unlock(self, request, pk=None):
         """
         POST /users/{id}/unlock/
-        Clear all django-axes AccessAttempt records for this user, immediately
-        allowing them to log in again regardless of cooloff period.
+        Clear all django-axes AccessAttempt records for this user and lift any
+        permanent ("hard") lock, immediately allowing them to log in again
+        regardless of cooloff period. Restricted to superusers.
         """
         from .audit import log_action as _log
         from .models import AuditLog as _AL
+        if not request.user.is_superuser:
+            raise PermissionDenied("Only a super administrator can unlock accounts.")
         user = self.get_object()
         try:
             from axes.models import AccessAttempt
             deleted, _ = AccessAttempt.objects.filter(username=user.username).delete()
         except Exception as exc:
             return Response({"detail": f"Could not clear lockout: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Lift our two-tier escalation flags too.
+        prof = getattr(user, "psc_profile", None)
+        if prof and (prof.hard_locked or prof.temp_lock_count):
+            prof.hard_locked = False
+            prof.hard_locked_at = None
+            prof.temp_lock_count = 0
+            prof.save(update_fields=["hard_locked", "hard_locked_at", "temp_lock_count"])
 
         _security_log.info(
             "USER_UNLOCKED | username=%s | by=%s | cleared=%d",
@@ -5223,15 +5273,22 @@ class UserAdminViewSet(
     def reset_all_lockouts(self, request):
         """
         POST /users/reset-all-lockouts/
-        Clear ALL axes AccessAttempt records — unlocks every locked account at once.
+        Clear ALL axes AccessAttempt records and lift every hard lock — unlocks
+        every locked account at once. Restricted to superusers.
         """
         from .audit import log_action as _log
         from .models import AuditLog as _AL
+        if not request.user.is_superuser:
+            raise PermissionDenied("Only a super administrator can unlock accounts.")
         try:
             from axes.models import AccessAttempt
             deleted, _ = AccessAttempt.objects.all().delete()
         except Exception as exc:
             return Response({"detail": f"Could not clear lockouts: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        Profile.objects.filter(hard_locked=True).update(
+            hard_locked=False, hard_locked_at=None, temp_lock_count=0
+        )
 
         _security_log.warning(
             "ALL_LOCKOUTS_RESET | by=%s | cleared=%d", request.user.username, deleted
@@ -5251,11 +5308,12 @@ class UserAdminViewSet(
         GET /users/lockout-stats/
         Returns current security thresholds and a count of locked accounts.
         """
-        from django.conf import settings as _settings
+        from .axes_config import current_failure_limit, current_cooloff
+        limit = current_failure_limit()
+        cooloff = current_cooloff()
         try:
             from axes.models import AccessAttempt
             from django.db.models import Max as _Max
-            limit = getattr(_settings, "AXES_FAILURE_LIMIT", 5)
             rows = (
                 AccessAttempt.objects
                 .values("username")
@@ -5268,10 +5326,19 @@ class UserAdminViewSet(
             locked_count = 0
             total_attempts = 0
 
+        try:
+            hard_locked_count = Profile.objects.filter(hard_locked=True).count()
+        except Exception:
+            hard_locked_count = 0
+
+        cooloff_minutes = int(cooloff.total_seconds() // 60)
         return Response({
-            "failure_limit": getattr(_settings, "AXES_FAILURE_LIMIT", 5),
-            "cooloff_hours": int(getattr(_settings, "AXES_COOLOFF_TIME", timedelta(hours=1)).total_seconds() // 3600),
+            "failure_limit": limit,
+            "cooloff_minutes": cooloff_minutes,
+            # Back-compat: keep hours (rounded) for older clients.
+            "cooloff_hours": round(cooloff_minutes / 60, 2),
             "locked_accounts": locked_count,
+            "hard_locked_accounts": hard_locked_count,
             "total_attempt_records": total_attempts,
         })
 
@@ -5385,18 +5452,114 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
             request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
             or request.META.get("REMOTE_ADDR", "unknown")
         )
+        req_username = (request.data.get("username") or "").strip()
 
-        # Standard credential validation
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        # ── Two-tier lockout: pre-check + capture prior state ────────────────
+        # We look the user up by username *before* validation so we can (a)
+        # reject a permanently ("hard") locked account up-front and (b) know
+        # whether a prior temporary lockout already happened, which means the
+        # *next* failed attempt must escalate to a hard lock.
+        precheck_profile = None
+        prior_temp_locks = 0
+        if req_username:
+            _lu = (
+                User.objects.filter(username=req_username)
+                .select_related("psc_profile")
+                .first()
+            )
+            if _lu is not None:
+                precheck_profile = getattr(_lu, "psc_profile", None)
+            if precheck_profile and precheck_profile.hard_locked:
+                _security_log.warning(
+                    "LOGIN_BLOCKED_HARD_LOCK | username=%s | ip=%s", req_username, ip
+                )
+                _log(request, _AL.Action.LOGIN_FAILED,
+                     resource_type="User", resource_id=_lu.id, resource_label=req_username,
+                     description=f"Login blocked — account permanently locked: {req_username}")
+                return Response(
+                    {
+                        "detail": "This account is locked. Please contact a system "
+                                  "administrator to have it unlocked.",
+                        "hard_locked": True,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if precheck_profile:
+                prior_temp_locks = precheck_profile.temp_lock_count or 0
+
+        failures_before = _axes_failures_for(req_username) if req_username else 0
+
+        # Standard credential validation (django-axes enforces the temporary lock)
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
         except Exception:
-            username = request.data.get("username", "<unknown>")
+            username = req_username or "<unknown>"
             _security_log.warning(
                 "LOGIN_FAILED | username=%s | ip=%s", username, ip
             )
-            from .audit import log_action as _log
-            from .models import AuditLog as _AL
+
+            from .axes_config import current_failure_limit, current_cooloff
+            limit = current_failure_limit()
+            failures_after = _axes_failures_for(req_username) if req_username else 0
+
+            # (a) A prior temporary lock exists → escalate to a permanent lock.
+            if precheck_profile and prior_temp_locks >= 1 and not precheck_profile.hard_locked:
+                precheck_profile.hard_locked = True
+                precheck_profile.hard_locked_at = timezone.now()
+                precheck_profile.save(update_fields=["hard_locked", "hard_locked_at"])
+                _security_log.warning(
+                    "ACCOUNT_HARD_LOCKED | username=%s | ip=%s", username, ip
+                )
+                _log(request, _AL.Action.LOCKOUT,
+                     resource_type="User", resource_id=precheck_profile.user_id,
+                     resource_label=username,
+                     description=f"Account permanently locked after repeat failures: {username}",
+                     extra_data={"ip": ip, "lock_type": "hard"})
+                try:
+                    from .email_notify import notify_account_locked
+                    notify_account_locked(precheck_profile.user, ip=ip, hard=True)
+                except Exception:
+                    _security_log.exception("Hard-lock notification failed for %s", username)
+                return Response(
+                    {
+                        "detail": "This account has been locked after repeated failed "
+                                  "sign-in attempts. Please contact a system administrator.",
+                        "hard_locked": True,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            # (b) This failure just crossed the limit → temporary lock (tier 1).
+            if (
+                precheck_profile
+                and limit
+                and failures_after >= limit > failures_before
+            ):
+                precheck_profile.temp_lock_count = (precheck_profile.temp_lock_count or 0) + 1
+                precheck_profile.save(update_fields=["temp_lock_count"])
+                cooloff_minutes = int(current_cooloff().total_seconds() // 60)
+                _security_log.warning(
+                    "ACCOUNT_TEMP_LOCKED | username=%s | ip=%s | minutes=%d",
+                    username, ip, cooloff_minutes,
+                )
+                _log(request, _AL.Action.LOCKOUT,
+                     resource_type="User", resource_id=precheck_profile.user_id,
+                     resource_label=username,
+                     description=f"Account temporarily locked ({cooloff_minutes} min) "
+                                 f"after {failures_after} failed attempts: {username}",
+                     extra_data={"ip": ip, "lock_type": "temporary", "minutes": cooloff_minutes})
+                try:
+                    from .email_notify import notify_account_locked
+                    notify_account_locked(
+                        precheck_profile.user, ip=ip, hard=False, minutes=cooloff_minutes
+                    )
+                except Exception:
+                    _security_log.exception("Temp-lock notification failed for %s", username)
+
             _log(request, _AL.Action.LOGIN_FAILED,
                  resource_type="User", resource_label=username,
                  description=f"Failed login attempt for username: {username}")
@@ -5412,6 +5575,18 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
             profile = ensure_psc_profile(user)
         except PermissionDenied:
             return Response({"detail": PROFILE_MISSING_MSG}, status=status.HTTP_403_FORBIDDEN)
+
+        # Valid credentials → clear our two-tier lockout counter (axes clears its
+        # own AccessAttempt rows via AXES_RESET_ON_SUCCESS).
+        if profile and (profile.temp_lock_count or profile.hard_locked):
+            profile.temp_lock_count = 0
+            profile.hard_locked = False
+            profile.hard_locked_at = None
+            profile.save(update_fields=["temp_lock_count", "hard_locked", "hard_locked_at"])
+
+        # Password expiry / rotation (NCSS 2030). PASSWORD_MAX_AGE_DAYS = 0 disables.
+        if profile:
+            _enforce_password_expiry(profile)
 
         # Check for valid trusted session → PIN-based re-auth (skip TOTP)
         if profile and profile.session_pin:
@@ -5820,9 +5995,9 @@ class PasswordResetConfirmView(APIView):
         user = ser.save()
         try:
             profile = user.psc_profile
-            if profile.force_password_change:
-                profile.force_password_change = False
-                profile.save(update_fields=["force_password_change"])
+            profile.force_password_change = False
+            profile.password_changed_at = timezone.now()
+            profile.save(update_fields=["force_password_change", "password_changed_at"])
         except Exception:
             pass
         from .audit import log_action as _log

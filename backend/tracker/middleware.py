@@ -1,9 +1,57 @@
 from __future__ import annotations
 
+import os
+
 from django.http import JsonResponse
 
 from .audit import log_action
 from .models import AuditLog
+
+
+# Default Content-Security-Policy. Strict by default (self-only scripts), but
+# allows inline styles which the Django admin and DRF browsable API rely on.
+# Override wholesale with the CONTENT_SECURITY_POLICY env var if needed.
+_DEFAULT_CSP = (
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "object-src 'none'; "
+    "frame-ancestors 'none'; "
+    "img-src 'self' data: blob:; "
+    "font-src 'self' data:; "
+    "style-src 'self' 'unsafe-inline'; "
+    "script-src 'self'; "
+    "connect-src 'self'; "
+    "form-action 'self'"
+)
+
+
+class ContentSecurityPolicyMiddleware:
+    """
+    Emit a Content-Security-Policy header on every response (NCSS 2030 / OWASP
+    XSS defence-in-depth). Dependency-free.
+
+    Env controls:
+      CSP_ENABLED               "false" to disable entirely (default on)
+      CONTENT_SECURITY_POLICY   full policy string override
+      CSP_REPORT_ONLY           "true" to send Report-Only (observe, don't block)
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self.enabled = os.getenv("CSP_ENABLED", "true").lower() in ("1", "true", "yes")
+        self.policy = (os.getenv("CONTENT_SECURITY_POLICY", "") or _DEFAULT_CSP).strip()
+        self.report_only = os.getenv("CSP_REPORT_ONLY", "false").lower() in ("1", "true", "yes")
+        self.header = (
+            "Content-Security-Policy-Report-Only"
+            if self.report_only
+            else "Content-Security-Policy"
+        )
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if self.enabled and self.header not in response:
+            response[self.header] = self.policy
+        return response
 
 
 class ForcePasswordChangeMiddleware:
