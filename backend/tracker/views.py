@@ -1490,7 +1490,38 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
             # ── Defer to next meeting: carry onto the next sitting's Matters Arising ──
             if prev == WorkflowStage.COMMISSION_SITTING and target == WorkflowStage.MATTERS_ARISING:
-                self._carry_to_matters_arising(submission)
+                self._carry_to_matters_arising(submission, actor=request.user, reason=remarks)
+
+            # ── Record other deferral types in the Deferred Agenda register ──────
+            from .deferral_tracking import record_deferral, resolve_open_deferrals
+            from .models import DeferralType
+
+            _DEFER_TARGET_TO_TYPE = {
+                WorkflowStage.DEFERRED_BACK_TO_UNIT: DeferralType.BACK_TO_UNIT,
+                WorkflowStage.DEFERRED_BACK_TO_HR:   DeferralType.BACK_TO_HR,
+                WorkflowStage.DEFERRED:              DeferralType.ON_HOLD,
+            }
+            if target in _DEFER_TARGET_TO_TYPE:
+                _source_item = (
+                    submission.agenda_placements.select_related("meeting")
+                    .order_by("-meeting__date", "-added_at")
+                    .first()
+                )
+                record_deferral(
+                    submission,
+                    deferral_type=_DEFER_TARGET_TO_TYPE[target],
+                    deferred_by=request.user,
+                    from_meeting=_source_item.meeting if _source_item else None,
+                    agenda_item=_source_item,
+                    reason=remarks,
+                )
+
+            # ── Resolve open deferrals once the item reaches a concluding decision ──
+            if target in {
+                WorkflowStage.APPROVED, WorkflowStage.REJECTED,
+                WorkflowStage.NOTED, WorkflowStage.NOT_APPROVED,
+            }:
+                resolve_open_deferrals(submission)
 
             submission.save(update_fields=_updated_fields(submission, prev, target))
 
@@ -2074,11 +2105,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .agenda_carryover import compute_scheduled_meeting
         submission.scheduled_meeting = compute_scheduled_meeting(submission)
 
-    def _carry_to_matters_arising(self, submission):
+    def _carry_to_matters_arising(self, submission, actor=None, reason=""):
         """Carry a 'deferred to next meeting' item onto the next sitting's agenda
-        under Matters Arising, so it is automatically re-tabled. Idempotent."""
+        under Matters Arising, so it is automatically re-tabled. Idempotent.
+
+        Also records an AgendaDeferral so the Deferred Agenda register is kept
+        accurate."""
         from .agenda_carryover import compute_scheduled_meeting
-        from .models import AgendaCategory, AgendaItem, Submission
+        from .deferral_tracking import record_deferral
+        from .models import AgendaCategory, AgendaItem, DeferralType, Submission
 
         # The sitting it was just deliberated in (most recent placement).
         source_item = (
@@ -2095,7 +2130,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 meeting=target_meeting, category=AgendaCategory.MATTERS_ARISING,
             ).aggregate(models.Max("sequence")).get("sequence__max") or 0
         ) + 1
-        AgendaItem.objects.get_or_create(
+        new_item, _created = AgendaItem.objects.get_or_create(
             meeting=target_meeting,
             submission=submission,
             defaults={
@@ -2107,6 +2142,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         )
         submission.scheduled_meeting = target_meeting
         Submission.objects.filter(pk=submission.pk).update(scheduled_meeting=target_meeting)
+        record_deferral(
+            submission,
+            deferral_type=DeferralType.TO_NEXT_MEETING,
+            deferred_by=actor,
+            from_meeting=source_meeting,
+            to_meeting=target_meeting,
+            agenda_item=source_item or new_item,
+            reason=reason,
+        )
 
     def _submission_view_side_effects(self, request, submission):
         """Queue async AI work when a submission is opened (retrieve / bootstrap)."""
@@ -4683,6 +4727,209 @@ def _axes_lockout_context(usernames=None):
         return {"locked_usernames": set(), "attempts_map": {}}
 
 
+from .serializers import AgendaDeferralSerializer, DecisionLetterSerializer  # noqa: E402
+
+
+class DecisionLetterViewSet(viewsets.ModelViewSet):
+    """Decision/action letters prepared by the responsible unit for a Commission
+    decision (e.g. a direct-appointment letter).
+
+    Interim wet-ink flow: the assigned action officer prepares the letter →
+    prints it → the Secretary signs on paper (recorded here) → the unit notifies
+    the originating ministry HR that the signed letter is ready for pickup → HR
+    confirms physical collection.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
+    serializer_class = DecisionLetterSerializer
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        from .decision_service import MINISTRY_ACK_ROLES
+        from .models import DecisionLetter
+
+        user = self.request.user
+        profile = _profile(user)
+        qs = DecisionLetter.objects.select_related(
+            "commission_task", "submission", "submission__ministry",
+            "prepared_by", "signed_by", "picked_up_by",
+        )
+        if profile and profile.role in MINISTRY_ACK_ROLES:
+            # Ministry side: only their own ministry's letters that have reached
+            # at least the pickup stage.
+            qs = qs.filter(
+                submission__ministry_id=profile.ministry_id,
+                status__in=["ready_for_pickup", "picked_up"],
+            )
+        elif not (user.is_staff or user.is_superuser):
+            # OPSC side: letters for commission tasks the user can access.
+            task_ids = _commission_task_queryset_for(user).values("id")
+            qs = qs.filter(commission_task_id__in=task_ids)
+
+        task_id = self.request.query_params.get("commission_task")
+        if task_id:
+            qs = qs.filter(commission_task_id=task_id)
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+        return qs
+
+    @staticmethod
+    def _can_prepare(user, task):
+        profile = _profile(user)
+        if user.is_staff or user.is_superuser or (profile and profile.role == Role.PSC_ADMIN):
+            return True
+        if task.assigned_manager_id == user.id or task.assigned_staff_id == user.id:
+            return True
+        return task.assigned_staff_m2m.filter(id=user.id).exists()
+
+    def perform_create(self, serializer):
+        task = serializer.validated_data.get("commission_task")
+        if task is None:
+            raise PermissionDenied("A commission task is required to prepare a letter.")
+        if not self._can_prepare(self.request.user, task):
+            raise PermissionDenied(
+                "Only the assigned action officer or unit manager can prepare this letter."
+            )
+        from .models import DecisionLetterStatus
+
+        serializer.save(
+            created_by=self.request.user,
+            prepared_by=self.request.user,
+            prepared_at=timezone.now(),
+            submission=task.submission,
+            status=DecisionLetterStatus.PREPARED,
+        )
+
+    def perform_update(self, serializer):
+        letter = serializer.instance
+        if not self._can_prepare(self.request.user, letter.commission_task):
+            raise PermissionDenied("Only the action officer or unit manager can edit this letter.")
+        if letter.status not in ("draft", "prepared", "printed"):
+            raise PermissionDenied("The letter can no longer be edited once it has been signed.")
+        serializer.save()
+
+    @action(detail=True, methods=["post"], url_path="mark-signed")
+    def mark_signed(self, request, pk=None):
+        """Secretary records that the printed letter has been signed (wet-ink).
+        Optionally attach a scan of the signed letter."""
+        from .models import DecisionLetterStatus
+
+        letter = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Secretary can sign decision letters.")
+        scan = request.FILES.get("signed_scan") or request.FILES.get("file")
+        if scan:
+            letter.signed_scan.save(
+                f"letter_{letter.id}_signed.{scan.name.rsplit('.', 1)[-1].lower()}", scan, save=False
+            )
+        letter.status = DecisionLetterStatus.SIGNED
+        letter.signed_by = request.user
+        letter.signed_at = timezone.now()
+        letter.save()
+        return Response(DecisionLetterSerializer(letter, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="notify-pickup")
+    def notify_pickup(self, request, pk=None):
+        """Unit notifies the originating ministry HR that the signed letter is
+        ready for physical pickup."""
+        from .decision_service import ministry_recipients
+        from .models import DecisionLetterStatus, Notification
+
+        letter = self.get_object()
+        if not self._can_prepare(request.user, letter.commission_task):
+            raise PermissionDenied("Only the action officer or unit manager can notify HR for pickup.")
+        if letter.status != DecisionLetterStatus.SIGNED:
+            return Response(
+                {"detail": "The letter must be signed by the Secretary before notifying HR for pickup."},
+                status=400,
+            )
+        letter.status = DecisionLetterStatus.READY_FOR_PICKUP
+        letter.pickup_notified_at = timezone.now()
+        letter.save(update_fields=["status", "pickup_notified_at", "updated_at"])
+
+        sub = letter.submission
+        recipients = ministry_recipients(sub) if sub else []
+        for recipient in recipients:
+            Notification.objects.create(
+                recipient=recipient,
+                submission=sub,
+                channel=Notification.Channel.BOTH,
+                title=f"Decision letter ready for pickup: {sub.reference_number if sub else letter.subject}",
+                body=(
+                    f"The signed decision letter \"{letter.subject}\" is ready for collection "
+                    f"from the responsible OPSC unit. Please arrange pickup."
+                ),
+            )
+        return Response({
+            **DecisionLetterSerializer(letter, context={"request": request}).data,
+            "notified": len(recipients),
+        })
+
+    @action(detail=True, methods=["post"], url_path="mark-picked-up")
+    def mark_picked_up(self, request, pk=None):
+        """Ministry HR (or the Secretariat on their behalf) confirms the signed
+        letter has been physically collected."""
+        from .decision_service import MINISTRY_ACK_ROLES
+        from .models import DecisionLetterStatus
+
+        letter = self.get_object()
+        profile = _profile(request.user)
+        is_secretariat = profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}
+        if profile.role not in MINISTRY_ACK_ROLES and not is_secretariat and not request.user.is_staff:
+            raise PermissionDenied("Only ministry HR or the Secretariat can confirm pickup.")
+        if letter.status != DecisionLetterStatus.READY_FOR_PICKUP:
+            return Response(
+                {"detail": "The letter is not marked ready for pickup."}, status=400,
+            )
+        letter.status = DecisionLetterStatus.PICKED_UP
+        letter.picked_up_by = request.user
+        letter.picked_up_at = timezone.now()
+        letter.pickup_note = (request.data.get("note") or "").strip()
+        letter.save()
+        return Response(DecisionLetterSerializer(letter, context={"request": request}).data)
+
+
+class AgendaDeferralViewSet(viewsets.ReadOnlyModelViewSet):
+    """The Deferred Agenda register — every recorded deferral, filterable by
+    status and type, so nothing falls off the agenda unnoticed."""
+
+    permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
+    serializer_class = AgendaDeferralSerializer
+
+    def get_queryset(self):
+        from .models import AgendaDeferral
+
+        sub_ids = _submission_queryset_for(self.request.user).values("id")
+        qs = AgendaDeferral.objects.select_related(
+            "submission", "from_meeting", "to_meeting", "deferred_by",
+        ).filter(submission_id__in=sub_ids)
+        resolved = self.request.query_params.get("resolved")
+        if resolved in ("true", "false"):
+            qs = qs.filter(resolved=(resolved == "true"))
+        dtype = self.request.query_params.get("deferral_type")
+        if dtype:
+            qs = qs.filter(deferral_type=dtype)
+        to_meeting = self.request.query_params.get("to_meeting")
+        if to_meeting:
+            qs = qs.filter(to_meeting_id=to_meeting)
+        return qs
+
+    @action(detail=True, methods=["post"], url_path="resolve")
+    def resolve(self, request, pk=None):
+        """Secretariat marks a deferral resolved (item concluded or no longer carried)."""
+        deferral = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Secretariat can resolve deferrals.")
+        if not deferral.resolved:
+            deferral.resolved = True
+            deferral.resolved_at = timezone.now()
+            deferral.save(update_fields=["resolved", "resolved_at"])
+        return Response(AgendaDeferralSerializer(deferral).data)
+
+
 class UserAdminViewSet(
     mixins.CreateModelMixin,
     mixins.ListModelMixin,
@@ -6660,9 +6907,22 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         )
         new_seq = (last_in_cat.sequence + 1) if last_in_cat else 1
 
+        from_meeting = item.meeting
         item.meeting  = next_meeting
         item.sequence = new_seq
         item.save(update_fields=["meeting", "sequence"])
+
+        from .deferral_tracking import record_deferral
+        from .models import DeferralType
+        record_deferral(
+            item.submission,
+            deferral_type=DeferralType.PUSH_TO_NEXT,
+            deferred_by=request.user,
+            from_meeting=from_meeting,
+            to_meeting=next_meeting,
+            agenda_item=item,
+            reason=(request.data.get("reason") or "").strip(),
+        )
 
         return Response({
             "detail": (

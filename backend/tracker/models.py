@@ -770,6 +770,64 @@ class MeetingOtherMatter(models.Model):
         return f"Other Matter — {self.meeting.reference_number}: {self.title[:48]}"
 
 
+class DeferralType(models.TextChoices):
+    TO_NEXT_MEETING = "to_next_meeting", "Deferred to Next Meeting"
+    PUSH_TO_NEXT    = "push_to_next",    "Moved to Next Meeting (pre-sitting)"
+    BACK_TO_UNIT    = "back_to_unit",    "Deferred Back to Unit"
+    BACK_TO_HR      = "back_to_hr",      "Deferred Back to HR"
+    ON_HOLD         = "on_hold",         "Deferred (on hold)"
+
+
+class AgendaDeferral(models.Model):
+    """A persistent record of an agenda item being deferred — so deferrals are
+    auditable and nothing silently falls off the agenda.
+
+    Written by every defer action (in-sitting defer-to-next-meeting, pre-sitting
+    push-to-next, deferred-back-to-unit/HR, and on-hold deferrals). Powers the
+    Deferred Agenda register and the per-item deferral count.
+    """
+
+    submission = models.ForeignKey(
+        "Submission", on_delete=models.CASCADE, related_name="agenda_deferrals",
+    )
+    agenda_item = models.ForeignKey(
+        "AgendaItem", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="deferrals",
+    )
+    from_meeting = models.ForeignKey(
+        "Meeting", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="deferrals_out",
+        help_text="The sitting the item was deferred from.",
+    )
+    to_meeting = models.ForeignKey(
+        "Meeting", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="deferrals_in",
+        help_text="The sitting the item was carried to (null for back-to-unit/HR/on-hold).",
+    )
+    deferral_type = models.CharField(max_length=20, choices=DeferralType.choices)
+    reason = models.TextField(blank=True)
+    deferred_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="agenda_deferrals_made",
+    )
+    deferred_at = models.DateTimeField(auto_now_add=True)
+    resolved = models.BooleanField(
+        default=False,
+        help_text="True once the deferred item has been decided or re-tabled and concluded.",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-deferred_at"]
+        indexes = [
+            models.Index(fields=["resolved", "deferral_type"]),
+            models.Index(fields=["submission", "resolved"]),
+        ]
+
+    def __str__(self):
+        return f"Deferral ({self.get_deferral_type_display()}): {self.submission.reference_number}"
+
+
 class SittingPackSession(models.Model):
     """
     Active Sitting Pack (Meeting Mode) session for a commissioner or secretariat user.
@@ -2672,6 +2730,85 @@ class DecisionService(models.Model):
     def __str__(self):
         state = "acknowledged" if self.acknowledged_at else "pending acknowledgement"
         return f"Service of {self.submission.reference_number} ({state})"
+
+
+class DecisionLetterStatus(models.TextChoices):
+    DRAFT            = "draft",            "Draft"
+    PREPARED         = "prepared",         "Prepared"
+    PRINTED          = "printed",          "Printed"
+    SIGNED           = "signed",           "Signed by Secretary"
+    READY_FOR_PICKUP = "ready_for_pickup", "Ready for Pickup"
+    PICKED_UP        = "picked_up",        "Picked Up"
+
+
+class DecisionLetter(models.Model):
+    """A formal decision/action letter prepared by the responsible OPSC unit for
+    a Commission decision (e.g. a direct-appointment letter).
+
+    Interim wet-ink flow until the DCDT digital-signature policy is in force:
+    the assigned action officer drafts the letter, prints it, the Secretary
+    signs it on paper, then the unit notifies the originating ministry HR that
+    the signed letter is ready for physical pickup. Mirrors the manual-signature
+    pattern used for minutes.
+    """
+
+    commission_task = models.ForeignKey(
+        CommissionTask, on_delete=models.CASCADE, related_name="decision_letters",
+    )
+    submission = models.ForeignKey(
+        Submission, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="decision_letters",
+        help_text="Convenience link (derived from the task) for ministry/HR lookup.",
+    )
+    subject = models.CharField(max_length=500)
+    body_text = models.TextField(blank=True)
+    document = models.FileField(
+        upload_to="decision_letters/%Y/%m/", null=True, blank=True,
+        help_text="The prepared (unsigned) letter, generated or uploaded for printing.",
+    )
+    signed_scan = models.FileField(
+        upload_to="decision_letters/signed/%Y/%m/", null=True, blank=True,
+        help_text="Optional scan of the wet-ink signed letter, for the record.",
+    )
+    status = models.CharField(
+        max_length=20, choices=DecisionLetterStatus.choices,
+        default=DecisionLetterStatus.DRAFT,
+    )
+    prepared_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="prepared_decision_letters",
+        help_text="Action officer (principal/senior) who prepared the letter.",
+    )
+    prepared_at = models.DateTimeField(null=True, blank=True)
+    signed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="signed_decision_letters",
+        help_text="Secretary who signed the letter (wet-ink record).",
+    )
+    signed_at = models.DateTimeField(null=True, blank=True)
+    pickup_notified_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the originating ministry HR was notified the letter is ready.",
+    )
+    picked_up_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="collected_decision_letters",
+        help_text="Ministry HR who confirmed physical collection.",
+    )
+    picked_up_at = models.DateTimeField(null=True, blank=True)
+    pickup_note = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="created_decision_letters",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Decision letter ({self.get_status_display()}): {self.subject[:60]}"
 
 
 class PermissionCategory(models.TextChoices):

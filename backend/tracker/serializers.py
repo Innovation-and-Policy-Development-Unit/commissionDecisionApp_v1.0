@@ -2625,6 +2625,98 @@ class DecisionServiceSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class DecisionLetterSerializer(serializers.ModelSerializer):
+    status_label = serializers.SerializerMethodField()
+    prepared_by_name = serializers.SerializerMethodField()
+    signed_by_name = serializers.SerializerMethodField()
+    picked_up_by_name = serializers.SerializerMethodField()
+    submission_ref = serializers.SerializerMethodField()
+    task_title = serializers.CharField(source="commission_task.title", read_only=True)
+    has_document = serializers.SerializerMethodField()
+    has_signed_scan = serializers.SerializerMethodField()
+
+    def _name(self, user):
+        return (user.get_full_name() or user.username) if user else None
+
+    def get_status_label(self, obj):
+        return obj.get_status_display()
+
+    def get_prepared_by_name(self, obj):
+        return self._name(obj.prepared_by)
+
+    def get_signed_by_name(self, obj):
+        return self._name(obj.signed_by)
+
+    def get_picked_up_by_name(self, obj):
+        return self._name(obj.picked_up_by)
+
+    def get_submission_ref(self, obj):
+        return obj.submission.reference_number if obj.submission_id else None
+
+    def get_has_document(self, obj):
+        return bool(obj.document)
+
+    def get_has_signed_scan(self, obj):
+        return bool(obj.signed_scan)
+
+    class Meta:
+        from .models import DecisionLetter
+        model = DecisionLetter
+        fields = (
+            "id", "commission_task", "task_title", "submission", "submission_ref",
+            "subject", "body_text", "status", "status_label",
+            "has_document", "has_signed_scan",
+            "prepared_by", "prepared_by_name", "prepared_at",
+            "signed_by", "signed_by_name", "signed_at",
+            "pickup_notified_at",
+            "picked_up_by", "picked_up_by_name", "picked_up_at", "pickup_note",
+            "created_by", "created_at", "updated_at",
+        )
+        read_only_fields = (
+            "id", "status", "submission", "prepared_by", "prepared_at",
+            "signed_by", "signed_at", "pickup_notified_at",
+            "picked_up_by", "picked_up_at", "created_by", "created_at", "updated_at",
+        )
+
+
+class AgendaDeferralSerializer(serializers.ModelSerializer):
+    type_label = serializers.SerializerMethodField()
+    submission_ref = serializers.SerializerMethodField()
+    submission_title = serializers.CharField(source="submission.title", read_only=True)
+    deferred_by_name = serializers.SerializerMethodField()
+    from_meeting_ref = serializers.CharField(source="from_meeting.reference_number", read_only=True, allow_null=True)
+    to_meeting_ref = serializers.CharField(source="to_meeting.reference_number", read_only=True, allow_null=True)
+    current_stage = serializers.CharField(source="submission.current_stage", read_only=True)
+    deferral_count = serializers.SerializerMethodField()
+
+    def get_type_label(self, obj):
+        return obj.get_deferral_type_display()
+
+    def get_submission_ref(self, obj):
+        return obj.submission.reference_number if obj.submission_id else None
+
+    def get_deferred_by_name(self, obj):
+        u = obj.deferred_by
+        return (u.get_full_name() or u.username) if u else None
+
+    def get_deferral_count(self, obj):
+        # Total deferrals recorded for this submission (gives "deferred N times").
+        return obj.submission.agenda_deferrals.count() if obj.submission_id else 1
+
+    class Meta:
+        from .models import AgendaDeferral
+        model = AgendaDeferral
+        fields = (
+            "id", "submission", "submission_ref", "submission_title", "current_stage",
+            "agenda_item", "from_meeting", "from_meeting_ref",
+            "to_meeting", "to_meeting_ref",
+            "deferral_type", "type_label", "reason",
+            "deferred_by", "deferred_by_name", "deferred_at",
+            "resolved", "resolved_at", "deferral_count",
+        )
+        read_only_fields = fields
+
+
 class DocumentVersionSerializer(serializers.ModelSerializer):
     uploaded_by_username = serializers.CharField(source="uploaded_by.username", read_only=True, allow_null=True)
     file_size = serializers.SerializerMethodField()

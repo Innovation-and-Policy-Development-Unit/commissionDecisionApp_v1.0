@@ -43,9 +43,11 @@ from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
 from .daily_brief.views import DailyBriefViewSet
 from .views import (
+    AgendaDeferralViewSet,
     AuditLogViewSet,
     BackupViewSet,
     CommissionTaskViewSet,
+    DecisionLetterViewSet,
     ODUChecklistViewSet,
     SubmissionChecklistViewSet,
     SecurityNoticeViewSet,
@@ -155,6 +157,8 @@ router.register(r"knowledge/articles",   KnowledgeArticleViewSet,  basename="kno
 router.register(r"meetings",       MeetingViewSet,      basename="meeting")
 router.register(r"agenda-items",   AgendaItemViewSet,   basename="agendaitem")
 router.register(r"commission-tasks", CommissionTaskViewSet, basename="commission-task")
+router.register(r"decision-letters", DecisionLetterViewSet, basename="decision-letter")
+router.register(r"agenda-deferrals", AgendaDeferralViewSet, basename="agenda-deferral")
 router.register(r"users",        UserAdminViewSet,        basename="user-admin")
 router.register(r"permissions",  SystemPermissionViewSet, basename="permission")
 router.register(r"role-defs",    RoleDefinitionViewSet,   basename="role-definition")
