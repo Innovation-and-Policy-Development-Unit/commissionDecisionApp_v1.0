@@ -294,6 +294,31 @@ class ComplianceCaseStage(models.Model):
         return f"{self.case.submission.reference_number} · {self.stage_order}. {self.stage_name}"
 
 
+class ComplianceStageDocument(models.Model):
+    """Links a case document to the statutory stage that produced it (e.g. the
+    SMDR to the 'SMDR Referral' stage). Documents live once on the case's
+    submission; this is an additional per-stage association."""
+
+    stage = models.ForeignKey(
+        ComplianceCaseStage, on_delete=models.CASCADE, related_name="document_links",
+    )
+    document = models.ForeignKey(
+        "SubmissionDocument", on_delete=models.CASCADE, related_name="compliance_stage_links",
+    )
+    linked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="compliance_stage_doc_links",
+    )
+    linked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["linked_at"]
+        unique_together = ("stage", "document")
+
+    def __str__(self):
+        return f"Stage doc · {self.stage_id} ← {self.document_id}"
+
+
 class LitigationRecord(models.Model):
     """Litigation matter and associated costs for a case (FR-13)."""
 

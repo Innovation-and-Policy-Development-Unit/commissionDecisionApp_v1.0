@@ -242,6 +242,8 @@ body{font-family:'Segoe UI','Segoe UI Web (West European)',Segoe,-apple-system,B
   <button class="tab-btn" onclick="switchTab('workflow',this)">🔄 Workflow Diagram</button>
   <button class="tab-btn" onclick="switchTab('documents',this)">📋 Document Inventory</button>
   <button class="tab-btn" onclick="switchTab('units',this)">🏢 Submissions by Unit</button>
+  <button class="tab-btn" onclick="switchTab('features',this)">✨ Features</button>
+  <button class="tab-btn" onclick="switchTab('compliance',this)">🛡️ Compliance</button>
 </div>
 
 <!-- ══════════════════════════════════════════
@@ -1107,6 +1109,98 @@ body{font-family:'Segoe UI','Segoe UI Web (West European)',Segoe,-apple-system,B
           <td><span class="tag tag-no">0%</span></td>
           <td colspan="4"><strong>HIGHEST PRIORITY:</strong> 8 form codes (PSC 6-1 to 6-8) with zero implementation. Must build forms, checklists, XML, letters.</td>
         </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB: FEATURES — functionality per feature area
+═══════════════════════════════════════════ -->
+<div class="tab-pane" id="tab-features">
+  <div class="doc-section">
+    <h2>System Functionality — by Feature Area</h2>
+    <p class="doc-subtitle">✅ Live &nbsp;·&nbsp; ◑ Partial &nbsp;·&nbsp; ✗ Planned &nbsp;·&nbsp; Compliance has its own tab → 🛡️ Compliance</p>
+    <table class="doc-table">
+      <thead><tr><th style="width:26%">Functionality</th><th style="width:11%">Status</th><th style="width:63%">What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="doc-cat" colspan="3">SUBMISSIONS &amp; WORKFLOW</td></tr>
+        <tr><td><strong>Submission lifecycle</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Draft → DG endorsement → PSC intake &amp; routing → manager checklist review → assessment (with SLA timers) → Secretary approval gate → Commission.</td></tr>
+        <tr><td><strong>Return for clarification</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Secretary/unit can return a submission to the originating unit with a <em>mandatory</em> explanatory comment.</td></tr>
+        <tr><td><strong>Recall</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Ministry can recall a submission before it is acted on.</td></tr>
+        <tr><td><strong>Document upload &amp; checklists</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Per-type required documents, checklist review, soft-delete (evidence preservation), versioning.</td></tr>
+        <tr><td><strong>AI assist</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Package validation, quality score, smart routing, duplicate detection, document classification, transition guidance.</td></tr>
+        <tr><td><strong>Late-submission visibility</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Carry-over banner + submit-time message + HR notification when a paper misses a sitting's due date; "Upcoming sittings &amp; due dates" widget.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">COMMISSION SITTINGS &amp; AGENDA</td></tr>
+        <tr><td><strong>Meeting scheduling</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Secretary schedules sittings; each carries an effective submission cutoff (due date).</td></tr>
+        <tr><td><strong>Agenda build chain</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Draft → with Secretary → with Chairman → endorsed → circulated.</td></tr>
+        <tr><td><strong>Agenda adoption gate</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Chairperson adopts the (possibly amended) agenda before the sitting can begin.</td></tr>
+        <tr><td><strong>In-sitting Other Matters</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Commissioners raise ad-hoc items live; Chairman may admit late carry-over items before endorsing.</td></tr>
+        <tr><td><strong>Sitting pack &amp; briefing</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Meeting-mode sitting pack with digital seal; AI briefing packs per agenda item.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">DECISIONS &amp; MINUTES</td></tr>
+        <tr><td><strong>Sitting outcomes</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Approved, Noted, Not Approved, Rejected, Deferred Back to Unit, Defer to Next Meeting (auto-carried to Matters Arising), Tabled, Awaiting Legal Advice.</td></tr>
+        <tr><td><strong>Minutes (manual signature)</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Draft → Reviewed → Awaiting Signature → upload wet-ink signed scan → Signed; uploading dispatches decisions &amp; tasks in one step. Stays editable post-sign.</td></tr>
+        <tr><td><strong>Deferred-agenda tracker</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Register of every deferral (type, from/to meeting, reason, count, resolved) so nothing falls off the agenda.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">POST-DECISION: LETTERS, TASKS &amp; IMPLEMENTATION</td></tr>
+        <tr><td><strong>Decision letters (pickup)</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Unit prepares letter → Secretary signs (wet-ink) → notify HR ready for pickup → HR confirms collection.</td></tr>
+        <tr><td><strong>Task allocation &amp; register</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Decisions allocated to OPSC units/officers; decision register + implementation tracking with due-date reminders.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">NOTIFICATIONS</td></tr>
+        <tr><td><strong>In-app + email</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Workflow events, deadlines, returns, decisions.</td></tr>
+        <tr><td><strong>Mobile web push (PWA)</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Installable PWA with push for important events (deadlines, decisions, returns, letter-ready, late carry-over, court dates, suspension expiry). Per-device opt-in.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">REPORTS, INTELLIGENCE &amp; ADMIN</td></tr>
+        <tr><td><strong>Reports &amp; dashboards</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Decision register, smart reports, executive/ministry dashboards, exports (PDF/PPTX).</td></tr>
+        <tr><td><strong>Admin &amp; security</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Roles &amp; permissions, session PIN, audit log, security incidents/scans, system settings, knowledge base.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB: COMPLIANCE — disciplinary / grievance / litigation
+═══════════════════════════════════════════ -->
+<div class="tab-pane" id="tab-compliance">
+  <div class="doc-section">
+    <h2>Compliance &amp; Integrity — Functionality</h2>
+    <p class="doc-subtitle">Disciplinary, serious misconduct, suspension, grievance and senior-executive matters — each running as a statutory case with SLA clocks. ✅ Live &nbsp;·&nbsp; ◑ Partial</p>
+    <table class="doc-table">
+      <thead><tr><th style="width:26%">Functionality</th><th style="width:11%">Status</th><th style="width:63%">What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="doc-cat" colspan="3">INTAKE &amp; CASE FAMILIES</td></tr>
+        <tr><td><strong>Complaints Register</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Ministries lodge complaints (write-only, see only their own); compliance triages and converts to a case.</td></tr>
+        <tr><td><strong>6 statutory case families</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Employee Internal Disciplinary · Serious Misconduct (Employee) · Temporary Suspension · Grievance · Senior Executive Serious Misconduct · Senior Executive Poor Performance.</td></tr>
+        <tr><td><strong>Statutory timelines + SLA</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Each family auto-materialises its ordered stages with working/calendar-day SLA clocks and PSC Reg / Act references; on-track / at-risk / overdue status.</td></tr>
+        <tr><td><strong>SLA deadline alerts</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>At-risk and overdue stage notifications to the responsible role.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">NATURE OF OFFENCE</td></tr>
+        <tr><td><strong>Offence catalogue</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Managed list classed minor vs serious-misconduct (Appendix C). Set as a register column; admin/manager-editable via the Offence Catalogue page.</td></tr>
+        <tr><td><strong>Repeat-offence escalation</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Flags prior cases for the same subject + same offence within the 3-year warning-validity window (escalation to serious misconduct).</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">INVESTIGATION</td></tr>
+        <tr><td><strong>Investigation record</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Panel members, terms of reference, dates, findings, recommendation, status, and report-document upload — alongside the SLA investigation stages.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">FINANCIAL IMPLICATION — SUSPENSION</td></tr>
+        <tr><td><strong>Suspension &amp; salary</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Salary basis (full / half / no-pay), monthly salary, withheld amount; temporary suspension auto-capped at 2 months.</td></tr>
+        <tr><td><strong>OPSC reimbursement assessment</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Reimburse or forfeit the withheld salary on the evidenced response; deemed reinstatement on full salary at expiry.</td></tr>
+        <tr><td><strong>Suspension-expiry alert</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Reminder (incl. mobile push) as a suspension nears its 2-month limit.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">DISCIPLINE, LITIGATION &amp; DECISIONS</td></tr>
+        <tr><td><strong>Litigation tracker (costs)</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Court name/reference, counsel, status, estimated vs actual cost, next court date.</td></tr>
+        <tr><td><strong>Court-date alert</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Countdown + "alerted" indicator on the tracker; reminder (incl. mobile push) before each hearing.</td></tr>
+        <tr><td><strong>Decisions (Commission / PSDB / HOD)</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Outcomes: reinstate, terminate/dismiss, warn, demote, suspend without pay, compulsory retirement, no action, referred to PSDB, settled / not settled.</td></tr>
+        <tr><td><strong>Grievance mediator</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Mediator appointment, mediation window, outcome (settled / not settled), Form 6.8 MoM reference.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">DOCUMENTS &amp; EVIDENCE</td></tr>
+        <tr><td><strong>Case documents</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Upload / list / download / remove, tagged by workflow type: SMDR (Form 6-1), 1st/2nd Warning, Subject Response, Investigation Report, Evidence, Outcome Letter.</td></tr>
+
+        <tr><td class="doc-cat" colspan="3">VISIBILITY &amp; REPORTING</td></tr>
+        <tr><td><strong>Scoped access</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Ministries never see compliance cases; read-only roles (DG/Director, Commission &amp; Panel members) view without editing.</td></tr>
+        <tr><td><strong>Compliance reports</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Disciplinary, NSDP, summary &amp; analytics reports; case-register PPTX export; compliance dashboard.</td></tr>
+        <tr><td><strong>Per-stage document linking</strong></td><td><span class="tag tag-yes">✅ Live</span></td><td>Attach a document directly to the statutory stage that produced it (e.g. SMDR at the referral stage); upload-and-link, download, or unlink from the timeline. The file also stays in the case-level document list.</td></tr>
       </tbody>
     </table>
   </div>

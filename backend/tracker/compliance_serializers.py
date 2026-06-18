@@ -24,6 +24,17 @@ from .compliance_forms import COMPLIANCE_FORM_CODES
 class ComplianceCaseStageSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     sla_status_display = serializers.CharField(source="get_sla_status_display", read_only=True)
+    documents = serializers.SerializerMethodField()
+
+    def get_documents(self, obj):
+        return [
+            {
+                "id": link.document_id,
+                "original_name": link.document.original_name,
+                "description": link.document.description,
+            }
+            for link in obj.document_links.select_related("document").all()
+        ]
 
     class Meta:
         model = ComplianceCaseStage
@@ -33,6 +44,7 @@ class ComplianceCaseStageSerializer(serializers.ModelSerializer):
             "sla_days", "sla_working_days", "due_date",
             "status", "status_display", "sla_status", "sla_status_display",
             "is_optional", "started_at", "completed_at", "notes",
+            "documents",
         )
 
 

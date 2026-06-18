@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ShieldCheck, Send, Check, RotateCcw, Scale, StickyNote, Plus,
   AlertCircle, Clock, CheckCircle2, CircleDot, RefreshCw, Gavel, UserCheck, Pencil,
+  Paperclip, Download, X,
 } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
@@ -113,12 +114,39 @@ const SLA_BADGE = {
   completed: { cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', Icon: CheckCircle2 },
 }
 
-function StageRow({ stage, onUpdate, busy, canWrite }) {
+function StageRow({ stage, onUpdate, busy, canWrite, caseId, onReload }) {
   const badge   = SLA_BADGE[stage.sla_status] || SLA_BADGE.on_track
   const Icon    = badge.Icon
   const done    = stage.status === 'completed'
   const active  = stage.status === 'in_progress'
   const skipped = stage.status === 'skipped'
+  const fileRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+  const docs = stage.documents || []
+
+  const attach = async (file) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('doc_type', stage.stage_name)
+      await api.post(`/compliance/cases/${caseId}/stages/${stage.id}/documents/`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      onReload?.()
+    } catch (e) { alert(e.response?.data?.detail || 'Upload failed.') }
+    finally { setUploading(false) }
+  }
+  const unlink = async (docId) => {
+    try { await api.post(`/compliance/cases/${caseId}/stages/${stage.id}/documents/${docId}/unlink/`); onReload?.() }
+    catch (e) { alert(e.response?.data?.detail || 'Could not unlink.') }
+  }
+  const download = async (doc) => {
+    try {
+      const res = await api.get(`/compliance/cases/${caseId}/documents/${doc.id}/download/`, { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a'); a.href = url; a.download = doc.original_name; a.click(); URL.revokeObjectURL(url)
+    } catch { alert('Could not download.') }
+  }
 
   let dotCls = 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
   if (done)   dotCls = 'bg-emerald-600 text-white'
@@ -150,6 +178,28 @@ function StageRow({ stage, onUpdate, busy, canWrite }) {
         </div>
         {stage.notes && active && (
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 italic">{stage.notes}</p>
+        )}
+
+        {/* Per-stage documents */}
+        {(docs.length > 0 || canWrite) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {docs.map((d) => (
+              <span key={d.id} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] dark:border-slate-700 dark:bg-slate-800/50">
+                <Paperclip size={10} className="text-slate-400" />
+                <button onClick={() => download(d)} className="max-w-[150px] truncate text-slate-600 hover:text-primary-600 dark:text-slate-300" title={d.original_name}>{d.original_name}</button>
+                <Download size={10} className="text-slate-300" />
+                {canWrite && <button onClick={() => unlink(d.id)} title="Unlink" className="text-slate-300 hover:text-red-500"><X size={11} /></button>}
+              </span>
+            ))}
+            {canWrite && (
+              <>
+                <input ref={fileRef} type="file" className="hidden" onChange={(e) => { attach(e.target.files?.[0]); e.target.value = '' }} />
+                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-1 rounded-md border border-dashed border-slate-300 px-1.5 py-0.5 text-[11px] text-slate-500 hover:border-primary-400 hover:text-primary-600 dark:border-slate-600 disabled:opacity-50">
+                  <Paperclip size={10} /> {uploading ? 'Uploading…' : 'Attach'}
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
       {!done && !skipped && canWrite && (
@@ -445,7 +495,7 @@ export default function ComplianceCaseDetail() {
           <h3 className="mb-2 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200"><ShieldCheck size={17} /> Statutory timeline</h3>
           {c.stages?.length ? (
             <ul className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              {c.stages.map((s) => <StageRow key={s.id} stage={s} onUpdate={updateStage} busy={busy} canWrite={canWrite} />)}
+              {c.stages.map((s) => <StageRow key={s.id} stage={s} onUpdate={updateStage} busy={busy} canWrite={canWrite} caseId={id} onReload={load} />)}
             </ul>
           ) : <p className="text-sm text-slate-400 py-4">No statutory stages.</p>}
         </section>

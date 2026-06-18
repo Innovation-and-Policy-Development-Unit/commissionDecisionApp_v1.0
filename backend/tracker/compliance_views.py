@@ -372,6 +372,70 @@ class ComplianceCaseViewSet(viewsets.ModelViewSet):
         resp["Content-Disposition"] = f'inline; filename="{doc.original_name}"'
         return resp
 
+    def _get_stage(self, case, stage_id):
+        stage = case.stages.filter(pk=stage_id).first()
+        if not stage:
+            raise ValidationError({"detail": "Stage not found for this case."})
+        return stage
+
+    @action(detail=True, methods=["post"], url_path="stages/(?P<stage_id>[0-9]+)/documents")
+    def stage_upload_document(self, request, pk=None, stage_id=None):
+        """Upload a document and link it to a statutory stage (e.g. the SMDR at
+        the 'SMDR Referral' stage). The file is stored once on the case submission
+        and also appears in the case-level documents list."""
+        from .models import SubmissionDocument
+        from .compliance_models import ComplianceStageDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        stage = self._get_stage(case, stage_id)
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        if f.size > 20 * 1024 * 1024:
+            return Response({"detail": f"File '{f.name}' exceeds the 20 MB limit."}, status=status.HTTP_400_BAD_REQUEST)
+        doc = SubmissionDocument.objects.create(
+            submission=case.submission,
+            file=f,
+            original_name=f.name,
+            description=(request.data.get("doc_type") or stage.stage_name),
+            uploaded_by=request.user,
+        )
+        ComplianceStageDocument.objects.get_or_create(
+            stage=stage, document=doc, defaults={"linked_by": request.user},
+        )
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="stages/(?P<stage_id>[0-9]+)/link-document")
+    def stage_link_document(self, request, pk=None, stage_id=None):
+        """Link an existing case document to a stage. Body: { document_id }."""
+        from .models import SubmissionDocument
+        from .compliance_models import ComplianceStageDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        stage = self._get_stage(case, stage_id)
+        doc = SubmissionDocument.objects.filter(
+            pk=request.data.get("document_id"), submission=case.submission,
+        ).first()
+        if not doc:
+            raise ValidationError({"detail": "Document not found on this case."})
+        ComplianceStageDocument.objects.get_or_create(
+            stage=stage, document=doc, defaults={"linked_by": request.user},
+        )
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="stages/(?P<stage_id>[0-9]+)/documents/(?P<doc_id>[0-9]+)/unlink")
+    def stage_unlink_document(self, request, pk=None, stage_id=None, doc_id=None):
+        """Remove a document↔stage link (the document itself is kept on the case)."""
+        from .compliance_models import ComplianceStageDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        stage = self._get_stage(case, stage_id)
+        ComplianceStageDocument.objects.filter(stage=stage, document_id=doc_id).delete()
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
+
     @action(detail=False, methods=["get"], url_path="export-pptx")
     def export_pptx(self, request):
         """Generate and return a PPTX summary of all compliance cases."""
