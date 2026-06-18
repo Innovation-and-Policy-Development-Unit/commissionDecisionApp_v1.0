@@ -758,6 +758,26 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     preliminary_quality_score = serializers.SerializerMethodField()
     subway_map = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    carryover_status = serializers.SerializerMethodField()
+
+    def get_carryover_status(self, obj):
+        """Late/queued status (target sitting + due dates) so HR and unit managers
+        can see a submission missed a cutoff and where it is queued. Only relevant
+        once a submission is heading to the Commission."""
+        from .agenda_carryover import carryover_status
+        from .models import WorkflowStage
+
+        relevant = {
+            WorkflowStage.SUBMITTED, WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.PENDING_SECRETARY_APPROVAL,
+            WorkflowStage.FORWARDED_TO_COMMISSION, WorkflowStage.MATTERS_ARISING,
+        }
+        if obj.current_stage not in relevant:
+            return None
+        try:
+            return carryover_status(obj)
+        except Exception:
+            return None
 
     def get_can_edit(self, obj):
         """Whether the requesting user may edit this submission's content.
@@ -857,6 +877,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "assessment_deadline_at",
             "closing_deadline_at",
             "scheduled_meeting",
+            "carryover_status",
             "implementation_status",
             "implementation_due_date",
             "commission_approved_at",

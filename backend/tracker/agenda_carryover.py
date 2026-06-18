@@ -51,6 +51,54 @@ def is_carryover(submission, meeting):
     )
 
 
+def _meeting_brief(meeting):
+    if not meeting:
+        return None
+    return {
+        "id": meeting.id,
+        "ref": meeting.reference_number,
+        "title": meeting.title,
+        "date": meeting.date.isoformat(),
+        "due_date": meeting.effective_cutoff.isoformat(),
+    }
+
+
+def carryover_status(submission):
+    """Late/queued status for a commission-bound submission — used to tell HR and
+    unit managers, in plain terms, that a submission missed a sitting's due date
+    and where it is queued.
+
+    Returns ``None`` when there is no upcoming sitting or no receipt timestamp.
+    Otherwise a small dict: whether it is late for the nearest sitting, whether it
+    has been carried to a later one, and briefs (ref/date/due_date) for both.
+    """
+    from .models import Meeting, MeetingStatus
+
+    now = timezone.now()
+    # Before PSC receipt, received_at is null — fall back to "now" so the late
+    # signal is available at submit time too.
+    ref_time = submission.received_at or now
+    nearest = (
+        Meeting.objects.filter(
+            status__in=(MeetingStatus.SCHEDULED, MeetingStatus.IN_PROGRESS),
+            date__gte=now.date(),
+        )
+        .order_by("date")
+        .first()
+    )
+    if not nearest:
+        return None
+    target = compute_scheduled_meeting(submission)
+    is_late = ref_time > nearest.effective_cutoff
+    carried_over = bool(target and target.id != nearest.id)
+    return {
+        "is_late": is_late,
+        "carried_over": carried_over,
+        "nearest_meeting": _meeting_brief(nearest),
+        "target_meeting": _meeting_brief(target),
+    }
+
+
 def reconcile_carryover(meeting):
     """Roll any commission-ready submissions left on a closed sitting (not placed
     on its agenda) forward to the next eligible sitting. Idempotent."""

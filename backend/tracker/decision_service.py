@@ -148,6 +148,7 @@ def serve_decision(submission, *, served_by, letter_subject: str, letter_body: s
             recipient=user,
             submission=submission,
             channel=Notification.Channel.BOTH,
+            push=True,
             title=f"Commission decision served: {submission.reference_number}",
             body=(
                 f'The Commission\'s decision on "{submission.title}" '

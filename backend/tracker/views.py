@@ -1455,6 +1455,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 and not submission.secretary_only
             ):
                 self._assign_scheduled_meeting(submission)
+                self._notify_if_late_carryover(submission, request.user)
 
             # ── On HR responding to deferral: route to manager queue ──
             if prev == WorkflowStage.DEFERRED_BACK_TO_HR and target == WorkflowStage.SUBMITTED:
@@ -2104,6 +2105,39 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         """
         from .agenda_carryover import compute_scheduled_meeting
         submission.scheduled_meeting = compute_scheduled_meeting(submission)
+
+    def _notify_if_late_carryover(self, submission, actor):
+        """Tell the originating HR when a submission missed the nearest sitting's
+        due date and has been queued for a later one (still subject to the
+        Chairman admitting it before he endorses the agenda)."""
+        from .agenda_carryover import carryover_status
+        from .models import Notification
+
+        try:
+            status_info = carryover_status(submission)
+        except Exception:
+            return
+        if not status_info or not status_info.get("is_late"):
+            return
+        nearest = status_info.get("nearest_meeting") or {}
+        target = status_info.get("target_meeting") or {}
+        recipient = submission.created_by
+        if not recipient or not recipient.is_active:
+            return
+        Notification.objects.create(
+            recipient=recipient,
+            submission=submission,
+            channel=Notification.Channel.BOTH,
+            push=True,
+            title=f"Submitted after the due date: {submission.reference_number}",
+            body=(
+                f"\"{submission.title}\" was submitted after the due date "
+                f"({nearest.get('due_date', '')[:10]}) for sitting {nearest.get('ref', '')}. "
+                f"It has been queued for {target.get('ref', 'a later sitting')} "
+                f"(sits {target.get('date', '')[:10]}). The Chairman may still admit it to "
+                f"{nearest.get('ref', 'the nearer sitting')} before endorsing that agenda."
+            ),
+        )
 
     def _carry_to_matters_arising(self, submission, actor=None, reason=""):
         """Carry a 'deferred to next meeting' item onto the next sitting's agenda
@@ -4218,6 +4252,54 @@ def change_password_view(request):
 
 
 @api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def upcoming_sittings_view(request):
+    """GET /meetings/upcoming/ — upcoming sittings and their submission due dates,
+    for HR and unit managers to see deadlines (and which are still open)."""
+    from django.utils import timezone
+    from .models import Meeting, MeetingStatus
+
+    now = timezone.now()
+    meetings = (
+        Meeting.objects.filter(
+            status__in=(MeetingStatus.SCHEDULED, MeetingStatus.IN_PROGRESS),
+            date__gte=now.date(),
+        )
+        .order_by("date", "time")[:12]
+    )
+    data = []
+    for m in meetings:
+        cutoff = m.effective_cutoff
+        data.append({
+            "id": m.id,
+            "reference_number": m.reference_number,
+            "title": m.title,
+            "date": m.date,
+            "time": m.time,
+            "venue": m.venue,
+            "type": m.type,
+            "status": m.status,
+            "agenda_status": m.agenda_status,
+            "due_date": cutoff,
+            "is_open": now <= cutoff,
+        })
+    return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def vapid_public_key_view(request):
+    """GET /push/vapid-public-key/ — the VAPID application server key the browser
+    needs to subscribe to web push. `enabled` is false when push is unconfigured."""
+    from django.conf import settings as _s
+
+    return Response({
+        "public_key": _s.VAPID_PUBLIC_KEY,
+        "enabled": bool(_s.VAPID_PUBLIC_KEY and _s.VAPID_PRIVATE_KEY),
+    })
+
+
+@api_view(["GET"])
 @permission_classes([permissions.AllowAny])
 def password_policy_view(request):
     """GET /auth/password-policy/ — live policy from SystemSetting."""
@@ -4856,6 +4938,7 @@ class DecisionLetterViewSet(viewsets.ModelViewSet):
                 recipient=recipient,
                 submission=sub,
                 channel=Notification.Channel.BOTH,
+                push=True,
                 title=f"Decision letter ready for pickup: {sub.reference_number if sub else letter.subject}",
                 body=(
                     f"The signed decision letter \"{letter.subject}\" is ready for collection "

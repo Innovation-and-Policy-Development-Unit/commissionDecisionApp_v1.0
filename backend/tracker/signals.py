@@ -13,6 +13,16 @@ from django.dispatch import receiver
 log = logging.getLogger("scdms.security")
 
 
+@receiver(post_save, sender="tracker.Notification")
+def notification_post_save(sender, instance, created, **kwargs):
+    """Deliver a web-push for newly created important notifications."""
+    if not created or not instance.push:
+        return
+    from .tasks import send_web_push_notification
+
+    transaction.on_commit(lambda: send_web_push_notification.delay(instance.id))
+
+
 @receiver(post_save, sender="tracker.FeedbackComment")
 def feedback_comment_post_save(sender, instance, created, **kwargs):
     """Trigger AI analysis on newly created feedback comments."""

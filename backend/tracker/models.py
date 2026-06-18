@@ -3077,6 +3077,10 @@ class Notification(models.Model):
     )
     is_read = models.BooleanField(default=False)
     emailed = models.BooleanField(default=False)
+    push = models.BooleanField(
+        default=False,
+        help_text="Send a mobile/desktop web-push for this notification (important events only).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

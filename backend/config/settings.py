@@ -475,6 +475,15 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+# ── Web Push (VAPID) ─────────────────────────────────────────────────────────
+# Mobile/desktop push for installed PWAs. Generate a keypair with
+# `python manage.py shell` + py_vapid, or `vapid --gen`, and set these in .env.
+# VAPID_PUBLIC_KEY is the base64url application server key the browser subscribes
+# with; VAPID_PRIVATE_KEY signs the push requests. Push is disabled if unset.
+VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '').strip()
+VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '').strip()
+VAPID_SUBJECT = os.getenv('VAPID_SUBJECT', 'mailto:admin@psc.gov.vu').strip()
+
 # ── AI / Claude API (replaces former Gemini integration) ─────────────────────
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')

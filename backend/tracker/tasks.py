@@ -11,6 +11,29 @@ app_log = logging.getLogger("scdms.app")
 
 
 @shared_task
+def send_web_push_notification(notification_id):
+    """Deliver a web-push for an important Notification to the recipient's
+    subscribed devices."""
+    from .models import Notification
+    from .web_push import push_configured, send_push_to_user
+
+    if not push_configured():
+        return
+    try:
+        n = Notification.objects.select_related("recipient", "submission").get(pk=notification_id)
+    except Notification.DoesNotExist:
+        return
+    url = n.link or (f"/submissions/{n.submission_id}" if n.submission_id else "/")
+    send_push_to_user(
+        n.recipient,
+        title=n.title,
+        body=(n.body or "")[:300],
+        url=url,
+        tag=f"notif-{n.id}",
+    )
+
+
+@shared_task
 def run_backup():
     """Execute the backup_db management command via Celery."""
     log.info("BACKUP_SCHEDULED | starting scheduled backup")
@@ -2654,6 +2677,7 @@ def remind_overdue_dg_endorsements():
                     recipient=dg,
                     submission=sub,
                     channel=Notification.Channel.BOTH,
+                    push=True,
                     title=f'Endorsement overdue: {sub.reference_number}',
                     body=(
                         f'Submission "{sub.title}" has been awaiting your endorsement for more '
