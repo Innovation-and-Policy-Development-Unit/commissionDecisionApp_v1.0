@@ -1,5 +1,7 @@
-import { useState } from 'react'
-import { Search, Plus } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Search, Plus, Paperclip, Download } from 'lucide-react'
+import api from '../../api/client'
+import { useToast } from '../../context/ToastContext'
 
 const STATUS = {
   appointed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
@@ -12,9 +14,13 @@ const STATUS = {
  * Structured investigation (panel, terms of reference, findings, recommendation)
  * for a compliance case. POSTs to /compliance/cases/{id}/investigation/.
  */
-export default function InvestigationSection({ caseId, investigation, canWrite, busy, post }) {
+export default function InvestigationSection({ caseId, investigation, canWrite, onReload }) {
+  const toast = useToast()
   const inv = investigation || null
   const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [file, setFile] = useState(null)
+  const fileRef = useRef(null)
   const [f, setF] = useState({
     panel_members_text: inv?.panel_members_text || '',
     terms_of_reference: inv?.terms_of_reference || '',
@@ -28,10 +34,24 @@ export default function InvestigationSection({ caseId, investigation, canWrite, 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   const save = async () => {
-    const body = { ...f, appointed_at: f.appointed_at || null, started_at: f.started_at || null, completed_at: f.completed_at || null }
-    await post(`/compliance/cases/${caseId}/investigation/`, body)
-    setOpen(false)
+    setSaving(true)
+    try {
+      const form = new FormData()
+      Object.entries(f).forEach(([k, v]) => {
+        if (['appointed_at', 'started_at', 'completed_at'].includes(k) && !v) return
+        form.append(k, v ?? '')
+      })
+      if (file) form.append('report_document', file)
+      await api.post(`/compliance/cases/${caseId}/investigation/`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      toast.success('Investigation saved.')
+      setOpen(false); setFile(null)
+      onReload?.()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not save investigation.')
+    } finally { setSaving(false) }
   }
+
+  const busy = saving
 
   return (
     <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-5">
@@ -59,6 +79,12 @@ export default function InvestigationSection({ caseId, investigation, canWrite, 
             <option value="reported">Report Submitted</option>
             <option value="closed">Closed</option>
           </select>
+          <div className="flex items-center gap-2">
+            <input ref={fileRef} type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            <button type="button" onClick={() => fileRef.current?.click()} className="btn-outline text-sm inline-flex items-center gap-2"><Paperclip size={14} /> {file ? 'Change report' : 'Attach report'}</button>
+            {file && <span className="truncate text-xs text-slate-500">{file.name}</span>}
+            {!file && inv?.has_report && <span className="text-xs text-emerald-600">Report on file</span>}
+          </div>
           <button disabled={busy} className="btn-primary text-sm w-full" onClick={save}>{inv ? 'Update investigation' : 'Save investigation'}</button>
         </div>
       )}
@@ -71,6 +97,7 @@ export default function InvestigationSection({ caseId, investigation, canWrite, 
           {inv.terms_of_reference && <div><dt className="text-slate-500 text-xs">Terms of reference</dt><dd className="text-slate-600 dark:text-slate-300">{inv.terms_of_reference}</dd></div>}
           {inv.findings && <div><dt className="text-slate-500 text-xs">Findings</dt><dd className="text-slate-600 dark:text-slate-300">{inv.findings}</dd></div>}
           {inv.recommendation && <div><dt className="text-slate-500 text-xs">Recommendation</dt><dd className="text-slate-600 dark:text-slate-300">{inv.recommendation}</dd></div>}
+          <div className="flex justify-between"><dt className="text-slate-500 text-xs">Report</dt><dd className={inv.has_report ? 'text-emerald-600 inline-flex items-center gap-1' : 'text-slate-400'}>{inv.has_report ? <><Download size={12} /> On file</> : 'Not submitted'}</dd></div>
         </dl>
       ) : !open && <p className="text-sm text-slate-400">No investigation recorded.</p>}
     </section>

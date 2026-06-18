@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext'
 import { WORKFLOW_ROUTES, canRecordDecision, canManageSeniorCases, isReadOnlyComplianceRole } from '../../constants/compliance'
 import InvestigationSection from '../../components/compliance/InvestigationSection'
 import SuspensionSection from '../../components/compliance/SuspensionSection'
+import DocumentsSection from '../../components/compliance/DocumentsSection'
 
 // Roles that can take any write action on a case (create notes, stages, litigation)
 const WRITE_ROLES = ['compliance_manager', 'compliance_senior', 'compliance_principal', 'psc_admin']
@@ -500,8 +501,11 @@ export default function ComplianceCaseDetail() {
             ) : <p className="text-sm text-slate-400">No litigation records.</p>}
           </section>
 
+          {/* Documents & evidence */}
+          <DocumentsSection caseId={id} canWrite={canWrite} />
+
           {/* Investigation (panel, findings, recommendation) */}
-          <InvestigationSection caseId={id} investigation={c.investigation} canWrite={canWrite} busy={busy} post={post} />
+          <InvestigationSection caseId={id} investigation={c.investigation} canWrite={canWrite} onReload={load} />
 
           {/* Suspension & salary (financial implication) */}
           <SuspensionSection caseId={id} suspensions={c.suspensions || []} canWrite={canWrite} busy={busy} post={post} />

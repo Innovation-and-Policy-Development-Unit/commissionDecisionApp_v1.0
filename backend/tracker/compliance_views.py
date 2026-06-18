@@ -306,6 +306,72 @@ class ComplianceCaseViewSet(viewsets.ModelViewSet):
         rec.save()
         return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
 
+    @action(detail=True, methods=["get", "post"], url_path="documents")
+    def documents(self, request, pk=None):
+        """List or upload documents/evidence for a case, stored against its
+        submission. ``doc_type`` tags the upload by workflow form (SMDR, warning,
+        response, investigation report, evidence, outcome letter)."""
+        from .models import SubmissionDocument
+        from .serializers import SubmissionDocumentSerializer
+
+        case = self.get_object()
+        submission = case.submission
+
+        if request.method == "GET":
+            docs = SubmissionDocument.objects.filter(submission=submission)
+            return Response(SubmissionDocumentSerializer(docs, many=True, context={"request": request}).data)
+
+        _require_write_access(request.user)
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        if f.size > 20 * 1024 * 1024:
+            return Response({"detail": f"File '{f.name}' exceeds the 20 MB limit."}, status=status.HTTP_400_BAD_REQUEST)
+        doc = SubmissionDocument.objects.create(
+            submission=submission,
+            file=f,
+            original_name=f.name,
+            description=(request.data.get("doc_type") or request.data.get("description") or ""),
+            uploaded_by=request.user,
+        )
+        return Response(
+            SubmissionDocumentSerializer(doc, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/remove")
+    def remove_document(self, request, pk=None, doc_id=None):
+        """Soft-delete (archive) a case document."""
+        from django.utils import timezone as _tz
+        from .models import SubmissionDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        doc = SubmissionDocument.objects.filter(submission=case.submission, pk=doc_id).first()
+        if not doc:
+            raise ValidationError({"detail": "Document not found."})
+        doc.archived_at = _tz.now()
+        doc.archived_by = request.user
+        doc.save(update_fields=["archived_at", "archived_by"])
+        return Response({"detail": "Document removed."})
+
+    @action(detail=True, methods=["get"], url_path="documents/(?P<doc_id>[0-9]+)/download")
+    def download_document(self, request, pk=None, doc_id=None):
+        """Stream a case document to compliance staff who can view the case."""
+        import mimetypes
+
+        from django.http import FileResponse
+        from django.shortcuts import get_object_or_404
+
+        from .models import SubmissionDocument
+
+        case = self.get_object()
+        doc = get_object_or_404(SubmissionDocument, id=doc_id, submission=case.submission)
+        content_type, _ = mimetypes.guess_type(doc.original_name)
+        resp = FileResponse(doc.file.open("rb"), content_type=content_type or "application/octet-stream")
+        resp["Content-Disposition"] = f'inline; filename="{doc.original_name}"'
+        return resp
+
     @action(detail=False, methods=["get"], url_path="export-pptx")
     def export_pptx(self, request):
         """Generate and return a PPTX summary of all compliance cases."""
