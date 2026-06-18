@@ -45,10 +45,10 @@ class LitigationRecordSerializer(serializers.ModelSerializer):
             "id", "description",
             "court_name", "court_reference", "legal_counsel", "opposing_counsel",
             "status", "status_display", "estimated_cost", "actual_cost",
-            "date_initiated", "next_court_date", "date_resolved", "notes",
+            "date_initiated", "next_court_date", "court_date_notified", "date_resolved", "notes",
             "created_at", "updated_at",
         )
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = ("id", "court_date_notified", "created_at", "updated_at")
 
 
 class GrievanceMediatorSerializer(serializers.ModelSerializer):

@@ -54,6 +54,7 @@ const menuItems = [
           { label: 'Litigation Tracker', labelKey: 'nav.compliance_litigation', icon: Scale,    path: '/compliance/litigation', audience: 'compliance' },
         ],
       },
+      { label: 'Offence Catalogue',   labelKey: 'nav.offence_catalogue',   icon: Gavel,      path: '/compliance/offence-catalogue', roles: ['psc_admin', 'compliance_manager'] },
     ],
   },
   {

@@ -805,8 +805,10 @@ class OffenceTypeViewSet(viewsets.ModelViewSet):
 
     def _require_admin(self):
         u = self.request.user
-        if not (u.is_staff or u.is_superuser or _user_role(u) == "psc_admin"):
-            raise PermissionDenied("Only administrators can modify the offence catalogue.")
+        from .models import Role
+        allowed = {Role.PSC_ADMIN, Role.COMPLIANCE_MANAGER}
+        if not (u.is_staff or u.is_superuser or _user_role(u) in allowed):
+            raise PermissionDenied("Only administrators or the Compliance Manager can modify the offence catalogue.")
 
     def perform_create(self, serializer):
         self._require_admin()
