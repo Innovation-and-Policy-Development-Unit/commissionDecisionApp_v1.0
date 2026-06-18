@@ -55,6 +55,7 @@ const Notifications = lazy(() => import('../pages/secretariat/Notifications'))
 const TaskManagement = lazy(() => import('../pages/secretariat/TaskManagement'))
 const MinutesIndex = lazy(() => import('../pages/secretariat/MinutesIndex'))
 const MinuteIntake = lazy(() => import('../pages/secretariat/MinuteIntake'))
+const DeferredAgenda = lazy(() => import('../pages/secretariat/DeferredAgenda'))
 const Account = lazy(() => import('../pages/pages/Account'))
 const KnowledgeBaseBrowse = lazy(() => import('../pages/psc/KnowledgeBaseBrowse'))
 const ArticleViewer = lazy(() => import('../pages/psc/ArticleViewer'))
@@ -167,6 +168,7 @@ export default function AppRouter() {
           <Route path="/secretariat/minute-intake" element={<S detail><MinuteIntake /></S>} />
           <Route path="/secretariat/minute-intake/:meetingId" element={<S detail><MinuteIntake /></S>} />
           <Route path="/secretariat/decisions" element={<S><Decisions /></S>} />
+          <Route path="/secretariat/deferred-agenda" element={<S><DeferredAgenda /></S>} />
           <Route path="/secretariat/tasks" element={<S><TaskManagement /></S>} />
           <Route path="/secretariat/notifications" element={<S><Notifications /></S>} />
 

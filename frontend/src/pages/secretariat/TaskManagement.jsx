@@ -18,6 +18,7 @@ import BaseButton from '../../components/shared/BaseButton'
 import BaseInput from '../../components/shared/BaseInput'
 import BaseSelect from '../../components/shared/BaseSelect'
 import BaseTextarea from '../../components/shared/BaseTextarea'
+import DecisionLetterPanel from '../../components/tasks/DecisionLetterPanel'
 import BaseCheckbox from '../../components/shared/BaseCheckbox'
 import { userCanWorkCommissionTask, userHasCommissionDecisionView } from '../../utils/opscAccess'
 import clsx from 'clsx'
@@ -1308,6 +1309,9 @@ function EditTaskModal({ task, staffList, mode, readOnly = false, onClose, onSav
             onDraftRefresh={refreshAiDrafts}
           />
         )}
+
+        {/* Decision letter workflow: prepare → Secretary signs → notify HR for pickup */}
+        {task?.id && <DecisionLetterPanel task={task} />}
 
         </fieldset>
 

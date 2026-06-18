@@ -81,6 +81,7 @@ const menuItems = [
           { label: 'Agenda',        labelKey: 'nav.agenda',        icon: ScrollText, path: '/secretariat/agenda',        audience: 'opsc_internal' },
           { label: 'Minutes',       labelKey: 'nav.minutes',       icon: FileText,   path: '/secretariat/minutes',       audience: 'opsc_internal' },
           { label: 'Minute intake', labelKey: 'nav.minute_intake', icon: PenLine,    path: '/secretariat/minute-intake', audience: 'secretariat' },
+          { label: 'Deferred agenda', labelKey: 'nav.deferred_agenda', icon: History, path: '/secretariat/deferred-agenda', audience: 'opsc_internal' },
         ],
       },
       {

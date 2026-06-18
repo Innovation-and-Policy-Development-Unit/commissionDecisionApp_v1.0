@@ -71,6 +71,7 @@
     "agenda": "Ordre du jour",
     "minutes": "Procès-verbaux",
     "minute_intake": "Saisie des procès-verbaux",
+    "deferred_agenda": "Ordre du jour reporté",
     "decisions": "Décisions",
     "tasks": "Gestion des tâches",
     "notifications": "Notifications",
