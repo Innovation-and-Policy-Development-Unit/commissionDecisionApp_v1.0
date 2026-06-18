@@ -25,12 +25,19 @@ export default function PwaManager() {
   const updateSWRef = useRef(null)
 
   useEffect(() => {
-    // Emergency mitigation: disable SW registration and clear stale registrations
-    // that can trap clients in redirect/precache loops after broken deploys.
-    if (!('serviceWorker' in navigator)) return
-    navigator.serviceWorker.getRegistrations().then((regs) => {
-      regs.forEach((reg) => reg.unregister())
-    }).catch(() => {})
+    // Register the Workbox service worker (offline caching + Web Push). Updates
+    // are user-prompted via the needRefresh banner — no surprise reloads.
+    let cancelled = false
+    import('virtual:pwa-register')
+      .then(({ registerSW }) => {
+        if (cancelled) return
+        updateSWRef.current = registerSW({
+          onNeedRefresh() { setNeedRefresh(true) },
+          onRegisterError(err) { console.warn('SW registration failed', err) },
+        })
+      })
+      .catch((err) => console.warn('PWA register unavailable', err))
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {

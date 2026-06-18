@@ -27,6 +27,7 @@ import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import LockPopover from '../../components/shared/LockPopover'
 import SignaturePad from '../../components/shared/SignaturePad'
+import PushNotificationToggle from '../../components/pwa/PushNotificationToggle'
 import api from '../../api/client'
 import { resolveMediaUrl } from '../../utils/mediaUrl'
 import DesktopNotificationSettings from '../../components/notifications/DesktopNotificationSettings'
@@ -476,6 +477,8 @@ export default function Account() {
           </div>
         </div>
       </div>
+
+      <PushNotificationToggle />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
