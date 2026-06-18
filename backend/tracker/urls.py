@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .comment_views import CommentViewSet, activity_timeline, mention_suggest
-from .compliance_views import ComplaintViewSet, ComplianceCaseViewSet
+from .compliance_views import ComplaintViewSet, ComplianceCaseViewSet, OffenceTypeViewSet
 from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
 from .intelligence_views import (
@@ -197,6 +197,7 @@ router.register(r"document-versions",  DocumentVersionViewSet,     basename="doc
 # ── Compliance module ────────────────────────────────────────────────────────
 router.register(r"compliance/cases",      ComplianceCaseViewSet, basename="compliance-case")
 router.register(r"compliance/complaints", ComplaintViewSet,      basename="compliance-complaint")
+router.register(r"compliance/offence-types", OffenceTypeViewSet, basename="compliance-offence-type")
 
 urlpatterns = [
     path("", include(router.urls)),

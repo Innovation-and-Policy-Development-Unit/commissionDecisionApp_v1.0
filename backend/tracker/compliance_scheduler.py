@@ -8,12 +8,16 @@ log = logging.getLogger("scdms.security")
 
 SLA_TASK_NAME      = "tracker.tasks.recompute_compliance_sla"
 NOTIFY_TASK_NAME   = "tracker.tasks.send_compliance_deadline_notifications"
+ALERTS_TASK_NAME   = "tracker.tasks.send_compliance_court_suspension_alerts"
 SLA_PERIODIC_NAME  = "compliance-sla-recompute"
 NOTIFY_PERIODIC_NAME = "compliance-deadline-notifications"
+ALERTS_PERIODIC_NAME = "compliance-court-suspension-alerts"
 
 # SLA recompute every 6 hours; notifications run 10 min after each recompute hour.
 SLA_CRON    = "0 */6 * * *"
 NOTIFY_CRON = "10 */6 * * *"
+# Court-date / suspension-expiry alerts once daily at 07:00.
+ALERTS_CRON = "0 7 * * *"
 
 
 def sync_compliance_sla_scheduler():
@@ -37,6 +41,10 @@ def sync_compliance_sla_scheduler():
         PeriodicTask.objects.update_or_create(
             name=NOTIFY_PERIODIC_NAME,
             defaults={"crontab": _cron(NOTIFY_CRON), "task": NOTIFY_TASK_NAME, "enabled": True},
+        )
+        PeriodicTask.objects.update_or_create(
+            name=ALERTS_PERIODIC_NAME,
+            defaults={"crontab": _cron(ALERTS_CRON), "task": ALERTS_TASK_NAME, "enabled": True},
         )
         log.info("Compliance SLA recompute schedule synced to Celery beat")
     except Exception as exc:  # noqa: BLE001

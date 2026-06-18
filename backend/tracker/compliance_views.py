@@ -29,7 +29,7 @@ from .compliance_actions import (
     return_compliance_case,
     submit_compliance_case,
 )
-from .compliance_models import Complaint, ComplaintStatus, ComplianceCase
+from .compliance_models import Complaint, ComplaintStatus, ComplianceCase, OffenceType
 from .compliance_scoping import (
     MINISTRY_LODGE_ROLES,
     complaint_queryset,
@@ -222,6 +222,89 @@ class ComplianceCaseViewSet(viewsets.ModelViewSet):
             ComplianceCaseDetailSerializer(case, context={"request": request}).data,
             status=status.HTTP_201_CREATED if not existing else status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=["get", "post", "patch"], url_path="investigation")
+    def investigation(self, request, pk=None):
+        """Get, create, or update the structured investigation for a case
+        (panel, terms of reference, findings, recommendation, report)."""
+        from .compliance_models import Investigation
+        from .compliance_serializers import InvestigationSerializer
+
+        case = self.get_object()
+        existing = getattr(case, "investigation", None)
+
+        if request.method == "GET":
+            if not existing:
+                return Response({"detail": "No investigation recorded."}, status=404)
+            return Response(InvestigationSerializer(existing).data)
+
+        _require_write_access(request.user)
+        ser = InvestigationSerializer(
+            existing, data=request.data, partial=(request.method == "PATCH"),
+        )
+        ser.is_valid(raise_exception=True)
+        if existing:
+            ser.save()
+        else:
+            ser.save(case=case, created_by=request.user)
+        return Response(
+            ComplianceCaseDetailSerializer(case, context={"request": request}).data,
+            status=status.HTTP_201_CREATED if not existing else status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="suspensions")
+    def add_suspension(self, request, pk=None):
+        """Record a suspension and its financial implication (half/full/no-pay)."""
+        from .compliance_serializers import SuspensionRecordSerializer
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        ser = SuspensionRecordSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ser.save(case=case, created_by=request.user)
+        return Response(
+            ComplianceCaseDetailSerializer(case, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["patch"], url_path="suspensions/(?P<sus_id>[0-9]+)")
+    def update_suspension(self, request, pk=None, sus_id=None):
+        """Update suspension fields (amounts, dates, notes)."""
+        from .compliance_serializers import SuspensionRecordSerializer
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        rec = case.suspensions.filter(pk=sus_id).first()
+        if not rec:
+            raise ValidationError({"detail": "Suspension record not found."})
+        ser = SuspensionRecordSerializer(rec, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="suspensions/(?P<sus_id>[0-9]+)/assess")
+    def assess_suspension_reimbursement(self, request, pk=None, sus_id=None):
+        """OPSC assessment of whether withheld salary is reimbursed on reinstatement.
+        Body: { reimbursement_status: reimburse|forfeit, reimbursed_amount? }."""
+        from django.utils import timezone as _tz
+        from .compliance_models import SuspensionReimbursement
+
+        if not user_can_manage_senior_cases(request.user):
+            raise PermissionDenied("Only the Compliance Manager or Secretary OPSC may assess reimbursement.")
+        case = self.get_object()
+        rec = case.suspensions.filter(pk=sus_id).first()
+        if not rec:
+            raise ValidationError({"detail": "Suspension record not found."})
+        decision = request.data.get("reimbursement_status")
+        if decision not in (SuspensionReimbursement.REIMBURSE, SuspensionReimbursement.FORFEIT):
+            raise ValidationError({"reimbursement_status": "Must be 'reimburse' or 'forfeit'."})
+        rec.reimbursement_status = decision
+        rec.opsc_assessed_by = request.user
+        rec.opsc_assessed_at = _tz.now()
+        if decision == SuspensionReimbursement.REIMBURSE and request.data.get("reimbursed_amount") is not None:
+            rec.reimbursed_amount = request.data["reimbursed_amount"]
+        rec.save()
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path="export-pptx")
     def export_pptx(self, request):
@@ -702,3 +785,37 @@ class ComplaintViewSet(viewsets.ModelViewSet):
         complaint.triaged_at = timezone.now()
         complaint.save(update_fields=["status", "closed_reason", "triaged_by", "triaged_at"])
         return Response(ComplaintSerializer(complaint, context={"request": request}).data)
+
+
+class OffenceTypeViewSet(viewsets.ModelViewSet):
+    """The nature-of-offence catalogue. Readable by compliance staff (for the
+    case dropdown); writable only by administrators."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        from .compliance_serializers import OffenceTypeSerializer
+        return OffenceTypeSerializer
+
+    def get_queryset(self):
+        qs = OffenceType.objects.all()
+        if self.request.query_params.get("active") == "true":
+            qs = qs.filter(active=True)
+        return qs
+
+    def _require_admin(self):
+        u = self.request.user
+        if not (u.is_staff or u.is_superuser or _user_role(u) == "psc_admin"):
+            raise PermissionDenied("Only administrators can modify the offence catalogue.")
+
+    def perform_create(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_admin()
+        instance.delete()

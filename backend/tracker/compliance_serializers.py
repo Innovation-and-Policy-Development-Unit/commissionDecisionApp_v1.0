@@ -13,7 +13,10 @@ from .compliance_models import (
     ComplianceCaseDecision,
     ComplianceCaseStage,
     GrievanceMediatorAppointment,
+    Investigation,
     LitigationRecord,
+    OffenceType,
+    SuspensionRecord,
 )
 from .compliance_forms import COMPLIANCE_FORM_CODES
 
@@ -95,6 +98,8 @@ class ComplianceCaseListSerializer(serializers.ModelSerializer):
     current_stage = serializers.CharField(source="submission.current_stage", read_only=True)
     case_family_display = serializers.CharField(source="get_case_family_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    nature_of_offence_label = serializers.CharField(source="nature_of_offence.label", read_only=True, default=None)
+    offence_category = serializers.CharField(source="nature_of_offence.category", read_only=True, default=None)
     sla_summary = serializers.SerializerMethodField()
     days_open = serializers.SerializerMethodField()
     next_action_due = serializers.SerializerMethodField()
@@ -106,6 +111,7 @@ class ComplianceCaseListSerializer(serializers.ModelSerializer):
         fields = (
             "id", "reference_number", "title", "current_stage",
             "case_family", "case_family_display",
+            "nature_of_offence", "nature_of_offence_label", "offence_category", "offence_detail",
             "subject_name", "subject_position", "subject_ministry", "is_senior_executive",
             "status", "status_display", "date_received", "created_at", "sla_summary",
             "days_open", "next_action_due", "latest_note", "year_group",
@@ -155,18 +161,105 @@ class ComplianceCaseDecisionSerializer(serializers.ModelSerializer):
         return obj.decided_by.get_full_name() or obj.decided_by.username
 
 
+class OffenceTypeSerializer(serializers.ModelSerializer):
+    category_display = serializers.CharField(source="get_category_display", read_only=True)
+
+    class Meta:
+        model = OffenceType
+        fields = ("id", "code", "label", "category", "category_display",
+                  "description", "statutory_ref", "active", "display_order")
+        read_only_fields = ("id",)
+
+
+class InvestigationSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    panel_member_names = serializers.SerializerMethodField()
+    has_report = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Investigation
+        fields = (
+            "id", "case", "panel_members", "panel_member_names", "panel_members_text",
+            "terms_of_reference", "appointed_at", "started_at", "completed_at",
+            "findings", "recommendation", "report_document", "has_report",
+            "status", "status_display", "created_by", "created_at", "updated_at",
+        )
+        read_only_fields = ("id", "case", "created_by", "created_at", "updated_at")
+
+    def get_panel_member_names(self, obj):
+        return [u.get_full_name() or u.username for u in obj.panel_members.all()]
+
+    def get_has_report(self, obj):
+        return bool(obj.report_document)
+
+
+class SuspensionRecordSerializer(serializers.ModelSerializer):
+    salary_basis_display = serializers.CharField(source="get_salary_basis_display", read_only=True)
+    reimbursement_status_display = serializers.CharField(source="get_reimbursement_status_display", read_only=True)
+    days_remaining = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SuspensionRecord
+        fields = (
+            "id", "case", "salary_basis", "salary_basis_display",
+            "monthly_salary", "withheld_amount", "reimbursed_amount",
+            "suspension_start", "suspension_end", "max_period_days", "days_remaining",
+            "reimbursement_status", "reimbursement_status_display",
+            "opsc_assessed_by", "opsc_assessed_at",
+            "reinstated_at", "reinstated_on_full_salary", "notes",
+            "created_by", "created_at", "updated_at",
+        )
+        read_only_fields = (
+            "id", "case", "suspension_end", "opsc_assessed_by", "opsc_assessed_at",
+            "reinstated_on_full_salary", "created_by", "created_at", "updated_at",
+        )
+
+    def get_days_remaining(self, obj):
+        if not obj.suspension_end or obj.reinstated_at:
+            return None
+        return (obj.suspension_end - tz.localdate()).days
+
+
 class ComplianceCaseDetailSerializer(ComplianceCaseListSerializer):
     stages             = ComplianceCaseStageSerializer(many=True, read_only=True)
     litigation_records = LitigationRecordSerializer(many=True, read_only=True)
     case_notes         = CaseNoteSerializer(many=True, read_only=True)
     decisions          = ComplianceCaseDecisionSerializer(many=True, read_only=True)
     mediator_appointment = GrievanceMediatorSerializer(read_only=True)
+    investigation      = InvestigationSerializer(read_only=True)
+    suspensions        = SuspensionRecordSerializer(many=True, read_only=True)
+    repeat_offence     = serializers.SerializerMethodField()
 
     class Meta(ComplianceCaseListSerializer.Meta):
         fields = ComplianceCaseListSerializer.Meta.fields + (
             "description", "notes", "stages", "litigation_records",
             "case_notes", "decisions", "mediator_appointment",
+            "investigation", "suspensions", "repeat_offence",
         )
+
+    def get_repeat_offence(self, obj):
+        """Prior cases for the same subject + same offence type within the 3-year
+        warning-validity window — the signal that escalates a repeat to serious
+        misconduct. Returns None when no offence type is set."""
+        if not obj.nature_of_offence_id or not obj.subject_name:
+            return None
+        from datetime import timedelta
+        cutoff = tz.localdate() - timedelta(days=3 * 365)
+        prior = (
+            ComplianceCase.objects
+            .filter(
+                nature_of_offence_id=obj.nature_of_offence_id,
+                subject_name__iexact=obj.subject_name.strip(),
+                date_received__gte=cutoff,
+            )
+            .exclude(pk=obj.pk)
+            .count()
+        )
+        return {
+            "prior_count": prior,
+            "is_repeat": prior > 0,
+            "window_years": 3,
+        }
 
 
 class ComplaintSerializer(serializers.ModelSerializer):
@@ -232,5 +325,7 @@ class ComplianceCaseCreateSerializer(serializers.Serializer):
     form_type_code = serializers.ChoiceField(choices=[(c, c) for c in COMPLIANCE_FORM_CODES], default="COMP-SMDR")
     title = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
     description = serializers.CharField(required=False, allow_blank=True, default="")
+    nature_of_offence_id = serializers.IntegerField(required=False, allow_null=True)
+    offence_detail = serializers.CharField(required=False, allow_blank=True, default="")
     # Optional: triage an existing complaint into this case.
     complaint_id = serializers.IntegerField(required=False, allow_null=True)
