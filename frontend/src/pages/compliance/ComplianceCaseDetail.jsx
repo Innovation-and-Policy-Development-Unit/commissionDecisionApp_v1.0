@@ -12,6 +12,7 @@ import { WORKFLOW_ROUTES, canRecordDecision, canManageSeniorCases, isReadOnlyCom
 import InvestigationSection from '../../components/compliance/InvestigationSection'
 import SuspensionSection from '../../components/compliance/SuspensionSection'
 import DocumentsSection from '../../components/compliance/DocumentsSection'
+import StageDetailDrawer from '../../components/compliance/StageDetailDrawer'
 
 // Roles that can take any write action on a case (create notes, stages, litigation)
 const WRITE_ROLES = ['compliance_manager', 'compliance_senior', 'compliance_principal', 'psc_admin']
@@ -114,7 +115,7 @@ const SLA_BADGE = {
   completed: { cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', Icon: CheckCircle2 },
 }
 
-function StageRow({ stage, onUpdate, busy, canWrite, caseId, onReload }) {
+function StageRow({ stage, onUpdate, busy, canWrite, caseId, onReload, onOpen }) {
   const badge   = SLA_BADGE[stage.sla_status] || SLA_BADGE.on_track
   const Icon    = badge.Icon
   const done    = stage.status === 'completed'
@@ -159,9 +160,14 @@ function StageRow({ stage, onUpdate, busy, canWrite, caseId, onReload }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`font-medium ${done || skipped ? 'text-slate-400 line-through' : active ? 'text-primary-700 dark:text-primary-300' : 'text-slate-800 dark:text-slate-100'}`}>
+          <button
+            type="button"
+            onClick={() => onOpen?.(stage)}
+            title="Open stage details"
+            className={`font-medium text-left hover:underline ${done || skipped ? 'text-slate-400 line-through' : active ? 'text-primary-700 dark:text-primary-300' : 'text-slate-800 dark:text-slate-100'}`}
+          >
             {stage.stage_name}
-          </span>
+          </button>
           {active  && <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-700 dark:bg-primary-900/40 dark:text-primary-400">Active</span>}
           {stage.is_optional && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase text-slate-500 dark:bg-slate-700">optional</span>}
           {!done && !skipped && (
@@ -232,6 +238,7 @@ export default function ComplianceCaseDetail() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [noteText, setNoteText] = useState('')
+  const [openStageId, setOpenStageId] = useState(null)
   const [showLit, setShowLit] = useState(false)
   const [lit, setLit] = useState({ description: '', court_name: '', court_reference: '', legal_counsel: '', opposing_counsel: '', next_court_date: '', estimated_cost: '', actual_cost: '', notes: '' })
   const [showDecision, setShowDecision] = useState(false)
@@ -495,7 +502,7 @@ export default function ComplianceCaseDetail() {
           <h3 className="mb-2 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200"><ShieldCheck size={17} /> Statutory timeline</h3>
           {c.stages?.length ? (
             <ul className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              {c.stages.map((s) => <StageRow key={s.id} stage={s} onUpdate={updateStage} busy={busy} canWrite={canWrite} caseId={id} onReload={load} />)}
+              {c.stages.map((s) => <StageRow key={s.id} stage={s} onUpdate={updateStage} busy={busy} canWrite={canWrite} caseId={id} onReload={load} onOpen={(st) => setOpenStageId(st.id)} />)}
             </ul>
           ) : <p className="text-sm text-slate-400 py-4">No statutory stages.</p>}
         </section>
@@ -639,6 +646,16 @@ export default function ComplianceCaseDetail() {
           </section>
         </div>
       </div>
+
+      {openStageId && (
+        <StageDetailDrawer
+          caseId={id}
+          stage={(c.stages || []).find((s) => s.id === openStageId) || null}
+          canWrite={canWrite}
+          onClose={() => setOpenStageId(null)}
+          onSaved={load}
+        />
+      )}
     </div>
   )
 }

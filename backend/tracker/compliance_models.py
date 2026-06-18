@@ -281,6 +281,10 @@ class ComplianceCaseStage(models.Model):
     started_at   = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     notes        = models.TextField(blank=True)
+    # Officer-entered detail for the stage (kept separate from ``notes``, which
+    # holds the statutory description from the workflow template).
+    outcome_notes        = models.TextField(blank=True)
+    responsible_officer  = models.CharField(max_length=200, blank=True)
 
     # Notification guards — prevent duplicate in-app alerts for the same event
     at_risk_notified = models.BooleanField(default=False)

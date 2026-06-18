@@ -25,6 +25,8 @@ export default function DocumentsSection({ caseId, canWrite }) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [docType, setDocType] = useState(DOC_TYPES[0])
+  const [uploadNote, setUploadNote] = useState('')
+  const [editingNote, setEditingNote] = useState(null) // {id, value}
   const fileRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -45,11 +47,22 @@ export default function DocumentsSection({ caseId, canWrite }) {
       const form = new FormData()
       form.append('file', file)
       form.append('doc_type', docType)
+      if (uploadNote) form.append('note', uploadNote)
       await api.post(`/compliance/cases/${caseId}/documents/`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
       toast.success('Document uploaded.')
+      setUploadNote('')
       await load()
     } catch (e) { toast.error(e.response?.data?.detail || 'Upload failed.') }
     finally { setBusy(false) }
+  }
+
+  const saveNote = async (doc, value) => {
+    setEditingNote(null)
+    if ((doc.note || '') === (value || '')) return
+    try {
+      await api.post(`/compliance/cases/${caseId}/documents/${doc.id}/update/`, { note: value })
+      await load()
+    } catch (e) { toast.error(e.response?.data?.detail || 'Could not save note.') }
   }
 
   const download = async (doc) => {
@@ -78,14 +91,17 @@ export default function DocumentsSection({ caseId, canWrite }) {
       <h3 className="mb-3 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200"><Paperclip size={17} /> Documents &amp; Evidence</h3>
 
       {canWrite && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 p-3">
-          <select className="form-input text-sm flex-1 min-w-[160px]" value={docType} onChange={(e) => setDocType(e.target.value)}>
-            {DOC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <input ref={fileRef} type="file" className="hidden" onChange={(e) => { upload(e.target.files?.[0]); e.target.value = '' }} />
-          <button disabled={busy} onClick={() => fileRef.current?.click()} className="btn-primary text-sm inline-flex items-center gap-2">
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Upload
-          </button>
+        <div className="mb-3 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <select className="form-input text-sm flex-1 min-w-[160px]" value={docType} onChange={(e) => setDocType(e.target.value)}>
+              {DOC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input ref={fileRef} type="file" className="hidden" onChange={(e) => { upload(e.target.files?.[0]); e.target.value = '' }} />
+            <button disabled={busy} onClick={() => fileRef.current?.click()} className="btn-primary text-sm inline-flex items-center gap-2">
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Upload
+            </button>
+          </div>
+          <input className="form-input w-full text-sm" placeholder="Note for this document (optional)" value={uploadNote} onChange={(e) => setUploadNote(e.target.value)} />
         </div>
       )}
 
@@ -96,8 +112,8 @@ export default function DocumentsSection({ caseId, canWrite }) {
       ) : (
         <ul className="space-y-1.5">
           {docs.map((d) => (
-            <li key={d.id} className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
-              <FileText size={15} className="shrink-0 text-slate-400" />
+            <li key={d.id} className="flex items-start gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <FileText size={15} className="mt-0.5 shrink-0 text-slate-400" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{d.original_name}</p>
                 <p className="text-[11px] text-slate-400">
@@ -105,6 +121,22 @@ export default function DocumentsSection({ caseId, canWrite }) {
                   {d.uploaded_by_username ? ` · ${d.uploaded_by_username}` : ''}
                   {d.uploaded_at ? ` · ${new Date(d.uploaded_at).toLocaleDateString()}` : ''}
                 </p>
+                {editingNote?.id === d.id ? (
+                  <input
+                    autoFocus
+                    className="form-input mt-1 w-full text-xs"
+                    value={editingNote.value}
+                    onChange={(e) => setEditingNote({ id: d.id, value: e.target.value })}
+                    onBlur={() => saveNote(d, editingNote.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveNote(d, editingNote.value) }}
+                    placeholder="Note…"
+                  />
+                ) : d.note ? (
+                  <p className={`text-[11px] text-slate-500 dark:text-slate-400 italic mt-0.5 ${canWrite ? 'cursor-text hover:text-slate-700' : ''}`}
+                     onClick={() => canWrite && setEditingNote({ id: d.id, value: d.note })}>{d.note}</p>
+                ) : canWrite ? (
+                  <button onClick={() => setEditingNote({ id: d.id, value: '' })} className="text-[11px] text-primary-600 hover:underline mt-0.5">+ Add note</button>
+                ) : null}
               </div>
               <button onClick={() => download(d)} className="text-slate-400 hover:text-primary-600" title="Download"><Download size={15} /></button>
               {canWrite && <button onClick={() => remove(d)} disabled={busy} className="text-slate-400 hover:text-red-600" title="Remove"><Trash2 size={15} /></button>}

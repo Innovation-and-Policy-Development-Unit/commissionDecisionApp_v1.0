@@ -332,12 +332,34 @@ class ComplianceCaseViewSet(viewsets.ModelViewSet):
             file=f,
             original_name=f.name,
             description=(request.data.get("doc_type") or request.data.get("description") or ""),
+            note=(request.data.get("note") or ""),
             uploaded_by=request.user,
         )
         return Response(
             SubmissionDocumentSerializer(doc, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/update")
+    def update_document(self, request, pk=None, doc_id=None):
+        """Edit a case document's type tag and/or note."""
+        from .models import SubmissionDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        doc = SubmissionDocument.objects.filter(submission=case.submission, pk=doc_id).first()
+        if not doc:
+            raise ValidationError({"detail": "Document not found."})
+        changed = []
+        if "doc_type" in request.data or "description" in request.data:
+            doc.description = request.data.get("doc_type") or request.data.get("description") or ""
+            changed.append("description")
+        if "note" in request.data:
+            doc.note = request.data.get("note") or ""
+            changed.append("note")
+        if changed:
+            doc.save(update_fields=changed)
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/remove")
     def remove_document(self, request, pk=None, doc_id=None):
@@ -399,6 +421,7 @@ class ComplianceCaseViewSet(viewsets.ModelViewSet):
             file=f,
             original_name=f.name,
             description=(request.data.get("doc_type") or stage.stage_name),
+            note=(request.data.get("note") or ""),
             uploaded_by=request.user,
         )
         ComplianceStageDocument.objects.get_or_create(
@@ -780,26 +803,63 @@ class ComplianceCaseViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="stage")
     def update_stage(self, request, pk=None):
-        """Update a statutory stage's status (e.g. mark complete) and refresh SLA."""
+        """Update a statutory stage: status plus officer-entered detail (outcome
+        notes, responsible officer, and started/completed dates). Refreshes SLA.
+
+        Any subset of fields may be supplied. ``status`` still auto-stamps the
+        dates when first moved to in-progress/completed, but explicit dates in
+        the payload always win (so overdue statutory stages can be back-dated)."""
+        from datetime import datetime, time
+
         from django.utils import timezone
+        from django.utils.dateparse import parse_date, parse_datetime
 
         from .compliance_models import StageStatus
         from .compliance_workflows import recompute_case_sla
 
+        def _to_dt(raw):
+            if not raw:
+                return None
+            dt = parse_datetime(raw)
+            if dt is None:
+                d = parse_date(raw)
+                if d is None:
+                    return None
+                dt = datetime.combine(d, time(9, 0))
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt)
+            return dt
+
+        _require_write_access(request.user)
         case = self.get_object()
-        stage_id = request.data.get("stage_id")
-        new_status = request.data.get("status")
-        stage = case.stages.filter(pk=stage_id).first()
+        stage = case.stages.filter(pk=request.data.get("stage_id")).first()
         if not stage:
             raise ValidationError({"stage_id": "Stage not found for this case."})
-        if new_status not in StageStatus.values:
-            raise ValidationError({"status": "Invalid stage status."})
-        stage.status = new_status
-        if new_status == StageStatus.IN_PROGRESS and not stage.started_at:
-            stage.started_at = timezone.now()
-        if new_status == StageStatus.COMPLETED:
-            stage.completed_at = timezone.now()
-        stage.save(update_fields=["status", "started_at", "completed_at"])
+
+        update_fields = []
+        new_status = request.data.get("status")
+        if new_status is not None:
+            if new_status not in StageStatus.values:
+                raise ValidationError({"status": "Invalid stage status."})
+            stage.status = new_status
+            update_fields.append("status")
+            if new_status == StageStatus.IN_PROGRESS and not stage.started_at:
+                stage.started_at = timezone.now(); update_fields.append("started_at")
+            if new_status == StageStatus.COMPLETED and not stage.completed_at:
+                stage.completed_at = timezone.now(); update_fields.append("completed_at")
+
+        if "outcome_notes" in request.data:
+            stage.outcome_notes = request.data.get("outcome_notes") or ""
+            update_fields.append("outcome_notes")
+        if "responsible_officer" in request.data:
+            stage.responsible_officer = request.data.get("responsible_officer") or ""
+            update_fields.append("responsible_officer")
+        for date_field in ("started_at", "completed_at"):
+            if date_field in request.data:
+                setattr(stage, date_field, _to_dt(request.data.get(date_field)))
+                update_fields.append(date_field)
+
+        stage.save(update_fields=list(set(update_fields)) or None)
         recompute_case_sla(case)
         return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
 

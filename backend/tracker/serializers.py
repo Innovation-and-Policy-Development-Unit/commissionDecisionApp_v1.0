@@ -989,7 +989,7 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubmissionDocument
         fields = (
-            'id', 'original_name', 'description', 'uploaded_by_username',
+            'id', 'original_name', 'description', 'note', 'uploaded_by_username',
             'uploaded_at', 'file_size', 'content_type',
             'version_num', 'version_count', 'archived_at',
             'ocr_status', 'ocr_status_display', 'extracted_text', 'extracted_facts',

@@ -32,6 +32,7 @@ class ComplianceCaseStageSerializer(serializers.ModelSerializer):
                 "id": link.document_id,
                 "original_name": link.document.original_name,
                 "description": link.document.description,
+                "note": link.document.note,
             }
             for link in obj.document_links.select_related("document").all()
         ]
@@ -40,10 +41,10 @@ class ComplianceCaseStageSerializer(serializers.ModelSerializer):
         model = ComplianceCaseStage
         fields = (
             "id", "stage_order", "stage_name", "stage_code",
-            "responsible_role", "statutory_ref",
+            "responsible_role", "responsible_officer", "statutory_ref",
             "sla_days", "sla_working_days", "due_date",
             "status", "status_display", "sla_status", "sla_status_display",
-            "is_optional", "started_at", "completed_at", "notes",
+            "is_optional", "started_at", "completed_at", "notes", "outcome_notes",
             "documents",
         )
 

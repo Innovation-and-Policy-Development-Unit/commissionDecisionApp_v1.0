@@ -1926,6 +1926,7 @@ class SubmissionDocument(models.Model):
     file = models.FileField(upload_to=_submission_doc_path)
     original_name = models.CharField(max_length=255)
     description = models.CharField(max_length=255, blank=True)
+    note = models.TextField(blank=True, help_text="Free-text note about this document (e.g. compliance evidence note).")
     uploaded_by = models.ForeignKey(
         'auth.User', on_delete=models.SET_NULL, null=True,
     )
