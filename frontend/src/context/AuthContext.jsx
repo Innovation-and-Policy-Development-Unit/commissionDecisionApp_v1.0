@@ -90,8 +90,14 @@ export function AuthProvider({ children }) {
     const ms = getInactivityLockMs(user.username)
     if (!ms) return
 
-    inactivityTimer.current = setTimeout(() => {
-      logout('inactivity')
+    inactivityTimer.current = setTimeout(async () => {
+      try {
+        await logout('inactivity')
+      } finally {
+        // Hard redirect → reloads the app and shows a fresh login screen,
+        // clearing all in-memory state regardless of the current route.
+        window.location.assign('/auth/login')
+      }
     }, ms)
   }, [user, isLocked, logout])
 
