@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShieldPlus, ArrowRight } from 'lucide-react'
 import api from '../../api/client'
@@ -37,9 +37,17 @@ export default function NewComplianceCaseForm({ modal = false, onSuccess, onClos
     form_type_code: 'COMP-SMDR',
     title: '',
     description: '',
+    nature_of_offence_id: '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [offences, setOffences] = useState([])
+
+  useEffect(() => {
+    api.get('/compliance/offence-types/?active=true')
+      .then((r) => setOffences(Array.isArray(r.data) ? r.data : (r.data?.results || [])))
+      .catch(() => setOffences([]))
+  }, [])
 
   const set = (k) => (e) => {
     const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value
@@ -51,7 +59,11 @@ export default function NewComplianceCaseForm({ modal = false, onSuccess, onClos
     if (!form.subject_name.trim()) { setError('Subject name is required.'); return }
     setSaving(true); setError('')
     try {
-      const res = await api.post('/compliance/cases/', form)
+      const payload = {
+        ...form,
+        nature_of_offence_id: form.nature_of_offence_id ? Number(form.nature_of_offence_id) : null,
+      }
+      const res = await api.post('/compliance/cases/', payload)
       if (onSuccess) onSuccess(res.data)
       else navigate('/compliance/cases')
     } catch (e) {
@@ -71,11 +83,29 @@ export default function NewComplianceCaseForm({ modal = false, onSuccess, onClos
           <div className="rounded-lg bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>
         )}
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Case family</label>
-          <select className="form-input w-full" value={form.case_family} onChange={set('case_family')}>
-            {CASE_FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Case family</label>
+            <select className="form-input w-full" value={form.case_family} onChange={set('case_family')}>
+              {CASE_FAMILIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Nature of offence</label>
+            <select className="form-input w-full" value={form.nature_of_offence_id} onChange={set('nature_of_offence_id')}>
+              <option value="">— Select offence —</option>
+              <optgroup label="Minor / Disciplinary">
+                {offences.filter((o) => o.category === 'minor').map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Serious Misconduct (Appendix C)">
+                {offences.filter((o) => o.category === 'serious_misconduct').map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
         </div>
 
         <WorkflowPreview family={form.case_family} />

@@ -8,6 +8,8 @@ import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import { useAuth } from '../../context/AuthContext'
 import { WORKFLOW_ROUTES, canRecordDecision, canManageSeniorCases, isReadOnlyComplianceRole } from '../../constants/compliance'
+import InvestigationSection from '../../components/compliance/InvestigationSection'
+import SuspensionSection from '../../components/compliance/SuspensionSection'
 
 // Roles that can take any write action on a case (create notes, stages, litigation)
 const WRITE_ROLES = ['compliance_manager', 'compliance_senior', 'compliance_principal', 'psc_admin']
@@ -287,6 +289,17 @@ export default function ComplianceCaseDetail() {
 
       <WorkflowPipeline caseFamily={c.case_family} stages={c.stages || []} />
 
+      {c.repeat_offence?.is_repeat && (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          <span>
+            <strong>Repeat offence:</strong> {c.repeat_offence.prior_count} prior case(s) for this subject and the same
+            offence within the last {c.repeat_offence.window_years} years. A repeat of the same nature of offence may
+            escalate to serious misconduct.
+          </span>
+        </div>
+      )}
+
       {/* Summary chips */}
       {isReadOnly && (
         <div className="mb-4 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300 flex items-center gap-2">
@@ -486,6 +499,12 @@ export default function ComplianceCaseDetail() {
               </ul>
             ) : <p className="text-sm text-slate-400">No litigation records.</p>}
           </section>
+
+          {/* Investigation (panel, findings, recommendation) */}
+          <InvestigationSection caseId={id} investigation={c.investigation} canWrite={canWrite} busy={busy} post={post} />
+
+          {/* Suspension & salary (financial implication) */}
+          <SuspensionSection caseId={id} suspensions={c.suspensions || []} canWrite={canWrite} busy={busy} post={post} />
 
           {/* Decisions */}
           <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-5">

@@ -174,6 +174,7 @@ export default function ComplianceCases() {
                 <th className="px-4 py-3">Reference</th>
                 <th className="px-4 py-3">Officer</th>
                 <th className="px-4 py-3">Nature of Offence</th>
+                <th className="px-4 py-3">Case Family</th>
                 <th className="px-4 py-3">Stage</th>
                 <th className="px-4 py-3">SLA</th>
                 <th className="px-4 py-3">Status</th>
@@ -192,6 +193,18 @@ export default function ComplianceCases() {
                       <span className="mt-0.5 inline-block rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
                         Senior Executive
                       </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.nature_of_offence_label ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{c.nature_of_offence_label}</span>
+                        {c.offence_category === 'serious_misconduct' && (
+                          <span className="inline-block w-fit rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-700 dark:bg-red-900/40 dark:text-red-300">Serious Misconduct</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
