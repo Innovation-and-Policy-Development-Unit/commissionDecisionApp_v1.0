@@ -117,6 +117,9 @@ class ComplianceCaseListSerializer(serializers.ModelSerializer):
     next_action_due = serializers.SerializerMethodField()
     latest_note = serializers.SerializerMethodField()
     year_group = serializers.SerializerMethodField()
+    # Included in the list payload so the Litigation Tracker (which reads the
+    # case list) can flatten records across cases. Prefetched in the viewset.
+    litigation_records = LitigationRecordSerializer(many=True, read_only=True)
 
     class Meta:
         model = ComplianceCase
@@ -127,6 +130,7 @@ class ComplianceCaseListSerializer(serializers.ModelSerializer):
             "subject_name", "subject_position", "subject_ministry", "is_senior_executive",
             "status", "status_display", "date_received", "created_at", "sla_summary",
             "days_open", "next_action_due", "latest_note", "year_group",
+            "litigation_records",
         )
 
     def get_sla_summary(self, obj):
@@ -234,7 +238,6 @@ class SuspensionRecordSerializer(serializers.ModelSerializer):
 
 class ComplianceCaseDetailSerializer(ComplianceCaseListSerializer):
     stages             = ComplianceCaseStageSerializer(many=True, read_only=True)
-    litigation_records = LitigationRecordSerializer(many=True, read_only=True)
     case_notes         = CaseNoteSerializer(many=True, read_only=True)
     decisions          = ComplianceCaseDecisionSerializer(many=True, read_only=True)
     mediator_appointment = GrievanceMediatorSerializer(read_only=True)
@@ -244,7 +247,7 @@ class ComplianceCaseDetailSerializer(ComplianceCaseListSerializer):
 
     class Meta(ComplianceCaseListSerializer.Meta):
         fields = ComplianceCaseListSerializer.Meta.fields + (
-            "description", "notes", "stages", "litigation_records",
+            "description", "notes", "stages",
             "case_notes", "decisions", "mediator_appointment",
             "investigation", "suspensions", "repeat_offence",
         )
