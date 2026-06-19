@@ -39,6 +39,17 @@ export function userIsSecretariatStaff(user) {
   return SECRETARIAT_ROLES.has(user.role)
 }
 
+// Commission members view meetings/agenda/minutes and receive notifications, but
+// do not operate the secretariat tooling (minute intake, decisions register).
+const COMMISSION_VIEW_ONLY_ROLES = new Set(['psc_commissioner', 'chairperson'])
+
+/** Secretariat *operators* — secretariat staff excluding view-only Commission roles. */
+export function userIsSecretariatOperator(user) {
+  if (!user) return false
+  if (userIsAdmin(user)) return true
+  return SECRETARIAT_ROLES.has(user.role) && !COMMISSION_VIEW_ONLY_ROLES.has(user.role)
+}
+
 /** OPSC unit managers/principals + post-decision staff — minutes & tasks (read-all, work allocated). */
 export function userIsCommissionDecisionOps(user) {
   if (!user) return false
@@ -65,6 +76,11 @@ export function menuItemVisibleForUser(item, user) {
   if (audience === 'compliance') return userHasComplianceAccess(user)
   if (audience === 'secretariat') {
     return userIsSecretariatStaff(user) && !userIsComplianceStaff(user)
+  }
+  if (audience === 'secretariat_operator') {
+    // Operator-only tools (minute intake, decisions register) — excludes
+    // view-only Commission members/Chairperson.
+    return userIsSecretariatOperator(user) && !userIsComplianceStaff(user)
   }
   if (audience === 'commission_decision') {
     return userIsCommissionDecisionOps(user) && !userIsComplianceStaff(user)

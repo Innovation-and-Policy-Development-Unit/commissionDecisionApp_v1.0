@@ -6855,6 +6855,14 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting.agenda_status = AgendaStatus.CIRCULATED
         meeting.save(update_fields=["agenda_status"])
         self._queue_agenda_briefs(meeting)
+        # Notify Commission members the (approved) agenda is available to view.
+        def _notify_circulated():
+            try:
+                from .email_notify import notify_agenda_circulated
+                notify_agenda_circulated(meeting)
+            except Exception:
+                _security_log.exception("AGENDA_CIRCULATE_NOTIFY_FAIL | meeting=%s", meeting.id)
+        transaction.on_commit(_notify_circulated)
         return Response({"detail": "Agenda circulated to Commission members."})
 
     @action(detail=True, methods=["post"], url_path="adopt-agenda")
@@ -8843,20 +8851,38 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def _run_post_signing_automation(minutes, user):
-        """Allocate decisions to unit managers, run AI decision extraction, and
-        queue outcome-letter drafts. Shared by the digital ``sign`` path and the
-        manual ``upload-signed`` path so both produce the same downstream effects."""
-        from .decision_allocation import allocate_decision_tasks, queue_post_signing_automation
+        """Advance decided submissions, allocate decisions to unit managers, run
+        AI decision extraction, queue outcome-letter drafts, and notify Commission
+        members that the signed minutes are on record. Shared by the digital
+        ``sign`` path and the manual ``upload-signed`` path so both produce the
+        same downstream effects. Runs once, on first signing."""
+        from .decision_allocation import (
+            advance_submissions_for_signed_minutes,
+            allocate_decision_tasks,
+            queue_post_signing_automation,
+        )
+        import logging as _logging_mod
+        _log = _logging_mod.getLogger("scdms.app")
+
+        # Advance each decided submission to its recorded outcome stage first, so
+        # task allocation and outcome letters act on submissions already decided.
+        try:
+            advance_submissions_for_signed_minutes(minutes, user)
+        except Exception:
+            _log.exception("POST_SIGN_STAGE_ADVANCE_FAIL | minutes=%s", minutes.id)
 
         try:
             allocate_decision_tasks(minutes, user)
             queue_post_signing_automation(minutes)
         except Exception:
-            import logging as _logging_mod
+            _log.exception("POST_SIGN_AUTOMATION_FAIL | minutes=%s", minutes.id)
 
-            _logging_mod.getLogger("scdms.app").exception(
-                "POST_SIGN_AUTOMATION_FAIL | minutes=%s", minutes.id
-            )
+        # Notify Commission members the signed minutes are now the official record.
+        try:
+            from .email_notify import notify_minutes_signed
+            notify_minutes_signed(minutes)
+        except Exception:
+            _log.exception("POST_SIGN_NOTIFY_FAIL | minutes=%s", minutes.id)
 
     @action(detail=True, methods=["post"], url_path="mark-for-signature")
     def mark_for_signature(self, request, pk=None):

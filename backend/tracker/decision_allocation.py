@@ -13,7 +13,9 @@ from __future__ import annotations
 import logging
 
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 
 from .models import (
     AgendaItem,
@@ -23,6 +25,7 @@ from .models import (
     Minutes,
     Notification,
     Role,
+    WorkflowStage,
 )
 
 logger = logging.getLogger("scdms.app")
@@ -276,3 +279,130 @@ def queue_post_signing_automation(minutes: Minutes) -> None:
             queue_outcome_letter(
                 agenda_item.submission_id, outcome=decision_type, force=True,
             )
+
+
+# Decision recorded in the minutes (block.decision_type) → submission stage.
+_DECISION_TYPE_TO_STAGE: dict[str, str] = {
+    "approved": WorkflowStage.APPROVED,
+    "noted": WorkflowStage.NOTED,
+    "not_approved": WorkflowStage.NOT_APPROVED,
+    "rejected": WorkflowStage.REJECTED,
+    "deferred_back_to_unit": WorkflowStage.DEFERRED_BACK_TO_UNIT,
+    "deferred": WorkflowStage.MATTERS_ARISING,  # deferred to next meeting
+}
+
+# Stages an item may be at while before the Commission (or in a hold state).
+_COMMISSION_SOURCE_STAGES = frozenset({
+    WorkflowStage.COMMISSION_SITTING,
+    WorkflowStage.FORWARDED_TO_COMMISSION,
+    WorkflowStage.TABLED,
+    WorkflowStage.MATTERS_ARISING,
+    WorkflowStage.AWAITING_LEGAL_ADVICE,
+})
+
+_CONCLUDING_STAGES = frozenset({
+    WorkflowStage.APPROVED,
+    WorkflowStage.REJECTED,
+    WorkflowStage.NOTED,
+    WorkflowStage.NOT_APPROVED,
+})
+
+
+def advance_submissions_for_signed_minutes(minutes: Minutes, actor) -> dict:
+    """Move each decided submission from its Commission stage to the recorded
+    outcome — a single hop mirroring the old per-submission decision action.
+
+    For every agenda block carrying a ``decision_type``, this stamps the outcome
+    stage, sets ``commission_approved_at`` on approval, resolves/records the
+    relevant deferral, writes a tamper-evident decision proof + ``WorkflowEvent``,
+    and cascades final decisions to attached children. Idempotent: it skips any
+    submission no longer at a Commission stage, so re-signing a corrected scan
+    does not re-transition. Best-effort per item — one failure never aborts the
+    rest of the signing automation.
+    """
+    from .deferral_tracking import record_deferral, resolve_open_deferrals
+    from .decision_proof import create_decision_proof, is_decision_stage
+    from .models import DeferralType, Submission, WorkflowEvent
+
+    content = minutes.content or {}
+    blocks = [b for b in (content.get("agenda_items") or []) if isinstance(b, dict)]
+    advanced = 0
+    for block in blocks:
+        agenda_item_id = block.get("agenda_item_id")
+        target = _DECISION_TYPE_TO_STAGE.get((block.get("decision_type") or "").lower())
+        if not agenda_item_id or not target:
+            continue
+        agenda_item = (
+            AgendaItem.objects.filter(id=agenda_item_id).select_related("submission").first()
+        )
+        submission = agenda_item.submission if agenda_item else None
+        if submission is None:
+            continue
+        prev = submission.current_stage
+        if prev == target or prev not in _COMMISSION_SOURCE_STAGES:
+            continue  # already decided, or not at a Commission stage
+
+        remarks = (block.get("decision") or "").strip()
+        try:
+            with transaction.atomic():
+                submission.current_stage = target
+                update_fields = ["current_stage", "updated_at"]
+                if target == WorkflowStage.APPROVED and submission.commission_approved_at is None:
+                    submission.commission_approved_at = timezone.now()
+                    update_fields.append("commission_approved_at")
+                submission.save(update_fields=update_fields)
+
+                if target in _CONCLUDING_STAGES:
+                    resolve_open_deferrals(submission)
+                elif target == WorkflowStage.DEFERRED_BACK_TO_UNIT:
+                    record_deferral(
+                        submission,
+                        deferral_type=DeferralType.BACK_TO_UNIT,
+                        deferred_by=actor,
+                        from_meeting=minutes.meeting,
+                        agenda_item=agenda_item,
+                        reason=remarks,
+                    )
+
+                proof_hash, proof_payload = "", {}
+                if is_decision_stage(target):
+                    proof_hash, proof_payload = create_decision_proof(
+                        submission=submission,
+                        previous_stage=prev,
+                        new_stage=target,
+                        actor=actor,
+                        remarks=remarks,
+                    )
+                WorkflowEvent.objects.create(
+                    submission=submission,
+                    actor=actor,
+                    previous_stage=prev,
+                    new_stage=target,
+                    remarks=remarks or "Recorded from the signed minutes.",
+                    content_hash=proof_hash,
+                    proof_payload=proof_payload,
+                )
+
+                if target in {WorkflowStage.APPROVED, WorkflowStage.REJECTED}:
+                    for child in Submission.objects.filter(
+                        parent_submission=submission, is_attachment=True
+                    ):
+                        child_prev = child.current_stage
+                        child.current_stage = target
+                        child.save(update_fields=["current_stage", "updated_at"])
+                        WorkflowEvent.objects.create(
+                            submission=child,
+                            actor=actor,
+                            previous_stage=child_prev,
+                            new_stage=target,
+                            remarks=f"Auto-cascaded from parent {submission.reference_number} (signed minutes).",
+                        )
+            advanced += 1
+        except Exception:
+            logger.exception(
+                "STAGE_ADVANCE_FAIL | minutes=%s submission=%s",
+                minutes.id, getattr(submission, "id", None),
+            )
+
+    logger.info("DECISION_STAGE_ADVANCE | minutes=%s | advanced=%d", minutes.id, advanced)
+    return {"advanced": advanced}

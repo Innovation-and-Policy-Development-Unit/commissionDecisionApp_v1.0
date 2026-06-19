@@ -189,6 +189,73 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "agenda_circulated",
+        "name": "Agenda circulated to Commission members",
+        "category": "submission_workflow",
+        "description": "Sent to Commission members + Chairperson when an approved agenda is circulated.",
+        "placeholders": _ph("meeting_reference, meeting_date, agenda_url"),
+        "subject_template": "Agenda circulated — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "The Chairman has endorsed the agenda for the Commission sitting on {{meeting_date}} "
+            "({{meeting_reference}}).\n\n"
+            "The approved agenda is attached and is also available in the Agenda menu:\n"
+            "{{agenda_url}}\n\n"
+            "During the sitting you can open the Sitting Pack to follow each item.\n"
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
+            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
+            "PSC — Agenda circulated"
+            "</div>"
+            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">The Chairman has endorsed the agenda for the Commission sitting on "
+            "<strong>{{meeting_date}}</strong> ({{meeting_reference}}).</p>"
+            "<p style=\"margin:0 0 16px 0;\">The approved agenda is attached, and is also available in the Agenda menu.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the agenda</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">During the sitting, open the Sitting Pack to follow each item.</p>"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
+    },
+    {
+        "slug": "minutes_signed",
+        "name": "Signed minutes on record",
+        "category": "submission_workflow",
+        "description": "Sent to Commission members + Chairperson when signed minutes are uploaded.",
+        "placeholders": _ph("meeting_reference, meeting_date, minutes_url"),
+        "subject_template": "Signed minutes on record — {{meeting_reference}}",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "The signed minutes for the Commission sitting of {{meeting_date}} ({{meeting_reference}}) "
+            "have been uploaded and are now the official record.\n\n"
+            "You can view them in the Minutes menu:\n"
+            "{{minutes_url}}\n"
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
+            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
+            "PSC — Signed minutes on record"
+            "</div>"
+            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">The signed minutes for the Commission sitting of "
+            "<strong>{{meeting_date}}</strong> ({{meeting_reference}}) have been uploaded and are now the official record.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{minutes_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the minutes</a>"
+            "</p>"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
+    },
+    {
         "slug": "submission_submitted",
         "name": "Submission submitted to PSC",
         "category": "submission_workflow",

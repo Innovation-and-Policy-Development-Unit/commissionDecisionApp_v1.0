@@ -418,6 +418,164 @@ def notify_account_locked(user: User, *, ip: str = "", hard: bool = False, minut
     )
 
 
+def commission_members() -> list[User]:
+    """Active Commission members + Chairperson — recipients of agenda/minutes notices."""
+    from .models import Role
+
+    return list(
+        User.objects.filter(
+            is_active=True,
+            psc_profile__role__in=[Role.PSC_COMMISSIONER, Role.CHAIRPERSON],
+        ).select_related("psc_profile")
+    )
+
+
+def _render_agenda_pdf(meeting) -> bytes | None:
+    """Best-effort one-page agenda PDF (sequence / section / reference / title)."""
+    import html as _html
+    import logging
+
+    try:
+        from io import BytesIO
+
+        from weasyprint import HTML
+
+        from .agenda_sections import agenda_section_label
+
+        rows = []
+        for item in meeting.agenda_items.select_related("submission").order_by("category", "sequence"):
+            sub = item.submission
+            ref = _html.escape((getattr(sub, "reference_number", "") or "") if sub else "")
+            title = _html.escape((getattr(sub, "title", "") or "") if sub else "")
+            section = _html.escape(agenda_section_label(item.category or "") or "Other")
+            rows.append(
+                f"<tr><td>{item.sequence}</td><td>{section}</td><td>{ref}</td><td>{title}</td></tr>"
+            )
+        body_rows = "".join(rows) or "<tr><td colspan='4'>No agenda items.</td></tr>"
+        doc = (
+            "<html><body style=\"font-family:Arial,sans-serif;font-size:12px;color:#1e293b;\">"
+            f"<h2 style=\"margin:0 0 4px 0;\">Agenda — {_html.escape(meeting.reference_number or '')}</h2>"
+            f"<p style=\"margin:0 0 12px 0;color:#475569;\">Sitting date: {meeting.date or ''}</p>"
+            "<table cellspacing=\"0\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%;border:1px solid #cbd5e1;\">"
+            "<thead><tr style=\"background:#f1f5f9;\">"
+            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">#</th>"
+            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Section</th>"
+            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Reference</th>"
+            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Title</th>"
+            "</tr></thead>"
+            f"<tbody>{body_rows}</tbody></table>"
+            "</body></html>"
+        )
+        buf = BytesIO()
+        HTML(string=doc).write_pdf(buf)
+        return buf.getvalue()
+    except Exception:
+        logging.getLogger("scdms.app").warning(
+            "Agenda PDF render failed for meeting %s", getattr(meeting, "id", None)
+        )
+        return None
+
+
+def notify_agenda_circulated(meeting) -> None:
+    """Tell every Commission member + the Chairperson that an approved agenda has
+    been circulated. In-app + push notification, plus a templated email carrying
+    the agenda PDF (the digital equivalent of the hand-delivered copy). Best-effort."""
+    import logging
+    from django.utils import timezone
+
+    from .models import Notification
+
+    members = commission_members()
+    if not members:
+        return
+
+    base = get_frontend_base_url()
+    when = (
+        timezone.localtime(timezone.now()).strftime("%d %B %Y")
+        if meeting.date is None
+        else meeting.date.strftime("%d %B %Y")
+    )
+    pdf = _render_agenda_pdf(meeting)
+    attachments = (
+        [(f"agenda_{(meeting.reference_number or 'meeting')}.pdf", pdf, "application/pdf")]
+        if pdf
+        else None
+    )
+
+    for user in members:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,  # email sent separately (templated)
+            push=True,
+            title=f"Agenda circulated — {meeting.reference_number or ''}".strip(),
+            body=(
+                f"The Chairman has endorsed the agenda for the sitting on {when}. "
+                "You can now view it in the Agenda menu."
+            ),
+            link="/secretariat/agenda",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user,
+                meeting_reference=meeting.reference_number or "",
+                meeting_date=when,
+                agenda_url=f"{base}/secretariat/agenda",
+            )
+            send_templated_email(
+                slug="agenda_circulated", to=[email], context=ctx, attachments=attachments
+            )
+
+    logging.getLogger("scdms.app").info(
+        "AGENDA_CIRCULATED_NOTIFIED | meeting=%s | members=%d",
+        meeting.reference_number, len(members),
+    )
+
+
+def notify_minutes_signed(minutes) -> None:
+    """Tell every Commission member + the Chairperson that the signed minutes are
+    now the official record and available to view. In-app + push + templated email.
+    Best-effort."""
+    import logging
+
+    from .models import Notification
+
+    members = commission_members()
+    if not members:
+        return
+
+    meeting = minutes.meeting
+    base = get_frontend_base_url()
+    when = meeting.date.strftime("%d %B %Y") if meeting and meeting.date else ""
+    ref = (meeting.reference_number or "") if meeting else ""
+
+    for user in members:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,
+            push=True,
+            title=f"Signed minutes on record — {ref}".strip(),
+            body=(
+                f"The signed minutes for the sitting of {when or ref} have been uploaded "
+                "and are now the official record. You can view them in the Minutes menu."
+            ),
+            link="/secretariat/minutes",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user,
+                meeting_reference=ref,
+                meeting_date=when,
+                minutes_url=f"{base}/secretariat/minutes",
+            )
+            send_templated_email(slug="minutes_signed", to=[email], context=ctx)
+
+    logging.getLogger("scdms.app").info(
+        "MINUTES_SIGNED_NOTIFIED | meeting=%s | members=%d", ref, len(members),
+    )
+
+
 def sample_context_for_slug(slug: str) -> dict[str, str]:
     from .email_template_defaults import SAMPLE_RECIPIENT
 
