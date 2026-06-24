@@ -6122,7 +6122,18 @@ class MeetingViewSet(viewsets.ModelViewSet):
         profile = _profile(self.request.user)
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can schedule meetings.")
-        serializer.save()
+        meeting = serializer.save()
+        # Notify HR managers of the new sitting (async, best-effort). Flying
+        # minutes are not physical sittings, so they're excluded.
+        if meeting.type != MeetingType.FLYING_MINUTE:
+            try:
+                from .tasks import notify_meeting_scheduled_task
+                notify_meeting_scheduled_task.delay(meeting.id)
+            except Exception:
+                import logging
+                logging.getLogger("scdms.app").exception(
+                    "Failed to enqueue HR notification for meeting %s", meeting.id
+                )
 
     def perform_update(self, serializer):
         profile = _profile(self.request.user)
@@ -10237,19 +10248,35 @@ def _assert_annual_report_access(request):
         raise PermissionDenied("Only the Secretariat may work with the Annual Report.")
 
 
+def _can_manage_all_reports(user):
+    """Super admins, staff and PSC Administrators see and delete every report;
+    everyone else is scoped to the reports they generated themselves."""
+    return bool(
+        user.is_superuser or user.is_staff or _profile(user).role == Role.PSC_ADMIN
+    )
+
+
 def _annual_report_payload(report, request):
+    can_delete = (
+        _can_manage_all_reports(request.user)
+        or report.requested_by_id == request.user.id
+    )
     return {
         "id": report.id,
         "year": report.year,
+        "period_type": report.period_type,
+        "period_label": report.period_label or (str(report.year) if report.year else None),
         "created_at": report.created_at,
         "requested_by": (
             report.requested_by.get_full_name() or report.requested_by.username
         ) if report.requested_by_id else None,
+        "can_delete": can_delete,
         "summary": {
             "total_received": (report.dataset.get("intake") or {}).get("total_received"),
             "total_decided": (report.dataset.get("decisions") or {}).get("total_decided"),
             "approval_rate": (report.dataset.get("decisions") or {}).get("approval_rate"),
             "pct_within_target": ((report.dataset.get("implementation") or {}).get("overall") or {}).get("pct_within_target"),
+            "avg_agenda_per_sitting": (report.dataset.get("sittings") or {}).get("avg_agenda_per_sitting"),
         },
         "download_url": request.build_absolute_uri(
             f"/api/reports/annual/{report.id}/download/"
@@ -10265,17 +10292,58 @@ def _parse_report_year(raw):
     return year if 2000 <= year <= 2100 else None
 
 
+# Sections a caller may include in a generated report.
+_REPORT_SECTIONS = {
+    "intake", "sittings", "decisions", "timeliness",
+    "implementation", "tasks", "decision_service", "ministries",
+}
+
+
+def _parse_report_period(source):
+    """Resolve period-selector params from a query-dict or POST body into
+    (start_dt, end_dt, label, key, period_type, include)."""
+    from .reports.annual_report import resolve_period
+
+    get = source.get
+    period_type = (get("period_type") or "annual").lower()
+    if period_type not in {"annual", "quarterly", "monthly", "custom"}:
+        period_type = "annual"
+
+    start, end, label, key = resolve_period(
+        period_type,
+        year=get("year"),
+        quarter=get("quarter"),
+        month=get("month"),
+        date_from=get("date_from"),
+        date_to=get("date_to"),
+    )
+
+    raw_include = source.getlist("include") if hasattr(source, "getlist") else get("include")
+    if isinstance(raw_include, str):
+        raw_include = [raw_include]
+    flat: list[str] = []
+    for item in (raw_include or []):
+        flat.extend(str(item).split(","))
+    include = [s.strip() for s in flat if s.strip() in _REPORT_SECTIONS] or None
+
+    return start, end, label, key, period_type, include
+
+
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def annual_report_preview_view(request):
-    """Live (unfrozen) statistics dataset for a year — on-screen preview.
-    ?year=2026; defaults to the previous calendar year."""
-    from .reports.annual_report import build_annual_report_dataset
+    """Live (unfrozen) statistics dataset for a period — on-screen preview.
+    Query: ?period_type=annual|quarterly|monthly|custom plus year/quarter/month
+    or date_from/date_to, and optional repeated ?include=… section flags.
+    Defaults to the previous calendar year."""
+    from .reports.annual_report import build_report_dataset
 
     _assert_annual_report_access(request)
-    year = _parse_report_year(request.query_params.get("year")) \
-        or timezone.localdate().year - 1
-    return Response(build_annual_report_dataset(year))
+    start, end, label, key, period_type, include = _parse_report_period(request.query_params)
+    return Response(build_report_dataset(
+        start, end, include=include,
+        period={"type": period_type, "label": label, "key": key},
+    ))
 
 
 @api_view(["GET"])
@@ -10284,30 +10352,45 @@ def annual_report_list_view(request):
     from .models import AnnualReport
 
     _assert_annual_report_access(request)
-    reports = AnnualReport.objects.select_related("requested_by")[:24]
+    qs = AnnualReport.objects.select_related("requested_by")
+    if not _can_manage_all_reports(request.user):
+        qs = qs.filter(requested_by=request.user)
+    reports = qs[:24]
     return Response({"reports": [_annual_report_payload(r, request) for r in reports]})
 
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def annual_report_generate_view(request):
-    """Freeze the dataset and render the statistics-chapter PDF.
-    POST {"year": 2026}; defaults to the previous calendar year."""
+    """Freeze the dataset and render the statistics PDF for the chosen period.
+    POST {period_type, year/quarter/month or date_from/date_to, include:[…]}.
+    Defaults to the previous calendar year."""
     from .audit import log_action as _log
     from .models import AnnualReport, AuditLog as _AL
-    from .reports.annual_report import render_annual_report_pdf
+    from .reports.annual_report import build_report_dataset, render_report_pdf
 
     _assert_annual_report_access(request)
-    year = _parse_report_year(request.data.get("year")) \
-        or timezone.localdate().year - 1
+    start, end, label, key, period_type, include = _parse_report_period(request.data)
 
-    report = AnnualReport.objects.create(year=year, requested_by=request.user)
-    render_annual_report_pdf(report)
+    report = AnnualReport.objects.create(
+        year=timezone.localtime(start).year,
+        period_type=period_type,
+        period_start=timezone.localtime(start).date(),
+        period_end=timezone.localtime(end).date(),
+        period_label=label,
+        options={"include": include} if include else {},
+        dataset=build_report_dataset(
+            start, end, include=include,
+            period={"type": period_type, "label": label, "key": key},
+        ),
+        requested_by=request.user,
+    )
+    render_report_pdf(report)
 
     _log(request, _AL.Action.EXPORT,
          resource_type="AnnualReport", resource_id=report.id,
-         resource_label=f"Annual Report statistics {year}",
-         description=f"Annual Report statistics chapter generated for {year}")
+         resource_label=f"Report statistics {label}",
+         description=f"Report statistics generated for {label}")
 
     return Response(_annual_report_payload(report, request), status=status.HTTP_201_CREATED)
 
@@ -10321,6 +10404,9 @@ def annual_report_download_view(request, pk):
 
     _assert_annual_report_access(request)
     report = get_object_or_404(AnnualReport, pk=pk)
+    if not (_can_manage_all_reports(request.user)
+            or report.requested_by_id == request.user.id):
+        raise PermissionDenied("You can only download reports you generated.")
     if not report.pdf_file:
         return Response({"detail": "PDF file is missing."}, status=404)
     return FileResponse(
@@ -10329,6 +10415,33 @@ def annual_report_download_view(request, pk):
         filename=report.pdf_file.name.split("/")[-1],
         content_type="application/pdf",
     )
+
+
+@api_view(["DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def annual_report_delete_view(request, pk):
+    """Delete a generated report. Admins may delete any; other Secretariat
+    users may delete only the reports they generated themselves."""
+    from .audit import log_action as _log
+    from .models import AnnualReport, AuditLog as _AL
+
+    _assert_annual_report_access(request)
+    report = get_object_or_404(AnnualReport, pk=pk)
+    if not (_can_manage_all_reports(request.user)
+            or report.requested_by_id == request.user.id):
+        raise PermissionDenied("You can only delete reports you generated.")
+
+    label = report.period_label or (str(report.year) if report.year else f"#{report.id}")
+    if report.pdf_file:
+        report.pdf_file.delete(save=False)
+    report.delete()
+
+    _log(request, _AL.Action.DELETE,
+         resource_type="AnnualReport", resource_id=pk,
+         resource_label=f"Report statistics {label}",
+         description=f"Generated report deleted: {label}")
+
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ── Workload Views ─────────────────────────────────────────────────────────────

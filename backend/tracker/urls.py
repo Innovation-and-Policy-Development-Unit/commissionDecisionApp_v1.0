@@ -130,6 +130,7 @@ from .views import (
     annual_report_list_view,
     annual_report_generate_view,
     annual_report_download_view,
+    annual_report_delete_view,
     trash_list_view,
     trash_restore_view,
     trash_purge_view,
@@ -298,6 +299,7 @@ urlpatterns = [
     path("reports/annual/preview/",        annual_report_preview_view,         name="annual-report-preview"),
     path("reports/annual/generate/",       annual_report_generate_view,        name="annual-report-generate"),
     path("reports/annual/<int:pk>/download/", annual_report_download_view,     name="annual-report-download"),
+    path("reports/annual/<int:pk>/",       annual_report_delete_view,          name="annual-report-delete"),
     # Workload
     path("workload/officers/",             workload_officers_view,             name="workload-officers"),
     path("workload/summary/",              workload_summary_view,              name="workload-summary"),

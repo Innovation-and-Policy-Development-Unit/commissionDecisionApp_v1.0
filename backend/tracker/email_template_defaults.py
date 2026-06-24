@@ -224,6 +224,55 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "meeting_scheduled",
+        "name": "Meeting scheduled — HR notification",
+        "category": "system",
+        "description": "Sent to HR managers when a new Commission meeting/sitting is created.",
+        "placeholders": _ph(
+            "meeting_reference, meeting_title, meeting_date, meeting_time, "
+            "meeting_venue, submission_deadline, meeting_url"
+        ),
+        "subject_template": "New sitting scheduled — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "A new Commission sitting has been scheduled.\n\n"
+            "Reference: {{meeting_reference}}\n"
+            "Title: {{meeting_title}}\n"
+            "Date: {{meeting_date}}\n"
+            "Time: {{meeting_time}}\n"
+            "Venue: {{meeting_venue}}\n"
+            "Submission deadline (due date): {{submission_deadline}}\n\n"
+            "Please ensure any submissions for this sitting are lodged before the "
+            "submission deadline. You can view the sitting here:\n"
+            "{{meeting_url}}\n"
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
+            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
+            "PSC — New sitting scheduled"
+            "</div>"
+            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">A new Commission sitting has been scheduled.</p>"
+            "<table style=\"border-collapse:collapse;font-size:14px;margin:0 0 16px 0;\">"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Reference</td><td style=\"padding:3px 0;\"><strong>{{meeting_reference}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Title</td><td style=\"padding:3px 0;\">{{meeting_title}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Date</td><td style=\"padding:3px 0;\"><strong>{{meeting_date}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Time</td><td style=\"padding:3px 0;\">{{meeting_time}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Venue</td><td style=\"padding:3px 0;\">{{meeting_venue}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Submission deadline</td><td style=\"padding:3px 0;color:#b91c1c;\"><strong>{{submission_deadline}}</strong></td></tr>"
+            "</table>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the sitting</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">Please ensure any submissions for this sitting are lodged before the submission deadline.</p>"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
+    },
+    {
         "slug": "minutes_signed",
         "name": "Signed minutes on record",
         "category": "submission_workflow",
@@ -535,6 +584,15 @@ SAMPLE_EMAIL_CONTEXTS = {
         "submission_title": "Senior appointment — Ministry of Finance",
         "submission_url": "http://localhost:8080/submissions/1",
         "new_stage": "Submitted to PSC",
+    },
+    "meeting_scheduled": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_title": "Ordinary Commission Sitting",
+        "meeting_date": "30 June 2026",
+        "meeting_time": "09:00",
+        "meeting_venue": "PSC Boardroom",
+        "submission_deadline": "27 June 2026",
+        "meeting_url": "http://localhost:8080/secretariat/agenda",
     },
     "submission_pending_dg_endorsement": {
         "submission_reference": "PSC-2026-0042",
