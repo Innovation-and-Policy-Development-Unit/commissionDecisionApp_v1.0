@@ -2,13 +2,13 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>PSC Annual Report {{ d.year }} — Statistics</title>
+  <title>PSC Report {{ d.period.label|default:d.year }} — Statistics</title>
   <style>
     @page {
       size: A4;
       margin: 2.2cm 1.8cm;
       @bottom-center {
-        content: "PSC Annual Report {{ d.year }} — Statistics chapter — page " counter(page) " of " counter(pages);
+        content: "PSC Report — {{ d.period.label|default:d.year }} — Statistics — page " counter(page) " of " counter(pages);
         font-size: 8px;
         color: #888;
       }
@@ -39,7 +39,7 @@
       font-weight: bold;
       margin-top: 6px;
     }
-    .section { margin-bottom: 20px; }
+    .section { margin-bottom: 20px; break-inside: avoid; }
     .section h2 {
       font-size: 12pt;
       font-weight: bold;
@@ -47,8 +47,13 @@
       border-bottom: 1px solid #ccc;
       padding-bottom: 3px;
       margin-bottom: 8px;
+      break-after: avoid;
     }
-    .kpi-row { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+    /* Keep rows, headers and KPI blocks intact across page breaks; sections
+       taller than a page still break, but never orphan a header or split a row. */
+    thead { break-inside: avoid; }
+    tr { break-inside: avoid; }
+    .kpi-row { width: 100%; border-collapse: collapse; margin-bottom: 6px; break-inside: avoid; }
     .kpi-row td {
       border: 1px solid #bbb;
       text-align: center;
@@ -76,12 +81,12 @@
 <div class="header">
   <h1>Republic of Vanuatu</h1>
   <h1>Public Service Commission</h1>
-  <h2 style="font-size:13pt; margin-top:8px;">ANNUAL REPORT — STATISTICS CHAPTER</h2>
-  <div class="badge">Calendar year {{ d.year }}</div>
+  <h2 style="font-size:13pt; margin-top:8px;">REPORT — STATISTICS</h2>
+  <div class="badge">{{ d.period.label|default:d.year }}</div>
 </div>
 
 <div class="section">
-  <h2>1. Year at a Glance</h2>
+  <h2>1. At a Glance</h2>
   <table class="kpi-row">
     <tr>
       <td><span class="kpi-value">{{ d.intake.total_received }}</span><span class="kpi-label">Submissions received</span></td>
@@ -94,6 +99,7 @@
   </table>
 </div>
 
+{% if 'intake' in include %}
 <div class="section">
   <h2>2. Submissions Received</h2>
   <table class="data">
@@ -116,10 +122,19 @@
   </table>
   {% endif %}
 </div>
+{% endif %}
 
+{% if 'sittings' in include %}
 <div class="section">
-  <h2>3. Commission Sittings</h2>
+  <h2>3. Commission Sittings &amp; Agenda Load</h2>
   {% if d.sittings.by_type %}
+  <table class="kpi-row" style="margin-bottom:10px;">
+    <tr>
+      <td><span class="kpi-value">{{ d.sittings.total }}</span><span class="kpi-label">Completed sittings</span></td>
+      <td><span class="kpi-value">{{ d.sittings.total_agenda_items }}</span><span class="kpi-label">Agenda items tabled</span></td>
+      <td><span class="kpi-value">{{ d.sittings.avg_agenda_per_sitting }}</span><span class="kpi-label">Avg agenda items per sitting</span></td>
+    </tr>
+  </table>
   <table class="data">
     <thead><tr><th>Sitting type</th><th class="num">Held</th></tr></thead>
     <tbody>
@@ -129,11 +144,24 @@
       <tr><td><strong>Total completed sittings</strong></td><td class="num"><strong>{{ d.sittings.total }}</strong></td></tr>
     </tbody>
   </table>
+  {% if d.sittings.detail %}
+  <p class="note" style="margin-top:10px; font-weight:bold;">Agenda items per sitting:</p>
+  <table class="data">
+    <thead><tr><th>Date</th><th>Sitting type</th><th class="num">Agenda items</th></tr></thead>
+    <tbody>
+      {% for s in d.sittings.detail %}
+      <tr><td>{{ s.date }}</td><td>{{ s.type }}</td><td class="num">{{ s.agenda_count }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
   {% else %}
-  <p class="note">No completed sittings recorded in {{ d.year }}.</p>
+  <p class="note">No completed sittings recorded for {{ d.period.label|default:d.year }}.</p>
   {% endif %}
 </div>
+{% endif %}
 
+{% if 'decisions' in include %}
 <div class="section">
   <h2>4. Decisions and Outcomes</h2>
   <table class="kpi-row">
@@ -144,14 +172,18 @@
       <td><span class="kpi-value">{{ d.decisions.approval_rate }}%</span><span class="kpi-label">Approval rate</span></td>
     </tr>
   </table>
+  {% if 'timeliness' in include %}
   <p class="note">
     Median time from receipt to Commission decision:
     {% if d.timeliness.median_days_to_decision is not None %}{{ d.timeliness.median_days_to_decision }} days
     (average {{ d.timeliness.avg_days_to_decision }} days over {{ d.timeliness.decisions_measured }} decisions).
     {% else %}not measurable for this period.{% endif %}
   </p>
+  {% endif %}
 </div>
+{% endif %}
 
+{% if 'ministries' in include %}
 <div class="section">
   <h2>5. Activity by Ministry</h2>
   {% if d.ministries %}
@@ -180,10 +212,12 @@
     </tbody>
   </table>
   {% else %}
-  <p class="note">No ministry activity recorded in {{ d.year }}.</p>
+  <p class="note">No ministry activity recorded for {{ d.period.label|default:d.year }}.</p>
   {% endif %}
 </div>
+{% endif %}
 
+{% if 'implementation' in include %}
 <div class="section">
   <h2>6. Implementation of Decisions</h2>
   <table class="kpi-row">
@@ -191,7 +225,7 @@
       <td><span class="kpi-value">{{ d.implementation.overall.total }}</span><span class="kpi-label">Approved decisions</span></td>
       <td><span class="kpi-value">{{ d.implementation.overall.implemented }}</span><span class="kpi-label">Implemented</span></td>
       <td><span class="kpi-value">{{ d.implementation.overall.pct_within_target }}%</span><span class="kpi-label">Within {{ d.implementation.target_days }}-day target</span></td>
-      <td><span class="kpi-value">{{ d.implementation.overall.overdue }}</span><span class="kpi-label">Overdue at year report</span></td>
+      <td><span class="kpi-value">{{ d.implementation.overall.overdue }}</span><span class="kpi-label">Overdue at report date</span></td>
     </tr>
   </table>
   {% if d.implementation.by_ministry %}
@@ -220,26 +254,35 @@
   <p class="note">Ministries listed worst-first by % implemented within target.</p>
   {% endif %}
 </div>
+{% endif %}
 
+{% if 'tasks' in include or 'decision_service' in include %}
 <div class="section">
   <h2>7. Post-Decision Administration</h2>
   <table class="kpi-row">
     <tr>
+      {% if 'tasks' in include %}
       <td><span class="kpi-value">{{ d.tasks.created }}</span><span class="kpi-label">Action items raised</span></td>
       <td><span class="kpi-value">{{ d.tasks.completed }}</span><span class="kpi-label">Action items completed</span></td>
+      {% endif %}
+      {% if 'decision_service' in include %}
       <td><span class="kpi-value">{{ d.decision_service.served }}</span><span class="kpi-label">Decisions formally served</span></td>
       <td><span class="kpi-value">{{ d.decision_service.pct_acknowledged }}%</span><span class="kpi-label">Service acknowledged</span></td>
       <td><span class="kpi-value">{% if d.decision_service.median_days_to_acknowledge is not None %}{{ d.decision_service.median_days_to_acknowledge }}{% else %}—{% endif %}</span><span class="kpi-label">Median days to acknowledge</span></td>
+      {% endif %}
     </tr>
   </table>
 </div>
+{% endif %}
 
 <div class="section">
   <h2>8. Methodology</h2>
   <ul class="methodology">
     <li>All figures are derived from the SCDMS workflow record; each decision and stage change is timestamped at the moment it was recorded.</li>
-    <li><strong>Submissions received</strong> counts papers lodged with the Commission in the calendar year, excluding attachments to parent submissions.</li>
-    <li><strong>Decisions recorded</strong> counts the first Commission decision (approved / rejected / returned) entered for each submission during the year.</li>
+    <li>This report covers the period <strong>{{ d.period.label|default:d.year }}</strong>{% if d.period.start %} ({{ d.period.start }} to {{ d.period.end }}){% endif %}.</li>
+    <li><strong>Submissions received</strong> counts papers lodged with the Commission in the period, excluding attachments to parent submissions.</li>
+    <li><strong>Agenda items per sitting</strong> counts the items tabled on each completed sitting's agenda.</li>
+    <li><strong>Decisions recorded</strong> counts the first Commission decision (approved / rejected / returned) entered for each submission during the period.</li>
     <li><strong>Days to decision</strong> measures receipt by PSC to the recorded Commission decision, in calendar days.</li>
     <li><strong>Implemented within target</strong> uses each submission's explicit implementation due date where set, otherwise {{ d.implementation.target_days }} calendar days from Commission approval.</li>
     <li><strong>Formally served</strong> refers to outcome letters served through the system's decision-service record, each protected by a SHA-256 integrity hash.</li>

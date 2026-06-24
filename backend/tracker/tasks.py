@@ -3071,16 +3071,24 @@ def generate_annual_report_statistics():
     """
     from django.utils import timezone
 
+    from datetime import date
+
     from .models import AnnualReport, Notification
-    from .reports.annual_report import render_annual_report_pdf
+    from .reports.annual_report import render_report_pdf
 
     year = timezone.localdate().year - 1
     if AnnualReport.objects.filter(year=year, requested_by__isnull=True).exists():
         app_log.info('ANNUAL_REPORT | %s already generated — skipping', year)
         return None
 
-    report = AnnualReport.objects.create(year=year)
-    render_annual_report_pdf(report)
+    report = AnnualReport.objects.create(
+        year=year,
+        period_type=AnnualReport.PeriodType.ANNUAL,
+        period_start=date(year, 1, 1),
+        period_end=date(year, 12, 31),
+        period_label=f"Calendar year {year}",
+    )
+    render_report_pdf(report)
 
     from django.contrib.auth import get_user_model
     User = get_user_model()
@@ -3097,9 +3105,32 @@ def generate_annual_report_statistics():
             body=(
                 f'The {year} statistics chapter has been generated '
                 f'({decided} decision(s) recorded). '
-                f'Find it under Operations → Annual Report.'
+                f'Find it under Operations → Reports.'
             ),
         )
 
     app_log.info('ANNUAL_REPORT | Generated %s (report #%s)', year, report.id)
     return report.id
+
+
+# ── New-meeting HR notification ──────────────────────────────────────────────
+
+@shared_task
+def notify_meeting_scheduled_task(meeting_id):
+    """Notify HR managers that a new Commission sitting has been created.
+
+    Dispatched (best-effort, async) from MeetingViewSet.perform_create so the
+    create request never blocks on potentially many ministry-HR recipients.
+    """
+    from .models import Meeting
+    from .email_notify import notify_meeting_scheduled
+
+    meeting = Meeting.objects.filter(pk=meeting_id).first()
+    if not meeting:
+        app_log.warning('MEETING_SCHEDULED | meeting %s not found — skipping', meeting_id)
+        return None
+    try:
+        notify_meeting_scheduled(meeting)
+    except Exception:
+        app_log.exception('MEETING_SCHEDULED | notification failed for meeting %s', meeting_id)
+    return meeting_id

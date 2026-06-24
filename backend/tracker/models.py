@@ -2416,13 +2416,37 @@ class ImplementationDashboardReport(models.Model):
 
 
 class AnnualReport(models.Model):
-    """Statistics chapter of the PSC Annual Report for a calendar year.
+    """Frozen statistics report for a reporting period.
 
-    The dataset is snapshotted at generation time so the published figures
-    stay reproducible even as the live data moves on.
+    Originally the Annual Report statistics chapter (calendar year), now the
+    snapshot behind any period: a full year, a quarter, a month, or a custom
+    on-the-go range. The dataset is snapshotted at generation time so the
+    published figures stay reproducible even as the live data moves on.
     """
 
-    year = models.PositiveIntegerField(db_index=True)
+    class PeriodType(models.TextChoices):
+        ANNUAL = "annual", "Annual"
+        QUARTERLY = "quarterly", "Quarterly"
+        MONTHLY = "monthly", "Monthly"
+        CUSTOM = "custom", "Custom range"
+
+    year = models.PositiveIntegerField(
+        null=True, blank=True, db_index=True,
+        help_text="Calendar year for annual reports; the start year otherwise.",
+    )
+    period_type = models.CharField(
+        max_length=12, choices=PeriodType.choices, default=PeriodType.ANNUAL,
+    )
+    period_start = models.DateField(null=True, blank=True)
+    period_end = models.DateField(null=True, blank=True)
+    period_label = models.CharField(
+        max_length=120, blank=True,
+        help_text="Human label for the period, e.g. 'Q2 2025'.",
+    )
+    options = models.JSONField(
+        default=dict, blank=True,
+        help_text="Generation options, e.g. {'include': [...sections]}.",
+    )
     dataset = models.JSONField(
         default=dict, blank=True,
         help_text="Frozen statistics dataset behind the PDF.",
@@ -2439,7 +2463,7 @@ class AnnualReport(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Annual Report statistics {self.year}"
+        return f"Report statistics {self.period_label or self.year}"
 
 
 class ReportTemplate(models.Model):

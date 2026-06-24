@@ -118,7 +118,7 @@ const menuItems = [
       { label: 'Pending Decisions',     labelKey: 'nav.pending_decisions',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
       { label: 'Ministry Performance',  labelKey: 'nav.ministry_performance',  icon: Building2,       path: '/ministry-performance', visibility: 'ops' },
       { label: 'Implementation',        labelKey: 'nav.implementation_dashboard', icon: ListChecks,   path: '/implementation',       visibility: 'ops' },
-      { label: 'Annual Report',         labelKey: 'nav.annual_report',         icon: BookOpen,        path: '/annual-report',        visibility: 'ops' },
+      { label: 'Reports',               labelKey: 'nav.annual_report',         icon: BookOpen,        path: '/annual-report',        visibility: 'ops' },
     ],
   },
   {
@@ -133,7 +133,7 @@ const menuItems = [
       { label: 'Flag Monitor',     labelKey: 'nav.flag_monitor',      icon: Flag,          path: '/intelligence/flags' },
       { label: 'Alert Rules',      labelKey: 'nav.alert_rules',       icon: SlidersHorizontal, path: '/intelligence/rules' },
       { label: 'Automations',      labelKey: 'nav.automations',       icon: Zap,           path: '/intelligence/automations' },
-      { label: 'Reports',          labelKey: 'nav.reports',           icon: FileText,      path: '/reports' },
+      { label: 'Analytics',        labelKey: 'nav.analytics',         icon: FileText,      path: '/reports' },
       { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
     ],
   },

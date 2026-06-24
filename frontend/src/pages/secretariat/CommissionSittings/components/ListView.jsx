@@ -1,7 +1,10 @@
-import { CalendarDays, Clock, MapPin, CheckCircle2, XCircle, MoreVertical } from 'lucide-react'
+import { CalendarDays, Clock, MapPin, CheckCircle2, XCircle, MoreVertical, AlarmClock } from 'lucide-react'
 import { SITTING_STATUSES, SITTING_TYPES } from '../constants'
 import clsx from 'clsx'
 import AgendaReadinessChip from '../../../../components/shared/AgendaReadinessChip'
+
+const fmtDate = (v) =>
+  v ? new Date(v).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
 export default function ListView({ meetings, onSittingClick, getCapacity }) {
   return (
@@ -51,9 +54,16 @@ export default function ListView({ meetings, onSittingClick, getCapacity }) {
                         <CalendarDays size={12} className="text-slate-400" />
                         <span className="text-xs">{new Date(m.date + 'T00:00').toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-0.5">
                         <Clock size={12} />
                         <span>{m.time.slice(0, 5)}</span>
+                      </div>
+                      <div
+                        className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-500"
+                        title="Submission deadline (due date)"
+                      >
+                        <AlarmClock size={12} />
+                        <span>Due {fmtDate(m.effective_cutoff)}</span>
                       </div>
                     </div>
                   </td>

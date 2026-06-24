@@ -68,7 +68,8 @@
   },
   "nav": {
     "implementation_dashboard": "Implementation",
-    "annual_report": "Annual Report",
+    "annual_report": "Reports",
+    "analytics": "Analytics",
     "trash_bin": "Trash Bin",
     "group_submissions": "Submissions",
     "group_commission": "Commission Decision",

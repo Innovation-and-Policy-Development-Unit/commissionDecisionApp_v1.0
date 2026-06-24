@@ -430,6 +430,21 @@ def commission_members() -> list[User]:
     )
 
 
+def hr_managers() -> list[User]:
+    """Active HR managers — the OPSC HR Unit Manager and ministry HR officers.
+    Recipients of the new-sitting notification."""
+    from .models import Role
+
+    return list(
+        User.objects.filter(
+            is_active=True,
+            psc_profile__role__in=[Role.HR_UNIT_MANAGER, Role.MINISTRY_HR],
+        )
+        .exclude(email="")
+        .select_related("psc_profile")
+    )
+
+
 def _render_agenda_pdf(meeting) -> bytes | None:
     """Best-effort one-page agenda PDF (sequence / section / reference / title)."""
     import html as _html
@@ -529,6 +544,60 @@ def notify_agenda_circulated(meeting) -> None:
     logging.getLogger("scdms.app").info(
         "AGENDA_CIRCULATED_NOTIFIED | meeting=%s | members=%d",
         meeting.reference_number, len(members),
+    )
+
+
+def notify_meeting_scheduled(meeting) -> None:
+    """Tell every HR manager (OPSC HR Unit Manager + ministry HR officers) that a
+    new Commission sitting has been scheduled, with the meeting date and the
+    submission deadline (due date). In-app + push + templated email. Best-effort."""
+    import logging
+    from django.utils import timezone
+
+    from .models import Notification
+
+    recipients = hr_managers()
+    if not recipients:
+        return
+
+    base = get_frontend_base_url()
+    meeting_date = meeting.date.strftime("%d %B %Y") if meeting.date else "—"
+    meeting_time = meeting.time.strftime("%H:%M") if meeting.time else "—"
+    cutoff = getattr(meeting, "effective_cutoff", None)
+    submission_deadline = (
+        timezone.localtime(cutoff).strftime("%d %B %Y") if cutoff else "—"
+    )
+    meeting_url = f"{base}/secretariat/agenda"
+
+    for user in recipients:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,  # email sent separately (templated)
+            push=True,
+            title=f"New sitting scheduled — {meeting.reference_number or ''}".strip(),
+            body=(
+                f"A Commission sitting is set for {meeting_date}. "
+                f"Submission deadline: {submission_deadline}."
+            ),
+            link="/secretariat/agenda",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user,
+                meeting_reference=meeting.reference_number or "",
+                meeting_title=meeting.title or "",
+                meeting_date=meeting_date,
+                meeting_time=meeting_time,
+                meeting_venue=meeting.venue or "—",
+                submission_deadline=submission_deadline,
+                meeting_url=meeting_url,
+            )
+            send_templated_email(slug="meeting_scheduled", to=[email], context=ctx)
+
+    logging.getLogger("scdms.app").info(
+        "MEETING_SCHEDULED_NOTIFIED | meeting=%s | hr_managers=%d",
+        meeting.reference_number, len(recipients),
     )
 
 
