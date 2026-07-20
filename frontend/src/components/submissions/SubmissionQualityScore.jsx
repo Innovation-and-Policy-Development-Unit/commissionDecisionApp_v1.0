@@ -35,13 +35,35 @@ function effortBadgeClass(effort) {
   return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
 }
 
+// If a submission stays in the "processing" state this long (ms), stop showing an
+// indefinite spinner — real scoring jobs finish in seconds; a longer wait means the
+// job never ran or errored without reaching the normal failure path.
+const QUALITY_STALL_MS = 20000
+
 export function QualityScoreBadge({ submission, compact = false }) {
   const { t } = useTranslation()
+  const [stalled, setStalled] = useState(false)
+  const loading = !!submission && submission.current_stage !== 'draft' && !submission.ai_quality_processed
+
+  useEffect(() => {
+    if (!loading) { setStalled(false); return undefined }
+    const timer = setTimeout(() => setStalled(true), QUALITY_STALL_MS)
+    return () => clearTimeout(timer)
+  }, [loading, submission?.id])
+
   if (!submission || submission.current_stage === 'draft') return null
 
-  const loading = !submission.ai_quality_processed
   const score = submission.ai_quality_score
   const tone = scoreTone(score)
+
+  if (loading && stalled) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+        <AlertCircle size={10} aria-hidden />
+        {compact ? '—' : t('submission.quality_unavailable', { defaultValue: 'Not scored yet' })}
+      </span>
+    )
+  }
 
   if (loading) {
     return (
@@ -78,6 +100,15 @@ export function QualityScoreBadge({ submission, compact = false }) {
 export default function SubmissionQualityScore({ submission, submissionId, onUpdated, canRescore = false }) {
   const { t } = useTranslation()
   const [rescoring, setRescoring] = useState(false)
+  const [stalled, setStalled] = useState(false)
+
+  const loadingNow = !!submission && submission.current_stage !== 'draft' && !submission.ai_quality_processed
+
+  useEffect(() => {
+    if (!loadingNow) { setStalled(false); return undefined }
+    const timer = setTimeout(() => setStalled(true), QUALITY_STALL_MS)
+    return () => clearTimeout(timer)
+  }, [loadingNow, submissionId])
 
   const poll = useCallback(async () => {
     if (!submissionId) return
@@ -151,7 +182,7 @@ export default function SubmissionQualityScore({ submission, submissionId, onUpd
         AI draft — verify before routing decisions
       </p>
 
-      {loading && (
+      {loading && !stalled && (
         <div className="space-y-3">
           {submission.preliminary_quality_score != null && (
             <p className="text-sm opacity-90">
@@ -164,6 +195,26 @@ export default function SubmissionQualityScore({ submission, submissionId, onUpd
             size="md"
             variant="violet"
           />
+        </div>
+      )}
+
+      {loading && stalled && (
+        <div className="flex items-start gap-2 text-sm">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <div>
+            <p>{t('submission.quality_stalled', { defaultValue: 'AI scoring is taking longer than expected — it may not have started.' })}</p>
+            {canRescore && (
+              <button
+                type="button"
+                onClick={handleRescore}
+                disabled={rescoring}
+                className="btn-outline text-xs py-1 px-2 mt-2 inline-flex items-center gap-1"
+              >
+                <RefreshCw size={12} />
+                {t('submission.quality_rescore')}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

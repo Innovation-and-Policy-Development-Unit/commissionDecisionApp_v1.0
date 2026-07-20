@@ -1,28 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { FileText, AlertTriangle, Clock, BarChart3, BrainCircuit } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import StatCard from '../../components/shared/StatCard'
 import BaseBadge from '../../components/shared/BaseBadge'
 import BaseSpinner from '../../components/shared/BaseSpinner'
-
-const STAGE_LABELS = {
-  draft: 'Draft',
-  submitted: 'Submitted',
-  secretary_review: 'Secretary Review',
-  manager_checklist_review: 'Manager Review',
-  under_assessment: 'Under Assessment',
-  forwarded_to_commission: 'Forwarded to Commission',
-  commission_sitting: 'Commission Sitting',
-  decided_approved: 'Approved',
-  decided_rejected: 'Rejected',
-  deferred: 'Deferred',
-  returned_for_clarification: 'Returned for Clarification',
-  withdrawn: 'Withdrawn',
-}
+import { stageLabel } from '../../constants/stages'
 
 export default function ExecutiveDashboard() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -84,7 +72,7 @@ export default function ExecutiveDashboard() {
           <div className="flex flex-col gap-2 p-4">
             {stageEntries.sort((a, b) => b[1] - a[1]).slice(0, 10).map(([stage, count]) => (
               <div key={stage} className="flex items-center gap-2">
-                <span className="text-sm w-44 shrink-0 text-slate-600 dark:text-slate-300">{STAGE_LABELS[stage] || stage}</span>
+                <span className="text-sm w-44 shrink-0 text-slate-600 dark:text-slate-300">{stageLabel(stage, t)}</span>
                 <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                   <div className="h-full bg-primary-500 rounded-full" style={{ width: `${Math.round((count / maxStageCount) * 100)}%` }} />
                 </div>

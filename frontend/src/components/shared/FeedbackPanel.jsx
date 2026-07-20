@@ -201,8 +201,9 @@ export default function FeedbackPanel({ open, onClose }) {
 
               {/* Summary */}
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Summary</label>
+                <label htmlFor="feedback-title" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Summary</label>
                 <input
+                  id="feedback-title"
                   type="text"
                   required
                   placeholder="What's the issue or suggestion?"
@@ -215,8 +216,9 @@ export default function FeedbackPanel({ open, onClose }) {
               {/* Type + Severity */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Type</label>
+                  <label htmlFor="feedback-type" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Type</label>
                   <select
+                    id="feedback-type"
                     className="w-full input"
                     value={formData.feedback_type}
                     onChange={e => setFormData({ ...formData, feedback_type: e.target.value })}
@@ -231,8 +233,9 @@ export default function FeedbackPanel({ open, onClose }) {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Severity</label>
+                  <label htmlFor="feedback-severity" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Severity</label>
                   <select
+                    id="feedback-severity"
                     className="w-full input"
                     value={formData.severity}
                     onChange={e => setFormData({ ...formData, severity: e.target.value })}
@@ -247,8 +250,9 @@ export default function FeedbackPanel({ open, onClose }) {
 
               {/* Description */}
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Detailed Description</label>
+                <label htmlFor="feedback-description" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Detailed Description</label>
                 <textarea
+                  id="feedback-description"
                   required
                   rows={5}
                   placeholder="Provide as much detail as possible..."

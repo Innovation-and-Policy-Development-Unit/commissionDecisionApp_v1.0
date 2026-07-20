@@ -81,6 +81,7 @@ const DECIDED_STAGES = new Set([
 // ── Tiny helpers ──────────────────────────────────────────────────────────────
 
 function TrendBadge({ value, inversed = false }) {
+  if (value == null || Number.isNaN(value)) return null
   const up = value >= 0
   const positive = inversed ? !up : up
   return (
@@ -154,6 +155,7 @@ export default function PscDashboard() {
   const { t } = useTranslation()
   const colors = useChartColors()
   const [board, setBoard] = useState({ loading: true, data: null })
+  const [stats, setStats] = useState(null)
   const [timeRange, setTimeRange] = useState('month') // day | week | month
 
   const radarData = useMemo(
@@ -166,6 +168,10 @@ export default function PscDashboard() {
       .get('/dashboard/')
       .then(r => setBoard({ loading: false, data: r.data }))
       .catch(() => setBoard({ loading: false, data: null }))
+    api
+      .get('/dashboard/stats/')
+      .then(r => setStats(r.data))
+      .catch(() => setStats(null))
   }, [])
 
   const apiData = board.data
@@ -329,7 +335,6 @@ export default function PscDashboard() {
           <div className="card card-compact flex-1">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('dashboard.completion_rate')}</p>
-              <TrendBadge value={3.2} />
             </div>
             <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 mt-1">{completionRate}<span className="text-lg text-slate-400 dark:text-slate-500">%</span></p>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-3">{t('dashboard.completion_rate_sub')}</p>
@@ -352,7 +357,6 @@ export default function PscDashboard() {
           <div className="card card-compact flex-1">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('dashboard.all_submissions')}</p>
-              <TrendBadge value={12.5} />
             </div>
             <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 mt-1">{total}</p>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-3">{t('dashboard.all_submissions_sub')}</p>
@@ -372,8 +376,7 @@ export default function PscDashboard() {
         <StatCard
           title={t('dashboard.stat_total_submissions')}
           value={total}
-          trend={12.5}
-          sub={t('dashboard.stat_total_submissions_sub')}
+          sub={stats ? t('dashboard.stat_total_submissions_sub', { count: stats.submitted_this_week }) : ''}
           sparkData={spkSubmissions}
           sparkType="area"
           color={colors.primary}
@@ -382,8 +385,7 @@ export default function PscDashboard() {
         <StatCard
           title={t('dashboard.active_cases')}
           value={activeCount}
-          trend={8.3}
-          sub={t('dashboard.stat_active_sub')}
+          sub={t('dashboard.stat_active_sub', { count: overdue })}
           sparkData={spkActive}
           sparkType="area"
           color={colors.cyan}
@@ -392,7 +394,6 @@ export default function PscDashboard() {
         <StatCard
           title={t('dashboard.stat_decisions')}
           value={decidedCount}
-          trend={15.2}
           sub={t('dashboard.stat_decisions_sub')}
           sparkData={spkDecided}
           sparkType="area"
@@ -402,8 +403,6 @@ export default function PscDashboard() {
         <StatCard
           title={t('dashboard.overdue_21')}
           value={overdue}
-          trend={0.5}
-          trendInversed
           sub={t('dashboard.stat_overdue_sub')}
           sparkData={spkOverdue}
           sparkType="bar"
@@ -463,11 +462,11 @@ export default function PscDashboard() {
             </div>
             <div className="space-y-4">
               {[
-                { label: t('dashboard.metric_processing_time'), value: t('dashboard.metric_days', { count: 18.4 }), trend: -2.1, good: true },
-                { label: t('dashboard.metric_compliance'),      value: '88.2%',                                     trend: 3.4,  good: true },
-                { label: t('dashboard.metric_decisions_month'), value: '47',                                        trend: 8.2,  good: true },
-                { label: t('dashboard.metric_sitting_items'),   value: '9.2',                                       trend: 0.8,  good: true },
-              ].map(({ label, value, trend, good }) => (
+                { label: t('dashboard.metric_processing_time'), value: stats ? `${stats.ai_brief_processing_rate}%` : '—' },
+                { label: t('dashboard.metric_compliance'),      value: stats ? `${stats.sla_compliance_pct}%` : '—' },
+                { label: t('dashboard.metric_decisions_month'), value: stats ? stats.submitted_this_month : '—' },
+                { label: t('dashboard.metric_sitting_items'),   value: stats ? stats.submitted_this_week : '—' },
+              ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5 flex-1">
                     <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
@@ -478,7 +477,6 @@ export default function PscDashboard() {
                       <p className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight">{value}</p>
                     </div>
                   </div>
-                  <TrendBadge value={trend} inversed={!good} />
                 </div>
               ))}
             </div>

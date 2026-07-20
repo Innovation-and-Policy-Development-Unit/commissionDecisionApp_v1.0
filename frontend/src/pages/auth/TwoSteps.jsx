@@ -13,7 +13,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ShieldCheck, RotateCcw, AlertCircle, Zap } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, RotateCcw, AlertCircle } from 'lucide-react'
 import Logo from '../../components/shared/Logo'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
@@ -309,14 +309,10 @@ export default function TwoSteps() {
 
         {/* Footer */}
         <div className="px-12 pb-8">
-          <div className="border-t border-white/[0.10] pt-5 flex items-center justify-between">
+          <div className="border-t border-white/[0.10] pt-5 flex items-center justify-center">
             <p className="text-white/20 text-[11px]">
               © {new Date().getFullYear()} Office of the Public Service Commission, Vanuatu
             </p>
-            <div className="flex items-center gap-1.5">
-              <Zap size={10} className="text-white/20" />
-              <span className="text-[11px] text-white/20">Powered by Django</span>
-            </div>
           </div>
         </div>
       </div>

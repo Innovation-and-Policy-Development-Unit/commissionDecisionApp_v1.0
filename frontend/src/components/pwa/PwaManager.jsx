@@ -11,6 +11,10 @@ function isStandaloneDisplay() {
   )
 }
 
+// Persisted per-tab so the install prompt doesn't reappear on every route change
+// if PwaManager is remounted (e.g. rendered inside a route element).
+const INSTALL_DISMISSED_KEY = 'pwa_install_dismissed'
+
 /**
  * Registers the service worker and surfaces install, update, and offline UI.
  */
@@ -21,7 +25,14 @@ export default function PwaManager() {
   )
   const [needRefresh, setNeedRefresh] = useState(false)
   const [installPrompt, setInstallPrompt] = useState(null)
-  const [installDismissed, setInstallDismissed] = useState(false)
+  const [installDismissed, setInstallDismissed] = useState(
+    () => typeof sessionStorage !== 'undefined' && sessionStorage.getItem(INSTALL_DISMISSED_KEY) === '1',
+  )
+
+  const dismissInstall = useCallback(() => {
+    setInstallDismissed(true)
+    try { sessionStorage.setItem(INSTALL_DISMISSED_KEY, '1') } catch { /* ignore */ }
+  }, [])
   const updateSWRef = useRef(null)
 
   useEffect(() => {
@@ -73,8 +84,8 @@ export default function PwaManager() {
     await installPrompt.prompt()
     await installPrompt.userChoice
     setInstallPrompt(null)
-    setInstallDismissed(true)
-  }, [installPrompt])
+    dismissInstall()
+  }, [installPrompt, dismissInstall])
 
   const showInstall =
     installPrompt && !installDismissed && !isStandaloneDisplay()
@@ -155,7 +166,7 @@ export default function PwaManager() {
                 <button
                   type="button"
                   className="btn-outline text-xs py-1.5 px-3"
-                  onClick={() => setInstallDismissed(true)}
+                  onClick={dismissInstall}
                 >
                   {t('pwa.install_later')}
                 </button>

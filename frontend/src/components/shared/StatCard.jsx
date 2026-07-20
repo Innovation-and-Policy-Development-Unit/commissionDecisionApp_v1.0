@@ -2,13 +2,15 @@ import React from 'react'
 import clsx from 'clsx'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 
+// -700 shades (not -500) so white text clears WCAG AA contrast (4.5:1) at the
+// small 12px label size, not just the large headline number.
 const solidColors = {
-  purple: 'bg-indigo-500',
-  cyan: 'bg-cyan-500',
-  emerald: 'bg-emerald-500',
-  amber: 'bg-amber-500',
-  red: 'bg-red-500',
-  blue: 'bg-blue-500',
+  purple: 'bg-indigo-700',
+  cyan: 'bg-cyan-700',
+  emerald: 'bg-emerald-700',
+  amber: 'bg-amber-700',
+  red: 'bg-red-700',
+  blue: 'bg-blue-700',
 }
 
 function renderStatIcon(Icon) {
@@ -59,7 +61,7 @@ export default function StatCard({
         {/* Icon and title */}
         <div className="flex items-start justify-between mb-4">
           <div>
-            <p className="text-white/70 text-xs font-semibold uppercase tracking-wider">{heading}</p>
+            <p className="text-white text-xs font-semibold uppercase tracking-wider">{heading}</p>
           </div>
           {iconNode && (
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
@@ -85,7 +87,7 @@ export default function StatCard({
               {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
               <span>{isPositive ? '+' : ''}{change}%</span>
             </div>
-            <span className="text-white/60 text-xs">{changeLabel || 'vs last month'}</span>
+            <span className="text-white text-xs">{changeLabel || 'vs last month'}</span>
           </div>
         )}
       </div>

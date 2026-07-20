@@ -550,9 +550,8 @@ export default function Login() {
             )}
           </div>
 
-          <div className="mt-6 flex items-center justify-between text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div className="mt-6 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
             <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
-            <span>Powered by Django</span>
           </div>
         </div>
       </div>
