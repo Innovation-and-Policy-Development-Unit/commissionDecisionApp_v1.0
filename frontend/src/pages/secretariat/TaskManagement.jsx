@@ -734,7 +734,7 @@ export default function TaskManagement() {
   const isViewOnlyRow = (t) => userHasCommissionDecisionView(user) && !canEditTask(t)
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6">
       <PageHeader
         title="Commission Decision Register"
         subtitle="PS Commission Implementation Tracker — decision outcomes, action units, and implementation progress."
