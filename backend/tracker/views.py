@@ -21,6 +21,7 @@ from .models import (
     Classification,
     CommissionTask,
     CommissionSubTask,
+    CommissionTaskStatus,
     CommissionTaskUpdate,
     Department,
     FlyingMinuteSignature,
@@ -3898,11 +3899,29 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             ser.is_valid(raise_exception=True)
             ser.save()
             self._maybe_close_cms_for_task(task)
+            self._sync_task_status_from_subtasks(task)
             return Response(CommissionSubTaskSerializer(subtask).data)
 
         if request.method == "DELETE":
             subtask.delete()
+            self._sync_task_status_from_subtasks(task)
             return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @staticmethod
+    def _sync_task_status_from_subtasks(task):
+        """A task with sub-tasks is complete iff every non-cancelled sub-task is
+        completed — matches the "completing all sub-tasks completes the task"
+        workflow. Reverts the parent out of 'completed' if a sub-task is reopened."""
+        subs = list(task.subtasks.exclude(status=CommissionTaskStatus.CANCELLED))
+        if not subs:
+            return
+        all_done = all(s.status == CommissionTaskStatus.COMPLETED for s in subs)
+        if all_done and task.status != CommissionTaskStatus.COMPLETED:
+            task.status = CommissionTaskStatus.COMPLETED
+            task.save(update_fields=["status"])
+        elif not all_done and task.status == CommissionTaskStatus.COMPLETED:
+            task.status = CommissionTaskStatus.IN_PROGRESS
+            task.save(update_fields=["status"])
 
     @action(detail=True, methods=["post"], url_path="reassign")
     def reassign(self, request, pk=None):
@@ -3939,6 +3958,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         task.save(update_fields=["assigned_staff"])
 
         from .audit import log_action as _log
+        from .models import AuditLog as _AL
         _log(request, _AL.Action.UPDATE, resource_type="CommissionTask",
              resource_id=str(task.id), resource_label=task.title,
              description=f"Task reassigned to {valid_staff.count()} staff")
@@ -4164,16 +4184,22 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
     def eligible_staff(self, request):
         if not rbac_user_has_permission(request.user, "assign_task"):
             raise PermissionDenied()
-        qs = User.objects.filter(
-            psc_profile__role__in=COMMISSION_TASK_STAFF_ROLES,
-            is_active=True,
-        )
+        # Scope to the requesting manager's own allowed staff roles (matches the
+        # validation in reassign()) so coordinators still see the broad staff-role
+        # set, but unit managers only see staff they're actually able to assign.
+        manager_role = None
         try:
             prof = request.user.psc_profile
-            if prof.ministry_id:
-                qs = qs.filter(psc_profile__ministry_id=prof.ministry_id)
+            manager_role = prof.role
         except Profile.DoesNotExist:
-            pass
+            prof = None
+        allowed_roles = manager_allowed_staff_roles(manager_role)
+        qs = User.objects.filter(
+            psc_profile__role__in=allowed_roles,
+            is_active=True,
+        )
+        if prof is not None and prof.ministry_id:
+            qs = qs.filter(psc_profile__ministry_id=prof.ministry_id)
         qs = qs.select_related("psc_profile").order_by("username")
         return Response([{"id": u.id, "username": u.username} for u in qs])
 

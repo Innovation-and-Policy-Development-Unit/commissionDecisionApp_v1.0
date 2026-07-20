@@ -335,7 +335,11 @@ function SubtaskSection({ taskId, subtasks, aiDrafts, onRefresh, onDraftRefresh 
             </div>
           ))}
           {showCreate ? (
-            <form onSubmit={createSub} className="p-3 rounded-xl border border-dashed border-primary-300 dark:border-primary-700 bg-primary-50/50 dark:bg-primary-900/10 space-y-2">
+            // Plain div, not <form> — this section renders inside EditTaskModal's own
+            // <form onSubmit={submit}>, and nested forms are invalid HTML: the inner
+            // submit silently gets swallowed by (or redirected to) the outer form,
+            // so this never reached createSub and just closed the whole modal.
+            <div className="p-3 rounded-xl border border-dashed border-primary-300 dark:border-primary-700 bg-primary-50/50 dark:bg-primary-900/10 space-y-2">
               {subErr && <p className="text-xs text-red-600">{subErr}</p>}
               <BaseInput hideLabel label="Subtask title" value={stitle} onChange={e => setStitle(e.target.value)} placeholder="Subtask title" required />
               <BaseTextarea hideLabel label="Description" rows={2} value={sdesc} onChange={e => setSdesc(e.target.value)} placeholder="Description (optional)" />
@@ -351,10 +355,10 @@ function SubtaskSection({ taskId, subtasks, aiDrafts, onRefresh, onDraftRefresh 
                 </div>
               )}
               <div className="flex gap-2 pt-1">
-                <BaseButton type="submit" variant="primary" size="sm" loading={subSaving} loadingLabel="Creating">Create</BaseButton>
+                <BaseButton type="button" variant="primary" size="sm" onClick={createSub} loading={subSaving} loadingLabel="Creating">Create</BaseButton>
                 <BaseButton type="button" variant="outline" size="sm" onClick={() => setShowCreate(false)}>Cancel</BaseButton>
               </div>
-            </form>
+            </div>
           ) : (
             <BaseButton variant="ghost" size="sm" icon={<Plus size={12} />} onClick={() => setShowCreate(true)}>Add Subtask</BaseButton>
           )}
