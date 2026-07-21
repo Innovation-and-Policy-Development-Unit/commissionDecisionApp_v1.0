@@ -150,6 +150,21 @@
   --p-hex: #f43f5e;
 }
 
+/* Corporate Blue — Professional Corporate Blue Elegance (#003366 / #006699 / #0099CC / #B3C7E6) */
+[data-theme="corporate-blue"] {
+  --p-50:  232 238 248;
+  --p-100: 179 199 230;  /* #B3C7E6 */
+  --p-200: 119 184 221;
+  --p-300:  60 169 213;
+  --p-400:   0 153 204;  /* #0099CC */
+  --p-500:   0 102 153;  /* #006699 */
+  --p-600:   0  77 128;
+  --p-700:   0  51 102;  /* #003366 */
+  --p-800:   0  38  77;
+  --p-900:   0  28  56;
+  --p-hex: #006699;
+}
+
 /* Dynamic primary using current preset */
 .bg-gradient-primary { background: rgb(var(--p-500)) !important; }
 .text-gradient       { color: rgb(var(--p-500)); }

@@ -8,6 +8,7 @@ const colorPresets = [
   { id: 'green', label: 'Emerald', hex: '#10b981' },
   { id: 'orange', label: 'Orange', hex: '#f97316' },
   { id: 'red', label: 'Rose', hex: '#f43f5e' },
+  { id: 'corporate-blue', label: 'Corporate Blue', hex: '#006699' },
 ]
 
 function Toggle({ checked, onChange, label }) {
@@ -129,14 +130,14 @@ export default function SettingsPanel() {
           {/* Color Presets */}
           <div className="px-5 py-5 border-b border-slate-100 dark:border-slate-700">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">Color Preset</h4>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="flex flex-wrap gap-2">
               {colorPresets.map(preset => (
                 <button
                   key={preset.id}
                   onClick={() => setColorPreset(preset.id)}
                   title={preset.label}
                   className={clsx(
-                    'flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all duration-150',
+                    'flex flex-col items-center gap-1.5 p-2 w-14 rounded-xl transition-all duration-150',
                     colorPreset === preset.id
                       ? 'bg-slate-100 dark:bg-slate-700 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-800'
                       : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
@@ -147,7 +148,7 @@ export default function SettingsPanel() {
                     className="w-8 h-8 rounded-full shadow-sm"
                     style={{ backgroundColor: preset.hex }}
                   />
-                  <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400">{preset.label}</span>
+                  <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400 text-center leading-tight">{preset.label}</span>
                 </button>
               ))}
             </div>
