@@ -525,6 +525,14 @@ class FormSectionSignature(models.Model):
         null=True,
         blank=True,
     )
+    auth_method = models.CharField(
+        max_length=16, blank=True,
+        help_text="How the signing session was authenticated: totp, pin, password_only, or push_demo.",
+    )
+    trusted_session = models.ForeignKey(
+        "TrustedSession", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    signed_ip = models.GenericIPAddressField(null=True, blank=True)
 
     class Meta:
         unique_together = [("submission", "section_key")]
@@ -1031,6 +1039,14 @@ class FlyingMinuteSignature(models.Model):
     signed_at = models.DateTimeField(auto_now_add=True)
     remarks = models.TextField(blank=True,
         help_text="Optional remarks or conditions attached to this member's decision.")
+    auth_method = models.CharField(
+        max_length=16, blank=True,
+        help_text="How the signing session was authenticated: totp, pin, password_only, or push_demo.",
+    )
+    trusted_session = models.ForeignKey(
+        "TrustedSession", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    signed_ip = models.GenericIPAddressField(null=True, blank=True)
 
     class Meta:
         ordering = ["signed_at"]
@@ -2085,6 +2101,14 @@ class DocumentSignature(models.Model):
     signed_date = models.DateField(help_text="Date entered by the signer.")
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)
+    auth_method = models.CharField(
+        max_length=16, blank=True,
+        help_text="How the signing session was authenticated: totp, pin, password_only, or push_demo.",
+    )
+    trusted_session = models.ForeignKey(
+        "TrustedSession", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    signed_ip = models.GenericIPAddressField(null=True, blank=True)
 
     class Meta:
         unique_together = [['document', 'signed_by']]

@@ -1788,6 +1788,7 @@ class TOTPVerifySerializer(serializers.Serializer):
             if not verify_totp_code(profile.totp_secret, code):
                 raise serializers.ValidationError("Push approval failed.")
             attrs["user"] = user
+            attrs["via_push_demo"] = True
             return attrs
 
         # Normal TOTP code verification
@@ -1798,6 +1799,7 @@ class TOTPVerifySerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid verification code.")
 
         attrs["user"] = user
+        attrs["via_push_demo"] = False
         return attrs
 
 

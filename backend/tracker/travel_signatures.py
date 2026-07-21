@@ -53,6 +53,7 @@ def sign_travel_section(
     section_key: str,
     approved: bool | None = None,
     remarks: str = "",
+    provenance: dict | None = None,
 ) -> FormSectionSignature:
     from .travel_forms import is_travel_form_code
 
@@ -90,6 +91,7 @@ def sign_travel_section(
             "signer_name": user.get_full_name() or user.username,
             "approved": approved,
             "remarks": remarks,
+            **(provenance or {}),
         },
     )
     if sig_file:

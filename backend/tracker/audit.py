@@ -28,6 +28,26 @@ def _get_ua(request):
     return (request.META.get("HTTP_USER_AGENT") or "")[:512]
 
 
+def signing_provenance(request):
+    """Auth-method/session/IP captured from the JWT claims set at login —
+    stamped onto signature records for legal defensibility. Blank/None on
+    tokens issued before this shipped, or on non-JWT auth (e.g. API key)."""
+    token = getattr(request, "auth", None)
+    auth_method = ""
+    trusted_session_id = None
+    if token is not None:
+        try:
+            auth_method = token.get("auth_method") or ""
+            trusted_session_id = token.get("trusted_session_id")
+        except Exception:
+            pass
+    return {
+        "auth_method": auth_method,
+        "trusted_session_id": trusted_session_id,
+        "signed_ip": _get_ip(request),
+    }
+
+
 def log_action(
     request,
     action: str,

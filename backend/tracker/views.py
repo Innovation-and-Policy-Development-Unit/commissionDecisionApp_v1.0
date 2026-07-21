@@ -2484,6 +2484,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             approved = bool(approved)
         remarks = request.data.get("remarks", "")
         try:
+            from .audit import signing_provenance
             from .travel_signatures import sign_travel_section
 
             sig = sign_travel_section(
@@ -2492,6 +2493,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 section_key=section_key,
                 approved=approved,
                 remarks=remarks,
+                provenance=signing_provenance(request),
             )
         except PermissionDenied as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
@@ -5795,7 +5797,7 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
         # Create a trusted session for PIN-based re-auth (if 2FA was skipped or not required)
         # Complies with NCSS 2030 CSP-4 Session Security
         TrustedSession.objects.filter(user=user, is_active=True).update(is_active=False)
-        TrustedSession.objects.create(
+        ts = TrustedSession.objects.create(
             user=user,
             expires_at=TrustedSession.compute_expiry(),
             ip_address=ip,
@@ -5809,7 +5811,18 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
              resource_type="User", resource_id=user.id,
              resource_label=user.username,
              description=f"Successful login: {user.username}")
-        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+        # Mint tokens ourselves (rather than returning serializer.validated_data)
+        # so we can carry auth-provenance claims — signature legal defensibility
+        # depends on later requests being able to prove which login produced them.
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(user)
+        refresh["auth_method"] = "password_only"
+        refresh["trusted_session_id"] = ts.id
+        return Response(
+            {"access": str(refresh.access_token), "refresh": str(refresh)},
+            status=status.HTTP_200_OK,
+        )
 
 
 class LogoutView(APIView):
@@ -5964,7 +5977,7 @@ class VerifyOTPView(APIView):
             request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
             or request.META.get("REMOTE_ADDR", "unknown")
         )
-        TrustedSession.objects.create(
+        ts = TrustedSession.objects.create(
             user=user,
             expires_at=TrustedSession.compute_expiry(),
             ip_address=ip,
@@ -5973,6 +5986,8 @@ class VerifyOTPView(APIView):
 
         _security_log.info("LOGIN_2FA_SUCCESS | username=%s | ip=%s", user.username, ip)
 
+        refresh["auth_method"] = "push_demo" if ser.validated_data.get("via_push_demo") else "totp"
+        refresh["trusted_session_id"] = ts.id
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
@@ -6064,6 +6079,8 @@ class SessionPinVerifyView(APIView):
              resource_label=user.username,
              description=f"Trusted session login via PIN for {user.username}")
 
+        refresh["auth_method"] = "pin"
+        refresh["trusted_session_id"] = ts.id
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
@@ -7128,10 +7145,12 @@ class MeetingViewSet(viewsets.ModelViewSet):
         if decision not in ("approve", "reject", "abstain"):
             return Response({"detail": "Decision must be 'approve', 'reject', or 'abstain'."}, status=400)
 
+        from .audit import signing_provenance
+
         sig, created = FlyingMinuteSignature.objects.update_or_create(
             meeting=meeting,
             member=request.user,
-            defaults={"decision": decision, "remarks": remarks},
+            defaults={"decision": decision, "remarks": remarks, **signing_provenance(request)},
         )
         return Response({
             "detail": f"Flying Minute signed as '{decision}'.",
@@ -9319,10 +9338,13 @@ class DocumentSignatureViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(signed_by=self.request.user)
+        from .audit import signing_provenance
+        serializer.save(signed_by=self.request.user, **signing_provenance(self.request))
 
     def create(self, request, *args, **kwargs):
         """Upsert: a user can update their own signature placement on a document."""
+        from .audit import signing_provenance
+
         doc_id = request.data.get('document')
         existing = DocumentSignature.objects.filter(
             document_id=doc_id,
@@ -9334,7 +9356,7 @@ class DocumentSignatureViewSet(viewsets.ModelViewSet):
             snapshot = request.FILES.get('snapshot')
             if snapshot:
                 existing.snapshot = snapshot
-            serializer.save()
+            serializer.save(**signing_provenance(request))
             return Response(serializer.data, status=status.HTTP_200_OK)
         return super().create(request, *args, **kwargs)
 
