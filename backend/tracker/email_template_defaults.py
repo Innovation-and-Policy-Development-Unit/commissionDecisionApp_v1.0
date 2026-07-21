@@ -320,6 +320,24 @@ DEFAULT_EMAIL_TEMPLATES = [
         "body_html_template": "",
     },
     {
+        "slug": "submission_received_confirmation",
+        "name": "Submission received — external confirmation",
+        "category": "submission_workflow",
+        "description": "Confirms PSC receipt to the ministry DG/HR contacts and any additional "
+                        "addresses HR added — includes the public tracking link, no login required.",
+        "placeholders": _ph("submission_reference, submission_title, tracking_url"),
+        "subject_template": "Your submission {{submission_reference}} has been received by OPSC",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "{{submission_title}} (reference {{submission_reference}}) has been received by the "
+            "Office of the Public Service Commission and is now being processed.\n\n"
+            "You can track its progress at any time, without needing to log in:\n"
+            "{{tracking_url}}\n\n"
+            "Keep this reference number for future enquiries: {{submission_reference}}"
+        ),
+        "body_html_template": "",
+    },
+    {
         "slug": "submission_returned_clarification",
         "name": "Returned for clarification",
         "category": "submission_workflow",
@@ -584,6 +602,11 @@ SAMPLE_EMAIL_CONTEXTS = {
         "submission_title": "Senior appointment — Ministry of Finance",
         "submission_url": "http://localhost:8080/submissions/1",
         "new_stage": "Submitted to PSC",
+    },
+    "submission_received_confirmation": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Senior appointment — Ministry of Finance",
+        "tracking_url": "http://localhost:8080/track?ref=PSC-2026-0042",
     },
     "meeting_scheduled": {
         "meeting_reference": "PSC-MTG-2026-014",

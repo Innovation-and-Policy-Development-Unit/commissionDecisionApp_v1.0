@@ -5,7 +5,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from ..models import (
-    Department, FormCategory, Ministry, Profile, Role, Submission,
+    AuditLog, Department, FormCategory, Ministry, Profile, Role, Submission,
     SubmissionStageEvent, Unit, WorkflowStage,
 )
 from ..public_tracking_views import MILESTONES, STAGE_INFO
@@ -156,6 +156,27 @@ class TrackSubmissionAPITests(TestCase):
             [h["stage_label"] for h in body["history"]],
             ["Submitted", "Registered", "Registered"],
         )
+
+    def test_lookup_is_logged_to_audit_log(self):
+        sub = self._make(WorkflowStage.SUBMITTED)
+        AuditLog.objects.all().delete()
+
+        self.client.get(f"/api/track/{sub.reference_number}/")
+
+        entry = AuditLog.objects.filter(resource_type="submission_track").first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.resource_id, sub.reference_number)
+        self.assertIsNone(entry.actor)
+        self.assertEqual(entry.action, AuditLog.Action.READ)
+
+    def test_not_found_lookup_is_also_logged(self):
+        AuditLog.objects.all().delete()
+
+        self.client.get("/api/track/PSC-2026-99999/")
+
+        entry = AuditLog.objects.filter(resource_type="submission_track").first()
+        self.assertIsNotNone(entry)
+        self.assertIn("not found", entry.description.lower())
 
     def test_history_excludes_draft_events(self):
         sub = self._make(WorkflowStage.DRAFT)

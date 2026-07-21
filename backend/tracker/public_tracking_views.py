@@ -13,7 +13,8 @@ from rest_framework import permissions
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 
-from .models import Submission, WorkflowStage
+from .audit import log_action
+from .models import AuditLog, Submission, WorkflowStage
 from .throttles import SubmissionTrackThrottle
 
 # The public-facing progress sequence. Every forward-path stage maps onto one
@@ -86,7 +87,12 @@ STAGE_INFO = {
 }
 
 
-def _not_found():
+def _not_found(request, ref):
+    log_action(
+        request, AuditLog.Action.READ,
+        resource_type="submission_track", resource_id=ref, resource_label=ref,
+        description="Public tracking lookup — not found",
+    )
     return Response({"detail": "Submission not found."}, status=404)
 
 
@@ -119,7 +125,7 @@ def track_submission_view(request, reference_number):
     """
     ref = (reference_number or "").strip().upper()
     if not ref:
-        return _not_found()
+        return _not_found(request, ref)
 
     submission = (
         Submission.objects.filter(reference_number__iexact=ref)
@@ -128,12 +134,19 @@ def track_submission_view(request, reference_number):
     )
     info = STAGE_INFO.get(submission.current_stage) if submission else None
     if submission is None or info is None:
-        return _not_found()
+        return _not_found(request, ref)
 
     assigned_role = None
     assigned_to = submission.assigned_to
     if assigned_to is not None and hasattr(assigned_to, "psc_profile"):
         assigned_role = assigned_to.psc_profile.get_role_display()
+
+    log_action(
+        request, AuditLog.Action.READ,
+        resource_type="submission_track", resource_id=submission.reference_number,
+        resource_label=submission.reference_number,
+        description="Public tracking lookup",
+    )
 
     return Response({
         "reference_number": submission.reference_number,

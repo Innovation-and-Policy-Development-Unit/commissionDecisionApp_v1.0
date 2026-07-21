@@ -430,6 +430,20 @@ def _dg_recipients_for_submission(submission):
     return [p.user for p in base.filter(department__isnull=True)]
 
 
+def _hr_recipients_for_submission(submission):
+    """Resolve ministry HR contacts for this submission (ministry-scoped)."""
+    from .models import Profile
+
+    if not submission or not submission.ministry_id:
+        return []
+    profiles = Profile.objects.filter(
+        role=Role.MINISTRY_HR,
+        ministry_id=submission.ministry_id,
+        user__is_active=True,
+    ).select_related("user")
+    return [p.user for p in profiles]
+
+
 def _get_submission_chain(submission):
     """Return the approval_chain governing this submission, or [].
 
@@ -759,6 +773,14 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
             submission, prev, target, recipient_list, decision_label=label, remarks=remarks
         )
 
+    if target == WorkflowStage.SUBMITTED:
+        from .email_notify import notify_external_submission_confirmation
+
+        notify_external_submission_confirmation(
+            submission,
+            _dg_recipients_for_submission(submission) + _hr_recipients_for_submission(submission),
+        )
+
 
 # Stages counted as "active" by the dashboard quick-filter. Kept in sync with the
 # ACTIVE_STAGES set in frontend/src/pages/psc/SubmissionLog.jsx and dashboard_stats_view.
@@ -923,6 +945,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                         "contact PSC IT or select a ministry if lodging on behalf of a line ministry."
                     ),
                 })
+            if validated.get("notify_emails"):
+                from .serializers import assert_notify_emails_match_ministry
+                assert_notify_emails_match_ministry(ministry_id, validated["notify_emails"])
             kwargs = {
                 "current_stage": WorkflowStage.DRAFT,
                 "is_internal": False,

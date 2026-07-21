@@ -33,6 +33,7 @@ import PSCForm37View from './PSCForm37View'
 import DynamicFormRenderer from '../../components/shared/DynamicFormRenderer'
 import BaseSelect from '../../components/shared/BaseSelect'
 import BaseTextarea from '../../components/shared/BaseTextarea'
+import EmailChipInput from '../../components/shared/EmailChipInput'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseInput from '../../components/shared/BaseInput'
 import BaseMessageBar from '../../components/shared/BaseMessageBar'
@@ -168,7 +169,7 @@ export default function SubmissionDetail() {
   const [showPreview, setShowPreview] = useState(false)
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ title: '', agenda_category: '', notes: '' })
+  const [editForm, setEditForm] = useState({ title: '', agenda_category: '', notes: '', notify_emails: [] })
   const [editBusy, setEditBusy] = useState(false)
   const [editError, setEditError] = useState('')
   const [officers, setOfficers] = useState([])
@@ -764,6 +765,7 @@ const stageDescriptions = {
                       title: submission.title || '',
                       agenda_category: submission.agenda_category || '',
                       notes: submission.notes || '',
+                      notify_emails: submission.notify_emails || [],
                     })
                     setEditError('')
                     setEditOpen(true)
@@ -1667,6 +1669,7 @@ const stageDescriptions = {
                   title: editForm.title.trim(),
                   agenda_category: editForm.agenda_category || undefined,
                   notes: editForm.notes,
+                  notify_emails: editForm.notify_emails,
                 })
                 setSubmission(data)
                 toast.success('Submission updated.')
@@ -1701,6 +1704,13 @@ const stageDescriptions = {
               value={editForm.notes}
               onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
               placeholder="Internal notes (optional)"
+            />
+            <EmailChipInput
+              label="Notify additional people (optional)"
+              hint="They'll get an email with the reference number and a link to track progress — no account needed."
+              value={editForm.notify_emails}
+              onChange={emails => setEditForm(f => ({ ...f, notify_emails: emails }))}
+              max={8}
             />
             <div className="flex gap-3 pt-1">
               <BaseButton type="submit" variant="primary" loading={editBusy} loadingLabel="Saving">

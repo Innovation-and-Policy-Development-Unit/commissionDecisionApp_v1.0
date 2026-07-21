@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search, FileSearch, Check } from 'lucide-react'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
@@ -62,14 +63,13 @@ function Stepper({ milestones, milestoneIndex, isPaused }) {
 }
 
 export default function TrackSubmission() {
-  const [referenceNumber, setReferenceNumber] = useState('')
+  const [searchParams] = useSearchParams()
+  const [referenceNumber, setReferenceNumber] = useState(searchParams.get('ref') || '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
 
-  const handleSubmit = async e => {
-    e.preventDefault()
-    const ref = referenceNumber.trim()
+  const lookup = async ref => {
     if (!ref) return
     setError('')
     setResult(null)
@@ -82,6 +82,17 @@ export default function TrackSubmission() {
     } finally {
       setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    const ref = searchParams.get('ref')
+    if (ref) lookup(ref.trim())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleSubmit = e => {
+    e.preventDefault()
+    lookup(referenceNumber.trim())
   }
 
   return (

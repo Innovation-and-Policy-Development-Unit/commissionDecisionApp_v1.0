@@ -13,6 +13,7 @@ import BaseInput from '../../components/shared/BaseInput'
 import BaseSelect from '../../components/shared/BaseSelect'
 import BaseTextarea from '../../components/shared/BaseTextarea'
 import BaseMessageBar from '../../components/shared/BaseMessageBar'
+import EmailChipInput from '../../components/shared/EmailChipInput'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -232,6 +233,7 @@ function CommissionSubmissionForm({
     department: '',
     unit: '',
     notes: '',
+    notify_emails: [],
   })
   const availUnits = units.filter(
     u => !form.department || u.department === parseInt(form.department, 10),
@@ -276,6 +278,7 @@ function CommissionSubmissionForm({
         agenda_category: form.agenda_category,
         received_at: new Date().toISOString(),
         notes: form.notes,
+        notify_emails: form.notify_emails,
       }
       if (!isMinistryUser && form.ministry) payload.ministry = Number(form.ministry)
       if (form.department) payload.department = Number(form.department)
@@ -394,6 +397,14 @@ function CommissionSubmissionForm({
           rows={3}
           value={form.notes}
           onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+        />
+
+        <EmailChipInput
+          label="Notify additional people (optional)"
+          hint="They'll get an email with the reference number and a link to track progress — no account needed."
+          value={form.notify_emails}
+          onChange={emails => setForm(f => ({ ...f, notify_emails: emails }))}
+          max={8}
         />
 
         <div className="flex items-center gap-3 pt-2">

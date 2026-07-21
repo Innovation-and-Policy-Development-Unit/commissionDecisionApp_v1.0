@@ -1467,6 +1467,11 @@ class Submission(models.Model):
     assessment_started_at = models.DateTimeField(null=True, blank=True)
     assessment_deadline_at = models.DateTimeField(null=True, blank=True)
     tags = models.JSONField(default=list, blank=True, help_text="Free-text tags (set manually or by automations).")
+    notify_emails = models.JSONField(
+        default=list, blank=True,
+        help_text="Extra email addresses (no SCDMS account required) to notify when this "
+                   "submission reaches PSC, so they can track its progress via reference number.",
+    )
     checklist_review_started_at  = models.DateTimeField(null=True, blank=True,
         help_text="When this submission entered Manager Checklist Review.")
     checklist_review_deadline_at = models.DateTimeField(null=True, blank=True,

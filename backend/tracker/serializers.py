@@ -899,6 +899,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "secretary_only",
             "requires_travel_letter",
             "travel_endorsers",
+            "notify_emails",
             "parent_submission",
             "parent_reference",
             "parent_title",
@@ -1148,6 +1149,44 @@ class ChecklistItemSerializer(serializers.ModelSerializer):
         read_only_fields = ('document', 'checked_by_username', 'checked_at')
 
 
+def ministry_email_domains(ministry_id):
+    """Email domains observed on this ministry's existing verified accounts
+    (any active Profile linked to it) — used to bound the ad-hoc notify_emails
+    list to the submitting organization, since those addresses are otherwise
+    free-text and unverified."""
+    from .models import Profile
+
+    if not ministry_id:
+        return set()
+    emails = (
+        Profile.objects.filter(ministry_id=ministry_id, user__is_active=True)
+        .exclude(user__email="")
+        .values_list("user__email", flat=True)
+    )
+    return {e.rsplit("@", 1)[-1].lower() for e in emails if "@" in e}
+
+
+def assert_notify_emails_match_ministry(ministry_id, emails):
+    """Raise a ValidationError if any notify_email's domain isn't one used by
+    this ministry's existing accounts. Fails closed if no domain can be
+    inferred (no verified accounts yet for this ministry)."""
+    if not emails:
+        return
+    domains = ministry_email_domains(ministry_id)
+    if not domains:
+        raise serializers.ValidationError({
+            "notify_emails": "Can't verify additional recipients for this ministry yet — "
+                              "contact PSC IT to add them, or leave this list empty.",
+        })
+    bad = [e for e in emails if e.rsplit("@", 1)[-1].lower() not in domains]
+    if bad:
+        allowed = ", ".join(sorted(f"@{d}" for d in domains))
+        raise serializers.ValidationError({
+            "notify_emails": f"These addresses aren't in your ministry's domain ({allowed}): "
+                              f"{', '.join(bad)}.",
+        })
+
+
 class SubmissionWriteSerializer(serializers.ModelSerializer):
     # Ministry is required for external submissions but auto-resolved for internal
     # (CSU/ODU) submissions on the backend, so we make it optional here.
@@ -1184,8 +1223,32 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             "is_attachment",
             "is_internal",
             "travel_endorsers",
+            "notify_emails",
         )
         read_only_fields = ("id", "is_internal", "secretary_only", "requires_travel_letter")
+
+    def validate_notify_emails(self, value):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from django.core.validators import validate_email
+
+        if not isinstance(value, list):
+            raise serializers.ValidationError("notify_emails must be a list of email addresses.")
+        cleaned = []
+        seen = set()
+        for raw in value:
+            email = (raw or "").strip().lower()
+            if not email:
+                continue
+            try:
+                validate_email(email)
+            except DjangoValidationError:
+                raise serializers.ValidationError(f"'{raw}' is not a valid email address.")
+            if email not in seen:
+                seen.add(email)
+                cleaned.append(email)
+        if len(cleaned) > 8:
+            raise serializers.ValidationError("You can add up to 8 additional email addresses.")
+        return cleaned
 
     def validate(self, attrs):
         unit = attrs.get("unit")
@@ -1194,6 +1257,15 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             attrs["ministry"] = unit.department.ministry
             if unit.routed_unit and not attrs.get("routed_unit"):
                 attrs["routed_unit"] = unit.routed_unit
+
+        if "notify_emails" in attrs:
+            ministry = attrs.get("ministry") or (self.instance.ministry if self.instance else None)
+            # If ministry isn't known yet (e.g. the ministry_hr create path, where it's
+            # resolved server-side after validation), the view's perform_create asserts
+            # this instead — skip here rather than block on an incomplete picture.
+            if ministry:
+                assert_notify_emails_match_ministry(ministry.id, attrs["notify_emails"])
+
         request = self.context.get("request")
         if not request or not getattr(request, "user", None):
             return attrs

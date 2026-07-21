@@ -26,6 +26,7 @@ def submission_email_context(submission: Submission) -> dict[str, str]:
         "submission_reference": submission.reference_number or str(submission.pk),
         "submission_title": submission.title or "",
         "submission_url": f"{base}/submissions/{submission.pk}",
+        "tracking_url": f"{base}/track?ref={submission.reference_number or ''}",
     }
 
 
@@ -102,6 +103,33 @@ def user_recipient_context(user: User | None) -> dict[str, str]:
 def merge_recipient_context(user: User, **extra: str) -> dict[str, str]:
     """Recipient personalization merged with event-specific placeholder values."""
     return {**user_recipient_context(user), **extra}
+
+
+def notify_external_submission_confirmation(
+    submission: Submission, internal_users: Iterable[User]
+) -> None:
+    """Confirm PSC receipt to the submission's DG/HR contacts and any ad-hoc
+    notify_emails — every recipient gets the public tracking link, no login
+    needed. Separate from send_transition_emails: these recipients may have
+    no User account at all (raw notify_emails strings)."""
+    base_ctx = submission_email_context(submission)
+    seen: set[str] = set()
+
+    for user in internal_users:
+        email = (getattr(user, "email", None) or "").strip().lower()
+        if not email or email in seen:
+            continue
+        seen.add(email)
+        ctx = merge_recipient_context(user, **base_ctx)
+        send_templated_email(slug="submission_received_confirmation", to=[email], context=ctx)
+
+    for raw_email in submission.notify_emails or []:
+        email = (raw_email or "").strip().lower()
+        if not email or email in seen:
+            continue
+        seen.add(email)
+        ctx = merge_recipient_context(None, **base_ctx)
+        send_templated_email(slug="submission_received_confirmation", to=[email], context=ctx)
 
 
 def get_transition_email_slug(prev: str, target: str) -> str | None:
