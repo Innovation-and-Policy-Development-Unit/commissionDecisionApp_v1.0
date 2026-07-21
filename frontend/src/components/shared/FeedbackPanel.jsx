@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Send, X, AlertCircle, CheckCircle2, MessageSquare, Camera, Trash2 } from 'lucide-react'
+import { Send, X, AlertCircle, CheckCircle2, MessageSquare, Camera, Trash2, ClipboardList, ExternalLink } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import api from '../../api/client'
 import clsx from 'clsx'
@@ -172,6 +172,23 @@ export default function FeedbackPanel({ open, onClose }) {
             }
             politeness={error ? 'assertive' : 'polite'}
           />
+
+          <a
+            href="/feedback/checklist"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 p-3.5 mb-5 rounded-xl border border-primary-100 dark:border-primary-900/40 bg-primary-50/60 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+          >
+            <div className="w-9 h-9 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 flex items-center justify-center shrink-0">
+              <ClipboardList size={18} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">System Feedback Checklist</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Structured pre-pilot review — opens in a new tab</p>
+            </div>
+            <ExternalLink size={14} className="ml-auto text-slate-400 shrink-0" aria-hidden="true" />
+          </a>
+
           {success ? (
             <div
               className="h-full flex flex-col items-center justify-center text-center animate-scale-in"

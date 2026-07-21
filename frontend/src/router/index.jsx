@@ -28,6 +28,7 @@ const FlagMonitor = lazy(() => import('../pages/psc/FlagMonitor'))
 const AlertRules = lazy(() => import('../pages/psc/AlertRules'))
 const Automations = lazy(() => import('../pages/psc/Automations'))
 const RedirectToMinuteIntake = lazy(() => import('../pages/meeting/RedirectToMinuteIntake'))
+const FeedbackChecklist = lazy(() => import('../pages/feedback/FeedbackChecklist'))
 const AdminPanel = lazy(() => import('../pages/admin/AdminPanel'))
 const MinistriesDepartments = lazy(() => import('../pages/admin/MinistriesDepartments'))
 const AdminApiKeysPage = lazy(() => import('../pages/admin/AdminApiKeysPage'))
@@ -100,6 +101,7 @@ export default function AppRouter() {
         <Route path="/secretariat/agenda/sitting-pack" element={<S><AgendaSittingPack /></S>} />
         <Route element={<Layout />}>
           <Route path="/" element={<HomeDashboard />} />
+          <Route path="/feedback/checklist" element={<S><FeedbackChecklist /></S>} />
           <Route path="/submissions" element={<SubmissionLog />} />
           <Route path="/submissions/new" element={<S><SubmissionForm /></S>} />
           <Route path="/submissions/:id" element={<S detail><SubmissionDetail /></S>} />

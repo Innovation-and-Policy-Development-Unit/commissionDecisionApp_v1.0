@@ -44,6 +44,7 @@ from .models import (
     SystemSetting,
     FeedbackReport,
     FeedbackComment,
+    FeedbackChecklistResponse,
     Comment,
     FormSectionSignature,
     RequiredDocument,
@@ -1488,6 +1489,25 @@ class FeedbackReportDetailSerializer(FeedbackReportSerializer):
 
     class Meta(FeedbackReportSerializer.Meta):
         fields = FeedbackReportSerializer.Meta.fields + ("comments",)
+
+
+class FeedbackChecklistResponseSerializer(serializers.ModelSerializer):
+    username = serializers.ReadOnlyField(source="user.username")
+
+    class Meta:
+        model = FeedbackChecklistResponse
+        fields = (
+            "id", "user", "username", "unit", "section_id", "section_title",
+            "item_id", "item_text", "rating", "comment", "screenshot",
+            "created_at", "updated_at",
+        )
+        read_only_fields = ("id", "user", "created_at", "updated_at")
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        if instance.screenshot:
+            rep["screenshot"] = instance.screenshot.url
+        return rep
 
 
 class UserAdminUpdateSerializer(serializers.Serializer):

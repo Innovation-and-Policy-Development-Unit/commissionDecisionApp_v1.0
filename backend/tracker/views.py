@@ -23,6 +23,7 @@ from .models import (
     CommissionSubTask,
     CommissionTaskStatus,
     CommissionTaskUpdate,
+    FeedbackChecklistResponse,
     Department,
     FlyingMinuteSignature,
     AgendaSection,
@@ -113,6 +114,7 @@ from .serializers import (
     FeedbackReportSerializer,
     FeedbackReportDetailSerializer,
     FeedbackCommentSerializer,
+    FeedbackChecklistResponseSerializer,
     NotificationSerializer,
     MinutesSerializer,
     MinuteAgendaIntakeSerializer,
@@ -8603,6 +8605,76 @@ class FeedbackStatusView(APIView):
     def get(self, request):
         enabled = SystemSetting.get_bool("ENABLE_USER_FEEDBACK", default=True)
         return Response({"enabled": enabled})
+
+
+class FeedbackChecklistViewSet(viewsets.ViewSet):
+    """
+    Pre-pilot System Feedback Checklist: per-item ratings/comments/screenshots.
+    - GET  mine/   → the current user's own responses
+    - POST save/   → upsert one or more items (multipart: `items` JSON string,
+                      `unit`, and optional files named `screenshot_<item_id>`)
+    - GET  team/   → every user's responses (any authenticated staff member —
+                      this is an internal review tool, not sensitive data)
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
+
+    @action(detail=False, methods=["get"])
+    def mine(self, request):
+        qs = FeedbackChecklistResponse.objects.filter(user=request.user)
+        return Response(FeedbackChecklistResponseSerializer(qs, many=True, context={"request": request}).data)
+
+    @action(detail=False, methods=["get"])
+    def team(self, request):
+        qs = FeedbackChecklistResponse.objects.select_related("user").all()
+        return Response(FeedbackChecklistResponseSerializer(qs, many=True, context={"request": request}).data)
+
+    @action(detail=False, methods=["post"])
+    def save(self, request):
+        import json as _json
+
+        raw_items = request.data.get("items")
+        if not raw_items:
+            return Response({"detail": "Provide `items` as a JSON array."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            items = _json.loads(raw_items)
+        except (TypeError, ValueError):
+            return Response({"detail": "`items` must be valid JSON."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(items, list):
+            return Response({"detail": "`items` must be a JSON array."}, status=status.HTTP_400_BAD_REQUEST)
+
+        unit = request.data.get("unit", "")
+        saved = []
+        for entry in items:
+            item_id = (entry or {}).get("item_id")
+            if not item_id:
+                continue
+            obj, _created = FeedbackChecklistResponse.objects.update_or_create(
+                user=request.user,
+                item_id=item_id,
+                defaults={
+                    "unit": unit,
+                    "section_id": entry.get("section_id", ""),
+                    "section_title": entry.get("section_title", ""),
+                    "item_text": entry.get("item_text", ""),
+                    "rating": entry.get("rating") or "",
+                    "comment": entry.get("comment") or "",
+                },
+            )
+            screenshot_file = request.FILES.get(f"screenshot_{item_id}")
+            if screenshot_file:
+                obj.screenshot = screenshot_file
+                obj.save(update_fields=["screenshot"])
+            elif entry.get("remove_screenshot"):
+                obj.screenshot.delete(save=False)
+                obj.screenshot = None
+                obj.save(update_fields=["screenshot"])
+            saved.append(obj)
+
+        return Response(
+            FeedbackChecklistResponseSerializer(saved, many=True, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 # ── Minutes & Transcript ──────────────────────────────────────────────────────

@@ -3095,6 +3095,45 @@ class FeedbackComment(models.Model):
         return f"Comment by {self.author.username} on {self.report_id}"
 
 
+class FeedbackChecklistRating(models.TextChoices):
+    GOOD = "good", "Works well"
+    NEEDS = "needs", "Needs work"
+    MISSING = "missing", "Missing / N/A"
+
+
+class FeedbackChecklistResponse(models.Model):
+    """
+    One row per (user, item_id) in the pre-pilot System Feedback Checklist.
+    Section/item text is snapshotted at save time so historical responses stay
+    readable even if the checklist copy changes later. Re-saving an item
+    updates the existing row rather than creating a new one.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="feedback_checklist_responses",
+    )
+    unit = models.CharField(max_length=120, blank=True, help_text="Free-text unit label shown on the response, e.g. VIPAM / HR / ODU.")
+
+    section_id  = models.CharField(max_length=16)
+    section_title = models.CharField(max_length=255)
+    item_id     = models.CharField(max_length=24)
+    item_text   = models.TextField()
+
+    rating  = models.CharField(max_length=10, choices=FeedbackChecklistRating.choices, blank=True)
+    comment = models.TextField(blank=True)
+    screenshot = models.ImageField(upload_to="feedback_checklist/screenshots/", null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("user", "item_id")]
+        ordering = ["user_id", "section_id", "item_id"]
+        verbose_name = "Feedback Checklist Response"
+
+    def __str__(self):
+        return f"{self.user.username} · {self.item_id}"
+
+
 class Notification(models.Model):
     class Channel(models.TextChoices):
         IN_APP = "in_app", "In-App"

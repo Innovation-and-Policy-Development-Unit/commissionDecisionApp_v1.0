@@ -93,6 +93,7 @@ from .views import (
     FeedbackViewSet,
     FeedbackCommentViewSet,
     FeedbackStatusView,
+    FeedbackChecklistViewSet,
     dashboard_view,
     reports_view,
     ai_smart_report_view,
@@ -175,6 +176,7 @@ router.register(r"security-scans",   SecurityScanViewSet,     basename="security
 router.register(r"security-notices", SecurityNoticeViewSet,   basename="security-notice")
 router.register(r"feedback",         FeedbackViewSet,         basename="feedback")
 router.register(r"feedback-comments", FeedbackCommentViewSet, basename="feedback-comments")
+router.register(r"feedback-checklist", FeedbackChecklistViewSet, basename="feedback-checklist")
 router.register(r"notifications",    NotificationViewSet,    basename="notification")
 router.register(r"comments",         CommentViewSet,         basename="comment")
 router.register(r"minutes",          MinutesViewSet,          basename="minutes")
