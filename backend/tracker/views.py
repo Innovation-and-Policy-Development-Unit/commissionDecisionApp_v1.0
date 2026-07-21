@@ -431,7 +431,21 @@ def _dg_recipients_for_submission(submission):
 
 
 def _get_submission_chain(submission):
-    """Return the approval_chain for a submission's agenda section, or []."""
+    """Return the approval_chain governing this submission, or [].
+
+    Attachment submissions (is_attachment=True) are governed by their own
+    PSCFormType.approval_chain — e.g. PSC Form 2-2 requires ODU Manager then
+    Director sign-off before it counts as satisfied on the parent's checklist.
+    Internal (CSU/ODU) submissions are governed by their AgendaSection.approval_chain.
+    """
+    if submission.is_attachment:
+        if not submission.form_type_code:
+            return []
+        try:
+            ft = PSCFormType.objects.filter(code=submission.form_type_code).first()
+            return ft.approval_chain if ft and ft.approval_chain else []
+        except Exception:
+            return []
     if not submission.agenda_category:
         return []
     try:
@@ -449,13 +463,13 @@ def _chain_stage_index(chain, stage):
     return -1
 
 
-def _chain_targets_for_role(submission, role):
+def _chain_targets_for_role(submission, role, user=None):
     """
     If the submission has a non-empty approval_chain and this role participates
     in it, return the list of allowed target stages. Returns None if the chain
     does not apply (use default logic).
     """
-    if not submission.is_internal:
+    if not (submission.is_internal or submission.is_attachment):
         return None
     chain = _get_submission_chain(submission)
     if not chain:
@@ -464,9 +478,14 @@ def _chain_targets_for_role(submission, role):
     current = submission.current_stage
     from .transitions import INTERNAL_SUBMITTER_ROLES
 
-    # DRAFT: internal submitters send to first chain step
-    if current == WorkflowStage.DRAFT and role in INTERNAL_SUBMITTER_ROLES:
-        return [chain[0]["stage"]]
+    # DRAFT: internal submitters send to first chain step. For an attachment
+    # submission (e.g. PSC Form 2-2), there's no fixed submitter role — the
+    # attachment's own creator sends it in, whatever role they hold.
+    if current == WorkflowStage.DRAFT:
+        if submission.is_internal and role in INTERNAL_SUBMITTER_ROLES:
+            return [chain[0]["stage"]]
+        if submission.is_attachment and user is not None and submission.created_by_id == user.id:
+            return [chain[0]["stage"]]
 
     # Chain steps: the role listed in a step approves it
     idx = _chain_stage_index(chain, current)
@@ -476,8 +495,12 @@ def _chain_targets_for_role(submission, role):
             targets = [WorkflowStage.DRAFT]   # can always return for changes
             if idx + 1 < len(chain):
                 targets.append(chain[idx + 1]["stage"])   # next step
-            else:
+            elif submission.is_internal:
                 targets.append(WorkflowStage.SUBMITTED)   # last step → Secretary
+            else:
+                # Attachment forms terminate at Approved — they don't go to
+                # Commission on their own; the parent submission carries them.
+                targets.append(WorkflowStage.APPROVED)
             return targets
         # PSC admin bypass handled by caller
         return None
@@ -485,7 +508,7 @@ def _chain_targets_for_role(submission, role):
     return None
 
 
-def _chain_transition_allowed(submission, role, target):
+def _chain_transition_allowed(submission, role, target, user=None):
     """
     Returns True  → chain explicitly allows this transition.
     Returns False → chain explicitly denies it.
@@ -494,7 +517,7 @@ def _chain_transition_allowed(submission, role, target):
     from .models import Role as _Role
     if role == _Role.PSC_ADMIN:
         return None   # admin always uses default logic
-    targets = _chain_targets_for_role(submission, role)
+    targets = _chain_targets_for_role(submission, role, user=user)
     if targets is None:
         return None
     return target in targets
@@ -841,6 +864,43 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         profile = _profile(self.request.user)
         validated = serializer.validated_data
 
+        # ── Attachment submission (e.g. PSC Form 2-2 proposed on a PSC 2-1) ──────
+        # Creation intent here is "attach a required form to a submission I can
+        # already see" — independent of the creator's own role/unit, so this is
+        # handled before (and instead of) the per-role branches below, which
+        # assume the submission is a fresh, standalone submission of that role's
+        # own type.
+        if bool(self.request.data.get("is_attachment")):
+            parent_id = self.request.data.get("parent_submission")
+            if not parent_id:
+                raise ValidationError({
+                    "parent_submission": "parent_submission is required for an attachment submission.",
+                })
+            parent = _submission_queryset_for(self.request.user).filter(
+                pk=parent_id, is_attachment=False,
+            ).first()
+            if not parent:
+                raise ValidationError({
+                    "parent_submission": "Parent submission not found or you don't have access to it.",
+                })
+            submission = serializer.save(
+                current_stage=WorkflowStage.DRAFT,
+                is_internal=False,
+                is_attachment=True,
+                parent_submission=parent,
+                ministry_id=parent.ministry_id,
+                department_id=parent.department_id,
+                unit_id=parent.unit_id,
+                routed_unit=parent.routed_unit,
+                received_at=validated.get("received_at") or timezone.now(),
+            )
+            _log(self.request, _AL.Action.CREATE, resource_type="Submission",
+                 resource_id=submission.id, resource_label=submission.reference_number,
+                 description=f"Attachment submission created: {submission.title} "
+                             f"(attached to {parent.reference_number})")
+            invalidate_submission(parent.id)
+            return
+
         if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
             from .travel_forms import (
                 assert_may_create_secretary_travel_form,
@@ -1147,7 +1207,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         prev = submission.current_stage
 
         # ── Approval chain check (dynamic per-section config) ────────────────
-        _chain_result = _chain_transition_allowed(submission, profile.role, target)
+        _chain_result = _chain_transition_allowed(submission, profile.role, target, user=request.user)
         if _chain_result is False:
             raise PermissionDenied(
                 "This transition is not permitted by the submission's approval chain. "
@@ -1429,6 +1489,33 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             submission.current_stage = target
+
+            # ── Attachment form approved: mark it present on the parent's checklist ──
+            # e.g. PSC Form 2-2 reaching Approved satisfies the "PSC Form 2-2" required
+            # item on its parent PSC Form 2-1, which the mandatory-checklist gate above
+            # already enforces before the parent can leave Manager Checklist Review.
+            if (
+                target == WorkflowStage.APPROVED
+                and submission.is_attachment
+                and submission.parent_submission_id
+                and submission.form_type_code
+            ):
+                from .models import RequiredDocument, SubmissionChecklistItem
+
+                doc = RequiredDocument.objects.filter(
+                    form_type__code=submission.parent_submission.form_type_code,
+                    required_form__code=submission.form_type_code,
+                    is_active=True,
+                ).first()
+                if doc:
+                    item, _ = SubmissionChecklistItem.objects.get_or_create(
+                        submission=submission.parent_submission, document=doc,
+                    )
+                    item.is_present = True
+                    item.checked_by = request.user
+                    item.checked_at = timezone.now()
+                    item.notes = f"Auto-checked — {submission.reference_number} approved."
+                    item.save(update_fields=["is_present", "checked_by", "checked_at", "notes"])
 
             # ── Auto-route to the responsible unit when entering checklist review ──
             # Covers both the Receptionist intake path (DRAFT → checklist review)
@@ -1890,13 +1977,17 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         allowed_roles = manager_allowed_staff_roles(
             profile.role if is_unit_manager else None
         )
+        officers_qs = User.objects.filter(
+            is_active=True,
+            psc_profile__role__in=allowed_roles,
+        )
+        # Some staff roles (e.g. Senior Officer) are shared across multiple OPSC
+        # units, so role alone doesn't guarantee the candidate is in *this*
+        # manager's unit — also require a matching Profile.unit.
+        if is_unit_manager and profile.unit_id:
+            officers_qs = officers_qs.filter(psc_profile__unit_id=profile.unit_id)
         officers = list(
-            User.objects.filter(
-                is_active=True,
-                psc_profile__role__in=allowed_roles,
-            )
-            .select_related("psc_profile")
-            .order_by("first_name", "username")
+            officers_qs.select_related("psc_profile").order_by("first_name", "username")
         )
 
         # Surface each candidate's current load so the allocation decision is
@@ -1975,6 +2066,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             if assignee_profile.role not in allowed_roles:
                 return Response(
                     {"detail": "Assignee must be one of your unit's principals or senior officers."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Roles like Senior Officer are shared across units — role alone
+            # doesn't prove unit membership, so also require a matching unit.
+            if profile.unit_id and assignee_profile.unit_id != profile.unit_id:
+                return Response(
+                    {"detail": "Assignee must belong to your own OPSC unit."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -2210,7 +2308,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             queue_submission_quality_score(submission.id, force=False)
 
     def _allowed_transitions_payload(self, submission, profile):
-        chain_targets = _chain_targets_for_role(submission, profile.role)
+        chain_targets = _chain_targets_for_role(submission, profile.role, user=self.request.user)
         if chain_targets is not None:
             allowed = chain_targets
         else:
@@ -3941,7 +4039,8 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         if not isinstance(staff_ids, list) or not staff_ids:
             return Response({"detail": "Provide assigned_staff_m2m as a non-empty list of user IDs."}, status=400)
 
-        manager_role = getattr(getattr(task.assigned_manager, "psc_profile", None), "role", None)
+        manager_profile = getattr(task.assigned_manager, "psc_profile", None)
+        manager_role = getattr(manager_profile, "role", None)
         allowed_roles = manager_allowed_staff_roles(manager_role)
         from django.contrib.auth.models import User
         valid_staff = User.objects.filter(
@@ -3949,6 +4048,12 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             psc_profile__role__in=allowed_roles,
             is_active=True,
         )
+        # Some staff roles (e.g. Senior Officer) are shared across multiple OPSC
+        # units, so role alone doesn't guarantee the candidate is in *this*
+        # manager's unit — also require a matching Profile.unit.
+        manager_unit_id = getattr(manager_profile, "unit_id", None)
+        if manager_unit_id:
+            valid_staff = valid_staff.filter(psc_profile__unit_id=manager_unit_id)
         if valid_staff.count() != len(set(staff_ids)):
             return Response(
                 {"detail": "One or more staff IDs are invalid or inactive."},
@@ -4202,6 +4307,11 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         )
         if prof is not None and prof.ministry_id:
             qs = qs.filter(psc_profile__ministry_id=prof.ministry_id)
+        # Some staff roles (e.g. Senior Officer) are shared across multiple OPSC
+        # units, so role alone doesn't guarantee the candidate is in *this*
+        # manager's unit — also require a matching Profile.unit.
+        if prof is not None and prof.unit_id:
+            qs = qs.filter(psc_profile__unit_id=prof.unit_id)
         qs = qs.select_related("psc_profile").order_by("username")
         return Response([{"id": u.id, "username": u.username} for u in qs])
 

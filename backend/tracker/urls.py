@@ -42,6 +42,7 @@ from .automation_views import (
 from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
 from .daily_brief.views import DailyBriefViewSet
+from .public_tracking_views import track_submission_view
 from .views import (
     AgendaDeferralViewSet,
     AuditLogViewSet,
@@ -210,6 +211,7 @@ urlpatterns = [
     path("me/", me_view),
     path("me/change-password/", change_password_view),
     path("auth/password-policy/", password_policy_view),
+    path("track/<str:reference_number>/", track_submission_view, name="track-submission"),
     path("upcoming-sittings/", upcoming_sittings_view),
     path("push/vapid-public-key/", vapid_public_key_view),
     path("dashboard/", dashboard_view),

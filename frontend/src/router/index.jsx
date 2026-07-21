@@ -11,6 +11,7 @@ import PasswordResetConfirm from '../pages/auth/PasswordResetConfirm'
 import TwoSteps from '../pages/auth/TwoSteps'
 import TOTPSetup from '../pages/auth/TOTPSetup'
 import Error404 from '../pages/auth/Error404'
+import TrackSubmission from '../pages/public/TrackSubmission'
 
 // Core navigation pages — small enough to be eager so the list/detail loop feels instant.
 import HomeDashboard from '../pages/HomeDashboard'
@@ -96,6 +97,7 @@ export default function AppRouter() {
       <Route path="/auth/reset-password/confirm"   element={<PasswordResetConfirm />} />
       <Route path="/auth/2fa"                      element={<TwoSteps />} />
       <Route path="/auth/totp-setup"               element={<TOTPSetup />} />
+      <Route path="/track"                         element={<TrackSubmission />} />
 
       <Route element={<RequireAuth />}>
         <Route path="/secretariat/agenda/sitting-pack" element={<S><AgendaSittingPack /></S>} />

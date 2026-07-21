@@ -550,7 +550,13 @@ export default function Login() {
             )}
           </div>
 
-          <div className="mt-6 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div className="mt-4 flex items-center justify-center text-xs anim-fade-in" style={{ animationDelay: '0.15s' }}>
+            <Link to="/track" className="text-primary-600 hover:text-primary-700 hover:underline font-medium">
+              Track your submission
+            </Link>
+          </div>
+
+          <div className="mt-3 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
             <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
           </div>
         </div>

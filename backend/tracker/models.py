@@ -381,6 +381,16 @@ class PSCFormType(models.Model):
             "Used to auto-categorize agenda items when a submission is added to a meeting."
         ),
     )
+    approval_chain = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Ordered approval steps required for a submission of this form type when it is "
+            "attached to a parent submission (is_attachment=True). Each step: "
+            "{\"stage\": \"pending_manager_approval\", \"roles\": [\"odu_manager\"], \"label\": \"ODU Manager Approval\"}. "
+            "Stages: pending_manager_approval, pending_second_approval. Only used for attachment forms."
+        ),
+    )
 
     class Meta:
         ordering = ["display_order", "code"]
@@ -1789,6 +1799,12 @@ class Submission(models.Model):
         return None
 
     def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        previous_stage = None
+        if not is_new:
+            previous_stage = (
+                Submission.objects.filter(pk=self.pk).values_list("current_stage", flat=True).first()
+            )
         if not self.reference_number:
             self.reference_number = allocate_reference_number()
         if self.assessment_started_at:
@@ -1796,6 +1812,19 @@ class Submission(models.Model):
         else:
             self.assessment_deadline_at = None
         super().save(*args, **kwargs)
+        if is_new or previous_stage != self.current_stage:
+            SubmissionStageEvent.objects.create(submission=self, stage=self.current_stage)
+
+
+class SubmissionStageEvent(models.Model):
+    """Append-only log of Submission.current_stage transitions. Powers the
+    public tracking timeline — timestamp + resulting stage only, no actor."""
+    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name="stage_events")
+    stage = models.CharField(max_length=48, choices=WorkflowStage.choices)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["occurred_at"]
 
 
 class PSCForm37Data(models.Model):
@@ -2109,6 +2138,16 @@ class RequiredDocument(models.Model):
         'PSCFormType', null=True, blank=True,
         on_delete=models.CASCADE, related_name='required_documents',
         help_text="When set, applies only to submissions of this specific form type.",
+    )
+    required_form = models.ForeignKey(
+        'PSCFormType', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='required_by_documents',
+        help_text=(
+            "When set, this requirement is satisfied by attaching a submission of this "
+            "form type (parent_submission + is_attachment=True) rather than a plain file. "
+            "The creation flow proposes adding it; it is marked present once the attached "
+            "submission's own approval chain reaches Approved."
+        ),
     )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)

@@ -43,3 +43,9 @@ class SessionPinVerifyThrottle(AnonRateThrottle):
 class StaffChatThrottle(UserRateThrottle):
     """Limit Staff Assistant messages per user — controls Claude API cost."""
     scope = 'staff_chat'
+
+
+class SubmissionTrackThrottle(AnonRateThrottle):
+    """Limit public submission-tracking lookups per IP — prevents reference-number
+    enumeration on the unauthenticated track-my-submission portal."""
+    scope = 'submission_track'

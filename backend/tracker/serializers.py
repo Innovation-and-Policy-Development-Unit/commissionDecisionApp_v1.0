@@ -1119,12 +1119,15 @@ class DocumentAnnotationSerializer(serializers.ModelSerializer):
 class RequiredDocumentSerializer(serializers.ModelSerializer):
     form_type_code = serializers.CharField(source='form_type.code', read_only=True, default=None)
     form_category_name = serializers.CharField(source='form_category.name', read_only=True, default=None)
+    required_form_code = serializers.CharField(source='required_form.code', read_only=True, default=None)
+    required_form_name = serializers.CharField(source='required_form.name', read_only=True, default=None)
 
     class Meta:
         model = RequiredDocument
         fields = (
             'id', 'form_type', 'form_type_code',
             'form_category', 'form_category_name',
+            'required_form', 'required_form_code', 'required_form_name',
             'name', 'description', 'order', 'is_active',
         )
 
@@ -1133,11 +1136,15 @@ class ChecklistItemSerializer(serializers.ModelSerializer):
     document_name = serializers.CharField(source='document.name', read_only=True)
     document_description = serializers.CharField(source='document.description', read_only=True)
     checked_by_username = serializers.CharField(source='checked_by.username', read_only=True)
+    required_form_id = serializers.IntegerField(source='document.required_form_id', read_only=True, default=None)
+    required_form_code = serializers.CharField(source='document.required_form.code', read_only=True, default=None)
+    required_form_name = serializers.CharField(source='document.required_form.name', read_only=True, default=None)
 
     class Meta:
         model = SubmissionChecklistItem
         fields = ('id', 'document', 'document_name', 'document_description',
-                  'is_present', 'notes', 'checked_by_username', 'checked_at')
+                  'is_present', 'notes', 'checked_by_username', 'checked_at',
+                  'required_form_id', 'required_form_code', 'required_form_name')
         read_only_fields = ('document', 'checked_by_username', 'checked_at')
 
 
@@ -1252,7 +1259,8 @@ class PSCFormTypeSerializer(serializers.ModelSerializer):
                   'form_category_name', 'is_digitized', 'digitized_form_key',
                   'is_checklist', 'checklist_form_type',
                   'routed_unit', 'assessment_deadline_days',
-                  'is_active', 'display_order', 'agenda_category', 'agenda_category_display')
+                  'is_active', 'display_order', 'agenda_category', 'agenda_category_display',
+                  'approval_chain')
 
     def get_agenda_category_display(self, obj):
         from .agenda_sections import agenda_section_label
