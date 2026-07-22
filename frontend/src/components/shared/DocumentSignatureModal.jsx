@@ -9,7 +9,9 @@ import {
 import { Link } from 'react-router-dom'
 import api from '../../api/client'
 import LockPopover from './LockPopover'
+import Badge from './Badge'
 import { useAuth } from '../../context/AuthContext'
+import { authMethodInfo } from '../../constants/signatureAuth'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc
 
@@ -65,6 +67,7 @@ export default function DocumentSignatureModal({ document: doc, submissionId, on
   const signerName = user
     ? [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username
     : ''
+  const authInfo = existing ? authMethodInfo(existing.auth_method) : null
 
   // ── 1. Check stored signature on mount ────────────────────────────────────
   useEffect(() => {
@@ -359,6 +362,11 @@ export default function DocumentSignatureModal({ document: doc, submissionId, on
                 <CheckCircle2 size={11} /> Previously Signed
               </p>
               <p className="text-xs text-slate-400">{fmtDate(existing.signed_date)} · p.{existing.page_number}</p>
+              {authInfo && (
+                <span title={authInfo.detail} className="inline-block mt-1.5">
+                  <Badge variant={authInfo.variant}>{authInfo.label}</Badge>
+                </span>
+              )}
             </div>
           )}
         </div>

@@ -1051,10 +1051,10 @@ class DocumentSignatureSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'document', 'signed_by', 'signed_by_username', 'signed_by_full_name',
             'page_number', 'position_x', 'position_y', 'sig_scale',
-            'snapshot', 'signed_date', 'created_at', 'updated_at',
+            'snapshot', 'signed_date', 'created_at', 'updated_at', 'auth_method',
         )
         read_only_fields = ('id', 'signed_by', 'signed_by_username', 'signed_by_full_name',
-                            'created_at', 'updated_at')
+                            'created_at', 'updated_at', 'auth_method')
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -1079,6 +1079,7 @@ class FormSectionSignatureSerializer(serializers.ModelSerializer):
             "approved",
             "remarks",
             "signature_image",
+            "auth_method",
         )
         read_only_fields = fields
 
@@ -2302,8 +2303,8 @@ class FlyingMinuteSignatureSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FlyingMinuteSignature
-        fields = ("id", "meeting", "member", "member_name", "decision", "signed_at", "remarks")
-        read_only_fields = ("id", "signed_at")
+        fields = ("id", "meeting", "member", "member_name", "decision", "signed_at", "remarks", "auth_method")
+        read_only_fields = ("id", "signed_at", "auth_method")
 
 
 class MeetingTranscriptSerializer(serializers.ModelSerializer):

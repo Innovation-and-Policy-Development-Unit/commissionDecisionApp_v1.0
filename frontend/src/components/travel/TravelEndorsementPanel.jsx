@@ -3,6 +3,8 @@ import { CheckCircle2, PenLine } from 'lucide-react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import Badge from '../shared/Badge'
+import { authMethodInfo } from '../../constants/signatureAuth'
 
 export default function TravelEndorsementPanel({ submissionId, submission, onSigned }) {
   const { user } = useAuth()
@@ -81,6 +83,7 @@ export default function TravelEndorsementPanel({ submissionId, submission, onSig
       <ul className="space-y-2">
         {data.sections.map(section => {
           const done = signedMap[section.key]
+          const authInfo = done ? authMethodInfo(done.auth_method) : null
           const showSign = !done && canSign(section) && (
             (section.signer !== 'secretary' && draftStage) ||
             (section.signer === 'secretary' && secretaryStage && isSecretary)
@@ -90,9 +93,14 @@ export default function TravelEndorsementPanel({ submissionId, submission, onSig
               <div>
                 <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{section.label}</p>
                 {done ? (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 flex-wrap mt-0.5">
                     <CheckCircle2 size={14} /> Signed by {done.signer_name} · {new Date(done.signed_at).toLocaleString()}
                     {done.approved === false && ' · Not approved'}
+                    {authInfo && (
+                      <span title={authInfo.detail}>
+                        <Badge variant={authInfo.variant}>{authInfo.label}</Badge>
+                      </span>
+                    )}
                   </p>
                 ) : (
                   <p className="text-xs text-slate-500 mt-0.5">Awaiting signature</p>
