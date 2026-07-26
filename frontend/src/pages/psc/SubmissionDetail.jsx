@@ -47,6 +47,7 @@ import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
 import SubmissionChecklistPanel from '../../components/submissions/SubmissionChecklistPanel'
 import SittingPackView from '../../components/submissions/SittingPackView'
 import WorkflowActionsPanel from '../../components/submissions/WorkflowActionsPanel'
+import CarryoverBanner from '../../components/submissions/CarryoverBanner'
 import { canShowOduChecklist } from '../../utils/oduChecklist'
 import { isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
 import { formatApiError } from '../../utils/apiError'
@@ -634,7 +635,7 @@ const stageDescriptions = {
     setBusy(true)
     setError('')
     const runOnce = async (ack = false) => {
-      await api.post(`/submissions/${id}/transition/`, {
+      const resp = await api.post(`/submissions/${id}/transition/`, {
         new_stage: newStage,
         remarks: transitionRemarks,
         acknowledge_gaps: ack,
@@ -642,6 +643,13 @@ const stageDescriptions = {
       setRemarks('')
       await reload()
       toast.success('Stage updated successfully.')
+      const cs = resp.data?.carryover_status
+      if (newStage === 'submitted' && cs?.is_late) {
+        toast.error(
+          `Submitted after the due date for ${cs.nearest_meeting?.ref || 'the next sitting'}. ` +
+          `Queued for ${cs.target_meeting?.ref || 'a later sitting'} — the Chairman may still admit it before endorsing that agenda.`,
+        )
+      }
     }
     try {
       await runOnce(acknowledgeGaps)
@@ -792,6 +800,8 @@ const stageDescriptions = {
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />{error}
         </div>
       )}
+
+      <CarryoverBanner status={submission.carryover_status} />
 
       {submission.can_edit === false && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">

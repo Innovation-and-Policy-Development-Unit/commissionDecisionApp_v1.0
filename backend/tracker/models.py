@@ -923,6 +923,20 @@ class Profile(models.Model):
         default=False,
         help_text="Require user to change password at first sign-in.",
     )
+    password_changed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the password was last changed; drives password-expiry enforcement.",
+    )
+    # ── Two-tier account lockout (NCSS 2030 brute-force escalation) ──────────
+    temp_lock_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Temporary lockouts in the current cycle; reset on a successful login.",
+    )
+    hard_locked = models.BooleanField(
+        default=False,
+        help_text="Permanently locked after a repeat lockout; only a superuser can unlock.",
+    )
+    hard_locked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "PSC profiles"
@@ -1926,6 +1940,7 @@ class SubmissionDocument(models.Model):
     file = models.FileField(upload_to=_submission_doc_path)
     original_name = models.CharField(max_length=255)
     description = models.CharField(max_length=255, blank=True)
+    note = models.TextField(blank=True, help_text="Free-text note about this document (e.g. compliance evidence note).")
     uploaded_by = models.ForeignKey(
         'auth.User', on_delete=models.SET_NULL, null=True,
     )
@@ -2401,13 +2416,37 @@ class ImplementationDashboardReport(models.Model):
 
 
 class AnnualReport(models.Model):
-    """Statistics chapter of the PSC Annual Report for a calendar year.
+    """Frozen statistics report for a reporting period.
 
-    The dataset is snapshotted at generation time so the published figures
-    stay reproducible even as the live data moves on.
+    Originally the Annual Report statistics chapter (calendar year), now the
+    snapshot behind any period: a full year, a quarter, a month, or a custom
+    on-the-go range. The dataset is snapshotted at generation time so the
+    published figures stay reproducible even as the live data moves on.
     """
 
-    year = models.PositiveIntegerField(db_index=True)
+    class PeriodType(models.TextChoices):
+        ANNUAL = "annual", "Annual"
+        QUARTERLY = "quarterly", "Quarterly"
+        MONTHLY = "monthly", "Monthly"
+        CUSTOM = "custom", "Custom range"
+
+    year = models.PositiveIntegerField(
+        null=True, blank=True, db_index=True,
+        help_text="Calendar year for annual reports; the start year otherwise.",
+    )
+    period_type = models.CharField(
+        max_length=12, choices=PeriodType.choices, default=PeriodType.ANNUAL,
+    )
+    period_start = models.DateField(null=True, blank=True)
+    period_end = models.DateField(null=True, blank=True)
+    period_label = models.CharField(
+        max_length=120, blank=True,
+        help_text="Human label for the period, e.g. 'Q2 2025'.",
+    )
+    options = models.JSONField(
+        default=dict, blank=True,
+        help_text="Generation options, e.g. {'include': [...sections]}.",
+    )
     dataset = models.JSONField(
         default=dict, blank=True,
         help_text="Frozen statistics dataset behind the PDF.",
@@ -2424,7 +2463,7 @@ class AnnualReport(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Annual Report statistics {self.year}"
+        return f"Report statistics {self.period_label or self.year}"
 
 
 class ReportTemplate(models.Model):

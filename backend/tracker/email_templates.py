@@ -194,8 +194,13 @@ def send_templated_email(
     to: list[str],
     context: dict[str, Any],
     fail_silently: bool = True,
+    attachments: list[tuple[str, bytes, str]] | None = None,
 ) -> bool:
-    """Render template `slug` and send via configured SMTP backend."""
+    """Render template `slug` and send via configured SMTP backend.
+
+    ``attachments`` is an optional list of ``(filename, content, mimetype)``
+    tuples (e.g. an agenda PDF) attached to the outgoing message.
+    """
     if not to:
         return False
     recipients = [e.strip() for e in to if e and e.strip()]
@@ -219,6 +224,12 @@ def send_templated_email(
         )
         if html_body:
             msg.attach_alternative(html_body, "text/html")
+        for att in attachments or []:
+            try:
+                filename, content, mimetype = att
+                msg.attach(filename, content, mimetype)
+            except Exception:
+                logger.warning("Skipping malformed attachment on %s email", slug)
         msg.extra_headers = {
             "Auto-Submitted": "auto-generated",
             "X-Auto-Response-Suppress": "All",

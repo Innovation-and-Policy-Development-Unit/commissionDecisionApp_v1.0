@@ -50,7 +50,8 @@
   },
   "nav": {
     "implementation_dashboard": "Mise en œuvre",
-    "annual_report": "Rapport annuel",
+    "annual_report": "Rapports",
+    "analytics": "Analyses",
     "trash_bin": "Corbeille",
     "group_submissions": "Soumissions",
     "group_commission": "Décisions de la Commission",

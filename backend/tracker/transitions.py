@@ -578,24 +578,20 @@ def assert_transition_allowed(
         return
 
     # ── Commissioner ────────────────────────────────────────────────────────
+    # Commissioners do not action submissions directly. The Commission decides in
+    # the sitting; the Secretariat records those decisions in the minutes, and
+    # signing the minutes advances each submission (see decision_allocation).
     if role == Role.PSC_COMMISSIONER:
-        if target_stage not in _COMMISSIONER_TARGETS:
-            raise PermissionDenied(
-                "Commissioners record decisions: approve, reject, defer back to HR, "
-                "table, or refer for advice."
-            )
-        if current_stage not in _COMMISSIONER_SOURCES:
-            raise PermissionDenied(
-                "Commission decisions apply only while an item is with the Commission or in a hold state."
-            )
-        return
+        raise PermissionDenied(
+            "Commission decisions are recorded by the Secretariat from the signed "
+            "minutes — Commissioners do not action submissions directly."
+        )
 
     # ── Secretary ───────────────────────────────────────────────────────────
+    # Secretariat records the Commission's outcome (as captured in the minutes),
+    # so the Secretary may set any decision stage. Principals still cannot forward
+    # directly to the Commission — they submit to the Secretary Approval Gate first.
     if role == Role.PSC_SECRETARY:
-        if target_stage in {WorkflowStage.APPROVED, WorkflowStage.REJECTED}:
-            raise PermissionDenied("Recording approval or rejection is for Commissioners.")
-        # Secretary is the only role that can approve from the Secretary Approval Gate.
-        # Principals cannot forward directly to Commission — they submit to Secretary first.
         if current_stage != WorkflowStage.PENDING_SECRETARY_APPROVAL and target_stage == WorkflowStage.FORWARDED_TO_COMMISSION:
             raise PermissionDenied(
                 "Submissions must pass through the Secretary Approval Gate "
@@ -604,23 +600,18 @@ def assert_transition_allowed(
         return
 
     # ── Senior Administration Officer (SOP Section 6) ──────────────────────
+    # The SAO is the minute-taker and records the Commission's decisions.
     if role == Role.SENIOR_ADMIN_OFFICER:
-        if target_stage in {WorkflowStage.APPROVED, WorkflowStage.REJECTED}:
-            raise PermissionDenied("Recording approval or rejection is for Commissioners.")
         return
 
     # ── Chairperson (SOP Section 6 — Chairman) ─────────────────────────────
+    # The Chairperson endorses the agenda and signs the minutes (separate flows);
+    # the decision text is recorded by the Secretariat, not by actioning submissions.
     if role == Role.CHAIRPERSON:
-        if target_stage not in _COMMISSIONER_TARGETS:
-            raise PermissionDenied(
-                "Chairperson records decisions: approve, reject, defer back to HR, "
-                "table, or refer for advice."
-            )
-        if current_stage not in _COMMISSIONER_SOURCES:
-            raise PermissionDenied(
-                "Chairperson decisions apply only while an item is with the Commission."
-            )
-        return
+        raise PermissionDenied(
+            "The Chairperson endorses the agenda and signs the minutes; Commission "
+            "decisions are recorded by the Secretariat from the signed minutes."
+        )
 
     # ── PSC Officer ─────────────────────────────────────────────────────────
     if role == Role.PSC_OFFICER:
@@ -711,10 +702,9 @@ def iter_allowed_targets(
             except PermissionDenied:
                 continue
         return targets
-    if role == Role.CHAIRPERSON:
-        if current_stage not in _COMMISSIONER_SOURCES:
-            return []
-        return [t.value for t in _STAGE_GRAPH.get(current_stage, []) if t in _COMMISSIONER_TARGETS]
+    # Commissioner / Chairperson no longer action submissions (decisions are
+    # recorded by the Secretariat from the signed minutes) — the generic loop
+    # below returns an empty list for them via assert_transition_allowed.
     targets = []
     for target in _STAGE_GRAPH.get(current_stage, []):
         try:

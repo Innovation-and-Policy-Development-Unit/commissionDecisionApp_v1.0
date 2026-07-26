@@ -11,9 +11,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // Temporary stability mode: unregister existing service workers and clear
-      // old precache manifests that reference removed media URLs.
-      selfDestroying: true,
+      // Full PWA service worker (offline caching + Web Push). The prior
+      // selfDestroying stability mode is retired; the precache-loop risk is
+      // contained by cleanupOutdatedCaches + the /api navigateFallback denylist
+      // below, and updates are user-prompted (no surprise skipWaiting reloads).
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'scdms-brand.svg', 'logo.svg'],
       manifest: {
@@ -50,6 +51,8 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
+        // Web Push + notification-click handlers, layered onto the generated SW.
+        importScripts: ['push-sw.js'],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api'),

@@ -80,7 +80,9 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  // ── Inactivity timer → screen lock (PIN), not logout ─────────────────────
+  // ── Inactivity timer → full auto-logout to the login screen ──────────────
+  // The session PIN is reserved for feature-level step-up (e.g. digital
+  // signatures), not for idle locking — inactivity always signs the user out.
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
     if (!user || isLocked) return
@@ -88,12 +90,16 @@ export function AuthProvider({ children }) {
     const ms = getInactivityLockMs(user.username)
     if (!ms) return
 
-    inactivityTimer.current = setTimeout(() => {
-      if (user.session_pin_set) {
-        lock()
+    inactivityTimer.current = setTimeout(async () => {
+      try {
+        await logout('inactivity')
+      } finally {
+        // Hard redirect → reloads the app and shows a fresh login screen,
+        // clearing all in-memory state regardless of the current route.
+        window.location.assign('/auth/login')
       }
     }, ms)
-  }, [user, isLocked, lock])
+  }, [user, isLocked, logout])
 
   // Attach/remove activity listeners when the user is logged in
   useEffect(() => {

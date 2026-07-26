@@ -1,4 +1,6 @@
-/** Per-user automatic screen lock after inactivity (minutes). Stored in localStorage. */
+/** Per-user automatic sign-out after inactivity (minutes). Stored in localStorage.
+ *  On timeout the user is fully logged out to the login screen (the session PIN
+ *  is used only for feature-level step-up, not idle locking). */
 
 export const INACTIVITY_LOCK_SETTINGS_EVENT = 'psc-auth:inactivity-settings-changed'
 

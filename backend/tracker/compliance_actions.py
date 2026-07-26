@@ -68,6 +68,8 @@ def create_compliance_case(
     form_type_code="COMP-SMDR",
     title="",
     description="",
+    nature_of_offence_id=None,
+    offence_detail="",
     complaint=None,
 ) -> ComplianceCase:
     """Create the linked Submission (DRAFT, internal, Compliance) + ComplianceCase.
@@ -107,6 +109,8 @@ def create_compliance_case(
         subject_ministry=subject_ministry,
         is_senior_executive=is_senior_executive,
         description=description,
+        nature_of_offence_id=nature_of_offence_id,
+        offence_detail=offence_detail,
     )
     if complaint is not None:
         complaint.compliance_case = case

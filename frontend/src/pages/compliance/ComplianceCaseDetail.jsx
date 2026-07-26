@@ -1,13 +1,18 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ShieldCheck, Send, Check, RotateCcw, Scale, StickyNote, Plus,
   AlertCircle, Clock, CheckCircle2, CircleDot, RefreshCw, Gavel, UserCheck, Pencil,
+  Paperclip, Download, X,
 } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import { useAuth } from '../../context/AuthContext'
 import { WORKFLOW_ROUTES, canRecordDecision, canManageSeniorCases, isReadOnlyComplianceRole } from '../../constants/compliance'
+import InvestigationSection from '../../components/compliance/InvestigationSection'
+import SuspensionSection from '../../components/compliance/SuspensionSection'
+import DocumentsSection from '../../components/compliance/DocumentsSection'
+import StageDetailDrawer from '../../components/compliance/StageDetailDrawer'
 
 // Roles that can take any write action on a case (create notes, stages, litigation)
 const WRITE_ROLES = ['compliance_manager', 'compliance_senior', 'compliance_principal', 'psc_admin']
@@ -110,12 +115,39 @@ const SLA_BADGE = {
   completed: { cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', Icon: CheckCircle2 },
 }
 
-function StageRow({ stage, onUpdate, busy, canWrite }) {
+function StageRow({ stage, onUpdate, busy, canWrite, caseId, onReload, onOpen }) {
   const badge   = SLA_BADGE[stage.sla_status] || SLA_BADGE.on_track
   const Icon    = badge.Icon
   const done    = stage.status === 'completed'
   const active  = stage.status === 'in_progress'
   const skipped = stage.status === 'skipped'
+  const fileRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+  const docs = stage.documents || []
+
+  const attach = async (file) => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('doc_type', stage.stage_name)
+      await api.post(`/compliance/cases/${caseId}/stages/${stage.id}/documents/`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      onReload?.()
+    } catch (e) { alert(e.response?.data?.detail || 'Upload failed.') }
+    finally { setUploading(false) }
+  }
+  const unlink = async (docId) => {
+    try { await api.post(`/compliance/cases/${caseId}/stages/${stage.id}/documents/${docId}/unlink/`); onReload?.() }
+    catch (e) { alert(e.response?.data?.detail || 'Could not unlink.') }
+  }
+  const download = async (doc) => {
+    try {
+      const res = await api.get(`/compliance/cases/${caseId}/documents/${doc.id}/download/`, { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a'); a.href = url; a.download = doc.original_name; a.click(); URL.revokeObjectURL(url)
+    } catch { alert('Could not download.') }
+  }
 
   let dotCls = 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
   if (done)   dotCls = 'bg-emerald-600 text-white'
@@ -128,9 +160,14 @@ function StageRow({ stage, onUpdate, busy, canWrite }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`font-medium ${done || skipped ? 'text-slate-400 line-through' : active ? 'text-primary-700 dark:text-primary-300' : 'text-slate-800 dark:text-slate-100'}`}>
+          <button
+            type="button"
+            onClick={() => onOpen?.(stage)}
+            title="Open stage details"
+            className={`font-medium text-left hover:underline ${done || skipped ? 'text-slate-400 line-through' : active ? 'text-primary-700 dark:text-primary-300' : 'text-slate-800 dark:text-slate-100'}`}
+          >
             {stage.stage_name}
-          </span>
+          </button>
           {active  && <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-700 dark:bg-primary-900/40 dark:text-primary-400">Active</span>}
           {stage.is_optional && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase text-slate-500 dark:bg-slate-700">optional</span>}
           {!done && !skipped && (
@@ -147,6 +184,28 @@ function StageRow({ stage, onUpdate, busy, canWrite }) {
         </div>
         {stage.notes && active && (
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 italic">{stage.notes}</p>
+        )}
+
+        {/* Per-stage documents */}
+        {(docs.length > 0 || canWrite) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {docs.map((d) => (
+              <span key={d.id} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] dark:border-slate-700 dark:bg-slate-800/50">
+                <Paperclip size={10} className="text-slate-400" />
+                <button onClick={() => download(d)} className="max-w-[150px] truncate text-slate-600 hover:text-primary-600 dark:text-slate-300" title={d.original_name}>{d.original_name}</button>
+                <Download size={10} className="text-slate-300" />
+                {canWrite && <button onClick={() => unlink(d.id)} title="Unlink" className="text-slate-300 hover:text-red-500"><X size={11} /></button>}
+              </span>
+            ))}
+            {canWrite && (
+              <>
+                <input ref={fileRef} type="file" className="hidden" onChange={(e) => { attach(e.target.files?.[0]); e.target.value = '' }} />
+                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-1 rounded-md border border-dashed border-slate-300 px-1.5 py-0.5 text-[11px] text-slate-500 hover:border-primary-400 hover:text-primary-600 dark:border-slate-600 disabled:opacity-50">
+                  <Paperclip size={10} /> {uploading ? 'Uploading…' : 'Attach'}
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
       {!done && !skipped && canWrite && (
@@ -179,6 +238,7 @@ export default function ComplianceCaseDetail() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [noteText, setNoteText] = useState('')
+  const [openStageId, setOpenStageId] = useState(null)
   const [showLit, setShowLit] = useState(false)
   const [lit, setLit] = useState({ description: '', court_name: '', court_reference: '', legal_counsel: '', opposing_counsel: '', next_court_date: '', estimated_cost: '', actual_cost: '', notes: '' })
   const [showDecision, setShowDecision] = useState(false)
@@ -286,6 +346,17 @@ export default function ComplianceCaseDetail() {
       />
 
       <WorkflowPipeline caseFamily={c.case_family} stages={c.stages || []} />
+
+      {c.repeat_offence?.is_repeat && (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          <span>
+            <strong>Repeat offence:</strong> {c.repeat_offence.prior_count} prior case(s) for this subject and the same
+            offence within the last {c.repeat_offence.window_years} years. A repeat of the same nature of offence may
+            escalate to serious misconduct.
+          </span>
+        </div>
+      )}
 
       {/* Summary chips */}
       {isReadOnly && (
@@ -431,7 +502,7 @@ export default function ComplianceCaseDetail() {
           <h3 className="mb-2 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200"><ShieldCheck size={17} /> Statutory timeline</h3>
           {c.stages?.length ? (
             <ul className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              {c.stages.map((s) => <StageRow key={s.id} stage={s} onUpdate={updateStage} busy={busy} canWrite={canWrite} />)}
+              {c.stages.map((s) => <StageRow key={s.id} stage={s} onUpdate={updateStage} busy={busy} canWrite={canWrite} caseId={id} onReload={load} onOpen={(st) => setOpenStageId(st.id)} />)}
             </ul>
           ) : <p className="text-sm text-slate-400 py-4">No statutory stages.</p>}
         </section>
@@ -486,6 +557,15 @@ export default function ComplianceCaseDetail() {
               </ul>
             ) : <p className="text-sm text-slate-400">No litigation records.</p>}
           </section>
+
+          {/* Documents & evidence */}
+          <DocumentsSection caseId={id} canWrite={canWrite} />
+
+          {/* Investigation (panel, findings, recommendation) */}
+          <InvestigationSection caseId={id} investigation={c.investigation} canWrite={canWrite} onReload={load} />
+
+          {/* Suspension & salary (financial implication) */}
+          <SuspensionSection caseId={id} suspensions={c.suspensions || []} canWrite={canWrite} busy={busy} post={post} />
 
           {/* Decisions */}
           <section className="rounded-xl border border-slate-200 dark:border-slate-700 p-5">
@@ -566,6 +646,16 @@ export default function ComplianceCaseDetail() {
           </section>
         </div>
       </div>
+
+      {openStageId && (
+        <StageDetailDrawer
+          caseId={id}
+          stage={(c.stages || []).find((s) => s.id === openStageId) || null}
+          canWrite={canWrite}
+          onClose={() => setOpenStageId(null)}
+          onSaved={load}
+        />
+      )}
     </div>
   )
 }

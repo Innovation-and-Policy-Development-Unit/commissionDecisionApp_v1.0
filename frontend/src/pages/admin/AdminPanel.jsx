@@ -213,6 +213,8 @@ const EMPTY_USER_FORM = {
 function UsersTab({ users, ministries, departments, units, onRefresh }) {
   const toast = useToast()
   const confirm = useConfirm()
+  const { user: currentUser } = useAuth()
+  const isSuperuser = Boolean(currentUser?.is_superuser)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [modal, setModal] = useState(null)
@@ -492,7 +494,11 @@ function UsersTab({ users, ministries, departments, units, onRefresh }) {
                             <UserX size={9} /> Deactivated
                           </span>
                         )}
-                        {u.is_locked && (
+                        {u.hard_locked ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" title="Permanently locked — superuser unlock required">
+                            <Lock size={9} /> Locked (permanent)
+                          </span>
+                        ) : u.is_locked && (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
                             <Lock size={9} /> Locked{u.failed_attempts > 0 ? ` (${u.failed_attempts})` : ''}
                           </span>
@@ -552,7 +558,7 @@ function UsersTab({ users, ministries, departments, units, onRefresh }) {
                     >
                       <KeyRound size={13} />
                     </button>
-                    {u.is_locked && (
+                    {u.is_locked && isSuperuser && (
                       <button
                         type="button"
                         onClick={() => unlockUser(u)}
@@ -561,6 +567,14 @@ function UsersTab({ users, ministries, departments, units, onRefresh }) {
                       >
                         <UserCheck size={13} />
                       </button>
+                    )}
+                    {u.is_locked && !isSuperuser && (
+                      <span
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 dark:text-slate-600"
+                        title="Only a super administrator can unlock accounts"
+                      >
+                        <Lock size={13} />
+                      </span>
                     )}
                   </div>
                 </td>
@@ -1440,7 +1454,8 @@ export function SettingsTab({ settings, onRefresh }) {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
-  const [lockoutStats, setLockoutStats] = useState({ failure_limit: 5, cooloff_hours: 1, locked_accounts: 0 })
+  const [lockoutStats, setLockoutStats] = useState({ failure_limit: 3, cooloff_minutes: 15, locked_accounts: 0, hard_locked_accounts: 0 })
+  const isSuperuser = Boolean(user?.is_superuser)
   const [lockoutLoading, setLockoutLoading] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
   const [testEmailTo, setTestEmailTo] = useState('')
@@ -1542,7 +1557,7 @@ export function SettingsTab({ settings, onRefresh }) {
   useEffect(() => {
     const s = {}
     settings.forEach(item => { s[item.key] = item.value })
-    const defaults = ['ENABLE_USER_FEEDBACK', 'INTAKE_RECEPTIONIST_ENABLED', 'INTAKE_HR_ENABLED', 'AI_PACKAGE_VALIDATION_ENABLED', 'AI_CHECKLIST_AUTOFILL_ENABLED', 'ANTHROPIC_API_KEY', 'TWO_FACTOR_REQUIRED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_TLS', 'SMTP_SSL', 'DEFAULT_FROM_EMAIL', 'AXES_FAILURE_LIMIT', 'AXES_COOLOFF_HOURS', 'LOGIN_RATE_LIMIT', 'PASSWORD_MIN_LENGTH', 'PASSWORD_REQUIRE_UPPERCASE', 'PASSWORD_REQUIRE_LOWERCASE', 'PASSWORD_REQUIRE_DIGITS', 'PASSWORD_REQUIRE_SPECIAL', 'PASSWORD_HISTORY_COUNT']
+    const defaults = ['ENABLE_USER_FEEDBACK', 'INTAKE_RECEPTIONIST_ENABLED', 'INTAKE_HR_ENABLED', 'AI_PACKAGE_VALIDATION_ENABLED', 'AI_CHECKLIST_AUTOFILL_ENABLED', 'ANTHROPIC_API_KEY', 'TWO_FACTOR_REQUIRED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_TLS', 'SMTP_SSL', 'DEFAULT_FROM_EMAIL', 'AXES_FAILURE_LIMIT', 'AXES_COOLOFF_MINUTES', 'LOGIN_RATE_LIMIT', 'PASSWORD_MIN_LENGTH', 'PASSWORD_REQUIRE_UPPERCASE', 'PASSWORD_REQUIRE_LOWERCASE', 'PASSWORD_REQUIRE_DIGITS', 'PASSWORD_REQUIRE_SPECIAL', 'PASSWORD_HISTORY_COUNT', 'PASSWORD_MAX_AGE_DAYS']
     defaults.forEach(k => { if (s[k] === undefined) s[k] = '' })
     if (s.ENABLE_USER_FEEDBACK === '') s.ENABLE_USER_FEEDBACK = 'true'
     if (s.INTAKE_RECEPTIONIST_ENABLED === '') s.INTAKE_RECEPTIONIST_ENABLED = 'true'
@@ -1551,8 +1566,9 @@ export function SettingsTab({ settings, onRefresh }) {
     if (s.AI_CHECKLIST_AUTOFILL_ENABLED === '') s.AI_CHECKLIST_AUTOFILL_ENABLED = 'true'
     if (!s.PASSWORD_MIN_LENGTH)    s.PASSWORD_MIN_LENGTH    = '8'
     if (!s.PASSWORD_HISTORY_COUNT) s.PASSWORD_HISTORY_COUNT = '5'
-    if (!s.AXES_FAILURE_LIMIT) s.AXES_FAILURE_LIMIT = '5'
-    if (!s.AXES_COOLOFF_HOURS) s.AXES_COOLOFF_HOURS = '1'
+    if (s.PASSWORD_MAX_AGE_DAYS === '') s.PASSWORD_MAX_AGE_DAYS = '0'
+    if (!s.AXES_FAILURE_LIMIT) s.AXES_FAILURE_LIMIT = '3'
+    if (!s.AXES_COOLOFF_MINUTES) s.AXES_COOLOFF_MINUTES = '15'
     setForm(prev => ({
       ...s,
       // Never repopulate secrets from the API; keep what the user is typing.
@@ -1619,11 +1635,12 @@ export function SettingsTab({ settings, onRefresh }) {
     try {
       await api.post('/settings/batch-update/', {
         AXES_FAILURE_LIMIT: form.AXES_FAILURE_LIMIT,
-        AXES_COOLOFF_HOURS: form.AXES_COOLOFF_HOURS,
+        AXES_COOLOFF_MINUTES: form.AXES_COOLOFF_MINUTES,
         LOGIN_RATE_LIMIT: form.LOGIN_RATE_LIMIT,
+        PASSWORD_MAX_AGE_DAYS: form.PASSWORD_MAX_AGE_DAYS,
       })
       await fetchLockoutStats()
-      const msg = 'Account security settings saved. Login rate limit requires a server restart to take effect.'
+      const msg = 'Account security settings saved and applied. (The login rate limit still requires a server restart.)'
       setSuccess(msg)
       toast.success(msg)
     } catch {
@@ -1931,6 +1948,11 @@ export function SettingsTab({ settings, onRefresh }) {
                 <Lock size={11} /> {lockoutStats.locked_accounts} account{lockoutStats.locked_accounts !== 1 ? 's' : ''} currently locked
               </span>
             )}
+            {lockoutStats.hard_locked_accounts > 0 && (
+              <span className={`${lockoutStats.locked_accounts > 0 ? '' : 'ml-auto'} inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400`}>
+                <Lock size={11} /> {lockoutStats.hard_locked_accounts} permanently locked
+              </span>
+            )}
             {lockoutStats.locked_accounts === 0 && (
               <span className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
                 <UserCheck size={11} /> No accounts locked
@@ -1938,7 +1960,13 @@ export function SettingsTab({ settings, onRefresh }) {
             )}
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-4">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-1">
+            After the configured number of failed attempts an account is locked for the duration below.
+            A further failed attempt then permanently locks it — only a super administrator can unlock a
+            permanently locked account.
+          </p>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
                 Max Login Attempts
@@ -1951,22 +1979,37 @@ export function SettingsTab({ settings, onRefresh }) {
                 value={form.AXES_FAILURE_LIMIT || ''}
                 onChange={e => setForm(f => ({ ...f, AXES_FAILURE_LIMIT: e.target.value }))}
               />
-              <p className="text-[11px] text-slate-400">Failures before account lock (currently: {lockoutStats.failure_limit})</p>
+              <p className="text-[11px] text-slate-400">Failures before temporary lock (currently: {lockoutStats.failure_limit})</p>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                Lockout Duration (hours)
+                Lockout Duration (minutes)
               </label>
               <input
                 type="number"
-                min={0.25}
-                max={72}
-                step={0.25}
+                min={1}
+                max={1440}
+                step={1}
                 className="input text-sm"
-                value={form.AXES_COOLOFF_HOURS || ''}
-                onChange={e => setForm(f => ({ ...f, AXES_COOLOFF_HOURS: e.target.value }))}
+                value={form.AXES_COOLOFF_MINUTES || ''}
+                onChange={e => setForm(f => ({ ...f, AXES_COOLOFF_MINUTES: e.target.value }))}
               />
-              <p className="text-[11px] text-slate-400">Auto-unlock after (currently: {lockoutStats.cooloff_hours}h)</p>
+              <p className="text-[11px] text-slate-400">Temporary auto-unlock after (currently: {lockoutStats.cooloff_minutes} min)</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                Password Expiry (days)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={365}
+                step={1}
+                className="input text-sm"
+                value={form.PASSWORD_MAX_AGE_DAYS ?? ''}
+                onChange={e => setForm(f => ({ ...f, PASSWORD_MAX_AGE_DAYS: e.target.value }))}
+              />
+              <p className="text-[11px] text-slate-400">Force a change after N days (0 = never)</p>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
@@ -1984,25 +2027,27 @@ export function SettingsTab({ settings, onRefresh }) {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            {/* Reset all lockouts danger action */}
-            <div className="flex items-start gap-3 p-3 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 flex-1 min-w-0">
-              <AlertTriangle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-red-700 dark:text-red-400">Reset All Lockouts</p>
-                <p className="text-[11px] text-red-600/70 dark:text-red-500/70">
-                  Immediately unlock every locked-out account. Use with caution.
-                </p>
+            {/* Reset all lockouts danger action — superuser only */}
+            {isSuperuser && (
+              <div className="flex items-start gap-3 p-3 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 flex-1 min-w-0">
+                <AlertTriangle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-red-700 dark:text-red-400">Reset All Lockouts</p>
+                  <p className="text-[11px] text-red-600/70 dark:text-red-500/70">
+                    Immediately unlock every locked-out account, including permanent locks. Use with caution.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetAllLockouts}
+                  disabled={resetLoading || (lockoutStats.locked_accounts === 0 && lockoutStats.hard_locked_accounts === 0)}
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 hover:bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {resetLoading ? <RefreshCw size={12} className="animate-spin" /> : <UserCheck size={12} />}
+                  {resetLoading ? 'Resetting…' : 'Reset All'}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={resetAllLockouts}
-                disabled={resetLoading || lockoutStats.locked_accounts === 0}
-                className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 hover:bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                {resetLoading ? <RefreshCw size={12} className="animate-spin" /> : <UserCheck size={12} />}
-                {resetLoading ? 'Resetting…' : 'Reset All'}
-              </button>
-            </div>
+            )}
 
             {/* Save security settings button */}
             <button

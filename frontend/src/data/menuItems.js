@@ -54,6 +54,7 @@ const menuItems = [
           { label: 'Litigation Tracker', labelKey: 'nav.compliance_litigation', icon: Scale,    path: '/compliance/litigation', audience: 'compliance' },
         ],
       },
+      { label: 'Offence Catalogue',   labelKey: 'nav.offence_catalogue',   icon: Gavel,      path: '/compliance/offence-catalogue', roles: ['psc_admin', 'compliance_manager'] },
     ],
   },
   {
@@ -80,7 +81,7 @@ const menuItems = [
         children: [
           { label: 'Agenda',        labelKey: 'nav.agenda',        icon: ScrollText, path: '/secretariat/agenda',        audience: 'opsc_internal' },
           { label: 'Minutes',       labelKey: 'nav.minutes',       icon: FileText,   path: '/secretariat/minutes',       audience: 'opsc_internal' },
-          { label: 'Minute intake', labelKey: 'nav.minute_intake', icon: PenLine,    path: '/secretariat/minute-intake', audience: 'secretariat' },
+          { label: 'Minute intake', labelKey: 'nav.minute_intake', icon: PenLine,    path: '/secretariat/minute-intake', audience: 'secretariat_operator' },
           { label: 'Deferred agenda', labelKey: 'nav.deferred_agenda', icon: History, path: '/secretariat/deferred-agenda', audience: 'opsc_internal' },
         ],
       },
@@ -89,7 +90,7 @@ const menuItems = [
         labelKey: 'nav.sub_outcomes',
         icon: Gavel,
         children: [
-          { label: 'Decisions',               labelKey: 'nav.decisions',     icon: Gavel,    path: '/secretariat/decisions',     audience: 'secretariat' },
+          { label: 'Decisions',               labelKey: 'nav.decisions',     icon: Gavel,    path: '/secretariat/decisions',     audience: 'secretariat_operator' },
           { label: 'Minutes decision tasks',  labelKey: 'nav.minutes_tasks', icon: ListTodo, path: '/secretariat/tasks',         audience: 'commission_decision' },
           { label: 'Notifications',           labelKey: 'nav.notifications', icon: Bell,     path: '/secretariat/notifications', audience: 'secretariat' },
         ],
@@ -117,7 +118,7 @@ const menuItems = [
       { label: 'Pending Decisions',     labelKey: 'nav.pending_decisions',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
       { label: 'Ministry Performance',  labelKey: 'nav.ministry_performance',  icon: Building2,       path: '/ministry-performance', visibility: 'ops' },
       { label: 'Implementation',        labelKey: 'nav.implementation_dashboard', icon: ListChecks,   path: '/implementation',       visibility: 'ops' },
-      { label: 'Annual Report',         labelKey: 'nav.annual_report',         icon: BookOpen,        path: '/annual-report',        visibility: 'ops' },
+      { label: 'Reports',               labelKey: 'nav.annual_report',         icon: BookOpen,        path: '/annual-report',        visibility: 'ops' },
     ],
   },
   {
@@ -132,7 +133,7 @@ const menuItems = [
       { label: 'Flag Monitor',     labelKey: 'nav.flag_monitor',      icon: Flag,          path: '/intelligence/flags' },
       { label: 'Alert Rules',      labelKey: 'nav.alert_rules',       icon: SlidersHorizontal, path: '/intelligence/rules' },
       { label: 'Automations',      labelKey: 'nav.automations',       icon: Zap,           path: '/intelligence/automations' },
-      { label: 'Reports',          labelKey: 'nav.reports',           icon: FileText,      path: '/reports' },
+      { label: 'Analytics',        labelKey: 'nav.analytics',         icon: FileText,      path: '/reports' },
       { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
     ],
   },

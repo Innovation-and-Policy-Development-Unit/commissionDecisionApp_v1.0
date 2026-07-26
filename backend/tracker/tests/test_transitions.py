@@ -102,21 +102,33 @@ class TransitionTests(TestCase):
     def test_secretary_can_forward_to_commission(self):
         self._call(Role.PSC_SECRETARY, WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.FORWARDED_TO_COMMISSION)
 
-    def test_secretary_cannot_approve(self):
-        self._denied(Role.PSC_SECRETARY, WorkflowStage.COMMISSION_SITTING, WorkflowStage.APPROVED)
+    # Secretariat records the Commission's decision from the signed minutes.
+    def test_secretary_can_approve(self):
+        self._call(Role.PSC_SECRETARY, WorkflowStage.COMMISSION_SITTING, WorkflowStage.APPROVED)
 
     def test_secretary_can_manage_minutes(self):
         self._call(Role.PSC_SECRETARY, WorkflowStage.COMMISSION_SITTING, WorkflowStage.MINUTES_DRAFTED_SIGNED)
 
-    # ── PSC Commissioner ──────────────────────────────────────────────────
-    def test_commissioner_can_approve(self):
-        self._call(Role.PSC_COMMISSIONER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.APPROVED)
+    # ── Senior Admin Officer (minute-taker, records decisions) ─────────────
+    def test_sao_can_approve(self):
+        self._call(Role.SENIOR_ADMIN_OFFICER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.APPROVED)
 
-    def test_commissioner_can_reject(self):
-        self._call(Role.PSC_COMMISSIONER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.REJECTED)
+    def test_sao_can_reject(self):
+        self._call(Role.SENIOR_ADMIN_OFFICER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.REJECTED)
+
+    # ── PSC Commissioner — does not action submissions directly ────────────
+    def test_commissioner_cannot_approve(self):
+        self._denied(Role.PSC_COMMISSIONER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.APPROVED)
+
+    def test_commissioner_cannot_reject(self):
+        self._denied(Role.PSC_COMMISSIONER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.REJECTED)
 
     def test_commissioner_cannot_assess(self):
         self._denied(Role.PSC_COMMISSIONER, WorkflowStage.SUBMITTED, WorkflowStage.UNDER_ASSESSMENT)
+
+    # ── Chairperson — endorses agenda & signs minutes elsewhere, not here ──
+    def test_chairperson_cannot_approve(self):
+        self._denied(Role.CHAIRPERSON, WorkflowStage.COMMISSION_SITTING, WorkflowStage.APPROVED)
 
     # ── OPSC Manager (PSC_MANAGER) ────────────────────────────────────────
     def test_manager_can_enter_decision(self):
@@ -142,8 +154,11 @@ class TransitionTests(TestCase):
         self._call(Role.SENIOR_OFFICER, WorkflowStage.UNDER_IMPLEMENTATION, WorkflowStage.IMPLEMENTATION_REPORT)
 
     # ── Matters Arising & Hold States ────────────────────────────────────
-    def test_commission_can_move_to_matters_arising(self):
-        self._call(Role.PSC_COMMISSIONER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.MATTERS_ARISING)
+    def test_secretariat_can_move_to_matters_arising(self):
+        self._call(Role.SENIOR_ADMIN_OFFICER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.MATTERS_ARISING)
+
+    def test_commissioner_cannot_move_to_matters_arising(self):
+        self._denied(Role.PSC_COMMISSIONER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.MATTERS_ARISING)
 
     def test_matters_arising_can_return_to_sitting(self):
         self._call(Role.PSC_SECRETARY, WorkflowStage.MATTERS_ARISING, WorkflowStage.COMMISSION_SITTING)

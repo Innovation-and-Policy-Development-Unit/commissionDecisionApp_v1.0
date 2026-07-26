@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext'
 import { stageLabel, stageBadgeClass, stageMeta } from '../../constants/stages'
 import { normalizeListPayload } from '../../utils/listPayload'
 import StatCard from '../../components/shared/StatCard'
+import UpcomingSittings from '../../components/meetings/UpcomingSittings'
 
 // ── Stage groupings (mirror backend tracker.models.WorkflowStage) ─────────────
 const STAGE_GROUPS = {
@@ -244,6 +245,8 @@ export default function MinistryDashboard() {
       )}
 
       {/* ── Hero: activity overview + mini cards ───────────────────────────── */}
+      <UpcomingSittings />
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2 card card-compact">
           <div className="flex items-start justify-between mb-4">

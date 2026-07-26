@@ -109,6 +109,202 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "account_locked_user",
+        "name": "Account locked (user notice)",
+        "category": "authentication",
+        "description": "Sent to a user when their account is temporarily or permanently locked.",
+        "placeholders": _ph("lock_summary, unlock_instructions, ip_address, attempt_time, login_url"),
+        "subject_template": "Security alert: your SCDMS account was locked",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "{{lock_summary}}\n\n"
+            "Username: {{username}}\n"
+            "Time: {{attempt_time}}\n"
+            "IP address: {{ip_address}}\n\n"
+            "{{unlock_instructions}}\n\n"
+            "If this was you, no further action is needed once access is restored. "
+            "If it was not you, please notify your SCDMS administrator immediately — "
+            "someone may be attempting to access your account."
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
+            "<div style=\"background:#7f1d1d;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
+            "SCDMS — Security alert"
+            "</div>"
+            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">{{lock_summary}}</p>"
+            "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 14px;margin:0 0 16px 0;\">"
+            "<p style=\"margin:0;\"><strong>Username:</strong> {{username}}</p>"
+            "<p style=\"margin:6px 0 0 0;\"><strong>Time:</strong> {{attempt_time}}</p>"
+            "<p style=\"margin:6px 0 0 0;\"><strong>IP address:</strong> {{ip_address}}</p>"
+            "</div>"
+            "<p style=\"margin:0 0 14px 0;\">{{unlock_instructions}}</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">If this was not you, notify your SCDMS "
+            "administrator immediately — someone may be attempting to access your account.</p>"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
+    },
+    {
+        "slug": "account_locked_admin",
+        "name": "Account locked (administrator alert)",
+        "category": "authentication",
+        "description": "Sent to super administrators when any account is locked out.",
+        "placeholders": _ph("target_username, target_email, lock_summary, ip_address, attempt_time, admin_url"),
+        "subject_template": "SCDMS lockout: {{target_username}} was {{lock_summary}}",
+        "body_text_template": (
+            "A user account has been locked on SCDMS.\n\n"
+            "Account: {{target_username}} ({{target_email}})\n"
+            "Status: {{lock_summary}}\n"
+            "Time: {{attempt_time}}\n"
+            "IP address: {{ip_address}}\n\n"
+            "Review the account in the Admin panel:\n"
+            "{{admin_url}}\n\n"
+            "Permanently locked accounts can only be unlocked by a super administrator."
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
+            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
+            "SCDMS — Account lockout"
+            "</div>"
+            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
+            "<p style=\"margin:0 0 14px 0;\">A user account has been locked on SCDMS.</p>"
+            "<div style=\"background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin:0 0 16px 0;\">"
+            "<p style=\"margin:0;\"><strong>Account:</strong> {{target_username}} ({{target_email}})</p>"
+            "<p style=\"margin:6px 0 0 0;\"><strong>Status:</strong> {{lock_summary}}</p>"
+            "<p style=\"margin:6px 0 0 0;\"><strong>Time:</strong> {{attempt_time}}</p>"
+            "<p style=\"margin:6px 0 0 0;\"><strong>IP address:</strong> {{ip_address}}</p>"
+            "</div>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{admin_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">Open Admin panel</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">Permanently locked accounts can only be unlocked by a super administrator.</p>"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
+    },
+    {
+        "slug": "agenda_circulated",
+        "name": "Agenda circulated to Commission members",
+        "category": "submission_workflow",
+        "description": "Sent to Commission members + Chairperson when an approved agenda is circulated.",
+        "placeholders": _ph("meeting_reference, meeting_date, agenda_url"),
+        "subject_template": "Agenda circulated — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "The Chairman has endorsed the agenda for the Commission sitting on {{meeting_date}} "
+            "({{meeting_reference}}).\n\n"
+            "The approved agenda is attached and is also available in the Agenda menu:\n"
+            "{{agenda_url}}\n\n"
+            "During the sitting you can open the Sitting Pack to follow each item.\n"
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
+            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
+            "PSC — Agenda circulated"
+            "</div>"
+            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">The Chairman has endorsed the agenda for the Commission sitting on "
+            "<strong>{{meeting_date}}</strong> ({{meeting_reference}}).</p>"
+            "<p style=\"margin:0 0 16px 0;\">The approved agenda is attached, and is also available in the Agenda menu.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the agenda</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">During the sitting, open the Sitting Pack to follow each item.</p>"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
+    },
+    {
+        "slug": "meeting_scheduled",
+        "name": "Meeting scheduled — HR notification",
+        "category": "system",
+        "description": "Sent to HR managers when a new Commission meeting/sitting is created.",
+        "placeholders": _ph(
+            "meeting_reference, meeting_title, meeting_date, meeting_time, "
+            "meeting_venue, submission_deadline, meeting_url"
+        ),
+        "subject_template": "New sitting scheduled — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "A new Commission sitting has been scheduled.\n\n"
+            "Reference: {{meeting_reference}}\n"
+            "Title: {{meeting_title}}\n"
+            "Date: {{meeting_date}}\n"
+            "Time: {{meeting_time}}\n"
+            "Venue: {{meeting_venue}}\n"
+            "Submission deadline (due date): {{submission_deadline}}\n\n"
+            "Please ensure any submissions for this sitting are lodged before the "
+            "submission deadline. You can view the sitting here:\n"
+            "{{meeting_url}}\n"
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
+            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
+            "PSC — New sitting scheduled"
+            "</div>"
+            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">A new Commission sitting has been scheduled.</p>"
+            "<table style=\"border-collapse:collapse;font-size:14px;margin:0 0 16px 0;\">"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Reference</td><td style=\"padding:3px 0;\"><strong>{{meeting_reference}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Title</td><td style=\"padding:3px 0;\">{{meeting_title}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Date</td><td style=\"padding:3px 0;\"><strong>{{meeting_date}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Time</td><td style=\"padding:3px 0;\">{{meeting_time}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Venue</td><td style=\"padding:3px 0;\">{{meeting_venue}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Submission deadline</td><td style=\"padding:3px 0;color:#b91c1c;\"><strong>{{submission_deadline}}</strong></td></tr>"
+            "</table>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the sitting</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">Please ensure any submissions for this sitting are lodged before the submission deadline.</p>"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
+    },
+    {
+        "slug": "minutes_signed",
+        "name": "Signed minutes on record",
+        "category": "submission_workflow",
+        "description": "Sent to Commission members + Chairperson when signed minutes are uploaded.",
+        "placeholders": _ph("meeting_reference, meeting_date, minutes_url"),
+        "subject_template": "Signed minutes on record — {{meeting_reference}}",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "The signed minutes for the Commission sitting of {{meeting_date}} ({{meeting_reference}}) "
+            "have been uploaded and are now the official record.\n\n"
+            "You can view them in the Minutes menu:\n"
+            "{{minutes_url}}\n"
+        ),
+        "body_html_template": (
+            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
+            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
+            "PSC — Signed minutes on record"
+            "</div>"
+            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">The signed minutes for the Commission sitting of "
+            "<strong>{{meeting_date}}</strong> ({{meeting_reference}}) have been uploaded and are now the official record.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{minutes_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the minutes</a>"
+            "</p>"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
+    },
+    {
         "slug": "submission_submitted",
         "name": "Submission submitted to PSC",
         "category": "submission_workflow",
@@ -388,6 +584,15 @@ SAMPLE_EMAIL_CONTEXTS = {
         "submission_title": "Senior appointment — Ministry of Finance",
         "submission_url": "http://localhost:8080/submissions/1",
         "new_stage": "Submitted to PSC",
+    },
+    "meeting_scheduled": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_title": "Ordinary Commission Sitting",
+        "meeting_date": "30 June 2026",
+        "meeting_time": "09:00",
+        "meeting_venue": "PSC Boardroom",
+        "submission_deadline": "27 June 2026",
+        "meeting_url": "http://localhost:8080/secretariat/agenda",
     },
     "submission_pending_dg_endorsement": {
         "submission_reference": "PSC-2026-0042",

@@ -355,15 +355,20 @@ display: none;
 <div id="design-system-unification-a1-implementation-spec" class="section level1">
 <h1>Design-System Unification (A1) — Implementation Spec</h1>
 <blockquote>
-<p><strong>Status:</strong> Proposed (awaiting build approval).
-<strong>Track:</strong> Enterprise UX/UI — foundational (other UX work
-depends on it). <strong>Driver:</strong> Production readiness — one
-consistent, accessible, themeable UI. <strong>One-line goal:</strong>
-Standardize the frontend on the <strong>existing in-house
-<code>Base*</code> component library</strong> (Tailwind + self-owned
-tokens) and <strong>remove the <code>@fluentui</code>
-dependency</strong>, eliminating the current two-component-system
-split.</p>
+<p><strong>Status:</strong> IMPLEMENTED.
+<code>@fluentui/react-components</code> and
+<code>@fluentui/react-icons</code> fully removed; all components/pages
+on Tailwind + the in-house <code>Base*</code> library; Fluent typography
+(Segoe UI stack + scale) preserved natively as CSS tokens in
+<code>index.css</code>. Pending: <code>npm install</code> + web image
+rebuild to drop the dependency. <strong>Track:</strong> Enterprise UX/UI
+— foundational (other UX work depends on it). <strong>Driver:</strong>
+Production readiness — one consistent, accessible, themeable UI.
+<strong>One-line goal:</strong> Standardize the frontend on the
+<strong>existing in-house <code>Base*</code> component library</strong>
+(Tailwind + self-owned tokens) and <strong>remove the
+<code>@fluentui</code> dependency</strong>, eliminating the current
+two-component-system split.</p>
 </blockquote>
 <hr />
 <div id="why" class="section level2">

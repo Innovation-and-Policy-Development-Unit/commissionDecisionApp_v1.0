@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Scale, RefreshCw, ExternalLink, Calendar, TrendingUp, AlertCircle, CheckCircle2, Pencil, X } from 'lucide-react'
+import { Scale, RefreshCw, ExternalLink, Calendar, TrendingUp, AlertCircle, CheckCircle2, Pencil, X, Bell } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import { useAuth } from '../../context/AuthContext'
@@ -30,6 +30,11 @@ function isUpcoming(dateStr) {
 function isPast(dateStr) {
   if (!dateStr) return false
   return new Date(dateStr) < new Date()
+}
+
+function daysUntil(dateStr) {
+  if (!dateStr) return null
+  return Math.ceil((new Date(dateStr) - new Date()) / 86400000)
 }
 
 function EditLitigationModal({ record, caseRef, onSave, onClose, saving }) {
@@ -295,7 +300,14 @@ export default function LitigationTracker() {
                       {l.next_court_date ? (
                         <span className={`font-medium ${upcoming ? 'text-amber-600 dark:text-amber-400' : past ? 'text-red-500 dark:text-red-400 line-through' : 'text-slate-600 dark:text-slate-300'}`}>
                           {l.next_court_date}
-                          {upcoming && <span className="ml-1 text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded px-1">upcoming</span>}
+                          {(() => {
+                            const d = daysUntil(l.next_court_date)
+                            if (d == null || d < 0 || d > 14) return null
+                            return <span className="ml-1 text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 rounded px-1">{d === 0 ? 'today' : `in ${d}d`}</span>
+                          })()}
+                          {l.court_date_notified === l.next_court_date && (
+                            <span title="Reminder sent" className="ml-1 inline-flex items-center text-[10px] text-emerald-600 dark:text-emerald-400"><Bell size={10} className="mr-0.5" />alerted</span>
+                          )}
                         </span>
                       ) : '—'}
                     </td>

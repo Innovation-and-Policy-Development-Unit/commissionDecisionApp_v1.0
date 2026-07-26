@@ -29,7 +29,7 @@ from .compliance_actions import (
     return_compliance_case,
     submit_compliance_case,
 )
-from .compliance_models import Complaint, ComplaintStatus, ComplianceCase
+from .compliance_models import Complaint, ComplaintStatus, ComplianceCase, OffenceType
 from .compliance_scoping import (
     MINISTRY_LODGE_ROLES,
     complaint_queryset,
@@ -222,6 +222,242 @@ class ComplianceCaseViewSet(viewsets.ModelViewSet):
             ComplianceCaseDetailSerializer(case, context={"request": request}).data,
             status=status.HTTP_201_CREATED if not existing else status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=["get", "post", "patch"], url_path="investigation")
+    def investigation(self, request, pk=None):
+        """Get, create, or update the structured investigation for a case
+        (panel, terms of reference, findings, recommendation, report)."""
+        from .compliance_models import Investigation
+        from .compliance_serializers import InvestigationSerializer
+
+        case = self.get_object()
+        existing = getattr(case, "investigation", None)
+
+        if request.method == "GET":
+            if not existing:
+                return Response({"detail": "No investigation recorded."}, status=404)
+            return Response(InvestigationSerializer(existing).data)
+
+        _require_write_access(request.user)
+        ser = InvestigationSerializer(
+            existing, data=request.data, partial=(request.method == "PATCH"),
+        )
+        ser.is_valid(raise_exception=True)
+        if existing:
+            ser.save()
+        else:
+            ser.save(case=case, created_by=request.user)
+        return Response(
+            ComplianceCaseDetailSerializer(case, context={"request": request}).data,
+            status=status.HTTP_201_CREATED if not existing else status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="suspensions")
+    def add_suspension(self, request, pk=None):
+        """Record a suspension and its financial implication (half/full/no-pay)."""
+        from .compliance_serializers import SuspensionRecordSerializer
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        ser = SuspensionRecordSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ser.save(case=case, created_by=request.user)
+        return Response(
+            ComplianceCaseDetailSerializer(case, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["patch"], url_path="suspensions/(?P<sus_id>[0-9]+)")
+    def update_suspension(self, request, pk=None, sus_id=None):
+        """Update suspension fields (amounts, dates, notes)."""
+        from .compliance_serializers import SuspensionRecordSerializer
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        rec = case.suspensions.filter(pk=sus_id).first()
+        if not rec:
+            raise ValidationError({"detail": "Suspension record not found."})
+        ser = SuspensionRecordSerializer(rec, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="suspensions/(?P<sus_id>[0-9]+)/assess")
+    def assess_suspension_reimbursement(self, request, pk=None, sus_id=None):
+        """OPSC assessment of whether withheld salary is reimbursed on reinstatement.
+        Body: { reimbursement_status: reimburse|forfeit, reimbursed_amount? }."""
+        from django.utils import timezone as _tz
+        from .compliance_models import SuspensionReimbursement
+
+        if not user_can_manage_senior_cases(request.user):
+            raise PermissionDenied("Only the Compliance Manager or Secretary OPSC may assess reimbursement.")
+        case = self.get_object()
+        rec = case.suspensions.filter(pk=sus_id).first()
+        if not rec:
+            raise ValidationError({"detail": "Suspension record not found."})
+        decision = request.data.get("reimbursement_status")
+        if decision not in (SuspensionReimbursement.REIMBURSE, SuspensionReimbursement.FORFEIT):
+            raise ValidationError({"reimbursement_status": "Must be 'reimburse' or 'forfeit'."})
+        rec.reimbursement_status = decision
+        rec.opsc_assessed_by = request.user
+        rec.opsc_assessed_at = _tz.now()
+        if decision == SuspensionReimbursement.REIMBURSE and request.data.get("reimbursed_amount") is not None:
+            rec.reimbursed_amount = request.data["reimbursed_amount"]
+        rec.save()
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
+
+    @action(detail=True, methods=["get", "post"], url_path="documents")
+    def documents(self, request, pk=None):
+        """List or upload documents/evidence for a case, stored against its
+        submission. ``doc_type`` tags the upload by workflow form (SMDR, warning,
+        response, investigation report, evidence, outcome letter)."""
+        from .models import SubmissionDocument
+        from .serializers import SubmissionDocumentSerializer
+
+        case = self.get_object()
+        submission = case.submission
+
+        if request.method == "GET":
+            docs = SubmissionDocument.objects.filter(submission=submission)
+            return Response(SubmissionDocumentSerializer(docs, many=True, context={"request": request}).data)
+
+        _require_write_access(request.user)
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        if f.size > 20 * 1024 * 1024:
+            return Response({"detail": f"File '{f.name}' exceeds the 20 MB limit."}, status=status.HTTP_400_BAD_REQUEST)
+        doc = SubmissionDocument.objects.create(
+            submission=submission,
+            file=f,
+            original_name=f.name,
+            description=(request.data.get("doc_type") or request.data.get("description") or ""),
+            note=(request.data.get("note") or ""),
+            uploaded_by=request.user,
+        )
+        return Response(
+            SubmissionDocumentSerializer(doc, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/update")
+    def update_document(self, request, pk=None, doc_id=None):
+        """Edit a case document's type tag and/or note."""
+        from .models import SubmissionDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        doc = SubmissionDocument.objects.filter(submission=case.submission, pk=doc_id).first()
+        if not doc:
+            raise ValidationError({"detail": "Document not found."})
+        changed = []
+        if "doc_type" in request.data or "description" in request.data:
+            doc.description = request.data.get("doc_type") or request.data.get("description") or ""
+            changed.append("description")
+        if "note" in request.data:
+            doc.note = request.data.get("note") or ""
+            changed.append("note")
+        if changed:
+            doc.save(update_fields=changed)
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/remove")
+    def remove_document(self, request, pk=None, doc_id=None):
+        """Soft-delete (archive) a case document."""
+        from django.utils import timezone as _tz
+        from .models import SubmissionDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        doc = SubmissionDocument.objects.filter(submission=case.submission, pk=doc_id).first()
+        if not doc:
+            raise ValidationError({"detail": "Document not found."})
+        doc.archived_at = _tz.now()
+        doc.archived_by = request.user
+        doc.save(update_fields=["archived_at", "archived_by"])
+        return Response({"detail": "Document removed."})
+
+    @action(detail=True, methods=["get"], url_path="documents/(?P<doc_id>[0-9]+)/download")
+    def download_document(self, request, pk=None, doc_id=None):
+        """Stream a case document to compliance staff who can view the case."""
+        import mimetypes
+
+        from django.http import FileResponse
+        from django.shortcuts import get_object_or_404
+
+        from .models import SubmissionDocument
+
+        case = self.get_object()
+        doc = get_object_or_404(SubmissionDocument, id=doc_id, submission=case.submission)
+        content_type, _ = mimetypes.guess_type(doc.original_name)
+        resp = FileResponse(doc.file.open("rb"), content_type=content_type or "application/octet-stream")
+        resp["Content-Disposition"] = f'inline; filename="{doc.original_name}"'
+        return resp
+
+    def _get_stage(self, case, stage_id):
+        stage = case.stages.filter(pk=stage_id).first()
+        if not stage:
+            raise ValidationError({"detail": "Stage not found for this case."})
+        return stage
+
+    @action(detail=True, methods=["post"], url_path="stages/(?P<stage_id>[0-9]+)/documents")
+    def stage_upload_document(self, request, pk=None, stage_id=None):
+        """Upload a document and link it to a statutory stage (e.g. the SMDR at
+        the 'SMDR Referral' stage). The file is stored once on the case submission
+        and also appears in the case-level documents list."""
+        from .models import SubmissionDocument
+        from .compliance_models import ComplianceStageDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        stage = self._get_stage(case, stage_id)
+        f = request.FILES.get("file")
+        if not f:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        if f.size > 20 * 1024 * 1024:
+            return Response({"detail": f"File '{f.name}' exceeds the 20 MB limit."}, status=status.HTTP_400_BAD_REQUEST)
+        doc = SubmissionDocument.objects.create(
+            submission=case.submission,
+            file=f,
+            original_name=f.name,
+            description=(request.data.get("doc_type") or stage.stage_name),
+            note=(request.data.get("note") or ""),
+            uploaded_by=request.user,
+        )
+        ComplianceStageDocument.objects.get_or_create(
+            stage=stage, document=doc, defaults={"linked_by": request.user},
+        )
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="stages/(?P<stage_id>[0-9]+)/link-document")
+    def stage_link_document(self, request, pk=None, stage_id=None):
+        """Link an existing case document to a stage. Body: { document_id }."""
+        from .models import SubmissionDocument
+        from .compliance_models import ComplianceStageDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        stage = self._get_stage(case, stage_id)
+        doc = SubmissionDocument.objects.filter(
+            pk=request.data.get("document_id"), submission=case.submission,
+        ).first()
+        if not doc:
+            raise ValidationError({"detail": "Document not found on this case."})
+        ComplianceStageDocument.objects.get_or_create(
+            stage=stage, document=doc, defaults={"linked_by": request.user},
+        )
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="stages/(?P<stage_id>[0-9]+)/documents/(?P<doc_id>[0-9]+)/unlink")
+    def stage_unlink_document(self, request, pk=None, stage_id=None, doc_id=None):
+        """Remove a document↔stage link (the document itself is kept on the case)."""
+        from .compliance_models import ComplianceStageDocument
+
+        _require_write_access(request.user)
+        case = self.get_object()
+        stage = self._get_stage(case, stage_id)
+        ComplianceStageDocument.objects.filter(stage=stage, document_id=doc_id).delete()
+        return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path="export-pptx")
     def export_pptx(self, request):
@@ -567,26 +803,63 @@ class ComplianceCaseViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="stage")
     def update_stage(self, request, pk=None):
-        """Update a statutory stage's status (e.g. mark complete) and refresh SLA."""
+        """Update a statutory stage: status plus officer-entered detail (outcome
+        notes, responsible officer, and started/completed dates). Refreshes SLA.
+
+        Any subset of fields may be supplied. ``status`` still auto-stamps the
+        dates when first moved to in-progress/completed, but explicit dates in
+        the payload always win (so overdue statutory stages can be back-dated)."""
+        from datetime import datetime, time
+
         from django.utils import timezone
+        from django.utils.dateparse import parse_date, parse_datetime
 
         from .compliance_models import StageStatus
         from .compliance_workflows import recompute_case_sla
 
+        def _to_dt(raw):
+            if not raw:
+                return None
+            dt = parse_datetime(raw)
+            if dt is None:
+                d = parse_date(raw)
+                if d is None:
+                    return None
+                dt = datetime.combine(d, time(9, 0))
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt)
+            return dt
+
+        _require_write_access(request.user)
         case = self.get_object()
-        stage_id = request.data.get("stage_id")
-        new_status = request.data.get("status")
-        stage = case.stages.filter(pk=stage_id).first()
+        stage = case.stages.filter(pk=request.data.get("stage_id")).first()
         if not stage:
             raise ValidationError({"stage_id": "Stage not found for this case."})
-        if new_status not in StageStatus.values:
-            raise ValidationError({"status": "Invalid stage status."})
-        stage.status = new_status
-        if new_status == StageStatus.IN_PROGRESS and not stage.started_at:
-            stage.started_at = timezone.now()
-        if new_status == StageStatus.COMPLETED:
-            stage.completed_at = timezone.now()
-        stage.save(update_fields=["status", "started_at", "completed_at"])
+
+        update_fields = []
+        new_status = request.data.get("status")
+        if new_status is not None:
+            if new_status not in StageStatus.values:
+                raise ValidationError({"status": "Invalid stage status."})
+            stage.status = new_status
+            update_fields.append("status")
+            if new_status == StageStatus.IN_PROGRESS and not stage.started_at:
+                stage.started_at = timezone.now(); update_fields.append("started_at")
+            if new_status == StageStatus.COMPLETED and not stage.completed_at:
+                stage.completed_at = timezone.now(); update_fields.append("completed_at")
+
+        if "outcome_notes" in request.data:
+            stage.outcome_notes = request.data.get("outcome_notes") or ""
+            update_fields.append("outcome_notes")
+        if "responsible_officer" in request.data:
+            stage.responsible_officer = request.data.get("responsible_officer") or ""
+            update_fields.append("responsible_officer")
+        for date_field in ("started_at", "completed_at"):
+            if date_field in request.data:
+                setattr(stage, date_field, _to_dt(request.data.get(date_field)))
+                update_fields.append(date_field)
+
+        stage.save(update_fields=list(set(update_fields)) or None)
         recompute_case_sla(case)
         return Response(ComplianceCaseDetailSerializer(case, context={"request": request}).data)
 
@@ -702,3 +975,39 @@ class ComplaintViewSet(viewsets.ModelViewSet):
         complaint.triaged_at = timezone.now()
         complaint.save(update_fields=["status", "closed_reason", "triaged_by", "triaged_at"])
         return Response(ComplaintSerializer(complaint, context={"request": request}).data)
+
+
+class OffenceTypeViewSet(viewsets.ModelViewSet):
+    """The nature-of-offence catalogue. Readable by compliance staff (for the
+    case dropdown); writable only by administrators."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        from .compliance_serializers import OffenceTypeSerializer
+        return OffenceTypeSerializer
+
+    def get_queryset(self):
+        qs = OffenceType.objects.all()
+        if self.request.query_params.get("active") == "true":
+            qs = qs.filter(active=True)
+        return qs
+
+    def _require_admin(self):
+        u = self.request.user
+        from .models import Role
+        allowed = {Role.PSC_ADMIN, Role.COMPLIANCE_MANAGER}
+        if not (u.is_staff or u.is_superuser or _user_role(u) in allowed):
+            raise PermissionDenied("Only administrators or the Compliance Manager can modify the offence catalogue.")
+
+    def perform_create(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._require_admin()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_admin()
+        instance.delete()

@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .comment_views import CommentViewSet, activity_timeline, mention_suggest
-from .compliance_views import ComplaintViewSet, ComplianceCaseViewSet
+from .compliance_views import ComplaintViewSet, ComplianceCaseViewSet, OffenceTypeViewSet
 from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
 from .intelligence_views import (
@@ -130,6 +130,7 @@ from .views import (
     annual_report_list_view,
     annual_report_generate_view,
     annual_report_download_view,
+    annual_report_delete_view,
     trash_list_view,
     trash_restore_view,
     trash_purge_view,
@@ -197,6 +198,7 @@ router.register(r"document-versions",  DocumentVersionViewSet,     basename="doc
 # ── Compliance module ────────────────────────────────────────────────────────
 router.register(r"compliance/cases",      ComplianceCaseViewSet, basename="compliance-case")
 router.register(r"compliance/complaints", ComplaintViewSet,      basename="compliance-complaint")
+router.register(r"compliance/offence-types", OffenceTypeViewSet, basename="compliance-offence-type")
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -297,6 +299,7 @@ urlpatterns = [
     path("reports/annual/preview/",        annual_report_preview_view,         name="annual-report-preview"),
     path("reports/annual/generate/",       annual_report_generate_view,        name="annual-report-generate"),
     path("reports/annual/<int:pk>/download/", annual_report_download_view,     name="annual-report-download"),
+    path("reports/annual/<int:pk>/",       annual_report_delete_view,          name="annual-report-delete"),
     # Workload
     path("workload/officers/",             workload_officers_view,             name="workload-officers"),
     path("workload/summary/",              workload_summary_view,              name="workload-summary"),

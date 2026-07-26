@@ -342,6 +342,309 @@ def send_password_reset_email(*, user: User, reset_url: str, to_email: str) -> b
         return False
 
 
+def _superuser_emails() -> list[str]:
+    """Active super administrators' email addresses (for security alerts)."""
+    return list(
+        User.objects.filter(is_superuser=True, is_active=True)
+        .exclude(email="")
+        .values_list("email", flat=True)
+    )
+
+
+def notify_account_locked(user: User, *, ip: str = "", hard: bool = False, minutes: int = 0) -> None:
+    """
+    Notify the affected user and all super administrators that an account was
+    locked — temporarily (after the failure limit) or permanently (after a
+    repeat lockout). Best-effort; never raises.
+    """
+    import logging
+    from django.utils import timezone
+
+    log = logging.getLogger("scdms.security")
+    base = get_frontend_base_url()
+    when = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M %Z")
+
+    if hard:
+        lock_summary = (
+            "Your account has been permanently locked after repeated failed "
+            "sign-in attempts."
+        )
+        unlock_instructions = (
+            "For your security, only a system administrator can unlock it. "
+            "Please contact your SCDMS administrator."
+        )
+        admin_summary = "permanently locked (repeat failed attempts)"
+    else:
+        lock_summary = (
+            f"Your account has been temporarily locked for {minutes} minutes "
+            "after several failed sign-in attempts."
+        )
+        unlock_instructions = (
+            f"You can try again after {minutes} minutes. If this was not you, "
+            "or you need access sooner, contact your SCDMS administrator."
+        )
+        admin_summary = f"temporarily locked for {minutes} min"
+
+    # 1) The affected user.
+    user_email = (user.email or "").strip()
+    if user_email:
+        ctx = merge_recipient_context(
+            user,
+            lock_summary=lock_summary,
+            unlock_instructions=unlock_instructions,
+            ip_address=ip or "unknown",
+            attempt_time=when,
+            login_url=f"{base}/auth/login",
+        )
+        send_templated_email(slug="account_locked_user", to=[user_email], context=ctx)
+
+    # 2) Super administrators.
+    admin_emails = _superuser_emails()
+    if admin_emails:
+        admin_ctx = merge_recipient_context(
+            None,
+            target_username=user.username,
+            target_email=user_email or "—",
+            lock_summary=admin_summary,
+            ip_address=ip or "unknown",
+            attempt_time=when,
+            admin_url=f"{base}/admin",
+        )
+        send_templated_email(slug="account_locked_admin", to=admin_emails, context=admin_ctx)
+
+    log.info(
+        "ACCOUNT_LOCK_NOTIFIED | username=%s | hard=%s | user_email=%s | admins=%d",
+        user.username, hard, bool(user_email), len(admin_emails),
+    )
+
+
+def commission_members() -> list[User]:
+    """Active Commission members + Chairperson — recipients of agenda/minutes notices."""
+    from .models import Role
+
+    return list(
+        User.objects.filter(
+            is_active=True,
+            psc_profile__role__in=[Role.PSC_COMMISSIONER, Role.CHAIRPERSON],
+        ).select_related("psc_profile")
+    )
+
+
+def hr_managers() -> list[User]:
+    """Active HR managers — the OPSC HR Unit Manager and ministry HR officers.
+    Recipients of the new-sitting notification."""
+    from .models import Role
+
+    return list(
+        User.objects.filter(
+            is_active=True,
+            psc_profile__role__in=[Role.HR_UNIT_MANAGER, Role.MINISTRY_HR],
+        )
+        .exclude(email="")
+        .select_related("psc_profile")
+    )
+
+
+def _render_agenda_pdf(meeting) -> bytes | None:
+    """Best-effort one-page agenda PDF (sequence / section / reference / title)."""
+    import html as _html
+    import logging
+
+    try:
+        from io import BytesIO
+
+        from weasyprint import HTML
+
+        from .agenda_sections import agenda_section_label
+
+        rows = []
+        for item in meeting.agenda_items.select_related("submission").order_by("category", "sequence"):
+            sub = item.submission
+            ref = _html.escape((getattr(sub, "reference_number", "") or "") if sub else "")
+            title = _html.escape((getattr(sub, "title", "") or "") if sub else "")
+            section = _html.escape(agenda_section_label(item.category or "") or "Other")
+            rows.append(
+                f"<tr><td>{item.sequence}</td><td>{section}</td><td>{ref}</td><td>{title}</td></tr>"
+            )
+        body_rows = "".join(rows) or "<tr><td colspan='4'>No agenda items.</td></tr>"
+        doc = (
+            "<html><body style=\"font-family:Arial,sans-serif;font-size:12px;color:#1e293b;\">"
+            f"<h2 style=\"margin:0 0 4px 0;\">Agenda — {_html.escape(meeting.reference_number or '')}</h2>"
+            f"<p style=\"margin:0 0 12px 0;color:#475569;\">Sitting date: {meeting.date or ''}</p>"
+            "<table cellspacing=\"0\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%;border:1px solid #cbd5e1;\">"
+            "<thead><tr style=\"background:#f1f5f9;\">"
+            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">#</th>"
+            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Section</th>"
+            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Reference</th>"
+            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Title</th>"
+            "</tr></thead>"
+            f"<tbody>{body_rows}</tbody></table>"
+            "</body></html>"
+        )
+        buf = BytesIO()
+        HTML(string=doc).write_pdf(buf)
+        return buf.getvalue()
+    except Exception:
+        logging.getLogger("scdms.app").warning(
+            "Agenda PDF render failed for meeting %s", getattr(meeting, "id", None)
+        )
+        return None
+
+
+def notify_agenda_circulated(meeting) -> None:
+    """Tell every Commission member + the Chairperson that an approved agenda has
+    been circulated. In-app + push notification, plus a templated email carrying
+    the agenda PDF (the digital equivalent of the hand-delivered copy). Best-effort."""
+    import logging
+    from django.utils import timezone
+
+    from .models import Notification
+
+    members = commission_members()
+    if not members:
+        return
+
+    base = get_frontend_base_url()
+    when = (
+        timezone.localtime(timezone.now()).strftime("%d %B %Y")
+        if meeting.date is None
+        else meeting.date.strftime("%d %B %Y")
+    )
+    pdf = _render_agenda_pdf(meeting)
+    attachments = (
+        [(f"agenda_{(meeting.reference_number or 'meeting')}.pdf", pdf, "application/pdf")]
+        if pdf
+        else None
+    )
+
+    for user in members:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,  # email sent separately (templated)
+            push=True,
+            title=f"Agenda circulated — {meeting.reference_number or ''}".strip(),
+            body=(
+                f"The Chairman has endorsed the agenda for the sitting on {when}. "
+                "You can now view it in the Agenda menu."
+            ),
+            link="/secretariat/agenda",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user,
+                meeting_reference=meeting.reference_number or "",
+                meeting_date=when,
+                agenda_url=f"{base}/secretariat/agenda",
+            )
+            send_templated_email(
+                slug="agenda_circulated", to=[email], context=ctx, attachments=attachments
+            )
+
+    logging.getLogger("scdms.app").info(
+        "AGENDA_CIRCULATED_NOTIFIED | meeting=%s | members=%d",
+        meeting.reference_number, len(members),
+    )
+
+
+def notify_meeting_scheduled(meeting) -> None:
+    """Tell every HR manager (OPSC HR Unit Manager + ministry HR officers) that a
+    new Commission sitting has been scheduled, with the meeting date and the
+    submission deadline (due date). In-app + push + templated email. Best-effort."""
+    import logging
+    from django.utils import timezone
+
+    from .models import Notification
+
+    recipients = hr_managers()
+    if not recipients:
+        return
+
+    base = get_frontend_base_url()
+    meeting_date = meeting.date.strftime("%d %B %Y") if meeting.date else "—"
+    meeting_time = meeting.time.strftime("%H:%M") if meeting.time else "—"
+    cutoff = getattr(meeting, "effective_cutoff", None)
+    submission_deadline = (
+        timezone.localtime(cutoff).strftime("%d %B %Y") if cutoff else "—"
+    )
+    meeting_url = f"{base}/secretariat/agenda"
+
+    for user in recipients:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,  # email sent separately (templated)
+            push=True,
+            title=f"New sitting scheduled — {meeting.reference_number or ''}".strip(),
+            body=(
+                f"A Commission sitting is set for {meeting_date}. "
+                f"Submission deadline: {submission_deadline}."
+            ),
+            link="/secretariat/agenda",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user,
+                meeting_reference=meeting.reference_number or "",
+                meeting_title=meeting.title or "",
+                meeting_date=meeting_date,
+                meeting_time=meeting_time,
+                meeting_venue=meeting.venue or "—",
+                submission_deadline=submission_deadline,
+                meeting_url=meeting_url,
+            )
+            send_templated_email(slug="meeting_scheduled", to=[email], context=ctx)
+
+    logging.getLogger("scdms.app").info(
+        "MEETING_SCHEDULED_NOTIFIED | meeting=%s | hr_managers=%d",
+        meeting.reference_number, len(recipients),
+    )
+
+
+def notify_minutes_signed(minutes) -> None:
+    """Tell every Commission member + the Chairperson that the signed minutes are
+    now the official record and available to view. In-app + push + templated email.
+    Best-effort."""
+    import logging
+
+    from .models import Notification
+
+    members = commission_members()
+    if not members:
+        return
+
+    meeting = minutes.meeting
+    base = get_frontend_base_url()
+    when = meeting.date.strftime("%d %B %Y") if meeting and meeting.date else ""
+    ref = (meeting.reference_number or "") if meeting else ""
+
+    for user in members:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,
+            push=True,
+            title=f"Signed minutes on record — {ref}".strip(),
+            body=(
+                f"The signed minutes for the sitting of {when or ref} have been uploaded "
+                "and are now the official record. You can view them in the Minutes menu."
+            ),
+            link="/secretariat/minutes",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user,
+                meeting_reference=ref,
+                meeting_date=when,
+                minutes_url=f"{base}/secretariat/minutes",
+            )
+            send_templated_email(slug="minutes_signed", to=[email], context=ctx)
+
+    logging.getLogger("scdms.app").info(
+        "MINUTES_SIGNED_NOTIFIED | meeting=%s | members=%d", ref, len(members),
+    )
+
+
 def sample_context_for_slug(slug: str) -> dict[str, str]:
     from .email_template_defaults import SAMPLE_RECIPIENT
 

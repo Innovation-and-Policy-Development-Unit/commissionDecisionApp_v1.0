@@ -60,6 +60,8 @@ INSTALLED_APPS = [
 
 _MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Content-Security-Policy (XSS defence-in-depth) — dependency-free, env-tunable
+    'tracker.middleware.ContentSecurityPolicyMiddleware',
 ]
 if os.getenv("USE_WHITENOISE", "").lower() in ("1", "true", "yes") or _ON_RENDER:
     _MIDDLEWARE.append("whitenoise.middleware.WhiteNoiseMiddleware")
@@ -246,8 +248,13 @@ SIMPLE_JWT = {
 }
 
 # ── django-axes: Account lockout (NCSS 2030 — Brute-force protection) ─────────
-AXES_FAILURE_LIMIT = int(os.getenv('AXES_FAILURE_LIMIT', '5'))
-AXES_COOLOFF_TIME = timedelta(hours=int(os.getenv('AXES_COOLOFF_HOURS', '1')))
+# Failure limit + cool-off are read at request time from SystemSetting (Admin →
+# System configuration) via tracker.axes_config, so the policy is live-editable
+# without a restart. Defaults: 3 failed attempts → 15-minute temporary lock.
+# A further failed attempt after a temporary lock escalates to a permanent
+# ("hard") lock that only a superuser can clear (enforced in the login view).
+AXES_FAILURE_LIMIT = 'tracker.axes_config.failure_limit'
+AXES_COOLOFF_TIME = 'tracker.axes_config.cool_off'
 AXES_RESET_ON_SUCCESS = True                       # reset counter on good login
 AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
 # Behind Caddy → nginx, REMOTE_ADDR is always the web container's docker IP,

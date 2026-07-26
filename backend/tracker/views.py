@@ -4236,9 +4236,9 @@ def change_password_view(request):
     user.save(update_fields=["password"])
     try:
         profile = user.psc_profile
-        if profile.force_password_change:
-            profile.force_password_change = False
-            profile.save(update_fields=["force_password_change"])
+        profile.force_password_change = False
+        profile.password_changed_at = timezone.now()
+        profile.save(update_fields=["force_password_change", "password_changed_at"])
     except Exception:
         pass
     _security_log.info("PASSWORD_CHANGED | username=%s", user.username)
@@ -4792,9 +4792,9 @@ def _axes_lockout_context(usernames=None):
     try:
         from axes.models import AccessAttempt
         from django.db.models import Max as _Max
-        from django.conf import settings as _settings
+        from .axes_config import current_failure_limit
 
-        limit = getattr(_settings, "AXES_FAILURE_LIMIT", 5)
+        limit = current_failure_limit()
         qs = AccessAttempt.objects.all()
         if usernames is not None:
             qs = qs.filter(username__in=usernames)
@@ -4807,6 +4807,45 @@ def _axes_lockout_context(usernames=None):
         return {"locked_usernames": locked_usernames, "attempts_map": attempts_map}
     except Exception:  # axes not ready during migrate, etc.
         return {"locked_usernames": set(), "attempts_map": {}}
+
+
+def _axes_failures_for(username):
+    """Max consecutive failed-login count django-axes has recorded for *username*."""
+    if not username:
+        return 0
+    try:
+        from axes.models import AccessAttempt
+        from django.db.models import Max as _Max
+        row = AccessAttempt.objects.filter(username=username).aggregate(m=_Max("failures_since_start"))
+        return row["m"] or 0
+    except Exception:
+        return 0
+
+
+def _enforce_password_expiry(profile):
+    """
+    Flag *profile* for a forced password change when its password is older than
+    PASSWORD_MAX_AGE_DAYS. A value of 0 (default) disables expiry. Legacy users
+    without a recorded change date have the clock started on this sign-in.
+    """
+    from .models import SystemSetting
+    max_age = SystemSetting.get_int("PASSWORD_MAX_AGE_DAYS", 0)
+    if max_age <= 0:
+        return
+    changed_at = profile.password_changed_at
+    if changed_at is None:
+        # Start the clock for accounts created before expiry tracking existed.
+        profile.password_changed_at = timezone.now()
+        profile.save(update_fields=["password_changed_at"])
+        return
+    if profile.force_password_change:
+        return
+    if timezone.now() - changed_at >= timedelta(days=max_age):
+        profile.force_password_change = True
+        profile.save(update_fields=["force_password_change"])
+        _security_log.info(
+            "PASSWORD_EXPIRED | username=%s | age_days>=%d", profile.user.username, max_age
+        )
 
 
 from .serializers import AgendaDeferralSerializer, DecisionLetterSerializer  # noqa: E402
@@ -5192,17 +5231,28 @@ class UserAdminViewSet(
     def unlock(self, request, pk=None):
         """
         POST /users/{id}/unlock/
-        Clear all django-axes AccessAttempt records for this user, immediately
-        allowing them to log in again regardless of cooloff period.
+        Clear all django-axes AccessAttempt records for this user and lift any
+        permanent ("hard") lock, immediately allowing them to log in again
+        regardless of cooloff period. Restricted to superusers.
         """
         from .audit import log_action as _log
         from .models import AuditLog as _AL
+        if not request.user.is_superuser:
+            raise PermissionDenied("Only a super administrator can unlock accounts.")
         user = self.get_object()
         try:
             from axes.models import AccessAttempt
             deleted, _ = AccessAttempt.objects.filter(username=user.username).delete()
         except Exception as exc:
             return Response({"detail": f"Could not clear lockout: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Lift our two-tier escalation flags too.
+        prof = getattr(user, "psc_profile", None)
+        if prof and (prof.hard_locked or prof.temp_lock_count):
+            prof.hard_locked = False
+            prof.hard_locked_at = None
+            prof.temp_lock_count = 0
+            prof.save(update_fields=["hard_locked", "hard_locked_at", "temp_lock_count"])
 
         _security_log.info(
             "USER_UNLOCKED | username=%s | by=%s | cleared=%d",
@@ -5223,15 +5273,22 @@ class UserAdminViewSet(
     def reset_all_lockouts(self, request):
         """
         POST /users/reset-all-lockouts/
-        Clear ALL axes AccessAttempt records — unlocks every locked account at once.
+        Clear ALL axes AccessAttempt records and lift every hard lock — unlocks
+        every locked account at once. Restricted to superusers.
         """
         from .audit import log_action as _log
         from .models import AuditLog as _AL
+        if not request.user.is_superuser:
+            raise PermissionDenied("Only a super administrator can unlock accounts.")
         try:
             from axes.models import AccessAttempt
             deleted, _ = AccessAttempt.objects.all().delete()
         except Exception as exc:
             return Response({"detail": f"Could not clear lockouts: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        Profile.objects.filter(hard_locked=True).update(
+            hard_locked=False, hard_locked_at=None, temp_lock_count=0
+        )
 
         _security_log.warning(
             "ALL_LOCKOUTS_RESET | by=%s | cleared=%d", request.user.username, deleted
@@ -5251,11 +5308,12 @@ class UserAdminViewSet(
         GET /users/lockout-stats/
         Returns current security thresholds and a count of locked accounts.
         """
-        from django.conf import settings as _settings
+        from .axes_config import current_failure_limit, current_cooloff
+        limit = current_failure_limit()
+        cooloff = current_cooloff()
         try:
             from axes.models import AccessAttempt
             from django.db.models import Max as _Max
-            limit = getattr(_settings, "AXES_FAILURE_LIMIT", 5)
             rows = (
                 AccessAttempt.objects
                 .values("username")
@@ -5268,10 +5326,19 @@ class UserAdminViewSet(
             locked_count = 0
             total_attempts = 0
 
+        try:
+            hard_locked_count = Profile.objects.filter(hard_locked=True).count()
+        except Exception:
+            hard_locked_count = 0
+
+        cooloff_minutes = int(cooloff.total_seconds() // 60)
         return Response({
-            "failure_limit": getattr(_settings, "AXES_FAILURE_LIMIT", 5),
-            "cooloff_hours": int(getattr(_settings, "AXES_COOLOFF_TIME", timedelta(hours=1)).total_seconds() // 3600),
+            "failure_limit": limit,
+            "cooloff_minutes": cooloff_minutes,
+            # Back-compat: keep hours (rounded) for older clients.
+            "cooloff_hours": round(cooloff_minutes / 60, 2),
             "locked_accounts": locked_count,
+            "hard_locked_accounts": hard_locked_count,
             "total_attempt_records": total_attempts,
         })
 
@@ -5385,18 +5452,114 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
             request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
             or request.META.get("REMOTE_ADDR", "unknown")
         )
+        req_username = (request.data.get("username") or "").strip()
 
-        # Standard credential validation
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        # ── Two-tier lockout: pre-check + capture prior state ────────────────
+        # We look the user up by username *before* validation so we can (a)
+        # reject a permanently ("hard") locked account up-front and (b) know
+        # whether a prior temporary lockout already happened, which means the
+        # *next* failed attempt must escalate to a hard lock.
+        precheck_profile = None
+        prior_temp_locks = 0
+        if req_username:
+            _lu = (
+                User.objects.filter(username=req_username)
+                .select_related("psc_profile")
+                .first()
+            )
+            if _lu is not None:
+                precheck_profile = getattr(_lu, "psc_profile", None)
+            if precheck_profile and precheck_profile.hard_locked:
+                _security_log.warning(
+                    "LOGIN_BLOCKED_HARD_LOCK | username=%s | ip=%s", req_username, ip
+                )
+                _log(request, _AL.Action.LOGIN_FAILED,
+                     resource_type="User", resource_id=_lu.id, resource_label=req_username,
+                     description=f"Login blocked — account permanently locked: {req_username}")
+                return Response(
+                    {
+                        "detail": "This account is locked. Please contact a system "
+                                  "administrator to have it unlocked.",
+                        "hard_locked": True,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if precheck_profile:
+                prior_temp_locks = precheck_profile.temp_lock_count or 0
+
+        failures_before = _axes_failures_for(req_username) if req_username else 0
+
+        # Standard credential validation (django-axes enforces the temporary lock)
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
         except Exception:
-            username = request.data.get("username", "<unknown>")
+            username = req_username or "<unknown>"
             _security_log.warning(
                 "LOGIN_FAILED | username=%s | ip=%s", username, ip
             )
-            from .audit import log_action as _log
-            from .models import AuditLog as _AL
+
+            from .axes_config import current_failure_limit, current_cooloff
+            limit = current_failure_limit()
+            failures_after = _axes_failures_for(req_username) if req_username else 0
+
+            # (a) A prior temporary lock exists → escalate to a permanent lock.
+            if precheck_profile and prior_temp_locks >= 1 and not precheck_profile.hard_locked:
+                precheck_profile.hard_locked = True
+                precheck_profile.hard_locked_at = timezone.now()
+                precheck_profile.save(update_fields=["hard_locked", "hard_locked_at"])
+                _security_log.warning(
+                    "ACCOUNT_HARD_LOCKED | username=%s | ip=%s", username, ip
+                )
+                _log(request, _AL.Action.LOCKOUT,
+                     resource_type="User", resource_id=precheck_profile.user_id,
+                     resource_label=username,
+                     description=f"Account permanently locked after repeat failures: {username}",
+                     extra_data={"ip": ip, "lock_type": "hard"})
+                try:
+                    from .email_notify import notify_account_locked
+                    notify_account_locked(precheck_profile.user, ip=ip, hard=True)
+                except Exception:
+                    _security_log.exception("Hard-lock notification failed for %s", username)
+                return Response(
+                    {
+                        "detail": "This account has been locked after repeated failed "
+                                  "sign-in attempts. Please contact a system administrator.",
+                        "hard_locked": True,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            # (b) This failure just crossed the limit → temporary lock (tier 1).
+            if (
+                precheck_profile
+                and limit
+                and failures_after >= limit > failures_before
+            ):
+                precheck_profile.temp_lock_count = (precheck_profile.temp_lock_count or 0) + 1
+                precheck_profile.save(update_fields=["temp_lock_count"])
+                cooloff_minutes = int(current_cooloff().total_seconds() // 60)
+                _security_log.warning(
+                    "ACCOUNT_TEMP_LOCKED | username=%s | ip=%s | minutes=%d",
+                    username, ip, cooloff_minutes,
+                )
+                _log(request, _AL.Action.LOCKOUT,
+                     resource_type="User", resource_id=precheck_profile.user_id,
+                     resource_label=username,
+                     description=f"Account temporarily locked ({cooloff_minutes} min) "
+                                 f"after {failures_after} failed attempts: {username}",
+                     extra_data={"ip": ip, "lock_type": "temporary", "minutes": cooloff_minutes})
+                try:
+                    from .email_notify import notify_account_locked
+                    notify_account_locked(
+                        precheck_profile.user, ip=ip, hard=False, minutes=cooloff_minutes
+                    )
+                except Exception:
+                    _security_log.exception("Temp-lock notification failed for %s", username)
+
             _log(request, _AL.Action.LOGIN_FAILED,
                  resource_type="User", resource_label=username,
                  description=f"Failed login attempt for username: {username}")
@@ -5412,6 +5575,18 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
             profile = ensure_psc_profile(user)
         except PermissionDenied:
             return Response({"detail": PROFILE_MISSING_MSG}, status=status.HTTP_403_FORBIDDEN)
+
+        # Valid credentials → clear our two-tier lockout counter (axes clears its
+        # own AccessAttempt rows via AXES_RESET_ON_SUCCESS).
+        if profile and (profile.temp_lock_count or profile.hard_locked):
+            profile.temp_lock_count = 0
+            profile.hard_locked = False
+            profile.hard_locked_at = None
+            profile.save(update_fields=["temp_lock_count", "hard_locked", "hard_locked_at"])
+
+        # Password expiry / rotation (NCSS 2030). PASSWORD_MAX_AGE_DAYS = 0 disables.
+        if profile:
+            _enforce_password_expiry(profile)
 
         # Check for valid trusted session → PIN-based re-auth (skip TOTP)
         if profile and profile.session_pin:
@@ -5820,9 +5995,9 @@ class PasswordResetConfirmView(APIView):
         user = ser.save()
         try:
             profile = user.psc_profile
-            if profile.force_password_change:
-                profile.force_password_change = False
-                profile.save(update_fields=["force_password_change"])
+            profile.force_password_change = False
+            profile.password_changed_at = timezone.now()
+            profile.save(update_fields=["force_password_change", "password_changed_at"])
         except Exception:
             pass
         from .audit import log_action as _log
@@ -5947,7 +6122,18 @@ class MeetingViewSet(viewsets.ModelViewSet):
         profile = _profile(self.request.user)
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can schedule meetings.")
-        serializer.save()
+        meeting = serializer.save()
+        # Notify HR managers of the new sitting (async, best-effort). Flying
+        # minutes are not physical sittings, so they're excluded.
+        if meeting.type != MeetingType.FLYING_MINUTE:
+            try:
+                from .tasks import notify_meeting_scheduled_task
+                notify_meeting_scheduled_task.delay(meeting.id)
+            except Exception:
+                import logging
+                logging.getLogger("scdms.app").exception(
+                    "Failed to enqueue HR notification for meeting %s", meeting.id
+                )
 
     def perform_update(self, serializer):
         profile = _profile(self.request.user)
@@ -6680,6 +6866,14 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting.agenda_status = AgendaStatus.CIRCULATED
         meeting.save(update_fields=["agenda_status"])
         self._queue_agenda_briefs(meeting)
+        # Notify Commission members the (approved) agenda is available to view.
+        def _notify_circulated():
+            try:
+                from .email_notify import notify_agenda_circulated
+                notify_agenda_circulated(meeting)
+            except Exception:
+                _security_log.exception("AGENDA_CIRCULATE_NOTIFY_FAIL | meeting=%s", meeting.id)
+        transaction.on_commit(_notify_circulated)
         return Response({"detail": "Agenda circulated to Commission members."})
 
     @action(detail=True, methods=["post"], url_path="adopt-agenda")
@@ -8668,20 +8862,38 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     @staticmethod
     def _run_post_signing_automation(minutes, user):
-        """Allocate decisions to unit managers, run AI decision extraction, and
-        queue outcome-letter drafts. Shared by the digital ``sign`` path and the
-        manual ``upload-signed`` path so both produce the same downstream effects."""
-        from .decision_allocation import allocate_decision_tasks, queue_post_signing_automation
+        """Advance decided submissions, allocate decisions to unit managers, run
+        AI decision extraction, queue outcome-letter drafts, and notify Commission
+        members that the signed minutes are on record. Shared by the digital
+        ``sign`` path and the manual ``upload-signed`` path so both produce the
+        same downstream effects. Runs once, on first signing."""
+        from .decision_allocation import (
+            advance_submissions_for_signed_minutes,
+            allocate_decision_tasks,
+            queue_post_signing_automation,
+        )
+        import logging as _logging_mod
+        _log = _logging_mod.getLogger("scdms.app")
+
+        # Advance each decided submission to its recorded outcome stage first, so
+        # task allocation and outcome letters act on submissions already decided.
+        try:
+            advance_submissions_for_signed_minutes(minutes, user)
+        except Exception:
+            _log.exception("POST_SIGN_STAGE_ADVANCE_FAIL | minutes=%s", minutes.id)
 
         try:
             allocate_decision_tasks(minutes, user)
             queue_post_signing_automation(minutes)
         except Exception:
-            import logging as _logging_mod
+            _log.exception("POST_SIGN_AUTOMATION_FAIL | minutes=%s", minutes.id)
 
-            _logging_mod.getLogger("scdms.app").exception(
-                "POST_SIGN_AUTOMATION_FAIL | minutes=%s", minutes.id
-            )
+        # Notify Commission members the signed minutes are now the official record.
+        try:
+            from .email_notify import notify_minutes_signed
+            notify_minutes_signed(minutes)
+        except Exception:
+            _log.exception("POST_SIGN_NOTIFY_FAIL | minutes=%s", minutes.id)
 
     @action(detail=True, methods=["post"], url_path="mark-for-signature")
     def mark_for_signature(self, request, pk=None):
@@ -10036,19 +10248,35 @@ def _assert_annual_report_access(request):
         raise PermissionDenied("Only the Secretariat may work with the Annual Report.")
 
 
+def _can_manage_all_reports(user):
+    """Super admins, staff and PSC Administrators see and delete every report;
+    everyone else is scoped to the reports they generated themselves."""
+    return bool(
+        user.is_superuser or user.is_staff or _profile(user).role == Role.PSC_ADMIN
+    )
+
+
 def _annual_report_payload(report, request):
+    can_delete = (
+        _can_manage_all_reports(request.user)
+        or report.requested_by_id == request.user.id
+    )
     return {
         "id": report.id,
         "year": report.year,
+        "period_type": report.period_type,
+        "period_label": report.period_label or (str(report.year) if report.year else None),
         "created_at": report.created_at,
         "requested_by": (
             report.requested_by.get_full_name() or report.requested_by.username
         ) if report.requested_by_id else None,
+        "can_delete": can_delete,
         "summary": {
             "total_received": (report.dataset.get("intake") or {}).get("total_received"),
             "total_decided": (report.dataset.get("decisions") or {}).get("total_decided"),
             "approval_rate": (report.dataset.get("decisions") or {}).get("approval_rate"),
             "pct_within_target": ((report.dataset.get("implementation") or {}).get("overall") or {}).get("pct_within_target"),
+            "avg_agenda_per_sitting": (report.dataset.get("sittings") or {}).get("avg_agenda_per_sitting"),
         },
         "download_url": request.build_absolute_uri(
             f"/api/reports/annual/{report.id}/download/"
@@ -10064,17 +10292,58 @@ def _parse_report_year(raw):
     return year if 2000 <= year <= 2100 else None
 
 
+# Sections a caller may include in a generated report.
+_REPORT_SECTIONS = {
+    "intake", "sittings", "decisions", "timeliness",
+    "implementation", "tasks", "decision_service", "ministries",
+}
+
+
+def _parse_report_period(source):
+    """Resolve period-selector params from a query-dict or POST body into
+    (start_dt, end_dt, label, key, period_type, include)."""
+    from .reports.annual_report import resolve_period
+
+    get = source.get
+    period_type = (get("period_type") or "annual").lower()
+    if period_type not in {"annual", "quarterly", "monthly", "custom"}:
+        period_type = "annual"
+
+    start, end, label, key = resolve_period(
+        period_type,
+        year=get("year"),
+        quarter=get("quarter"),
+        month=get("month"),
+        date_from=get("date_from"),
+        date_to=get("date_to"),
+    )
+
+    raw_include = source.getlist("include") if hasattr(source, "getlist") else get("include")
+    if isinstance(raw_include, str):
+        raw_include = [raw_include]
+    flat: list[str] = []
+    for item in (raw_include or []):
+        flat.extend(str(item).split(","))
+    include = [s.strip() for s in flat if s.strip() in _REPORT_SECTIONS] or None
+
+    return start, end, label, key, period_type, include
+
+
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def annual_report_preview_view(request):
-    """Live (unfrozen) statistics dataset for a year — on-screen preview.
-    ?year=2026; defaults to the previous calendar year."""
-    from .reports.annual_report import build_annual_report_dataset
+    """Live (unfrozen) statistics dataset for a period — on-screen preview.
+    Query: ?period_type=annual|quarterly|monthly|custom plus year/quarter/month
+    or date_from/date_to, and optional repeated ?include=… section flags.
+    Defaults to the previous calendar year."""
+    from .reports.annual_report import build_report_dataset
 
     _assert_annual_report_access(request)
-    year = _parse_report_year(request.query_params.get("year")) \
-        or timezone.localdate().year - 1
-    return Response(build_annual_report_dataset(year))
+    start, end, label, key, period_type, include = _parse_report_period(request.query_params)
+    return Response(build_report_dataset(
+        start, end, include=include,
+        period={"type": period_type, "label": label, "key": key},
+    ))
 
 
 @api_view(["GET"])
@@ -10083,30 +10352,45 @@ def annual_report_list_view(request):
     from .models import AnnualReport
 
     _assert_annual_report_access(request)
-    reports = AnnualReport.objects.select_related("requested_by")[:24]
+    qs = AnnualReport.objects.select_related("requested_by")
+    if not _can_manage_all_reports(request.user):
+        qs = qs.filter(requested_by=request.user)
+    reports = qs[:24]
     return Response({"reports": [_annual_report_payload(r, request) for r in reports]})
 
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def annual_report_generate_view(request):
-    """Freeze the dataset and render the statistics-chapter PDF.
-    POST {"year": 2026}; defaults to the previous calendar year."""
+    """Freeze the dataset and render the statistics PDF for the chosen period.
+    POST {period_type, year/quarter/month or date_from/date_to, include:[…]}.
+    Defaults to the previous calendar year."""
     from .audit import log_action as _log
     from .models import AnnualReport, AuditLog as _AL
-    from .reports.annual_report import render_annual_report_pdf
+    from .reports.annual_report import build_report_dataset, render_report_pdf
 
     _assert_annual_report_access(request)
-    year = _parse_report_year(request.data.get("year")) \
-        or timezone.localdate().year - 1
+    start, end, label, key, period_type, include = _parse_report_period(request.data)
 
-    report = AnnualReport.objects.create(year=year, requested_by=request.user)
-    render_annual_report_pdf(report)
+    report = AnnualReport.objects.create(
+        year=timezone.localtime(start).year,
+        period_type=period_type,
+        period_start=timezone.localtime(start).date(),
+        period_end=timezone.localtime(end).date(),
+        period_label=label,
+        options={"include": include} if include else {},
+        dataset=build_report_dataset(
+            start, end, include=include,
+            period={"type": period_type, "label": label, "key": key},
+        ),
+        requested_by=request.user,
+    )
+    render_report_pdf(report)
 
     _log(request, _AL.Action.EXPORT,
          resource_type="AnnualReport", resource_id=report.id,
-         resource_label=f"Annual Report statistics {year}",
-         description=f"Annual Report statistics chapter generated for {year}")
+         resource_label=f"Report statistics {label}",
+         description=f"Report statistics generated for {label}")
 
     return Response(_annual_report_payload(report, request), status=status.HTTP_201_CREATED)
 
@@ -10120,6 +10404,9 @@ def annual_report_download_view(request, pk):
 
     _assert_annual_report_access(request)
     report = get_object_or_404(AnnualReport, pk=pk)
+    if not (_can_manage_all_reports(request.user)
+            or report.requested_by_id == request.user.id):
+        raise PermissionDenied("You can only download reports you generated.")
     if not report.pdf_file:
         return Response({"detail": "PDF file is missing."}, status=404)
     return FileResponse(
@@ -10128,6 +10415,33 @@ def annual_report_download_view(request, pk):
         filename=report.pdf_file.name.split("/")[-1],
         content_type="application/pdf",
     )
+
+
+@api_view(["DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+def annual_report_delete_view(request, pk):
+    """Delete a generated report. Admins may delete any; other Secretariat
+    users may delete only the reports they generated themselves."""
+    from .audit import log_action as _log
+    from .models import AnnualReport, AuditLog as _AL
+
+    _assert_annual_report_access(request)
+    report = get_object_or_404(AnnualReport, pk=pk)
+    if not (_can_manage_all_reports(request.user)
+            or report.requested_by_id == request.user.id):
+        raise PermissionDenied("You can only delete reports you generated.")
+
+    label = report.period_label or (str(report.year) if report.year else f"#{report.id}")
+    if report.pdf_file:
+        report.pdf_file.delete(save=False)
+    report.delete()
+
+    _log(request, _AL.Action.DELETE,
+         resource_type="AnnualReport", resource_id=pk,
+         resource_label=f"Report statistics {label}",
+         description=f"Generated report deleted: {label}")
+
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ── Workload Views ─────────────────────────────────────────────────────────────

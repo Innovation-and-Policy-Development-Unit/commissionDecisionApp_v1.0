@@ -184,6 +184,84 @@ def _compliance_stage_recipients(stage, role_users: dict) -> list:
     return list(fallback)
 
 
+@shared_task
+def send_compliance_court_suspension_alerts():
+    """Alert compliance staff about upcoming litigation court dates and suspensions
+    nearing their 2-month expiry (auto-reinstatement on full salary). Delivered as
+    important web-push notifications."""
+    from datetime import date, timedelta
+
+    from django.contrib.auth import get_user_model
+    from django.db.models import F
+
+    from .compliance_models import LitigationRecord, SuspensionRecord
+    from .models import Notification, Role
+
+    User = get_user_model()
+    today = date.today()
+    horizon = today + timedelta(days=7)
+
+    managers = list(
+        User.objects.filter(psc_profile__role=Role.COMPLIANCE_MANAGER, is_active=True)
+    )
+
+    def _recipients(case):
+        users = set(managers)
+        assignee = getattr(case.submission, "assigned_to", None)
+        if assignee and assignee.is_active:
+            users.add(assignee)
+        return users
+
+    court_alerts = suspension_alerts = 0
+
+    # ── Litigation court dates ──────────────────────────────────────────────
+    lit_qs = LitigationRecord.objects.select_related("case__submission").filter(
+        status=LitigationRecord.LitigationStatus.ACTIVE,
+        next_court_date__isnull=False,
+        next_court_date__gte=today,
+        next_court_date__lte=horizon,
+    ).exclude(court_date_notified=F("next_court_date"))
+    for rec in lit_qs:
+        ref = rec.case.submission.reference_number
+        for user in _recipients(rec.case):
+            Notification.objects.create(
+                recipient=user, submission=rec.case.submission,
+                channel=Notification.Channel.BOTH, push=True,
+                title=f"Court date approaching: {ref}",
+                body=f"Litigation for {ref} has a court date on {rec.next_court_date}. "
+                     f"{rec.court_name or ''} {rec.court_reference or ''}".strip(),
+            )
+            court_alerts += 1
+        rec.court_date_notified = rec.next_court_date
+        rec.save(update_fields=["court_date_notified"])
+
+    # ── Suspension 2-month expiry ───────────────────────────────────────────
+    sus_qs = SuspensionRecord.objects.select_related("case__submission").filter(
+        reinstated_at__isnull=True,
+        expiry_notified=False,
+        suspension_end__isnull=False,
+        suspension_end__gte=today,
+        suspension_end__lte=horizon,
+    )
+    for rec in sus_qs:
+        ref = rec.case.submission.reference_number
+        for user in _recipients(rec.case):
+            Notification.objects.create(
+                recipient=user, submission=rec.case.submission,
+                channel=Notification.Channel.BOTH, push=True,
+                title=f"Suspension expiring: {ref}",
+                body=f"The suspension for {ref} expires on {rec.suspension_end}. On expiry the "
+                     f"employee is deemed reinstated on full salary — confirm reinstatement and "
+                     f"the reimbursement assessment of any withheld salary.",
+            )
+            suspension_alerts += 1
+        rec.expiry_notified = True
+        rec.save(update_fields=["expiry_notified"])
+
+    log.info("COMPLIANCE_ALERTS | court=%d suspension=%d", court_alerts, suspension_alerts)
+    return {"court": court_alerts, "suspension": suspension_alerts}
+
+
 SYSTEM_INSTRUCTION = """You are a highly efficient "Executive Secretary" and "Triage Officer" for a high-level Commission Board in Vanuatu. You are an expert in both Bislama and English.
 
 Analyze the provided User Feedback. The feedback may be in Bislama, English, French, or a mix.
@@ -2993,16 +3071,24 @@ def generate_annual_report_statistics():
     """
     from django.utils import timezone
 
+    from datetime import date
+
     from .models import AnnualReport, Notification
-    from .reports.annual_report import render_annual_report_pdf
+    from .reports.annual_report import render_report_pdf
 
     year = timezone.localdate().year - 1
     if AnnualReport.objects.filter(year=year, requested_by__isnull=True).exists():
         app_log.info('ANNUAL_REPORT | %s already generated — skipping', year)
         return None
 
-    report = AnnualReport.objects.create(year=year)
-    render_annual_report_pdf(report)
+    report = AnnualReport.objects.create(
+        year=year,
+        period_type=AnnualReport.PeriodType.ANNUAL,
+        period_start=date(year, 1, 1),
+        period_end=date(year, 12, 31),
+        period_label=f"Calendar year {year}",
+    )
+    render_report_pdf(report)
 
     from django.contrib.auth import get_user_model
     User = get_user_model()
@@ -3019,9 +3105,32 @@ def generate_annual_report_statistics():
             body=(
                 f'The {year} statistics chapter has been generated '
                 f'({decided} decision(s) recorded). '
-                f'Find it under Operations → Annual Report.'
+                f'Find it under Operations → Reports.'
             ),
         )
 
     app_log.info('ANNUAL_REPORT | Generated %s (report #%s)', year, report.id)
     return report.id
+
+
+# ── New-meeting HR notification ──────────────────────────────────────────────
+
+@shared_task
+def notify_meeting_scheduled_task(meeting_id):
+    """Notify HR managers that a new Commission sitting has been created.
+
+    Dispatched (best-effort, async) from MeetingViewSet.perform_create so the
+    create request never blocks on potentially many ministry-HR recipients.
+    """
+    from .models import Meeting
+    from .email_notify import notify_meeting_scheduled
+
+    meeting = Meeting.objects.filter(pk=meeting_id).first()
+    if not meeting:
+        app_log.warning('MEETING_SCHEDULED | meeting %s not found — skipping', meeting_id)
+        return None
+    try:
+        notify_meeting_scheduled(meeting)
+    except Exception:
+        app_log.exception('MEETING_SCHEDULED | notification failed for meeting %s', meeting_id)
+    return meeting_id
