@@ -113,6 +113,8 @@ export default function Decisions() {
   const [typeFilter, setTypeFilter] = useState('')
   const [ministryFilter, setMinistryFilter] = useState('')
   const [departmentFilter, setDepartmentFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState('')
+  const [meetingFilter, setMeetingFilter] = useState('')
   const [page, setPage] = useState(1)
 
   const fetchData = async () => {
