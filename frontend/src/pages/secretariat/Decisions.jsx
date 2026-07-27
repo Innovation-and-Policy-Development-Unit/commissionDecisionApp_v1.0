@@ -218,23 +218,22 @@ export default function Decisions() {
 
       <SummaryBar submissions={submissions} />
 
-      {/* Filters */}
-      <div className="card p-4 mb-4 space-y-2">
-        {/* Row 1: search */}
-        <BaseInput
-          hideLabel
-          label={t('common.search')}
-          type="search"
-          placeholder={t('secretariat.search_decisions_placeholder')}
-          value={q}
-          onChange={e => { setQ(e.target.value); setPage(1) }}
-        />
-        {/* Row 2: outcome / ministry / department filters + refresh */}
-        <div className="flex flex-wrap gap-2 items-center">
+      {/* Filters — arranged in a 12-col grid so dropdowns sit inline instead of stacking (mirrors SubmissionLog.jsx) */}
+      <div className="card p-4 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:items-end">
+          <BaseInput
+            hideLabel
+            label={t('common.search')}
+            type="search"
+            className="lg:col-span-12"
+            placeholder={t('secretariat.search_decisions_placeholder')}
+            value={q}
+            onChange={e => { setQ(e.target.value); setPage(1) }}
+          />
           <BaseSelect
             hideLabel
             label={t('secretariat.all_outcomes')}
-            className="w-44"
+            className="lg:col-span-2"
             value={typeFilter}
             placeholder={t('secretariat.all_outcomes')}
             options={DECISION_TYPES.map(opt => ({ value: opt.value, label: t(opt.i18nKey) }))}
@@ -243,7 +242,7 @@ export default function Decisions() {
           <BaseSelect
             hideLabel
             label={t('submission.ministry')}
-            className="w-44"
+            className="lg:col-span-2"
             value={ministryFilter}
             placeholder={t('secretariat.all_ministries')}
             options={ministryOptions}
@@ -252,7 +251,7 @@ export default function Decisions() {
           <BaseSelect
             hideLabel
             label={t('submission.department')}
-            className="w-44"
+            className="lg:col-span-2"
             value={departmentFilter}
             placeholder={t('secretariat.all_departments')}
             options={departmentOptions}
@@ -261,7 +260,7 @@ export default function Decisions() {
           <BaseSelect
             hideLabel
             label={t('secretariat.year_label')}
-            className="w-32"
+            className="lg:col-span-1"
             value={yearFilter}
             placeholder={t('secretariat.all_years')}
             options={yearOptions}
@@ -270,31 +269,33 @@ export default function Decisions() {
           <BaseSelect
             hideLabel
             label={t('secretariat.meeting_ref_label')}
-            className="w-44"
+            className="lg:col-span-2"
             value={meetingFilter}
             placeholder={t('secretariat.meeting_ref_label')}
             options={meetingOptions}
             onChange={(_, v) => { setMeetingFilter(v); setPage(1) }}
           />
-          <BaseButton
-            variant="outline"
-            size="sm"
-            icon={<RefreshCw size={14} aria-hidden="true" className={loading ? 'animate-spin' : ''} />}
-            onClick={fetchData}
-            aria-label={t('submission.reload')}
-          >
-            {t('submission.reload')}
-          </BaseButton>
-          <BaseButton
-            variant="outline"
-            size="sm"
-            icon={<Download size={14} aria-hidden="true" />}
-            onClick={exportCsv}
-            disabled={!filtered.length}
-            aria-label={t('secretariat.export_csv')}
-          >
-            {t('secretariat.export_csv')}
-          </BaseButton>
+          <div className="lg:col-span-3 flex gap-2">
+            <BaseButton
+              variant="outline"
+              size="sm"
+              icon={<RefreshCw size={14} aria-hidden="true" className={loading ? 'animate-spin' : ''} />}
+              onClick={fetchData}
+              aria-label={t('submission.reload')}
+            >
+              {t('submission.reload')}
+            </BaseButton>
+            <BaseButton
+              variant="outline"
+              size="sm"
+              icon={<Download size={14} aria-hidden="true" />}
+              onClick={exportCsv}
+              disabled={!filtered.length}
+              aria-label={t('secretariat.export_csv')}
+            >
+              {t('secretariat.export_csv')}
+            </BaseButton>
+          </div>
         </div>
       </div>
 
