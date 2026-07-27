@@ -32,6 +32,30 @@ const INTERNAL_ROLES = [
   'vipam_principal',
 ]
 
+const DEFAULT_TITLE_PLACEHOLDER = 'e.g. Appointment of Director Finance & Administration'
+
+/** Title/subject placeholder shown once a specific submission type is picked —
+ * makes the example match what's actually being submitted. */
+const TITLE_PLACEHOLDER_BY_FORM_TYPE = {
+  'RECRUIT-PROBATION':    'e.g. Appointment on Probation for John Smith, Senior Officer',
+  'RECRUIT-CONFIRM':      'e.g. Confirmation of Appointment for John Smith, Senior Officer',
+  'RECRUIT-DIRECT':       'e.g. Direct Appointment of John Smith to Senior Officer',
+  'RECRUIT-TEMPORARY':    'e.g. Temporary Appointment of John Smith as Senior Officer',
+  'RECRUIT-CONTRACT':     'e.g. Contract Employment of John Smith as Senior Officer',
+  'RECRUIT-ACTING':       'e.g. Acting Appointment of John Smith as Manager HRM',
+  'RECRUIT-ELIGIBLE':     'e.g. Eligible Candidate Notification for John Smith',
+  'RECRUIT-UNSUCCESSFUL': 'e.g. Unsuccessful Candidate Notification for John Smith',
+  'CESSATION-AGE':          'e.g. Age Retirement for John Smith, Senior Officer',
+  'CESSATION-NOTICE-AGE':   'e.g. Notice of Age Retirement for John Smith',
+  'CESSATION-MEDICAL':      'e.g. Medical Retirement for John Smith',
+  'CESSATION-DEATH':        'e.g. Death in Service Benefits for the late John Smith',
+  'CESSATION-REDUNDANCY':   'e.g. Redundancy of John Smith, Senior Officer',
+  'CESSATION-RESIGNATION':  'e.g. Voluntary Resignation of John Smith',
+  'SECONDMENT':    'e.g. Secondment of John Smith to the Commercial Investment Unit',
+  'LEAVE-PAYOUT':  'e.g. Outstanding Leave Payout for John Smith',
+  'MEDICAL-CLAIM': 'e.g. Medical Expense Claim for John Smith',
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Deadline Banner
 // ─────────────────────────────────────────────────────────────────────────────
@@ -261,7 +285,13 @@ function CommissionSubmissionForm({
       .then(res => {
         if (cancelled) return
         const rows = res.data.results ?? res.data
-        setMatchingFormTypes(Array.isArray(rows) ? rows : [])
+        const list = Array.isArray(rows) ? rows : []
+        setMatchingFormTypes(list)
+        // No real choice to make when there's exactly one match — select it
+        // automatically instead of forcing a single-option dropdown click.
+        if (list.length === 1) {
+          setForm(f => ({ ...f, form_type_code: list[0].code }))
+        }
       })
       .catch(() => { if (!cancelled) setMatchingFormTypes([]) })
       .finally(() => { if (!cancelled) setFormTypesLoading(false) })
@@ -372,7 +402,7 @@ function CommissionSubmissionForm({
           </p>
         </div>
 
-        {form.agenda_category && matchingFormTypes.length > 0 && (
+        {form.agenda_category && matchingFormTypes.length > 1 && (
           <div>
             <BaseSelect
               label="Specific submission type"
@@ -392,7 +422,7 @@ function CommissionSubmissionForm({
         <BaseInput
           label="Title / subject"
           required
-          placeholder="e.g. Appointment of Director Finance & Administration"
+          placeholder={TITLE_PLACEHOLDER_BY_FORM_TYPE[form.form_type_code] || DEFAULT_TITLE_PLACEHOLDER}
           value={form.title}
           onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
         />
