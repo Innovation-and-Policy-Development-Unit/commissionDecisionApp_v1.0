@@ -150,16 +150,32 @@ export default function Decisions() {
     return [...new Set(pool.map(s => s.department_name).filter(Boolean))].sort()
   }, [submissions, ministryFilter])
 
+  // "Year" = year of the record's last update (approval/rejection/etc. move the record, so this
+  // tracks closely with when the decision was actually made — there's no separate decision-date field).
+  const yearOptions = useMemo(
+    () => [...new Set(submissions.map(s => s.updated_at && new Date(s.updated_at).getFullYear()).filter(Boolean))]
+      .sort((a, b) => b - a)
+      .map(String),
+    [submissions],
+  )
+
+  const meetingOptions = useMemo(
+    () => [...new Set(submissions.map(s => s.scheduled_meeting_reference).filter(Boolean))].sort().reverse(),
+    [submissions],
+  )
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
     return submissions.filter(d => {
       if (typeFilter && d.current_stage !== typeFilter) return false
       if (ministryFilter && d.ministry_name !== ministryFilter) return false
       if (departmentFilter && d.department_name !== departmentFilter) return false
+      if (yearFilter && (!d.updated_at || String(new Date(d.updated_at).getFullYear()) !== yearFilter)) return false
+      if (meetingFilter && d.scheduled_meeting_reference !== meetingFilter) return false
       if (s && !d.reference_number.toLowerCase().includes(s) && !d.title.toLowerCase().includes(s) && !d.ministry_name.toLowerCase().includes(s)) return false
       return true
     })
-  }, [submissions, q, typeFilter, ministryFilter, departmentFilter])
+  }, [submissions, q, typeFilter, ministryFilter, departmentFilter, yearFilter, meetingFilter])
 
   const exportCsv = () => {
     const headers = [
@@ -241,6 +257,24 @@ export default function Decisions() {
             placeholder={t('secretariat.all_departments')}
             options={departmentOptions}
             onChange={(_, v) => { setDepartmentFilter(v); setPage(1) }}
+          />
+          <BaseSelect
+            hideLabel
+            label={t('secretariat.year_label')}
+            className="w-32"
+            value={yearFilter}
+            placeholder={t('secretariat.all_years')}
+            options={yearOptions}
+            onChange={(_, v) => { setYearFilter(v); setPage(1) }}
+          />
+          <BaseSelect
+            hideLabel
+            label={t('secretariat.meeting_ref_label')}
+            className="w-44"
+            value={meetingFilter}
+            placeholder={t('secretariat.meeting_ref_label')}
+            options={meetingOptions}
+            onChange={(_, v) => { setMeetingFilter(v); setPage(1) }}
           />
           <BaseButton
             variant="outline"
