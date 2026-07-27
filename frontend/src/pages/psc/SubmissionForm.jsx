@@ -229,6 +229,7 @@ function CommissionSubmissionForm({
   const [form, setForm] = useState({
     title: '',
     agenda_category: '',
+    form_type_code: '',
     ministry: '',
     department: '',
     unit: '',
@@ -240,6 +241,33 @@ function CommissionSubmissionForm({
   )
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // Once a broad agenda category is picked, look up the specific digitized
+  // form types filed under it (e.g. "Resignation / Retirement / Death" covers
+  // Age Retirement, Medical Retirement, Death in Service, and Redundancy —
+  // each a different form) so the ministry can pick exactly which one applies.
+  const [matchingFormTypes, setMatchingFormTypes] = useState([])
+  const [formTypesLoading, setFormTypesLoading] = useState(false)
+
+  useEffect(() => {
+    setForm(f => ({ ...f, form_type_code: '' }))
+    if (!form.agenda_category) {
+      setMatchingFormTypes([])
+      return
+    }
+    let cancelled = false
+    setFormTypesLoading(true)
+    api.get('/form-types/', { params: { agenda_category: form.agenda_category, active_only: '1' } })
+      .then(res => {
+        if (cancelled) return
+        const rows = res.data.results ?? res.data
+        setMatchingFormTypes(Array.isArray(rows) ? rows : [])
+      })
+      .catch(() => { if (!cancelled) setMatchingFormTypes([]) })
+      .finally(() => { if (!cancelled) setFormTypesLoading(false) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.agenda_category])
 
   const userMinistryId = user?.ministry?.id ?? user?.ministry_id ?? null
   const userMinistry = isMinistryUser
@@ -256,6 +284,10 @@ function CommissionSubmissionForm({
     e.preventDefault()
     if (!form.agenda_category) {
       setError('Please select a submission type.')
+      return
+    }
+    if (matchingFormTypes.length > 0 && !form.form_type_code) {
+      setError('Please select the specific submission type.')
       return
     }
     if (!form.title.trim()) {
@@ -280,6 +312,7 @@ function CommissionSubmissionForm({
         notes: form.notes,
         notify_emails: form.notify_emails,
       }
+      if (form.form_type_code) payload.form_type_code = form.form_type_code
       if (!isMinistryUser && form.ministry) payload.ministry = Number(form.ministry)
       if (form.department) payload.department = Number(form.department)
       if (form.unit) payload.unit = Number(form.unit)
@@ -338,6 +371,23 @@ function CommissionSubmissionForm({
             {' '}Scanned papers can still be attached as documents.
           </p>
         </div>
+
+        {form.agenda_category && matchingFormTypes.length > 0 && (
+          <div>
+            <BaseSelect
+              label="Specific submission type"
+              required
+              disabled={formTypesLoading}
+              placeholder={formTypesLoading ? 'Loading…' : '— Select specific type —'}
+              value={form.form_type_code}
+              options={matchingFormTypes.map(ft => ({ value: ft.code, label: ft.name }))}
+              onChange={(_, value) => setForm(f => ({ ...f, form_type_code: value }))}
+            />
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              This determines which digitized form and required-document checklist apply.
+            </p>
+          </div>
+        )}
 
         <BaseInput
           label="Title / subject"
@@ -408,7 +458,7 @@ function CommissionSubmissionForm({
         />
 
         <div className="flex items-center gap-3 pt-2">
-          <BaseButton type="submit" variant="primary" loading={busy} loadingLabel="Saving" disabled={sectionsLoading}>
+          <BaseButton type="submit" variant="primary" loading={busy} loadingLabel="Saving" disabled={sectionsLoading || formTypesLoading}>
             Create submission
           </BaseButton>
           {modal && onClose && (

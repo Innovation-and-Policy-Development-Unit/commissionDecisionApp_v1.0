@@ -3759,6 +3759,9 @@ class PSCFormTypeViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
         cat = self.request.query_params.get('form_category')
         if cat:
             qs = qs.filter(form_category_id=cat)
+        agenda_cat = self.request.query_params.get('agenda_category')
+        if agenda_cat:
+            qs = qs.filter(agenda_category=agenda_cat)
         audience = self.request.query_params.get('audience')
         if audience == 'compliance':
             from .compliance_forms import compliance_form_codes_for_role
