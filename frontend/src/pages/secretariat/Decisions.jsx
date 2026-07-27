@@ -7,7 +7,7 @@ import BaseInput from '../../components/shared/BaseInput'
 import BaseSelect from '../../components/shared/BaseSelect'
 import {
   Plus, X, Gavel, CheckCircle2, XCircle, RotateCcw, Clock, FileText, RefreshCw,
-  ChevronLeft, ChevronRight, ShieldCheck, PenLine, ClipboardCheck, Hourglass, FileCheck2,
+  ChevronLeft, ChevronRight, ShieldCheck, PenLine, ClipboardCheck, Hourglass, FileCheck2, Download,
 } from 'lucide-react'
 import api from '../../api/client'
 
@@ -48,6 +48,11 @@ const STATUS_TYPES = [
 const STATUS_MAP = Object.fromEntries(STATUS_TYPES.map(s => [s.value, s]))
 
 const LOCALE_MAP = { en: 'en-GB', fr: 'fr-FR', bi: 'en-GB' }
+
+function csvEscape(value) {
+  const s = String(value ?? '')
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
 
 // ── Components ──────────────────────────────────────────────────────────────
 
@@ -154,6 +159,33 @@ export default function Decisions() {
     })
   }, [submissions, q, typeFilter, ministryFilter, departmentFilter])
 
+  const exportCsv = () => {
+    const headers = [
+      t('secretariat.submission_ref'), t('secretariat.title_subject'), t('submission.ministry'),
+      t('submission.department'), t('secretariat.outcome_col'), t('secretariat.status_col'),
+      t('secretariat.last_updated_col'),
+    ]
+    const rows = filtered.map(d => [
+      d.reference_number,
+      d.title,
+      d.ministry_name,
+      d.department_name || '',
+      TYPE_MAP[d.current_stage] ? t(TYPE_MAP[d.current_stage].i18nKey) : d.current_stage,
+      STATUS_MAP[STATUS_STAGE_MAP[d.current_stage]] ? t(STATUS_MAP[STATUS_STAGE_MAP[d.current_stage]].i18nKey) : '',
+      d.updated_at ? new Date(d.updated_at).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+    ])
+    const csv = [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `commission-decisions-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const safePage   = Math.min(page, totalPages)
   const paged      = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE)
@@ -216,6 +248,16 @@ export default function Decisions() {
             aria-label={t('submission.reload')}
           >
             {t('submission.reload')}
+          </BaseButton>
+          <BaseButton
+            variant="outline"
+            size="sm"
+            icon={<Download size={14} aria-hidden="true" />}
+            onClick={exportCsv}
+            disabled={!filtered.length}
+            aria-label={t('secretariat.export_csv')}
+          >
+            {t('secretariat.export_csv')}
           </BaseButton>
         </div>
       </div>
