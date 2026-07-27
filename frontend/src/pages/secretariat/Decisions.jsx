@@ -7,7 +7,7 @@ import BaseInput from '../../components/shared/BaseInput'
 import BaseSelect from '../../components/shared/BaseSelect'
 import {
   Plus, X, Gavel, CheckCircle2, XCircle, RotateCcw, Clock, FileText, RefreshCw,
-  ChevronLeft, ChevronRight, ShieldCheck,
+  ChevronLeft, ChevronRight, ShieldCheck, PenLine, ClipboardCheck, Hourglass, FileCheck2,
 } from 'lucide-react'
 import api from '../../api/client'
 
@@ -24,6 +24,29 @@ const DECISION_TYPES = [
 
 const TYPE_MAP = Object.fromEntries(DECISION_TYPES.map(t => [t.value, t]))
 
+// Post-decision processing status — distinct from the outcome (approved/rejected/…) above.
+// The four outcome stages sit at "pending_entry" until the register/implementation pipeline moves them along.
+const STATUS_STAGE_MAP = {
+  approved: 'pending_entry',
+  rejected: 'pending_entry',
+  deferred: 'pending_entry',
+  returned: 'pending_entry',
+  minutes_drafted_signed: 'minutes_drafted_signed',
+  decision_entered_assigned: 'decision_entered_assigned',
+  under_implementation: 'under_implementation',
+  implementation_report: 'implementation_report',
+}
+
+const STATUS_TYPES = [
+  { value: 'pending_entry',              i18nKey: 'secretariat.status_pending_entry',              cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300',   icon: Hourglass      },
+  { value: 'minutes_drafted_signed',     i18nKey: 'secretariat.status_minutes_drafted',             cls: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',           icon: PenLine        },
+  { value: 'decision_entered_assigned',  i18nKey: 'secretariat.status_entered_assigned',            cls: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300', icon: ClipboardCheck },
+  { value: 'under_implementation',       i18nKey: 'secretariat.status_under_implementation',        cls: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300', icon: RefreshCw      },
+  { value: 'implementation_report',      i18nKey: 'secretariat.status_implementation_report',       cls: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',       icon: FileCheck2     },
+]
+
+const STATUS_MAP = Object.fromEntries(STATUS_TYPES.map(s => [s.value, s]))
+
 const LOCALE_MAP = { en: 'en-GB', fr: 'fr-FR', bi: 'en-GB' }
 
 // ── Components ──────────────────────────────────────────────────────────────
@@ -32,6 +55,19 @@ function DecisionBadge({ decision }) {
   const { t } = useTranslation()
   const meta = TYPE_MAP[decision]
   if (!meta) return <span className="text-xs text-slate-400 capitalize">{decision.replace(/_/g, ' ')}</span>
+  const Icon = meta.icon
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}>
+      <Icon size={12} aria-hidden="true" />
+      {t(meta.i18nKey)}
+    </span>
+  )
+}
+
+function StatusBadge({ decision }) {
+  const { t } = useTranslation()
+  const meta = STATUS_MAP[STATUS_STAGE_MAP[decision]]
+  if (!meta) return <span className="text-xs text-slate-400">—</span>
   const Icon = meta.icon
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}>
@@ -70,6 +106,8 @@ export default function Decisions() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [ministryFilter, setMinistryFilter] = useState('')
+  const [departmentFilter, setDepartmentFilter] = useState('')
   const [page, setPage] = useState(1)
 
   const fetchData = async () => {
@@ -90,14 +128,31 @@ export default function Decisions() {
     fetchData()
   }, [])
 
+  // Department filter cascades off the selected Ministry — reset it if the ministry changes.
+  useEffect(() => {
+    setDepartmentFilter('')
+  }, [ministryFilter])
+
+  const ministryOptions = useMemo(
+    () => [...new Set(submissions.map(s => s.ministry_name).filter(Boolean))].sort(),
+    [submissions],
+  )
+
+  const departmentOptions = useMemo(() => {
+    const pool = ministryFilter ? submissions.filter(s => s.ministry_name === ministryFilter) : submissions
+    return [...new Set(pool.map(s => s.department_name).filter(Boolean))].sort()
+  }, [submissions, ministryFilter])
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
     return submissions.filter(d => {
       if (typeFilter && d.current_stage !== typeFilter) return false
+      if (ministryFilter && d.ministry_name !== ministryFilter) return false
+      if (departmentFilter && d.department_name !== departmentFilter) return false
       if (s && !d.reference_number.toLowerCase().includes(s) && !d.title.toLowerCase().includes(s) && !d.ministry_name.toLowerCase().includes(s)) return false
       return true
     })
-  }, [submissions, q, typeFilter])
+  }, [submissions, q, typeFilter, ministryFilter, departmentFilter])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const safePage   = Math.min(page, totalPages)
@@ -124,7 +179,7 @@ export default function Decisions() {
           value={q}
           onChange={e => { setQ(e.target.value); setPage(1) }}
         />
-        {/* Row 2: outcome filter + refresh */}
+        {/* Row 2: outcome / ministry / department filters + refresh */}
         <div className="flex flex-wrap gap-2 items-center">
           <BaseSelect
             hideLabel
@@ -134,6 +189,24 @@ export default function Decisions() {
             placeholder={t('secretariat.all_outcomes')}
             options={DECISION_TYPES.map(opt => ({ value: opt.value, label: t(opt.i18nKey) }))}
             onChange={(_, v) => { setTypeFilter(v); setPage(1) }}
+          />
+          <BaseSelect
+            hideLabel
+            label={t('submission.ministry')}
+            className="w-44"
+            value={ministryFilter}
+            placeholder={t('secretariat.all_ministries')}
+            options={ministryOptions}
+            onChange={(_, v) => { setMinistryFilter(v); setPage(1) }}
+          />
+          <BaseSelect
+            hideLabel
+            label={t('submission.department')}
+            className="w-44"
+            value={departmentFilter}
+            placeholder={t('secretariat.all_departments')}
+            options={departmentOptions}
+            onChange={(_, v) => { setDepartmentFilter(v); setPage(1) }}
           />
           <BaseButton
             variant="outline"
@@ -157,6 +230,7 @@ export default function Decisions() {
                 <th>{t('secretariat.title_subject')}</th>
                 <th>{t('submission.ministry')}</th>
                 <th>{t('secretariat.outcome_col')}</th>
+                <th>{t('secretariat.status_col')}</th>
                 <th>{t('decision_proof.badge_label')}</th>
                 <th>{t('secretariat.last_updated_col')}</th>
                 <th className="text-end">{t('secretariat.details_col')}</th>
@@ -165,7 +239,7 @@ export default function Decisions() {
             <tbody>
               {loading && !submissions.length ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400">
+                  <td colSpan={8} className="py-10 text-center text-slate-400">
                     <RefreshCw size={20} aria-hidden="true" className="animate-spin mx-auto mb-2" />
                     {t('secretariat.loading_decisions')}
                   </td>
@@ -178,6 +252,7 @@ export default function Decisions() {
                   </td>
                   <td className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.ministry_name}</td>
                   <td><DecisionBadge decision={d.current_stage} /></td>
+                  <td><StatusBadge decision={d.current_stage} /></td>
                   <td>
                     {['approved', 'rejected'].includes(d.current_stage) ? (
                       <Link
@@ -207,7 +282,7 @@ export default function Decisions() {
               ))}
               {!loading && !filtered.length && (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400">
+                  <td colSpan={8} className="py-10 text-center text-slate-400">
                     {t('secretariat.no_decisions_match')}
                   </td>
                 </tr>

@@ -667,6 +667,7 @@ class CoAssignmentSerializer(serializers.Serializer):
 
 class SubmissionListSerializer(serializers.ModelSerializer):
     ministry_name = serializers.CharField(source="ministry.name", read_only=True)
+    department_name = serializers.CharField(source="department.name", read_only=True, default=None)
     category_name = serializers.CharField(source="form_category.name", read_only=True)
     logged_by = serializers.CharField(source="created_by.username", read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
@@ -709,6 +710,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "agenda_category",
             "form_agenda_category",
             "ministry_name",
+            "department_name",
             "category_name",
             "logged_by",
             "current_stage",
