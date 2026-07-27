@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import PageHeader from '../../components/shared/PageHeader'
 import SubmissionSubwayMap from '../../components/submissions/SubmissionSubwayMap'
@@ -96,6 +97,10 @@ const CHECKLIST_EDIT_ROLES = [
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
   'vipam_manager', 'hr_unit_manager', 'compliance_manager', 'compliance_senior',
 ]
+// Ministry-side roles must attach a real file to satisfy a required-document
+// item — they cannot self-declare "present" with the manual checkbox toggle
+// the way OPSC reviewers can (see ChecklistPanel's uploadOnly mode).
+const MINISTRY_SUBMITTER_ROLES = ['ministry_hr', 'dept_admin']
 
 const DYNAMIC_CHECKLIST_EDIT_ROLES = [
   'odu_manager', 'odu_principal', 'principal_org_dev_analyst', 'principal_job_analyst', 'psc_admin',
@@ -133,6 +138,7 @@ function StageBadge({ stage, overdue }) {
 export default function SubmissionDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { user } = useAuth()
   const toast   = useToast()
   const confirm = useConfirm()
@@ -227,7 +233,8 @@ export default function SubmissionDetail() {
   const showPolicyGuardrail = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
     && policyGuardrailApplies(submission)
   const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
-  const canEditChecklist = user && CHECKLIST_EDIT_ROLES.includes(user.role)
+  const isMinistrySubmitterChecklist = user && MINISTRY_SUBMITTER_ROLES.includes(user.role)
+  const canEditChecklist = user && CHECKLIST_EDIT_ROLES.includes(user.role) && !isMinistrySubmitterChecklist
   const showChecklist = !submission?.is_attachment && !submission?.is_internal && !submission?.secretary_only
 
   const applyBootstrap = useCallback((data) => {
@@ -486,7 +493,9 @@ export default function SubmissionDetail() {
     }
   }
 
-  // Upload a document specifically for a required checklist item
+  // Upload a document specifically for a required checklist item — tags the
+  // file with required_document so the backend auto-marks the item present
+  // (ministry-side roles can't self-declare presence without a real file).
   const handleUploadForItem = async (e, item) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -496,14 +505,11 @@ export default function SubmissionDetail() {
       const fd = new FormData()
       fd.append('file', file)
       fd.append('description', item.document_name)
+      fd.append('required_document', item.document)
       await api.post(`/submissions/${id}/documents/`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      // Auto-mark checklist item as present
-      if (!item.is_present) {
-        await api.patch(`/submissions/${id}/checklist/${item.id}/`, { is_present: true })
-        setChecklist(prev => prev.map(i => i.id === item.id ? { ...i, is_present: true } : i))
-      }
+      setChecklist(prev => prev.map(i => i.id === item.id ? { ...i, is_present: true } : i))
       await fetchDocuments()
       toast.success(`"${item.document_name}" uploaded.`)
     } catch (err) {
@@ -1372,6 +1378,10 @@ const stageDescriptions = {
               canEdit={canEditChecklist}
               hasDocuments={documents.length > 0}
               autofillEnabled={user?.ai_checklist_autofill_enabled !== false}
+              uploadOnly={isMinistrySubmitterChecklist}
+              onUploadForItem={isMinistrySubmitterChecklist ? handleUploadForItem : undefined}
+              uploadBusy={uploadBusy}
+              currentStage={submission?.current_stage}
             />
           )}
 

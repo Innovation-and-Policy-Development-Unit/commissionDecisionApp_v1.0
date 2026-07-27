@@ -1,9 +1,47 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ClipboardList, Square, CheckSquare, Wand2, Loader2, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { ClipboardList, Square, CheckSquare, Wand2, Loader2, Check, X, ChevronDown, ChevronUp, Paperclip } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
+
+function RequiredBadge({ t }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-300">
+      {t('submission.checklist_required_badge')}
+    </span>
+  )
+}
+
+/** Upload-to-satisfy control for ministry-side roles (uploadOnly mode) — no
+ * manual self-declare checkbox; presence can only be set by attaching a file. */
+function UploadForItemButton({ item, onUpload, uploadBusy, t }) {
+  const inputRef = useRef()
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploadBusy}
+        className={clsx(
+          'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-50',
+          item.is_present
+            ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+            : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+        )}
+      >
+        <Paperclip size={11} />
+        {item.is_present ? t('submission.checklist_replace_file') : t('submission.checklist_attach_file')}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        onChange={e => onUpload(e, item)}
+      />
+    </>
+  )
+}
 
 function SuggestionBadge({ suggestion, t }) {
   if (!suggestion) return null
@@ -31,6 +69,10 @@ export default function ChecklistPanel({
   canEdit,
   hasDocuments,
   autofillEnabled = true,
+  uploadOnly = false,
+  onUploadForItem,
+  uploadBusy = false,
+  currentStage,
 }) {
   const { t } = useTranslation()
   const [autofilling, setAutofilling] = useState(false)
@@ -217,6 +259,12 @@ export default function ChecklistPanel({
           const isSaving = savingItems.has(item.id)
           const notesOpen = expandedNotes.has(item.id)
           const displayNotes = pendingNotes[item.id] ?? item.notes ?? ''
+          const isRequiredNow = Boolean(
+            currentStage && item.mandatory_for_stage && item.mandatory_for_stage === currentStage,
+          )
+          // Items satisfied by an attached child submission (required_form_id)
+          // aren't plain file uploads — no attach button for those.
+          const canUploadForItem = uploadOnly && onUploadForItem && !item.required_form_id
 
           return (
             <li
@@ -231,7 +279,7 @@ export default function ChecklistPanel({
               )}
             >
               <div className="flex items-start gap-2.5">
-                {/* Checkbox toggle */}
+                {/* Checkbox toggle — read-only status indicator in uploadOnly mode */}
                 <button
                   type="button"
                   onClick={() => handleToggle(item)}
@@ -270,6 +318,7 @@ export default function ChecklistPanel({
                       {item.document_name}
                     </span>
                     {hasSug && <SuggestionBadge suggestion={sug} t={t} />}
+                    {isRequiredNow && !item.is_present && <RequiredBadge t={t} />}
                   </div>
 
                   {item.document_description && (
@@ -316,7 +365,14 @@ export default function ChecklistPanel({
 
                 {/* Action buttons */}
                 <div className="shrink-0 flex items-center gap-1">
-                  {hasSug ? (
+                  {canUploadForItem ? (
+                    <UploadForItemButton
+                      item={item}
+                      onUpload={onUploadForItem}
+                      uploadBusy={uploadBusy}
+                      t={t}
+                    />
+                  ) : hasSug ? (
                     <>
                       <button
                         type="button"

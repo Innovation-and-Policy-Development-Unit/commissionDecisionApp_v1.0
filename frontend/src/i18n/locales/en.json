@@ -715,7 +715,10 @@
     "checklist_suggestion_missing": "AI suggests: missing",
     "checklist_notes_placeholder": "Notes…",
     "checklist_saving": "Saving…",
-    "checklist_no_docs_hint": "Upload documents first so AI can analyse them."
+    "checklist_no_docs_hint": "Upload documents first so AI can analyse them.",
+    "checklist_required_badge": "Required",
+    "checklist_attach_file": "Attach file",
+    "checklist_replace_file": "Replace file"
   },
   "meeting_briefing": {
     "title": "Sitting briefing pack",
