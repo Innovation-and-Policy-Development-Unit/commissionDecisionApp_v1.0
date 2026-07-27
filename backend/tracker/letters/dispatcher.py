@@ -15,9 +15,13 @@ from .recruitment import (
     direct_appointment_letter,
     temporary_appointment_letter,
     contract_employment_letter,
+    acting_appointment_letter,
+    eligible_candidate_letter,
+    unsuccessful_candidate_letter,
 )
 from .secondment import secondment_letter
 from .leave_payout import leave_payout_letter
+from .allowances import medical_claim_letter
 
 _DISPATCH = {
     # Cessation
@@ -33,10 +37,15 @@ _DISPATCH = {
     "RECRUIT-DIRECT": direct_appointment_letter,
     "RECRUIT-TEMPORARY": temporary_appointment_letter,
     "RECRUIT-CONTRACT": contract_employment_letter,
+    "RECRUIT-ACTING": acting_appointment_letter,
+    "RECRUIT-ELIGIBLE": eligible_candidate_letter,
+    "RECRUIT-UNSUCCESSFUL": unsuccessful_candidate_letter,
     # Secondment
     "SECONDMENT": secondment_letter,
     # Leave payout
     "LEAVE-PAYOUT": leave_payout_letter,
+    # Allowances & claims
+    "MEDICAL-CLAIM": medical_claim_letter,
 }
 
 

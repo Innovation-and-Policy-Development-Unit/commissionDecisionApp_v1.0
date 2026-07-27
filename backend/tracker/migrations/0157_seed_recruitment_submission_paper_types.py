@@ -414,9 +414,14 @@ def seed_data(apps, schema_editor):
     PSCFormField     = apps.get_model('tracker', 'PSCFormField')
     RequiredDocument = apps.get_model('tracker', 'RequiredDocument')
 
-    recruitment_cat = FormCategory.objects.filter(code='RECRUITMENT').first()
-    if not recruitment_cat:
-        return  # Guard: should always exist from 0038
+    # NOTE: migration 0051 deleted the 'RECRUITMENT' FormCategory created by 0038
+    # (it replaced the category scheme with agenda-based codes). Self-heal here
+    # instead of assuming it still exists — a bare .filter().first() guard used
+    # to return early and silently skip all of this migration's seeding.
+    recruitment_cat, _ = FormCategory.objects.get_or_create(
+        code='RECRUITMENT',
+        defaults={'name': 'Recruitment & Selection', 'display_order': 20},
+    )
 
     # ── 5a. Seed form type records ────────────────────────────────────────────
     ft_map = {}

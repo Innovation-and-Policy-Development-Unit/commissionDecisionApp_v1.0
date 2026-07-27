@@ -286,6 +286,18 @@ def _submission_queryset_for(user):
     # CSU Manager sees only internal submissions
     if role == Role.CSU_MANAGER:
         return qs.filter(is_internal=True)
+    # Unit managers (the checklist-review gate) must only see submissions the
+    # PSC receptionist/officer has already routed to their own unit — never
+    # unrouted submissions still with PSC intake, and never another unit's
+    # queue. Keep this mapping in sync with _unit_role_to_routed used for the
+    # transition-permission check further below.
+    _unit_manager_to_routed = {
+        Role.VIPAM_MANAGER: "vipam",
+        Role.HR_UNIT_MANAGER: "hr",
+        Role.ODU_MANAGER: "odu",
+    }
+    if role in _unit_manager_to_routed:
+        return qs.filter(routed_unit=_unit_manager_to_routed[role])
     if role in {
         Role.RECEPTIONIST,
         Role.PSC_OFFICER,
@@ -297,9 +309,6 @@ def _submission_queryset_for(user):
         Role.PSC_MANAGER,
         Role.PRINCIPAL_OFFICER,
         Role.SENIOR_OFFICER,
-        Role.VIPAM_MANAGER,
-        Role.HR_UNIT_MANAGER,
-        Role.ODU_MANAGER,
         Role.COMPLIANCE_MANAGER,
         Role.CSU_MANAGER,
     }:
@@ -1488,12 +1497,19 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             WorkflowStage.DEFERRED_BACK_TO_HR,
         }
         if target not in _allowed_targets_with_gaps and not submission.secretary_only:
+            # Guarantee checklist rows exist for the submission's current required
+            # documents before counting — a submission the ministry never opened
+            # in the browser (e.g. created via API) would otherwise have zero
+            # SubmissionChecklistItem rows and silently skip this gate.
+            from .submission_checklist import ensure_submission_checklist_items
+
+            ensure_submission_checklist_items(submission)
             unchecked_mandatory = submission.checklist_items.filter(
                 document__mandatory_for_stage=prev,
                 is_present=False,
                 document__is_active=True
             ).count()
-            
+
             if unchecked_mandatory > 0:
                 return Response(
                     {"detail": f"Cannot proceed: {unchecked_mandatory} mandatory task(s) or document(s) for the current stage '{prev}' are incomplete. Please complete all assessment milestones before advancing."},
@@ -2787,14 +2803,45 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
             description = document_name or request.data.get("description", "")
 
+            # Optional link to a specific required-document checklist slot — set
+            # when this upload comes from the "attach for this requirement" UI
+            # (e.g. ministry HR filling required attachments before submitting).
+            # Accept required_document (single upload) or required_document_ids[idx].
+            required_document_ids = request.data.getlist("required_document_ids")
+            required_document_id = (
+                required_document_ids[idx]
+                if required_document_ids and idx < len(required_document_ids) and required_document_ids[idx]
+                else request.data.get("required_document") or None
+            )
+            required_document = None
+            if required_document_id:
+                from .models import RequiredDocument as _RequiredDocument
+                required_document = _RequiredDocument.objects.filter(
+                    pk=required_document_id, is_active=True,
+                ).first()
+
             doc = SubmissionDocument.objects.create(
                 submission=submission,
                 file=uploaded,
                 original_name=document_name if document_name else uploaded.name,
                 description=description,
                 uploaded_by=request.user,
+                required_document=required_document,
             )
             created_docs.append(doc)
+
+            if required_document:
+                from .submission_checklist import ensure_submission_checklist_items
+
+                ensure_submission_checklist_items(submission)
+                item, _ = SubmissionChecklistItem.objects.get_or_create(
+                    submission=submission, document=required_document,
+                )
+                item.is_present = True
+                item.checked_by = request.user
+                item.checked_at = timezone.now()
+                item.save(update_fields=["is_present", "checked_by", "checked_at"])
+
             from .tasks import queue_document_classification, queue_document_extraction
 
             queue_document_extraction(doc.id)
