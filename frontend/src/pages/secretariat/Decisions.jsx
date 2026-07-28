@@ -7,7 +7,7 @@ import BaseInput from '../../components/shared/BaseInput'
 import BaseSelect from '../../components/shared/BaseSelect'
 import {
   Plus, X, Gavel, CheckCircle2, XCircle, RotateCcw, Clock, FileText, RefreshCw,
-  ChevronLeft, ChevronRight, ShieldCheck,
+  ChevronLeft, ChevronRight, ShieldCheck, PenLine, ClipboardCheck, Hourglass, FileCheck2, Download,
 } from 'lucide-react'
 import api from '../../api/client'
 
@@ -24,7 +24,35 @@ const DECISION_TYPES = [
 
 const TYPE_MAP = Object.fromEntries(DECISION_TYPES.map(t => [t.value, t]))
 
+// Post-decision processing status — distinct from the outcome (approved/rejected/…) above.
+// The four outcome stages sit at "pending_entry" until the register/implementation pipeline moves them along.
+const STATUS_STAGE_MAP = {
+  approved: 'pending_entry',
+  rejected: 'pending_entry',
+  deferred: 'pending_entry',
+  returned: 'pending_entry',
+  minutes_drafted_signed: 'minutes_drafted_signed',
+  decision_entered_assigned: 'decision_entered_assigned',
+  under_implementation: 'under_implementation',
+  implementation_report: 'implementation_report',
+}
+
+const STATUS_TYPES = [
+  { value: 'pending_entry',              i18nKey: 'secretariat.status_pending_entry',              cls: 'bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300',   icon: Hourglass      },
+  { value: 'minutes_drafted_signed',     i18nKey: 'secretariat.status_minutes_drafted',             cls: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',           icon: PenLine        },
+  { value: 'decision_entered_assigned',  i18nKey: 'secretariat.status_entered_assigned',            cls: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300', icon: ClipboardCheck },
+  { value: 'under_implementation',       i18nKey: 'secretariat.status_under_implementation',        cls: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300', icon: RefreshCw      },
+  { value: 'implementation_report',      i18nKey: 'secretariat.status_implementation_report',       cls: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',       icon: FileCheck2     },
+]
+
+const STATUS_MAP = Object.fromEntries(STATUS_TYPES.map(s => [s.value, s]))
+
 const LOCALE_MAP = { en: 'en-GB', fr: 'fr-FR', bi: 'en-GB' }
+
+function csvEscape(value) {
+  const s = String(value ?? '')
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
 
 // ── Components ──────────────────────────────────────────────────────────────
 
@@ -32,6 +60,19 @@ function DecisionBadge({ decision }) {
   const { t } = useTranslation()
   const meta = TYPE_MAP[decision]
   if (!meta) return <span className="text-xs text-slate-400 capitalize">{decision.replace(/_/g, ' ')}</span>
+  const Icon = meta.icon
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}>
+      <Icon size={12} aria-hidden="true" />
+      {t(meta.i18nKey)}
+    </span>
+  )
+}
+
+function StatusBadge({ decision }) {
+  const { t } = useTranslation()
+  const meta = STATUS_MAP[STATUS_STAGE_MAP[decision]]
+  if (!meta) return <span className="text-xs text-slate-400">—</span>
   const Icon = meta.icon
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}>
@@ -70,6 +111,10 @@ export default function Decisions() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [ministryFilter, setMinistryFilter] = useState('')
+  const [departmentFilter, setDepartmentFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState('')
+  const [meetingFilter, setMeetingFilter] = useState('')
   const [page, setPage] = useState(1)
 
   const fetchData = async () => {
@@ -90,14 +135,74 @@ export default function Decisions() {
     fetchData()
   }, [])
 
+  // Department filter cascades off the selected Ministry — reset it if the ministry changes.
+  useEffect(() => {
+    setDepartmentFilter('')
+  }, [ministryFilter])
+
+  const ministryOptions = useMemo(
+    () => [...new Set(submissions.map(s => s.ministry_name).filter(Boolean))].sort(),
+    [submissions],
+  )
+
+  const departmentOptions = useMemo(() => {
+    const pool = ministryFilter ? submissions.filter(s => s.ministry_name === ministryFilter) : submissions
+    return [...new Set(pool.map(s => s.department_name).filter(Boolean))].sort()
+  }, [submissions, ministryFilter])
+
+  // "Year" = year of the record's last update (approval/rejection/etc. move the record, so this
+  // tracks closely with when the decision was actually made — there's no separate decision-date field).
+  const yearOptions = useMemo(
+    () => [...new Set(submissions.map(s => s.updated_at && new Date(s.updated_at).getFullYear()).filter(Boolean))]
+      .sort((a, b) => b - a)
+      .map(String),
+    [submissions],
+  )
+
+  const meetingOptions = useMemo(
+    () => [...new Set(submissions.map(s => s.scheduled_meeting_reference).filter(Boolean))].sort().reverse(),
+    [submissions],
+  )
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
     return submissions.filter(d => {
       if (typeFilter && d.current_stage !== typeFilter) return false
+      if (ministryFilter && d.ministry_name !== ministryFilter) return false
+      if (departmentFilter && d.department_name !== departmentFilter) return false
+      if (yearFilter && (!d.updated_at || String(new Date(d.updated_at).getFullYear()) !== yearFilter)) return false
+      if (meetingFilter && d.scheduled_meeting_reference !== meetingFilter) return false
       if (s && !d.reference_number.toLowerCase().includes(s) && !d.title.toLowerCase().includes(s) && !d.ministry_name.toLowerCase().includes(s)) return false
       return true
     })
-  }, [submissions, q, typeFilter])
+  }, [submissions, q, typeFilter, ministryFilter, departmentFilter, yearFilter, meetingFilter])
+
+  const exportCsv = () => {
+    const headers = [
+      t('secretariat.submission_ref'), t('secretariat.title_subject'), t('submission.ministry'),
+      t('submission.department'), t('secretariat.outcome_col'), t('secretariat.status_col'),
+      t('secretariat.last_updated_col'),
+    ]
+    const rows = filtered.map(d => [
+      d.reference_number,
+      d.title,
+      d.ministry_name,
+      d.department_name || '',
+      TYPE_MAP[d.current_stage] ? t(TYPE_MAP[d.current_stage].i18nKey) : d.current_stage,
+      STATUS_MAP[STATUS_STAGE_MAP[d.current_stage]] ? t(STATUS_MAP[STATUS_STAGE_MAP[d.current_stage]].i18nKey) : '',
+      d.updated_at ? new Date(d.updated_at).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+    ])
+    const csv = [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `commission-decisions-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const safePage   = Math.min(page, totalPages)
@@ -113,37 +218,84 @@ export default function Decisions() {
 
       <SummaryBar submissions={submissions} />
 
-      {/* Filters */}
-      <div className="card p-4 mb-4 space-y-2">
-        {/* Row 1: search */}
-        <BaseInput
-          hideLabel
-          label={t('common.search')}
-          type="search"
-          placeholder={t('secretariat.search_decisions_placeholder')}
-          value={q}
-          onChange={e => { setQ(e.target.value); setPage(1) }}
-        />
-        {/* Row 2: outcome filter + refresh */}
-        <div className="flex flex-wrap gap-2 items-center">
+      {/* Filters — arranged in a 12-col grid so dropdowns sit inline instead of stacking (mirrors SubmissionLog.jsx) */}
+      <div className="card p-4 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:items-end">
+          <BaseInput
+            hideLabel
+            label={t('common.search')}
+            type="search"
+            className="lg:col-span-12"
+            placeholder={t('secretariat.search_decisions_placeholder')}
+            value={q}
+            onChange={e => { setQ(e.target.value); setPage(1) }}
+          />
           <BaseSelect
             hideLabel
             label={t('secretariat.all_outcomes')}
-            className="w-44"
+            className="lg:col-span-2"
             value={typeFilter}
             placeholder={t('secretariat.all_outcomes')}
             options={DECISION_TYPES.map(opt => ({ value: opt.value, label: t(opt.i18nKey) }))}
             onChange={(_, v) => { setTypeFilter(v); setPage(1) }}
           />
-          <BaseButton
-            variant="outline"
-            size="sm"
-            icon={<RefreshCw size={14} aria-hidden="true" className={loading ? 'animate-spin' : ''} />}
-            onClick={fetchData}
-            aria-label={t('submission.reload')}
-          >
-            {t('submission.reload')}
-          </BaseButton>
+          <BaseSelect
+            hideLabel
+            label={t('submission.ministry')}
+            className="lg:col-span-2"
+            value={ministryFilter}
+            placeholder={t('secretariat.all_ministries')}
+            options={ministryOptions}
+            onChange={(_, v) => { setMinistryFilter(v); setPage(1) }}
+          />
+          <BaseSelect
+            hideLabel
+            label={t('submission.department')}
+            className="lg:col-span-2"
+            value={departmentFilter}
+            placeholder={t('secretariat.all_departments')}
+            options={departmentOptions}
+            onChange={(_, v) => { setDepartmentFilter(v); setPage(1) }}
+          />
+          <BaseSelect
+            hideLabel
+            label={t('secretariat.year_label')}
+            className="lg:col-span-1"
+            value={yearFilter}
+            placeholder={t('secretariat.all_years')}
+            options={yearOptions}
+            onChange={(_, v) => { setYearFilter(v); setPage(1) }}
+          />
+          <BaseSelect
+            hideLabel
+            label={t('secretariat.meeting_ref_label')}
+            className="lg:col-span-2"
+            value={meetingFilter}
+            placeholder={t('secretariat.meeting_ref_label')}
+            options={meetingOptions}
+            onChange={(_, v) => { setMeetingFilter(v); setPage(1) }}
+          />
+          <div className="lg:col-span-3 flex gap-2">
+            <BaseButton
+              variant="outline"
+              size="sm"
+              icon={<RefreshCw size={14} aria-hidden="true" className={loading ? 'animate-spin' : ''} />}
+              onClick={fetchData}
+              aria-label={t('submission.reload')}
+            >
+              {t('submission.reload')}
+            </BaseButton>
+            <BaseButton
+              variant="outline"
+              size="sm"
+              icon={<Download size={14} aria-hidden="true" />}
+              onClick={exportCsv}
+              disabled={!filtered.length}
+              aria-label={t('secretariat.export_csv')}
+            >
+              {t('secretariat.export_csv')}
+            </BaseButton>
+          </div>
         </div>
       </div>
 
@@ -157,6 +309,7 @@ export default function Decisions() {
                 <th>{t('secretariat.title_subject')}</th>
                 <th>{t('submission.ministry')}</th>
                 <th>{t('secretariat.outcome_col')}</th>
+                <th>{t('secretariat.status_col')}</th>
                 <th>{t('decision_proof.badge_label')}</th>
                 <th>{t('secretariat.last_updated_col')}</th>
                 <th className="text-end">{t('secretariat.details_col')}</th>
@@ -165,7 +318,7 @@ export default function Decisions() {
             <tbody>
               {loading && !submissions.length ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400">
+                  <td colSpan={8} className="py-10 text-center text-slate-400">
                     <RefreshCw size={20} aria-hidden="true" className="animate-spin mx-auto mb-2" />
                     {t('secretariat.loading_decisions')}
                   </td>
@@ -178,6 +331,7 @@ export default function Decisions() {
                   </td>
                   <td className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.ministry_name}</td>
                   <td><DecisionBadge decision={d.current_stage} /></td>
+                  <td><StatusBadge decision={d.current_stage} /></td>
                   <td>
                     {['approved', 'rejected'].includes(d.current_stage) ? (
                       <Link
@@ -207,7 +361,7 @@ export default function Decisions() {
               ))}
               {!loading && !filtered.length && (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400">
+                  <td colSpan={8} className="py-10 text-center text-slate-400">
                     {t('secretariat.no_decisions_match')}
                   </td>
                 </tr>

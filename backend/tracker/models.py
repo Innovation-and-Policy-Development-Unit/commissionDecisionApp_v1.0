@@ -1987,6 +1987,13 @@ class SubmissionDocument(models.Model):
     submission = models.ForeignKey(
         'Submission', on_delete=models.CASCADE, related_name='documents',
     )
+    required_document = models.ForeignKey(
+        'RequiredDocument', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='uploaded_documents',
+        help_text="Set when this file was uploaded against a specific required-document "
+                  "checklist slot (e.g. on the ministry submission form), rather than as a "
+                  "free-form attachment.",
+    )
     file = models.FileField(upload_to=_submission_doc_path)
     original_name = models.CharField(max_length=255)
     description = models.CharField(max_length=255, blank=True)

@@ -32,6 +32,30 @@ const INTERNAL_ROLES = [
   'vipam_principal',
 ]
 
+const DEFAULT_TITLE_PLACEHOLDER = 'e.g. Appointment of Director Finance & Administration'
+
+/** Title/subject placeholder shown once a specific submission type is picked —
+ * makes the example match what's actually being submitted. */
+const TITLE_PLACEHOLDER_BY_FORM_TYPE = {
+  'RECRUIT-PROBATION':    'e.g. Appointment on Probation for John Smith, Senior Officer',
+  'RECRUIT-CONFIRM':      'e.g. Confirmation of Appointment for John Smith, Senior Officer',
+  'RECRUIT-DIRECT':       'e.g. Direct Appointment of John Smith to Senior Officer',
+  'RECRUIT-TEMPORARY':    'e.g. Temporary Appointment of John Smith as Senior Officer',
+  'RECRUIT-CONTRACT':     'e.g. Contract Employment of John Smith as Senior Officer',
+  'RECRUIT-ACTING':       'e.g. Acting Appointment of John Smith as Manager HRM',
+  'RECRUIT-ELIGIBLE':     'e.g. Eligible Candidate Notification for John Smith',
+  'RECRUIT-UNSUCCESSFUL': 'e.g. Unsuccessful Candidate Notification for John Smith',
+  'CESSATION-AGE':          'e.g. Age Retirement for John Smith, Senior Officer',
+  'CESSATION-NOTICE-AGE':   'e.g. Notice of Age Retirement for John Smith',
+  'CESSATION-MEDICAL':      'e.g. Medical Retirement for John Smith',
+  'CESSATION-DEATH':        'e.g. Death in Service Benefits for the late John Smith',
+  'CESSATION-REDUNDANCY':   'e.g. Redundancy of John Smith, Senior Officer',
+  'CESSATION-RESIGNATION':  'e.g. Voluntary Resignation of John Smith',
+  'SECONDMENT':    'e.g. Secondment of John Smith to the Commercial Investment Unit',
+  'LEAVE-PAYOUT':  'e.g. Outstanding Leave Payout for John Smith',
+  'MEDICAL-CLAIM': 'e.g. Medical Expense Claim for John Smith',
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Deadline Banner
 // ─────────────────────────────────────────────────────────────────────────────
@@ -229,6 +253,7 @@ function CommissionSubmissionForm({
   const [form, setForm] = useState({
     title: '',
     agenda_category: '',
+    form_type_code: '',
     ministry: '',
     department: '',
     unit: '',
@@ -240,6 +265,39 @@ function CommissionSubmissionForm({
   )
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // Once a broad agenda category is picked, look up the specific digitized
+  // form types filed under it (e.g. "Resignation / Retirement / Death" covers
+  // Age Retirement, Medical Retirement, Death in Service, and Redundancy —
+  // each a different form) so the ministry can pick exactly which one applies.
+  const [matchingFormTypes, setMatchingFormTypes] = useState([])
+  const [formTypesLoading, setFormTypesLoading] = useState(false)
+
+  useEffect(() => {
+    setForm(f => ({ ...f, form_type_code: '' }))
+    if (!form.agenda_category) {
+      setMatchingFormTypes([])
+      return
+    }
+    let cancelled = false
+    setFormTypesLoading(true)
+    api.get('/form-types/', { params: { agenda_category: form.agenda_category, active_only: '1' } })
+      .then(res => {
+        if (cancelled) return
+        const rows = res.data.results ?? res.data
+        const list = Array.isArray(rows) ? rows : []
+        setMatchingFormTypes(list)
+        // No real choice to make when there's exactly one match — select it
+        // automatically instead of forcing a single-option dropdown click.
+        if (list.length === 1) {
+          setForm(f => ({ ...f, form_type_code: list[0].code }))
+        }
+      })
+      .catch(() => { if (!cancelled) setMatchingFormTypes([]) })
+      .finally(() => { if (!cancelled) setFormTypesLoading(false) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.agenda_category])
 
   const userMinistryId = user?.ministry?.id ?? user?.ministry_id ?? null
   const userMinistry = isMinistryUser
@@ -256,6 +314,10 @@ function CommissionSubmissionForm({
     e.preventDefault()
     if (!form.agenda_category) {
       setError('Please select a submission type.')
+      return
+    }
+    if (matchingFormTypes.length > 0 && !form.form_type_code) {
+      setError('Please select the specific submission type.')
       return
     }
     if (!form.title.trim()) {
@@ -280,6 +342,7 @@ function CommissionSubmissionForm({
         notes: form.notes,
         notify_emails: form.notify_emails,
       }
+      if (form.form_type_code) payload.form_type_code = form.form_type_code
       if (!isMinistryUser && form.ministry) payload.ministry = Number(form.ministry)
       if (form.department) payload.department = Number(form.department)
       if (form.unit) payload.unit = Number(form.unit)
@@ -339,10 +402,27 @@ function CommissionSubmissionForm({
           </p>
         </div>
 
+        {form.agenda_category && matchingFormTypes.length > 1 && (
+          <div>
+            <BaseSelect
+              label="Specific submission type"
+              required
+              disabled={formTypesLoading}
+              placeholder={formTypesLoading ? 'Loading…' : '— Select specific type —'}
+              value={form.form_type_code}
+              options={matchingFormTypes.map(ft => ({ value: ft.code, label: ft.name }))}
+              onChange={(_, value) => setForm(f => ({ ...f, form_type_code: value }))}
+            />
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              This determines which digitized form and required-document checklist apply.
+            </p>
+          </div>
+        )}
+
         <BaseInput
           label="Title / subject"
           required
-          placeholder="e.g. Appointment of Director Finance & Administration"
+          placeholder={TITLE_PLACEHOLDER_BY_FORM_TYPE[form.form_type_code] || DEFAULT_TITLE_PLACEHOLDER}
           value={form.title}
           onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
         />
@@ -408,7 +488,7 @@ function CommissionSubmissionForm({
         />
 
         <div className="flex items-center gap-3 pt-2">
-          <BaseButton type="submit" variant="primary" loading={busy} loadingLabel="Saving" disabled={sectionsLoading}>
+          <BaseButton type="submit" variant="primary" loading={busy} loadingLabel="Saving" disabled={sectionsLoading || formTypesLoading}>
             Create submission
           </BaseButton>
           {modal && onClose && (

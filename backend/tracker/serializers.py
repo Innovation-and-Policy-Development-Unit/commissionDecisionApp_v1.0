@@ -667,7 +667,9 @@ class CoAssignmentSerializer(serializers.Serializer):
 
 class SubmissionListSerializer(serializers.ModelSerializer):
     ministry_name = serializers.CharField(source="ministry.name", read_only=True)
+    department_name = serializers.CharField(source="department.name", read_only=True, default=None)
     category_name = serializers.CharField(source="form_category.name", read_only=True)
+    scheduled_meeting_reference = serializers.CharField(source="scheduled_meeting.reference_number", read_only=True, default=None)
     logged_by = serializers.CharField(source="created_by.username", read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
     co_assignments = CoAssignmentSerializer(many=True, read_only=True)
@@ -709,6 +711,8 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "agenda_category",
             "form_agenda_category",
             "ministry_name",
+            "department_name",
+            "scheduled_meeting_reference",
             "category_name",
             "logged_by",
             "current_stage",
@@ -994,6 +998,7 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
             'id', 'original_name', 'description', 'note', 'uploaded_by_username',
             'uploaded_at', 'file_size', 'content_type',
             'version_num', 'version_count', 'archived_at',
+            'required_document',
             'ocr_status', 'ocr_status_display', 'extracted_text', 'extracted_facts',
             'ocr_error', 'ocr_processed_at',
             'document_type', 'document_type_display', 'document_type_confidence',
@@ -1141,12 +1146,14 @@ class ChecklistItemSerializer(serializers.ModelSerializer):
     required_form_id = serializers.IntegerField(source='document.required_form_id', read_only=True, default=None)
     required_form_code = serializers.CharField(source='document.required_form.code', read_only=True, default=None)
     required_form_name = serializers.CharField(source='document.required_form.name', read_only=True, default=None)
+    mandatory_for_stage = serializers.CharField(source='document.mandatory_for_stage', read_only=True, default=None)
 
     class Meta:
         model = SubmissionChecklistItem
         fields = ('id', 'document', 'document_name', 'document_description',
                   'is_present', 'notes', 'checked_by_username', 'checked_at',
-                  'required_form_id', 'required_form_code', 'required_form_name')
+                  'required_form_id', 'required_form_code', 'required_form_name',
+                  'mandatory_for_stage')
         read_only_fields = ('document', 'checked_by_username', 'checked_at')
 
 

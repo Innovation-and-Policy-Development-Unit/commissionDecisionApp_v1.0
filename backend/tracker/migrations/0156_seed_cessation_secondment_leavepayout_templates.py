@@ -622,8 +622,13 @@ def seed_data(apps, schema_editor):
         'PSC 3-7-CONTRACT': PSCFormType.objects.filter(code='PSC 3-7').first(),
     }
     # RECRUIT-CONFIRM and RECRUIT-DIRECT don't map to a single PSCFormType —
-    # they use form_category RECRUITMENT with a name prefix so they're distinct
-    recruitment_cat = FormCategory.objects.filter(code='RECRUITMENT').first()
+    # they use form_category RECRUITMENT with a name prefix so they're distinct.
+    # Self-heal: migration 0051 deleted the 'RECRUITMENT' category from 0038,
+    # so recreate it rather than silently attaching these docs to no category.
+    recruitment_cat, _ = FormCategory.objects.get_or_create(
+        code='RECRUITMENT',
+        defaults={'name': 'Recruitment & Selection', 'display_order': 20},
+    )
 
     for doc_key, docs in REQUIRED_DOCS.items():
         ft_obj = ft_map.get(doc_key) or special_map.get(doc_key)

@@ -1,0 +1,104 @@
+---
+title: "HRM Unit Pre-Pilot Test — Instructions"
+subtitle: "SCDMS — Submission & Commission Decision Management System"
+date: today
+
+format:
+  html:
+    toc: true
+    number-sections: false
+    theme: cosmo
+    embed-resources: true
+    smooth-scroll: true
+    code-fold: false
+
+page-layout: article
+---
+
+*Version 3 — pre-pilot dry run ahead of the wider OPSC management pilot*
+
+## What's different from the last draft
+
+- **Full coverage** — every HR-routed submission type is in scope (17 total, not just one).
+- **Decision task allocation** — minutes signed → task auto-assigned to HR Unit Manager → manager assigns to a Principal or Senior Officer.
+- **Real HRM Unit staff, not placeholder accounts** — the seven officers below are testing under their own names, provided by ODU. `m.hrunit` (the old generic HR Unit Manager test account) has been deactivated.
+
+## Test Accounts
+
+| Role | Name | Username | Temp password |
+|:--|:--|:--|:--|
+| Ministry HR (submitter) | — | `hr.finance` | `Ministry123!` |
+| Head of Agency / DG (endorses) | — | `dg.mfem` | `DG12345!` |
+| PSC Officer (routes Submitted → Checklist Review) | — | `p.mahe` | `Officer123!` |
+| HR Unit Manager (checklist gate, allocates tasks) | Shem George | `gshem` | `Manager2026!` |
+| HR Unit Principal (assessment, task work) | Kalmatak Willie David | `wkalmatak` | `Principal2026!` |
+| Senior Officer | Ephraim Letishia Packete | `eletishia` | `Officer2026A!` |
+| Senior Officer | Garaesese Morgan Garaeully | `mggaraesere` | `Officer2026B!` |
+| Senior Officer | Obed Julie Lina | `juobed` | `Officer2026C!` |
+| Senior Officer | Iesul Savana | `siesul` | `Officer2026D!` |
+| Senior Officer | Mele Flora | `fmele` | `Officer2026E!` |
+| PSC Secretary (commission, minutes, decisions) | — | `j.iati` | `Secretary123!` |
+| Senior Admin Officer (uploads signed minutes) | — | `s.tari` | `Officer123!` |
+| PSC Admin (oversight, letter generation) | — | `admin` | `Admin1234!` |
+
+*All seven HRM Unit accounts are set to force a password change on first login — the temp password above only works once.*
+
+## Phase 1 — Smoke Test All 17 Submission Types (breadth)
+
+For each row below: log in as `hr.finance` → **New Submission** → pick the agenda category shown → in the "Specific submission type" dropdown, pick the exact name listed (some categories also list older, non-digitized PSC form numbers alongside — ignore those, pick the named one) → fill a few realistic fields → attach any placeholder file to each item the Required Documents panel marks *Required* → Submit to DG.
+
+| # | Category to pick | Specific type to select |
+|:-:|:--|:--|
+| 1 | Appointment / Acting Appointment | **Appointment on Probation Submission Paper** |
+| 2 | Appointment / Acting Appointment | **Acting Appointment** |
+| 3 | Appointment / Acting Appointment | **Eligible Candidate Notification** |
+| 4 | Appointment / Acting Appointment | **Unsuccessful Candidate Notification** |
+| 5 | Direct Appointment / Confirmation of Appointment | **Confirmation of Appointment Submission Paper** |
+| 6 | Direct Appointment / Confirmation of Appointment | **Direct Appointment Submission Paper** |
+| 7 | Temporary Salaried Appointment | **Temporary Appointment Submission Paper** |
+| 8 | Contract / Temporary Salaried Appointment | **Contract Employment Submission Paper** |
+| 9 | Resignation / Retirement / Death | **Age Retirement Submission** |
+| 10 | Resignation / Retirement / Death | **Notice of Age Retirement Submission** |
+| 11 | Resignation / Retirement / Death | **Medical Retirement Submission** |
+| 12 | Resignation / Retirement / Death | **Death in Service Submission** |
+| 13 | Resignation / Retirement / Death | **Redundancy Submission** |
+| 14 | Resignation / Retirement / Death | **Voluntary Resignation Submission** |
+| 15 | Other Matters | **Secondment Submission** |
+| 16 | Other Matters | **Leave Payout Authorization** |
+| 17 | Medical Claim *(auto-selected)* | **Medical Expense Claim** |
+
+**For each one, confirm:**
+
+- the digitized form fields match the real paper form;
+- the Required Documents list makes sense to HR;
+- submission is blocked until mandatory items are attached;
+- DG endorsement → PSC Officer routing works;
+- it lands in `gshem`'s (Shem George, HR Unit Manager) Manager Checklist Review queue — and only there, not in VIPAM's or ODU's queue.
+
+*Log anything wrong via the feedback button as you go. Don't take any of these past Checklist Review — that's what Phase 2 is for.*
+
+**Distributing the load:** with five Senior Officer accounts now available, feel free to split Phase 1 across the team — different officers can each pick up a handful of the 17 rows rather than one person working through all of them.
+
+## Phase 2 — Full Depth: 2 Submissions Through Decision + Task Allocation
+
+Pick **one Recruitment type** (suggest #5, Confirmation of Appointment) and **one Cessation type** (suggest #13, Redundancy) from Phase 1 and carry them all the way through:
+
+1. `gshem` (Shem George, HR Unit Manager) — checklist review → assign to `wkalmatak`
+2. `wkalmatak` (Kalmatak Willie David, HR Unit Principal) — assessment → forward to Secretary approval gate
+3. `j.iati` — approve gate → forward to Commission → add to a meeting agenda → record the Commission's decision (Approved) in the minutes
+4. `s.tari` (or `admin`) — upload the signed minutes
+5. **Confirm automatically, without anyone touching a button:**
+   - A `CommissionTask` appears in `gshem`'s task register, already linked to the right submission.
+   - The submission's own "journey" progress bar advances to **Decision Entered & Assigned** — this is a newly-fixed sync, worth specifically checking it isn't stuck showing "Decision" only.
+6. `gshem` — from the task register, assign the task to `wkalmatak` for one submission and to `eletishia` for the other (testing both allowed assignee types — any of the five Senior Officer accounts works the same way as `eletishia` here)
+7. `wkalmatak` / `eletishia` — open their assigned task, update status to In Progress, then Completed
+8. Generate the outcome letter on both submissions and check the content matches what was actually entered
+
+## What to Watch For
+
+- Does the right unit manager — and only that manager — see each submission once routed?
+- Does the Required Documents panel feel like a help or a hindrance to real HR staff — any item that shouldn't be mandatory, or one that's missing?
+- Does the task-allocation notification actually reach `gshem`, and the reassignment notification reach `wkalmatak`/`eletishia`?
+- Does the progress bar / journey view accurately reflect where things actually are at every stage?
+
+Log everything through the feedback button as it happens; fill out the System Feedback Checklist at the end (sections 2–5, 7, 8, 9 are most relevant this round — intake/routing, checklist review, assignment/assessment, commission outcome, implementation tracking, notifications).

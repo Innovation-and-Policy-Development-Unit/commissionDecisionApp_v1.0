@@ -1,7 +1,8 @@
 """
 Outcome letters for Recruitment submission papers.
 Covers: Offer of Employment, Confirmation of Appointment, Direct Appointment,
-        Temporary Appointment, Contract Employment, Unsuccessful Candidate.
+        Temporary Appointment, Contract Employment, Acting Appointment,
+        Eligible Candidate, Unsuccessful Candidate.
 """
 from __future__ import annotations
 from .utils import today_str, letterhead, signature_block, wrap_html, _form_data, _ministry_name
@@ -193,6 +194,90 @@ def contract_employment_letter(submission) -> dict:
         ),
     ]
     return _recruit_letter(submission, subject, paras)
+
+
+def acting_appointment_letter(submission) -> dict:
+    data = _form_data(submission)
+    officer = data.get("officer_name", "[Officer Name]")
+    position = data.get("position_title", "[Position Title]")
+    post_number = data.get("post_number", "")
+    dept = data.get("department", "[Department]")
+    ministry = _ministry_name(submission) or data.get("ministry", "[Ministry]")
+    salary_grade = data.get("salary_grade", "[Salary Grade]")
+    start_date = data.get("acting_start_date", "[Start Date]")
+    end_date = data.get("acting_end_date", "")
+    ref = submission.reference_number or ""
+
+    subject = f"Approval of Acting Appointment as {position} — {dept}"
+    period = f"{start_date} to {end_date}" if end_date else f"{start_date} until further decision by the Commission"
+    full_text = (
+        f"PUBLIC SERVICE COMMISSION\nPort Vila, Vanuatu\nDate: {today_str()}\n\n"
+        f"Reference: {ref}\n\n"
+        f"TO: {officer}\n\n"
+        f"RE: {subject}\n\n"
+        f"Dear {officer},\n\n"
+        f"I am pleased to inform you that, with the powers vested under section "
+        f"4.2.2(1) & (2) of the PSSM, I hereby appoint you on an acting basis to "
+        f"the following post as stated below:\n\n"
+        f"    Post Title:       {position}\n"
+        + (f"    Post No.:         {post_number}\n" if post_number else "")
+        + f"    Salary Grade:     {salary_grade}\n"
+        f"    Department:       {dept}\n"
+        f"    Ministry:         {ministry}\n\n"
+        f"Your acting appointment is effective from {period}. You are expected "
+        f"to carry out the full duties and responsibilities of {position}. The "
+        f"terms and conditions of service contained in your letter of appointment "
+        f"remain unchanged.\n\n"
+        f"On behalf of the Commission, I congratulate you and wish you all the "
+        f"best in your acting capacity as {position}."
+        + signature_block()
+    )
+    return {
+        "subject": subject,
+        "body_text": full_text,
+        "body_html": wrap_html(full_text),
+    }
+
+
+def eligible_candidate_letter(submission) -> dict:
+    data = _form_data(submission)
+    applicant = data.get("applicant_name", "[Applicant Name]")
+    position = data.get("position_title", "[Position Title]")
+    post_number = data.get("post_number", "")
+    dept = data.get("department", "[Department]")
+    ministry = _ministry_name(submission) or data.get("ministry", "[Ministry]")
+    expiry = data.get("eligibility_expiry", "[Expiry Date]")
+    ref = submission.reference_number or ""
+
+    subject = f"Application Outcome — {position}, {dept}"
+    post_ref = f"{position} - Post No. {post_number}" if post_number else position
+    full_text = (
+        f"PUBLIC SERVICE COMMISSION\nPort Vila, Vanuatu\nDate: {today_str()}\n\n"
+        f"Reference: {ref}\n\n"
+        f"TO: {applicant}\n\n"
+        f"RE: {subject}\n\n"
+        f"Dear {applicant},\n\n"
+        f"I refer to your application for the post of {post_ref} within the "
+        f"{dept}, {ministry}.\n\n"
+        f"Thank you for your interest in applying for this post and for making "
+        f"yourself available for interview by the Selection Panel. The Commission "
+        f"carefully considered all applicants for the post and, on this occasion, "
+        f"you were recommended as an eligible candidate for the position.\n\n"
+        f"The current policy states that the eligibility list is active until "
+        f"{expiry}. Within this period, if the successful applicant withdraws "
+        f"the offer of appointment or ceases office, the Director-General of "
+        f"{ministry} shall consult with the Commission to appoint you to the "
+        f"position, or alternatively request approval to re-advertise the "
+        f"position.\n\n"
+        f"We encourage you to apply for future vacancies in the Public Service "
+        f"for which you believe your skills and qualifications make you suitable."
+        + signature_block()
+    )
+    return {
+        "subject": subject,
+        "body_text": full_text,
+        "body_html": wrap_html(full_text),
+    }
 
 
 def unsuccessful_candidate_letter(submission) -> dict:
