@@ -15,8 +15,15 @@ mkdir -p "${BACKUP_DIR:-/var/backups/scdms}" 2>/dev/null || true
 mkdir -p "${MEDIA_ROOT:-/var/scdms/media}" 2>/dev/null || true
 
 python manage.py migrate --noinput
+python manage.py collectstatic --noinput
 if [ "${AUTO_SEED:-1}" != "0" ]; then
   # Idempotent: reference data every start; dummy submissions only when none exist.
   python manage.py seed_tracker || echo "seed_tracker finished with warnings (non-fatal)"
 fi
-exec python manage.py runserver 0.0.0.0:8000
+exec gunicorn config.wsgi:application \
+  --bind "0.0.0.0:8000" \
+  --workers "${GUNICORN_WORKERS:-5}" \
+  --threads "${GUNICORN_THREADS:-4}" \
+  --timeout "${GUNICORN_TIMEOUT:-120}" \
+  --access-logfile - \
+  --error-logfile -
