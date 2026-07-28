@@ -7,7 +7,7 @@ output:
 
 **System:** Submission & Commission Decision Management System (SCDMS) / Commission Decision Portal (CDP)  
 **API version:** 1.0.0  
-**Document version:** 1.1 — May 2026  
+**Document version:** 1.2 — July 2026  
 **Maintainer:** IPDU, Office of the Public Service Commission of Vanuatu
 
 ---
@@ -463,6 +463,71 @@ Called when SCDMS marks implementation complete (event-driven).
 | Read outcome / stage | `GET /api/submissions/{id}/` → `current_stage`, `implementation_status` |
 | Register linked matter | Usually created in SCDMS by ministry HR; HRMIS does not duplicate create unless using service account |
 
+### 7.4 Addendum — recruitment-module review (PSSM Chapter 3, July 2026)
+
+Reviewed against the HRMIS Recruitment process maps (PSSM Chapter 3, §§3.1–3.9: permanent appointment without advertising, record keeping, vacancy advertising, panel establishment, shortlisting, final selection/submission, temporary staff, daily rated workers, contract/specialist engagement). The division of responsibility in §7 holds — HRMIS owns the recruitment workflow up to a completed selection dossier (panel, shortlisting, scoring, Forms 3-2–3-5); SCDMS owns the submission, Commission decision, and decision register. Four gaps were found in the §7.1 contract that should be closed before the HRMIS MOU is finalised.
+
+#### 7.4.1 Decision-event notification (new) — separate from `psc-decision-outcomes`
+
+PSSM §3.6 requires candidates to be notified as soon as the **Commission decides** (approved / deferred), not when implementation is later completed. `psc-decision-outcomes` (§7.1) fires only at `implementation_completed` and is the wrong signal for this — it can be weeks later. SCDMS should post a second, earlier event when a submission leaves `commission_sitting`.
+
+**`POST /api/v1/psc-decision-events`** (HRMIS → called by SCDMS, event-driven, same retry/idempotency rules as §7.1)
+
+```json
+{
+  "psc_reference": "PSC-2026-00142",
+  "form_type_code": "PSC 3.6",
+  "decision": "approved",
+  "decision_date": "2026-06-01",
+  "decision_stage": "approved",
+  "minutes_reference": "MIN-2026-0087",
+  "recommended_applicant_employee_id": "EMP-12345",
+  "eligible_applicant_employee_ids": ["EMP-12399"],
+  "notify_candidates": true
+}
+```
+
+`decision` one of `approved` / `rejected` / `returned` / `deferred_back_to_hr` (mirrors §8 outcome stages). HRMIS uses this purely to trigger candidate correspondence and to update its own recruitment-file status (PSSM §3.2 Step 8/9); it does **not** become HRMIS's authoritative decision record — `current_stage` on the SCDMS submission remains that.
+
+#### 7.4.2 `position_classification` field (new) — add to `GET /api/v1/employees/{employee_id}`
+
+Several process steps branch on whether a position is senior/SEO-level (PSC establishes the panel directly rather than the DG — §3.4; permanent-file retention at OPSC vs. 6-month ministry retention — §3.2 Step 9; escalation thresholds — §3.1). HRMIS already owns establishment/position data (per the scope letter); SCDMS should read the classification rather than keep a second copy.
+
+```json
+{
+  "employee_id": "EMP-12345",
+  "position_title": "Director Finance",
+  "position_number": "POS-99",
+  "position_classification": "senior_executive",
+  "grade_or_level": "G10"
+}
+```
+
+`position_classification`: `senior_executive` | `standard`. Add to the existing §7.1 response schema; no new endpoint required.
+
+#### 7.4.3 Resubmission counter — SCDMS-side gap, not HRMIS
+
+PSSM §3.1 Step 10B allows **only one** resubmission when the Commission returns a case on rectifiable grounds, looping back to Commission review. SCDMS currently has a `resubmitted` workflow stage but no counter field, so nothing stops (or reports) a second resubmission, and HRMIS has no read-only signal to show "resubmission not available" in its UI.
+
+**IPDU action (SCDMS side):** add `resubmission_count` and `resubmission_limit` to the submission detail response (§6.3 key fields) and enforce the limit in the `returned_for_clarification` → `resubmitted` transition (`backend/tracker/transitions.py`). HRMIS should read these fields rather than track its own counter, consistent with SCDMS owning stage tracking.
+
+#### 7.4.4 `validate-for-psc` — itemised eligibility checks
+
+PSSM §3.7 Step 2 requires confirming several distinct eligibility criteria (age 18–60 unless contract, citizenship, character, job requirements met). The current `{"valid": true, "errors": []}` shape can't tell a caller *which* criterion failed, so SCDMS can't surface a specific reason to the assessing unit. Request HRMIS itemise checks:
+
+```json
+{
+  "valid": false,
+  "checks": {
+    "age_in_range": true,
+    "citizenship": true,
+    "good_character": true,
+    "meets_job_requirements": false
+  },
+  "errors": ["meets_job_requirements: minimum qualification not on file"]
+}
+```
+
 ---
 
 ## 8. Workflow stages (reference)
@@ -548,9 +613,10 @@ The README in the repository root contains a **summary table** of major route gr
 | Action | Owner | Notes |
 |--------|--------|-------|
 | DCDT server handshake | IPDU + DCDT | Run integration tests with strict TLS/headers (NCSS 2030) using local self-signed certs until production domain is live |
-| HRMIS MOU / RFC | IPDU + HRMIS technical unit | Use §7.1 as the formal contract template; agree auth, 202 SLA, and idempotent `psc_reference` |
+| HRMIS MOU / RFC | IPDU + HRMIS technical unit | Use §7.1 and §7.4 as the formal contract template; agree auth, 202 SLA, and idempotent `psc_reference` |
 | CMS webhook key rotation | IPDU ops | Rotate `X-CMS-Callback-Key` via env; plan HMAC signing in v1.1.0 |
 | Dynamic form contract tests | IPDU dev | Assert 400 `dynamic_form` errors in partner test packs for unknown `field_key` values |
+| Resubmission counter (§7.4.3) | IPDU dev | Add `resubmission_count`/`resubmission_limit` to submission detail response; enforce single-resubmission limit in `returned_for_clarification` → `resubmitted` transition |
 
 ---
 
@@ -558,6 +624,7 @@ The README in the repository root contains a **summary table** of major route gr
 
 | Version | Date | Notes |
 |---------|------|-------|
+| 1.2 | July 2026 | §7.4 recruitment-module addendum (PSSM Ch.3 review): `psc-decision-events`, `position_classification`, resubmission counter, itemised `validate-for-psc` |
 | 1.1 | May 2026 | Dynamic form validation; `{id}` vs reference_number; HRMIS retry SLA; IPDU checklist; CMS webhook ops |
 | 1.0 | May 2026 | Initial partner-facing API guide; HRMIS proposed contract; Form 4.4 director/DG rules |
 
