@@ -1,0 +1,26 @@
+body {
+    font-family: Calibri, Arial, sans-serif;
+    font-size: 11pt;
+    max-width: 1000px;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+h1, h2, h3 {
+    color: #003366;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table th,
+table td {
+    border: 1px solid #ccc;
+    padding: 8px;
+}
+
+table th {
+    background: #f3f6fa;
+}

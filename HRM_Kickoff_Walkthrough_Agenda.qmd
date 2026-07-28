@@ -1,0 +1,29 @@
+---
+title: "HRM Pre-Pilot — Kickoff Walkthrough Agenda"
+subtitle: "Shared big-screen demo before individual testing begins (~20 minutes)"
+date: today
+format:
+  html:
+    toc: true
+    number-sections: false
+    theme: cosmo
+    embed-resources: true
+    smooth-scroll: true
+    code-fold: false
+---
+
+**Presenter:** you, logged in and switching between the accounts below as you go. Logins are the real HRM Unit staff accounts (`gshem`, `wkalmatak`, etc.) — the old generic `m.hrunit` test account has been retired.
+
+| Time | What to show | Login |
+|:-:|:--|:--|
+| 0–2 min | **Context.** Why this pre-pilot exists, what's in scope today (17 HR submission types + decision task allocation), and that this is a dry run before the wider OPSC pilot — rough edges are expected and that's the point. | — |
+| 2–6 min | **Ministry side.** Create a new submission (Confirmation of Appointment). Show: picking the category, then the specific type dropdown, the title placeholder changing to match, the digitized form fields, and the Required Documents panel blocking submission until mandatory items are attached. Submit to DG. | `hr.finance` |
+| 6–7 min | **DG endorsement.** Quick — open the submission, endorse it, hand back to HR to forward to PSC. | `dg.mfem` |
+| 7–8 min | **PSC intake.** Show it arriving at Submitted, then routed into Manager Checklist Review — point out it's auto-routed, no manual "which unit" decision needed. | `p.mahe` |
+| 8–11 min | **HR Unit Manager.** Show the submission landing *only* in this queue (not VIPAM's, not ODU's), work through the checklist, assign to the Principal. | `gshem` (Shem George) |
+| 11–13 min | **Principal → Secretary → Commission.** Move quickly — assess, forward to Secretary approval gate, forward to Commission. Don't dwell; this part isn't what's new today. | `wkalmatak` (Kalmatak Willie David), `j.iati` |
+| 13–17 min | **The new part — decision → task allocation.** Use a submission pre-staged at the minutes-signing step (prepare this *before* the session). Sign the minutes, then show — live, automatically — the CommissionTask appearing in the HR Unit Manager's register and the submission's journey bar advancing to *Decision Entered & Assigned*. Then show the manager assigning that task to a Principal or Senior. | `s.tari`/`admin`, `gshem` |
+| 17–19 min | **What they'll do next.** Two phases: Phase 1, everyone works through their assigned submission types solo; Phase 2, two people carry a submission all the way through what was just demoed. | — |
+| 19–20 min | **Feedback mechanism.** Show the feedback button and the System Feedback Checklist, and where it goes. Hand out login credentials. | — |
+
+**Before the session:** have one submission already parked at "minutes ready to sign" so the 13–17 minute mark doesn't stall waiting on a live commission sitting — that's the moment you most want everyone watching closely, not waiting on five prior clicks.
