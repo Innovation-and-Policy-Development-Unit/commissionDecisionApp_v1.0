@@ -3762,12 +3762,16 @@ class PSCFormTypeViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
         agenda_cat = self.request.query_params.get('agenda_category')
         if agenda_cat:
             # Used by the ministry "specific submission type" picker only.
-            # Exclude OPSC-internal-only form types (INT-1..8, form_category
-            # 'INTERNAL') — they carry an agenda_category for the CSU/ODU/VIPAM
-            # internal-submission flow's own grouping, but were never meant to
-            # be selectable by ministries and would otherwise show up as
-            # confusing near-duplicates of the real digitized forms.
-            qs = qs.filter(agenda_category=agenda_cat).exclude(form_category__code='INTERNAL')
+            # Exclude the 8 OPSC-internal-only placeholder types (INT-1..8 —
+            # added by migration 0046 for the CSU/ODU/VIPAM internal-submission
+            # flow). Their form_category was later genericized to 'other' by
+            # migration 0051's reshuffle, so code prefix is the only reliable
+            # way left to identify them; they carry an agenda_category from
+            # that same reshuffle but were never meant to be ministry-selectable
+            # and would otherwise show up as confusing near-duplicates of the
+            # real digitized forms (e.g. "Voluntary Resignation" vs "Voluntary
+            # Resignation Submission").
+            qs = qs.filter(agenda_category=agenda_cat).exclude(code__startswith='INT-')
         audience = self.request.query_params.get('audience')
         if audience == 'compliance':
             from .compliance_forms import compliance_form_codes_for_role
