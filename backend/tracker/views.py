@@ -3951,6 +3951,14 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
 
         notify_task_assigned(task, task_assignees(task))
 
+        if sub is not None:
+            from .decision_allocation import advance_to_decision_entered_assigned
+
+            advance_to_decision_entered_assigned(
+                sub, self.request.user,
+                remarks="Decision manually allocated to unit manager by the Secretariat.",
+            )
+
     def perform_update(self, serializer):
         task = serializer.instance
         user = self.request.user

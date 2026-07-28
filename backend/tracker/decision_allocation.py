@@ -74,6 +74,33 @@ def _effective_routed_unit(submission) -> str:
     return routed_unit_for_form_type(submission.form_type_code) or ""
 
 
+def advance_to_decision_entered_assigned(submission, actor, remarks: str = "") -> bool:
+    """Once a decision has an allocated CommissionTask, the submission has
+    moved past the bare decision outcome into 'decision entered & assigned for
+    implementation' — advance current_stage to match (a graph-valid direct hop
+    from APPROVED/REJECTED/NOTED/NOT_APPROVED, per transitions._STAGE_GRAPH),
+    so the ministry-facing journey and public tracker reflect that a unit
+    manager is now working the decision instead of showing it stuck at the
+    bare outcome. Deferred outcomes (sent back to the unit / next meeting)
+    are not concluding decisions and are left alone. Returns True if advanced.
+    """
+    from .models import WorkflowEvent
+
+    if submission is None or submission.current_stage not in _CONCLUDING_STAGES:
+        return False
+    prev = submission.current_stage
+    submission.current_stage = WorkflowStage.DECISION_ENTERED_ASSIGNED
+    submission.save(update_fields=["current_stage", "updated_at"])
+    WorkflowEvent.objects.create(
+        submission=submission,
+        actor=actor,
+        previous_stage=prev,
+        new_stage=WorkflowStage.DECISION_ENTERED_ASSIGNED,
+        remarks=remarks or "Decision allocated to unit manager.",
+    )
+    return True
+
+
 def unit_manager_for(routed_unit: str) -> User | None:
     role = ROUTED_UNIT_TO_MANAGER_ROLE.get(routed_unit or "")
     if not role:
@@ -157,6 +184,11 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
             created_by=actor,
         )
         created.append(task)
+        if submission is not None:
+            advance_to_decision_entered_assigned(
+                submission, actor,
+                remarks=f"Decision allocated to unit manager following signed minutes of {meeting.reference_number}.",
+            )
         Notification.objects.create(
             recipient=manager,
             submission=submission,
