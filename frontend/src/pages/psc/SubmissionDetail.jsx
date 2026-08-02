@@ -1191,7 +1191,26 @@ const stageDescriptions = {
             </div>
           )}
 
-          {/* ── Documents panel ── */}
+          {/* ── Formal decision service + acknowledgement ── */}
+          {submission && <DecisionServicePanel submission={submission} />}
+
+          {/* ── Required Documents Checklist (AI autofill) ── */}
+          {showChecklist && checklist.length > 0 && (
+            <ChecklistPanel
+              checklist={checklist}
+              setChecklist={setChecklist}
+              submissionId={id}
+              canEdit={canEditChecklist}
+              hasDocuments={documents.length > 0}
+              autofillEnabled={user?.ai_checklist_autofill_enabled !== false}
+              uploadOnly={isMinistrySubmitterChecklist}
+              onUploadForItem={isMinistrySubmitterChecklist ? handleUploadForItem : undefined}
+              uploadBusy={uploadBusy}
+              currentStage={submission?.current_stage}
+            />
+          )}
+
+          {/* ── Documents panel (additional, non-checklist attachments) ── */}
           {(() => {
             const DocActions = ({ doc }) => (
               <div className="flex items-center gap-1 shrink-0 flex-wrap">
@@ -1335,7 +1354,7 @@ const stageDescriptions = {
                 {/* ── Upload area ── */}
                 {canUploadDocs && (
                   <div className={`${documents.length > 0 ? 'border-t border-slate-100 dark:border-slate-700 pt-4' : ''} space-y-2`}>
-                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Attach a document</p>
+                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Attach any additional document not listed above but deemed necessary for review and recommendation</p>
                     <BaseInput
                       hideLabel
                       label="Description"
@@ -1365,25 +1384,6 @@ const stageDescriptions = {
               </div>
             )
           })()}
-
-          {/* ── Formal decision service + acknowledgement ── */}
-          {submission && <DecisionServicePanel submission={submission} />}
-
-          {/* ── Required Documents Checklist (AI autofill) ── */}
-          {showChecklist && checklist.length > 0 && (
-            <ChecklistPanel
-              checklist={checklist}
-              setChecklist={setChecklist}
-              submissionId={id}
-              canEdit={canEditChecklist}
-              hasDocuments={documents.length > 0}
-              autofillEnabled={user?.ai_checklist_autofill_enabled !== false}
-              uploadOnly={isMinistrySubmitterChecklist}
-              onUploadForItem={isMinistrySubmitterChecklist ? handleUploadForItem : undefined}
-              uploadBusy={uploadBusy}
-              currentStage={submission?.current_stage}
-            />
-          )}
 
           {/* ── ODU Restructure Checklist ── */}
           {showOduChecklist && (
