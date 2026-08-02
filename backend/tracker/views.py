@@ -5501,6 +5501,44 @@ class UserAdminViewSet(
             "cleared_records": deleted,
         })
 
+    # ── force-mfa-setup (require authenticator app re-enrollment) ────────────
+    @action(detail=True, methods=["post"], url_path="force-mfa-setup")
+    def force_mfa_setup(self, request, pk=None):
+        """
+        POST /users/{id}/force-mfa-setup/
+        Enable two_factor_enabled and clear any existing TOTP secret, so the
+        user is routed into the authenticator-app setup flow on their next
+        login (see TokenObtainPairView's setup_required branch). Superuser-only,
+        matching the `unlock` action's permission gate. A superuser may target
+        their own account.
+        """
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        if not request.user.is_superuser:
+            raise PermissionDenied("Only a super administrator can force MFA setup.")
+        user = self.get_object()
+        try:
+            profile = user.psc_profile
+            profile.two_factor_enabled = True
+            profile.totp_secret = None
+            profile.save(update_fields=["two_factor_enabled", "totp_secret"])
+        except Exception:
+            return Response({"detail": "This user has no profile to configure."}, status=status.HTTP_400_BAD_REQUEST)
+
+        _security_log.info(
+            "MFA_SETUP_FORCED | username=%s | by=%s",
+            user.username, request.user.username,
+        )
+        _log(request, _AL.Action.TWO_FA,
+             resource_type="User", resource_id=user.id,
+             resource_label=user.username,
+             description=f"Admin-forced authenticator app setup for user: {user.username}")
+        return Response({
+            "detail": f"'{user.username}' will be required to set up their authenticator app on next login.",
+            "username": user.username,
+            "two_factor_enabled": True,
+        })
+
     # ── reset-all-lockouts ────────────────────────────────────────────────────
     @action(detail=False, methods=["post"], url_path="reset-all-lockouts")
     def reset_all_lockouts(self, request):

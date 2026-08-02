@@ -17,6 +17,7 @@ import {
   Clock,
   Download,
   Edit2,
+  Fingerprint,
   HardDrive,
   KeyRound,
   KeySquare,
@@ -366,6 +367,23 @@ function UsersTab({ users, ministries, departments, units, onRefresh }) {
     }
   }
 
+  const forceMfaSetup = async u => {
+    const ok = await confirm({
+      title: 'Force authenticator app setup',
+      message: `${u.username} will be required to set up their authenticator app (e.g. Microsoft Authenticator) on their next login`
+        + `${u.two_factor_enabled ? ' — their current setup will be cleared and they must re-enroll.' : '.'}`,
+      confirmLabel: 'Force setup',
+    })
+    if (!ok) return
+    try {
+      await api.post(`/users/${u.id}/force-mfa-setup/`)
+      await onRefresh()
+      toast.success(`${u.username} must set up their authenticator app on next login.`)
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'Failed to force MFA setup.')
+    }
+  }
+
   useEffect(() => {
     if (!modal || !form.ministry_id) {
       setDeptOptions([])
@@ -503,6 +521,15 @@ function UsersTab({ users, ministries, departments, units, onRefresh }) {
                             <Lock size={9} /> Locked{u.failed_attempts > 0 ? ` (${u.failed_attempts})` : ''}
                           </span>
                         )}
+                        {u.two_factor_enabled ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" title="Authenticator app enabled">
+                            <Fingerprint size={9} /> MFA on
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400" title="No authenticator app configured">
+                            <Fingerprint size={9} /> MFA off
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-slate-400">{u.email || '—'}</p>
                     </div>
@@ -566,6 +593,16 @@ function UsersTab({ users, ministries, departments, units, onRefresh }) {
                         title="Unlock account"
                       >
                         <UserCheck size={13} />
+                      </button>
+                    )}
+                    {isSuperuser && (
+                      <button
+                        type="button"
+                        onClick={() => forceMfaSetup(u)}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                        title="Force authenticator app setup"
+                      >
+                        <Fingerprint size={13} />
                       </button>
                     )}
                     {u.is_locked && !isSuperuser && (
