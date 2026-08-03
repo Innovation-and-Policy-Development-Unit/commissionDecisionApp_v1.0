@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ClipboardList, Square, CheckSquare, Wand2, Loader2, Check, X, ChevronDown, ChevronUp, Paperclip } from 'lucide-react'
+import { ClipboardList, Square, CheckSquare, Wand2, Loader2, Check, X, ChevronDown, ChevronUp, Paperclip, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
@@ -40,6 +40,15 @@ function UploadForItemButton({ item, onUpload, uploadBusy, t }) {
         onChange={e => onUpload(e, item)}
       />
     </>
+  )
+}
+
+function ContentMismatchBadge({ t }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+      <AlertTriangle size={9} />
+      {t('submission.checklist_content_mismatch_badge')}
+    </span>
   )
 }
 
@@ -273,9 +282,11 @@ export default function ChecklistPanel({
                 'rounded-lg border px-3 py-2.5 transition-colors',
                 hasSug
                   ? 'border-violet-200 bg-violet-50/60 dark:border-violet-700/60 dark:bg-violet-900/10'
-                  : item.is_present
-                    ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-800/40 dark:bg-emerald-900/10'
-                    : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/20',
+                  : item.content_mismatch
+                    ? 'border-amber-200 bg-amber-50/50 dark:border-amber-800/40 dark:bg-amber-900/10'
+                    : item.is_present
+                      ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-800/40 dark:bg-emerald-900/10'
+                      : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/20',
               )}
             >
               <div className="flex items-start gap-2.5">
@@ -318,6 +329,7 @@ export default function ChecklistPanel({
                       {item.document_name}
                     </span>
                     {hasSug && <SuggestionBadge suggestion={sug} t={t} />}
+                    {item.content_mismatch && <ContentMismatchBadge t={t} />}
                     {isRequiredNow && !item.is_present && <RequiredBadge t={t} />}
                   </div>
 

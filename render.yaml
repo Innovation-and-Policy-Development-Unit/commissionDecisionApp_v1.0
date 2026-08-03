@@ -70,7 +70,7 @@ services:
         # Public URL of this API service — used for media callbacks and CORS.
         # Override in the Render dashboard if you use a custom domain.
         value: "https://scdms-api.onrender.com"
-      - key: ANTHROPIC_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
       - key: INTERNAL_MEDIA_TOKEN
         generateValue: true
@@ -119,11 +119,11 @@ services:
           type: keyvalue
           name: scdms-redis
           property: connectionString
-      - key: ANTHROPIC_API_KEY
+      - key: GEMINI_API_KEY
         fromService:
           type: web
           name: scdms-api
-          envVarKey: ANTHROPIC_API_KEY
+          envVarKey: GEMINI_API_KEY
       - key: INTERNAL_MEDIA_TOKEN
         fromService:
           type: web

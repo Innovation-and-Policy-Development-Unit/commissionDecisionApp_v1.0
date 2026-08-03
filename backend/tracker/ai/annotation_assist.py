@@ -35,7 +35,7 @@ def suggest_annotations(
     submission_context: str = "",
 ) -> tuple[dict[str, Any] | None, str | None]:
     if not ai_enabled():
-        return None, "ANTHROPIC_API_KEY is not configured."
+        return None, "GEMINI_API_KEY is not configured."
 
     images: list[tuple[str, str]] = []
     lower = original_name.lower()

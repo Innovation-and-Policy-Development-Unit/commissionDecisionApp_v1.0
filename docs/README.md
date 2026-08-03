@@ -7,7 +7,7 @@
 | [email-to-hrmis-manager-scope.md](email-to-hrmis-manager-scope.md) | Draft outreach email to HRMIS |
 | [deployment-tls.md](deployment-tls.md) | Production HTTPS — Caddy, host Nginx, or Certbot overlay |
 | [deployment-render.md](deployment-render.md) | Hosting on Render.com (Blueprint, env vars, Celery) |
-| [ai-claude.md](ai-claude.md) | Anthropic Claude API — env, implemented tasks, roadmap |
+| [ai-claude.md](ai-claude.md) | Google Gemini API — env, implemented tasks, roadmap |
 | [diagrams/](diagrams/) | Workflow diagram drafts (historical iterations) |
 | [business/](business/) | Concept notes, quotations, feature lists |
 | [demo/](demo/) | Demo scenarios and validation HTML/QMD |

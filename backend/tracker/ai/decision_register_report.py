@@ -141,7 +141,7 @@ def interpret_report_request(
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Return (spec, error_message)."""
     if not ai_enabled():
-        return None, "AI is not configured (ANTHROPIC_API_KEY missing)."
+        return None, "AI is not configured (GEMINI_API_KEY missing)."
 
     prompt = user_prompt.strip()
     if not prompt:

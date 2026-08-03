@@ -609,11 +609,11 @@ def generate_submission_brief(submission_id: int, force: bool = False):
     if not ai_enabled():
         _mark_submission_brief_failed(
             submission,
-            "AI brief could not be generated: the Anthropic API key is not configured. "
+            "AI brief could not be generated: the Gemini API key is not configured. "
             "An administrator can add it under Administration → System config → AI Features, "
             "then click Regenerate.",
         )
-        app_log.error("BRIEF_FAIL | Submission %s | ANTHROPIC_API_KEY missing", submission_id)
+        app_log.error("BRIEF_FAIL | Submission %s | GEMINI_API_KEY missing", submission_id)
         return
 
     context = build_submission_brief_context(submission)
@@ -656,7 +656,7 @@ def generate_submission_brief(submission_id: int, force: bool = False):
         _mark_submission_brief_failed(
             submission,
             f"AI brief could not be generated: {exc}. "
-            "Check ANTHROPIC_API_KEY, Celery worker logs, and try Regenerate.",
+            "Check GEMINI_API_KEY, Celery worker logs, and try Regenerate.",
         )
         app_log.error("BRIEF_FAIL | Submission %s | %s", submission_id, exc)
 
@@ -1265,6 +1265,10 @@ def classify_submission_document(document_id: int, *, force: bool = False):
         doc.document_type_confidence,
     )
 
+    from .submission_checklist import apply_content_mismatch_check
+
+    apply_content_mismatch_check(doc)
+
 
 # ── C2: Commission sitting briefing pack ───────────────────────────────────
 
@@ -1676,7 +1680,7 @@ def score_submission_quality(submission_id: int, *, force: bool = False):
     if not result:
         _mark_submission_quality_failed(
             submission,
-            err or "Quality score could not be generated. Check ANTHROPIC_API_KEY and try again.",
+            err or "Quality score could not be generated. Check GEMINI_API_KEY and try again.",
         )
         app_log.error("QUALITY_FAIL | Submission %s | %s", submission_id, err)
         return

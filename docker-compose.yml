@@ -76,9 +76,9 @@ services:
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
       REDIS_CACHE_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      CLAUDE_MODEL_HAIKU: ${CLAUDE_MODEL_HAIKU:-claude-haiku-4-5-20251001}
-      CLAUDE_MODEL_SONNET: ${CLAUDE_MODEL_SONNET:-claude-sonnet-4-6}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL_HAIKU: ${GEMINI_MODEL_HAIKU:-gemini-2.5-flash-lite}
+      GEMINI_MODEL_SONNET: ${GEMINI_MODEL_SONNET:-gemini-2.5-flash}
     volumes:
       - scdms_logs:/var/log/scdms
       - scdms_backups:/var/backups/scdms
@@ -116,9 +116,9 @@ services:
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/0
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      CLAUDE_MODEL_HAIKU: ${CLAUDE_MODEL_HAIKU:-claude-haiku-4-5-20251001}
-      CLAUDE_MODEL_SONNET: ${CLAUDE_MODEL_SONNET:-claude-sonnet-4-6}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL_HAIKU: ${GEMINI_MODEL_HAIKU:-gemini-2.5-flash-lite}
+      GEMINI_MODEL_SONNET: ${GEMINI_MODEL_SONNET:-gemini-2.5-flash}
       MEDIA_ROOT: /var/scdms/media
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
@@ -146,7 +146,7 @@ services:
       start_period: 90s
     networks:
       - internal
-      # Outbound HTTPS (Anthropic API) — internal network has no internet
+      # Outbound HTTPS (Gemini API) — internal network has no internet
       - app
     restart: unless-stopped
 

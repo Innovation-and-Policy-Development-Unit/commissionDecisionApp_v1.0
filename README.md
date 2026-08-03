@@ -498,10 +498,10 @@ REDIS_PASSWORD=<strong-redis-password>
 CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
 CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
 
-# ── Anthropic Claude (AI features) ───────────────────────────────────────────
-ANTHROPIC_API_KEY=
-CLAUDE_MODEL_HAIKU=claude-3-5-haiku-20241022
-CLAUDE_MODEL_SONNET=claude-sonnet-4-20250514
+# ── Google Gemini (AI features, free tier) ────────────────────────────────────
+GEMINI_API_KEY=
+GEMINI_MODEL_HAIKU=gemini-2.5-flash-lite
+GEMINI_MODEL_SONNET=gemini-2.5-flash
 
 # ── Monitoring (optional) ─────────────────────────────────────────────────────
 SENTRY_DSN=

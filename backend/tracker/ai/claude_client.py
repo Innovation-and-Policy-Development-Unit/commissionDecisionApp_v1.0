@@ -1,14 +1,18 @@
 """
-Anthropic Claude API wrapper for CDP/CMS AI features.
+Google Gemini API wrapper for CDP/CMS AI features (Google AI Studio, free tier).
 
-Replaces the previous Google Gemini integration. Configure via:
-  ANTHROPIC_API_KEY
-  CLAUDE_MODEL_HAIKU  — fast / high-volume (checklist, feedback, classification)
-  CLAUDE_MODEL_SONNET — reasoning / drafting (briefs, minutes, similarity)
+Configure via:
+  GEMINI_API_KEY
+  GEMINI_MODEL_HAIKU  — fast / high-volume (checklist, feedback, classification)
+  GEMINI_MODEL_SONNET — reasoning / drafting (briefs, minutes, similarity)
+
+Function names/tiers ("haiku"/"sonnet") are kept as internal labels for a 1:1 mapping
+from the previous Claude integration — they no longer refer to Anthropic models.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -19,20 +23,9 @@ logger = logging.getLogger("scdms.app")
 
 ModelTier = Literal["haiku", "sonnet"]
 
-# Map retired / legacy .env model IDs to IDs that work on the Anthropic API today.
-_MODEL_FALLBACKS: dict[str, str] = {
-    "claude-sonnet-4-20250514": "claude-sonnet-4-6",
-    "claude-sonnet-4-0": "claude-sonnet-4-6",
-    "claude-3-5-sonnet-20241022": "claude-sonnet-4-6",
-    "claude-3-5-sonnet-20240620": "claude-sonnet-4-6",
-    "claude-opus-4-20250514": "claude-opus-4-7",
-    "claude-opus-4-0": "claude-opus-4-7",
-    "claude-3-5-haiku-20241022": "claude-haiku-4-5-20251001",
-}
-
 _CURRENT_DEFAULTS: dict[ModelTier, str] = {
-    "sonnet": "claude-sonnet-4-6",
-    "haiku": "claude-haiku-4-5-20251001",
+    "sonnet": "gemini-2.5-flash",
+    "haiku": "gemini-2.5-flash-lite",
 }
 
 
@@ -58,32 +51,32 @@ def _settings_attr(name: str, default: str = "") -> str:
         return os.environ.get(name, default)
 
 
-def resolve_anthropic_api_key() -> str:
+def resolve_gemini_api_key() -> str:
     """
-    Active Anthropic API key: Admin SystemSetting overrides environment/.env.
+    Active Gemini API key: Admin SystemSetting overrides environment/.env.
     """
     try:
         from tracker.models import SystemSetting
 
-        db_key = (SystemSetting.get_val("ANTHROPIC_API_KEY") or "").strip()
+        db_key = (SystemSetting.get_val("GEMINI_API_KEY") or "").strip()
         if db_key:
             return db_key
     except Exception:
         pass
-    return (_settings_attr("ANTHROPIC_API_KEY") or "").strip()
+    return (_settings_attr("GEMINI_API_KEY") or "").strip()
 
 
-def anthropic_config_diagnostics() -> dict:
+def gemini_config_diagnostics() -> dict:
     """Non-secret summary for Admin → System Config."""
     db_key = ""
     try:
         from tracker.models import SystemSetting
 
-        db_key = (SystemSetting.get_val("ANTHROPIC_API_KEY") or "").strip()
+        db_key = (SystemSetting.get_val("GEMINI_API_KEY") or "").strip()
     except Exception:
         pass
-    env_key = (_settings_attr("ANTHROPIC_API_KEY") or "").strip()
-    active = resolve_anthropic_api_key()
+    env_key = (_settings_attr("GEMINI_API_KEY") or "").strip()
+    active = resolve_gemini_api_key()
     if db_key:
         source = "admin_settings"
     elif env_key:
@@ -100,77 +93,46 @@ def anthropic_config_diagnostics() -> dict:
     }
 
 
-def get_anthropic_client():
-    """Return an Anthropic client, or None if the API key is missing."""
-    api_key = resolve_anthropic_api_key()
+def get_gemini_client():
+    """Return a Gemini client, or None if the API key is missing."""
+    api_key = resolve_gemini_api_key()
     if not api_key:
-        logger.warning("ANTHROPIC_API_KEY not set — AI features are disabled.")
+        logger.warning("GEMINI_API_KEY not set — AI features are disabled.")
         return None
     try:
-        from anthropic import Anthropic
+        from google import genai
 
-        return Anthropic(api_key=api_key)
+        return genai.Client(api_key=api_key)
     except ImportError:
-        logger.error("anthropic package not installed — run: pip install anthropic")
+        logger.error("google-genai package not installed — run: pip install google-genai")
         return None
 
 
 def ai_enabled() -> bool:
-    return bool(resolve_anthropic_api_key())
+    return bool(resolve_gemini_api_key())
 
 
 def get_model_id(tier: ModelTier = "haiku") -> str:
-    """Resolved model ID (applies fallbacks for retired IDs in .env)."""
     default = _CURRENT_DEFAULTS[tier]
     if tier == "sonnet":
-        raw = _settings_attr("CLAUDE_MODEL_SONNET", default)
+        raw = _settings_attr("GEMINI_MODEL_SONNET", default)
     else:
-        raw = _settings_attr("CLAUDE_MODEL_HAIKU", default)
-    raw = (raw or default).strip()
-    resolved = _MODEL_FALLBACKS.get(raw, raw)
-    if resolved != raw:
-        logger.warning(
-            "Claude model %s is retired or unavailable; using %s instead. "
-            "Update CLAUDE_MODEL_%s in .env.",
-            raw,
-            resolved,
-            "SONNET" if tier == "sonnet" else "HAIKU",
-        )
-    return resolved
-
-
-def _is_model_not_found(exc: Exception) -> bool:
-    try:
-        from anthropic import NotFoundError
-    except ImportError:
-        return "not_found" in str(exc).lower() or "404" in str(exc)
-    return isinstance(exc, NotFoundError)
+        raw = _settings_attr("GEMINI_MODEL_HAIKU", default)
+    return (raw or default).strip()
 
 
 def _api_error_message(exc: Exception) -> str:
     try:
-        from anthropic import APIConnectionError, APIStatusError
+        from google.genai import errors
     except ImportError:
         return str(exc)
-    if isinstance(exc, APIConnectionError):
-        return f"Cannot reach Anthropic API: {exc}"
-    if isinstance(exc, APIStatusError):
-        detail = ""
-        body = getattr(exc, "body", None)
-        if isinstance(body, dict):
-            err = body.get("error")
-            if isinstance(err, dict):
-                detail = err.get("message") or ""
-        return f"Anthropic API HTTP {exc.status_code}: {detail or str(exc)}"
+    if isinstance(exc, errors.APIError):
+        return f"Gemini API HTTP {exc.code}: {exc.message or str(exc)}"
     return str(exc)
 
 
 def _extract_text(response) -> str:
-    parts = []
-    for block in response.content:
-        if getattr(block, "type", None) == "text":
-            parts.append(block.text)
-    return "".join(parts).strip()
+    return (getattr(response, "text", None) or "").strip()
 
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
@@ -189,42 +151,29 @@ def complete_text_with_error(
     max_tokens: int = 8192,
 ) -> tuple[str | None, str | None]:
     """Returns (text, error_message). On success error is None."""
-    client = get_anthropic_client()
+    client = get_gemini_client()
     if client is None:
-        return None, "ANTHROPIC_API_KEY is not set"
+        return None, "GEMINI_API_KEY is not set"
     model = get_model_id(tier)
-    fallback = _CURRENT_DEFAULTS[tier]
-    models_to_try = [model]
-    if fallback not in models_to_try:
-        models_to_try.append(fallback)
 
-    last_exc: Exception | None = None
-    for attempt_model in models_to_try:
-        try:
-            response = client.messages.create(
-                model=attempt_model,
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": user}],
-            )
-            text = _extract_text(response)
-            if not text:
-                return None, f"Claude returned empty content (model={attempt_model})"
-            return text, None
-        except Exception as exc:
-            last_exc = exc
-            if _is_model_not_found(exc) and attempt_model != fallback:
-                logger.warning(
-                    "CLAUDE_TEXT_RETRY | model=%s not found, retrying with %s",
-                    attempt_model,
-                    fallback,
-                )
-                continue
-            logger.exception("CLAUDE_TEXT_FAIL | model=%s | %s", attempt_model, exc)
-            return None, _api_error_message(exc)
-    if last_exc:
-        return None, _api_error_message(last_exc)
-    return None, "Claude request failed"
+    try:
+        from google.genai import types
+
+        response = client.models.generate_content(
+            model=model,
+            contents=user,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        text = _extract_text(response)
+        if not text:
+            return None, f"Gemini returned empty content (model={model})"
+        return text, None
+    except Exception as exc:
+        logger.exception("GEMINI_TEXT_FAIL | model=%s | %s", model, exc)
+        return None, _api_error_message(exc)
 
 
 def complete_text(
@@ -259,8 +208,8 @@ def complete_json_with_error(
     try:
         return _parse_json_text(text), None
     except json.JSONDecodeError as exc:
-        logger.error("CLAUDE_JSON_PARSE_FAIL | %s | body=%r", exc, text[:500])
-        return None, f"Claude returned invalid JSON: {exc}"
+        logger.error("GEMINI_JSON_PARSE_FAIL | %s | body=%r", exc, text[:500])
+        return None, f"Gemini returned invalid JSON: {exc}"
 
 
 def complete_json(
@@ -286,59 +235,40 @@ def complete_json_with_images(
     max_tokens: int = 8192,
 ) -> tuple[Any | None, str | None]:
     """Vision: images as list of (media_type, base64_data). Returns parsed JSON."""
-    client = get_anthropic_client()
+    client = get_gemini_client()
     if client is None:
-        return None, "ANTHROPIC_API_KEY is not set"
+        return None, "GEMINI_API_KEY is not set"
     if not images:
         return None, "No images provided for vision extraction"
 
-    content: list[dict] = []
-    for media_type, b64 in images[:10]:
-        content.append(
-            {
-                "type": "image",
-                "source": {"type": "base64", "media_type": media_type, "data": b64},
-            }
+    try:
+        from google.genai import types
+
+        parts: list[types.Part] = []
+        for media_type, b64 in images[:10]:
+            parts.append(types.Part.from_bytes(data=base64.b64decode(b64), mime_type=media_type))
+        parts.append(types.Part.from_text(text=user_text))
+
+        sys = (
+            f"{system.strip()}\n\n"
+            "Respond with valid JSON only. No markdown code fences or commentary."
         )
-    content.append({"type": "text", "text": user_text})
-
-    sys = (
-        f"{system.strip()}\n\n"
-        "Respond with valid JSON only. No markdown code fences or commentary."
-    )
-    model = get_model_id(tier)
-    fallback = _CURRENT_DEFAULTS[tier]
-    models_to_try = [model]
-    if fallback not in models_to_try:
-        models_to_try.append(fallback)
-
-    last_exc: Exception | None = None
-    for attempt_model in models_to_try:
-        try:
-            response = client.messages.create(
-                model=attempt_model,
-                max_tokens=max_tokens,
-                system=sys,
-                messages=[{"role": "user", "content": content}],
-            )
-            text = _extract_text(response)
-            if not text:
-                return None, f"Claude returned empty content (model={attempt_model})"
-            return _parse_json_text(text), None
-        except Exception as exc:
-            last_exc = exc
-            if _is_model_not_found(exc) and attempt_model != fallback:
-                logger.warning(
-                    "CLAUDE_VISION_RETRY | model=%s not found, retrying with %s",
-                    attempt_model,
-                    fallback,
-                )
-                continue
-            logger.exception("CLAUDE_VISION_FAIL | model=%s | %s", attempt_model, exc)
-            return None, _api_error_message(exc)
-    if last_exc:
-        return None, _api_error_message(last_exc)
-    return None, "Claude vision request failed"
+        model = get_model_id(tier)
+        response = client.models.generate_content(
+            model=model,
+            contents=parts,
+            config=types.GenerateContentConfig(
+                system_instruction=sys,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        text = _extract_text(response)
+        if not text:
+            return None, f"Gemini returned empty content (model={model})"
+        return _parse_json_text(text), None
+    except Exception as exc:
+        logger.exception("GEMINI_VISION_FAIL | %s", exc)
+        return None, _api_error_message(exc)
 
 
 def complete_chat_with_error(
@@ -349,39 +279,33 @@ def complete_chat_with_error(
     max_tokens: int = 4096,
 ) -> tuple[str | None, str | None]:
     """Multi-turn chat. messages: [{\"role\": \"user\"|\"assistant\", \"content\": \"...\"}, ...]."""
-    client = get_anthropic_client()
+    client = get_gemini_client()
     if client is None:
-        return None, "ANTHROPIC_API_KEY is not set"
+        return None, "GEMINI_API_KEY is not set"
     model = get_model_id(tier)
-    fallback = _CURRENT_DEFAULTS[tier]
-    models_to_try = [model]
-    if fallback not in models_to_try:
-        models_to_try.append(fallback)
 
-    last_exc: Exception | None = None
-    for attempt_model in models_to_try:
-        try:
-            response = client.messages.create(
-                model=attempt_model,
-                max_tokens=max_tokens,
-                system=system,
-                messages=messages,
+    try:
+        from google.genai import types
+
+        contents = [
+            types.Content(
+                role="user" if m.get("role") == "user" else "model",
+                parts=[types.Part.from_text(text=m.get("content", ""))],
             )
-            text = _extract_text(response)
-            if not text:
-                return None, f"Claude returned empty content (model={attempt_model})"
-            return text, None
-        except Exception as exc:
-            last_exc = exc
-            if _is_model_not_found(exc) and attempt_model != fallback:
-                logger.warning(
-                    "CLAUDE_CHAT_RETRY | model=%s not found, retrying with %s",
-                    attempt_model,
-                    fallback,
-                )
-                continue
-            logger.exception("CLAUDE_CHAT_FAIL | model=%s | %s", attempt_model, exc)
-            return None, _api_error_message(exc)
-    if last_exc:
-        return None, _api_error_message(last_exc)
-    return None, "Claude request failed"
+            for m in messages
+        ]
+        response = client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        text = _extract_text(response)
+        if not text:
+            return None, f"Gemini returned empty content (model={model})"
+        return text, None
+    except Exception as exc:
+        logger.exception("GEMINI_CHAT_FAIL | model=%s | %s", model, exc)
+        return None, _api_error_message(exc)

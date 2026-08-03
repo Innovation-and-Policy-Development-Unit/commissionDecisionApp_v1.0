@@ -26,7 +26,7 @@ Provide 3–6 subtasks. Align with action_unit and way_forward."""
 
 def draft_subtasks_from_task(task) -> tuple[dict[str, Any] | None, str | None]:
     if not ai_enabled():
-        return None, "ANTHROPIC_API_KEY is not configured."
+        return None, "GEMINI_API_KEY is not configured."
 
     lines = [
         f"Decision: {task.decision_number or '—'}",

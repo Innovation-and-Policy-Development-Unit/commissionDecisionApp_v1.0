@@ -2194,6 +2194,13 @@ class RequiredDocument(models.Model):
         max_length=50, choices=WorkflowStage.choices, null=True, blank=True,
         help_text="Block transition FROM this stage if this item is incomplete."
     )
+    expected_document_type = models.CharField(
+        max_length=32, choices=DocumentClassificationType.choices, blank=True, default="",
+        help_text="When set, an uploaded file's classified document type is checked "
+                  "against this expectation; a confident mismatch un-ticks the "
+                  "checklist item instead of trusting any attached file. Leave blank "
+                  "to skip content validation for this item.",
+    )
     order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
 
@@ -2223,6 +2230,12 @@ class SubmissionChecklistItem(models.Model):
         'auth.User', null=True, blank=True, on_delete=models.SET_NULL,
     )
     checked_at = models.DateTimeField(null=True, blank=True)
+    content_mismatch = models.BooleanField(
+        default=False,
+        help_text="Set by the content-validation check when an uploaded file's "
+                  "classified type doesn't match document.expected_document_type. "
+                  "Cleared automatically on manual officer toggle.",
+    )
 
     class Meta:
         unique_together = ['submission', 'document']

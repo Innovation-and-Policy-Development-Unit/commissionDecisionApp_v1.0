@@ -527,7 +527,7 @@ POST /api/submissions/{id}/generate-brief/
 GET  /api/submissions/{id}/   → poll ai_brief_processed, ai_brief_summary
 ```
 
-Requires workers and API keys for Anthropic/OpenAI in deployment. Not required for HRMIS v1 integration.
+Requires workers and API keys for Gemini/OpenAI in deployment. Not required for HRMIS v1 integration.
 
 ---
 

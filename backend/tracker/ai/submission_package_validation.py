@@ -143,7 +143,7 @@ def validate_package_from_context(
     if not ai_enabled():
         ready = _compute_ready(rule_gaps)
         summary = (
-            "Rule-based check only (ANTHROPIC_API_KEY not configured). "
+            "Rule-based check only (GEMINI_API_KEY not configured). "
             + ("Package looks ready to submit." if ready else "Fix critical items before submitting.")
         )
         return {"ready": ready, "summary": summary, "gaps": rule_gaps}, None

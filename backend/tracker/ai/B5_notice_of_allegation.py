@@ -71,7 +71,7 @@ def draft_notice_of_allegation(
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Return (result_dict, error_message)."""
     if not ai_enabled():
-        return None, "ANTHROPIC_API_KEY is not configured."
+        return None, "GEMINI_API_KEY is not configured."
 
     tier = FEATURE_MODEL_TIER.get("B5_draft_notice", "sonnet")
     user_prompt = (

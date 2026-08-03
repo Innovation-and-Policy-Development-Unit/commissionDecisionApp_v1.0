@@ -66,7 +66,7 @@ def draft_outcome_letter(
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Return (result_dict, error_message)."""
     if not ai_enabled():
-        return None, "ANTHROPIC_API_KEY is not configured."
+        return None, "GEMINI_API_KEY is not configured."
 
     conditions = conditions or []
     conditions_text = "\n".join(f"- {c}" for c in conditions) if conditions else "None"

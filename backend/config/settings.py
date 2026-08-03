@@ -492,8 +492,8 @@ VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '').strip()
 VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '').strip()
 VAPID_SUBJECT = os.getenv('VAPID_SUBJECT', 'mailto:admin@psc.gov.vu').strip()
 
-# ── AI / Claude API (replaces former Gemini integration) ─────────────────────
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+# ── AI / Gemini API (Google AI Studio, free tier) ────────────────────────────
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'whisper-1')
 
@@ -501,9 +501,9 @@ WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'whisper-1')
 QUARTO_BIN = os.getenv('QUARTO_BIN', 'quarto')
 QUARTO_RENDER_TIMEOUT = int(os.getenv('QUARTO_RENDER_TIMEOUT', '180'))
 # Fast tier: feedback, classification, extraction (see AI_Features_List.txt)
-CLAUDE_MODEL_HAIKU = os.getenv('CLAUDE_MODEL_HAIKU', 'claude-haiku-4-5-20251001')
+GEMINI_MODEL_HAIKU = os.getenv('GEMINI_MODEL_HAIKU', 'gemini-2.5-flash-lite')
 # Quality tier: executive briefs, minutes drafting, similarity, chatbots
-CLAUDE_MODEL_SONNET = os.getenv('CLAUDE_MODEL_SONNET', 'claude-sonnet-4-6')
+GEMINI_MODEL_SONNET = os.getenv('GEMINI_MODEL_SONNET', 'gemini-2.5-flash')
 # A3 — block draft→submitted when critical package gaps remain (set false to warn only)
 AI_PACKAGE_BLOCK_SUBMIT = os.getenv('AI_PACKAGE_BLOCK_SUBMIT', 'true').lower() in (
     '1', 'true', 'yes', 'on',

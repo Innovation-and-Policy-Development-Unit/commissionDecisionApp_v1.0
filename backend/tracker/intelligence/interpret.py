@@ -46,7 +46,7 @@ Output schema:
 def interpret_query(*, user_prompt: str, dataset_key: str) -> tuple[dict[str, Any] | None, str | None]:
     """Return (query_spec, error_message). The executor re-validates the spec."""
     if not ai_enabled():
-        return None, "AI is not configured (ANTHROPIC_API_KEY missing)."
+        return None, "AI is not configured (GEMINI_API_KEY missing)."
     prompt = (user_prompt or "").strip()
     if not prompt:
         return None, "Ask a question to explore."

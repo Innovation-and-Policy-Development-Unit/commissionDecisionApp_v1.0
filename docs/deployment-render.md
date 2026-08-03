@@ -21,7 +21,7 @@ flowchart LR
 ## Prerequisites
 
 1. [Render](https://render.com) account and a **GitHub** (or GitLab) repo with this project pushed.
-2. **Anthropic API key** for AI features (executive brief, staff chatbot).
+2. **Gemini API key** (free, from [aistudio.google.com/apikey](https://aistudio.google.com/apikey)) for AI features (executive brief, staff chatbot).
 3. **SMTP** credentials for password-reset and notification email (or use a provider such as SendGrid, Mailgun, Resend).
 
 ## Quick deploy (Blueprint)
@@ -49,7 +49,7 @@ Set these on **`scdms-api`** (and ensure **`scdms-web`** has the frontend URL).
 | `FRONTEND_URL` | scdms-api | `https://scdms-web.onrender.com` |
 | `CDP_BASE_URL` | scdms-api | `https://scdms-api.onrender.com` |
 | `VITE_API_BASE_URL` | scdms-web | `https://scdms-api.onrender.com/api` |
-| `ANTHROPIC_API_KEY` | scdms-api | `sk-ant-...` |
+| `GEMINI_API_KEY` | scdms-api | `sk-ant-...` |
 | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` | scdms-api | your mail provider |
 | `DEFAULT_FROM_EMAIL` | scdms-api | `SCDMS <noreply@yourdomain.com>` |
 
@@ -186,7 +186,7 @@ If you deployed before this fix, add **`INTERNAL_MEDIA_TOKEN`** (same random val
 | 502 on API | Deploy logs; `migrate` errors; invalid `DATABASE_URL` |
 | CORS errors in browser | `CORS_ALLOWED_ORIGINS` must exactly match frontend origin (scheme + host, no trailing slash) |
 | Login works locally on Render but API 400 | `DJANGO_ALLOWED_HOSTS` must include API hostname |
-| Brief stuck on “Generating…” | `scdms-celery-worker` running; `ANTHROPIC_API_KEY` set; worker logs |
+| Brief stuck on “Generating…” | `scdms-celery-worker` running; `GEMINI_API_KEY` set; worker logs |
 | `scdms-celery-worker` failed | Open **Logs** — often OOM; blueprint uses `--pool=solo`. Redeploy after pull. Ensure worker has same `DATABASE_URL` / Redis env as API |
 | Broken images / uploads | `CDP_BASE_URL` set to public API URL; disk mounted on API |
 | OCR / extract: **File not found on disk** | `INTERNAL_MEDIA_TOKEN` on **api** and **worker** (same value); redeploy worker after API; check worker logs for `MEDIA_FETCH_FAIL` |

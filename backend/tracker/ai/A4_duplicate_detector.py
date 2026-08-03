@@ -75,7 +75,7 @@ def detect_duplicates(
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Return (result_dict, error_message)."""
     if not ai_enabled():
-        return None, "ANTHROPIC_API_KEY is not configured."
+        return None, "GEMINI_API_KEY is not configured."
 
     tier = FEATURE_MODEL_TIER.get("A4_duplicate_detector", "sonnet")
     user_prompt = (

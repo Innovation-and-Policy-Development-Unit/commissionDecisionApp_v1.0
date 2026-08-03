@@ -24,6 +24,25 @@ const FIELD_TYPES = [
   { value: 'checkbox',       label: 'Checkbox (Yes / No)' },
 ]
 
+// Mirrors backend/tracker/models.py DocumentClassificationType — the types the
+// content-validation classifier (backend/tracker/ai/document_classification.py)
+// can assign to an uploaded file's OCR'd content.
+const EXPECTED_DOCUMENT_TYPES = [
+  { value: '',                     label: '— No content check —' },
+  { value: 'appointment_letter',   label: 'Appointment letter' },
+  { value: 'medical_certificate',  label: 'Medical certificate' },
+  { value: 'psc_form',             label: 'PSC form' },
+  { value: 'position_description', label: 'Position description' },
+  { value: 'dg_endorsement',       label: 'DG / HoA endorsement' },
+  { value: 'organisational_chart', label: 'Organisational chart' },
+  { value: 'legislation_policy',   label: 'Legislation / policy' },
+  { value: 'financial_costing',    label: 'Financial / costing' },
+  { value: 'correspondence',       label: 'Correspondence' },
+  { value: 'supporting_evidence',  label: 'Supporting evidence' },
+  { value: 'minutes_report',       label: 'Minutes / report' },
+  { value: 'other',                label: 'Other' },
+]
+
 const EMPTY_FIELD = {
   label: '',
   field_key: '',
@@ -170,7 +189,7 @@ function ImportModal({ parsedFields, onClose, onConfirm, importing }) {
 
 // ── Required Document modal ───────────────────────────────────────────────────
 
-const EMPTY_DOC = { name: '', description: '', order: 10, is_active: true }
+const EMPTY_DOC = { name: '', description: '', order: 10, is_active: true, expected_document_type: '' }
 
 function RequiredDocModal({ doc, onClose, onSave }) {
   const [form, setForm] = useState(doc)
@@ -225,6 +244,25 @@ function RequiredDocModal({ doc, onClose, onSave }) {
               placeholder="Describe what this document is, why it is required, and any formatting or content requirements."
               onChange={e => set('description', e.target.value)}
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+              Expected document type
+            </label>
+            <select
+              className="input"
+              value={form.expected_document_type || ''}
+              onChange={e => set('expected_document_type', e.target.value)}
+            >
+              {EXPECTED_DOCUMENT_TYPES.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+              When set, an uploaded file is checked against this type from its OCR'd
+              content; a confident mismatch un-ticks the item and flags it for review.
+            </p>
           </div>
 
           <div className="flex gap-4">

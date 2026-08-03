@@ -1500,11 +1500,11 @@ export function SettingsTab({ settings, onRefresh }) {
   const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false)
   const [emailProvider, setEmailProvider] = useState('smtp') // 'smtp' | 'resend'
   const [resendConfigured, setResendConfigured] = useState(false)
-  const [anthropicKeyConfigured, setAnthropicKeyConfigured] = useState(false)
+  const [geminiKeyConfigured, setGeminiKeyConfigured] = useState(false)
   const [aiStatus, setAiStatus] = useState({ model_haiku: '', model_sonnet: '', source: 'none' })
   const [testAiLoading, setTestAiLoading] = useState(false)
   const smtpPasswordRef = useRef(null)
-  const anthropicKeyRef = useRef(null)
+  const geminiKeyRef = useRef(null)
   const [emailSchedule, setEmailSchedule] = useState({
     enabled: true,
     cron_expr: '0 8 * * *',
@@ -1549,7 +1549,7 @@ export function SettingsTab({ settings, onRefresh }) {
   const fetchAiStatus = useCallback(async () => {
     try {
       const res = await api.get('/settings/ai-status/')
-      setAnthropicKeyConfigured(Boolean(res.data?.api_key_configured))
+      setGeminiKeyConfigured(Boolean(res.data?.api_key_configured))
       setAiStatus(res.data || {})
     } catch {
       /* best-effort */
@@ -1559,15 +1559,15 @@ export function SettingsTab({ settings, onRefresh }) {
   const readSmtpPasswordInput = () =>
     (smtpPasswordRef.current?.value || form.SMTP_PASSWORD || '').trim()
 
-  const readAnthropicKeyInput = () =>
-    (anthropicKeyRef.current?.value || form.ANTHROPIC_API_KEY || '').trim()
+  const readGeminiKeyInput = () =>
+    (geminiKeyRef.current?.value || form.GEMINI_API_KEY || '').trim()
 
   const buildSavePayload = () => {
     const payload = { ...form }
     const pwd = readSmtpPasswordInput()
     if (pwd) payload.SMTP_PASSWORD = pwd
-    const aiKey = readAnthropicKeyInput()
-    if (aiKey) payload.ANTHROPIC_API_KEY = aiKey
+    const aiKey = readGeminiKeyInput()
+    if (aiKey) payload.GEMINI_API_KEY = aiKey
     return payload
   }
 
@@ -1594,7 +1594,7 @@ export function SettingsTab({ settings, onRefresh }) {
   useEffect(() => {
     const s = {}
     settings.forEach(item => { s[item.key] = item.value })
-    const defaults = ['ENABLE_USER_FEEDBACK', 'INTAKE_RECEPTIONIST_ENABLED', 'INTAKE_HR_ENABLED', 'AI_PACKAGE_VALIDATION_ENABLED', 'AI_CHECKLIST_AUTOFILL_ENABLED', 'ANTHROPIC_API_KEY', 'TWO_FACTOR_REQUIRED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_TLS', 'SMTP_SSL', 'DEFAULT_FROM_EMAIL', 'AXES_FAILURE_LIMIT', 'AXES_COOLOFF_MINUTES', 'LOGIN_RATE_LIMIT', 'PASSWORD_MIN_LENGTH', 'PASSWORD_REQUIRE_UPPERCASE', 'PASSWORD_REQUIRE_LOWERCASE', 'PASSWORD_REQUIRE_DIGITS', 'PASSWORD_REQUIRE_SPECIAL', 'PASSWORD_HISTORY_COUNT', 'PASSWORD_MAX_AGE_DAYS']
+    const defaults = ['ENABLE_USER_FEEDBACK', 'INTAKE_RECEPTIONIST_ENABLED', 'INTAKE_HR_ENABLED', 'AI_PACKAGE_VALIDATION_ENABLED', 'AI_CHECKLIST_AUTOFILL_ENABLED', 'GEMINI_API_KEY', 'TWO_FACTOR_REQUIRED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_TLS', 'SMTP_SSL', 'DEFAULT_FROM_EMAIL', 'AXES_FAILURE_LIMIT', 'AXES_COOLOFF_MINUTES', 'LOGIN_RATE_LIMIT', 'PASSWORD_MIN_LENGTH', 'PASSWORD_REQUIRE_UPPERCASE', 'PASSWORD_REQUIRE_LOWERCASE', 'PASSWORD_REQUIRE_DIGITS', 'PASSWORD_REQUIRE_SPECIAL', 'PASSWORD_HISTORY_COUNT', 'PASSWORD_MAX_AGE_DAYS']
     defaults.forEach(k => { if (s[k] === undefined) s[k] = '' })
     if (s.ENABLE_USER_FEEDBACK === '') s.ENABLE_USER_FEEDBACK = 'true'
     if (s.INTAKE_RECEPTIONIST_ENABLED === '') s.INTAKE_RECEPTIONIST_ENABLED = 'true'
@@ -1610,12 +1610,12 @@ export function SettingsTab({ settings, onRefresh }) {
       ...s,
       // Never repopulate secrets from the API; keep what the user is typing.
       SMTP_PASSWORD: prev.SMTP_PASSWORD || '',
-      ANTHROPIC_API_KEY: prev.ANTHROPIC_API_KEY || '',
+      GEMINI_API_KEY: prev.GEMINI_API_KEY || '',
     }))
   }, [settings])
 
-  const anthropicConfigured = (settings || []).some(
-    item => item.key === 'ANTHROPIC_API_KEY' && item.configured,
+  const geminiConfigured = (settings || []).some(
+    item => item.key === 'GEMINI_API_KEY' && item.configured,
   )
 
   const save = async e => {
@@ -1624,7 +1624,7 @@ export function SettingsTab({ settings, onRefresh }) {
     setSuccess('')
     setError('')
     const pwd = readSmtpPasswordInput()
-    const aiKey = readAnthropicKeyInput()
+    const aiKey = readGeminiKeyInput()
     try {
       await api.post('/settings/batch-update/', buildSavePayload())
       await onRefresh()
@@ -1632,17 +1632,17 @@ export function SettingsTab({ settings, onRefresh }) {
       await fetchAiStatus()
       await fetchLockoutStats()
       if (refreshFeedbackStatus) await refreshFeedbackStatus()
-      setForm(f => ({ ...f, ANTHROPIC_API_KEY: '' }))
+      setForm(f => ({ ...f, GEMINI_API_KEY: '' }))
       if (pwd) {
-        setForm(f => ({ ...f, SMTP_PASSWORD: '', ANTHROPIC_API_KEY: '' }))
+        setForm(f => ({ ...f, SMTP_PASSWORD: '', GEMINI_API_KEY: '' }))
         if (smtpPasswordRef.current) smtpPasswordRef.current.value = ''
       }
       if (aiKey) {
-        setForm(f => ({ ...f, ANTHROPIC_API_KEY: '' }))
-        if (anthropicKeyRef.current) anthropicKeyRef.current.value = ''
+        setForm(f => ({ ...f, GEMINI_API_KEY: '' }))
+        if (geminiKeyRef.current) geminiKeyRef.current.value = ''
       }
       if (pwd && aiKey) {
-        const msg = 'Settings saved. SMTP password and Anthropic API key are stored securely (fields stay blank).'
+        const msg = 'Settings saved. SMTP password and Gemini API key are stored securely (fields stay blank).'
         setSuccess(msg)
         toast.success(msg)
       } else if (pwd) {
@@ -1650,7 +1650,7 @@ export function SettingsTab({ settings, onRefresh }) {
         setSuccess(msg)
         toast.success(msg)
       } else if (aiKey) {
-        const msg = 'Settings saved. Anthropic API key is stored securely (the field stays blank).'
+        const msg = 'Settings saved. Gemini API key is stored securely (the field stays blank).'
         setSuccess(msg)
         toast.success(msg)
       } else {
@@ -1816,24 +1816,24 @@ export function SettingsTab({ settings, onRefresh }) {
     setSuccess('')
     setError('')
     try {
-      const aiKey = readAnthropicKeyInput()
+      const aiKey = readGeminiKeyInput()
       if (aiKey) {
-        await api.post('/settings/batch-update/', { ANTHROPIC_API_KEY: aiKey })
-        setForm(f => ({ ...f, ANTHROPIC_API_KEY: '' }))
-        if (anthropicKeyRef.current) anthropicKeyRef.current.value = ''
+        await api.post('/settings/batch-update/', { GEMINI_API_KEY: aiKey })
+        setForm(f => ({ ...f, GEMINI_API_KEY: '' }))
+        if (geminiKeyRef.current) geminiKeyRef.current.value = ''
       }
       const res = await api.post(
         '/settings/test-ai/',
-        aiKey ? { anthropic_api_key: aiKey } : {},
+        aiKey ? { gemini_api_key: aiKey } : {},
       )
       await fetchAiStatus()
-      const msg = res.data.detail ?? 'Anthropic API key verified.'
+      const msg = res.data.detail ?? 'Gemini API key verified.'
       setSuccess(msg)
       toast.success(msg)
     } catch (err) {
-      const msg = err.response?.data?.detail ?? 'Anthropic API test failed.'
-      setError(typeof msg === 'string' ? msg : 'Anthropic API test failed.')
-      toast.error(typeof msg === 'string' ? msg : 'Anthropic API test failed.')
+      const msg = err.response?.data?.detail ?? 'Gemini API test failed.'
+      setError(typeof msg === 'string' ? msg : 'Gemini API test failed.')
+      toast.error(typeof msg === 'string' ? msg : 'Gemini API test failed.')
     } finally {
       setTestAiLoading(false)
     }
@@ -1900,8 +1900,8 @@ export function SettingsTab({ settings, onRefresh }) {
           {/* API key card — always first */}
           <div className="p-4 rounded-xl border bg-white dark:bg-slate-800/40 space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium">Anthropic API key</p>
-              {anthropicConfigured ? (
+              <p className="text-sm font-medium">Gemini API key</p>
+              {geminiConfigured ? (
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                   <CheckCircle2 size={12} /> Configured
                 </span>
@@ -1912,25 +1912,25 @@ export function SettingsTab({ settings, onRefresh }) {
               )}
             </div>
             <p className="text-xs text-slate-500">
-              Powers all AI features (executive briefs, quality score, checklist autofill, etc.). Paste your key from{' '}
-              <code className="text-[11px]">console.anthropic.com</code>. Stored securely — the field stays blank after saving and the existing key is kept if you leave it empty.
+              Powers all AI features (executive briefs, quality score, checklist autofill, etc.). Paste a free key from{' '}
+              <code className="text-[11px]">aistudio.google.com/apikey</code>. Stored securely — the field stays blank after saving and the existing key is kept if you leave it empty.
             </p>
             <input
               type="password"
               autoComplete="new-password"
               className="input text-sm w-full"
-              title="Anthropic API key"
-              placeholder={anthropicConfigured ? '•••••••••• (leave blank to keep current key)' : 'sk-ant-…'}
-              value={form.ANTHROPIC_API_KEY || ''}
-              onChange={e => setForm({ ...form, ANTHROPIC_API_KEY: e.target.value })}
+              title="Gemini API key"
+              placeholder={geminiConfigured ? '•••••••••• (leave blank to keep current key)' : 'AIza…'}
+              value={form.GEMINI_API_KEY || ''}
+              onChange={e => setForm({ ...form, GEMINI_API_KEY: e.target.value })}
             />
           </div>
 
           {/* Feature toggles — disabled (with explanation) when no API key is set */}
-          {!anthropicConfigured && (
+          {!geminiConfigured && (
             <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 text-amber-800 dark:text-amber-300 text-xs">
               <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-              <span>AI features are disabled — add an Anthropic API key above to enable them.</span>
+              <span>AI features are disabled — add a Gemini API key above to enable them.</span>
             </div>
           )}
 
@@ -1938,21 +1938,21 @@ export function SettingsTab({ settings, onRefresh }) {
             Turn AI-backed helpers off to conserve API tokens. Disable while quota is exhausted, then re-enable later.
           </p>
 
-          <div className={`flex items-center justify-between p-4 rounded-xl border ${anthropicConfigured ? 'bg-white dark:bg-slate-800/40' : 'bg-slate-50 dark:bg-slate-800/20 opacity-50 pointer-events-none'}`}>
+          <div className={`flex items-center justify-between p-4 rounded-xl border ${geminiConfigured ? 'bg-white dark:bg-slate-800/40' : 'bg-slate-50 dark:bg-slate-800/20 opacity-50 pointer-events-none'}`}>
             <div>
               <p className="text-sm font-medium">Validate package before submit</p>
               <p className="text-xs text-slate-500">AI completeness check (documents, fields, attachments) required before HR submits or the DG endorses. When off, the check is hidden and submissions/endorsements proceed without it.</p>
             </div>
-            <button type="button" onClick={() => toggle('AI_PACKAGE_VALIDATION_ENABLED')} disabled={!anthropicConfigured}>
+            <button type="button" onClick={() => toggle('AI_PACKAGE_VALIDATION_ENABLED')} disabled={!geminiConfigured}>
               {form.AI_PACKAGE_VALIDATION_ENABLED === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}
             </button>
           </div>
-          <div className={`flex items-center justify-between p-4 rounded-xl border ${anthropicConfigured ? 'bg-white dark:bg-slate-800/40' : 'bg-slate-50 dark:bg-slate-800/20 opacity-50 pointer-events-none'}`}>
+          <div className={`flex items-center justify-between p-4 rounded-xl border ${geminiConfigured ? 'bg-white dark:bg-slate-800/40' : 'bg-slate-50 dark:bg-slate-800/20 opacity-50 pointer-events-none'}`}>
             <div>
               <p className="text-sm font-medium">Auto-fill checklist</p>
               <p className="text-xs text-slate-500">AI suggests which checklist items are present from the uploaded documents during manager/principal review. When off, the "AI autofill" button is hidden and the checklist is filled manually.</p>
             </div>
-            <button type="button" onClick={() => toggle('AI_CHECKLIST_AUTOFILL_ENABLED')} disabled={!anthropicConfigured}>
+            <button type="button" onClick={() => toggle('AI_CHECKLIST_AUTOFILL_ENABLED')} disabled={!geminiConfigured}>
               {form.AI_CHECKLIST_AUTOFILL_ENABLED === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}
             </button>
           </div>
@@ -2099,12 +2099,12 @@ export function SettingsTab({ settings, onRefresh }) {
           </div>
         </section>
 
-        {/* ── Anthropic AI (Claude) ── */}
+        {/* ── Google Gemini AI ── */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-medium border-b pb-2">
             <Sparkles size={18} className="text-violet-500" />
-            <h3>Anthropic AI (Claude)</h3>
-            {anthropicKeyConfigured && (
+            <h3>Google Gemini AI</h3>
+            {geminiKeyConfigured && (
               <span className="ml-auto text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
                 API key configured
               </span>
@@ -2112,36 +2112,36 @@ export function SettingsTab({ settings, onRefresh }) {
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Powers executive briefs, quality scores, minute drafting, and other AI features.
-            Get a key at{' '}
-            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="underline">
-              console.anthropic.com
+            Get a free key at{' '}
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="underline">
+              aistudio.google.com/apikey
             </a>.
-            Admin setting overrides <code className="text-[11px]">ANTHROPIC_API_KEY</code> in{' '}
+            Admin setting overrides <code className="text-[11px]">GEMINI_API_KEY</code> in{' '}
             <code className="text-[11px]">.env</code>. Celery workers pick up changes without restart.
           </p>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-500">Anthropic API key</label>
+            <label className="text-xs font-medium text-slate-500">Gemini API key</label>
             <input
-              ref={anthropicKeyRef}
+              ref={geminiKeyRef}
               type="password"
-              title="Anthropic API key"
-              name="anthropic_api_key"
+              title="Gemini API key"
+              name="gemini_api_key"
               autoComplete="off"
               className="input text-sm font-mono"
               placeholder={
-                anthropicKeyConfigured
-                  ? 'Saved — paste again to change (sk-ant-...)'
-                  : 'sk-ant-api03-...'
+                geminiKeyConfigured
+                  ? 'Saved — paste again to change (AIza...)'
+                  : 'AIzaSy...'
               }
-              value={form.ANTHROPIC_API_KEY || ''}
-              onChange={e => setForm({ ...form, ANTHROPIC_API_KEY: e.target.value })}
+              value={form.GEMINI_API_KEY || ''}
+              onChange={e => setForm({ ...form, GEMINI_API_KEY: e.target.value })}
             />
           </div>
           {(aiStatus.model_haiku || aiStatus.model_sonnet) && (
             <p className="text-[11px] text-slate-400">
-              Models: Haiku <code className="text-[10px]">{aiStatus.model_haiku}</code>
+              Models: Fast tier <code className="text-[10px]">{aiStatus.model_haiku}</code>
               {' · '}
-              Sonnet <code className="text-[10px]">{aiStatus.model_sonnet}</code>
+              Quality tier <code className="text-[10px]">{aiStatus.model_sonnet}</code>
               {aiStatus.source && aiStatus.source !== 'none' ? ` · source: ${aiStatus.source}` : ''}
             </p>
           )}
@@ -2157,7 +2157,7 @@ export function SettingsTab({ settings, onRefresh }) {
               className="inline-flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-medium border border-violet-500 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 disabled:opacity-60 transition-colors"
             >
               {testAiLoading ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {testAiLoading ? 'Testing…' : 'Test Anthropic API'}
+              {testAiLoading ? 'Testing…' : 'Test Gemini API'}
             </button>
           </div>
         </section>

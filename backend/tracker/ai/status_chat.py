@@ -233,7 +233,7 @@ def generate_status_chat_reply(
     user_message: str,
 ) -> tuple[str | None, str | None]:
     if not ai_enabled():
-        return None, "Status assistant is disabled (ANTHROPIC_API_KEY not configured)."
+        return None, "Status assistant is disabled (GEMINI_API_KEY not configured)."
 
     system = build_status_chat_system_prompt(user, user_message)
     messages = []

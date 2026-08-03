@@ -136,7 +136,7 @@ def generate_staff_chat_reply(
 ) -> tuple[str | None, str | None]:
     """Returns (assistant_reply, error_message)."""
     if not ai_enabled():
-        return None, "AI assistant is disabled (ANTHROPIC_API_KEY not configured)."
+        return None, "AI assistant is disabled (GEMINI_API_KEY not configured)."
 
     system = build_staff_chat_system_prompt(user, user_message)
     messages = []

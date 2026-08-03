@@ -40,24 +40,52 @@ Output valid JSON only:
 }"""
 
 
+# Shared filename+content regex rules, ordered most-specific-first. Confidence is
+# for a filename match; a content match against the same pattern is scored higher
+# (see _content_hint) since it's stronger evidence than a filename guess.
+_TYPE_RULES: list[tuple[str, str, int]] = [
+    (r"medical|doctor|sick|fitness|health", DocumentClassificationType.MEDICAL_CERTIFICATE, 70),
+    (r"appointment|offer.?letter|posting", DocumentClassificationType.APPOINTMENT_LETTER, 72),
+    (r"position.?desc|job.?desc|jd\b|p\.?d\.", DocumentClassificationType.POSITION_DESCRIPTION, 75),
+    (r"endorse|dg.?letter|head.?of.?agency|director.?general", DocumentClassificationType.DG_ENDORSEMENT, 74),
+    (r"org.?chart|organisation(al)?.?(chart|structure)|organizational", DocumentClassificationType.ORGANISATIONAL_CHART, 70),
+    (r"psc.?[0-9]|form.?3|form.?2|form.?37", DocumentClassificationType.PSC_FORM, 78),
+    (r"act\.|regulation|policy|circular|legislation", DocumentClassificationType.LEGISLATION_POLICY, 68),
+    (r"cost|budget|financial|salary|funding|smartstream|entitlement|payroll", DocumentClassificationType.FINANCIAL_COSTING, 68),
+    (r"minute|transcript|report", DocumentClassificationType.MINUTES_REPORT, 65),
+    (r"memo|letter|correspondence|email", DocumentClassificationType.CORRESPONDENCE, 60),
+]
+
+# Content matches are scored slightly higher than filename-only matches — the text
+# inside the document is stronger evidence of what it actually is than its filename.
+_CONTENT_CONFIDENCE_BONUS = 8
+
+
 def _filename_hint(original_name: str) -> tuple[str, int] | None:
     n = (original_name or "").lower()
-    rules = [
-        (r"medical|doctor|sick|fitness|health", DocumentClassificationType.MEDICAL_CERTIFICATE, 70),
-        (r"appointment|offer.?letter|posting", DocumentClassificationType.APPOINTMENT_LETTER, 72),
-        (r"position.?desc|job.?desc|jd\b|p\.?d\.", DocumentClassificationType.POSITION_DESCRIPTION, 75),
-        (r"endorse|dg.?letter|head.?of.?agency", DocumentClassificationType.DG_ENDORSEMENT, 74),
-        (r"org.?chart|organisation|organizational", DocumentClassificationType.ORGANISATIONAL_CHART, 70),
-        (r"psc.?[0-9]|form.?3|form.?2|form.?37", DocumentClassificationType.PSC_FORM, 78),
-        (r"act\.|regulation|policy|circular|legislation", DocumentClassificationType.LEGISLATION_POLICY, 68),
-        (r"cost|budget|financial|salary|funding", DocumentClassificationType.FINANCIAL_COSTING, 68),
-        (r"minute|transcript|report", DocumentClassificationType.MINUTES_REPORT, 65),
-        (r"memo|letter|correspondence|email", DocumentClassificationType.CORRESPONDENCE, 60),
-    ]
-    for pattern, dtype, conf in rules:
+    for pattern, dtype, conf in _TYPE_RULES:
         if re.search(pattern, n):
             return dtype, conf
     return None
+
+
+def _content_hint(extracted_text: str) -> tuple[str, int] | None:
+    """Rule-based classification from OCR'd document content (no AI required).
+
+    Scans the first few thousand characters of extracted text for the same
+    keyword/phrase patterns used for filenames — this is the local-only path
+    that lets checklist content-validation work even when the AI API is off.
+    """
+    text = (extracted_text or "")[:5000].lower()
+    if not text.strip():
+        return None
+    best: tuple[str, int] | None = None
+    for pattern, dtype, conf in _TYPE_RULES:
+        if re.search(pattern, text):
+            scored = min(95, conf + _CONTENT_CONFIDENCE_BONUS)
+            if best is None or scored > best[1]:
+                best = (dtype, scored)
+    return best
 
 
 def classify_document_from_signals(
@@ -86,6 +114,10 @@ def classify_document_from_signals(
         user_parts.append(f"Extracted text (snippet):\n{text_snip[:3500]}")
 
     if not ai_enabled():
+        content = _content_hint(extracted_text)
+        if content:
+            dtype, conf = content
+            return {"document_type": dtype, "confidence": conf, "note": "Classified from document content (AI off)."}
         if hint:
             dtype, conf = hint
             return {"document_type": dtype, "confidence": conf, "note": "Classified from filename (AI off)."}

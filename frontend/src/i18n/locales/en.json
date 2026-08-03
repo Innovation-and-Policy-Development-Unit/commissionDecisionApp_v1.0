@@ -663,8 +663,8 @@
     "ai_brief_subtitle": "Auto-generated summary so you can route or approve without reading every document.",
     "ai_brief_generating": "Generating brief…",
     "ai_brief_regenerate": "Regenerate",
-    "ai_brief_empty": "Brief could not be generated. Check ANTHROPIC_API_KEY and try Regenerate.",
-    "ai_brief_timeout": "Brief generation is taking too long. Ensure Celery worker is running, ANTHROPIC_API_KEY is set in .env, then click Regenerate.",
+    "ai_brief_empty": "Brief could not be generated. Check GEMINI_API_KEY and try Regenerate.",
+    "ai_brief_timeout": "Brief generation is taking too long. Ensure Celery worker is running, GEMINI_API_KEY is set in .env, then click Regenerate.",
     "ai_brief_generated": "Generated {{time}}",
     "quality_title": "Submission quality score",
     "quality_subtitle": "AI triage for reviewers — higher scores usually mean less rework before assessment.",
@@ -717,6 +717,7 @@
     "checklist_saving": "Saving…",
     "checklist_no_docs_hint": "Upload documents first so AI can analyse them.",
     "checklist_required_badge": "Required",
+    "checklist_content_mismatch_badge": "Content mismatch",
     "checklist_attach_file": "Attach file",
     "checklist_replace_file": "Replace file"
   },

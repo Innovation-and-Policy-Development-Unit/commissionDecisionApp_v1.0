@@ -563,8 +563,8 @@
     "ai_brief_subtitle": "Résumé généré automatiquement pour approuver ou orienter sans tout lire.",
     "ai_brief_generating": "Génération du brief…",
     "ai_brief_regenerate": "Régénérer",
-    "ai_brief_empty": "Brief non généré. Vérifiez ANTHROPIC_API_KEY et réessayez.",
-    "ai_brief_timeout": "La génération prend trop de temps. Vérifiez Celery, ANTHROPIC_API_KEY dans .env, puis Régénérer.",
+    "ai_brief_empty": "Brief non généré. Vérifiez GEMINI_API_KEY et réessayez.",
+    "ai_brief_timeout": "La génération prend trop de temps. Vérifiez Celery, GEMINI_API_KEY dans .env, puis Régénérer.",
     "ai_brief_generated": "Généré le {{time}}"
   },
   "stage": {

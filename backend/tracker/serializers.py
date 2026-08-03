@@ -1136,6 +1136,7 @@ class RequiredDocumentSerializer(serializers.ModelSerializer):
             'form_category', 'form_category_name',
             'required_form', 'required_form_code', 'required_form_name',
             'name', 'description', 'order', 'is_active',
+            'expected_document_type',
         )
 
 
@@ -1153,7 +1154,7 @@ class ChecklistItemSerializer(serializers.ModelSerializer):
         fields = ('id', 'document', 'document_name', 'document_description',
                   'is_present', 'notes', 'checked_by_username', 'checked_at',
                   'required_form_id', 'required_form_code', 'required_form_name',
-                  'mandatory_for_stage')
+                  'mandatory_for_stage', 'content_mismatch')
         read_only_fields = ('document', 'checked_by_username', 'checked_at')
 
 
@@ -2016,7 +2017,7 @@ class SystemSettingSerializer(serializers.ModelSerializer):
         read_only_fields = ("updated_at",)
 
     # Secret settings: never return the raw value, only a "configured" flag.
-    SECRET_KEYS = {"SMTP_PASSWORD", "ANTHROPIC_API_KEY"}
+    SECRET_KEYS = {"SMTP_PASSWORD", "GEMINI_API_KEY"}
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

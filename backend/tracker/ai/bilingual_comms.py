@@ -29,7 +29,7 @@ def translate_ministry_comms(*, english_text: str, context: str = "") -> dict[st
         return {
             "english": english_text,
             "bislama": "",
-            "notes": "ANTHROPIC_API_KEY not configured — Bislama not generated.",
+            "notes": "GEMINI_API_KEY not configured — Bislama not generated.",
         }
 
     tier = FEATURE_MODEL_TIER.get("F2_deadline_notifications", "haiku")
