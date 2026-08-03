@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /opt/quarto \
     && tar -xzf /tmp/quarto.tar.gz -C /opt/quarto --strip-components=1 \
     && ln -sf /opt/quarto/bin/quarto /usr/local/bin/quarto \
+    && ln -sf /opt/quarto/bin/tools/x86_64/typst /usr/local/bin/typst \
     && rm -f /tmp/quarto.tar.gz \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
