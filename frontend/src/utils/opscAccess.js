@@ -49,20 +49,13 @@ export function userIsOpscInternal(user) {
   return Boolean(user.role && !MINISTRY_SIDE_ROLES.has(user.role))
 }
 
-/** Roles that may force-regenerate an AI brief / briefing pack ("manager and above"). */
-export const AI_REGENERATE_ROLES = new Set([
-  'psc_commissioner',
-  'chairperson',
-  'psc_secretary',
-  'senior_admin_officer',
-  'psc_admin',
-  'psc_manager',
-])
-
+/** Server-authoritative — mirrors backend rbac_user_can_regenerate_ai_brief via
+ * MeSerializer's can_regenerate_ai_brief flag. Admin-editable via Roles & Permissions
+ * (permission code "regenerate_ai_brief"), not a hardcoded role list. */
 export function userCanRegenerateAiBrief(user) {
   if (!user) return false
   if (user.is_superuser || user.is_staff) return true
-  return Boolean(user.role && AI_REGENERATE_ROLES.has(user.role))
+  return Boolean(user.can_regenerate_ai_brief)
 }
 
 export function userIsOpscUnitManager(user) {

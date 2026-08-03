@@ -716,6 +716,7 @@ class Command(BaseCommand):
         ("manage_meetings",     "Manage Commission Meetings", "secretariat", "Schedule and administer commission sitting meetings."),
         ("manage_agenda",       "Manage Meeting Agenda",      "secretariat", "Add, order, and manage agenda items for each sitting."),
         ("manage_notifications","Manage Decision Notifications","secretariat","Draft and issue formal decision notification letters."),
+        ("regenerate_ai_brief", "Regenerate AI Brief", "secretariat", "Force-regenerate an AI executive brief or meeting briefing pack."),
         # Administration
         ("manage_users",        "Manage Users",        "administration", "Create, edit, and deactivate user accounts."),
         ("manage_roles",        "Manage Roles & Permissions","administration","Configure role definitions and their permission sets."),
@@ -736,7 +737,7 @@ class Command(BaseCommand):
             "export_submissions", "transition_workflow", "assess_submission",
             "forward_commission", "record_decision", "allocate_decision", "assign_task",
             "update_implementation", "view_reports", "export_reports",
-            "manage_meetings", "manage_agenda", "manage_notifications",
+            "manage_meetings", "manage_agenda", "manage_notifications", "regenerate_ai_brief",
             "manage_users", "manage_roles", "manage_ui_translations", "view_audit_trail",
             "manage_report_templates",
             "feedback_view", "feedback_manage", "feedback_respond", "feedback_configure",

@@ -67,6 +67,7 @@ from .rbac import (
     rbac_user_can_manage_roles,
     rbac_user_can_manage_translations,
     rbac_user_can_manage_users,
+    rbac_user_can_regenerate_ai_brief,
     rbac_user_can_view_audit_log,
 )
 
@@ -224,6 +225,7 @@ class MeSerializer(serializers.ModelSerializer):
     can_manage_translations = serializers.SerializerMethodField()
     can_access_admin_panel = serializers.SerializerMethodField()
     can_view_audit_log  = serializers.SerializerMethodField()
+    can_regenerate_ai_brief = serializers.SerializerMethodField()
     intake_receptionist_enabled = serializers.SerializerMethodField()
     intake_hr_enabled = serializers.SerializerMethodField()
     ai_package_validation_enabled = serializers.SerializerMethodField()
@@ -247,6 +249,7 @@ class MeSerializer(serializers.ModelSerializer):
             "can_manage_translations",
             "can_access_admin_panel",
             "can_view_audit_log",
+            "can_regenerate_ai_brief",
             "intake_receptionist_enabled",
             "intake_hr_enabled",
             "ai_package_validation_enabled",
@@ -285,6 +288,9 @@ class MeSerializer(serializers.ModelSerializer):
 
     def get_can_view_audit_log(self, obj):
         return rbac_user_can_view_audit_log(obj.user)
+
+    def get_can_regenerate_ai_brief(self, obj):
+        return rbac_user_can_regenerate_ai_brief(obj.user)
 
     def get_intake_receptionist_enabled(self, obj):
         from .intake_routing import receptionist_intake_enabled

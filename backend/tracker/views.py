@@ -1985,16 +1985,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def generate_brief(self, request, pk=None):
         """Queue AI executive brief generation for Secretariat review."""
         from .tasks import queue_submission_brief
+        from .rbac import rbac_user_can_regenerate_ai_brief
 
         submission = self.get_object()
-        profile = _profile(request.user)
-        from .sitting_pack import BRIEF_REQUEST_ROLES
 
-        if profile.role not in BRIEF_REQUEST_ROLES and not (
-            request.user.is_superuser or request.user.is_staff
-        ):
+        if not rbac_user_can_regenerate_ai_brief(request.user):
             raise PermissionDenied(
-                "Only Commission members and Secretariat staff can request an executive brief."
+                "Only users with the Regenerate AI Brief permission can request an executive brief."
             )
 
         submission.ai_brief_processed = False
@@ -7280,12 +7277,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
         })
 
     def _user_can_generate_briefing_pack(self, user) -> bool:
-        from .sitting_pack import SITTING_PACK_ROLES
+        from .rbac import rbac_user_can_regenerate_ai_brief
 
-        if user.is_superuser or user.is_staff:
-            return True
-        profile = _profile(user)
-        return profile.role in SITTING_PACK_ROLES
+        return rbac_user_can_regenerate_ai_brief(user)
 
     @staticmethod
     def _ensure_meeting_briefing_pack_queued(meeting, requested_by, *, force: bool = False):
@@ -7325,7 +7319,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
         if pack.requested_by_id != request.user.id and not (
             request.user.is_superuser or request.user.is_staff
         ):
-            if not self._user_can_generate_briefing_pack(request.user):
+            from .opsc_access import is_opsc_internal
+
+            if not is_opsc_internal(request.user):
                 raise PermissionDenied("You cannot access this briefing pack.")
         return pack
 
@@ -7335,7 +7331,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting = self.get_object()
         if not self._user_can_generate_briefing_pack(request.user):
             raise PermissionDenied(
-                "Only Commission members, Secretariat, or Admin staff may generate briefing packs."
+                "Only users with the Regenerate AI Brief permission may generate briefing packs."
             )
 
         pack = self._ensure_meeting_briefing_pack_queued(meeting, request.user, force=True)
