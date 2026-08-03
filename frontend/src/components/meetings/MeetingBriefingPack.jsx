@@ -5,11 +5,22 @@ import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
 
-export default function MeetingBriefingPack({ meetingId, meetingRef }) {
+export default function MeetingBriefingPack({ meetingId, meetingRef, canRegenerate = false }) {
   const { t } = useTranslation()
   const [job, setJob] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // Show a pack already generated (e.g. auto-created on agenda circulation)
+  // without requiring a manual Generate click.
+  useEffect(() => {
+    if (!meetingId) return
+    let cancelled = false
+    api.get(`/meetings/${meetingId}/briefing-pack/latest/`)
+      .then(res => { if (!cancelled) setJob(res.data) })
+      .catch(() => { /* none generated yet */ })
+    return () => { cancelled = true }
+  }, [meetingId])
 
   useEffect(() => {
     if (!job?.id || job.status === 'ready' || job.status === 'failed') return undefined
@@ -61,15 +72,17 @@ export default function MeetingBriefingPack({ meetingId, meetingRef }) {
       <p className="text-[11px] text-indigo-800/80 dark:text-indigo-300/80 mb-2">
         {t('meeting_briefing.subtitle')}
       </p>
-      <button
-        type="button"
-        onClick={generate}
-        disabled={busy || processing}
-        className="btn-outline text-xs py-1 px-2 inline-flex items-center gap-1"
-      >
-        <Sparkles size={12} />
-        {processing ? t('meeting_briefing.generating') : t('meeting_briefing.generate')}
-      </button>
+      {canRegenerate && (
+        <button
+          type="button"
+          onClick={generate}
+          disabled={busy || processing}
+          className="btn-outline text-xs py-1 px-2 inline-flex items-center gap-1"
+        >
+          <Sparkles size={12} />
+          {processing ? t('meeting_briefing.generating') : job ? t('meeting_briefing.regenerate') : t('meeting_briefing.generate')}
+        </button>
+      )}
       {processing && (
         <div className="mt-2">
           <AiProcessingIndicator

@@ -6,11 +6,18 @@ import { X, Calendar, Clock, MapPin, ListChecks, FileText, CheckSquare, Users, T
 import { SITTING_STATUSES } from '../constants'
 import clsx from 'clsx'
 import AgendaReadinessChip from '../../../../components/shared/AgendaReadinessChip'
+import MeetingBriefingPack from '../../../../components/meetings/MeetingBriefingPack'
+import { useAuth } from '../../../../context/AuthContext'
+import { userIsOpscInternal, userCanRegenerateAiBrief } from '../../../../utils/opscAccess'
 
 export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapacity, onOpenLogitechGuide }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { user } = useAuth()
   if (!sitting) return null
+
+  const canViewBriefingPack = userIsOpscInternal(user)
+  const canRegenerateBriefingPack = userCanRegenerateAiBrief(user)
 
   const status = SITTING_STATUSES[sitting.status] || {}
   const capacity = getCapacity(sitting.agenda_count || 0)
@@ -159,6 +166,13 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                             ? <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{sitting.agenda_count} item{sitting.agenda_count !== 1 ? 's' : ''} — open the Sitting Workspace</p>
                             : <p className="text-sm text-slate-500 italic">No agenda items yet — open the Sitting Workspace to schedule submissions.</p>}
                         </button>
+                        {canViewBriefingPack && (
+                          <MeetingBriefingPack
+                            meetingId={sitting.id}
+                            meetingRef={sitting.reference_number}
+                            canRegenerate={canRegenerateBriefingPack}
+                          />
+                        )}
                       </section>
 
                       {/* Attendance Section */}

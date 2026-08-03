@@ -665,6 +665,18 @@ class CoAssignmentSerializer(serializers.Serializer):
         return obj.principal.get_full_name() or obj.principal.username
 
 
+def _strip_ai_brief_if_ministry(data: dict, request) -> dict:
+    """Never let the AI executive brief text reach a ministry-side viewer, even
+    though the frontend also hides the card — the API response must not leak it."""
+    from .opsc_access import is_opsc_internal
+
+    if not request or not getattr(request, "user", None) or request.user.is_anonymous:
+        return data
+    if not is_opsc_internal(request.user):
+        data["ai_brief_summary"] = None
+    return data
+
+
 class SubmissionListSerializer(serializers.ModelSerializer):
     ministry_name = serializers.CharField(source="ministry.name", read_only=True)
     department_name = serializers.CharField(source="department.name", read_only=True, default=None)
@@ -700,6 +712,10 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             cache = dict(PSCFormType.objects.values_list("code", "agenda_category"))
             self.context["_ft_agenda_cache"] = cache
         return cache.get(obj.form_type_code) or "other"
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        return _strip_ai_brief_if_ministry(data, self.context.get("request"))
 
     class Meta:
         model = Submission
@@ -795,6 +811,10 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         if not request or not getattr(request, "user", None) or request.user.is_anonymous:
             return None
         return can_edit_submission(profile_role(request.user), obj)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        return _strip_ai_brief_if_ministry(data, self.context.get("request"))
 
     def get_subway_map(self, obj):
         from .subway_map import build_subway_map

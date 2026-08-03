@@ -7155,6 +7155,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting.agenda_status = AgendaStatus.CIRCULATED
         meeting.save(update_fields=["agenda_status"])
         self._queue_agenda_briefs(meeting)
+        self._ensure_meeting_briefing_pack_queued(meeting, request.user)
         # Notify Commission members the (approved) agenda is available to view.
         def _notify_circulated():
             try:
@@ -7279,15 +7280,39 @@ class MeetingViewSet(viewsets.ModelViewSet):
         })
 
     def _user_can_generate_briefing_pack(self, user) -> bool:
+        from .sitting_pack import SITTING_PACK_ROLES
+
         if user.is_superuser or user.is_staff:
             return True
         profile = _profile(user)
-        return profile.role in {
-            Role.PSC_SECRETARY,
-            Role.SENIOR_ADMIN_OFFICER,
-            Role.PSC_ADMIN,
-            Role.CHAIRPERSON,
-        }
+        return profile.role in SITTING_PACK_ROLES
+
+    @staticmethod
+    def _ensure_meeting_briefing_pack_queued(meeting, requested_by, *, force: bool = False):
+        """Create + queue a MeetingBriefingPack, unless one is already
+        pending/processing/ready and this isn't an explicit regenerate."""
+        from .models import MeetingBriefingPack
+        from .tasks import queue_meeting_briefing_pack
+
+        if not force:
+            existing = MeetingBriefingPack.objects.filter(
+                meeting=meeting,
+                status__in=[
+                    MeetingBriefingPack.Status.PENDING,
+                    MeetingBriefingPack.Status.PROCESSING,
+                    MeetingBriefingPack.Status.READY,
+                ],
+            ).order_by("-id").first()
+            if existing:
+                return existing
+
+        pack = MeetingBriefingPack.objects.create(
+            meeting=meeting,
+            requested_by=requested_by,
+            status=MeetingBriefingPack.Status.PENDING,
+        )
+        queue_meeting_briefing_pack(pack.id)
+        return pack
 
     def _get_briefing_pack_for_user(self, request, pack_id: int):
         from .models import MeetingBriefingPack
@@ -7307,25 +7332,36 @@ class MeetingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="briefing-pack/generate")
     def generate_briefing_pack(self, request, pk=None):
         """C2 — queue AI sitting briefing pack (HTML + PDF)."""
-        from .models import MeetingBriefingPack
-        from .tasks import queue_meeting_briefing_pack
-
         meeting = self.get_object()
         if not self._user_can_generate_briefing_pack(request.user):
             raise PermissionDenied(
-                "Only PSC Secretary, Senior Admin Officer, Admin, or Chairperson may generate briefing packs."
+                "Only Commission members, Secretariat, or Admin staff may generate briefing packs."
             )
 
-        pack = MeetingBriefingPack.objects.create(
-            meeting=meeting,
-            requested_by=request.user,
-            status=MeetingBriefingPack.Status.PENDING,
-        )
-        queue_meeting_briefing_pack(pack.id)
+        pack = self._ensure_meeting_briefing_pack_queued(meeting, request.user, force=True)
         return Response(
             MeetingBriefingPackSerializer(pack).data,
             status=status.HTTP_202_ACCEPTED,
         )
+
+    @action(detail=True, methods=["get"], url_path="briefing-pack/latest")
+    def briefing_pack_latest(self, request, pk=None):
+        """Most recent briefing pack for this meeting, e.g. one auto-generated on
+        agenda circulation — lets the UI show it without a manual Generate click."""
+        from .models import MeetingBriefingPack
+        from .opsc_access import is_opsc_internal
+
+        meeting = self.get_object()
+        if not is_opsc_internal(request.user):
+            raise PermissionDenied("Only OPSC or Commission staff may view briefing packs.")
+        pack = (
+            MeetingBriefingPack.objects.filter(meeting=meeting)
+            .order_by("-id")
+            .first()
+        )
+        if not pack:
+            return Response({"detail": "No briefing pack yet."}, status=404)
+        return Response(MeetingBriefingPackSerializer(pack).data)
 
     @action(detail=False, methods=["get"], url_path=r"briefing-packs/(?P<pack_id>[0-9]+)")
     def briefing_pack_status(self, request, pack_id=None):

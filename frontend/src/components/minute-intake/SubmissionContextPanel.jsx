@@ -5,6 +5,8 @@ import { ChevronDown, ChevronRight, ExternalLink, FolderOpen, Loader2 } from 'lu
 import ExecutiveBriefPanel from '../sitting-pack/ExecutiveBriefPanel'
 import SittingPackPapersPanel from '../sitting-pack/SittingPackPapersPanel'
 import api from '../../api/client'
+import { useAuth } from '../../context/AuthContext'
+import { userIsOpscInternal, userCanRegenerateAiBrief } from '../../utils/opscAccess'
 
 const humanizeStage = (stage) =>
   (stage || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -16,6 +18,9 @@ const humanizeStage = (stage) =>
  */
 export default function SubmissionContextPanel({ submissionId, itemLabel }) {
   const { t } = useTranslation()
+  const { user } = useAuth()
+  const canViewBrief = userIsOpscInternal(user)
+  const canRegenerateBrief = userCanRegenerateAiBrief(user)
   const [accordionOpen, setAccordionOpen] = useState(false)
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -50,9 +55,11 @@ export default function SubmissionContextPanel({ submissionId, itemLabel }) {
 
   return (
     <div className="space-y-4">
-      <div className="h-[320px]">
-        <ExecutiveBriefPanel submissionId={submissionId} itemLabel={itemLabel} canRegenerate />
-      </div>
+      {canViewBrief && (
+        <div className="h-[320px]">
+          <ExecutiveBriefPanel submissionId={submissionId} itemLabel={itemLabel} canRegenerate={canRegenerateBrief} />
+        </div>
+      )}
 
       <div className="card p-0 overflow-hidden">
         <button

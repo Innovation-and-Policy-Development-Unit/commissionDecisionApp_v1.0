@@ -39,6 +39,7 @@ export const MINISTRY_SIDE_ROLES = new Set([
   'ministry_hr',
   'dept_admin',
   'traveller',
+  'dg_director',
 ])
 
 /** Any OPSC-internal staff role — sees endorsed Commission minutes. */
@@ -46,6 +47,22 @@ export function userIsOpscInternal(user) {
   if (!user) return false
   if (user.is_superuser || user.is_staff) return true
   return Boolean(user.role && !MINISTRY_SIDE_ROLES.has(user.role))
+}
+
+/** Roles that may force-regenerate an AI brief / briefing pack ("manager and above"). */
+export const AI_REGENERATE_ROLES = new Set([
+  'psc_commissioner',
+  'chairperson',
+  'psc_secretary',
+  'senior_admin_officer',
+  'psc_admin',
+  'psc_manager',
+])
+
+export function userCanRegenerateAiBrief(user) {
+  if (!user) return false
+  if (user.is_superuser || user.is_staff) return true
+  return Boolean(user.role && AI_REGENERATE_ROLES.has(user.role))
 }
 
 export function userIsOpscUnitManager(user) {

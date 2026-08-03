@@ -81,6 +81,7 @@ MINISTRY_SIDE_ROLES: frozenset[str] = frozenset({
     Role.MINISTRY_HR,
     Role.DEPT_ADMIN,
     Role.TRAVELLER,
+    Role.DG_DIRECTOR,
 })
 
 # Roles that may be assigned as commission-task managers (secretariat allocates)
@@ -105,6 +106,17 @@ def profile_role(user: User) -> str | None:
         return user.psc_profile.role
     except Profile.DoesNotExist:
         return None
+
+
+def is_opsc_internal(user: User) -> bool:
+    """True for any OPSC/Commission-side user — the inverse of MINISTRY_SIDE_ROLES.
+    Mirrors frontend/src/utils/opscAccess.js's userIsOpscInternal()."""
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff:
+        return True
+    role = profile_role(user)
+    return bool(role and role not in MINISTRY_SIDE_ROLES)
 
 
 def user_has_commission_decision_view(role: str | None) -> bool:
