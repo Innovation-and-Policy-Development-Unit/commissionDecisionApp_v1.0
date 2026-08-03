@@ -2011,6 +2011,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         is_unit_manager = profile.role in OPSC_UNIT_MANAGER_ROLES
         if not (is_admin or is_unit_manager):
             raise PermissionDenied("Only unit managers can allocate submissions.")
+        if submission.current_stage not in (
+            WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+        ):
+            raise PermissionDenied("Allocation is only available while a submission is under assessment.")
 
         allowed_roles = manager_allowed_staff_roles(
             profile.role if is_unit_manager else None
@@ -2069,6 +2073,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         if not (is_admin or is_unit_manager):
             raise PermissionDenied("Only unit managers can assign submissions to principals.")
+        if submission.current_stage not in (
+            WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+        ):
+            raise PermissionDenied("Allocation is only available while a submission is under assessment.")
 
         if is_unit_manager:
             expected_unit = _manager_to_unit[profile.role]

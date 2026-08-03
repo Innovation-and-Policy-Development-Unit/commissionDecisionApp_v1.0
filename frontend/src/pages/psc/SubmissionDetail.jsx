@@ -183,7 +183,12 @@ export default function SubmissionDetail() {
   const [allocateBusy, setAllocateBusy] = useState(false)
   const isAdmin = user?.role === 'psc_admin'
   const isUnitManager  = user && UNIT_MANAGER_ROLES.includes(user.role)
-  const canAllocate    = user && (
+  // Allocation is an assessment-stage action — routed_unit is set once at intake and
+  // never cleared, so without this the panel would stay usable at every later stage too.
+  // Matches STAGE_META's "Assessment" category (constants/stages.js): checklist review
+  // (where the unit manager first allocates) through the actual assessment work.
+  const inAssessmentStage = ['manager_checklist_review', 'under_assessment'].includes(submission?.current_stage)
+  const canAllocate    = user && inAssessmentStage && (
     isAdmin
     || (MANAGER_ROLE_TO_UNIT[user.role] && MANAGER_ROLE_TO_UNIT[user.role] === submission?.routed_unit)
   )
