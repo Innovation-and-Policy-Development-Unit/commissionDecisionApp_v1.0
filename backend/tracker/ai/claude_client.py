@@ -23,9 +23,13 @@ logger = logging.getLogger("scdms.app")
 
 ModelTier = Literal["haiku", "sonnet"]
 
+# Rolling aliases (not pinned snapshots) — Google periodically retires pinned
+# model IDs for new API keys/projects (e.g. gemini-2.5-flash-lite 404s on new
+# projects as of Aug 2026); the -latest aliases track whatever generation is
+# current so this doesn't need a code change every time Google cycles models.
 _CURRENT_DEFAULTS: dict[ModelTier, str] = {
-    "sonnet": "gemini-2.5-flash",
-    "haiku": "gemini-2.5-flash-lite",
+    "sonnet": "gemini-flash-latest",
+    "haiku": "gemini-flash-lite-latest",
 }
 
 

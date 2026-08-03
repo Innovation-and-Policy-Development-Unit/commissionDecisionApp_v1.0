@@ -7,8 +7,8 @@ Server-side AI uses **Google Gemini** (Google AI Studio, free tier) for text/rea
 
 ```env
 GEMINI_API_KEY=AIza...
-GEMINI_MODEL_HAIKU=gemini-2.5-flash-lite
-GEMINI_MODEL_SONNET=gemini-2.5-flash
+GEMINI_MODEL_HAIKU=gemini-flash-lite-latest
+GEMINI_MODEL_SONNET=gemini-flash-latest
 
 OPENAI_API_KEY=sk-...
 WHISPER_MODEL=whisper-1

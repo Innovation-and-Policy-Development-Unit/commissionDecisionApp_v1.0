@@ -501,9 +501,11 @@ WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'whisper-1')
 QUARTO_BIN = os.getenv('QUARTO_BIN', 'quarto')
 QUARTO_RENDER_TIMEOUT = int(os.getenv('QUARTO_RENDER_TIMEOUT', '180'))
 # Fast tier: feedback, classification, extraction (see AI_Features_List.txt)
-GEMINI_MODEL_HAIKU = os.getenv('GEMINI_MODEL_HAIKU', 'gemini-2.5-flash-lite')
+# Rolling aliases (not pinned snapshots) so a future Google model-generation
+# cutover doesn't 404 like gemini-2.5-flash-lite did for new API keys.
+GEMINI_MODEL_HAIKU = os.getenv('GEMINI_MODEL_HAIKU', 'gemini-flash-lite-latest')
 # Quality tier: executive briefs, minutes drafting, similarity, chatbots
-GEMINI_MODEL_SONNET = os.getenv('GEMINI_MODEL_SONNET', 'gemini-2.5-flash')
+GEMINI_MODEL_SONNET = os.getenv('GEMINI_MODEL_SONNET', 'gemini-flash-latest')
 # A3 — block draft→submitted when critical package gaps remain (set false to warn only)
 AI_PACKAGE_BLOCK_SUBMIT = os.getenv('AI_PACKAGE_BLOCK_SUBMIT', 'true').lower() in (
     '1', 'true', 'yes', 'on',

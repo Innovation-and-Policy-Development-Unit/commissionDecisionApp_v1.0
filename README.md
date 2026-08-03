@@ -500,8 +500,8 @@ CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
 
 # ── Google Gemini (AI features, free tier) ────────────────────────────────────
 GEMINI_API_KEY=
-GEMINI_MODEL_HAIKU=gemini-2.5-flash-lite
-GEMINI_MODEL_SONNET=gemini-2.5-flash
+GEMINI_MODEL_HAIKU=gemini-flash-lite-latest
+GEMINI_MODEL_SONNET=gemini-flash-latest
 
 # ── Monitoring (optional) ─────────────────────────────────────────────────────
 SENTRY_DSN=
