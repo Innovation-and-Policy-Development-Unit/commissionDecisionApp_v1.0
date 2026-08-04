@@ -28,7 +28,7 @@ DEFAULT_EMAIL_TEMPLATES = [
         "name": "New user account created",
         "category": "authentication",
         "description": "Sent when an administrator creates a new user account.",
-        "placeholders": _ph("initial_password, login_url"),
+        "placeholders": _ph("initial_password, login_url, portal_domain"),
         "subject_template": "SCDMS account created — sign-in instructions ({{username}})",
         "body_text_template": (
             "{{greeting}}\n\n"
@@ -40,7 +40,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "{{login_url}}\n\n"
             "If the link is blocked by your email or firewall, open a browser and type:\n"
             "{{login_url}}\n\n"
-            "Network access: your IT team may need to allow HTTPS (port 443) to scdms.xyz.\n\n"
+            "Network access: your IT team may need to allow HTTPS (port 443) to {{portal_domain}}.\n\n"
             "After sign-in you will be asked to set a new password.\n\n"
             "If you did not expect this email, contact your SCDMS administrator."
         ),
@@ -62,7 +62,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "</p>"
             "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">"
             "If your browser warns about the site or your network blocks access, ask IT to allow "
-            "<strong>https://scdms.xyz</strong> on port <strong>443</strong>."
+            "<strong>{{portal_domain}}</strong> on port <strong>443</strong>."
             "</p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">"
             "You will be prompted to set a new password on first sign-in."
@@ -75,10 +75,10 @@ DEFAULT_EMAIL_TEMPLATES = [
         "category": "authentication",
         "description": "Sent when a user requests a password reset link.",
         "placeholders": _ph("reset_url, expiry_hours, login_url"),
-        "subject_template": "Reset your password — Commission Decision App",
+        "subject_template": "Reset your password — SCDMS",
         "body_text_template": (
             "Dear {{firstname}},\n\n"
-            "You requested a password reset for your Commission Decision App account.\n"
+            "You requested a password reset for your SCDMS account.\n"
             "Username: {{username}}\n\n"
             "Open this link to set a new password:\n\n"
             "{{reset_url}}\n\n"
@@ -87,12 +87,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "If you did not request this, you can ignore this email."
         ),
         "body_html_template": (
-            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
-            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
-            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
-            "Commission Decision App"
-            "</div>"
-            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
             "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
             "<p style=\"margin:0 0 10px 0;\">You requested a password reset for your account.</p>"
             "<p style=\"margin:0 0 16px 0;\"><strong>Username:</strong> {{username}}</p>"
@@ -103,9 +97,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">If the button does not open, copy this link:</p>"
             "<p style=\"margin:0 0 16px 0;word-break:break-all;font-size:13px;\"><a href=\"{{reset_url}}\" style=\"color:#2563eb;\">{{reset_url}}</a></p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">If you did not request this, you can ignore this email.</p>"
-            "</div>"
-            "</div>"
-            "</div>"
         ),
     },
     {
@@ -127,12 +118,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "someone may be attempting to access your account."
         ),
         "body_html_template": (
-            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
-            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
-            "<div style=\"background:#7f1d1d;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
-            "SCDMS — Security alert"
-            "</div>"
-            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
             "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
             "<p style=\"margin:0 0 14px 0;\">{{lock_summary}}</p>"
             "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 14px;margin:0 0 16px 0;\">"
@@ -143,9 +128,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p style=\"margin:0 0 14px 0;\">{{unlock_instructions}}</p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">If this was not you, notify your SCDMS "
             "administrator immediately — someone may be attempting to access your account.</p>"
-            "</div>"
-            "</div>"
-            "</div>"
         ),
     },
     {
@@ -166,12 +148,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "Permanently locked accounts can only be unlocked by a super administrator."
         ),
         "body_html_template": (
-            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
-            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
-            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
-            "SCDMS — Account lockout"
-            "</div>"
-            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
             "<p style=\"margin:0 0 14px 0;\">A user account has been locked on SCDMS.</p>"
             "<div style=\"background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin:0 0 16px 0;\">"
             "<p style=\"margin:0;\"><strong>Account:</strong> {{target_username}} ({{target_email}})</p>"
@@ -183,9 +159,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<a href=\"{{admin_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">Open Admin panel</a>"
             "</p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">Permanently locked accounts can only be unlocked by a super administrator.</p>"
-            "</div>"
-            "</div>"
-            "</div>"
         ),
     },
     {
@@ -204,12 +177,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "During the sitting you can open the Sitting Pack to follow each item.\n"
         ),
         "body_html_template": (
-            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
-            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
-            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
-            "PSC — Agenda circulated"
-            "</div>"
-            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
             "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
             "<p style=\"margin:0 0 14px 0;\">The Chairman has endorsed the agenda for the Commission sitting on "
             "<strong>{{meeting_date}}</strong> ({{meeting_reference}}).</p>"
@@ -218,9 +185,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the agenda</a>"
             "</p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">During the sitting, open the Sitting Pack to follow each item.</p>"
-            "</div>"
-            "</div>"
-            "</div>"
         ),
     },
     {
@@ -247,12 +211,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "{{meeting_url}}\n"
         ),
         "body_html_template": (
-            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
-            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
-            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
-            "PSC — New sitting scheduled"
-            "</div>"
-            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
             "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
             "<p style=\"margin:0 0 14px 0;\">A new Commission sitting has been scheduled.</p>"
             "<table style=\"border-collapse:collapse;font-size:14px;margin:0 0 16px 0;\">"
@@ -267,9 +225,6 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the sitting</a>"
             "</p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">Please ensure any submissions for this sitting are lodged before the submission deadline.</p>"
-            "</div>"
-            "</div>"
-            "</div>"
         ),
     },
     {
@@ -287,21 +242,12 @@ DEFAULT_EMAIL_TEMPLATES = [
             "{{minutes_url}}\n"
         ),
         "body_html_template": (
-            "<div style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px;\">"
-            "<div style=\"max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;\">"
-            "<div style=\"background:#0f172a;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:600;\">"
-            "PSC — Signed minutes on record"
-            "</div>"
-            "<div style=\"padding:24px;color:#334155;line-height:1.6;font-size:15px;\">"
             "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
             "<p style=\"margin:0 0 14px 0;\">The signed minutes for the Commission sitting of "
             "<strong>{{meeting_date}}</strong> ({{meeting_reference}}) have been uploaded and are now the official record.</p>"
             "<p style=\"margin:0 0 16px 0;\">"
             "<a href=\"{{minutes_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the minutes</a>"
             "</p>"
-            "</div>"
-            "</div>"
-            "</div>"
         ),
     },
     {
@@ -549,7 +495,7 @@ DEFAULT_EMAIL_TEMPLATES = [
         "subject_template": "Your daily brief — {{brief_date}}",
         "body_text_template": (
             "{{greeting}}\n\n"
-            "Here is your Commission Decision App brief for {{brief_date}}.\n\n"
+            "Here is your SCDMS brief for {{brief_date}}.\n\n"
             "Open the portal: {{portal_url}}\n\n"
             "— Sections are included in the HTML version of this email."
         ),
@@ -559,7 +505,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p>Your daily brief for <strong>{{brief_date}}</strong>.</p>"
             "{{sections_html}}"
             "<p style=\"margin-top:1.5em;\"><a href=\"{{portal_url}}\" style=\"color:#2563eb;\">"
-            "Open Commission Decision App</a></p></div>"
+            "Open SCDMS</a></p></div>"
         ),
     },
     {
@@ -581,7 +527,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p>Manager daily brief for <strong>{{brief_date}}</strong>.</p>"
             "{{kpis_html}}"
             "<p style=\"margin-top:1.5em;\"><a href=\"{{portal_url}}\" style=\"color:#2563eb;\">"
-            "Open Commission Decision App</a></p></div>"
+            "Open SCDMS</a></p></div>"
         ),
     },
 ]

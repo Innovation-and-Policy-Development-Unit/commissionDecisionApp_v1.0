@@ -687,4 +687,14 @@ def sample_context_for_slug(slug: str) -> dict[str, str]:
             "new_stage": "Under Assessment",
             "previous_stage": "Submitted to PSC",
         })
+    # Sample URLs in SAMPLE_EMAIL_CONTEXTS are authored against a placeholder
+    # localhost origin; swap in the real configured frontend origin so admin
+    # template previews reflect the actual deployed domain.
+    base = get_frontend_base_url()
+    placeholder = "http://localhost:8080"
+    for key, value in ctx.items():
+        if isinstance(value, str) and value.startswith(placeholder):
+            ctx[key] = base + value[len(placeholder):]
+    from urllib.parse import urlparse
+    ctx.setdefault("portal_domain", urlparse(base).netloc or base)
     return ctx

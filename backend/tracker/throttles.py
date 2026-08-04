@@ -45,6 +45,13 @@ class StaffChatThrottle(UserRateThrottle):
     scope = 'staff_chat'
 
 
+class AiAnalysisTriggerThrottle(UserRateThrottle):
+    """Limit AI analysis triggers (duplicate/risk/outcome/NOA/letter) per user —
+    each call re-runs the Gemini API even on an already-processed submission,
+    so this controls both abuse and cost."""
+    scope = 'ai_analysis_trigger'
+
+
 class SubmissionTrackThrottle(AnonRateThrottle):
     """Limit public submission-tracking lookups per IP — prevents reference-number
     enumeration on the unauthenticated track-my-submission portal."""

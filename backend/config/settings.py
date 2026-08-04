@@ -218,6 +218,7 @@ REST_FRAMEWORK = {
         'submission_create': '10/hour',
         'feedback_create':   '5/hour',
         'staff_chat':        '60/hour',
+        'ai_analysis_trigger': '20/hour',
         'session_pin_verify': '5/min',
         'submission_track':  os.getenv('SUBMISSION_TRACK_RATE_LIMIT', '10/min'),
     },

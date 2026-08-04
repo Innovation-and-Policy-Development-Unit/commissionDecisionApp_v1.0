@@ -2106,7 +2106,13 @@ def generate_document_redaction_preview(document_id: int):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _build_submission_context(submission) -> str:
-    """Return a text block describing a submission for use in AI prompts."""
+    """Return a text block describing a submission for use in AI prompts.
+
+    Submission has no officer_name/officer_grade/description/submitted_at
+    fields — that data lives in the per-form-type dynamic_form_response.data
+    JSON blob (PSCFormResponse), which varies by form_type_code, so the full
+    field dump (rather than one hardcoded key) is used as the narrative.
+    """
     from .models import SubmissionDocument, SubmissionChecklistItem
 
     docs = SubmissionDocument.objects.filter(submission=submission).values_list("original_name", flat=True)
@@ -2115,17 +2121,33 @@ def _build_submission_context(submission) -> str:
     cl_present = checklist.filter(is_present=True).count()
     cl_total = checklist.count()
 
+    try:
+        form_data = submission.dynamic_form_response.data or {}
+    except Exception:
+        form_data = {}
+
+    officer_name = (
+        form_data.get("officer_name") or form_data.get("candidate_name")
+        or form_data.get("recommended_name") or "N/A"
+    )
+    position = form_data.get("position_title", "N/A")
+    skip_keys = {"officer_name", "candidate_name", "recommended_name", "position_title"}
+    form_fields = "\n".join(
+        f"  - {k}: {v}" for k, v in form_data.items()
+        if v not in (None, "", []) and k not in skip_keys
+    ) or "  (no additional form data on file)"
+
     lines = [
         f"Reference: {submission.reference_number or 'N/A'}",
         f"Title: {submission.title or 'N/A'}",
         f"Form Type: {submission.form_type_code or 'N/A'}",
         f"Ministry: {submission.ministry.name if submission.ministry else 'N/A'}",
-        f"Officer Name: {submission.officer_name or 'N/A'}",
-        f"Officer Grade: {submission.officer_grade or 'N/A'}",
+        f"Officer Name: {officer_name}",
+        f"Position/Grade: {position}",
         f"Stage: {submission.current_stage or 'N/A'}",
-        f"Submission Date: {submission.submitted_at.date() if submission.submitted_at else 'N/A'}",
+        f"Submission Date: {submission.created_at.date() if submission.created_at else 'N/A'}",
         f"Checklist Completeness: {cl_present}/{cl_total}",
-        f"Narrative/Description: {(submission.description or 'N/A')[:1500]}",
+        f"Form Details:\n{form_fields[:2000]}",
         f"Documents on file:\n{doc_list}",
     ]
     return "\n".join(lines)
@@ -2141,9 +2163,6 @@ def detect_submission_duplicates(submission_id: int, force: bool = False):
     from .ai.A4_duplicate_detector import detect_duplicates
     from .ai.claude_client import ai_enabled
 
-    if not ai_enabled():
-        return
-
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
     except Submission.DoesNotExist:
@@ -2153,27 +2172,42 @@ def detect_submission_duplicates(submission_id: int, force: bool = False):
     if not force and submission.ai_duplicate_processed:
         return
 
-    # Build context for candidate similar submissions (same ministry, similar form type)
-    candidates = Submission.objects.filter(
-        ministry=submission.ministry,
-    ).exclude(pk=submission_id).order_by("-submitted_at")[:20]
-
-    submission_ctx = _build_submission_context(submission)
-    existing_ctx = "\n\n---\n\n".join(
-        _build_submission_context(c) for c in candidates
-    ) or "No existing submissions found."
-
-    data, err = detect_duplicates(submission_ctx, existing_ctx)
-
-    if err or not data:
-        app_log.error("A4_DUPLICATE | Sub %s | Error: %s", submission_id, err)
+    def _fail(msg):
         submission.ai_duplicate_processed = True
-        submission.ai_duplicate_recommendation = f"AI error: {err or 'empty response'}"
+        submission.ai_duplicate_recommendation = msg
         submission.ai_duplicate_generated_at = timezone.now()
         submission.save(update_fields=[
             "ai_duplicate_processed", "ai_duplicate_recommendation",
             "ai_duplicate_generated_at", "updated_at",
         ])
+
+    # Always terminate polling with a recorded state — a silent return here
+    # (missing API key, unexpected exception) would otherwise leave the
+    # frontend polling ai-duplicate/ forever with no feedback.
+    if not ai_enabled():
+        _fail("AI is not configured (GEMINI_API_KEY missing).")
+        return
+
+    try:
+        # Build context for candidate similar submissions (same ministry, similar form type)
+        candidates = Submission.objects.filter(
+            ministry=submission.ministry,
+        ).exclude(pk=submission_id).order_by("-created_at")[:20]
+
+        submission_ctx = _build_submission_context(submission)
+        existing_ctx = "\n\n---\n\n".join(
+            _build_submission_context(c) for c in candidates
+        ) or "No existing submissions found."
+
+        data, err = detect_duplicates(submission_ctx, existing_ctx)
+    except Exception as exc:
+        app_log.exception("A4_DUPLICATE | Sub %s | unexpected failure", submission_id)
+        _fail(f"AI error: {exc}")
+        return
+
+    if err or not data:
+        app_log.error("A4_DUPLICATE | Sub %s | Error: %s", submission_id, err)
+        _fail(f"AI error: {err or 'empty response'}")
         return
 
     submission.ai_duplicate_processed = True
@@ -2210,9 +2244,6 @@ def run_risk_assessment(submission_id: int, force: bool = False):
     from .ai.B2_risk_assessment import assess_risk
     from .ai.claude_client import ai_enabled
 
-    if not ai_enabled():
-        return
-
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
     except Submission.DoesNotExist:
@@ -2221,16 +2252,28 @@ def run_risk_assessment(submission_id: int, force: bool = False):
     if not force and submission.ai_risk_processed:
         return
 
-    submission_ctx = _build_submission_context(submission)
-    data, err = assess_risk(submission_ctx)
-
-    if err or not data:
+    def _fail(msg):
         submission.ai_risk_processed = True
-        submission.ai_risk_recommendation = f"AI error: {err or 'empty response'}"
+        submission.ai_risk_recommendation = msg
         submission.ai_risk_generated_at = timezone.now()
         submission.save(update_fields=[
             "ai_risk_processed", "ai_risk_recommendation", "ai_risk_generated_at", "updated_at"
         ])
+
+    if not ai_enabled():
+        _fail("AI is not configured (GEMINI_API_KEY missing).")
+        return
+
+    try:
+        submission_ctx = _build_submission_context(submission)
+        data, err = assess_risk(submission_ctx)
+    except Exception as exc:
+        app_log.exception("B2_RISK | Sub %s | unexpected failure", submission_id)
+        _fail(f"AI error: {exc}")
+        return
+
+    if err or not data:
+        _fail(f"AI error: {err or 'empty response'}")
         return
 
     submission.ai_risk_processed = True
@@ -2267,9 +2310,6 @@ def generate_recommended_outcome(submission_id: int, force: bool = False):
     from .ai.B3_recommended_outcome import recommend_outcome
     from .ai.claude_client import ai_enabled
 
-    if not ai_enabled():
-        return
-
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
     except Submission.DoesNotExist:
@@ -2278,16 +2318,28 @@ def generate_recommended_outcome(submission_id: int, force: bool = False):
     if not force and submission.ai_outcome_processed:
         return
 
-    submission_ctx = _build_submission_context(submission)
-    data, err = recommend_outcome(submission_ctx)
-
-    if err or not data:
+    def _fail(msg):
         submission.ai_outcome_processed = True
-        submission.ai_outcome_rationale = f"AI error: {err or 'empty response'}"
+        submission.ai_outcome_rationale = msg
         submission.ai_outcome_generated_at = timezone.now()
         submission.save(update_fields=[
             "ai_outcome_processed", "ai_outcome_rationale", "ai_outcome_generated_at", "updated_at"
         ])
+
+    if not ai_enabled():
+        _fail("AI is not configured (GEMINI_API_KEY missing).")
+        return
+
+    try:
+        submission_ctx = _build_submission_context(submission)
+        data, err = recommend_outcome(submission_ctx)
+    except Exception as exc:
+        app_log.exception("B3_OUTCOME | Sub %s | unexpected failure", submission_id)
+        _fail(f"AI error: {exc}")
+        return
+
+    if err or not data:
+        _fail(f"AI error: {err or 'empty response'}")
         return
 
     submission.ai_outcome_processed = True
@@ -2326,9 +2378,6 @@ def generate_notice_of_allegation(submission_id: int, response_deadline_days: in
     from .ai.B5_notice_of_allegation import draft_notice_of_allegation
     from .ai.claude_client import ai_enabled
 
-    if not ai_enabled():
-        return
-
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
     except Submission.DoesNotExist:
@@ -2337,16 +2386,28 @@ def generate_notice_of_allegation(submission_id: int, response_deadline_days: in
     if not force and submission.ai_noa_processed:
         return
 
-    submission_ctx = _build_submission_context(submission)
-    data, err = draft_notice_of_allegation(submission_ctx, response_deadline_days=response_deadline_days)
-
-    if err or not data:
+    def _fail(msg):
         submission.ai_noa_processed = True
-        submission.ai_noa_content = f"AI error: {err or 'empty response'}"
+        submission.ai_noa_content = msg
         submission.ai_noa_generated_at = timezone.now()
         submission.save(update_fields=[
             "ai_noa_processed", "ai_noa_content", "ai_noa_generated_at", "updated_at"
         ])
+
+    if not ai_enabled():
+        _fail("AI is not configured (GEMINI_API_KEY missing).")
+        return
+
+    try:
+        submission_ctx = _build_submission_context(submission)
+        data, err = draft_notice_of_allegation(submission_ctx, response_deadline_days=response_deadline_days)
+    except Exception as exc:
+        app_log.exception("B5_NOA | Sub %s | unexpected failure", submission_id)
+        _fail(f"AI error: {exc}")
+        return
+
+    if err or not data:
+        _fail(f"AI error: {err or 'empty response'}")
         return
 
     submission.ai_noa_processed = True
@@ -2379,9 +2440,6 @@ def generate_outcome_letter(submission_id: int, outcome: str = "", conditions: l
     from .ai.F3_outcome_letter import draft_outcome_letter
     from .ai.claude_client import ai_enabled
 
-    if not ai_enabled():
-        return
-
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
     except Submission.DoesNotExist:
@@ -2390,16 +2448,28 @@ def generate_outcome_letter(submission_id: int, outcome: str = "", conditions: l
     if not force and submission.ai_letter_processed:
         return
 
-    submission_ctx = _build_submission_context(submission)
-    data, err = draft_outcome_letter(submission_ctx, outcome=outcome, conditions=conditions or [])
-
-    if err or not data:
+    def _fail(msg):
         submission.ai_letter_processed = True
-        submission.ai_letter_content = f"AI error: {err or 'empty response'}"
+        submission.ai_letter_content = msg
         submission.ai_letter_generated_at = timezone.now()
         submission.save(update_fields=[
             "ai_letter_processed", "ai_letter_content", "ai_letter_generated_at", "updated_at"
         ])
+
+    if not ai_enabled():
+        _fail("AI is not configured (GEMINI_API_KEY missing).")
+        return
+
+    try:
+        submission_ctx = _build_submission_context(submission)
+        data, err = draft_outcome_letter(submission_ctx, outcome=outcome, conditions=conditions or [])
+    except Exception as exc:
+        app_log.exception("F3_LETTER | Sub %s | unexpected failure", submission_id)
+        _fail(f"AI error: {exc}")
+        return
+
+    if err or not data:
+        _fail(f"AI error: {err or 'empty response'}")
         return
 
     submission.ai_letter_processed = True
@@ -3138,3 +3208,54 @@ def notify_meeting_scheduled_task(meeting_id):
     except Exception:
         app_log.exception('MEETING_SCHEDULED | notification failed for meeting %s', meeting_id)
     return meeting_id
+
+
+@shared_task
+def force_logout_non_admin_users():
+    """Enforce each user's session cap — 5pm same day, or 12h after login if
+    they logged in after 5pm (see TrustedSession.compute_expiry) — for
+    everyone except PSC Administrators. Once a user's TrustedSession has
+    actually expired, blacklist their refresh tokens and deactivate the
+    session, so logging back in requires full TOTP re-auth rather than a
+    PIN-only trusted-session bypass (TrustedSession/session_pin skips TOTP
+    entirely — see SessionPinVerifyView).
+
+    Runs frequently (see logout_scheduler.py) rather than once at a fixed
+    clock time, since each user's cutoff is individual to their login time —
+    a single daily 5pm sweep would leave post-5pm logins active for up to
+    ~24h instead of the intended 12h cap."""
+    from django.contrib.auth import get_user_model
+    from django.utils import timezone
+    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+
+    from .models import Profile, Role, TrustedSession
+
+    User = get_user_model()
+    admin_user_ids = Profile.objects.filter(role=Role.PSC_ADMIN).values_list("user_id", flat=True)
+
+    expired_sessions = TrustedSession.objects.filter(
+        is_active=True, expires_at__lte=timezone.now(),
+    ).exclude(user_id__in=admin_user_ids)
+    target_user_ids = set(expired_sessions.values_list("user_id", flat=True))
+
+    if not target_user_ids:
+        return {"blacklisted": 0, "deactivated": 0}
+
+    target_users = User.objects.filter(id__in=target_user_ids)
+
+    blacklisted = 0
+    for outstanding in OutstandingToken.objects.filter(
+        user__in=target_users, blacklistedtoken__isnull=True
+    ):
+        BlacklistedToken.objects.get_or_create(token=outstanding)
+        blacklisted += 1
+
+    deactivated = TrustedSession.objects.filter(
+        is_active=True, user_id__in=target_user_ids
+    ).update(is_active=False)
+
+    log.info(
+        "FORCE_LOGOUT_SESSION_CAP | users=%d | blacklisted=%d refresh token(s) | deactivated=%d trusted session(s)",
+        len(target_user_ids), blacklisted, deactivated,
+    )
+    return {"blacklisted": blacklisted, "deactivated": deactivated}

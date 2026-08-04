@@ -3,8 +3,8 @@
  * Reusable AI result + trigger panels for SubmissionDetail.
  * Exports: AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel
  */
-import { useState, useEffect, useCallback } from 'react'
-import { BrainCircuit, Copy, RefreshCw, CheckCircle2, XCircle, AlertTriangle, FileText } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { BrainCircuit, Copy, RefreshCw, CheckCircle2, XCircle, AlertTriangle, FileText, Clock } from 'lucide-react'
 import api from '../../api/client'
 import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 import { useToast } from '../../context/ToastContext'
@@ -14,6 +14,12 @@ import BaseSpinner from '../shared/BaseSpinner'
 import BaseTextarea from '../shared/BaseTextarea'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
+
+const AI_POLL_INTERVAL_MS = 3000
+// Backend tasks always record *_processed on failure (missing API key, LLM
+// error, unexpected exception) — this timeout only guards the remaining edge
+// case where the task never runs at all (e.g. Celery worker unreachable).
+const AI_POLL_TIMEOUT_MS = 90000
 
 function AiPanelShell({ title, icon, children, onTrigger, loading, lastRun }) {
   return (
@@ -53,38 +59,84 @@ function RiskLevelBadge({ level }) {
 
 const muted = 'text-sm text-slate-500 py-2 block'
 
+function TimeoutNotice() {
+  return (
+    <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-2">
+      <Clock size={14} className="shrink-0 mt-0.5" />
+      <span>This is taking longer than expected. Click Run to try again.</span>
+    </div>
+  )
+}
+
+/** Shared GET-result + POST-trigger + poll-until-processed mechanics, with a
+ * hard timeout so a stuck backend task can't spin the UI forever. */
+function useAiPanel(resultUrl, { isProcessed } = {}) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [polling, setPolling] = useState(false)
+  const [timedOut, setTimedOut] = useState(false)
+  const pollStartRef = useRef(null)
+  const processedCheck = isProcessed || (d => Boolean(d?.processed))
+
+  const fetchResult = useCallback(async () => {
+    try {
+      const res = await api.get(resultUrl)
+      setData(res.data)
+      if (processedCheck(res.data)) {
+        setPolling(false)
+        setTimedOut(false)
+      }
+      return res.data
+    } catch {
+      return null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resultUrl])
+
+  useEffect(() => { fetchResult() }, [fetchResult])
+
+  useEffect(() => {
+    if (!polling) return undefined
+    if (!pollStartRef.current) pollStartRef.current = Date.now()
+    const id = setInterval(() => {
+      if (Date.now() - pollStartRef.current > AI_POLL_TIMEOUT_MS) {
+        setPolling(false)
+        setTimedOut(true)
+        pollStartRef.current = null
+        return
+      }
+      if (isTabVisible()) fetchResult()
+    }, AI_POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [polling, fetchResult])
+
+  const startPolling = useCallback(() => {
+    pollStartRef.current = Date.now()
+    setTimedOut(false)
+    setPolling(true)
+  }, [])
+
+  return { data, setData, loading, setLoading, polling, timedOut, startPolling }
+}
+
 // ── A4 Duplicate Detection ────────────────────────────────────────────────────
 
 export function AiDuplicatePanel({ submissionId }) {
   const toast = useToast()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [polling, setPolling] = useState(false)
-
-  const fetchResult = useCallback(async () => {
-    try {
-      const res = await api.get(`/submissions/${submissionId}/ai-duplicate/`)
-      setData(res.data)
-      if (res.data.ai_duplicate_processed) setPolling(false)
-    } catch { /* silently skip */ }
-  }, [submissionId])
-
-  useEffect(() => { fetchResult() }, [fetchResult])
-  useEffect(() => {
-    if (!polling) return undefined
-    const id = setInterval(() => { if (isTabVisible()) fetchResult() }, 3000)
-    return () => clearInterval(id)
-  }, [polling, fetchResult])
+  const { data, setData, loading, setLoading, polling, timedOut, startPolling } = useAiPanel(
+    `/submissions/${submissionId}/ai-duplicate/`,
+    { isProcessed: d => d?.ai_duplicate_processed },
+  )
 
   const trigger = async () => {
     setLoading(true)
     try {
       await api.post(`/submissions/${submissionId}/trigger-ai-duplicate/`)
-      setPolling(true)
+      startPolling()
       setData(d => d ? { ...d, ai_duplicate_processed: false } : null)
       toast.info('Duplicate scan running…')
-    } catch {
-      toast.error('Failed to trigger duplicate scan.')
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to trigger duplicate scan.')
     } finally {
       setLoading(false)
     }
@@ -96,7 +148,11 @@ export function AiDuplicatePanel({ submissionId }) {
   return (
     <AiPanelShell title="Duplicate Detection" icon={<BrainCircuit size={20} className="text-primary-500" />}
       onTrigger={trigger} loading={loading || polling} lastRun={data?.ai_duplicate_generated_at}>
-      {!data?.ai_duplicate_processed ? (
+      {polling ? (
+        <span className={muted}>Scanning for duplicates…</span>
+      ) : timedOut ? (
+        <TimeoutNotice />
+      ) : !data?.ai_duplicate_processed ? (
         <span className={muted}>Not yet analysed. Click Run to detect duplicates.</span>
       ) : (
         <div className="py-2 flex flex-col gap-3">
@@ -124,33 +180,19 @@ export function AiDuplicatePanel({ submissionId }) {
 
 export function AiRiskPanel({ submissionId }) {
   const toast = useToast()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [polling, setPolling] = useState(false)
-
-  const fetchResult = useCallback(async () => {
-    try {
-      const res = await api.get(`/submissions/${submissionId}/ai-risk/`)
-      setData(res.data)
-      if (res.data.ai_risk_processed) setPolling(false)
-    } catch { /* ignore */ }
-  }, [submissionId])
-
-  useEffect(() => { fetchResult() }, [fetchResult])
-  useEffect(() => {
-    if (!polling) return undefined
-    const id = setInterval(() => { if (isTabVisible()) fetchResult() }, 3000)
-    return () => clearInterval(id)
-  }, [polling, fetchResult])
+  const { data, loading, setLoading, polling, timedOut, startPolling } = useAiPanel(
+    `/submissions/${submissionId}/ai-risk/`,
+    { isProcessed: d => d?.ai_risk_processed },
+  )
 
   const trigger = async () => {
     setLoading(true)
     try {
       await api.post(`/submissions/${submissionId}/trigger-ai-risk/`)
-      setPolling(true)
+      startPolling()
       toast.info('Risk assessment running…')
-    } catch {
-      toast.error('Failed to trigger risk assessment.')
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to trigger risk assessment.')
     } finally {
       setLoading(false)
     }
@@ -162,7 +204,11 @@ export function AiRiskPanel({ submissionId }) {
   return (
     <AiPanelShell title="Risk Assessment" icon={<AlertTriangle size={20} className="text-amber-500" />}
       onTrigger={trigger} loading={loading || polling} lastRun={data?.ai_risk_generated_at}>
-      {!data?.ai_risk_processed ? (
+      {polling ? (
+        <span className={muted}>Assessing risk…</span>
+      ) : timedOut ? (
+        <TimeoutNotice />
+      ) : !data?.ai_risk_processed ? (
         <span className={muted}>Not yet analysed. Click Run to assess risk.</span>
       ) : (
         <div className="py-2 flex flex-col gap-3">
@@ -193,33 +239,19 @@ export function AiRiskPanel({ submissionId }) {
 
 export function AiOutcomePanel({ submissionId }) {
   const toast = useToast()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [polling, setPolling] = useState(false)
-
-  const fetchResult = useCallback(async () => {
-    try {
-      const res = await api.get(`/submissions/${submissionId}/ai-outcome/`)
-      setData(res.data)
-      if (res.data.ai_outcome_processed) setPolling(false)
-    } catch { /* ignore */ }
-  }, [submissionId])
-
-  useEffect(() => { fetchResult() }, [fetchResult])
-  useEffect(() => {
-    if (!polling) return undefined
-    const id = setInterval(() => { if (isTabVisible()) fetchResult() }, 3000)
-    return () => clearInterval(id)
-  }, [polling, fetchResult])
+  const { data, loading, setLoading, polling, timedOut, startPolling } = useAiPanel(
+    `/submissions/${submissionId}/ai-outcome/`,
+    { isProcessed: d => d?.ai_outcome_processed },
+  )
 
   const trigger = async () => {
     setLoading(true)
     try {
       await api.post(`/submissions/${submissionId}/trigger-ai-outcome/`)
-      setPolling(true)
+      startPolling()
       toast.info('Outcome recommendation running…')
-    } catch {
-      toast.error('Failed to trigger outcome recommendation.')
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to trigger outcome recommendation.')
     } finally {
       setLoading(false)
     }
@@ -230,7 +262,11 @@ export function AiOutcomePanel({ submissionId }) {
   return (
     <AiPanelShell title="Recommended Outcome" icon={<CheckCircle2 size={20} className="text-emerald-500" />}
       onTrigger={trigger} loading={loading || polling} lastRun={data?.ai_outcome_generated_at}>
-      {!data?.ai_outcome_processed ? (
+      {polling ? (
+        <span className={muted}>Generating recommendation…</span>
+      ) : timedOut ? (
+        <TimeoutNotice />
+      ) : !data?.ai_outcome_processed ? (
         <span className={muted}>Not yet analysed. Click Run for outcome recommendation.</span>
       ) : (
         <div className="py-2 flex flex-col gap-3">
@@ -260,33 +296,19 @@ export function AiOutcomePanel({ submissionId }) {
 
 export function AiNoaPanel({ submissionId }) {
   const toast = useToast()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [polling, setPolling] = useState(false)
-
-  const fetchResult = useCallback(async () => {
-    try {
-      const res = await api.get(`/submissions/${submissionId}/ai-noa/`)
-      setData(res.data)
-      if (res.data.ai_noa_processed) setPolling(false)
-    } catch { /* ignore */ }
-  }, [submissionId])
-
-  useEffect(() => { fetchResult() }, [fetchResult])
-  useEffect(() => {
-    if (!polling) return undefined
-    const id = setInterval(() => { if (isTabVisible()) fetchResult() }, 3000)
-    return () => clearInterval(id)
-  }, [polling, fetchResult])
+  const { data, loading, setLoading, polling, timedOut, startPolling } = useAiPanel(
+    `/submissions/${submissionId}/ai-noa/`,
+    { isProcessed: d => d?.ai_noa_processed },
+  )
 
   const trigger = async () => {
     setLoading(true)
     try {
       await api.post(`/submissions/${submissionId}/trigger-ai-noa/`, { response_deadline_days: 14 })
-      setPolling(true)
+      startPolling()
       toast.info('Notice of Allegation draft running…')
-    } catch {
-      toast.error('Failed to trigger NOA draft.')
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to trigger NOA draft.')
     } finally {
       setLoading(false)
     }
@@ -302,7 +324,11 @@ export function AiNoaPanel({ submissionId }) {
   return (
     <AiPanelShell title="Notice of Allegation (Draft)" icon={<FileText size={20} className="text-primary-500" />}
       onTrigger={trigger} loading={loading || polling} lastRun={data?.ai_noa_generated_at}>
-      {!data?.ai_noa_processed ? (
+      {polling ? (
+        <span className={muted}>Drafting Notice of Allegation…</span>
+      ) : timedOut ? (
+        <TimeoutNotice />
+      ) : !data?.ai_noa_processed ? (
         <span className={muted}>Not yet drafted. Click Run to generate a Notice of Allegation.</span>
       ) : (
         <div className="py-2 flex flex-col gap-3">
@@ -321,34 +347,20 @@ export function AiNoaPanel({ submissionId }) {
 
 export function AiLetterPanel({ submissionId, suggestedOutcome = '' }) {
   const toast = useToast()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [polling, setPolling] = useState(false)
+  const { data, loading, setLoading, polling, timedOut, startPolling } = useAiPanel(
+    `/submissions/${submissionId}/ai-letter/`,
+    { isProcessed: d => d?.ai_letter_processed },
+  )
   const [outcome, setOutcome] = useState(suggestedOutcome)
-
-  const fetchResult = useCallback(async () => {
-    try {
-      const res = await api.get(`/submissions/${submissionId}/ai-letter/`)
-      setData(res.data)
-      if (res.data.ai_letter_processed) setPolling(false)
-    } catch { /* ignore */ }
-  }, [submissionId])
-
-  useEffect(() => { fetchResult() }, [fetchResult])
-  useEffect(() => {
-    if (!polling) return undefined
-    const id = setInterval(() => { if (isTabVisible()) fetchResult() }, 3000)
-    return () => clearInterval(id)
-  }, [polling, fetchResult])
 
   const trigger = async () => {
     setLoading(true)
     try {
       await api.post(`/submissions/${submissionId}/trigger-ai-letter/`, { outcome })
-      setPolling(true)
+      startPolling()
       toast.info('Outcome letter drafting…')
-    } catch {
-      toast.error('Failed to trigger letter draft.')
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to trigger letter draft.')
     } finally {
       setLoading(false)
     }
@@ -378,7 +390,11 @@ export function AiLetterPanel({ submissionId, suggestedOutcome = '' }) {
           />
         </label>
 
-        {!data?.ai_letter_processed ? (
+        {polling ? (
+          <span className="text-sm text-slate-500">Drafting outcome letter…</span>
+        ) : timedOut ? (
+          <TimeoutNotice />
+        ) : !data?.ai_letter_processed ? (
           <span className="text-sm text-slate-500">Not yet drafted. Click Run to generate an outcome letter.</span>
         ) : (
           <>

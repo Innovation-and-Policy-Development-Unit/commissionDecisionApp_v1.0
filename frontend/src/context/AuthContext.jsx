@@ -80,9 +80,9 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  // ── Inactivity timer → full auto-logout to the login screen ──────────────
-  // The session PIN is reserved for feature-level step-up (e.g. digital
-  // signatures), not for idle locking — inactivity always signs the user out.
+  // ── Inactivity timer → lock (PIN re-entry) if the user has a PIN set,
+  // otherwise fall back to a full logout (a user with no PIN has no way to
+  // unlock, so locking them would be a dead end).
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
     if (!user || isLocked) return
@@ -91,6 +91,10 @@ export function AuthProvider({ children }) {
     if (!ms) return
 
     inactivityTimer.current = setTimeout(async () => {
+      if (user.session_pin_set) {
+        lock()
+        return
+      }
       try {
         await logout('inactivity')
       } finally {
@@ -99,7 +103,7 @@ export function AuthProvider({ children }) {
         window.location.assign('/auth/login')
       }
     }, ms)
-  }, [user, isLocked, logout])
+  }, [user, isLocked, logout, lock])
 
   // Attach/remove activity listeners when the user is logged in
   useEffect(() => {
@@ -194,8 +198,8 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (username, password) => {
     const { data } = await api.post('/auth/token/', { username, password })
 
-    if (data.two_factor_required || data.pin_required) {
-      return data  // Let the UI handle 2FA or PIN step
+    if (data.two_factor_required || data.pin_required || data.must_change_password) {
+      return data  // Let the UI handle 2FA, PIN, or forced password-change step
     }
 
     setTokens(data.access, data.refresh)

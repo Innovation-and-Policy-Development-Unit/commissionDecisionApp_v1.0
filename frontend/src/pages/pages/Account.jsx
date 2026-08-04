@@ -811,7 +811,7 @@ export default function Account() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Session PIN</h3>
-                  <p className="text-xs text-slate-400">Unlock the screen after inactivity or manual lock (valid until 5pm or 8h after full login)</p>
+                  <p className="text-xs text-slate-400">Unlock the screen after inactivity or manual lock (valid until 5pm, or 12h after full login if signing in after 5pm)</p>
                 </div>
               </div>
 

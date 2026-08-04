@@ -198,6 +198,28 @@ services:
       - app
     restart: unless-stopped
 
+  # Outbound-only connection to Cloudflare's edge — publishes `web` at
+  # scdms.ipdu.work without opening any inbound port on this host.
+  # This tunnel is locally managed (routes can't be set from the dashboard),
+  # so ingress is defined here via --url. Targets web:443 (not :80, which
+  # unconditionally 301s to https and would loop). --no-tls-verify is safe
+  # here: it only skips validating the cert CN ("web" vs scdms.ipdu.work)
+  # on this trusted internal hop — Cloudflare's edge still presents a fully
+  # valid public cert to real visitors.
+  # DNS CNAME -> <tunnel-id>.cfargotunnel.com must be added manually in the
+  # Cloudflare DNS dashboard for ipdu.work (dashboard route-add is disabled
+  # for locally-managed tunnels).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url https://web:443 --no-tls-verify run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - web
+    networks:
+      - app
+    restart: unless-stopped
+
 networks:
   # Data stores — not reachable from web; no outbound internet
   internal:

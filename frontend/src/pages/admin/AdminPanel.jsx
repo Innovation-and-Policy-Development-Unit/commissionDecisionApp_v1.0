@@ -33,6 +33,7 @@ import {
   Sparkles,
   ToggleLeft,
   ToggleRight,
+  Trash2,
   Upload,
   UserCheck,
   UserX,

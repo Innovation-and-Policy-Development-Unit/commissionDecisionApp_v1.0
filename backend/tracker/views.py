@@ -9,7 +9,7 @@ from django.urls.resolvers import URLPattern, URLResolver
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework import mixins, parsers, permissions, status, viewsets, exceptions
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -155,7 +155,8 @@ from .api_cache import (
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
-from .throttles import PasswordResetThrottle, SessionPinVerifyThrottle
+from .throttles import AiAnalysisTriggerThrottle, PasswordResetThrottle, SessionPinVerifyThrottle
+from .auth import LenientJWTAuthentication
 from .models import (
     AuditLog,
     CommissionTask,
@@ -4434,10 +4435,29 @@ def me_view(request):
 
 
 @api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.AllowAny])
+@authentication_classes([LenientJWTAuthentication])
 def change_password_view(request):
-    """POST /me/change-password/ — self-service password change."""
+    """POST /me/change-password/ — self-service password change.
+
+    Also serves the forced first-login change (must_change_password) where no
+    JWT exists yet: mirrors TOTPSetupView's pattern of re-authenticating with
+    username + current password instead of requiring IsAuthenticated.
+    """
     user = request.user
+    if not user.is_authenticated:
+        username = (request.data.get("username") or "").strip()
+        probe_password = request.data.get("old_password", "").strip()
+        if not username or not probe_password:
+            return Response(
+                {"detail": "Username and current password are required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        from django.contrib.auth import authenticate
+        user = authenticate(request, username=username, password=probe_password)
+        if not user:
+            return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
+
     old_password = request.data.get("old_password", "").strip()
     new_password = request.data.get("new_password", "").strip()
     confirm_password = request.data.get("confirm_password", "").strip()
@@ -5343,16 +5363,20 @@ class UserAdminViewSet(
         user_email = (user.email or "").strip()
         if user_email and initial_password:
             try:
+                from urllib.parse import urlparse
+
                 from .email_notify import merge_recipient_context
                 from .email_templates import get_frontend_base_url, send_templated_email
 
+                base_url = get_frontend_base_url()
                 send_templated_email(
                     slug="new_user_welcome",
                     to=[user_email],
                     context=merge_recipient_context(
                         user,
                         initial_password=initial_password,
-                        login_url=f"{get_frontend_base_url()}/auth/login",
+                        login_url=f"{base_url}/auth/login",
+                        portal_domain=urlparse(base_url).netloc or base_url,
                     ),
                     fail_silently=True,
                 )
@@ -5690,6 +5714,7 @@ class RegisterView(APIView):
     """Open registration for bootstrap — restrict in production via settings."""
 
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
 
     def post(self, request):
         from django.conf import settings
@@ -5718,6 +5743,7 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
     Rate-limited (5 req/min per IP) login view with 2FA support and security audit logging.
     Wraps SimpleJWT's TokenObtainPairView to enforce NCSS 2030 access-control requirements.
     """
+    authentication_classes = [LenientJWTAuthentication]
     def post(self, request, *args, **kwargs):
         from django.conf import settings
         import os as _os
@@ -5862,6 +5888,20 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
         if profile:
             _enforce_password_expiry(profile)
 
+        # Forced password change (new admin-created account, or expired password)
+        # takes priority over everything else — including 2FA setup — so a fresh
+        # account never establishes 2FA trust against a temporary password.
+        if profile and profile.force_password_change:
+            _security_log.info("LOGIN_PASSWORD_CHANGE_REQUIRED | username=%s | ip=%s", user.username, ip)
+            return Response(
+                {
+                    "must_change_password": True,
+                    "username": user.username,
+                    "detail": "You must change your password before continuing.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
         # Check for valid trusted session → PIN-based re-auth (skip TOTP)
         if profile and profile.session_pin:
             ts = TrustedSession.valid_for(user, ip_address=ip,
@@ -5975,6 +6015,7 @@ class LogoutView(APIView):
 class TOTPSetupView(APIView):
     """Generate a TOTP secret and QR code for the authenticated user or during login."""
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
 
     def post(self, request):
         # Can be authenticated or provide username/password
@@ -6020,6 +6061,7 @@ class TOTPSetupView(APIView):
 class TOTPVerifySetupView(APIView):
     """Verify the first TOTP code to finalize setup."""
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
 
     def post(self, request):
         code = request.data.get("code")
@@ -6069,6 +6111,7 @@ class VerifyOTPView(APIView):
     """Verify a 6-digit TOTP code during login; on success return JWT tokens
     and create a TrustedSession for PIN-based re-authentication."""
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
 
     def post(self, request):
         ser = TOTPVerifySerializer(data=request.data)
@@ -6165,6 +6208,7 @@ class SessionPinSetupView(APIView):
 class SessionPinVerifyView(APIView):
     """Verify the session PIN and return JWT tokens (within trusted session window)."""
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
     throttle_classes = [SessionPinVerifyThrottle]
 
     def post(self, request):
@@ -6227,6 +6271,7 @@ def _password_reset_frontend_base(request) -> str:
 class PasswordResetRequestView(APIView):
     """Request a password reset token (logged to console in dev, emailed in prod)."""
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
     throttle_classes = [PasswordResetThrottle]
 
     def post(self, request):
@@ -6276,6 +6321,7 @@ class PasswordResetRequestView(APIView):
 class PasswordResetConfirmView(APIView):
     """Validate reset token and set new password."""
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
     throttle_classes = [PasswordResetThrottle]
 
     def post(self, request):
@@ -9892,7 +9938,7 @@ def submission_bulk_action_view(request):
         return Response({"detail": f"{count} submissions assigned to {assignee.username}.", "updated": count})
 
     elif action_type == "export_list":
-        data = list(qs.values("id", "reference_number", "title", "current_stage", "ministry__name", "officer_name", "submitted_at"))
+        data = list(qs.values("id", "reference_number", "title", "current_stage", "ministry__name", "created_at"))
         return Response({"submissions": data, "count": len(data)})
 
     elif action_type == "run_ai_risk":
@@ -9911,8 +9957,9 @@ def submission_bulk_action_view(request):
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
+@throttle_classes([AiAnalysisTriggerThrottle])
 def trigger_ai_duplicate(request, pk):
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     from .tasks import queue_duplicate_detection
     queue_duplicate_detection(submission.id, force=True)
     return Response({"detail": "Duplicate detection queued."}, status=status.HTTP_202_ACCEPTED)
@@ -9922,14 +9969,15 @@ def trigger_ai_duplicate(request, pk):
 @permission_classes([permissions.IsAuthenticated])
 def get_ai_duplicate(request, pk):
     from .serializers import AiDuplicateResultSerializer
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     return Response(AiDuplicateResultSerializer(submission).data)
 
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
+@throttle_classes([AiAnalysisTriggerThrottle])
 def trigger_ai_risk(request, pk):
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     from .tasks import queue_risk_assessment
     queue_risk_assessment(submission.id, force=True)
     return Response({"detail": "Risk assessment queued."}, status=status.HTTP_202_ACCEPTED)
@@ -9939,14 +9987,15 @@ def trigger_ai_risk(request, pk):
 @permission_classes([permissions.IsAuthenticated])
 def get_ai_risk(request, pk):
     from .serializers import AiRiskResultSerializer
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     return Response(AiRiskResultSerializer(submission).data)
 
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
+@throttle_classes([AiAnalysisTriggerThrottle])
 def trigger_ai_outcome(request, pk):
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     from .tasks import queue_recommended_outcome
     queue_recommended_outcome(submission.id, force=True)
     return Response({"detail": "Outcome recommendation queued."}, status=status.HTTP_202_ACCEPTED)
@@ -9956,14 +10005,15 @@ def trigger_ai_outcome(request, pk):
 @permission_classes([permissions.IsAuthenticated])
 def get_ai_outcome(request, pk):
     from .serializers import AiOutcomeResultSerializer
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     return Response(AiOutcomeResultSerializer(submission).data)
 
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
+@throttle_classes([AiAnalysisTriggerThrottle])
 def trigger_ai_noa(request, pk):
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     deadline_days = int(request.data.get("response_deadline_days", 14))
     from .tasks import queue_notice_of_allegation
     queue_notice_of_allegation(submission.id, response_deadline_days=deadline_days, force=True)
@@ -9974,14 +10024,15 @@ def trigger_ai_noa(request, pk):
 @permission_classes([permissions.IsAuthenticated])
 def get_ai_noa(request, pk):
     from .serializers import AiNoaResultSerializer
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     return Response(AiNoaResultSerializer(submission).data)
 
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
+@throttle_classes([AiAnalysisTriggerThrottle])
 def trigger_ai_letter(request, pk):
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     outcome = request.data.get("outcome", "")
     conditions = request.data.get("conditions", [])
     from .tasks import queue_outcome_letter
@@ -9993,7 +10044,7 @@ def trigger_ai_letter(request, pk):
 @permission_classes([permissions.IsAuthenticated])
 def get_ai_letter(request, pk):
     from .serializers import AiLetterResultSerializer
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     return Response(AiLetterResultSerializer(submission).data)
 
 
@@ -10002,7 +10053,7 @@ def get_ai_letter(request, pk):
 def generate_submission_letter(request, pk):
     """Generate a structured outcome letter for cessation, recruitment, secondment, or leave payout submissions."""
     from .letters import generate_letter
-    submission = get_object_or_404(Submission, pk=pk)
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     try:
         result = generate_letter(submission)
     except ValueError as exc:

@@ -90,6 +90,15 @@ class TrackerConfig(AppConfig):
                 "Automation schedule could not be synced: %s", exc
             )
 
+        try:
+            from .logout_scheduler import sync_force_logout_scheduler
+            sync_force_logout_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger("scdms.security").warning(
+                "Force-logout schedule could not be synced: %s", exc
+            )
+
         # Wire up signal handlers for AI feedback analysis
         try:
             import tracker.signals  # noqa: F401

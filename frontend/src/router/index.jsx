@@ -10,6 +10,7 @@ import ResetPassword from '../pages/auth/ResetPassword'
 import PasswordResetConfirm from '../pages/auth/PasswordResetConfirm'
 import TwoSteps from '../pages/auth/TwoSteps'
 import TOTPSetup from '../pages/auth/TOTPSetup'
+import SetupSecurity from '../pages/auth/SetupSecurity'
 import Error404 from '../pages/auth/Error404'
 import TrackSubmission from '../pages/public/TrackSubmission'
 
@@ -97,6 +98,7 @@ export default function AppRouter() {
       <Route path="/auth/reset-password/confirm"   element={<PasswordResetConfirm />} />
       <Route path="/auth/2fa"                      element={<TwoSteps />} />
       <Route path="/auth/totp-setup"               element={<TOTPSetup />} />
+      <Route path="/auth/setup-security"            element={<SetupSecurity />} />
       <Route path="/track"                         element={<TrackSubmission />} />
 
       <Route element={<RequireAuth />}>

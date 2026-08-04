@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom'
-import { ArrowRight, ShieldCheck, Lock, KeyRound, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Lock, KeyRound } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/client'
 import BaseButton from '../../components/shared/BaseButton'
@@ -17,18 +17,8 @@ const ANIM_STYLES = `
     from { opacity: 0; }
     to   { opacity: 1; }
   }
-  @keyframes pulse-ring {
-    0%   { transform: scale(0.92); opacity: 0.6; }
-    100% { transform: scale(1.18); opacity: 0; }
-  }
-  @keyframes phone-vibrate {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(-4deg); }
-    75% { transform: rotate(4deg); }
-  }
   .anim-slide-up { animation: slide-up 0.5s cubic-bezier(.22,1,.36,1) both; }
   .anim-fade-in  { animation: fade-in 0.6s ease both; }
-  .anim-vibrate  { animation: phone-vibrate 0.3s ease-in-out 3; }
 `
 
 function redirectTarget(location) {
@@ -61,8 +51,6 @@ export default function Login() {
   const [showPIN,          setShowPIN]          = useState(false)
   const [otp,              setOtp]              = useState('')
   const [pin,              setPin]              = useState('')
-  const [simPush,          setSimPush]          = useState(false)
-  const [pushState,        setPushState]        = useState('idle') // idle, pending, approved
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword,      setNewPassword]      = useState('')
   const [confirmPassword,  setConfirmPassword]  = useState('')
@@ -102,6 +90,22 @@ export default function Login() {
     return <Navigate to={redirectTarget(location)} replace />
   }
 
+  const applyLoginResponse = data => {
+    if (data?.pin_required) {
+      setShowPIN(true)
+    } else if (data?.two_factor_required) {
+      if (data.setup_required) {
+        sessionStorage.setItem('psc_setup_username', username)
+        navigate('/auth/totp-setup', { state: { from: location.state?.from } })
+      } else {
+        setShow2FA(true)
+      }
+    } else if (data?.must_change_password) {
+      setShowPasswordChange(true)
+    }
+    // Otherwise redirect via <Navigate> when accessToken, user, and authReady are set.
+  }
+
   const handleSubmit = async e => {
     e.preventDefault()
     setError('')
@@ -109,19 +113,7 @@ export default function Login() {
     try {
       loginPasswordRef.current = password
       const data = await login(username.trim(), password)
-      if (data?.pin_required) {
-        setShowPIN(true)
-      } else if (data?.two_factor_required) {
-        if (data.setup_required) {
-          sessionStorage.setItem('psc_setup_username', username)
-          navigate('/auth/totp-setup', { state: { from: location.state?.from } })
-        } else {
-          setShow2FA(true)
-        }
-      } else if (data?.must_change_password) {
-        setShowPasswordChange(true)
-      }
-      // Otherwise redirect via <Navigate> when accessToken, user, and authReady are set.
+      applyLoginResponse(data)
     } catch (err) {
       const detail = err.response?.data?.detail
       setError(typeof detail === 'string' ? detail : 'Sign-in failed. Please check your credentials.')
@@ -135,8 +127,7 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const payload = simPush ? { username, push_approved: true } : { username, code: otp }
-      const { data } = await api.post('/auth/totp/verify/', payload)
+      const { data } = await api.post('/auth/totp/verify/', { username, code: otp })
       setTokens(data.access, data.refresh)
       const me = await refreshMe()
       if (me?.must_change_password) {
@@ -146,20 +137,9 @@ export default function Login() {
       goToApp()
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid verification code.')
-      setPushState('idle')
     } finally {
       setLoading(false)
     }
-  }
-
-  const triggerPush = () => {
-    setSimPush(true)
-    setPushState('pending')
-    // Auto-approve after 2 seconds for smooth demo
-    setTimeout(() => {
-      setPushState('approved')
-      setTimeout(() => handleVerifyOTP(), 800)
-    }, 2000)
   }
 
   const handleVerifyPIN = async e => {
@@ -200,7 +180,9 @@ export default function Login() {
     }
     setLoading(true)
     try {
+      const wasPreAuth = !accessToken
       await api.post('/me/change-password/', {
+        username,
         old_password: oldPassword,
         new_password: newPassword,
         confirm_password: confirmPassword,
@@ -210,6 +192,16 @@ export default function Login() {
       setNewPassword('')
       setConfirmPassword('')
       setShowPasswordChange(false)
+
+      if (wasPreAuth) {
+        // No JWT existed yet (forced change during initial login) — re-run
+        // login with the new password so the normal flow (2FA setup, etc.)
+        // continues from where it left off.
+        const data = await login(username.trim(), newPassword)
+        applyLoginResponse(data)
+        return
+      }
+
       const me = await refreshMe()
       if (me?.must_change_password) {
         setError('Password was not accepted. Please try a different password.')
@@ -405,96 +397,39 @@ export default function Login() {
                   </BaseMessageBar>
                 )}
 
-                {pushState === 'idle' ? (
-                  <>
-                    <p className="text-sm text-center text-slate-500 mb-7">
-                      Enter the 6-digit code from your authenticator app.
-                    </p>
-                    <form onSubmit={handleVerifyOTP} className="space-y-5">
-                      <BaseInput
-                        label="Verification Code"
-                        type="text"
-                        maxLength={6}
-                        placeholder="——————"
-                        value={otp}
-                        onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                        required
-                        autoFocus
-                        input={{ className: 'text-center text-3xl font-mono', style: { letterSpacing: '0.4em' } }}
-                      />
-                      <BaseButton
-                        type="submit"
-                        variant="primary"
-                        className="w-full !py-3"
-                        loading={loading}
-                        loadingLabel="Verifying"
-                        disabled={otp.length < 6}
-                      >
-                        Verify &amp; Continue
-                      </BaseButton>
+                <p className="text-sm text-center text-slate-500 mb-7">
+                  Enter the 6-digit code from your authenticator app.
+                </p>
+                <form onSubmit={handleVerifyOTP} className="space-y-5">
+                  <BaseInput
+                    label="Verification Code"
+                    type="text"
+                    maxLength={6}
+                    placeholder="——————"
+                    value={otp}
+                    onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                    required
+                    autoFocus
+                    input={{ className: 'text-center text-3xl font-mono', style: { letterSpacing: '0.4em' } }}
+                  />
+                  <BaseButton
+                    type="submit"
+                    variant="primary"
+                    className="w-full !py-3"
+                    loading={loading}
+                    loadingLabel="Verifying"
+                    disabled={otp.length < 6}
+                  >
+                    Verify &amp; Continue
+                  </BaseButton>
 
-                      <div className="relative flex items-center gap-4 my-6">
-                        <div className="flex-1 h-px bg-slate-100" />
-                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">or</span>
-                        <div className="flex-1 h-px bg-slate-100" />
-                      </div>
-
-                      <BaseButton
-                        type="button"
-                        variant="secondary"
-                        className="w-full !py-3"
-                        onClick={triggerPush}
-                        icon={<img src="/favicon.svg" alt="" className="w-4 h-4 opacity-50" />}
-                      >
-                        Send Push Notification
-                      </BaseButton>
-
-                      <div className="text-center mt-4">
-                        <BaseButton type="button" variant="ghost" size="sm"
-                          onClick={() => { setShow2FA(false); setOtp(''); setError('') }}>
-                          Back to sign in
-                        </BaseButton>
-                      </div>
-                    </form>
-                  </>
-                ) : (
-                  <div className="py-8 text-center flex flex-col items-center">
-                    <div className="relative mb-8">
-                      {/* Pulse rings */}
-                      <div className="absolute inset-0 rounded-3xl bg-primary-100 opacity-20" style={{ animation: 'pulse-ring 2s infinite' }} />
-                      <div className="absolute inset-0 rounded-3xl bg-primary-100 opacity-20" style={{ animation: 'pulse-ring 2s infinite 0.5s' }} />
-
-                      {/* Phone container */}
-                      <div className={`relative bg-white border-4 border-slate-900 rounded-3xl p-3 w-40 h-64 shadow-2xl transition-transform ${pushState === 'pending' ? 'anim-vibrate' : ''}`}>
-                        <div className="w-12 h-1 bg-slate-900 rounded-full mx-auto mb-4" />
-                        <div className="flex flex-col items-center justify-center h-full gap-4">
-                          <img src="/favicon.svg" alt="Auth" className="w-10 h-10" />
-                          <div className="text-center">
-                            <p className="text-[10px] font-black text-slate-900 uppercase">Microsoft Authenticator</p>
-                            <p className="text-[8px] text-slate-400">Request from SCDMS</p>
-                          </div>
-
-                          {pushState === 'pending' ? (
-                            <div className="mt-4 w-full flex flex-col gap-2">
-                              <div className="w-full h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-lg">Approve</div>
-                              <div className="w-full h-8 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] font-bold text-slate-400">Deny</div>
-                            </div>
-                          ) : (
-                            <div className="mt-4 flex flex-col items-center gap-2">
-                              <CheckCircle2 size={32} className="text-emerald-500 anim-fade-in" />
-                              <p className="text-[10px] font-bold text-emerald-600">Approved</p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-slate-900 rounded-full" />
-                      </div>
-                    </div>
-                    <p className="text-sm font-medium text-slate-700">
-                      {pushState === 'pending' ? 'Sending push notification to your phone…' : 'Push notification approved!'}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-1">Open Authenticator app to approve the request.</p>
+                  <div className="text-center mt-4">
+                    <BaseButton type="button" variant="ghost" size="sm"
+                      onClick={() => { setShow2FA(false); setOtp(''); setError('') }}>
+                      Back to sign in
+                    </BaseButton>
                   </div>
-                )}
+                </form>
               </>
             ) : (
               /* ── Session PIN step ── */
