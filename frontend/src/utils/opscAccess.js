@@ -39,6 +39,7 @@ export const MINISTRY_SIDE_ROLES = new Set([
   'ministry_hr',
   'dept_admin',
   'traveller',
+  'dg_director',
 ])
 
 /** Any OPSC-internal staff role — sees endorsed Commission minutes. */
@@ -46,6 +47,15 @@ export function userIsOpscInternal(user) {
   if (!user) return false
   if (user.is_superuser || user.is_staff) return true
   return Boolean(user.role && !MINISTRY_SIDE_ROLES.has(user.role))
+}
+
+/** Server-authoritative — mirrors backend rbac_user_can_regenerate_ai_brief via
+ * MeSerializer's can_regenerate_ai_brief flag. Admin-editable via Roles & Permissions
+ * (permission code "regenerate_ai_brief"), not a hardcoded role list. */
+export function userCanRegenerateAiBrief(user) {
+  if (!user) return false
+  if (user.is_superuser || user.is_staff) return true
+  return Boolean(user.can_regenerate_ai_brief)
 }
 
 export function userIsOpscUnitManager(user) {

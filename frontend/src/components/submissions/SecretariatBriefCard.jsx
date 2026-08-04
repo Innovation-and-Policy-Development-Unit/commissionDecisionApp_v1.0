@@ -8,7 +8,7 @@ import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 const POLL_MS = 3000
 const POLL_MAX = 40
 
-export default function SecretariatBriefCard({ submission, submissionId, onUpdated }) {
+export default function SecretariatBriefCard({ submission, submissionId, onUpdated, canRegenerate = false }) {
   const { t } = useTranslation()
   const [regenerating, setRegenerating] = useState(false)
   const [pollTimedOut, setPollTimedOut] = useState(false)
@@ -45,6 +45,7 @@ export default function SecretariatBriefCard({ submission, submissionId, onUpdat
   }, [submissionId, submission?.ai_brief_processed, onUpdated])
 
   const handleRegenerate = async () => {
+    if (!canRegenerate) return
     setRegenerating(true)
     setPollTimedOut(false)
     onUpdated?.({ ...submission, ai_brief_processed: false, ai_brief_summary: '' })
@@ -90,19 +91,21 @@ export default function SecretariatBriefCard({ submission, submissionId, onUpdat
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={handleRegenerate}
-          disabled={regenerating || isLoading}
-          className="btn-outline btn-sm shrink-0 disabled:opacity-50"
-        >
-          {regenerating ? (
-            <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />
-          ) : (
-            <RefreshCw size={14} />
-          )}
-          {t('submission.ai_brief_regenerate')}
-        </button>
+        {canRegenerate && (
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={regenerating || isLoading}
+            className="btn-outline btn-sm shrink-0 disabled:opacity-50"
+          >
+            {regenerating ? (
+              <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />
+            ) : (
+              <RefreshCw size={14} />
+            )}
+            {t('submission.ai_brief_regenerate')}
+          </button>
+        )}
       </div>
 
       {isLoading ? (

@@ -12,6 +12,7 @@ import { policyGuardrailApplies } from '../../utils/policyGuardrail'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import api, { isRateLimited } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
+import { userIsOpscInternal, userCanRegenerateAiBrief } from '../../utils/opscAccess'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import {
@@ -80,7 +81,6 @@ const MANAGER_ROLE_TO_UNIT = {
   compliance_manager: 'compliance',
   csu_manager: 'csu',
 }
-const SECRETARIAT_BRIEF_ROLES = ['psc_secretary', 'senior_admin_officer', 'psc_admin']
 const DOC_EXTRACT_ROLES = [
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
   'compliance_manager', 'compliance_senior', 'compliance_principal',
@@ -183,7 +183,12 @@ export default function SubmissionDetail() {
   const [allocateBusy, setAllocateBusy] = useState(false)
   const isAdmin = user?.role === 'psc_admin'
   const isUnitManager  = user && UNIT_MANAGER_ROLES.includes(user.role)
-  const canAllocate    = user && (
+  // Allocation is an assessment-stage action — routed_unit is set once at intake and
+  // never cleared, so without this the panel would stay usable at every later stage too.
+  // Matches STAGE_META's "Assessment" category (constants/stages.js): checklist review
+  // (where the unit manager first allocates) through the actual assessment work.
+  const inAssessmentStage = ['manager_checklist_review', 'under_assessment'].includes(submission?.current_stage)
+  const canAllocate    = user && inAssessmentStage && (
     isAdmin
     || (MANAGER_ROLE_TO_UNIT[user.role] && MANAGER_ROLE_TO_UNIT[user.role] === submission?.routed_unit)
   )
@@ -226,7 +231,8 @@ export default function SubmissionDetail() {
   const showSittingPack = showOduChecklist || showDynamicChecklist
 
   const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
-  const showSecretariatBrief = user && SECRETARIAT_BRIEF_ROLES.includes(user.role) && user.ai_enabled === true
+  const showSecretariatBrief = user && userIsOpscInternal(user) && user.ai_enabled === true
+  const canRegenerateBrief = userCanRegenerateAiBrief(user)
   const showDeadlineDrafts = user && DEADLINE_DRAFT_ROLES.includes(user.role) && user.ai_enabled === true
   const showPackageValidation = user && PACKAGE_VALIDATE_ROLES.includes(user.role)
     && user.ai_package_validation_enabled !== false
@@ -859,6 +865,7 @@ const stageDescriptions = {
           submission={submission}
           submissionId={id}
           onUpdated={setSubmission}
+          canRegenerate={canRegenerateBrief}
         />
       )}
 

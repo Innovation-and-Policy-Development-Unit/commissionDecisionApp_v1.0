@@ -14,6 +14,7 @@ import SittingPackPapersPanel from '../../components/sitting-pack/SittingPackPap
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseBadge from '../../components/shared/BaseBadge'
+import { userIsOpscInternal, userCanRegenerateAiBrief } from '../../utils/opscAccess'
 
 const HEARTBEAT_MS = 60_000
 
@@ -40,8 +41,8 @@ export default function AgendaSittingPack() {
   const [rightTab, setRightTab] = useState('papers')
   const [upcomingMeetings, setUpcomingMeetings] = useState(null)
 
-  const role = user?.role || ''
-  const canRegenerateBrief = ['psc_secretary', 'senior_admin_officer', 'psc_admin', 'psc_manager'].includes(role)
+  const canViewBrief = userIsOpscInternal(user)
+  const canRegenerateBrief = userCanRegenerateAiBrief(user)
 
   const { categoryOrder, allSections } = useAgendaSections()
   const rows = useMemo(() => buildSittingPackRows(items, categoryOrder, allSections), [items, categoryOrder, allSections])
@@ -277,7 +278,7 @@ export default function AgendaSittingPack() {
           <div className="shrink-0 flex gap-1 mb-2">
             {[
               { key: 'papers', label: t('sitting_pack.papers_tab') },
-              { key: 'brief', label: t('sitting_pack.brief_tab') },
+              ...(canViewBrief ? [{ key: 'brief', label: t('sitting_pack.brief_tab') }] : []),
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -297,9 +298,9 @@ export default function AgendaSittingPack() {
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {rightTab === 'papers' ? (
               <SittingPackPapersPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} />
-            ) : (
+            ) : canViewBrief ? (
               <ExecutiveBriefPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} canRegenerate={canRegenerateBrief} />
-            )}
+            ) : null}
           </div>
         </div>
       </div>

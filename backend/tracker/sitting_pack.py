@@ -17,8 +17,6 @@ SITTING_PACK_ROLES = frozenset({
     Role.PSC_MANAGER,
 })
 
-BRIEF_REQUEST_ROLES = SITTING_PACK_ROLES
-
 
 def _user_profile(user):
     from .models import Profile

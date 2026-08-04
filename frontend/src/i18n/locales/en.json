@@ -725,6 +725,7 @@
     "title": "Sitting briefing pack",
     "subtitle": "AI agenda overview: ready items, deferred, overdue, low quality scores.",
     "generate": "Generate briefing",
+    "regenerate": "Regenerate briefing",
     "generating": "Building pack…",
     "generate_failed": "Could not generate briefing pack."
   },
