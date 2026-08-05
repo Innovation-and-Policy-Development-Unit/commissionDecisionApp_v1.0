@@ -1,28 +1,113 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Dialog, Transition } from '@headlessui/react'
-import { X, Calendar, Clock, MapPin, ListChecks, FileText, CheckSquare, Users, Trash2, Edit3, ChevronRight, AlertCircle, FileSignature, PenLine } from 'lucide-react'
-import { SITTING_STATUSES } from '../constants'
+import { X, Calendar, Clock, MapPin, ListChecks, FileText, CheckSquare, Users, Trash2, Edit3, ChevronRight, AlertCircle, FileSignature, PenLine, Rocket } from 'lucide-react'
+import { SITTING_STATUSES, VENUES, SITTING_TYPES } from '../constants'
 import clsx from 'clsx'
 import AgendaReadinessChip from '../../../../components/shared/AgendaReadinessChip'
 import MeetingBriefingPack from '../../../../components/meetings/MeetingBriefingPack'
+import Modal from '../../../../components/shared/Modal'
 import { useAuth } from '../../../../context/AuthContext'
+import { useToast } from '../../../../context/ToastContext'
+import { useConfirm } from '../../../../context/ConfirmContext'
 import { userIsOpscInternal, userCanRegenerateAiBrief } from '../../../../utils/opscAccess'
+import api from '../../../../api/client'
 
-export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapacity, onOpenLogitechGuide }) {
+const MANAGE_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'psc_admin'])
+
+export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapacity, onOpenLogitechGuide, onUpdated }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const toast = useToast()
+  const confirm = useConfirm()
+
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState(null)
+  const [editSaving, setEditSaving] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [launching, setLaunching] = useState(false)
+
   if (!sitting) return null
 
   const canViewBriefingPack = userIsOpscInternal(user)
   const canRegenerateBriefingPack = userCanRegenerateAiBrief(user)
+  const canManage = user && MANAGE_ROLES.has(user.role)
 
   const status = SITTING_STATUSES[sitting.status] || {}
   const capacity = getCapacity(sitting.agenda_count || 0)
+  const isCancelled = sitting.status === 'cancelled'
+  const isInProgress = sitting.status === 'in_progress'
+
+  const openEdit = () => {
+    setEditForm({
+      title: sitting.title || '',
+      date: sitting.date || '',
+      time: (sitting.time || '09:00').slice(0, 5),
+      venue: sitting.venue || VENUES[0],
+      type: sitting.type || 'ordinary',
+    })
+    setIsEditOpen(true)
+  }
+
+  const submitEdit = async (e) => {
+    e.preventDefault()
+    setEditSaving(true)
+    try {
+      await api.patch(`/meetings/${sitting.id}/`, editForm)
+      toast.success('Sitting details updated.')
+      setIsEditOpen(false)
+      onUpdated?.()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update sitting.')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const handleCancelSitting = async () => {
+    const ok = await confirm({
+      title: 'Cancel this sitting?',
+      message: `"${sitting.title}" will be marked as cancelled. This does not delete its record, agenda, or minutes — it can still be viewed, just no longer scheduled to proceed.`,
+      confirmLabel: 'Cancel sitting',
+      cancelLabel: 'Keep sitting',
+      variant: 'danger',
+    })
+    if (!ok) return
+    setCancelling(true)
+    try {
+      await api.patch(`/meetings/${sitting.id}/`, { status: 'cancelled' })
+      toast.success('Sitting cancelled.')
+      onUpdated?.()
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to cancel sitting.')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  const launchOperations = async () => {
+    setLaunching(true)
+    try {
+      await api.patch(`/meetings/${sitting.id}/`, { status: 'in_progress' })
+      toast.success('Sitting is now in progress.')
+      onUpdated?.()
+      onClose()
+      navigate(`/secretariat/meetings/${sitting.id}/workspace`)
+    } catch (err) {
+      toast.error(
+        err.response?.data?.detail
+        || 'Could not launch operations — the agenda must be adopted by the Chairperson first.'
+      )
+    } finally {
+      setLaunching(false)
+    }
+  }
 
   return (
+    <>
     <Transition.Root show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-[60]" onClose={onClose}>
         <Transition.Child
@@ -226,19 +311,40 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="mt-auto border-t border-slate-100 dark:border-slate-800 p-8 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
-                      <button className="flex items-center gap-2 text-sm font-bold text-red-600 hover:text-red-700 transition-colors">
-                        <Trash2 size={18} /> Cancel Sitting
-                      </button>
-                      <div className="flex items-center gap-3">
-                        <button className="btn-secondary py-2.5 px-6 flex items-center gap-2">
-                          <Edit3 size={16} /> Edit Details
+                    {canManage && (
+                      <div className="mt-auto border-t border-slate-100 dark:border-slate-800 p-8 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
+                        <button
+                          type="button"
+                          disabled={isCancelled || cancelling}
+                          onClick={handleCancelSitting}
+                          className="flex items-center gap-2 text-sm font-bold text-red-600 hover:text-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-red-600"
+                        >
+                          <Trash2 size={18} /> {cancelling ? 'Cancelling…' : 'Cancel Sitting'}
                         </button>
-                        <button className="btn-gradient py-2.5 px-6 flex items-center gap-2 shadow-lg shadow-primary-500/20">
-                          Launch Operations <ChevronRight size={16} />
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            disabled={isCancelled}
+                            onClick={openEdit}
+                            className="btn-secondary py-2.5 px-6 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <Edit3 size={16} /> Edit Details
+                          </button>
+                          {!isInProgress && (
+                            <button
+                              type="button"
+                              disabled={isCancelled || launching}
+                              onClick={launchOperations}
+                              className="btn-gradient py-2.5 px-6 flex items-center gap-2 shadow-lg shadow-primary-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              {launching ? 'Launching…' : 'Launch Operations'}
+                              {!launching && <ChevronRight size={16} />}
+                              {launching && <Rocket size={16} className="animate-pulse" />}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </Dialog.Panel>
               </Transition.Child>
@@ -247,5 +353,77 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
         </div>
       </Dialog>
     </Transition.Root>
+
+    {isEditOpen && editForm && (
+      <Modal
+        open={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        size="md"
+        title="Edit Sitting Details"
+      >
+        <form onSubmit={submitEdit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Sitting title</label>
+            <input
+              className="input"
+              required
+              value={editForm.title}
+              onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date</label>
+              <input
+                type="date"
+                className="input"
+                required
+                value={editForm.date}
+                onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Time</label>
+              <input
+                type="time"
+                className="input"
+                required
+                value={editForm.time}
+                onChange={e => setEditForm(f => ({ ...f, time: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Venue</label>
+            <select
+              className="input"
+              value={editForm.venue}
+              onChange={e => setEditForm(f => ({ ...f, venue: e.target.value }))}
+            >
+              {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Sitting type</label>
+            <select
+              className="input"
+              value={editForm.type}
+              onChange={e => setEditForm(f => ({ ...f, type: e.target.value }))}
+            >
+              {SITTING_TYPES.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-3 pt-2">
+            <button type="submit" disabled={editSaving} className="btn-primary flex-1 py-2.5 disabled:opacity-50">
+              {editSaving ? 'Saving…' : 'Save changes'}
+            </button>
+            <button type="button" onClick={() => setIsEditOpen(false)} className="btn-secondary px-6 py-2.5">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
+    )}
+    </>
   )
 }

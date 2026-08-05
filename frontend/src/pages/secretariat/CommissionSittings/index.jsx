@@ -146,12 +146,13 @@ export default function CommissionSittings() {
         </main>
       </div>
 
-      <SittingDetailDrawer 
+      <SittingDetailDrawer
         sitting={selectedSitting}
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         getCapacity={getCapacity}
         onOpenLogitechGuide={() => setLogitechGuideOpen(true)}
+        onUpdated={refresh}
       />
 
       <LogitechGroupGuideDialog open={logitechGuideOpen} onClose={() => setLogitechGuideOpen(false)} />

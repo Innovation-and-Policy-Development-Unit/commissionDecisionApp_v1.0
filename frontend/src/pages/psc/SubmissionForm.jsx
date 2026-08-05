@@ -23,14 +23,18 @@ const FALLBACK_FORM_TYPES = []
 
 /** Roles that submit OPSC-internal submissions (no checklist, straight to Secretary). */
 const INTERNAL_ROLES = [
-  'csu_manager',
-  'odu_manager',
   'odu_principal',
   'principal_org_dev_analyst',
   'principal_job_analyst',
   'vipam_manager',
   'vipam_principal',
 ]
+
+/** CSU Manager creates OPSC-internal submissions too (PSC-staff-only visible),
+ * but uses the same submission-type catalog as the HR Unit and follows the
+ * normal PSC route — checklist, assessment, Secretary gate, Commission —
+ * rather than the short internal-only path the roles above use. */
+const CSU_ROLE = 'csu_manager'
 
 const DEFAULT_TITLE_PLACEHOLDER = 'e.g. Appointment of Director Finance & Administration'
 
@@ -640,6 +644,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   const [formTypes, setFormTypes] = useState(FALLBACK_FORM_TYPES)
 
   const isInternalUser = user && INTERNAL_ROLES.includes(user.role)
+  const isCsuUser = user && user.role === CSU_ROLE
   const isComplianceUser = user && isComplianceRole(user.role)
   const isMinistryUser = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
 
@@ -648,9 +653,13 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
     return cat?.code === 'INTERNAL' || cat?.name === 'Internal Submissions'
   })
 
+  // CSU Manager: same submission types as the HR Unit (routed_unit === 'hr'),
+  // not the dedicated internal-only catalog.
+  const csuFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'hr')
+
   const allowed =
     user && ['receptionist', 'psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
-              ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
+              CSU_ROLE, ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
               'vipam_manager', 'vipam_principal'].includes(user.role)
 
   useEffect(() => {
@@ -707,6 +716,18 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   if (isComplianceUser) {
     return (
       <NewComplianceCaseForm modal={modal} onSuccess={onSuccess} onClose={onClose} />
+    )
+  }
+
+  // ── CSU Manager: simplified internal form, HR Unit's submission types ──
+  if (isCsuUser) {
+    return (
+      <InternalSubmissionForm
+        modal={modal}
+        onClose={onClose}
+        onSuccess={onSuccess}
+        internalFormTypes={csuFormTypesResolved}
+      />
     )
   }
 

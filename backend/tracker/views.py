@@ -1024,25 +1024,31 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission = serializer.save(**kwargs)
 
         elif profile.role == Role.CSU_MANAGER:
-            # OPSC CSU internal submission — routes directly to Secretary
-            org = _resolve_opsc_submission_org(profile)
-            kwargs = {
-                "current_stage": WorkflowStage.DRAFT,
-                "is_internal": True,
-                "routed_unit": RoutedUnit.CSU,
-                "ministry_id": org["ministry_id"],
-                "department_id": org["department_id"],
-                "unit_id": org.get("unit_id"),
-            }
-            submission = serializer.save(**kwargs)
+            # OPSC CSU internal submission (e.g. appointment of OPSC staff) —
+            # PSC-staff-only visible (is_internal=True), but still follows the
+            # normal PSC route: responsible unit checklist, assessment, Secretary
+            # approval gate, Commission. routed_unit is intentionally left unset
+            # here so the existing form-type-based auto-routing (on entering
+            # Manager Checklist Review) assigns the correct responsible unit,
+            # exactly as it does for a ministry-origin submission.
+            from .travel_forms import normalize_form_type_code
+            from .intake_routing import routed_unit_for_form_type
 
-        elif profile.role == Role.ODU_MANAGER:
-            # OPSC ODU internal submission — only the manager creates, routes to Secretary
+            form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
+            if not form_code:
+                raise ValidationError({"form_type_code": "Please select a form type."})
+            # CSU Manager uses the same submission-type catalog as the HR Unit —
+            # only the workflow differs (is_internal=True, PSC-staff-only visible).
+            if routed_unit_for_form_type(form_code) != RoutedUnit.HR:
+                raise ValidationError({
+                    "form_type_code": "CSU Manager can only use HR Unit submission types."
+                })
             org = _resolve_opsc_submission_org(profile)
             kwargs = {
                 "current_stage": WorkflowStage.DRAFT,
                 "is_internal": True,
-                "routed_unit": RoutedUnit.ODU,
+                "follows_normal_route": True,
+                "form_type_code": form_code,
                 "ministry_id": org["ministry_id"],
                 "department_id": org["department_id"],
                 "unit_id": org.get("unit_id"),
@@ -1254,7 +1260,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 role=profile.role,
                 current_stage=prev,
                 target_stage=target,
-                is_internal=submission.is_internal,
+                # follows_normal_route submissions (e.g. CSU) stay is_internal=True
+                # for visibility, but use the normal transition rules, not the
+                # short internal-only path.
+                is_internal=submission.is_internal and not submission.follows_normal_route,
                 secretary_only=submission.secretary_only,
                 remarks=remarks,
             )
@@ -2362,7 +2371,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             allowed = iter_allowed_targets(
                 profile.role,
                 submission.current_stage,
-                is_internal=submission.is_internal,
+                is_internal=submission.is_internal and not submission.follows_normal_route,
                 secretary_only=submission.secretary_only,
             )
         guidance = submission.ai_transition_guidance or {}
@@ -2392,7 +2401,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def _checklist_payload(self, submission):
         if (
             submission.is_attachment
-            or submission.is_internal
+            or (submission.is_internal and not submission.follows_normal_route)
             or getattr(submission, "secretary_only", False)
         ):
             return []
@@ -2685,7 +2694,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         if (
             submission.is_attachment
-            or submission.is_internal
+            or (submission.is_internal and not submission.follows_normal_route)
             or getattr(submission, "secretary_only", False)
         ):
             return Response([])
@@ -2736,7 +2745,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if submission.is_attachment or submission.is_internal:
+        if submission.is_attachment or (submission.is_internal and not submission.follows_normal_route):
             return Response({"suggestions": {}, "items": [], "error": None})
 
         _autofill_roles = {
@@ -6597,17 +6606,18 @@ class MeetingViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="admit-reserve")
     def admit_reserve(self, request, pk=None):
-        """Chairman admits a carry-over (late) submission into the draft agenda.
+        """Chairman or Secretary admits a carry-over (late) submission into the draft agenda.
 
         The only sanctioned override of the submission cutoff: allowed for the
-        Chairperson while the agenda is `with_chairman` for endorsement. Audited.
+        Chairperson or PSC Secretary while the agenda is `with_chairman` for
+        endorsement. Audited.
         """
         from .agenda_carryover import is_carryover
 
         meeting = self.get_object()
         profile = _profile(request.user)
-        if profile.role not in {Role.CHAIRPERSON, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Chairperson can admit carry-over items.")
+        if profile.role not in {Role.CHAIRPERSON, Role.PSC_SECRETARY, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Chairperson or PSC Secretary can admit carry-over items.")
         if meeting.agenda_status != AgendaStatus.WITH_CHAIRMAN:
             return Response(
                 {"detail": "Carry-over items can be admitted only while the agenda is with the Chairman for endorsement."},
@@ -6622,6 +6632,24 @@ class MeetingViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Only commission-ready submissions can be admitted."}, status=400)
         if AgendaItem.objects.filter(meeting=meeting, submission=submission).exists():
             return Response({"detail": "Already on this agenda."}, status=400)
+        current_count = AgendaItem.objects.filter(meeting=meeting).count()
+        if (
+            meeting.max_items
+            and current_count >= meeting.max_items
+            and profile.role != Role.PSC_ADMIN
+        ):
+            return Response(
+                {
+                    "detail": (
+                        f"This meeting's agenda is already at capacity "
+                        f"({current_count}/{meeting.max_items} items). "
+                        "Admitting another item would overload the sitting — "
+                        "defer it to a later meeting instead, or ask a PSC "
+                        "Administrator to override."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Section: honour the requested (dropped-on) section, else auto-detect.
         from .agenda_sections import validate_agenda_section_code
@@ -6652,9 +6680,10 @@ class MeetingViewSet(viewsets.ModelViewSet):
         from .audit import log_action as _log
         from .models import AuditLog as _AL
         late = is_carryover(submission, meeting)
+        admitted_by_label = "Chairman" if profile.role == Role.CHAIRPERSON else "Secretary" if profile.role == Role.PSC_SECRETARY else "Admin"
         _log(request, _AL.Action.UPDATE, resource_type="AgendaItem",
              resource_label=submission.reference_number,
-             description=(f"Chairman admitted {'late carry-over ' if late else ''}submission "
+             description=(f"{admitted_by_label} admitted {'late carry-over ' if late else ''}submission "
                          f"{submission.reference_number} to {meeting.reference_number} agenda (cutoff override)."))
 
         from .tasks import queue_agenda_item_blurb

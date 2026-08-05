@@ -9,10 +9,12 @@ from .opsc_access import OPSC_UNIT_MANAGER_ROLES
 # Internal submission roles — only unit managers (not principals) create submissions
 # ---------------------------------------------------------------------------
 INTERNAL_SUBMITTER_ROLES = {
-    Role.CSU_MANAGER,
-    Role.ODU_MANAGER,
     Role.VIPAM_PRINCIPAL,   # creates VIPAM submissions; vipam_manager is an approver in the chain
 }
+# CSU Manager also creates OPSC-internal submissions (is_internal=True), but they
+# follow the normal PSC route (follows_normal_route=True on the submission), not
+# this short internal-only path — see _CSU_MANAGER_ALLOWED below. ODU Manager does
+# not create submissions.
 
 TRAVELLER_SUBMITTER_ROLES = {
     Role.TRAVELLER,
@@ -332,6 +334,19 @@ _TERMINAL_STAGES = {
     WorkflowStage.RECALLED,
 }
 
+# CSU Manager: OPSC-internal submissions (e.g. appointment of OPSC staff) that
+# still follow the normal PSC route (submission.follows_normal_route=True) rather
+# than the short internal-only path. No DG endorsement step — there is no
+# external ministry DG involved — so a draft goes straight to Submitted, same as
+# a Receptionist-lodged paper. Every stage after Submitted follows the same rules
+# as any other submission (see the generic graph/role checks below).
+_CSU_MANAGER_ALLOWED = {
+    (WorkflowStage.DRAFT,                      WorkflowStage.SUBMITTED),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
+    (WorkflowStage.SUBMITTED,                  WorkflowStage.RECALLED),
+}
+
 # Receptionist (registry front desk): lodges a scanned submission and routes it
 # to the responsible unit Manager (Manager Checklist Review).
 _RECEPTIONIST_ALLOWED = {
@@ -548,6 +563,18 @@ def assert_transition_allowed(
             )
         return
 
+    # ── CSU Manager (OPSC-internal, normal-route submissions) ───────────────
+    # Only governs CSU's own draft/submit/clarification steps — every later
+    # stage (checklist review, assessment, Secretary gate, Commission, ...) is
+    # handled by the normal role checks further below, same as any submission.
+    if role == Role.CSU_MANAGER:
+        if (current_stage, target_stage) not in _CSU_MANAGER_ALLOWED:
+            raise PermissionDenied(
+                "CSU Manager can submit a draft, respond to a clarification request, "
+                "or recall a submission before it is registered."
+            )
+        return
+
     # ── OPSC Unit Managers — checklist review only ──────────────────────────
     if role in _UNIT_MANAGER_ROLES:
         if current_stage not in _UNIT_MANAGER_STAGES:
@@ -685,6 +712,8 @@ def iter_allowed_targets(
         return [t.value for (s, t) in _MINISTRY_DG_ALLOWED if s == current_stage]
     if role == Role.RECEPTIONIST:
         return [t.value for (s, t) in _RECEPTIONIST_ALLOWED if s == current_stage]
+    if role == Role.CSU_MANAGER:
+        return [t.value for (s, t) in _CSU_MANAGER_ALLOWED if s == current_stage]
     if role in _UNIT_MANAGER_ROLES:
         if current_stage in _UNIT_MANAGER_STAGES:
             return _STAGE_GRAPH.get(current_stage, [])

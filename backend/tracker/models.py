@@ -1703,7 +1703,18 @@ class Submission(models.Model):
     )
     is_internal = models.BooleanField(
         default=False,
-        help_text="True when submitted by OPSC staff (CSU/ODU). Routes directly to Secretary, no checklist.",
+        help_text="True when submitted by OPSC staff (CSU/VIPAM/Compliance) — PSC-staff-only visible.",
+    )
+    follows_normal_route = models.BooleanField(
+        default=False,
+        help_text=(
+            "For an internal submission (is_internal=True): still route it through the "
+            "normal PSC workflow — responsible unit checklist, assessment, Secretary "
+            "approval gate, Commission — instead of the short internal-only path "
+            "straight to the Secretary. Used by CSU Manager submissions (e.g. "
+            "appointment of OPSC staff), which stay PSC-staff-only visible but still "
+            "require the responsible unit's checklist review like any other case."
+        ),
     )
     secretary_only = models.BooleanField(
         default=False,

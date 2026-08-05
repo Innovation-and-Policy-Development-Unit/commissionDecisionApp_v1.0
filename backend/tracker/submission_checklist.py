@@ -8,7 +8,9 @@ from .models import PSCFormType, RequiredDocument, Submission, SubmissionCheckli
 
 def resolve_required_documents(submission: Submission):
     """Return RequiredDocument queryset for this submission (same rules as GET checklist)."""
-    if submission.is_attachment or submission.is_internal or submission.secretary_only:
+    if submission.is_attachment or submission.secretary_only:
+        return RequiredDocument.objects.none()
+    if submission.is_internal and not submission.follows_normal_route:
         return RequiredDocument.objects.none()
 
     form_type_obj = None

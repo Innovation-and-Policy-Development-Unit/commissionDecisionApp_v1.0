@@ -113,9 +113,9 @@ export default function SittingWorkspace() {
   const carryover = data?.carryover || []
   const readiness = data?.readiness || {}
 
-  // The Chairman may admit carry-over (late) items into the agenda — only while
-  // it is with them for endorsement.
-  const canAdmit = ['chairperson', 'psc_admin'].includes(role) && meeting?.agenda_status === 'with_chairman'
+  // The Chairman or Secretary may admit carry-over (late) items into the
+  // agenda — only while it is with the Chairman for endorsement.
+  const canAdmit = ['chairperson', 'psc_secretary', 'psc_admin'].includes(role) && meeting?.agenda_status === 'with_chairman'
   const canDrop = (d) => d && (canEdit || (canAdmit && d.kind === 'carryover'))
 
   // Group agenda items into section lanes, preserving admin section order.
@@ -436,7 +436,7 @@ export default function SittingWorkspace() {
               ))}
             </div>
             {!canAdmit && carryover.length > 0 && (
-              <p className="px-1 mt-2 text-[10px] text-slate-400 italic">Only the Chairman can admit these, during endorsement.</p>
+              <p className="px-1 mt-2 text-[10px] text-slate-400 italic">Only the Chairman or Secretary can admit these, during endorsement.</p>
             )}
           </div>
         )}

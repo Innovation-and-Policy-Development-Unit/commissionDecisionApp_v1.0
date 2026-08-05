@@ -76,7 +76,7 @@ export default function SubmissionLog() {
   const isComplianceUser = user && isComplianceRole(user.role)
   const canCreateSubmission = user && (!isComplianceUser || user.role === 'compliance_manager')
   const isTraveller = user?.role === 'traveller'
-  const isInternalCreate = user && ['csu_manager', 'odu_manager'].includes(user.role)
+  const isInternalCreate = user && user.role === 'csu_manager'
   const showCommissionCreate = canCreateSubmission && !isTraveller && !isInternalCreate
   const showInternalCreate = canCreateSubmission && isInternalCreate
 
