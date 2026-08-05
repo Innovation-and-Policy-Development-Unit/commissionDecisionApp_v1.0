@@ -91,16 +91,19 @@ const DEADLINE_DRAFT_ROLES = [
 const PACKAGE_VALIDATE_ROLES = [
   'ministry_hr', 'dept_admin', 'head_of_agency',
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
+  'csu_manager', 'vipam_principal',
+  'compliance_manager', 'compliance_senior', 'compliance_principal',
 ]
 const CHECKLIST_EDIT_ROLES = [
   'ministry_hr', 'dept_admin', 'head_of_agency',
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
   'vipam_manager', 'hr_unit_manager', 'compliance_manager', 'compliance_senior',
 ]
-// Ministry-side roles must attach a real file to satisfy a required-document
-// item — they cannot self-declare "present" with the manual checkbox toggle
-// the way OPSC reviewers can (see ChecklistPanel's uploadOnly mode).
-const MINISTRY_SUBMITTER_ROLES = ['ministry_hr', 'dept_admin']
+// Submitter roles (ministry-side, and OPSC-internal submitters like CSU
+// Manager) must attach a real file to satisfy a required-document item —
+// they cannot self-declare "present" with the manual checkbox toggle the
+// way OPSC reviewers can (see ChecklistPanel's uploadOnly mode).
+const MINISTRY_SUBMITTER_ROLES = ['ministry_hr', 'dept_admin', 'csu_manager']
 
 const DYNAMIC_CHECKLIST_EDIT_ROLES = [
   'odu_manager', 'odu_principal', 'principal_org_dev_analyst', 'principal_job_analyst', 'psc_admin',
@@ -213,9 +216,9 @@ export default function SubmissionDetail() {
   // stays permissive and the server still enforces.
   const contentEditable = submission?.can_edit !== false
   const canUploadDocs  = contentEditable && user && ['ministry_hr', 'dept_admin', 'head_of_agency',
-                                   'psc_admin', 'psc_officer', 'psc_secretary'].includes(user.role)
+                                   'psc_admin', 'psc_officer', 'psc_secretary', 'csu_manager'].includes(user.role)
   const canEditForm37  = contentEditable && user && ['ministry_hr', 'dept_admin', 'psc_admin',
-                                   'psc_officer', 'psc_secretary'].includes(user.role)
+                                   'psc_officer', 'psc_secretary', 'csu_manager'].includes(user.role)
   // Compliance forms are completed in CMS; portal record is read-only for compliance roles
   const canEditComplianceForm = false
   const canEditDigitizedForm = canEditForm37 || canEditComplianceForm
@@ -236,7 +239,11 @@ export default function SubmissionDetail() {
   const showSittingPack = showOduChecklist || showDynamicChecklist
 
   const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
+  // The executive brief is a triage tool for the OPSC unit that receives the
+  // submission — while still in Draft (being authored by HR/CSU/VIPAM/Compliance),
+  // there's nothing to triage yet; only package validation applies at that point.
   const showSecretariatBrief = user && userIsOpscInternal(user) && user.ai_enabled === true
+    && submission?.current_stage !== 'draft'
   const canRegenerateBrief = userCanRegenerateAiBrief(user)
   const showDeadlineDrafts = user && DEADLINE_DRAFT_ROLES.includes(user.role) && user.ai_enabled === true
   const showPackageValidation = user && PACKAGE_VALIDATE_ROLES.includes(user.role)

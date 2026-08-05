@@ -1166,7 +1166,7 @@ class RequiredDocumentSerializer(serializers.ModelSerializer):
             'form_category', 'form_category_name',
             'required_form', 'required_form_code', 'required_form_name',
             'name', 'description', 'order', 'is_active',
-            'expected_document_type',
+            'expected_document_type', 'ministry_only',
         )
 
 

@@ -508,7 +508,7 @@ function CommissionSubmissionForm({
 // Internal Submission Form (CSU Manager / ODU)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function InternalSubmissionForm({ modal, onClose, onSuccess, internalFormTypes }) {
+function InternalSubmissionForm({ modal, onClose, onSuccess, internalFormTypes, isCsuUser }) {
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -574,7 +574,9 @@ function InternalSubmissionForm({ modal, onClose, onSuccess, internalFormTypes }
       {!modal && (
         <PageHeader
           title="New internal submission"
-          subtitle="OPSC internal submissions route directly to the Secretary for review."
+          subtitle={isCsuUser
+            ? "Routed to the HR Unit for checklist review and assessment, same as any other submission."
+            : "OPSC internal submissions route directly to the Secretary for review."}
         />
       )}
 
@@ -727,6 +729,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
         onClose={onClose}
         onSuccess={onSuccess}
         internalFormTypes={csuFormTypesResolved}
+        isCsuUser
       />
     )
   }

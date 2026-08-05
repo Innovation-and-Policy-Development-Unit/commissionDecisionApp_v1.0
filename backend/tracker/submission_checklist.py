@@ -13,6 +13,11 @@ def resolve_required_documents(submission: Submission):
     if submission.is_internal and not submission.follows_normal_route:
         return RequiredDocument.objects.none()
 
+    # OPSC-internal submissions that follow the normal route (e.g. CSU/ODU
+    # appointing OPSC staff) have no Director-General in their workflow, so
+    # ministry-only items (DG endorsement letters, etc.) don't apply.
+    skip_ministry_only = submission.is_internal and submission.follows_normal_route
+
     form_type_obj = None
     if submission.form_type_code:
         form_type_obj = PSCFormType.objects.filter(code=submission.form_type_code).first()
@@ -21,29 +26,47 @@ def resolve_required_documents(submission: Submission):
         type_specific = RequiredDocument.objects.filter(
             is_active=True, form_type=form_type_obj
         )
+        if skip_ministry_only:
+            type_specific = type_specific.exclude(ministry_only=True)
         if type_specific.exists():
             return type_specific
-        return RequiredDocument.objects.filter(
+        qs = RequiredDocument.objects.filter(
             is_active=True, form_type__isnull=True
         ).filter(
             models.Q(form_category=submission.form_category)
             | models.Q(form_category__isnull=True)
         )
+        if skip_ministry_only:
+            qs = qs.exclude(ministry_only=True)
+        return qs
 
-    return RequiredDocument.objects.filter(
+    qs = RequiredDocument.objects.filter(
         is_active=True, form_type__isnull=True
     ).filter(
         models.Q(form_category=submission.form_category)
         | models.Q(form_category__isnull=True)
     )
+    if skip_ministry_only:
+        qs = qs.exclude(ministry_only=True)
+    return qs
 
 
 def ensure_submission_checklist_items(submission: Submission) -> None:
-    """Create SubmissionChecklistItem rows for each applicable RequiredDocument."""
-    for doc in resolve_required_documents(submission):
+    """Sync SubmissionChecklistItem rows to the currently applicable RequiredDocuments.
+
+    Creates rows for newly-applicable documents and removes rows for documents
+    that no longer apply (e.g. scoping rules changed, or the submission's
+    is_internal/follows_normal_route flags were corrected after creation).
+    """
+    applicable = list(resolve_required_documents(submission))
+    for doc in applicable:
         SubmissionChecklistItem.objects.get_or_create(
             submission=submission, document=doc
         )
+    applicable_ids = {doc.id for doc in applicable}
+    SubmissionChecklistItem.objects.filter(submission=submission).exclude(
+        document_id__in=applicable_ids
+    ).delete()
 
 
 def apply_content_mismatch_check(document) -> None:

@@ -22,10 +22,16 @@ Before a ministry or OPSC user submits a draft package, identify missing or weak
 cause "returned for clarification" or checklist rejection.
 
 Review:
-- Required checklist documents (confirmed present vs missing)
+- Required checklist documents (confirmed present vs missing) — go only by what the context
+  lists as required; never assume a document type is required just because it's common for
+  this kind of submission elsewhere.
 - Uploaded supporting files and whether they match the ask
 - Digitized form fields (Form 3-7, dynamic PSC forms, restructure data) for blanks or placeholders
-- DG / Head of Agency endorsement when expected for external ministry submissions
+- DG / Head of Agency endorsement — ONLY relevant for external ministry-origin submissions.
+  The context explicitly states whether this submission "follows normal PSC route" with no DG
+  in its workflow (OPSC-internal submissions such as CSU/ODU appointing OPSC staff). When the
+  context says no DG applies, you MUST NOT raise any gap about a missing DG/HoA endorsement —
+  doing so is a false positive, not a real gap.
 - Title clarity and whether the submission narrative is actionable
 
 Severity:
@@ -174,6 +180,20 @@ def validate_package_from_context(
         g = _normalize_gap(raw)
         if g:
             ai_gaps.append(g)
+
+    # Deterministic guard: models occasionally raise a DG/HoA endorsement gap out of
+    # general PSC domain knowledge even when told this submission has none in its
+    # workflow (OPSC-internal, normal-route submissions like CSU/ODU appointments).
+    # Prompt instructions alone aren't reliable enough on the cheap tier — strip these
+    # false positives outright rather than keep tuning wording.
+    if submission.is_internal and submission.follows_normal_route:
+        ai_gaps = [
+            g for g in ai_gaps
+            if g["category"] != "endorsement"
+            and "dg" not in g["message"].lower().split()
+            and "director-general" not in g["message"].lower()
+            and "endorsement" not in g["message"].lower()
+        ]
 
     gaps = _merge_gaps(rule_gaps, ai_gaps)
     ready = _compute_ready(gaps)

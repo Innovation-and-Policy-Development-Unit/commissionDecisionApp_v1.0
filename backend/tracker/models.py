@@ -2263,6 +2263,13 @@ class RequiredDocument(models.Model):
     )
     order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    ministry_only = models.BooleanField(
+        default=False,
+        help_text="Only required for ministry-origin submissions (e.g. DG endorsement "
+                  "letters). Skipped for OPSC-internal submissions that follow the normal "
+                  "PSC route (e.g. CSU/ODU appointments of OPSC staff), which have no "
+                  "Director-General step in their workflow.",
+    )
 
     class Meta:
         ordering = ['form_category', 'form_type', 'order', 'name']

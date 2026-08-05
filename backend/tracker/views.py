@@ -1162,7 +1162,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(
                 "Public servants have read-only access. Contact ministry HR to update a submission."
             )
-        if profile.role not in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
+        if profile.role not in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.CSU_MANAGER}:
             raise PermissionDenied("Only PSC staff or Ministry users can edit submissions.")
         from .transitions import assert_can_edit_submission
         assert_can_edit_submission(profile.role, submission)
@@ -1903,6 +1903,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.PSC_ADMIN,
             Role.PSC_SECRETARY,
             Role.SENIOR_ADMIN_OFFICER,
+            Role.CSU_MANAGER,
+            Role.VIPAM_PRINCIPAL,
+            Role.COMPLIANCE_MANAGER,
+            Role.COMPLIANCE_SENIOR,
+            Role.COMPLIANCE_PRINCIPAL,
         }
         if profile.role not in _submit_roles and not request.user.is_staff:
             raise PermissionDenied("You do not have permission to validate this submission package.")
@@ -3502,6 +3507,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         allowed_write_roles = {
             Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY,
             Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY,
+            Role.CSU_MANAGER,
         }
         profile = _profile(request.user)
         if profile.role not in allowed_write_roles:
@@ -3898,6 +3904,13 @@ class PSCFormTypeViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
     cache_invalidate_groups = ("form-fields", "required-documents")
     permission_classes = [permissions.IsAuthenticated, HasProfilePermission]
     serializer_class = PSCFormTypeSerializer
+    # Reference/lookup data — every consumer (submission-type dropdowns, the
+    # admin Form Types table) expects the complete list in one response, not
+    # a paginated page 1. With DRF's default pagination active here, this
+    # silently truncated to the first page (e.g. 50 of 78 rows), dropping
+    # whichever types happened to sort onto later pages — including, at one
+    # point, the entire RECRUIT-* family.
+    pagination_class = None
 
     def get_queryset(self):
         qs = PSCFormType.objects.select_related('form_category').all()

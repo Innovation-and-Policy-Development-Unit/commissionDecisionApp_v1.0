@@ -465,6 +465,8 @@ def build_submission_brief_context(submission) -> str:
         f"Current stage: {submission.get_current_stage_display()} ({submission.current_stage})",
         f"Classification: {submission.get_classification_display()}",
         f"Internal (OPSC) submission: {submission.is_internal}",
+        f"Follows normal PSC route: {submission.follows_normal_route} "
+        f"({'no Director-General in this workflow — do not flag a missing DG/HoA endorsement letter' if submission.is_internal and submission.follows_normal_route else 'ministry-origin, DG/HoA endorsement applies'})",
         f"Routed unit: {submission.routed_unit or '—'}",
         f"Received: {submission.received_at}",
         f"Assessment deadline: {submission.assessment_deadline_at or '—'}",

@@ -35,6 +35,21 @@ const STAGE_ACTIONS = {
     },
   ],
 
+  // OPSC-internal submissions that follow the normal PSC route (e.g. CSU/ODU
+  // appointing OPSC staff) have no Director-General in their workflow — a
+  // draft goes straight to Submitted, same as a receptionist-lodged paper.
+  draft_internal: [
+    {
+      id: 'submit',
+      label: 'Submit',
+      description: 'Submit for registration and routing to the responsible unit',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'submitted',
+      requiresNote: false,
+    },
+  ],
+
   pending_dg_endorsement: [
     {
       id: 'endorse',
@@ -352,7 +367,10 @@ export default function WorkflowActionsPanel({
   const [localBusy, setLocalBusy] = useState(false)
 
   const stage = submission?.current_stage
-  const stageActions = STAGE_ACTIONS[stage] ?? []
+  const isNormalRouteInternal = !!(submission?.is_internal && submission?.follows_normal_route)
+  const stageActions = (stage === 'draft' && isNormalRouteInternal)
+    ? STAGE_ACTIONS.draft_internal
+    : (STAGE_ACTIONS[stage] ?? [])
 
   // Filter to only actions the current user is allowed to perform
   const visibleActions = stageActions

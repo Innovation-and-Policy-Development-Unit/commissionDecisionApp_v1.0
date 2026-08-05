@@ -49,7 +49,7 @@ _COMPLIANCE_CREATOR_ALLOWED = {
 }
 
 # ---------------------------------------------------------------------------
-# Ministry-side content-edit gate
+# Draft-only content-edit gate
 # ---------------------------------------------------------------------------
 # Ministry HR / Department Admin draft the paper and may only edit its content
 # (fields, forms, attachments) while it is still in DRAFT. Once it is submitted
@@ -58,10 +58,14 @@ _COMPLIANCE_CREATOR_ALLOWED = {
 # re-opens. The DG (Head of Agency) endorses or returns the paper via stage
 # transitions and never edits content directly.
 #
+# CSU Manager follows the same draft-only pattern for OPSC-internal, normal-route
+# submissions (e.g. appointment of OPSC staff): they build the paper in DRAFT,
+# then it is read-only for them once submitted for HR Unit processing.
+#
 # Other roles are intentionally unaffected here (their write rights are governed
 # at each endpoint), so this can be called as a guard on any submission write
 # path without changing PSC / OPSC behaviour.
-_MINISTRY_DRAFT_EDIT_ROLES = {Role.MINISTRY_HR, Role.DEPT_ADMIN}
+_DRAFT_ONLY_EDIT_ROLES = {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.CSU_MANAGER}
 
 
 def can_edit_submission(role, submission) -> bool:
@@ -70,7 +74,7 @@ def can_edit_submission(role, submission) -> bool:
     Stage transitions (endorse / submit / return) are governed separately by the
     transition rules, not by this gate.
     """
-    if role in _MINISTRY_DRAFT_EDIT_ROLES:
+    if role in _DRAFT_ONLY_EDIT_ROLES:
         return submission.current_stage == WorkflowStage.DRAFT
     if role == Role.HEAD_OF_AGENCY:
         return False
@@ -88,7 +92,7 @@ def assert_can_edit_submission(role, submission) -> None:
         )
     raise PermissionDenied(
         "This submission is read-only because it is no longer in draft. It can only be "
-        "edited while in draft, before it is submitted to the DG for endorsement."
+        "edited while still in draft, before it is submitted."
     )
 
 # ---------------------------------------------------------------------------
