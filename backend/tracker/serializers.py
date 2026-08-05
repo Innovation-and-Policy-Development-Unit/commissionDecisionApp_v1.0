@@ -210,6 +210,7 @@ class MeSerializer(serializers.ModelSerializer):
     """GET /me/ — profile plus flags for admin UI and RBAC."""
 
     username = serializers.CharField(source="user.username", read_only=True)
+    full_name = serializers.SerializerMethodField()
     email = serializers.CharField(source="user.email", read_only=True)
     ministry = MinistrySerializer(read_only=True, allow_null=True)
     department = DepartmentSerializer(read_only=True, allow_null=True)
@@ -236,6 +237,7 @@ class MeSerializer(serializers.ModelSerializer):
         model = Profile
         fields = (
             "username",
+            "full_name",
             "email",
             "role",
             "ministry",
@@ -260,6 +262,9 @@ class MeSerializer(serializers.ModelSerializer):
             "must_change_password",
             "signature",
         )
+
+    def get_full_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
 
     def get_session_pin_set(self, obj):
         return bool(obj.session_pin)

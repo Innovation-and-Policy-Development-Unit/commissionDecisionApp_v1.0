@@ -498,12 +498,16 @@ export default function SubmissionDetail() {
       const raw = Array.isArray(fieldsRes.data) ? fieldsRes.data : (fieldsRes.data?.results ?? [])
       setDynamicFormFields(raw.sort((a, b) => a.display_order - b.display_order || a.id - b.id))
       const data = valuesRes.data?.data ?? valuesRes.data ?? {}
-      setDynamicForm(typeof data === 'object' && data !== null ? data : {})
+      const merged = typeof data === 'object' && data !== null ? { ...data } : {}
+      if (!merged.prepared_by && raw.some(f => f.field_key === 'prepared_by') && user?.full_name) {
+        merged.prepared_by = user.full_name
+      }
+      setDynamicForm(merged)
     }).catch(() => {
       setDynamicFormFields([])
       setDynamicForm({})
     })
-  }, [id, submission?.form_type_detail?.id, isDedicatedForm])
+  }, [id, submission?.form_type_detail?.id, isDedicatedForm, user?.full_name])
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0]
