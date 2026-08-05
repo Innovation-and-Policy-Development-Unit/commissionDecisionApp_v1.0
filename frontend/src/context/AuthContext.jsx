@@ -91,7 +91,20 @@ export function AuthProvider({ children }) {
     if (!ms) return
 
     inactivityTimer.current = setTimeout(async () => {
-      if (user.session_pin_set) {
+      // Re-check with the server rather than trusting the closure's `user`
+      // snapshot, which can be stale by now (e.g. captured before the PIN
+      // was set up, or before a silent token refresh landed) — that
+      // staleness previously caused a full logout even for accounts with a
+      // PIN configured, instead of the intended lock screen.
+      let pinSet = user.session_pin_set
+      try {
+        const { data } = await api.get('/me/')
+        pinSet = Boolean(data?.session_pin_set)
+      } catch {
+        // Network hiccup — fall back to the last-known value rather than
+        // guessing the account has no PIN.
+      }
+      if (pinSet) {
         lock()
         return
       }

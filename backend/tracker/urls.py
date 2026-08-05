@@ -91,6 +91,7 @@ from .views import (
     APIKeyViewSet,
     SystemSettingViewSet,
     EmailTemplateViewSet,
+    LetterTemplateViewSet,
     FeedbackViewSet,
     FeedbackCommentViewSet,
     FeedbackStatusView,
@@ -170,6 +171,7 @@ router.register(r"role-defs",    RoleDefinitionViewSet,   basename="role-definit
 router.register(r"api-keys",     APIKeyViewSet,           basename="api-key")
 router.register(r"settings",     SystemSettingViewSet,    basename="system-setting")
 router.register(r"email-templates", EmailTemplateViewSet, basename="email-template")
+router.register(r"letter-templates", LetterTemplateViewSet, basename="letter-template")
 router.register(r"backup",           BackupViewSet,           basename="backup")
 router.register(r"audit-logs",       AuditLogViewSet,         basename="audit-log")
 router.register(r"incidents",        SecurityIncidentViewSet, basename="incident")

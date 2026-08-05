@@ -179,10 +179,14 @@ def build_visual_audit_trail(submission) -> list[dict[str, Any]]:
         })
 
     sid = str(submission.id)
+    # Exclude READ ("viewed"/"bootstrap") entries — logged on every page
+    # load/tab-refocus, they drown out the actions that actually matter here
+    # (who created it, who transitioned/assigned/decided). READ events are
+    # still recorded in AuditLog itself for compliance purposes elsewhere.
     for log in AuditLog.objects.filter(
         resource_type="Submission",
         resource_id=sid,
-    ).order_by("timestamp"):
+    ).exclude(action=AuditLog.Action.READ).order_by("timestamp"):
         entries.append({
             "id": f"audit-{log.id}",
             "entry_type": "audit",

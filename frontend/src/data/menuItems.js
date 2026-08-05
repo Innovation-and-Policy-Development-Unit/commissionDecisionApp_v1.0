@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo, PenLine,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
-  Headphones, Mail, FolderOpen, BookOpen, Languages, Sparkles,
+  Mail, FolderOpen, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, CalendarCheck, AlertCircle, Tablet, Trash2,
   ListChecks, Megaphone, Inbox, Flag, SlidersHorizontal, Zap, Scale,
 } from 'lucide-react'
@@ -69,7 +69,6 @@ const menuItems = [
         icon: CalendarDays,
         audience: 'secretariat',
         children: [
-          { label: 'Meeting room',  labelKey: 'nav.meeting_room', icon: Headphones,   path: '/secretariat/meeting-room', audience: 'secretariat' },
           { label: 'Meetings',      labelKey: 'nav.meetings',     icon: CalendarDays, path: '/secretariat/meetings',     audience: 'secretariat' },
           { label: 'Sitting Pack',  labelKey: 'sitting_pack.enter', icon: Tablet,     path: '/secretariat/agenda/sitting-pack', audience: 'secretariat' },
         ],
@@ -162,6 +161,7 @@ const menuItems = [
         children: [
           { label: 'Knowledge Base',  labelKey: 'nav.knowledge_base',  icon: BookOpen,  path: '/admin/knowledge-base',  visibility: 'admin' },
           { label: 'Email templates', labelKey: 'nav.email_templates', icon: Mail,      path: '/admin/email-templates', visibility: 'roles' },
+          { label: 'Letter templates', labelKey: 'nav.letter_templates', icon: FileText, path: '/admin/letter-templates', visibility: 'roles' },
           { label: 'Daily Brief',     labelKey: 'nav.daily_brief',     icon: Calendar,  path: '/admin/daily-brief',     visibility: 'roles' },
           { label: 'UI translations', labelKey: 'nav.ui_translations', icon: Languages, path: '/admin/ui-translations', visibility: 'translations' },
         ],

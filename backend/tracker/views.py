@@ -45,6 +45,7 @@ from .models import (
     SystemPermission,
     SystemSetting,
     EmailTemplate,
+    LetterTemplate,
     WorkflowEvent,
     WorkflowStage,
     RequiredDocument,
@@ -111,6 +112,7 @@ from .serializers import (
     APIKeySerializer,
     SystemSettingSerializer,
     EmailTemplateSerializer,
+    LetterTemplateSerializer,
     FeedbackReportSerializer,
     FeedbackReportDetailSerializer,
     FeedbackCommentSerializer,
@@ -1799,6 +1801,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         )
 
         invalidate_submission(submission.id)
+        self._auto_advance_submitted_to_checklist_review(submission)
         return Response(SubmissionDetailSerializer(submission).data)
 
     @action(detail=True, methods=["post"], url_path="endorse")
@@ -2339,6 +2342,52 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .agenda_carryover import compute_scheduled_meeting
         submission.scheduled_meeting = compute_scheduled_meeting(submission)
 
+    def _auto_advance_submitted_to_checklist_review(self, submission):
+        """
+        Once a submission reaches Submitted, which unit reviews it is already
+        100% determined by its form type — there's no human judgement left to
+        apply, so a PSC Officer manually "registering and routing" it into
+        Manager Checklist Review was a purely mechanical extra click. This
+        advances it immediately instead, in its own workflow event
+        (actor=None / actor_label="System") so the audit trail still shows
+        exactly when and how it happened — same pattern already used for
+        system-generated events like CMS callbacks.
+
+        No-ops for internal short-path submissions (VIPAM/Compliance), which
+        go to Secretary Review next by human judgement, not mechanical
+        routing, and for anything without a form type to route by.
+        """
+        if submission.current_stage != WorkflowStage.SUBMITTED:
+            return
+        if submission.is_internal and not submission.follows_normal_route:
+            return
+        if not submission.form_type_code:
+            return
+
+        from .intake_routing import routed_unit_for_form_type
+        routed = routed_unit_for_form_type(submission.form_type_code)
+        if not routed:
+            return
+
+        with transaction.atomic():
+            submission.routed_unit = routed
+            submission.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            update_fields = ["routed_unit", "current_stage"]
+            if submission.checklist_review_started_at is None:
+                submission.checklist_review_started_at = timezone.now()
+                submission._set_checklist_review_deadline_from_start()
+                update_fields += ["checklist_review_started_at", "checklist_review_deadline_at"]
+            submission.save(update_fields=update_fields)
+            WorkflowEvent.objects.create(
+                submission=submission,
+                actor=None,
+                actor_label="System",
+                previous_stage=WorkflowStage.SUBMITTED,
+                new_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                remarks="Automatically routed to the responsible unit — form type determines the unit, no manual routing needed.",
+            )
+        invalidate_submission(submission.id)
+
     def _notify_if_late_carryover(self, submission, actor):
         """Tell the originating HR when a submission missed the nearest sitting's
         due date and has been queued for a later one (still subject to the
@@ -2654,8 +2703,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="visual-audit-trail")
     def visual_audit_trail(self, request, pk=None):
-        """Readable merged timeline: workflow events + audit log entries."""
+        """Readable merged timeline: workflow events + audit log entries.
+        OPSC-internal only — ministry-side roles (HR, DG) never see this."""
         from .decision_proof import build_visual_audit_trail
+        from .opsc_access import MINISTRY_SIDE_ROLES
+
+        profile = _profile(request.user)
+        if profile.role in MINISTRY_SIDE_ROLES:
+            raise PermissionDenied("The audit trail is only available to OPSC staff.")
 
         submission = self.get_object()
         return Response({
@@ -8271,6 +8326,61 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
         return Response(EmailTemplateSerializer(tpl).data)
 
 
+class LetterTemplateViewSet(viewsets.ModelViewSet):
+    """Manage decision letter templates — PSC Admin / manage_roles."""
+
+    permission_classes = [permissions.IsAuthenticated, HasManageRoles]
+    queryset = LetterTemplate.objects.all()
+    serializer_class = LetterTemplateSerializer
+    lookup_field = "form_type_code"
+    http_method_names = ["get", "patch", "post", "head", "options"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        category = self.request.query_params.get("category")
+        if category:
+            qs = qs.filter(category=category)
+        active = self.request.query_params.get("active")
+        if active is not None:
+            qs = qs.filter(is_active=active.lower() in ("true", "1", "yes"))
+        return qs
+
+    @action(detail=False, methods=["post"], url_path="seed-defaults")
+    def seed_defaults(self, request):
+        from .letter_templates import seed_default_letter_templates
+
+        created = seed_default_letter_templates()
+        return Response(
+            {"detail": "Default letter templates synced.", "created": created},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="preview")
+    def preview(self, request, form_type_code=None):
+        from .letter_templates import render_letter_template_record, sample_context_for_form_type
+
+        tpl = self.get_object()
+        extra = request.data.get("context") if isinstance(request.data.get("context"), dict) else {}
+        ctx = {**sample_context_for_form_type(tpl.form_type_code), **extra}
+        result = render_letter_template_record(tpl, ctx)
+        return Response({**result, "context": ctx})
+
+    @action(detail=True, methods=["post"], url_path="reset")
+    def reset_to_default(self, request, form_type_code=None):
+        from .letter_templates import reset_letter_template_to_default
+
+        tpl = self.get_object()
+        if not tpl.is_system:
+            return Response(
+                {"detail": "Only system templates can be reset to defaults."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not reset_letter_template_to_default(tpl.form_type_code):
+            return Response({"detail": "No default found for this template."}, status=404)
+        tpl.refresh_from_db()
+        return Response(LetterTemplateSerializer(tpl).data)
+
+
 # ── Backup & Restore ──────────────────────────────────────────────────────────
 
 import os as _os
@@ -10233,11 +10343,18 @@ def get_ai_letter(request, pk):
 def generate_submission_letter(request, pk):
     """Generate a structured outcome letter for cessation, recruitment, secondment, or leave payout submissions."""
     from .letters import generate_letter
+    from .models import LetterTemplate
+
     submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     try:
         result = generate_letter(submission)
     except ValueError as exc:
         return Response({"error": str(exc)}, status=400)
+    except LetterTemplate.DoesNotExist:
+        return Response(
+            {"error": f"No active letter template for form type '{submission.form_type_code}'. Ask a PSC Administrator to check Admin → Letter Templates."},
+            status=400,
+        )
 
     # Store in ai_letter fields so the existing AiLetterPanel can display it
     submission.ai_letter_subject = result["subject"]

@@ -1187,6 +1187,46 @@ class EmailTemplate(models.Model):
         return f"{self.name} ({self.slug})"
 
 
+class LetterTemplate(models.Model):
+    """Configurable subject/body for decision letters (offer, confirmation,
+    retirement, secondment, leave payout, etc.), keyed by form_type_code."""
+
+    class Category(models.TextChoices):
+        RECRUITMENT = "recruitment", "Recruitment & Selection"
+        CESSATION = "cessation", "Cessation of Employment"
+        SECONDMENT = "secondment", "Secondment"
+        LEAVE_PAYOUT = "leave_payout", "Leave Payout"
+        ALLOWANCES = "allowances", "Allowances & Claims"
+
+    form_type_code = models.SlugField(max_length=64, unique=True)
+    name = models.CharField(max_length=128)
+    category = models.CharField(
+        max_length=32,
+        choices=Category.choices,
+        default=Category.RECRUITMENT,
+    )
+    description = models.TextField(blank=True)
+    placeholders = models.TextField(
+        blank=True,
+        help_text="Comma-separated placeholder names available in subject/body.",
+    )
+    subject_template = models.CharField(max_length=255)
+    body_text_template = models.TextField()
+    is_active = models.BooleanField(default=True)
+    is_system = models.BooleanField(
+        default=False,
+        help_text="System templates can be reset to defaults but not deleted.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["category", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.form_type_code})"
+
+
 class PasswordHistory(models.Model):
     """Hashed record of a user's previous passwords to prevent reuse."""
     user = models.ForeignKey(

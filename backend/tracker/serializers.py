@@ -2091,6 +2091,37 @@ class EmailTemplateSerializer(serializers.ModelSerializer):
         return [p.strip() for p in obj.placeholders.split(",") if p.strip()]
 
 
+class LetterTemplateSerializer(serializers.ModelSerializer):
+    category_label = serializers.CharField(source="get_category_display", read_only=True)
+    placeholder_list = serializers.SerializerMethodField()
+
+    class Meta:
+        from .models import LetterTemplate
+
+        model = LetterTemplate
+        fields = (
+            "form_type_code",
+            "name",
+            "category",
+            "category_label",
+            "description",
+            "placeholders",
+            "placeholder_list",
+            "subject_template",
+            "body_text_template",
+            "is_active",
+            "is_system",
+            "updated_at",
+            "created_at",
+        )
+        read_only_fields = ("form_type_code", "is_system", "created_at", "updated_at")
+
+    def get_placeholder_list(self, obj):
+        if not obj.placeholders:
+            return []
+        return [p.strip() for p in obj.placeholders.split(",") if p.strip()]
+
+
 # ── Security feature serializers (NCSS 2030 / ISO 27001) ─────────────────────
 
 class AuditLogSerializer(serializers.ModelSerializer):

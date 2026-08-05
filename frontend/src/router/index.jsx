@@ -37,6 +37,7 @@ const AdminApiKeysPage = lazy(() => import('../pages/admin/AdminApiKeysPage'))
 const AdminSystemConfigPage = lazy(() => import('../pages/admin/AdminSystemConfigPage'))
 const DailyBriefAdmin = lazy(() => import('../pages/admin/DailyBriefAdmin'))
 const AdminEmailTemplatesPage = lazy(() => import('../pages/admin/AdminEmailTemplatesPage'))
+const AdminLetterTemplatesPage = lazy(() => import('../pages/admin/AdminLetterTemplatesPage'))
 const AdminTranslationsPage = lazy(() => import('../pages/admin/AdminTranslationsPage'))
 const AdminBackupRestorePage = lazy(() => import('../pages/admin/AdminBackupRestorePage'))
 const AdminTrashPage = lazy(() => import('../pages/admin/AdminTrashPage'))
@@ -150,6 +151,7 @@ export default function AppRouter() {
           <Route path="/admin/api-keys" element={<S><AdminApiKeysPage /></S>} />
           <Route path="/admin/system-config" element={<S><AdminSystemConfigPage /></S>} />
           <Route path="/admin/email-templates" element={<S><AdminEmailTemplatesPage /></S>} />
+          <Route path="/admin/letter-templates" element={<S><AdminLetterTemplatesPage /></S>} />
           <Route path="/admin/daily-brief" element={<S><DailyBriefAdmin /></S>} />
           <Route path="/admin/ui-translations" element={<S><AdminTranslationsPage /></S>} />
           <Route path="/admin/security" element={<S><AdminSecurityPage /></S>} />
