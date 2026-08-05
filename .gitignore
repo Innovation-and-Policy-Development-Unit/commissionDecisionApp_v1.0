@@ -64,3 +64,4 @@ email_*.txt
 
 # Database backups
 backups/
+~$*
