@@ -3211,6 +3211,32 @@ def notify_meeting_scheduled_task(meeting_id):
 
 
 @shared_task
+def notify_meeting_postponed_task(meeting_id, old_date_iso, old_time_iso, old_cutoff_iso):
+    """Notify HR managers that a Commission sitting's date/time — and therefore
+    its submission deadline — has changed.
+
+    Dispatched (best-effort, async) from MeetingViewSet.perform_update.
+    """
+    from datetime import date, time
+    from django.utils.dateparse import parse_datetime
+    from .models import Meeting
+    from .email_notify import notify_meeting_postponed
+
+    meeting = Meeting.objects.filter(pk=meeting_id).first()
+    if not meeting:
+        app_log.warning('MEETING_POSTPONED | meeting %s not found — skipping', meeting_id)
+        return None
+    try:
+        old_date = date.fromisoformat(old_date_iso) if old_date_iso else None
+        old_time = time.fromisoformat(old_time_iso) if old_time_iso else None
+        old_cutoff = parse_datetime(old_cutoff_iso) if old_cutoff_iso else None
+        notify_meeting_postponed(meeting, old_date, old_time, old_cutoff)
+    except Exception:
+        app_log.exception('MEETING_POSTPONED | notification failed for meeting %s', meeting_id)
+    return meeting_id
+
+
+@shared_task
 def force_logout_non_admin_users():
     """Enforce each user's session cap — 5pm same day, or 12h after login if
     they logged in after 5pm (see TrustedSession.compute_expiry) — for

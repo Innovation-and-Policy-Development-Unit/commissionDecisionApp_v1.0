@@ -228,6 +228,49 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "meeting_postponed",
+        "name": "Meeting postponed — HR notification",
+        "category": "system",
+        "description": "Sent to HR managers when a Commission meeting/sitting's date or time is changed, since this also moves the submission deadline.",
+        "placeholders": _ph(
+            "meeting_reference, meeting_title, old_meeting_date, old_meeting_time, "
+            "new_meeting_date, new_meeting_time, meeting_venue, old_submission_deadline, "
+            "new_submission_deadline, deadline_change_note, meeting_url"
+        ),
+        "subject_template": "Sitting postponed — {{meeting_reference}} (now {{new_meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "A Commission sitting has been rescheduled.\n\n"
+            "Reference: {{meeting_reference}}\n"
+            "Title: {{meeting_title}}\n"
+            "Previous date: {{old_meeting_date}} at {{old_meeting_time}}\n"
+            "New date: {{new_meeting_date}} at {{new_meeting_time}}\n"
+            "Venue: {{meeting_venue}}\n\n"
+            "Previous submission deadline: {{old_submission_deadline}}\n"
+            "New submission deadline: {{new_submission_deadline}}\n"
+            "{{deadline_change_note}}\n\n"
+            "You can view the sitting here:\n"
+            "{{meeting_url}}\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">A Commission sitting has been rescheduled.</p>"
+            "<table style=\"border-collapse:collapse;font-size:14px;margin:0 0 16px 0;\">"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Reference</td><td style=\"padding:3px 0;\"><strong>{{meeting_reference}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Title</td><td style=\"padding:3px 0;\">{{meeting_title}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Previous date</td><td style=\"padding:3px 0;text-decoration:line-through;color:#94a3b8;\">{{old_meeting_date}} at {{old_meeting_time}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">New date</td><td style=\"padding:3px 0;\"><strong>{{new_meeting_date}} at {{new_meeting_time}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Venue</td><td style=\"padding:3px 0;\">{{meeting_venue}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Previous deadline</td><td style=\"padding:3px 0;text-decoration:line-through;color:#94a3b8;\">{{old_submission_deadline}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">New deadline</td><td style=\"padding:3px 0;color:#b91c1c;\"><strong>{{new_submission_deadline}}</strong></td></tr>"
+            "</table>"
+            "<p style=\"margin:0 0 16px 0;font-weight:600;\">{{deadline_change_note}}</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the sitting</a>"
+            "</p>"
+        ),
+    },
+    {
         "slug": "minutes_signed",
         "name": "Signed minutes on record",
         "category": "submission_workflow",
@@ -561,6 +604,19 @@ SAMPLE_EMAIL_CONTEXTS = {
         "meeting_time": "09:00",
         "meeting_venue": "PSC Boardroom",
         "submission_deadline": "27 June 2026",
+        "meeting_url": "http://localhost:8080/secretariat/agenda",
+    },
+    "meeting_postponed": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_title": "Ordinary Commission Sitting",
+        "old_meeting_date": "30 June 2026",
+        "old_meeting_time": "09:00",
+        "new_meeting_date": "14 July 2026",
+        "new_meeting_time": "09:00",
+        "meeting_venue": "PSC Boardroom",
+        "old_submission_deadline": "27 June 2026",
+        "new_submission_deadline": "11 July 2026",
+        "deadline_change_note": "The submission deadline has moved later — you now have more time to lodge submissions for this sitting.",
         "meeting_url": "http://localhost:8080/secretariat/agenda",
     },
     "submission_pending_dg_endorsement": {

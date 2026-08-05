@@ -629,6 +629,87 @@ def notify_meeting_scheduled(meeting) -> None:
     )
 
 
+def notify_meeting_postponed(meeting, old_date, old_time, old_cutoff) -> None:
+    """Tell every HR manager that a Commission sitting's date/time changed —
+    this also moves the submission deadline, earlier or later. In-app + push +
+    templated email. Best-effort."""
+    import logging
+    from django.utils import timezone
+
+    from .models import Notification
+
+    recipients = hr_managers()
+    if not recipients:
+        return
+
+    base = get_frontend_base_url()
+    old_meeting_date = old_date.strftime("%d %B %Y") if old_date else "—"
+    old_meeting_time = old_time.strftime("%H:%M") if old_time else "—"
+    new_meeting_date = meeting.date.strftime("%d %B %Y") if meeting.date else "—"
+    new_meeting_time = meeting.time.strftime("%H:%M") if meeting.time else "—"
+    old_submission_deadline = (
+        timezone.localtime(old_cutoff).strftime("%d %B %Y") if old_cutoff else "—"
+    )
+    new_cutoff = getattr(meeting, "effective_cutoff", None)
+    new_submission_deadline = (
+        timezone.localtime(new_cutoff).strftime("%d %B %Y") if new_cutoff else "—"
+    )
+
+    if old_cutoff and new_cutoff:
+        if new_cutoff > old_cutoff:
+            deadline_change_note = (
+                "The submission deadline has moved later — you now have more time "
+                "to lodge submissions for this sitting."
+            )
+        elif new_cutoff < old_cutoff:
+            deadline_change_note = (
+                "The submission deadline has moved earlier — please lodge any "
+                "outstanding submissions for this sitting as soon as possible."
+            )
+        else:
+            deadline_change_note = "The submission deadline is unchanged."
+    else:
+        deadline_change_note = ""
+
+    meeting_url = f"{base}/secretariat/agenda"
+
+    for user in recipients:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,  # email sent separately (templated)
+            push=True,
+            title=f"Sitting postponed — {meeting.reference_number or ''}".strip(),
+            body=(
+                f"{meeting.reference_number or 'A Commission sitting'} moved from "
+                f"{old_meeting_date} to {new_meeting_date}. "
+                f"New submission deadline: {new_submission_deadline}."
+            ),
+            link="/secretariat/agenda",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user,
+                meeting_reference=meeting.reference_number or "",
+                meeting_title=meeting.title or "",
+                old_meeting_date=old_meeting_date,
+                old_meeting_time=old_meeting_time,
+                new_meeting_date=new_meeting_date,
+                new_meeting_time=new_meeting_time,
+                meeting_venue=meeting.venue or "—",
+                old_submission_deadline=old_submission_deadline,
+                new_submission_deadline=new_submission_deadline,
+                deadline_change_note=deadline_change_note,
+                meeting_url=meeting_url,
+            )
+            send_templated_email(slug="meeting_postponed", to=[email], context=ctx)
+
+    logging.getLogger("scdms.app").info(
+        "MEETING_POSTPONED_NOTIFIED | meeting=%s | hr_managers=%d",
+        meeting.reference_number, len(recipients),
+    )
+
+
 def notify_minutes_signed(minutes) -> None:
     """Tell every Commission member + the Chairperson that the signed minutes are
     now the official record and available to view. In-app + push + templated email.

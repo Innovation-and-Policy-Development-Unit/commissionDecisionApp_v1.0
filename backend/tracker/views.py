@@ -6500,12 +6500,47 @@ class MeetingViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(
                 "The agenda must be adopted by the Chairperson before the sitting can begin."
             )
-        serializer.save()
+
+        # ── Postponement: date/time change also moves the submission deadline
+        # (effective_cutoff). Capture the pre-save values so HR can be told
+        # both the old and new date and deadline once saved.
+        instance = serializer.instance
+        old_date, old_time, old_cutoff = instance.date, instance.time, instance.effective_cutoff
+        new_date = serializer.validated_data.get("date", old_date)
+        new_time = serializer.validated_data.get("time", old_time)
+        is_postponed = new_date != old_date or new_time != old_time
+
+        meeting = serializer.save()
+
+        if is_postponed:
+            from .tasks import notify_meeting_postponed_task
+            try:
+                notify_meeting_postponed_task.delay(
+                    meeting.id,
+                    old_date.isoformat() if old_date else None,
+                    old_time.isoformat() if old_time else None,
+                    old_cutoff.isoformat() if old_cutoff else None,
+                )
+            except Exception:
+                import logging
+                logging.getLogger("scdms.app").exception(
+                    "Failed to enqueue postponement notification for meeting %s", meeting.id
+                )
 
     def perform_destroy(self, instance):
         profile = _profile(self.request.user)
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can delete meetings.")
+        # A completed sitting (or one with minutes already drafted/signed) has
+        # produced official records — Minutes, agenda items, flying-minute
+        # signatures — that would be silently destroyed by the CASCADE delete.
+        # Deleting is only safe before the sitting has actually produced those
+        # records; use "Cancel" (status change) instead for anything past that.
+        if instance.status == MeetingStatus.COMPLETED or Minutes.objects.filter(meeting=instance).exists():
+            raise PermissionDenied(
+                "This sitting has already convened or has minutes on record — deleting it "
+                "would destroy that official record. Set its status to Cancelled instead."
+            )
         instance.delete()
 
     @action(detail=True, methods=["get"], url_path="workspace")

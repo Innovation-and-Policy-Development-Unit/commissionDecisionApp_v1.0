@@ -39,6 +39,9 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
   const capacity = getCapacity(sitting.agenda_count || 0)
   const isCancelled = sitting.status === 'cancelled'
   const isInProgress = sitting.status === 'in_progress'
+  // Matches the backend guard in MeetingViewSet.perform_destroy — a sitting
+  // that's already convened or has minutes on record can't be deleted.
+  const isDeletable = sitting.status !== 'completed'
 
   const openEdit = () => {
     setEditForm({
@@ -66,23 +69,23 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
     }
   }
 
-  const handleCancelSitting = async () => {
+  const handleDeleteSitting = async () => {
     const ok = await confirm({
-      title: 'Cancel this sitting?',
-      message: `"${sitting.title}" will be marked as cancelled. This does not delete its record, agenda, or minutes — it can still be viewed, just no longer scheduled to proceed.`,
-      confirmLabel: 'Cancel sitting',
+      title: 'Delete this sitting?',
+      message: `"${sitting.title}" and its agenda placements will be permanently deleted — this cannot be undone. Submissions scheduled to it are not deleted; they'll need to be rescheduled to another sitting. Sittings that have already convened or have minutes on record can't be deleted this way.`,
+      confirmLabel: 'Delete sitting',
       cancelLabel: 'Keep sitting',
       variant: 'danger',
     })
     if (!ok) return
     setCancelling(true)
     try {
-      await api.patch(`/meetings/${sitting.id}/`, { status: 'cancelled' })
-      toast.success('Sitting cancelled.')
+      await api.delete(`/meetings/${sitting.id}/`)
+      toast.success('Sitting deleted.')
       onUpdated?.()
       onClose()
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to cancel sitting.')
+      toast.error(err.response?.data?.detail || 'Failed to delete sitting.')
     } finally {
       setCancelling(false)
     }
@@ -315,11 +318,12 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                       <div className="mt-auto border-t border-slate-100 dark:border-slate-800 p-8 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
                         <button
                           type="button"
-                          disabled={isCancelled || cancelling}
-                          onClick={handleCancelSitting}
+                          disabled={!isDeletable || cancelling}
+                          onClick={handleDeleteSitting}
+                          title={!isDeletable ? "Sittings that have convened or have minutes on record can't be deleted" : undefined}
                           className="flex items-center gap-2 text-sm font-bold text-red-600 hover:text-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-red-600"
                         >
-                          <Trash2 size={18} /> {cancelling ? 'Cancelling…' : 'Cancel Sitting'}
+                          <Trash2 size={18} /> {cancelling ? 'Deleting…' : 'Delete Sitting'}
                         </button>
                         <div className="flex items-center gap-3">
                           <button
