@@ -746,9 +746,11 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "assigned_to",
             "assigned_to_name",
             "assigned_at",
+            "ready_for_manager_at",
             "co_assignments",
             "is_attachment",
             "is_internal",
+            "follows_normal_route",
             "parent_submission",
             "parent_reference",
             "attached_submissions",
@@ -926,6 +928,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "estimated_meeting_date",
             "is_attachment",
             "is_internal",
+            "follows_normal_route",
+            "ready_for_manager_at",
             "secretary_only",
             "requires_travel_letter",
             "travel_endorsers",
@@ -1257,10 +1261,11 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             "parent_submission",
             "is_attachment",
             "is_internal",
+            "follows_normal_route",
             "travel_endorsers",
             "notify_emails",
         )
-        read_only_fields = ("id", "is_internal", "secretary_only", "requires_travel_letter")
+        read_only_fields = ("id", "is_internal", "follows_normal_route", "secretary_only", "requires_travel_letter")
 
     def validate_notify_emails(self, value):
         from django.core.exceptions import ValidationError as DjangoValidationError

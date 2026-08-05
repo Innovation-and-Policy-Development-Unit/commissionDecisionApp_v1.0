@@ -192,6 +192,11 @@ export default function SubmissionDetail() {
     isAdmin
     || (MANAGER_ROLE_TO_UNIT[user.role] && MANAGER_ROLE_TO_UNIT[user.role] === submission?.routed_unit)
   )
+  // The assigned principal/senior officer hands their completed checklist
+  // review or assessment back to their unit manager — only the manager
+  // advances the stage from here (see transitions.py _UNIT_PRINCIPAL_ROLES).
+  const isAssignedToMe = user && submission?.assigned_to === user.id
+  const canSubmitToManager = isAssignedToMe && inAssessmentStage
   const canAnnotateDocs = user && [
     ...UNIT_MANAGER_ROLES,
     'psc_officer', 'psc_secretary', 'psc_commissioner', 'psc_admin',
@@ -241,7 +246,10 @@ export default function SubmissionDetail() {
   const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
   const isMinistrySubmitterChecklist = user && MINISTRY_SUBMITTER_ROLES.includes(user.role)
   const canEditChecklist = user && CHECKLIST_EDIT_ROLES.includes(user.role) && !isMinistrySubmitterChecklist
-  const showChecklist = !submission?.is_attachment && !submission?.is_internal && !submission?.secretary_only
+  // is_internal submissions that follow the normal route (e.g. CSU Manager's)
+  // still get a checklist — only the short internal-only path skips it.
+  const showChecklist = !submission?.is_attachment && !submission?.secretary_only
+    && !(submission?.is_internal && !submission?.follows_normal_route)
 
   const applyBootstrap = useCallback((data) => {
     const tr = data.allowed_transitions || {}
@@ -321,6 +329,19 @@ export default function SubmissionDetail() {
       toast.success('Submission unallocated.')
     } catch (err) {
       toast.error(formatApiError(err, 'Could not unallocate the submission.'))
+    } finally {
+      setAllocateBusy(false)
+    }
+  }
+
+  const submitToManager = async () => {
+    setAllocateBusy(true)
+    try {
+      await api.post(`/submissions/${id}/submit-to-manager/`)
+      await reload()
+      toast.success('Submitted back to your unit manager.')
+    } catch (err) {
+      toast.error(formatApiError(err, 'Could not submit back to your manager.'))
     } finally {
       setAllocateBusy(false)
     }
@@ -1548,6 +1569,31 @@ const stageDescriptions = {
                   </BaseButton>
                 )}
               </div>
+            </div>
+          )}
+
+          {canSubmitToManager && (
+            <div className="card card-compact space-y-3">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {submission.current_stage === 'manager_checklist_review' ? 'Checklist review' : 'Assessment'}
+              </h3>
+              {submission.ready_for_manager_at ? (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                  Submitted back to your unit manager — waiting for their review.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Once your review is complete, submit it back to your unit manager —
+                    they'll advance it to the next stage.
+                  </p>
+                  <BaseButton type="button" variant="primary" className="w-full"
+                    loading={allocateBusy} loadingLabel="Submitting"
+                    onClick={submitToManager}>
+                    Submit back to Manager
+                  </BaseButton>
+                </>
+              )}
             </div>
           )}
 

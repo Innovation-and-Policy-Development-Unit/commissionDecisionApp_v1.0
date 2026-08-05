@@ -1516,6 +1516,15 @@ class Submission(models.Model):
         help_text="Primary responsible principal assigned by the unit manager.",
     )
     assigned_at = models.DateTimeField(null=True, blank=True)
+    ready_for_manager_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text=(
+            "Set when the assigned principal/senior officer submits their completed "
+            "checklist review or assessment back to the unit manager. The manager — "
+            "not the assignee — is the one who advances the workflow stage from here. "
+            "Cleared when reassigned or once the manager advances the stage."
+        ),
+    )
     # Secondary analysts — M2M for concurrent multi-analyst work (e.g. ORG-3.1 restructures)
     co_assigned_principals = models.ManyToManyField(
         settings.AUTH_USER_MODEL,

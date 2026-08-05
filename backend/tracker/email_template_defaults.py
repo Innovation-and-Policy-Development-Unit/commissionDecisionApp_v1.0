@@ -484,6 +484,21 @@ DEFAULT_EMAIL_TEMPLATES = [
         "body_html_template": "",
     },
     {
+        "slug": "submission_ready_for_manager",
+        "name": "Submission ready for your review",
+        "category": "submission_workflow",
+        "description": "Notifies a unit manager when a principal/senior officer submits their completed checklist review or assessment back for the manager to advance.",
+        "placeholders": _ph("submission_reference, submission_title, submission_url, assignee_name, work_stage"),
+        "subject_template": "Ready for your review: {{submission_reference}}",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "{{assignee_name}} has submitted \"{{submission_title}}\" ({{submission_reference}}) "
+            "back to you after completing their {{work_stage}}.\n\n"
+            "Review it and advance the stage when ready: {{submission_url}}"
+        ),
+        "body_html_template": "",
+    },
+    {
         "slug": "task_assigned",
         "name": "Task assigned to you",
         "category": "tasks",
@@ -644,6 +659,13 @@ SAMPLE_EMAIL_CONTEXTS = {
         "submission_title": "Organisation restructure — Ministry of Climate Change",
         "submission_url": "http://localhost:8080/submissions/1",
         "manager_name": "Manager ODU",
+    },
+    "submission_ready_for_manager": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Confirmation of Appointment for John Smith, Senior Officer",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "assignee_name": "J. Principal",
+        "work_stage": "checklist review",
     },
     "task_assigned": {
         "task_title": "Implement decision on senior appointment",

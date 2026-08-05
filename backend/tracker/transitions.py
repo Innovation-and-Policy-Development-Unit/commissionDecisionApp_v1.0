@@ -353,15 +353,21 @@ _RECEPTIONIST_ALLOWED = {
     (WorkflowStage.DRAFT, WorkflowStage.MANAGER_CHECKLIST_REVIEW),
 }
 
-# OPSC Unit Managers handle the checklist review stage only
+# OPSC Unit Managers handle both the checklist review and assessment stages —
+# they're the only ones who can advance either, including work handed back to
+# them by a principal/senior officer they assigned it to (see _UNIT_WORKER_ROLES).
 _UNIT_MANAGER_ROLES = OPSC_UNIT_MANAGER_ROLES
 
 _UNIT_MANAGER_STAGES = {
     WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+    WorkflowStage.UNDER_ASSESSMENT,
 }
 
-# OPSC Unit Principals work on submissions assigned to them by their manager.
-# They can do checklist review AND assessment; assignment enforcement happens in views.py.
+# OPSC Unit Principals/Senior Officers do the checklist review and assessment
+# work on submissions assigned to them by their unit manager (assignment
+# enforcement happens in views.py), but cannot advance the workflow stage
+# themselves — they submit their completed work back to the manager (see the
+# `submit-to-manager` action), and only the manager moves the stage forward.
 _UNIT_PRINCIPAL_ROLES = {
     Role.ODU_PRINCIPAL,
     Role.PRINCIPAL_ORG_DEV_ANALYST,
@@ -372,6 +378,13 @@ _UNIT_PRINCIPAL_ROLES = {
     # compliance_senior is a senior analyst (not a manager); treated as a principal
     # so it is properly role-gated rather than falling through to the generic graph check.
     Role.COMPLIANCE_SENIOR,
+    # Senior Officer is a shared "senior" assignee role usable across units
+    # (see MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES in opsc_access.py) — same
+    # hand-back-to-manager rule applies. Note: Senior Officer is *also* a
+    # post-decision execution role (_STAFF_STAGES below) — that's a separate,
+    # unrelated capacity, so the checks below only apply this restriction
+    # while at a checklist-review/assessment stage, not unconditionally.
+    Role.SENIOR_OFFICER,
 }
 
 _UNIT_PRINCIPAL_STAGES = {
@@ -575,20 +588,25 @@ def assert_transition_allowed(
             )
         return
 
-    # ── OPSC Unit Managers — checklist review only ──────────────────────────
+    # ── OPSC Unit Managers — checklist review and assessment ────────────────
     if role in _UNIT_MANAGER_ROLES:
         if current_stage not in _UNIT_MANAGER_STAGES:
-            raise PermissionDenied("Unit managers can only act at the Manager Checklist Review stage.")
-        return
-
-    # ── OPSC Unit Principals — checklist review and assessment ──────────────
-    # Assignment enforcement (assigned_to == request.user) is done in views.py.
-    if role in _UNIT_PRINCIPAL_ROLES:
-        if current_stage not in _UNIT_PRINCIPAL_STAGES:
             raise PermissionDenied(
-                "Unit principals can only act at the Checklist Review and Under Assessment stages."
+                "Unit managers can only act at the Manager Checklist Review and Under Assessment stages."
             )
         return
+
+    # ── OPSC Unit Principals / Senior Officers — do the work, hand it back ──
+    # They can update checklist items and write assessment notes (separate
+    # endpoints, not gated here; assignment enforcement is done in views.py),
+    # but cannot advance the workflow stage themselves at these two stages —
+    # only their unit manager can, after the "submit-to-manager" hand-back.
+    if role in _UNIT_PRINCIPAL_ROLES and current_stage in _UNIT_PRINCIPAL_STAGES:
+        raise PermissionDenied(
+            "You can't move this stage yourself — use \"Submit back to Manager\" once "
+            "your review/assessment is ready. Your unit manager will review it and "
+            "advance the stage."
+        )
 
     # ── Recall is a ministry-only action ────────────────────────────────────
     if target_stage == WorkflowStage.RECALLED and role != Role.PSC_ADMIN:
@@ -718,9 +736,12 @@ def iter_allowed_targets(
         if current_stage in _UNIT_MANAGER_STAGES:
             return _STAGE_GRAPH.get(current_stage, [])
         return []
-    if role in _UNIT_PRINCIPAL_ROLES:
-        if current_stage in _UNIT_PRINCIPAL_STAGES:
-            return _STAGE_GRAPH.get(current_stage, [])
+    # Unit principals/senior officers can't self-transition at the checklist
+    # review/assessment stages (must hand back to their manager — see
+    # assert_transition_allowed). Outside those two stages, fall through to
+    # the generic loop below — needed for Senior Officer's separate
+    # post-decision capacity (_STAFF_STAGES).
+    if role in _UNIT_PRINCIPAL_ROLES and current_stage in _UNIT_PRINCIPAL_STAGES:
         return []
     if role in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_SECRETARY}:
         targets = []

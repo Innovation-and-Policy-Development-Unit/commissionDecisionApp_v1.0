@@ -227,6 +227,27 @@ def send_assignment_email(submission: Submission, assignee: User, *, manager_nam
     send_templated_email(slug="submission_assigned_officer", to=[email], context=ctx)
 
 
+def notify_submission_ready_for_manager(submission: Submission, assignee: User, managers: Iterable[User]) -> None:
+    """Email the unit manager(s) when a principal/senior officer hands their
+    completed checklist review or assessment back for the manager to advance."""
+    assignee_name = assignee.get_full_name() or assignee.username
+    work_stage = (
+        "checklist review" if submission.current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW else "assessment"
+    )
+    base_ctx = submission_email_context(submission)
+    for manager in managers:
+        email = (getattr(manager, "email", None) or "").strip()
+        if not email:
+            continue
+        ctx = merge_recipient_context(
+            manager,
+            assignee_name=assignee_name,
+            work_stage=work_stage,
+            **base_ctx,
+        )
+        send_templated_email(slug="submission_ready_for_manager", to=[email], context=ctx)
+
+
 def notify_task_assigned(task: CommissionTask, users: Iterable[User]) -> None:
     base_ctx = task_email_context(task)
     for user in users:

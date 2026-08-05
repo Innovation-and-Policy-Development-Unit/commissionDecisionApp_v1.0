@@ -398,6 +398,11 @@ class HasProfilePermission(permissions.BasePermission):
 def _updated_fields(submission, prev, target):
     """Return minimal set of fields to save given the transition."""
     fields = {"current_stage"}
+    if (
+        prev in (WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT)
+        and submission.ready_for_manager_at is None
+    ):
+        fields.add("ready_for_manager_at")
     if target == WorkflowStage.UNDER_ASSESSMENT and submission.assessment_started_at is not None:
         fields.add("assessment_started_at")
         fields.add("assessment_deadline_at")
@@ -1539,6 +1544,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         proof_payload = {}
 
         with transaction.atomic():
+            # Leaving checklist review/assessment via a real stage transition
+            # means the manager has acted on the hand-back — clear the flag so
+            # it doesn't linger into the next stage.
+            if prev in (WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT) and submission.ready_for_manager_at:
+                submission.ready_for_manager_at = None
+
             submission.current_stage = target
 
             # ── Attachment form approved: mark it present on the parent's checklist ──
@@ -2101,7 +2112,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             # Unassign
             submission.assigned_to = None
             submission.assigned_at = None
-            submission.save(update_fields=["assigned_to", "assigned_at"])
+            submission.ready_for_manager_at = None
+            submission.save(update_fields=["assigned_to", "assigned_at", "ready_for_manager_at"])
             _log(request, _AL.Action.UPDATE, resource_type="Submission",
                  resource_id=submission.id, resource_label=submission.reference_number,
                  description="Submission unassigned from principal")
@@ -2134,7 +2146,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         submission.assigned_to = assignee
         submission.assigned_at = timezone.now()
-        submission.save(update_fields=["assigned_to", "assigned_at"])
+        submission.ready_for_manager_at = None
+        submission.save(update_fields=["assigned_to", "assigned_at", "ready_for_manager_at"])
 
         _log(request, _AL.Action.UPDATE, resource_type="Submission",
              resource_id=submission.id, resource_label=submission.reference_number,
@@ -2250,6 +2263,69 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         _log(request, _AL.Action.UPDATE, resource_type="Submission",
              resource_id=submission.id, resource_label=submission.reference_number,
              description=f"Co-assignment {'added' if created else 'updated'} for {principal.username}")
+
+        return Response(SubmissionDetailSerializer(submission).data)
+
+    @action(detail=True, methods=["post"], url_path="submit-to-manager")
+    def submit_to_manager(self, request, pk=None):
+        """
+        The assigned principal/senior officer hands their completed checklist
+        review or assessment back to their unit manager. Only the manager can
+        advance the workflow stage from here — this action doesn't move the
+        stage itself, it just flags the work ready and notifies the manager.
+        """
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL, Notification
+        from django.contrib.auth.models import User
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+
+        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser
+        if not is_admin and submission.assigned_to_id != request.user.id:
+            raise PermissionDenied("Only the assigned principal/senior officer can submit this back to their manager.")
+        if submission.current_stage not in (
+            WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+        ):
+            raise PermissionDenied("This can only be done during checklist review or assessment.")
+
+        submission.ready_for_manager_at = timezone.now()
+        submission.save(update_fields=["ready_for_manager_at"])
+
+        _log(request, _AL.Action.UPDATE, resource_type="Submission",
+             resource_id=submission.id, resource_label=submission.reference_number,
+             description=f"Submitted back to unit manager by {request.user.username}")
+
+        # ── Notify the unit's manager(s) (in-app + email) ──────────────────────
+        unit_manager_role = {v: k for k, v in MANAGER_ROLE_TO_ROUTED_UNIT.items()}.get(submission.routed_unit)
+        managers = []
+        if unit_manager_role:
+            qs = User.objects.filter(
+                is_active=True, psc_profile__role=unit_manager_role,
+            ).select_related("psc_profile")
+            if profile.unit_id:
+                qs = qs.filter(psc_profile__unit_id=profile.unit_id)
+            managers = list(qs)
+
+        assignee_name = request.user.get_full_name() or request.user.username
+        for manager in managers:
+            Notification.objects.create(
+                recipient=manager,
+                submission=submission,
+                channel=Notification.Channel.BOTH,
+                title=f"Ready for your review: {submission.reference_number}",
+                body=(
+                    f"{assignee_name} has submitted '{submission.title}' back to you "
+                    f"after completing their {'checklist review' if submission.current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW else 'assessment'}."
+                ),
+            )
+        if managers:
+            try:
+                from .email_notify import notify_submission_ready_for_manager
+
+                notify_submission_ready_for_manager(submission, request.user, managers)
+            except Exception:
+                pass
 
         return Response(SubmissionDetailSerializer(submission).data)
 
