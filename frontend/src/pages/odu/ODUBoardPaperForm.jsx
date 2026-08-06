@@ -347,6 +347,11 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
             {readOnly ? 'This is the paper that was — or will be — presented to the Commission.' : 'This paper, not the ministry’s original request, is what the Commission will receive.'}
           </p>
         </div>
+        {(isOduPrincipal || isOduManager) && submission?.assigned_to_name && (
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+            Assigned to <span className="font-medium text-slate-600 dark:text-slate-300">{submission.assigned_to_name}</span>
+          </p>
+        )}
         {(paper?.submitted_for_review_at || paper?.manager_approved_at || paper?.secretary_approved_at) && (
           <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
             {paper?.submitted_for_review_at && (

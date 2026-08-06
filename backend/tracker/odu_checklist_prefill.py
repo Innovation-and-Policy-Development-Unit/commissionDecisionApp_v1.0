@@ -77,16 +77,20 @@ _REQUIRED_DOC_NAME_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
+def _user_display_name(user: User | None) -> str:
+    if not user:
+        return ""
+    full = f"{user.first_name} {user.last_name}".strip()
+    return full or user.username
+
+
 def _manager_odu_name() -> str:
     profile = (
         User.objects.filter(psc_profile__role=Role.ODU_MANAGER)
         .order_by("id")
         .first()
     )
-    if not profile:
-        return ""
-    full = f"{profile.first_name} {profile.last_name}".strip()
-    return full or profile.username
+    return _user_display_name(profile)
 
 
 def _dynamic_form_data(submission: Submission) -> dict[str, Any]:
@@ -188,9 +192,12 @@ def build_odu_checklist_prefill(submission: Submission, *, user: User | None = N
     for field in _MINISTRY_SELF_CERTIFIED_FIELDS:
         section_b[field] = None
 
-    officer_name = ""
-    if user:
-        officer_name = f"{user.first_name} {user.last_name}".strip() or user.username
+    # Prefer the officer the Manager ODU has actually assigned via the
+    # standard "Allocate to officer" mechanism (Submission.assigned_to) over
+    # whoever merely happens to be viewing the form right now.
+    officer_name = _user_display_name(submission.assigned_to) if submission.assigned_to_id else ""
+    if not officer_name and user:
+        officer_name = _user_display_name(user)
 
     return {
         "ministry_department": ministry_name,

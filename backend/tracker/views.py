@@ -10056,6 +10056,7 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                     "This checklist can only be reviewed while the submission is "
                     "with ODU for Manager Checklist Review."
                 )
+            _require_assigned_officer_or_manager(profile, instance.submission, self.request.user.id)
             # ODU may only add their own recommendation/sign-off — the
             # ministry's 20 answers are locked to them.
             for field in list(serializer.validated_data.keys()):
@@ -10134,6 +10135,18 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
 # ── ODU Restructure Board Paper ────────────────────────────────────────────────
 
 BOARD_PAPER_SECRETARY_ROLES = frozenset({Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN})
+
+
+def _require_assigned_officer_or_manager(profile, submission, user_id):
+    """If the Manager ODU has assigned this case to a specific officer (via
+    "Allocate to officer"), only that officer — or the Manager, who can
+    always step in — may do the ODU-side work. If nobody's assigned yet,
+    any eligible ODU role may act."""
+    if profile.role == Role.ODU_MANAGER:
+        return
+    assigned_to_id = submission.assigned_to_id
+    if assigned_to_id and assigned_to_id != user_id:
+        raise PermissionDenied("This case is assigned to a different ODU officer.")
 
 
 class ODUBoardPaperViewSet(viewsets.ModelViewSet):
@@ -10232,7 +10245,8 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
             submission=submission,
             created_by=request.user,
             subject=submission.title or "",
-            prepared_by=_odu_prepared_by_default(profile, request.user),
+            prepared_by=_odu_prepared_by_default(submission, request.user),
+            action_officer=_odu_action_officer_default(),
         )
         return Response(ODUBoardPaperSerializer(paper).data)
 
@@ -10246,6 +10260,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(
                 "Board paper can only be created while the submission is with ODU."
             )
+        _require_assigned_officer_or_manager(profile, submission, self.request.user.id)
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
@@ -10259,8 +10274,8 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
                 "Board paper can only be edited while the submission is with ODU."
             )
         if instance.status == BoardPaperStatus.DRAFT:
-            # Either the principal or the manager may draft it.
-            pass
+            # The assigned officer (or the manager) may draft it.
+            _require_assigned_officer_or_manager(profile, instance.submission, self.request.user.id)
         elif instance.status == BoardPaperStatus.SUBMITTED:
             # Principal has submitted it — only the manager reviews/edits now.
             if profile.role != Role.ODU_MANAGER:
@@ -10283,6 +10298,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         profile = _profile(request.user)
         if profile.role not in ODU_PRINCIPAL_WORKER_ROLES:
             raise PermissionDenied("Only an ODU principal analyst can submit the board paper.")
+        _require_assigned_officer_or_manager(profile, paper.submission, request.user.id)
         if paper.status != BoardPaperStatus.DRAFT:
             return Response(
                 {"detail": "Only a Draft board paper can be submitted."},
@@ -10331,10 +10347,23 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         return Response(ODUBoardPaperSerializer(paper).data)
 
 
-def _odu_prepared_by_default(profile, user) -> str:
+def _name_with_role_title(user) -> str:
     full = f"{user.first_name} {user.last_name}".strip() or user.username
-    title = dict(Role.choices).get(profile.role, profile.role)
+    profile = _profile(user)
+    title = dict(Role.choices).get(profile.role, profile.role) if profile else ""
     return f"{full}, {title}" if title else full
+
+
+def _odu_prepared_by_default(submission, fallback_user) -> str:
+    # Prefer whoever the Manager ODU has assigned via "Allocate to officer"
+    # over whoever merely happens to be viewing the form right now.
+    user = submission.assigned_to or fallback_user
+    return _name_with_role_title(user)
+
+
+def _odu_action_officer_default() -> str:
+    manager = User.objects.filter(psc_profile__role=Role.ODU_MANAGER).order_by("id").first()
+    return _name_with_role_title(manager) if manager else ""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
