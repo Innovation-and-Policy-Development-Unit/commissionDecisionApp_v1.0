@@ -4,8 +4,7 @@
  * Digital version of the OPSC ODU Checklist for Restructure Submissions.
  * Sections A + B (submission info + the 20 items) are filled by the
  * submitting ministry/unit while their submission is in Draft. ODU
- * (odu_principal, principal_org_dev_analyst, principal_job_analyst,
- * odu_manager) reviews those answers read-only during Manager Checklist
+ * (odu_principal, odu_manager) reviews those answers read-only during Manager Checklist
  * Review and adds their own recommendation + sign-off (Sections C + D).
  * Manager ODU approves once satisfied.
  *

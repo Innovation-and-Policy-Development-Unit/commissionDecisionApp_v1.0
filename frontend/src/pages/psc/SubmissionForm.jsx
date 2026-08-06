@@ -24,8 +24,6 @@ const FALLBACK_FORM_TYPES = []
 /** Roles that submit OPSC-internal submissions (no checklist, straight to Secretary). */
 const INTERNAL_ROLES = [
   'odu_principal',
-  'principal_org_dev_analyst',
-  'principal_job_analyst',
   'vipam_manager',
   'vipam_principal',
 ]

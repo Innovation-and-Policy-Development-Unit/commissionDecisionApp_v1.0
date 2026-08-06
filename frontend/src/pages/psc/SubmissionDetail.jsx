@@ -107,7 +107,7 @@ const CHECKLIST_EDIT_ROLES = [
 const MINISTRY_SUBMITTER_ROLES = ['ministry_hr', 'dept_admin', 'csu_manager']
 
 const DYNAMIC_CHECKLIST_EDIT_ROLES = [
-  'odu_manager', 'odu_principal', 'principal_org_dev_analyst', 'principal_job_analyst', 'psc_admin',
+  'odu_manager', 'odu_principal', 'psc_admin',
 ]
 const DYNAMIC_CHECKLIST_VIEW_ROLES = [
   ...DYNAMIC_CHECKLIST_EDIT_ROLES,

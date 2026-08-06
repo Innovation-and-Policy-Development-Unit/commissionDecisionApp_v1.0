@@ -21,19 +21,10 @@ OPSC_UNIT_PRINCIPAL_ROLES: frozenset[str] = frozenset({
     Role.VIPAM_PRINCIPAL,
     Role.HR_UNIT_PRINCIPAL,
     Role.ODU_PRINCIPAL,
-    Role.PRINCIPAL_ORG_DEV_ANALYST,
-    Role.PRINCIPAL_JOB_ANALYST,
     Role.COMPLIANCE_PRINCIPAL,
     # compliance_senior: senior analyst assigned by compliance_manager;
     # can review/assess submissions but cannot approve checklists (manager-only).
     Role.COMPLIANCE_SENIOR,
-})
-
-# ODU principals and specialist analysts (checklist / assessment work under ODU Manager)
-ODU_PRINCIPAL_WORKER_ROLES: frozenset[str] = frozenset({
-    Role.ODU_PRINCIPAL,
-    Role.PRINCIPAL_ORG_DEV_ANALYST,
-    Role.PRINCIPAL_JOB_ANALYST,
 })
 
 OPSC_POST_DECISION_ROLES: frozenset[str] = frozenset({
@@ -63,12 +54,7 @@ MANAGER_ROLE_TO_PRINCIPAL_ROLE: dict[str, str] = {
 }
 
 MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES: dict[str, set[str]] = {
-    Role.ODU_MANAGER: {
-        Role.ODU_PRINCIPAL,
-        Role.PRINCIPAL_ORG_DEV_ANALYST,
-        Role.PRINCIPAL_JOB_ANALYST,
-        Role.SENIOR_OFFICER,
-    },
+    Role.ODU_MANAGER: {Role.ODU_PRINCIPAL, Role.SENIOR_OFFICER},
     Role.VIPAM_MANAGER: {Role.VIPAM_PRINCIPAL, Role.SENIOR_OFFICER},
     Role.HR_UNIT_MANAGER: {Role.HR_UNIT_PRINCIPAL, Role.SENIOR_OFFICER},
     Role.COMPLIANCE_MANAGER: {Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_SENIOR},

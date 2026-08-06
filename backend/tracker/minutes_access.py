@@ -25,8 +25,6 @@ FULL_ACCESS_ROLES = frozenset({
 ROLE_TO_ROUTED_UNIT: dict[str, str] = {
     Role.ODU_MANAGER: "odu",
     Role.ODU_PRINCIPAL: "odu",
-    Role.PRINCIPAL_ORG_DEV_ANALYST: "odu",
-    Role.PRINCIPAL_JOB_ANALYST: "odu",
     Role.VIPAM_MANAGER: "vipam",
     Role.VIPAM_PRINCIPAL: "vipam",
     Role.HR_UNIT_MANAGER: "hr",

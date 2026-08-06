@@ -12,8 +12,6 @@ from .models import WorkflowStage
 # ── Human-readable role titles (no personal names — role/title only) ──────────
 _ROLE_TITLE: dict[str, str] = {
     "odu_principal":               "ODU Principal Analyst",
-    "principal_org_dev_analyst":   "Principal Org Dev Analyst",
-    "principal_job_analyst":       "Principal Job Analyst",
     "hr_unit_principal":           "HR Principal Officer",
     "vipam_principal":             "VIPAM Principal",
     "compliance_principal":        "Compliance Principal",

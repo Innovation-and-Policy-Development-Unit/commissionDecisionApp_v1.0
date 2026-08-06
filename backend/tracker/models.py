@@ -38,8 +38,6 @@ class Role(models.TextChoices):
     VIPAM_PRINCIPAL       = "vipam_principal",       "VIPAM Principal"
     HR_UNIT_PRINCIPAL     = "hr_unit_principal",     "HR Unit Principal"
     ODU_PRINCIPAL         = "odu_principal",          "ODU Principal"
-    PRINCIPAL_ORG_DEV_ANALYST = "principal_org_dev_analyst", "Principal Organization Development Analyst"
-    PRINCIPAL_JOB_ANALYST     = "principal_job_analyst",     "Principal Job Analyst"
     COMPLIANCE_PRINCIPAL  = "compliance_principal",  "Compliance Principal"
     # ── FR-05: Additional compliance-adjacent roles ─────────────────────────
     SECRETARY_OPSC    = "secretary_opsc",    "Secretary, OPSC"

@@ -76,8 +76,6 @@ const ROLE_CHOICES = [
   { value: 'vipam_principal', label: 'VIPAM Principal' },
   { value: 'hr_unit_principal', label: 'HR Unit Principal' },
   { value: 'odu_principal', label: 'ODU Principal' },
-  { value: 'principal_org_dev_analyst', label: 'Principal Organization Development Analyst' },
-  { value: 'principal_job_analyst', label: 'Principal Job Analyst' },
   { value: 'compliance_principal', label: 'Compliance Principal' },
   { value: 'secretary_opsc', label: 'Secretary, OPSC' },
   { value: 'dg_director', label: 'DG / Director (Ministry Read-Only)' },

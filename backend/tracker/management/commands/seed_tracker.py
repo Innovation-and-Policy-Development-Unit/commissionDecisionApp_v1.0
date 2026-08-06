@@ -674,8 +674,7 @@ class Command(BaseCommand):
     _OPSC_STAFF_ROLES = frozenset({
         "psc_admin", "psc_officer", "psc_secretary", "senior_admin_officer",
         "psc_commissioner", "chairperson", "psc_manager", "principal_officer",
-        "senior_officer", "odu_principal", "principal_org_dev_analyst",
-        "principal_job_analyst",
+        "senior_officer", "odu_principal",
     })
 
     def _seed_opsc_units(self):
@@ -871,26 +870,9 @@ class Command(BaseCommand):
             "view_audit_trail",
         ]),
         ("odu_principal", (
-            "ODU Principal — assessment work assigned by the ODU Manager; views all Commission "
-            "minutes and tasks; updates only tasks allocated to them."
-        ), [
-            "view_dashboard", "view_submissions", "transition_workflow",
-            "update_implementation",
-            "view_commission_minutes", "view_commission_tasks",
-            "view_audit_trail",
-        ]),
-        ("principal_org_dev_analyst", (
-            "Principal Organization Development Analyst (ODU) — completes the ODU restructure "
-            "checklist and assessment on submissions assigned by the ODU Manager (ORG-3.1 / PSC 2-1)."
-        ), [
-            "view_dashboard", "view_submissions", "transition_workflow",
-            "update_implementation",
-            "view_commission_minutes", "view_commission_tasks",
-            "view_audit_trail",
-        ]),
-        ("principal_job_analyst", (
-            "Principal Job Analyst (ODU) — job analysis and establishment variation work on "
-            "submissions assigned by the ODU Manager; same ODU workflow access as org development analyst."
+            "ODU Principal — assessment work assigned by the ODU Manager, including the ODU "
+            "restructure checklist/assessment and job analysis work on submissions (ORG-3.1 / "
+            "PSC 2-1); views all Commission minutes and tasks; updates only tasks allocated to them."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
             "update_implementation",

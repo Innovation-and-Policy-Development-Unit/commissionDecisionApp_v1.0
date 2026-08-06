@@ -56,8 +56,6 @@ const RECEIVER_ROLE_HINTS = [
   'psc_officer',
   'psc_secretary',
   'odu_principal',
-  'principal_org_dev_analyst',
-  'principal_job_analyst',
   'hr_unit_principal',
   'vipam_principal',
 ]

@@ -273,8 +273,6 @@ def _submission_queryset_for(user):
         return qs.filter(department_id=profile.department_id, is_internal=False)
     _UNIT_PRINCIPAL_ROLES = {
         Role.ODU_PRINCIPAL,
-        Role.PRINCIPAL_ORG_DEV_ANALYST,
-        Role.PRINCIPAL_JOB_ANALYST,
         Role.HR_UNIT_PRINCIPAL,
         Role.VIPAM_PRINCIPAL,
         Role.COMPLIANCE_PRINCIPAL,
@@ -1435,8 +1433,6 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         # ── Unit principals can only transition submissions assigned to them ──
         _unit_principal_to_routed = {
             Role.ODU_PRINCIPAL: "odu",
-            Role.PRINCIPAL_ORG_DEV_ANALYST: "odu",
-            Role.PRINCIPAL_JOB_ANALYST: "odu",
             Role.VIPAM_PRINCIPAL: "vipam",
             Role.HR_UNIT_PRINCIPAL: "hr",
             Role.COMPLIANCE_PRINCIPAL: "compliance",
@@ -11671,9 +11667,7 @@ class DocumentVersionViewSet(
 # Roles that can fill/edit the checklist during manager_checklist_review
 CHECKLIST_EDIT_STAGE   = WorkflowStage.MANAGER_CHECKLIST_REVIEW
 CHECKLIST_EDIT_ROLES   = frozenset({
-    Role.ODU_MANAGER, Role.ODU_PRINCIPAL,
-    Role.PRINCIPAL_ORG_DEV_ANALYST, Role.PRINCIPAL_JOB_ANALYST,
-    Role.PSC_ADMIN,
+    Role.ODU_MANAGER, Role.ODU_PRINCIPAL, Role.PSC_ADMIN,
 })
 # Roles that can view the completed checklist in later stages
 CHECKLIST_VIEW_STAGES  = frozenset({
