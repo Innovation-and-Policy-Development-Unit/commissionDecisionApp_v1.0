@@ -117,6 +117,14 @@ export function canShowOduChecklist(submission, user) {
   return false
 }
 
+// Roles that can give the final Secretary sign-off on the board paper —
+// matches BOARD_PAPER_SECRETARY_ROLES in views.py.
+export const BOARD_PAPER_SECRETARY_ROLES = ['psc_secretary', 'senior_admin_officer', 'psc_admin']
+
+export function userIsBoardPaperSecretary(role) {
+  return BOARD_PAPER_SECRETARY_ROLES.includes(role)
+}
+
 // ── ODU Board Paper (Commission-facing submission ODU prepares) ───────────────
 
 // Editable while ODU is actively working the case: checklist review, then

@@ -1,19 +1,30 @@
-"""Rule-based prefill for the ODU Restructure Checklist from submission data and uploads."""
+"""Auto-derive the ODU Restructure Checklist from the ministry's actual submitted data.
+
+Confirmed with ODU (2026-08-06): the ministry should not have to manually click
+Yes/No through the checklist — the system checks what they actually submitted
+(their digitized form answers + the Required Documents they've attached) and
+answers the items it can verify directly. The ministry then reviews the result
+rather than filling in a blank 20-item form.
+
+Not every item can be verified this way. Items 7–13 (structure/JD *quality*
+judgments — span of control, KRA/KPI clarity, competency appropriateness) have
+no corresponding submitted fact to check against; those stay as the ministry's
+own self-certification. Items 17–20 describe ODU's own subsequent work (their
+analysis, their final check) and were never in scope for the ministry at all —
+see CHECKLIST_MINISTRY_REQUIRED_FIELDS in odu_checklist_rules.py.
+"""
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from django.contrib.auth import get_user_model
 
 from .models import (
-    DocumentClassificationType,
     ODURestructureChecklist,
-    RestructureSubmissionData,
     Role,
     Submission,
-    SubmissionDocument,
+    SubmissionChecklistItem,
 )
 
 User = get_user_model()
@@ -26,13 +37,23 @@ _SECTION_A_FIELDS = (
     "manager_odu",
 )
 
-_SECTION_B_FIELDS = (
+# Items the system can verify directly from the ministry's submitted data or
+# their Required Documents — set to a definite True/False, not a suggestion.
+_SYSTEM_VERIFIABLE_FIELDS = (
     "b1_cover_letter",
     "b2_org_chart",
     "b3_positions_list",
     "b4_jds_attached",
     "b5_rationale_stated",
     "b6_mandate_alignment",
+    "b14_cost_analysis",
+    "b15_grt_mapping",
+    "b16_consultation",
+)
+
+# Items with no submitted fact to check against — content/quality judgments
+# left as the ministry's own self-certification.
+_MINISTRY_SELF_CERTIFIED_FIELDS = (
     "b7_reporting_lines",
     "b8_no_duplication",
     "b9_span_of_control",
@@ -40,41 +61,19 @@ _SECTION_B_FIELDS = (
     "b11_kra_kta_kpi",
     "b12_competencies",
     "b13_qual_experience",
-    "b14_cost_analysis",
-    "b15_grt_mapping",
-    "b16_consultation",
 )
 
-# Document-type → checklist items (document evidence only; officer confirms)
-_DOC_TYPE_HINTS: dict[str, tuple[str, ...]] = {
-    DocumentClassificationType.DG_ENDORSEMENT: ("b1_cover_letter",),
-    DocumentClassificationType.ORGANISATIONAL_CHART: ("b2_org_chart",),
-    DocumentClassificationType.POSITION_DESCRIPTION: (
-        "b4_jds_attached",
-        "b10_job_purpose_linked",
-        "b12_competencies",
-        "b13_qual_experience",
-    ),
-    DocumentClassificationType.FINANCIAL_COSTING: ("b14_cost_analysis", "b15_grt_mapping"),
-    DocumentClassificationType.CORRESPONDENCE: ("b1_cover_letter", "b16_consultation"),
-    DocumentClassificationType.SUPPORTING_EVIDENCE: ("b16_consultation",),
-}
+_ALL_MINISTRY_FIELDS = _SYSTEM_VERIFIABLE_FIELDS + _MINISTRY_SELF_CERTIFIED_FIELDS
 
-# Keywords in file name / description / OCR snippet
-_KEYWORD_HINTS: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("cover letter", "covering letter", "head of agency", "director general", "dg letter", "endorsement"), "b1_cover_letter"),
-    (("org chart", "organisational chart", "organizational chart", "organisation structure", "organization structure"), "b2_org_chart"),
-    (("position list", "establishment list", "staffing table", "post list", "schedule of posts"), "b3_positions_list"),
-    (("job description", "position description", " jd ", ".jd"), "b4_jds_attached"),
-    (("rationale", "justification", "background", "proposal"), "b5_rationale_stated"),
-    (("mandate", "strategic plan", "corporate plan"), "b6_mandate_alignment"),
-    (("reporting line", "reporting structure", "line of report"), "b7_reporting_lines"),
-    (("cost", "financial impact", "budget impact", "costing", "cost spreadsheet", "excel cost"), "b14_cost_analysis"),
-    (("grt", "remuneration table", "government remuneration"), "b15_grt_mapping"),
-    (("doft", "dsspac", "consultation", "grt consultation"), "b16_consultation"),
-    (("kra", "key result", "kta", "kpi", "performance indicator"), "b11_kra_kta_kpi"),
-    (("competenc", "skill requirement"), "b12_competencies"),
-    (("qualification", "experience requirement", "minimum qualification"), "b13_qual_experience"),
+# Which Required Documents (by name substring, case-insensitive) satisfy which
+# system-verifiable items, for form types (PSC 2-1) that track document
+# completeness via SubmissionChecklistItem.is_present.
+_REQUIRED_DOC_NAME_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("current organisation structure", ("b2_org_chart",)),
+    ("proposed organisation structure", ("b2_org_chart",)),
+    ("job description", ("b4_jds_attached",)),
+    ("cost spreadsheet", ("b14_cost_analysis",)),
+    ("costing", ("b14_cost_analysis",)),
 )
 
 
@@ -90,77 +89,69 @@ def _manager_odu_name() -> str:
     return full or profile.username
 
 
-def _doc_search_text(doc: SubmissionDocument) -> str:
-    parts = [doc.original_name or "", doc.description or "", doc.document_type or ""]
-    if doc.extracted_text:
-        parts.append(doc.extracted_text[:2500])
-    elif isinstance(doc.extracted_facts, dict):
-        summary = doc.extracted_facts.get("document_summary") or ""
-        if summary:
-            parts.append(str(summary)[:1500])
-    return " ".join(parts).lower()
+def _dynamic_form_data(submission: Submission) -> dict[str, Any]:
+    try:
+        resp = submission.dynamic_form_response
+    except Exception:
+        return {}
+    return resp.data if resp and isinstance(resp.data, dict) else {}
 
 
-def _documents_for(submission: Submission) -> list[SubmissionDocument]:
-    return list(
-        SubmissionDocument.objects.filter(submission=submission).order_by("uploaded_at")
-    )
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return bool(str(value).strip()) and str(value).strip().lower() not in ("no", "false", "0")
 
 
-def _keyword_hits(corpus: str) -> set[str]:
-    hits: set[str] = set()
-    for keywords, field in _KEYWORD_HINTS:
-        if any(kw in corpus for kw in keywords):
-            hits.add(field)
-    return hits
-
-
-def _document_evidence(submission: Submission) -> dict[str, bool]:
-    evidence = {field: False for field in _SECTION_B_FIELDS}
-    for doc in _documents_for(submission):
-        for field in _DOC_TYPE_HINTS.get(doc.document_type, ()):
-            evidence[field] = True
-        for field in _keyword_hits(_doc_search_text(doc)):
-            evidence[field] = True
+def _required_document_evidence(submission: Submission) -> dict[str, bool]:
+    """Which system-verifiable items have a matching Required Document already
+    marked present (SubmissionChecklistItem.is_present)."""
+    evidence = {f: False for f in _SYSTEM_VERIFIABLE_FIELDS}
+    items = SubmissionChecklistItem.objects.filter(
+        submission=submission, is_present=True,
+    ).select_related("document")
+    for item in items:
+        name = (item.document.name or "").lower()
+        for needle, fields in _REQUIRED_DOC_NAME_HINTS:
+            if needle in name:
+                for f in fields:
+                    evidence[f] = True
     return evidence
 
 
-def _restructure_hints(submission: Submission) -> dict[str, bool]:
-    hints = {field: False for field in _SECTION_B_FIELDS}
-    try:
-        rd: RestructureSubmissionData = submission.restructure_data
-    except RestructureSubmissionData.DoesNotExist:
-        return hints
+def _submitted_form_evidence(submission: Submission) -> dict[str, bool]:
+    """Which system-verifiable items are satisfied by the ministry's own
+    digitized form answers (PSC 2-1's PSCForm21Fields data)."""
+    data = _dynamic_form_data(submission)
+    evidence = {f: False for f in _SYSTEM_VERIFIABLE_FIELDS}
+    if not data:
+        return evidence
 
-    if rd.attach_current_org_chart or rd.attach_proposed_org_chart:
-        hints["b2_org_chart"] = True
-    if rd.attach_job_descriptions:
-        hints["b4_jds_attached"] = True
-    if rd.dg_endorses is True or (rd.dg_name or "").strip():
-        hints["b1_cover_letter"] = True
-    if (rd.background or "").strip() or (rd.proposal or "").strip():
-        hints["b5_rationale_stated"] = True
-    if (rd.proposal or "").strip():
-        hints["b6_mandate_alignment"] = True
-    rows = rd.costing_rows if isinstance(rd.costing_rows, list) else []
-    if rows:
-        hints["b3_positions_list"] = True
-        hints["b14_cost_analysis"] = True
-    if (rd.costing_notes or "").strip():
-        hints["b14_cost_analysis"] = True
-    if re.search(r"\bgrt\b", (rd.costing_notes or "").lower()):
-        hints["b15_grt_mapping"] = True
-    return hints
+    if _truthy(data.get("dg_endorsement_confirmed")) or (data.get("dg_name") or "").strip():
+        evidence["b1_cover_letter"] = True
+    if _truthy(data.get("attachment_current_structure")) and _truthy(data.get("attachment_proposed_structure")):
+        evidence["b2_org_chart"] = True
+    if (data.get("positions_deleted_regraded") or "").strip() or (data.get("new_positions_sought") or "").strip():
+        evidence["b3_positions_list"] = True
+    if _truthy(data.get("attachment_job_descriptions")):
+        evidence["b4_jds_attached"] = True
+    if (data.get("background_reasons") or "").strip():
+        evidence["b5_rationale_stated"] = True
+    if (data.get("policy_legislative_basis") or "").strip():
+        evidence["b6_mandate_alignment"] = True
+    if _truthy(data.get("attachment_cost_spreadsheet")) or (data.get("cost_breakdown_detail") or "").strip():
+        evidence["b14_cost_analysis"] = True
+    if (data.get("proposed_grading") or "").strip():
+        evidence["b15_grt_mapping"] = True
+    if (data.get("funds_allocated_current_year") or "").strip():
+        evidence["b16_consultation"] = True
+    return evidence
 
 
 def _submission_type_value(submission: Submission) -> str:
-    if submission.form_type_code == "ORG-3.1":
-        return ODURestructureChecklist.SubmissionType.FULL_RESTRUCTURE
-    try:
-        resp = submission.dynamic_form_response
-        data = resp.data if resp and isinstance(resp.data, dict) else {}
-    except Exception:
-        data = {}
+    data = _dynamic_form_data(submission)
     proposal = str(
         data.get("proposal_type")
         or data.get("type_of_proposal")
@@ -173,29 +164,29 @@ def _submission_type_value(submission: Submission) -> str:
         return ODURestructureChecklist.SubmissionType.NEW_JD
     if "amend" in proposal:
         return ODURestructureChecklist.SubmissionType.AMENDMENT
-    if submission.form_type_code == "PSC 2-1":
+    if submission.form_type_code in ("PSC 2-1", "ORG-3.1"):
         return ODURestructureChecklist.SubmissionType.FULL_RESTRUCTURE
     return ""
 
 
 def build_odu_checklist_prefill(submission: Submission, *, user: User | None = None) -> dict[str, Any]:
     """
-    Build default field values from submission metadata, ORG-3.1 data, and uploads.
-    Section B values are suggestions (True) where evidence exists; officer must confirm.
-    Items b17–b20 are left unset for ODU officer/manager review.
+    Build checklist values from the ministry's actual submitted data.
+    System-verifiable items (1-6, 14-16) are set to a definite True/False.
+    Self-certified items (7-13) and ODU's own items (17-20) are left unset
+    for the relevant party to answer.
     """
     ministry_name = submission.ministry.name if submission.ministry_id else ""
     division = submission.department.name if submission.department_id else ""
 
-    doc_evidence = _document_evidence(submission)
-    restructure = _restructure_hints(submission)
+    doc_evidence = _required_document_evidence(submission)
+    form_evidence = _submitted_form_evidence(submission)
 
     section_b: dict[str, bool | None] = {}
-    for field in _SECTION_B_FIELDS:
-        if field in ("b17_odu_analysis", "b18_feedback_provided", "b19_final_docs_ready", "b20_manager_final_check"):
-            section_b[field] = None
-            continue
-        section_b[field] = True if (doc_evidence.get(field) or restructure.get(field)) else None
+    for field in _SYSTEM_VERIFIABLE_FIELDS:
+        section_b[field] = doc_evidence.get(field) or form_evidence.get(field) or False
+    for field in _MINISTRY_SELF_CERTIFIED_FIELDS:
+        section_b[field] = None
 
     officer_name = ""
     if user:
@@ -208,35 +199,36 @@ def build_odu_checklist_prefill(submission: Submission, *, user: User | None = N
         "odu_officer_assigned": officer_name,
         "manager_odu": _manager_odu_name(),
         **section_b,
-        "officer_comments": _build_prefill_comment(submission, doc_evidence, restructure),
+        "officer_comments": _build_prefill_comment(submission, doc_evidence, form_evidence),
     }
 
 
 def _build_prefill_comment(
     submission: Submission,
     doc_evidence: dict[str, bool],
-    restructure: dict[str, bool],
+    form_evidence: dict[str, bool],
 ) -> str:
     lines = [
-        f"Pre-filled from submission {submission.reference_number} and uploaded documents. "
-        "Please verify each checklist item before submitting for manager approval.",
+        f"System-checked against submission {submission.reference_number} and its "
+        "Required Documents. Items 7-13 need your own confirmation — the system has "
+        "no way to verify content quality (span of control, KRA/KPI clarity, etc.).",
     ]
     if submission.title:
         lines.append(f"Title: {submission.title}")
-    try:
-        rd = submission.restructure_data
-        if (rd.subject_title or "").strip():
-            lines.append(f"Subject: {rd.subject_title.strip()}")
-    except RestructureSubmissionData.DoesNotExist:
-        pass
-    suggested = [
+    confirmed = [
         f.replace("b", "B", 1).replace("_", " ")
-        for f in _SECTION_B_FIELDS
-        if f not in ("b17_odu_analysis", "b18_feedback_provided", "b19_final_docs_ready", "b20_manager_final_check")
-        and (doc_evidence.get(f) or restructure.get(f))
+        for f in _SYSTEM_VERIFIABLE_FIELDS
+        if doc_evidence.get(f) or form_evidence.get(f)
     ]
-    if suggested:
-        lines.append("Suggested Yes (verify): " + ", ".join(suggested[:8]) + ("…" if len(suggested) > 8 else ""))
+    missing = [
+        f.replace("b", "B", 1).replace("_", " ")
+        for f in _SYSTEM_VERIFIABLE_FIELDS
+        if not (doc_evidence.get(f) or form_evidence.get(f))
+    ]
+    if confirmed:
+        lines.append("Confirmed Yes: " + ", ".join(confirmed))
+    if missing:
+        lines.append("Confirmed No (not found in submission): " + ", ".join(missing))
     return "\n".join(lines)
 
 
@@ -262,9 +254,9 @@ def apply_prefill_to_checklist(
             setattr(checklist, field, new_val)
             changed = True
 
-    for field in _SECTION_B_FIELDS:
-        if field in ("b17_odu_analysis", "b18_feedback_provided", "b19_final_docs_ready", "b20_manager_final_check"):
-            continue
+    # Only re-apply the system-verifiable items — never overwrite a
+    # self-certified item the ministry has already answered themselves.
+    for field in _SYSTEM_VERIFIABLE_FIELDS:
         new_val = prefill.get(field)
         if new_val is None:
             continue

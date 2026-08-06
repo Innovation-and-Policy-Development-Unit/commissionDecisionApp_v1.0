@@ -3850,6 +3850,13 @@ class ODURestructureChecklist(models.Model):
         return sum(1 for f in fields if f is True)
 
 
+class BoardPaperStatus(models.TextChoices):
+    DRAFT             = "draft",             "Draft"
+    SUBMITTED         = "submitted",         "Submitted to Manager ODU"
+    MANAGER_APPROVED  = "manager_approved",  "Approved by Manager ODU — Pending Secretary"
+    SECRETARY_APPROVED = "secretary_approved", "Approved by Secretary"
+
+
 class ODURestructureBoardPaper(models.Model):
     """
     The PSC Board Submission Paper for an Organisation Restructure /
@@ -3858,12 +3865,37 @@ class ODURestructureBoardPaper(models.Model):
 
     This — not the ministry's original PSC 2-1 submission — is what the
     Commission actually receives and votes on. One per submission.
+
+    Approval chain: an ODU Principal drafts and submits it to the Manager
+    ODU (or the Manager drafts it directly, skipping that step); the
+    Manager approves it; the Secretary gives final sign-off before it's
+    ready for the Commission.
     """
 
     submission = models.OneToOneField(
         Submission, on_delete=models.CASCADE,
         related_name="odu_board_paper",
         help_text="The restructure submission this board paper belongs to.",
+    )
+
+    status = models.CharField(
+        max_length=20, choices=BoardPaperStatus.choices,
+        default=BoardPaperStatus.DRAFT, db_index=True,
+    )
+    submitted_for_review_at = models.DateTimeField(null=True, blank=True)
+    submitted_for_review_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="odu_board_papers_submitted",
+    )
+    manager_approved_at = models.DateTimeField(null=True, blank=True)
+    manager_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="odu_board_papers_manager_approved",
+    )
+    secretary_approved_at = models.DateTimeField(null=True, blank=True)
+    secretary_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="odu_board_papers_secretary_approved",
     )
 
     # ── Header ────────────────────────────────────────────────────────────────

@@ -5,19 +5,50 @@
  * assessment. This — not the ministry's original PSC 2-1 request — is what
  * the Commission actually receives and votes on.
  *
+ * Approval chain: an ODU Principal drafts and submits it to the Manager ODU
+ * (or the Manager drafts it directly, skipping that step); the Manager
+ * approves it; the Secretary gives final sign-off.
+ *
  * Props:
  *   submissionId  – numeric ID of the parent Submission
  *   submission    – the submission object (for stage/role gating)
- * Editable by ODU Principal/Manager while the case is with ODU (Manager
- * Checklist Review or Under Assessment). Read-only afterwards.
  */
 
 import { useEffect, useState, useCallback } from 'react'
-import { FileSignature, Save, Plus, Trash2 } from 'lucide-react'
+import { FileSignature, Save, Send, ThumbsUp, CheckCircle2, Plus, Trash2 } from 'lucide-react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { userIsOduPrincipalWorker, submissionInBoardPaperEditPhase } from '../../utils/oduChecklist'
+import {
+  userIsOduPrincipalWorker, userIsBoardPaperSecretary, submissionInBoardPaperEditPhase,
+} from '../../utils/oduChecklist'
+
+const STATUS_LABELS = {
+  draft: 'Draft',
+  submitted: 'Submitted to Manager ODU',
+  manager_approved: 'Approved by Manager — Pending Secretary',
+  secretary_approved: 'Approved by Secretary',
+}
+
+const STATUS_STYLES = {
+  draft: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  submitted: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  manager_approved: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  secretary_approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+}
+
+function StatusBadge({ status }) {
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[status] || STATUS_STYLES.draft}`}>
+      {STATUS_LABELS[status] || status}
+    </span>
+  )
+}
+
+function fmtDateTime(v) {
+  if (!v) return null
+  return new Date(v).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 
 function Field({ label, children, span }) {
   return (
@@ -162,11 +193,26 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
   const [loadMessage, setLoadMessage] = useState('')
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [managerApproving, setManagerApproving] = useState(false)
+  const [secretaryApproving, setSecretaryApproving] = useState(false)
 
   const isOduPrincipal = userIsOduPrincipalWorker(user?.role)
   const isOduManager = user?.role === 'odu_manager'
-  const canEdit = (isOduPrincipal || isOduManager) && submissionInBoardPaperEditPhase(submission)
+  const isSecretary = userIsBoardPaperSecretary(user?.role)
+  const inEditWindow = submissionInBoardPaperEditPhase(submission)
+  const status = paper?.status || 'draft'
+
+  const canEdit = inEditWindow && (
+    (status === 'draft' && (isOduPrincipal || isOduManager))
+    || (status === 'submitted' && isOduManager)
+  )
   const readOnly = !canEdit
+  const canSubmit = inEditWindow && isOduPrincipal && status === 'draft'
+  const canManagerApprove = inEditWindow && isOduManager && (status === 'draft' || status === 'submitted')
+  // Not gated to the ODU edit window — by the time it's Manager Approved the
+  // submission may already have moved past ODU's own stages to the Secretary.
+  const canSecretaryApprove = isSecretary && status === 'manager_approved'
 
   const populateForm = useCallback((data) => {
     const filled = { ...EMPTY_FORM }
@@ -226,6 +272,48 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
     }
   }
 
+  const handleSubmit = async () => {
+    if (!paper?.id) return
+    setSubmitting(true)
+    try {
+      const r = await api.post(`/odu-board-papers/${paper.id}/submit/`)
+      setPaper(r.data)
+      toast.success('Board paper submitted to Manager ODU.')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to submit board paper.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleManagerApprove = async () => {
+    if (!paper?.id) return
+    setManagerApproving(true)
+    try {
+      const r = await api.post(`/odu-board-papers/${paper.id}/manager-approve/`)
+      setPaper(r.data)
+      toast.success('Board paper approved — ready for Secretary sign-off.')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to approve board paper.')
+    } finally {
+      setManagerApproving(false)
+    }
+  }
+
+  const handleSecretaryApprove = async () => {
+    if (!paper?.id) return
+    setSecretaryApproving(true)
+    try {
+      const r = await api.post(`/odu-board-papers/${paper.id}/secretary-approve/`)
+      setPaper(r.data)
+      toast.success('Board paper approved by Secretary.')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to approve board paper.')
+    } finally {
+      setSecretaryApproving(false)
+    }
+  }
+
   if (paper === undefined) {
     return (
       <div className="card card-compact">
@@ -248,14 +336,30 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
 
   return (
     <div className="card card-compact">
-      <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100 dark:border-slate-700 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <FileSignature size={14} className="text-slate-400" />
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">ODU Board Submission Paper</h3>
+      <div className="mb-5 pb-3 border-b border-slate-100 dark:border-slate-700">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <FileSignature size={14} className="text-slate-400" />
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">ODU Board Submission Paper</h3>
+            <StatusBadge status={status} />
+          </div>
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            {readOnly ? 'This is the paper that was — or will be — presented to the Commission.' : 'This paper, not the ministry’s original request, is what the Commission will receive.'}
+          </p>
         </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500">
-          {readOnly ? 'This is the paper that was — or will be — presented to the Commission.' : 'This paper, not the ministry’s original request, is what the Commission will receive.'}
-        </p>
+        {(paper?.submitted_for_review_at || paper?.manager_approved_at || paper?.secretary_approved_at) && (
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+            {paper?.submitted_for_review_at && (
+              <span>Submitted by {paper.submitted_for_review_by_name || '—'} on {fmtDateTime(paper.submitted_for_review_at)}</span>
+            )}
+            {paper?.manager_approved_at && (
+              <span>Manager-approved by {paper.manager_approved_by_name || '—'} on {fmtDateTime(paper.manager_approved_at)}</span>
+            )}
+            {paper?.secretary_approved_at && (
+              <span>Secretary-approved by {paper.secretary_approved_by_name || '—'} on {fmtDateTime(paper.secretary_approved_at)}</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="space-y-6 text-sm">
@@ -373,17 +477,52 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
         </div>
       </div>
 
-      {!readOnly && (
-        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-end">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center gap-1.5 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <Save size={14} />
-            {saving ? 'Saving…' : 'Save Board Paper'}
-          </button>
+      {(!readOnly || canSubmit || canManagerApprove || canSecretaryApprove) && (
+        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700 flex flex-wrap items-center gap-3">
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="btn-outline inline-flex items-center gap-1.5"
+            >
+              <Save size={14} />
+              {saving ? 'Saving…' : 'Save Draft'}
+            </button>
+          )}
+          {canSubmit && (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="inline-flex items-center gap-1.5 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Send size={14} />
+              {submitting ? 'Submitting…' : 'Submit to Manager ODU'}
+            </button>
+          )}
+          {canManagerApprove && (
+            <button
+              type="button"
+              onClick={handleManagerApprove}
+              disabled={managerApproving}
+              className="inline-flex items-center gap-1.5 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <ThumbsUp size={14} />
+              {managerApproving ? 'Approving…' : 'Approve — Send to Secretary'}
+            </button>
+          )}
+          {canSecretaryApprove && (
+            <button
+              type="button"
+              onClick={handleSecretaryApprove}
+              disabled={secretaryApproving}
+              className="inline-flex items-center gap-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <CheckCircle2 size={14} />
+              {secretaryApproving ? 'Approving…' : 'Secretary Sign-off'}
+            </button>
+          )}
         </div>
       )}
     </div>

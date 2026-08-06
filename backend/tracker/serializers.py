@@ -2612,16 +2612,37 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
     the Commission-facing submission ODU prepares after their assessment."""
 
     created_by_name = serializers.SerializerMethodField()
+    submitted_for_review_by_name = serializers.SerializerMethodField()
+    manager_approved_by_name = serializers.SerializerMethodField()
+    secretary_approved_by_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
 
-    def get_created_by_name(self, obj):
-        u = obj.created_by
+    def _user_name(self, u):
+        if not u:
+            return ""
         full = f"{u.first_name} {u.last_name}".strip()
         return full or u.username
+
+    def get_created_by_name(self, obj):
+        return self._user_name(obj.created_by)
+
+    def get_submitted_for_review_by_name(self, obj):
+        return self._user_name(obj.submitted_for_review_by)
+
+    def get_manager_approved_by_name(self, obj):
+        return self._user_name(obj.manager_approved_by)
+
+    def get_secretary_approved_by_name(self, obj):
+        return self._user_name(obj.secretary_approved_by)
 
     class Meta:
         model  = ODURestructureBoardPaper
         fields = [
             "id", "submission",
+            "status", "status_display",
+            "submitted_for_review_at", "submitted_for_review_by_name",
+            "manager_approved_at", "manager_approved_by_name",
+            "secretary_approved_at", "secretary_approved_by_name",
             # Header
             "meeting_number", "item_number", "submitted_by", "action_officer",
             "psc_file", "prepared_by",
@@ -2634,7 +2655,11 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
             "created_by", "created_by_name", "created_at", "updated_at",
         ]
         read_only_fields = [
-            "id", "created_by", "created_by_name", "created_at", "updated_at",
+            "id", "status", "status_display", "created_by", "created_by_name",
+            "created_at", "updated_at",
+            "submitted_for_review_at", "submitted_for_review_by_name",
+            "manager_approved_at", "manager_approved_by_name",
+            "secretary_approved_at", "secretary_approved_by_name",
         ]
 
 

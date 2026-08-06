@@ -30,7 +30,6 @@ const SECTION_B = [
   {
     group: 1,
     label: 'Group 1 — Submission Completeness',
-    color: 'blue',
     items: [
       { field: 'b1_cover_letter',     label: 'Cover letter from Head of Agency/Director General included' },
       { field: 'b2_org_chart',        label: 'Current and proposed organisational chart attached' },
@@ -42,7 +41,6 @@ const SECTION_B = [
   {
     group: 2,
     label: 'Group 2 — Structure Compliance',
-    color: 'violet',
     items: [
       { field: 'b6_mandate_alignment', label: 'Proposed structure aligned with the ministry/agency mandate' },
       { field: 'b7_reporting_lines',   label: 'Reporting lines are clear and appropriate' },
@@ -53,7 +51,6 @@ const SECTION_B = [
   {
     group: 3,
     label: 'Group 3 — Job Description Verification',
-    color: 'emerald',
     items: [
       { field: 'b10_job_purpose_linked', label: 'Job purpose clearly linked to the unit/team objectives' },
       { field: 'b11_kra_kta_kpi',        label: 'KRAs, KTAs and KPIs are clearly defined and measurable' },
@@ -64,7 +61,6 @@ const SECTION_B = [
   {
     group: 4,
     label: 'Group 4 — Financial Implications',
-    color: 'amber',
     items: [
       { field: 'b14_cost_analysis',  label: 'Cost analysis/financial impact of the restructure included' },
       { field: 'b15_grt_mapping',    label: 'Proposed positions mapped against the Government Remuneration Table (GRT)' },
@@ -73,8 +69,7 @@ const SECTION_B = [
   },
   {
     group: 6,
-    label: 'Group 6 — ODU Review & Feedback',
-    color: 'indigo',
+    label: 'Group 6 — ODU Review & Feedback (ODU only, not the ministry)',
     items: [
       { field: 'b17_odu_analysis',       label: 'ODU analysis of the submission completed' },
       { field: 'b18_feedback_provided',  label: 'Feedback on findings/issues provided to the submitting ministry' },
@@ -82,8 +77,7 @@ const SECTION_B = [
   },
   {
     group: 7,
-    label: 'Group 7 — Documentation for Commission',
-    color: 'rose',
+    label: 'Group 7 — Documentation for Commission (ODU only, not the ministry)',
     items: [
       { field: 'b19_final_docs_ready',    label: 'Final restructure documents and JDs ready for Commission consideration' },
       { field: 'b20_manager_final_check', label: 'Manager ODU final check and clearance completed' },
@@ -92,16 +86,20 @@ const SECTION_B = [
 ]
 
 const ALL_ITEM_FIELDS = SECTION_B.flatMap(g => g.items.map(i => i.field))
+// Groups 1-4 (items 1-16) — the ministry's checklist. Groups 6-7 (17-20)
+// describe ODU's own subsequent work and are never required from the ministry.
+const MINISTRY_REQUIRED_FIELDS = SECTION_B
+  .filter(g => g.group !== 6 && g.group !== 7)
+  .flatMap(g => g.items.map(i => i.field))
+const MINISTRY_REQUIRED_COUNT = MINISTRY_REQUIRED_FIELDS.length
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-const GROUP_COLORS = {
-  blue:   { header: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
-  violet: { header: 'bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-200', badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' },
-  emerald:{ header: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
-  amber:  { header: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
-  indigo: { header: 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200', badge: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' },
-  rose:   { header: 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200', badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' },
+// One neutral style for every group — matches the app's slate/primary
+// palette instead of a distinct hue per group.
+const GROUP_NEUTRAL = {
+  header: 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200',
+  badge: 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300',
 }
 
 function TriStateToggle({ value, onChange, readOnly }) {
@@ -141,7 +139,7 @@ function TriStateToggle({ value, onChange, readOnly }) {
 }
 
 function SectionGroup({ group, form, onChange, readOnly, collapsed, onToggle }) {
-  const colors = GROUP_COLORS[group.color] || GROUP_COLORS.blue
+  const colors = GROUP_NEUTRAL
   const answered = group.items.filter(i => form[i.field] !== null && form[i.field] !== undefined).length
   const allYes   = group.items.every(i => form[i.field] === true)
   const anyNo    = group.items.some(i => form[i.field] === false)
@@ -263,6 +261,10 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
   const isMinistryRole = userIsChecklistMinistryRole(user?.role)
   const isOduPrincipal = userIsOduPrincipalWorker(user?.role)
   const isOduManager   = user?.role === 'odu_manager'
+  const isAdminUser    = user?.is_superuser || user?.role === 'psc_admin'
+  // Groups 6-7 + Sections C/D are ODU's own work — the ministry never needs
+  // to see empty placeholders for content that isn't theirs to fill in.
+  const showOduOnlySections = isOduPrincipal || isOduManager || isAdminUser
 
   // Section A (submission info) + Section B (the 20 items) — ministry's own
   // self-certification, filled while the checklist is still a Draft.
@@ -276,8 +278,8 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
   const readOnlyCD = !canEditCD
   const canEdit = canEditAB || canEditCD
 
-  // Count answered items
-  const answeredCount = ALL_ITEM_FIELDS.filter(f => form[f] !== null && form[f] !== undefined).length
+  // Count answered items — only the 16 ministry-required items gate submission.
+  const answeredCount = MINISTRY_REQUIRED_FIELDS.filter(f => form[f] !== null && form[f] !== undefined).length
 
   // Fetch existing checklist for this submission
   const populateFormFromChecklist = useCallback((data) => {
@@ -356,8 +358,8 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
 
   // Submit draft → submitted
   const handleSubmit = async () => {
-    if (answeredCount < 20) {
-      toast.error(`Please answer all 20 checklist items before submitting. (${answeredCount}/20 answered)`)
+    if (answeredCount < MINISTRY_REQUIRED_COUNT) {
+      toast.error(`Please answer all ${MINISTRY_REQUIRED_COUNT} checklist items before submitting. (${answeredCount}/${MINISTRY_REQUIRED_COUNT} answered)`)
       return
     }
     // Save first, then submit
@@ -451,8 +453,9 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             )}
             {checklist?.status === 'submitted' && (isOduPrincipal || isOduManager) && (
               <p className="text-xs text-amber-800 dark:text-amber-200 mt-2">
-                The ministry has completed all 20 items. Review their answers below, then add your recommendation
-                and sign-off — the ministry's answers themselves are locked to you.
+                The ministry has completed their 16 required items (Groups 1-4). Review their answers below,
+                then complete Groups 6-7 and add your recommendation and sign-off — the ministry's own answers
+                are locked to you.
               </p>
             )}
             {checklist?.status === 'draft' && !isMinistryRole && (
@@ -472,7 +475,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
         </div>
 
         {/* Progress */}
-        <ProgressBar answered={answeredCount} total={20} />
+        <ProgressBar answered={answeredCount} total={MINISTRY_REQUIRED_COUNT} />
       </div>
 
       {/* ── Section A — Submission Information ── */}
@@ -625,19 +628,30 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
         )}
 
         <div className="space-y-3">
-          {SECTION_B.map(group => (
-            <SectionGroup
-              key={group.group}
-              group={group}
-              form={form}
-              onChange={handleFieldChange}
-              readOnly={readOnlyAB}
-              collapsed={!!collapsedGroups[group.group]}
-              onToggle={() => toggleGroup(group.group)}
-            />
-          ))}
+          {SECTION_B.map(group => {
+            // Groups 6-7 (items 17-20) describe ODU's own work, not the
+            // ministry's — they're ODU's to fill in during review, not
+            // part of the ministry's 16 required items, and the ministry
+            // never needs to see these empty placeholders at all.
+            const isOduGroup = group.group === 6 || group.group === 7
+            if (isOduGroup && !showOduOnlySections) return null
+            return (
+              <SectionGroup
+                key={group.group}
+                group={group}
+                form={form}
+                onChange={handleFieldChange}
+                readOnly={isOduGroup ? readOnlyCD : readOnlyAB}
+                collapsed={!!collapsedGroups[group.group]}
+                onToggle={() => toggleGroup(group.group)}
+              />
+            )
+          })}
         </div>
       </div>
+
+      {showOduOnlySections && (
+      <>
 
       {/* ── Section C — Recommendation ── */}
       <div className="card p-5">
@@ -796,6 +810,8 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* ── Action buttons ── */}
       {(canEdit || canSubmit || canApprove) && (
@@ -815,9 +831,9 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting || answeredCount < 20}
+              disabled={submitting || answeredCount < MINISTRY_REQUIRED_COUNT}
               className="btn-primary inline-flex items-center gap-2"
-              title={answeredCount < 20 ? `Answer all 20 items first (${answeredCount}/20)` : 'Submit with your request'}
+              title={answeredCount < MINISTRY_REQUIRED_COUNT ? `Answer all ${MINISTRY_REQUIRED_COUNT} items first (${answeredCount}/${MINISTRY_REQUIRED_COUNT})` : 'Submit with your request'}
             >
               <Send size={14} />
               {submitting ? 'Submitting…' : 'Submit Checklist'}
@@ -834,10 +850,10 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
               {approving ? 'Approving…' : 'Approve Checklist'}
             </button>
           )}
-          {canSubmit && answeredCount < 20 && (
+          {canSubmit && answeredCount < MINISTRY_REQUIRED_COUNT && (
             <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
               <AlertTriangle size={12} />
-              {20 - answeredCount} item{20 - answeredCount !== 1 ? 's' : ''} still unanswered
+              {MINISTRY_REQUIRED_COUNT - answeredCount} item{MINISTRY_REQUIRED_COUNT - answeredCount !== 1 ? 's' : ''} still unanswered
             </p>
           )}
         </div>

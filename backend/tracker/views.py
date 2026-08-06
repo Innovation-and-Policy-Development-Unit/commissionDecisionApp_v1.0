@@ -191,6 +191,7 @@ from .models import (
     ODURestructureChecklist,
     ODUChecklistStatus,
     ODURestructureBoardPaper,
+    BoardPaperStatus,
     PSCFormField,
     PSCFormType,
     RestructureSubmissionData,
@@ -10069,10 +10070,13 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
     def submit(self, request, pk=None):
         """
         Transition checklist from Draft → Submitted.
-        Ministry only, once all 20 items are answered — this locks it for
-        ODU's review.
+        Ministry only, once their 16 items are answered — this locks it for
+        ODU's review. Items 17-20 are ODU's own and never gate this.
         """
-        from .odu_checklist_rules import submission_eligible_for_checklist_draft
+        from .odu_checklist_rules import (
+            CHECKLIST_MINISTRY_REQUIRED_FIELDS,
+            submission_eligible_for_checklist_draft,
+        )
 
         checklist = self.get_object()
         profile = _profile(request.user)
@@ -10086,9 +10090,14 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                 {"detail": "Only Draft checklists can be submitted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if checklist.items_answered < 20:
+        answered = sum(
+            1 for f in CHECKLIST_MINISTRY_REQUIRED_FIELDS
+            if getattr(checklist, f) is not None
+        )
+        required = len(CHECKLIST_MINISTRY_REQUIRED_FIELDS)
+        if answered < required:
             return Response(
-                {"detail": f"All 20 checklist items must be answered before submitting. ({checklist.items_answered}/20 answered)"},
+                {"detail": f"All {required} checklist items must be answered before submitting. ({answered}/{required} answered)"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         checklist.status = ODUChecklistStatus.SUBMITTED
@@ -10124,19 +10133,24 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
 
 # ── ODU Restructure Board Paper ────────────────────────────────────────────────
 
+BOARD_PAPER_SECRETARY_ROLES = frozenset({Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN})
+
+
 class ODUBoardPaperViewSet(viewsets.ModelViewSet):
     """
-    CRUD for the ODU Restructure Board Paper — the Commission-facing
-    submission ODU prepares after their checklist review and assessment.
-    This, not the ministry's original PSC 2-1 request, is what gets shown
-    to the Commission.
+    CRUD + approval chain for the ODU Restructure Board Paper — the
+    Commission-facing submission ODU prepares after their checklist review
+    and assessment. This, not the ministry's original PSC 2-1 request, is
+    what gets shown to the Commission.
 
-    ODU Principal/Manager: create/edit while the case is with ODU
-    (Manager Checklist Review or Under Assessment).
-    Everyone else who could already see the checklist: read-only once
-    the case has moved past ODU's own working stages.
+    Approval chain: an ODU Principal drafts and submits it to the Manager
+    ODU (or the Manager drafts it directly, skipping that step); the
+    Manager approves it; the Secretary gives final sign-off.
 
     GET /odu-board-papers/ensure/?submission=<id> — load or create draft.
+    POST .../submit/            — Principal: Draft -> Submitted.
+    POST .../manager_approve/   — Manager: Draft or Submitted -> Manager Approved.
+    POST .../secretary_approve/ — Secretary: Manager Approved -> Secretary Approved.
     """
 
     serializer_class   = ODUBoardPaperSerializer
@@ -10160,9 +10174,10 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         profile = _profile(self.request.user)
-        self._require_odu_role(profile)
+        self._require_view_role(profile)
         qs = ODURestructureBoardPaper.objects.select_related(
-            "submission", "created_by",
+            "submission", "created_by", "submitted_for_review_by",
+            "manager_approved_by", "secretary_approved_by",
         ).all()
         sub_id = self.request.query_params.get("submission")
         if sub_id:
@@ -10176,6 +10191,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         from rest_framework.exceptions import ValidationError
 
         from .odu_checklist_rules import (
+            ODU_CHECKLIST_ROLES,
             submission_eligible_for_board_paper,
             submission_viewable_board_paper,
         )
@@ -10206,7 +10222,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         if paper:
             return Response(ODUBoardPaperSerializer(paper).data)
 
-        if not submission_eligible_for_board_paper(submission):
+        if not submission_eligible_for_board_paper(submission) or profile.role not in ODU_CHECKLIST_ROLES:
             return Response(
                 {"detail": "The board paper has not been started for this submission."},
                 status=status.HTTP_404_NOT_FOUND,
@@ -10242,7 +10258,77 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(
                 "Board paper can only be edited while the submission is with ODU."
             )
+        if instance.status == BoardPaperStatus.DRAFT:
+            # Either the principal or the manager may draft it.
+            pass
+        elif instance.status == BoardPaperStatus.SUBMITTED:
+            # Principal has submitted it — only the manager reviews/edits now.
+            if profile.role != Role.ODU_MANAGER:
+                raise PermissionDenied(
+                    "This board paper has been submitted for manager review — only "
+                    "the Manager ODU can edit it now."
+                )
+        else:
+            raise PermissionDenied(
+                "This board paper has already been approved and is locked for editing."
+            )
         serializer.save()
+
+    @action(detail=True, methods=["post"], url_path="submit")
+    def submit(self, request, pk=None):
+        """Principal: Draft -> Submitted, for the Manager to review."""
+        from .odu_checklist_rules import ODU_PRINCIPAL_WORKER_ROLES
+
+        paper = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in ODU_PRINCIPAL_WORKER_ROLES:
+            raise PermissionDenied("Only an ODU principal analyst can submit the board paper.")
+        if paper.status != BoardPaperStatus.DRAFT:
+            return Response(
+                {"detail": "Only a Draft board paper can be submitted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        paper.status = BoardPaperStatus.SUBMITTED
+        paper.submitted_for_review_at = timezone.now()
+        paper.submitted_for_review_by = request.user
+        paper.save(update_fields=["status", "submitted_for_review_at", "submitted_for_review_by"])
+        return Response(ODUBoardPaperSerializer(paper).data)
+
+    @action(detail=True, methods=["post"], url_path="manager-approve")
+    def manager_approve(self, request, pk=None):
+        """Manager: Draft (self-authored) or Submitted -> Manager Approved."""
+        paper = self.get_object()
+        profile = _profile(request.user)
+        if profile.role != Role.ODU_MANAGER:
+            raise PermissionDenied("Only the Manager ODU can approve the board paper.")
+        if paper.status not in (BoardPaperStatus.DRAFT, BoardPaperStatus.SUBMITTED):
+            return Response(
+                {"detail": "Only a Draft or Submitted board paper can be approved by the manager."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        paper.status = BoardPaperStatus.MANAGER_APPROVED
+        paper.manager_approved_at = timezone.now()
+        paper.manager_approved_by = request.user
+        paper.save(update_fields=["status", "manager_approved_at", "manager_approved_by"])
+        return Response(ODUBoardPaperSerializer(paper).data)
+
+    @action(detail=True, methods=["post"], url_path="secretary-approve")
+    def secretary_approve(self, request, pk=None):
+        """Secretary: Manager Approved -> Secretary Approved (final sign-off)."""
+        paper = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in BOARD_PAPER_SECRETARY_ROLES:
+            raise PermissionDenied("Only the Secretary can give final sign-off on the board paper.")
+        if paper.status != BoardPaperStatus.MANAGER_APPROVED:
+            return Response(
+                {"detail": "The board paper must be approved by the Manager ODU first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        paper.status = BoardPaperStatus.SECRETARY_APPROVED
+        paper.secretary_approved_at = timezone.now()
+        paper.secretary_approved_by = request.user
+        paper.save(update_fields=["status", "secretary_approved_at", "secretary_approved_by"])
+        return Response(ODUBoardPaperSerializer(paper).data)
 
 
 def _odu_prepared_by_default(profile, user) -> str:

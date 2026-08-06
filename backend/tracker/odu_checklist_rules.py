@@ -75,14 +75,29 @@ CHECKLIST_MINISTRY_ROLES = frozenset({
     "csu_manager",
 })
 
-# Section C (ODU's own recommendation/comments) + Section D (sign-off) —
-# the only fields ODU may write once the ministry has submitted the
-# checklist. Section A (submission info) and Section B (the 20 items
-# themselves) are the ministry's answers and stay locked to ODU.
+# The 16 items that are the ministry's to answer (system-verified where a
+# submitted fact exists, self-certified otherwise). Items 17-20 describe
+# ODU's own subsequent work and are never required from the ministry — see
+# odu_checklist_prefill.py for which of these 16 get auto-verified.
+CHECKLIST_MINISTRY_REQUIRED_FIELDS = frozenset({
+    "b1_cover_letter", "b2_org_chart", "b3_positions_list", "b4_jds_attached",
+    "b5_rationale_stated", "b6_mandate_alignment", "b7_reporting_lines",
+    "b8_no_duplication", "b9_span_of_control", "b10_job_purpose_linked",
+    "b11_kra_kta_kpi", "b12_competencies", "b13_qual_experience",
+    "b14_cost_analysis", "b15_grt_mapping", "b16_consultation",
+})
+
+# Fields ODU may write once the ministry has submitted the checklist:
+# Section C (recommendation/comments), Section D (sign-off), and items
+# 17-20 (Groups 6-7) which describe ODU's own process, not the ministry's.
+# Section A (submission info) and items 1-16 are the ministry's answers and
+# stay locked to ODU.
 CHECKLIST_ODU_REVIEW_FIELDS = frozenset({
     "recommendation", "officer_comments",
     "verifying_officer_name", "verifying_officer_date",
     "manager_verifier_name", "manager_verifier_date",
+    "b17_odu_analysis", "b18_feedback_provided",
+    "b19_final_docs_ready", "b20_manager_final_check",
 })
 
 
