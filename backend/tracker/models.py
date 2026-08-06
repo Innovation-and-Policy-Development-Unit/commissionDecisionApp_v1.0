@@ -2844,6 +2844,12 @@ class WorkflowEvent(models.Model):
     previous_stage = models.CharField(max_length=48, choices=WorkflowStage.choices)
     new_stage = models.CharField(max_length=48, choices=WorkflowStage.choices)
     remarks = models.TextField(blank=True)
+    remarks_html = models.TextField(
+        blank=True, default="",
+        help_text="Sanitized rich-text version of remarks, for display only. "
+                   "Never used for the decision proof hash, emails, or AI context — "
+                   "those all read the plain-text `remarks` field derived from this.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     content_hash = models.CharField(
         max_length=64,
@@ -2862,6 +2868,24 @@ class WorkflowEvent(models.Model):
 
     def __str__(self):
         return f"{self.submission.reference_number}: {self.previous_stage} → {self.new_stage}"
+
+
+class RemarksImage(models.Model):
+    """An image pasted/dropped into a workflow-event rich-text remarks editor.
+
+    Uploaded ahead of the transition being confirmed, so `workflow_event`
+    starts null and is linked once the transition that referenced it commits.
+    """
+    submission = models.ForeignKey(Submission, on_delete=models.CASCADE, related_name="remarks_images")
+    workflow_event = models.ForeignKey(
+        WorkflowEvent, null=True, blank=True, on_delete=models.CASCADE, related_name="images",
+    )
+    file = models.ImageField(upload_to="remarks_images/%Y/%m/")
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
 
 
 class DecisionService(models.Model):

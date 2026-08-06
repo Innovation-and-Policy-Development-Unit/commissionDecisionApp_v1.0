@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import {
   Send, CheckCircle2, RotateCcw, ClipboardCheck, ClipboardList,
-  PlayCircle, ArrowRight, Clock, XCircle, Users, AlertTriangle,
+  PlayCircle, ArrowRight, Clock, XCircle, Users,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import BaseButton from '../shared/BaseButton'
-import BaseTextarea from '../shared/BaseTextarea'
 import BaseMessageBar from '../shared/BaseMessageBar'
+import RichNoteModal from '../shared/RichNoteModal'
 
 /**
  * Stage-based action buttons that replace the generic "Move to Next Stage" dropdown.
@@ -363,7 +363,6 @@ export default function WorkflowActionsPanel({
 }) {
   const { t } = useTranslation()
   const [activeAction, setActiveAction] = useState(null) // action requiring a note
-  const [note, setNote] = useState('')
   const [localBusy, setLocalBusy] = useState(false)
 
   const stage = submission?.current_stage
@@ -384,17 +383,16 @@ export default function WorkflowActionsPanel({
 
   const executing = busy || localBusy
 
-  const execute = async (action, remarks = '') => {
+  const execute = async (action, remarksHtml = '') => {
     setLocalBusy(true)
     setError?.('')
     try {
       if (action.endpoint === 'endorse') {
         await onEndorse()
       } else {
-        await onTransition(action.transitionTo, remarks)
+        await onTransition(action.transitionTo, remarksHtml)
       }
       setActiveAction(null)
-      setNote('')
     } catch (err) {
       // onTransition / onEndorse already set error via setError
     } finally {
@@ -405,19 +403,10 @@ export default function WorkflowActionsPanel({
   const handleClick = (action) => {
     if (action.requiresNote) {
       setActiveAction(action)
-      setNote('')
       setError?.('')
     } else {
       execute(action)
     }
-  }
-
-  const handleConfirm = () => {
-    if (!note.trim()) {
-      setError?.(`${activeAction.noteLabel || 'Note'} is required.`)
-      return
-    }
-    execute(activeAction, note)
   }
 
   return (
@@ -430,73 +419,38 @@ export default function WorkflowActionsPanel({
         <BaseMessageBar intent="error">{error}</BaseMessageBar>
       )}
 
-      {/* Action buttons — hidden while a note-required action is active */}
-      {!activeAction && (
-        <div className="flex flex-col gap-2">
-          {visibleActions.map(action => (
-            <div key={action.id}>
-              <BaseButton
-                variant={action.variant}
-                className="w-full justify-start"
-                icon={<action.Icon size={15} />}
-                onClick={() => handleClick(action)}
-                disabled={executing}
-                loading={executing && !activeAction}
-                loadingLabel="Saving"
-              >
-                {action.label}
-              </BaseButton>
-              {action.description && (
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 ml-1">
-                  {action.description}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Inline note form for actions that require a reason */}
-      {activeAction && (() => {
-        const ActiveIcon = activeAction.icon
-        return (
-        <div className="space-y-3 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20 p-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-              {activeAction.label}
-            </p>
-          </div>
-          <BaseTextarea
-            label={activeAction.noteLabel || 'Note'}
-            required
-            rows={3}
-            placeholder={activeAction.notePlaceholder}
-            value={note}
-            onChange={e => setNote(e.target.value)}
-          />
-          <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
+        {visibleActions.map(action => (
+          <div key={action.id}>
             <BaseButton
-              variant="primary"
-              onClick={handleConfirm}
-              loading={executing}
-              loadingLabel="Saving"
-              disabled={!note.trim()}
-              icon={!executing ? <ActiveIcon size={14} /> : undefined}
-            >
-              Confirm: {activeAction.label}
-            </BaseButton>
-            <BaseButton
-              variant="ghost"
-              onClick={() => { setActiveAction(null); setNote(''); setError?.('') }}
+              variant={action.variant}
+              className="w-full justify-start"
+              icon={<action.Icon size={15} />}
+              onClick={() => handleClick(action)}
               disabled={executing}
+              loading={executing && activeAction?.id === action.id}
+              loadingLabel="Saving"
             >
-              Cancel
+              {action.label}
             </BaseButton>
+            {action.description && (
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 ml-1">
+                {action.description}
+              </p>
+            )}
           </div>
-        </div>
-        )
-      })()}
+        ))}
+      </div>
+
+      <RichNoteModal
+        open={!!activeAction}
+        submissionId={submission?.id}
+        action={activeAction}
+        busy={executing}
+        error={error}
+        onConfirm={(html) => execute(activeAction, html)}
+        onCancel={() => { setActiveAction(null); setError?.('') }}
+      />
     </div>
   )
 }

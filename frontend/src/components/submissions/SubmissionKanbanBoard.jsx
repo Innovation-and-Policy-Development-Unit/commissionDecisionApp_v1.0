@@ -162,21 +162,21 @@ export default function SubmissionKanbanBoard({
     [draggingId, canDrag, submissions, openTransitionDialog],
   )
 
-  const runTransition = async ({ targetStage, remarks }, acknowledgeGaps = false) => {
+  const runTransition = async ({ targetStage, remarksHtml }, acknowledgeGaps = false) => {
     if (!pending) return
     await api.post(`/submissions/${pending.submission.id}/transition/`, {
       new_stage: targetStage,
-      remarks,
+      remarks_html: remarksHtml,
       acknowledge_gaps: acknowledgeGaps,
     })
   }
 
-  const handleConfirmTransition = async ({ targetStage, remarks }) => {
+  const handleConfirmTransition = async ({ targetStage, remarksHtml }) => {
     if (!pending) return
     setDialogBusy(true)
     setDialogError('')
     try {
-      await runTransition({ targetStage, remarks }, false)
+      await runTransition({ targetStage, remarksHtml }, false)
       setDialogOpen(false)
       setPending(null)
       toast.success(t('submission.kanban.success'))
@@ -196,7 +196,7 @@ export default function SubmissionKanbanBoard({
         })
         if (proceed) {
           try {
-            await runTransition({ targetStage, remarks }, true)
+            await runTransition({ targetStage, remarksHtml }, true)
             setDialogOpen(false)
             setPending(null)
             toast.success(t('submission.kanban.success'))

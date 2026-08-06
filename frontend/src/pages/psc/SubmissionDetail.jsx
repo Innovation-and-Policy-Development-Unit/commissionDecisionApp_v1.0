@@ -676,7 +676,9 @@ const stageDescriptions = {
 
   /**
    * Perform a standard workflow transition via the /transition/ endpoint.
-   * Used by both the old form and the new WorkflowActionsPanel.
+   * `transitionRemarks` is the HTML from WorkflowActionsPanel's RichNoteModal
+   * (or '' for actions with no note); the backend derives the plain-text
+   * `remarks` it hashes/emails/etc. from this HTML server-side.
    */
   const performTransition = async (newStage, transitionRemarks = '', acknowledgeGaps = false) => {
     setBusy(true)
@@ -684,7 +686,7 @@ const stageDescriptions = {
     const runOnce = async (ack = false) => {
       const resp = await api.post(`/submissions/${id}/transition/`, {
         new_stage: newStage,
-        remarks: transitionRemarks,
+        remarks_html: transitionRemarks,
         acknowledge_gaps: ack,
       })
       setRemarks('')
