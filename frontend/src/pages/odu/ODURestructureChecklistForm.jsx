@@ -2,13 +2,16 @@
  * ODURestructureChecklistForm.jsx
  *
  * Digital version of the OPSC ODU Checklist for Restructure Submissions.
- * Used by ODU Principal Job Analysts (odu_principal) and their managers (odu_manager).
+ * Sections A + B (submission info + the 20 items) are filled by the
+ * submitting ministry/unit while their submission is in Draft. ODU
+ * (odu_principal, principal_org_dev_analyst, principal_job_analyst,
+ * odu_manager) reviews those answers read-only during Manager Checklist
+ * Review and adds their own recommendation + sign-off (Sections C + D).
+ * Manager ODU approves once satisfied.
  *
  * Props:
  *   submissionId  – numeric ID of the parent Submission
  *   submission    – the submission object (for pre-filling Section A)
- * Shown only during Manager Checklist Review (ODU-routed restructure submissions).
- * Principal edits and submits; Manager reviews read-only then approves.
  */
 
 import { useEffect, useState, useCallback } from 'react'
@@ -19,7 +22,7 @@ import {
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { userIsOduPrincipalWorker } from '../../utils/oduChecklist'
+import { userIsOduPrincipalWorker, userIsChecklistMinistryRole } from '../../utils/oduChecklist'
 
 // ── Checklist item definitions ────────────────────────────────────────────────
 
@@ -257,12 +260,21 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
   const [approving, setApproving] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState({})
 
+  const isMinistryRole = userIsChecklistMinistryRole(user?.role)
   const isOduPrincipal = userIsOduPrincipalWorker(user?.role)
   const isOduManager   = user?.role === 'odu_manager'
-  const canEdit = isOduPrincipal && checklist?.status === 'draft'
-  const canSubmit = isOduPrincipal && checklist?.status === 'draft'
+
+  // Section A (submission info) + Section B (the 20 items) — ministry's own
+  // self-certification, filled while the checklist is still a Draft.
+  const canEditAB = isMinistryRole && checklist?.status === 'draft'
+  const canSubmit = isMinistryRole && checklist?.status === 'draft'
+  // Section C (recommendation) + Section D (sign-off) — ODU's review, only
+  // once the ministry has submitted. ODU never touches the 20 answers.
+  const canEditCD = (isOduPrincipal || isOduManager) && checklist?.status === 'submitted'
   const canApprove = isOduManager && checklist?.status === 'submitted'
-  const readOnly = !canEdit
+  const readOnlyAB = !canEditAB
+  const readOnlyCD = !canEditCD
+  const canEdit = canEditAB || canEditCD
 
   // Count answered items
   const answeredCount = ALL_ITEM_FIELDS.filter(f => form[f] !== null && form[f] !== undefined).length
@@ -292,7 +304,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
         setLoadMessage(
           typeof detail === 'string'
             ? detail
-            : 'The ODU Principal must start the checklist during this review stage.',
+            : 'The ministry has not started this checklist yet.',
         )
         return
       }
@@ -431,20 +443,21 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
               Office of the Public Service Commission — Organisational Development Unit
             </p>
-            {checklist?.status === 'draft' && isOduPrincipal && (
+            {checklist?.status === 'draft' && isMinistryRole && (
               <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-2">
-                Section A and suggested Yes/No answers are pre-filled from the submission and uploaded documents.
-                Verify each item, complete Groups 6–7, then submit for manager approval.
+                Section A and suggested Yes/No answers are pre-filled from your submission and uploaded documents.
+                Verify each item, then submit alongside your request.
               </p>
             )}
-            {checklist?.status === 'submitted' && isOduManager && (
+            {checklist?.status === 'submitted' && (isOduPrincipal || isOduManager) && (
               <p className="text-xs text-amber-800 dark:text-amber-200 mt-2">
-                Review all checklist items below. Approve only when you are satisfied the package is ready.
+                The ministry has completed all 20 items. Review their answers below, then add your recommendation
+                and sign-off — the ministry's answers themselves are locked to you.
               </p>
             )}
-            {checklist?.status === 'submitted' && isOduPrincipal && (
+            {checklist?.status === 'draft' && !isMinistryRole && (
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                Submitted for manager review — editing is locked until the manager returns it or approves.
+                The ministry is still completing this checklist.
               </p>
             )}
           </div>
@@ -472,7 +485,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
               Ministry / Department
             </label>
-            {readOnly ? (
+            {readOnlyAB ? (
               <p className="text-sm text-slate-800 dark:text-slate-100">{form.ministry_department || '—'}</p>
             ) : (
               <input
@@ -488,7 +501,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
               Division / Unit
             </label>
-            {readOnly ? (
+            {readOnlyAB ? (
               <p className="text-sm text-slate-800 dark:text-slate-100">{form.division_unit || '—'}</p>
             ) : (
               <input
@@ -504,7 +517,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
               Type of Submission
             </label>
-            {readOnly ? (
+            {readOnlyAB ? (
               <p className="text-sm text-slate-800 dark:text-slate-100">
                 {{ full_restructure: 'Full Restructure', partial_review: 'Partial Review', new_jd: 'New Job Description', amendment: 'Amendment' }[form.submission_type] || '—'}
               </p>
@@ -536,7 +549,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
               ODU Officer Assigned
             </label>
-            {readOnly ? (
+            {readOnlyAB ? (
               <p className="text-sm text-slate-800 dark:text-slate-100">{form.odu_officer_assigned || '—'}</p>
             ) : (
               <input
@@ -552,7 +565,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
               Manager ODU
             </label>
-            {readOnly ? (
+            {readOnlyAB ? (
               <p className="text-sm text-slate-800 dark:text-slate-100">{form.manager_odu || '—'}</p>
             ) : (
               <input
@@ -573,7 +586,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
           <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             Section B — Verification Checklist
           </h4>
-          {!readOnly && (
+          {!readOnlyAB && (
             <div className="flex gap-2">
               <button
                 type="button"
@@ -591,16 +604,23 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
           )}
         </div>
 
-        {canEdit && (
+        {canEditAB && (
           <div className="mb-4 flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
             <Info size={13} className="shrink-0 mt-0.5" />
             Pre-filled suggestions are based on submission data and attachments. Click <strong>Yes</strong> or <strong>No</strong> to confirm each item (click again to clear).
           </div>
         )}
-        {readOnly && checklist?.status === 'submitted' && (
+        {readOnlyAB && checklist?.status === 'submitted' && (isOduPrincipal || isOduManager) && (
           <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
             <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-            Read-only review — use <strong>Approve Checklist</strong> below when the verification is complete.
+            The ministry's answers are read-only — add your recommendation and sign-off below, then{' '}
+            <strong>Approve Checklist</strong> when satisfied.
+          </div>
+        )}
+        {readOnlyAB && checklist?.status === 'submitted' && isMinistryRole && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
+            <Info size={13} className="shrink-0 mt-0.5" />
+            Submitted — ODU is now reviewing this checklist.
           </div>
         )}
 
@@ -611,7 +631,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
               group={group}
               form={form}
               onChange={handleFieldChange}
-              readOnly={readOnly}
+              readOnly={readOnlyAB}
               collapsed={!!collapsedGroups[group.group]}
               onToggle={() => toggleGroup(group.group)}
             />
@@ -642,13 +662,13 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
               <button
                 key={opt.value}
                 type="button"
-                disabled={readOnly}
-                onClick={() => !readOnly && handleFieldChange('recommendation', selected ? '' : opt.value)}
+                disabled={readOnlyCD}
+                onClick={() => !readOnlyCD && handleFieldChange('recommendation', selected ? '' : opt.value)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
                   selected
                     ? `${c.border} ${c.bg} ${c.text}`
                     : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                } ${readOnly ? 'cursor-default' : 'cursor-pointer'}`}
+                } ${readOnlyCD ? 'cursor-default' : 'cursor-pointer'}`}
               >
                 <div className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
                   selected ? `${c.border} ${c.bg}` : 'border-slate-300 dark:border-slate-600'
@@ -665,7 +685,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
             Officer Comments / Remarks
           </label>
-          {readOnly ? (
+          {readOnlyCD ? (
             <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2">
               {form.officer_comments || '—'}
             </p>
@@ -696,7 +716,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             </div>
             <div>
               <label className="block text-xs text-slate-500 dark:text-slate-500 mb-1">Name</label>
-              {readOnly ? (
+              {readOnlyCD ? (
                 <p className="text-sm text-slate-800 dark:text-slate-100">{form.verifying_officer_name || '—'}</p>
               ) : (
                 <input
@@ -712,7 +732,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
               <label className="block text-xs text-slate-500 dark:text-slate-500 mb-1 flex items-center gap-1">
                 <Calendar size={11} /> Date
               </label>
-              {readOnly ? (
+              {readOnlyCD ? (
                 <p className="text-sm text-slate-800 dark:text-slate-100">
                   {form.verifying_officer_date
                     ? new Date(form.verifying_officer_date).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -740,7 +760,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
             </div>
             <div>
               <label className="block text-xs text-slate-500 dark:text-slate-500 mb-1">Name</label>
-              {(readOnly || checklist?.status === 'approved') ? (
+              {(readOnlyCD || checklist?.status === 'approved') ? (
                 <p className="text-sm text-slate-800 dark:text-slate-100">{form.manager_verifier_name || '—'}</p>
               ) : (
                 <input
@@ -757,7 +777,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
               <label className="block text-xs text-slate-500 dark:text-slate-500 mb-1 flex items-center gap-1">
                 <Calendar size={11} /> Date
               </label>
-              {(readOnly || checklist?.status === 'approved') ? (
+              {(readOnlyCD || checklist?.status === 'approved') ? (
                 <p className="text-sm text-slate-800 dark:text-slate-100">
                   {form.manager_verifier_date
                     ? new Date(form.manager_verifier_date).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -788,7 +808,7 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
               className="btn-outline inline-flex items-center gap-2"
             >
               <Save size={14} />
-              {saving ? 'Saving…' : 'Save Draft'}
+              {saving ? 'Saving…' : canEditAB ? 'Save Draft' : 'Save Review'}
             </button>
           )}
           {canSubmit && (
@@ -797,10 +817,10 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
               onClick={handleSubmit}
               disabled={submitting || answeredCount < 20}
               className="btn-primary inline-flex items-center gap-2"
-              title={answeredCount < 20 ? `Answer all 20 items first (${answeredCount}/20)` : 'Submit for manager approval'}
+              title={answeredCount < 20 ? `Answer all 20 items first (${answeredCount}/20)` : 'Submit with your request'}
             >
               <Send size={14} />
-              {submitting ? 'Submitting…' : 'Submit for Approval'}
+              {submitting ? 'Submitting…' : 'Submit Checklist'}
             </button>
           )}
           {canApprove && (

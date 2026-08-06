@@ -61,6 +61,30 @@ ODU_PRINCIPAL_WORKER_ROLES = frozenset({
     "principal_job_analyst",
 })
 
+# Roles that draft/own the ministry's submission (same set the digitized
+# ORG-3.1/PSC 2-1 form itself is editable by — see canEditForm37 in
+# SubmissionDetail.jsx). These are who now fills in the 20-item checklist,
+# confirmed by ODU (2026-08-06): the ministry completes it as part of their
+# own submission; ODU reviews what they submitted rather than authoring it.
+CHECKLIST_MINISTRY_ROLES = frozenset({
+    "ministry_hr",
+    "dept_admin",
+    "psc_admin",
+    "psc_officer",
+    "psc_secretary",
+    "csu_manager",
+})
+
+# Section C (ODU's own recommendation/comments) + Section D (sign-off) —
+# the only fields ODU may write once the ministry has submitted the
+# checklist. Section A (submission info) and Section B (the 20 items
+# themselves) are the ministry's answers and stay locked to ODU.
+CHECKLIST_ODU_REVIEW_FIELDS = frozenset({
+    "recommendation", "officer_comments",
+    "verifying_officer_name", "verifying_officer_date",
+    "manager_verifier_name", "manager_verifier_date",
+})
+
 
 def user_is_odu_principal_worker(role: str | None) -> bool:
     return bool(role and role in ODU_PRINCIPAL_WORKER_ROLES)
@@ -68,6 +92,18 @@ def user_is_odu_principal_worker(role: str | None) -> bool:
 
 def submission_uses_odu_restructure_checklist(submission: Submission) -> bool:
     return (submission.form_type_code or "") in ODU_RESTRUCTURE_CHECKLIST_FORM_CODES
+
+
+def submission_in_checklist_draft_phase(submission: Submission) -> bool:
+    """Submission is still with the ministry, drafting before OPSC ever sees it."""
+    return submission.current_stage == WorkflowStage.DRAFT
+
+
+def submission_eligible_for_checklist_draft(submission: Submission) -> bool:
+    return (
+        submission_uses_odu_restructure_checklist(submission)
+        and submission_in_checklist_draft_phase(submission)
+    )
 
 
 def submission_in_odu_review_phase(submission: Submission) -> bool:
@@ -94,9 +130,11 @@ def submission_in_odu_view_phase(submission: Submission) -> bool:
 
 
 def submission_viewable_odu_checklist(submission: Submission) -> bool:
-    """Checklist can be shown (editable in review phase, read-only afterwards)."""
+    """Checklist can be shown: ministry drafting it, ODU reviewing it, or
+    read-only afterwards."""
     return submission_uses_odu_restructure_checklist(submission) and (
-        submission_in_odu_review_phase(submission)
+        submission_in_checklist_draft_phase(submission)
+        or submission_in_odu_review_phase(submission)
         or submission_in_odu_view_phase(submission)
     )
 

@@ -9889,14 +9889,30 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
     """
     CRUD + submit for the ODU Restructure Checklist.
 
-    ODU Principal: create/edit draft during Manager Checklist Review (ODU-routed).
-    ODU Manager: review submitted checklist and approve.
+    Ministry (whoever drafts the submission — ministry_hr, dept_admin, csu_manager,
+    etc., same roles that can edit the digitized ORG-3.1/PSC 2-1 form itself):
+    create/edit/submit the 20-item checklist while their submission is still in
+    Draft. This is their own self-certification, submitted alongside the rest
+    of their package — confirmed with ODU (2026-08-06) that this is now their
+    responsibility, not ODU's.
 
-    GET /odu-checklists/ensure/?submission=<id> — load or create pre-filled draft (principal).
+    ODU Principal/Manager: once the ministry has submitted it, review it during
+    Manager Checklist Review — they can only add their own recommendation and
+    sign-off (Section C/D), not touch the ministry's 20 answers. Manager approves.
+
+    GET /odu-checklists/ensure/?submission=<id> — load or create pre-filled draft.
   """
 
     serializer_class   = ODUChecklistSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def _require_ministry_role(self, profile):
+        from .odu_checklist_rules import CHECKLIST_MINISTRY_ROLES
+
+        if profile.role not in CHECKLIST_MINISTRY_ROLES:
+            raise PermissionDenied(
+                "Only the submitting ministry/unit can fill in this checklist."
+            )
 
     def _require_odu_role(self, profile):
         from .odu_checklist_rules import ODU_CHECKLIST_ROLES
@@ -9907,29 +9923,16 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
             )
 
     def _require_view_role(self, profile):
-        from .odu_checklist_rules import ODU_CHECKLIST_VIEW_ROLES
+        from .odu_checklist_rules import CHECKLIST_MINISTRY_ROLES, ODU_CHECKLIST_VIEW_ROLES
 
-        if profile.role not in ODU_CHECKLIST_VIEW_ROLES:
+        if profile.role not in (CHECKLIST_MINISTRY_ROLES | ODU_CHECKLIST_VIEW_ROLES):
             raise PermissionDenied(
                 "You do not have access to the ODU restructure checklist."
             )
 
-    def _validate_submission_for_checklist(self, submission):
-        from rest_framework.exceptions import ValidationError
-
-        from .odu_checklist_rules import submission_eligible_for_odu_checklist
-
-        if not submission_eligible_for_odu_checklist(submission):
-            raise ValidationError({
-                "submission": (
-                    "ODU Restructure Checklist is only available for ORG-3.1 or PSC 2-1 "
-                    "submissions in Manager Checklist Review while routed to ODU."
-                ),
-            })
-
     def get_queryset(self):
         profile = _profile(self.request.user)
-        self._require_odu_role(profile)
+        self._require_view_role(profile)
         qs = ODURestructureChecklist.objects.select_related(
             "submission", "created_by",
         ).all()
@@ -9942,19 +9945,20 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
     def ensure(self, request):
         """Load checklist for a submission.
 
-        During Manager Checklist Review (ODU-routed) an ODU Principal gets a
-        pre-filled draft created on demand. After review, the completed checklist
-        is returned read-only to ODU + PSC reviewer roles so the verification
-        record stays visible downstream.
+        The ministry gets a pre-filled draft created on demand while their
+        submission is still in Draft. Once submitted, ODU reviews it read-only
+        for the 20 items (their own recommendation/sign-off fields stay
+        editable). After review, everyone with view access sees it read-only
+        so the verification record stays visible downstream.
         """
         from rest_framework.exceptions import ValidationError
 
         from .odu_checklist_prefill import ensure_odu_checklist_for_submission
         from .odu_checklist_rules import (
-            submission_eligible_for_odu_checklist,
+            CHECKLIST_MINISTRY_ROLES,
+            submission_eligible_for_checklist_draft,
             submission_in_odu_view_phase,
             submission_viewable_odu_checklist,
-            user_is_odu_principal_worker,
         )
 
         profile = _profile(request.user)
@@ -9979,13 +9983,11 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Only create a draft during the active review phase, and only for the
-        # ODU Principal (or an admin/superuser, for oversight + testing). In the
-        # read-only view phase, never create — just load.
+        # Only create a draft while the ministry is still drafting, and only
+        # for ministry roles (or an admin/superuser, for oversight + testing).
         is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser
-        in_review = submission_eligible_for_odu_checklist(submission)
-        allow_create = in_review and (
-            user_is_odu_principal_worker(profile.role) or is_admin
+        allow_create = submission_eligible_for_checklist_draft(submission) and (
+            profile.role in CHECKLIST_MINISTRY_ROLES or is_admin
         )
         checklist = ensure_odu_checklist_for_submission(
             submission,
@@ -9995,10 +9997,9 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
         if not checklist:
             view_phase = submission_in_odu_view_phase(submission)
             detail = (
-                "No ODU checklist was completed for this submission."
+                "No checklist was completed for this submission."
                 if view_phase
-                else "Checklist has not been started. The ODU Principal must open "
-                     "this submission during checklist review."
+                else "The ministry has not started this checklist yet."
             )
             return Response({"detail": detail}, status=status.HTTP_404_NOT_FOUND)
         return Response(ODUChecklistSerializer(checklist).data)
@@ -10006,42 +10007,79 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from rest_framework.exceptions import ValidationError
 
-        from .odu_checklist_rules import user_is_odu_principal_worker
+        from .odu_checklist_rules import submission_eligible_for_checklist_draft
 
         profile = _profile(self.request.user)
-        self._require_odu_role(profile)
-        if not user_is_odu_principal_worker(profile.role):
-            raise PermissionDenied("Only an ODU principal analyst can create the checklist draft.")
+        self._require_ministry_role(profile)
         submission = serializer.validated_data["submission"]
-        self._validate_submission_for_checklist(submission)
+        if not submission_eligible_for_checklist_draft(submission):
+            raise ValidationError({
+                "submission": (
+                    "This checklist can only be started while the submission is "
+                    "still in Draft."
+                ),
+            })
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
-        from .odu_checklist_rules import user_is_odu_principal_worker
+        from .odu_checklist_rules import (
+            CHECKLIST_MINISTRY_ROLES,
+            CHECKLIST_ODU_REVIEW_FIELDS,
+            ODU_CHECKLIST_ROLES,
+            submission_eligible_for_checklist_draft,
+            submission_eligible_for_odu_checklist,
+        )
 
         profile = _profile(self.request.user)
-        self._require_odu_role(profile)
-        if not user_is_odu_principal_worker(profile.role):
-            raise PermissionDenied("Only an ODU principal analyst can edit the checklist draft.")
         instance = serializer.instance
-        if instance.status != ODUChecklistStatus.DRAFT:
-            raise PermissionDenied("Only draft checklists can be edited.")
-        serializer.save()
+
+        if profile.role in CHECKLIST_MINISTRY_ROLES:
+            if instance.status != ODUChecklistStatus.DRAFT:
+                raise PermissionDenied(
+                    "This checklist has already been submitted and can no longer be edited."
+                )
+            if not submission_eligible_for_checklist_draft(instance.submission):
+                raise PermissionDenied(
+                    "This checklist can only be edited while the submission is still in Draft."
+                )
+            serializer.save()
+            return
+
+        if profile.role in ODU_CHECKLIST_ROLES:
+            if instance.status != ODUChecklistStatus.SUBMITTED:
+                raise PermissionDenied(
+                    "Only a checklist the ministry has submitted can be reviewed."
+                )
+            if not submission_eligible_for_odu_checklist(instance.submission):
+                raise PermissionDenied(
+                    "This checklist can only be reviewed while the submission is "
+                    "with ODU for Manager Checklist Review."
+                )
+            # ODU may only add their own recommendation/sign-off — the
+            # ministry's 20 answers are locked to them.
+            for field in list(serializer.validated_data.keys()):
+                if field not in CHECKLIST_ODU_REVIEW_FIELDS:
+                    serializer.validated_data.pop(field)
+            serializer.save()
+            return
+
+        raise PermissionDenied("You do not have access to edit this checklist.")
 
     @action(detail=True, methods=["post"], url_path="submit")
     def submit(self, request, pk=None):
         """
         Transition checklist from Draft → Submitted.
-        ODU Principal only. All 20 items must be answered.
+        Ministry only, once all 20 items are answered — this locks it for
+        ODU's review.
         """
-        from .odu_checklist_rules import user_is_odu_principal_worker
+        from .odu_checklist_rules import submission_eligible_for_checklist_draft
 
         checklist = self.get_object()
         profile = _profile(request.user)
-        self._require_odu_role(profile)
-        if not user_is_odu_principal_worker(profile.role):
+        self._require_ministry_role(profile)
+        if not submission_eligible_for_checklist_draft(checklist.submission):
             raise PermissionDenied(
-                "Only an ODU principal analyst can submit the checklist for manager review."
+                "This checklist can only be submitted while the submission is still in Draft."
             )
         if checklist.status != ODUChecklistStatus.DRAFT:
             return Response(

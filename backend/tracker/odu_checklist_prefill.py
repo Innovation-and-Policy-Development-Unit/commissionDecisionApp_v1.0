@@ -286,9 +286,9 @@ def ensure_odu_checklist_for_submission(
     user: User,
     allow_create: bool,
 ) -> ODURestructureChecklist | None:
-    from .odu_checklist_rules import submission_eligible_for_odu_checklist
+    from .odu_checklist_rules import submission_viewable_odu_checklist
 
-    if not submission_eligible_for_odu_checklist(submission):
+    if not submission_viewable_odu_checklist(submission):
         return None
 
     existing = (

@@ -49,13 +49,29 @@ export const ODU_CHECKLIST_VIEW_ROLES = [
   'psc_admin',
 ]
 
+// Roles that draft the ministry's submission — same set the digitized
+// ORG-3.1/PSC 2-1 form itself is editable by (canEditForm37). They now fill
+// in the 20-item checklist themselves; ODU reviews it rather than authoring
+// it (confirmed with ODU 2026-08-06).
+export const CHECKLIST_MINISTRY_ROLES = [
+  'ministry_hr', 'dept_admin', 'psc_admin', 'psc_officer', 'psc_secretary', 'csu_manager',
+]
+
 export function userIsOduPrincipalWorker(role) {
   return ODU_PRINCIPAL_WORKER_ROLES.includes(role)
+}
+
+export function userIsChecklistMinistryRole(role) {
+  return CHECKLIST_MINISTRY_ROLES.includes(role)
 }
 
 export function submissionUsesOduRestructureChecklist(submission) {
   const code = submission?.form_type_code || ''
   return ODU_RESTRUCTURE_CHECKLIST_FORM_CODES.includes(code)
+}
+
+export function submissionInChecklistDraftPhase(submission) {
+  return submission?.current_stage === 'draft'
 }
 
 export function submissionInOduReviewPhase(submission) {
@@ -75,9 +91,16 @@ export function submissionInOduViewPhase(submission) {
 export function canShowOduChecklist(submission, user) {
   if (!user || !submission) return false
   if (!submissionUsesOduRestructureChecklist(submission)) return false
-  // Admins / superusers get visibility in both phases for oversight + testing.
+  // Admins / superusers get visibility in every phase for oversight + testing.
   const isAdmin = user.is_superuser || user.role === 'psc_admin'
-  // Active review phase — ODU manager + principals edit/approve.
+  // Ministry drafting phase — they fill in the checklist themselves.
+  if (
+    (isAdmin || CHECKLIST_MINISTRY_ROLES.includes(user.role))
+    && submissionInChecklistDraftPhase(submission)
+  ) {
+    return true
+  }
+  // Active review phase — ODU manager + principals add their own recommendation.
   if (
     (isAdmin || ODU_CHECKLIST_ROLES.includes(user.role))
     && submissionInOduReviewPhase(submission)
