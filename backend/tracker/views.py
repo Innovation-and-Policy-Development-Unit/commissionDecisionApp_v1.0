@@ -137,6 +137,7 @@ from .serializers import (
     DocumentSignatureSerializer,
     UserSignatureSerializer,
     ODUChecklistSerializer,
+    ODUBoardPaperSerializer,
     RestructureSubmissionDataSerializer,
     KnowledgeCategorySerializer,
     KnowledgeArticleSerializer,
@@ -189,6 +190,7 @@ from .models import (
     FeedbackStatus,
     ODURestructureChecklist,
     ODUChecklistStatus,
+    ODURestructureBoardPaper,
     PSCFormField,
     PSCFormType,
     RestructureSubmissionData,
@@ -10080,6 +10082,135 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
             checklist.manager_verifier_date = timezone.now().date()
         checklist.save(update_fields=["status", "manager_verifier_name", "manager_verifier_date"])
         return Response(ODUChecklistSerializer(checklist).data)
+
+
+# ── ODU Restructure Board Paper ────────────────────────────────────────────────
+
+class ODUBoardPaperViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for the ODU Restructure Board Paper — the Commission-facing
+    submission ODU prepares after their checklist review and assessment.
+    This, not the ministry's original PSC 2-1 request, is what gets shown
+    to the Commission.
+
+    ODU Principal/Manager: create/edit while the case is with ODU
+    (Manager Checklist Review or Under Assessment).
+    Everyone else who could already see the checklist: read-only once
+    the case has moved past ODU's own working stages.
+
+    GET /odu-board-papers/ensure/?submission=<id> — load or create draft.
+    """
+
+    serializer_class   = ODUBoardPaperSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _require_odu_role(self, profile):
+        from .odu_checklist_rules import ODU_CHECKLIST_ROLES
+
+        if profile.role not in ODU_CHECKLIST_ROLES:
+            raise PermissionDenied(
+                "Only ODU Manager or ODU principal analysts can access the board paper."
+            )
+
+    def _require_view_role(self, profile):
+        from .odu_checklist_rules import ODU_CHECKLIST_VIEW_ROLES
+
+        if profile.role not in ODU_CHECKLIST_VIEW_ROLES:
+            raise PermissionDenied(
+                "You do not have access to the ODU restructure board paper."
+            )
+
+    def get_queryset(self):
+        profile = _profile(self.request.user)
+        self._require_odu_role(profile)
+        qs = ODURestructureBoardPaper.objects.select_related(
+            "submission", "created_by",
+        ).all()
+        sub_id = self.request.query_params.get("submission")
+        if sub_id:
+            qs = qs.filter(submission_id=sub_id)
+        return qs
+
+    @action(detail=False, methods=["get"], url_path="ensure")
+    def ensure(self, request):
+        """Load the board paper for a submission, creating a blank draft on
+        demand while ODU is actively working the case."""
+        from rest_framework.exceptions import ValidationError
+
+        from .odu_checklist_rules import (
+            submission_eligible_for_board_paper,
+            submission_viewable_board_paper,
+        )
+
+        profile = _profile(request.user)
+        self._require_view_role(profile)
+
+        submission_id = request.query_params.get("submission")
+        if not submission_id:
+            raise ValidationError({"submission": "Query parameter submission is required."})
+
+        submission = get_object_or_404(
+            Submission.objects.select_related("ministry", "department"),
+            pk=submission_id,
+        )
+        if not submission_viewable_board_paper(submission):
+            return Response(
+                {
+                    "detail": (
+                        "Board paper is only shown for ORG-3.1 / PSC 2-1 submissions "
+                        "routed to ODU."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        paper = ODURestructureBoardPaper.objects.filter(submission=submission).first()
+        if paper:
+            return Response(ODUBoardPaperSerializer(paper).data)
+
+        if not submission_eligible_for_board_paper(submission):
+            return Response(
+                {"detail": "The board paper has not been started for this submission."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        paper = ODURestructureBoardPaper.objects.create(
+            submission=submission,
+            created_by=request.user,
+            subject=submission.title or "",
+            prepared_by=_odu_prepared_by_default(profile, request.user),
+        )
+        return Response(ODUBoardPaperSerializer(paper).data)
+
+    def perform_create(self, serializer):
+        from .odu_checklist_rules import submission_eligible_for_board_paper
+
+        profile = _profile(self.request.user)
+        self._require_odu_role(profile)
+        submission = serializer.validated_data["submission"]
+        if not submission_eligible_for_board_paper(submission):
+            raise PermissionDenied(
+                "Board paper can only be created while the submission is with ODU."
+            )
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        from .odu_checklist_rules import submission_eligible_for_board_paper
+
+        profile = _profile(self.request.user)
+        self._require_odu_role(profile)
+        instance = serializer.instance
+        if not submission_eligible_for_board_paper(instance.submission):
+            raise PermissionDenied(
+                "Board paper can only be edited while the submission is with ODU."
+            )
+        serializer.save()
+
+
+def _odu_prepared_by_default(profile, user) -> str:
+    full = f"{user.first_name} {user.last_name}".strip() or user.username
+    title = dict(Role.choices).get(profile.role, profile.role)
+    return f"{full}, {title}" if title else full
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

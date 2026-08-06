@@ -55,6 +55,7 @@ from .models import (
     DocumentSignature,
     UserSignature,
     ODURestructureChecklist,
+    ODURestructureBoardPaper,
     RestructureSubmissionData,
     StaffChatMessage,
     StaffChatSession,
@@ -2601,6 +2602,39 @@ class ODUChecklistSerializer(serializers.ModelSerializer):
             "items_answered", "items_yes",
             "status_display", "submission_type_display", "recommendation_display",
             "submitted_at", "created_at", "updated_at",
+        ]
+
+
+# ── ODU Restructure Board Paper ───────────────────────────────────────────────
+
+class ODUBoardPaperSerializer(serializers.ModelSerializer):
+    """Full read/write serializer for the ODU Restructure Board Paper —
+    the Commission-facing submission ODU prepares after their assessment."""
+
+    created_by_name = serializers.SerializerMethodField()
+
+    def get_created_by_name(self, obj):
+        u = obj.created_by
+        full = f"{u.first_name} {u.last_name}".strip()
+        return full or u.username
+
+    class Meta:
+        model  = ODURestructureBoardPaper
+        fields = [
+            "id", "submission",
+            # Header
+            "meeting_number", "item_number", "submitted_by", "action_officer",
+            "psc_file", "prepared_by",
+            "date_submitted_to_psc_by_ministry", "date_submitted_to_pscb",
+            # Body
+            "subject", "background", "issues", "discussions", "odu_assessment",
+            # Costing
+            "costing_rows", "costing_notes",
+            # Meta
+            "created_by", "created_by_name", "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "created_by", "created_by_name", "created_at", "updated_at",
         ]
 
 

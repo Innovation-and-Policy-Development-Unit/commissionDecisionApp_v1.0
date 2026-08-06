@@ -93,3 +93,43 @@ export function canShowOduChecklist(submission, user) {
   }
   return false
 }
+
+// ── ODU Board Paper (Commission-facing submission ODU prepares) ───────────────
+
+// Editable while ODU is actively working the case: checklist review, then
+// their own assessment phase where the board paper itself gets drafted.
+export const BOARD_PAPER_EDIT_STAGES = ['manager_checklist_review', 'under_assessment']
+
+export function submissionInBoardPaperEditPhase(submission) {
+  return (
+    submission?.routed_unit === ODU_ROUTED_UNIT
+    && BOARD_PAPER_EDIT_STAGES.includes(submission?.current_stage)
+  )
+}
+
+export function submissionInBoardPaperViewPhase(submission) {
+  return (
+    submission?.routed_unit === ODU_ROUTED_UNIT
+    && ODU_CHECKLIST_VIEW_STAGES.includes(submission?.current_stage)
+    && !BOARD_PAPER_EDIT_STAGES.includes(submission?.current_stage)
+  )
+}
+
+export function canShowBoardPaper(submission, user) {
+  if (!user || !submission) return false
+  if (!submissionUsesOduRestructureChecklist(submission)) return false
+  const isAdmin = user.is_superuser || user.role === 'psc_admin'
+  if (
+    (isAdmin || ODU_CHECKLIST_ROLES.includes(user.role))
+    && submissionInBoardPaperEditPhase(submission)
+  ) {
+    return true
+  }
+  if (
+    (isAdmin || ODU_CHECKLIST_VIEW_ROLES.includes(user.role))
+    && submissionInBoardPaperViewPhase(submission)
+  ) {
+    return true
+  }
+  return false
+}

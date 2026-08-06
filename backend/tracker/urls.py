@@ -50,6 +50,7 @@ from .views import (
     CommissionTaskViewSet,
     DecisionLetterViewSet,
     ODUChecklistViewSet,
+    ODUBoardPaperViewSet,
     SubmissionChecklistViewSet,
     SecurityNoticeViewSet,
     DepartmentViewSet,
@@ -187,6 +188,7 @@ router.register(r"transcripts",      TranscriptViewSet,       basename="transcri
 router.register(r"doc-annotations",  DocumentAnnotationViewSet, basename="doc-annotation")
 router.register(r"doc-signatures",   DocumentSignatureViewSet,  basename="doc-signature")
 router.register(r"odu-checklists",        ODUChecklistViewSet,        basename="odu-checklist")
+router.register(r"odu-board-papers",      ODUBoardPaperViewSet,       basename="odu-board-paper")
 router.register(r"submission-checklists", SubmissionChecklistViewSet, basename="submission-checklist")
 router.register(r"smart-reports", SmartReportViewSet, basename="smart-report")
 router.register(r"report-templates", ReportTemplateViewSet, basename="report-template")

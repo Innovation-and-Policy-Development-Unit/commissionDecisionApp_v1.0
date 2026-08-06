@@ -3850,6 +3850,64 @@ class ODURestructureChecklist(models.Model):
         return sum(1 for f in fields if f is True)
 
 
+class ODURestructureBoardPaper(models.Model):
+    """
+    The PSC Board Submission Paper for an Organisation Restructure /
+    Establishment Variation submission, authored by ODU after their own
+    assessment (20-item checklist + review of the ministry's request).
+
+    This — not the ministry's original PSC 2-1 submission — is what the
+    Commission actually receives and votes on. One per submission.
+    """
+
+    submission = models.OneToOneField(
+        Submission, on_delete=models.CASCADE,
+        related_name="odu_board_paper",
+        help_text="The restructure submission this board paper belongs to.",
+    )
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    meeting_number = models.CharField(max_length=100, blank=True)
+    item_number    = models.CharField(max_length=100, blank=True)
+    submitted_by   = models.CharField(max_length=255, blank=True, default="Secretary")
+    action_officer = models.CharField(max_length=255, blank=True)
+    psc_file       = models.CharField(max_length=255, blank=True)
+    prepared_by    = models.CharField(max_length=255, blank=True)
+    date_submitted_to_psc_by_ministry = models.DateField(null=True, blank=True)
+    date_submitted_to_pscb            = models.DateField(null=True, blank=True)
+
+    # ── Body ──────────────────────────────────────────────────────────────────
+    subject         = models.CharField(max_length=512, blank=True)
+    background      = models.TextField(blank=True)
+    issues          = models.TextField(blank=True)
+    discussions     = models.TextField(blank=True)
+    odu_assessment  = models.TextField(blank=True)
+
+    # ── Costing table ─────────────────────────────────────────────────────────
+    # Array of position rows, same shape as RestructureSubmissionData.costing_rows:
+    # {current_post_no, current_title, current_level, current_salary,
+    #  proposed_post_no, proposed_title, proposed_level, proposed_salary,
+    #  salary_difference}
+    costing_rows  = models.JSONField(default=list, blank=True)
+    costing_notes = models.TextField(blank=True)
+
+    # ── Meta ──────────────────────────────────────────────────────────────────
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="odu_board_papers_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name        = "ODU Restructure Board Paper"
+        verbose_name_plural = "ODU Restructure Board Papers"
+
+    def __str__(self):
+        return f"ODU Board Paper — {self.submission.reference_number}"
+
+
 class StaffChatSession(models.Model):
     """Per-user conversation thread for Staff Assistant or Status Assistant."""
 

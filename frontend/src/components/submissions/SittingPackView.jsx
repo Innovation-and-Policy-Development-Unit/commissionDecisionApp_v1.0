@@ -244,6 +244,11 @@ export default function SittingPackView({
               {/* Digitised form view — dedicated forms */}
               {isDedicatedForm && dynamicForm && (
                 <div className="card card-compact">
+                  {submission?.form_type_code === 'PSC 2-1' && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 italic mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
+                      Ministry's original request, for reference. Prepare the ODU Board Submission Paper from the main submission page.
+                    </p>
+                  )}
                   {submission?.form_type_code === 'PSC 2-1' && <PSCForm21View data={dynamicForm} />}
                   {submission?.form_type_code === 'PSC 2-2' && <PSCForm22View data={dynamicForm} />}
                 </div>

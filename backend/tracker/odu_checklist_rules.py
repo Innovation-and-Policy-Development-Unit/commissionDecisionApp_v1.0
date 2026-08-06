@@ -99,3 +99,44 @@ def submission_viewable_odu_checklist(submission: Submission) -> bool:
         submission_in_odu_review_phase(submission)
         or submission_in_odu_view_phase(submission)
     )
+
+
+# ── ODU Board Paper (the Commission-facing submission ODU prepares) ───────────
+
+# Editable while ODU is actively working the case: their own checklist review,
+# then their assessment phase where they draft the board paper itself.
+BOARD_PAPER_EDIT_STAGES = frozenset({
+    WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+    WorkflowStage.UNDER_ASSESSMENT,
+})
+
+
+def submission_in_board_paper_edit_phase(submission: Submission) -> bool:
+    return (
+        submission.routed_unit == RoutedUnit.ODU
+        and submission.current_stage in BOARD_PAPER_EDIT_STAGES
+    )
+
+
+def submission_eligible_for_board_paper(submission: Submission) -> bool:
+    return (
+        submission_uses_odu_restructure_checklist(submission)
+        and submission_in_board_paper_edit_phase(submission)
+    )
+
+
+def submission_in_board_paper_view_phase(submission: Submission) -> bool:
+    """Board paper has left ODU's hands but the record stays viewable."""
+    return (
+        submission.routed_unit == RoutedUnit.ODU
+        and submission.current_stage in ODU_CHECKLIST_VIEW_STAGES
+        and submission.current_stage not in BOARD_PAPER_EDIT_STAGES
+    )
+
+
+def submission_viewable_board_paper(submission: Submission) -> bool:
+    """Board paper can be shown (editable while ODU is working it, read-only after)."""
+    return submission_uses_odu_restructure_checklist(submission) and (
+        submission_in_board_paper_edit_phase(submission)
+        or submission_in_board_paper_view_phase(submission)
+    )

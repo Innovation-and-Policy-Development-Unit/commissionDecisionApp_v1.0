@@ -47,11 +47,12 @@ import PSCForm21View from './PSCForm21View'
 import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
+import ODUBoardPaperForm from '../odu/ODUBoardPaperForm'
 import SubmissionChecklistPanel from '../../components/submissions/SubmissionChecklistPanel'
 import SittingPackView from '../../components/submissions/SittingPackView'
 import WorkflowActionsPanel from '../../components/submissions/WorkflowActionsPanel'
 import CarryoverBanner from '../../components/submissions/CarryoverBanner'
-import { canShowOduChecklist } from '../../utils/oduChecklist'
+import { canShowOduChecklist, canShowBoardPaper, submissionUsesOduRestructureChecklist } from '../../utils/oduChecklist'
 import { isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
 import { formatApiError } from '../../utils/apiError'
 import { PageSkeleton } from '../../components/shared/Skeleton'
@@ -229,6 +230,7 @@ export default function SubmissionDetail() {
 
   // Suppress the legacy hardcoded ODU form when a dynamic XML checklist is configured for this form type
   const showOduChecklist = canShowOduChecklist(submission, user) && !hasDynamicChecklist
+  const showOduBoardPaper = canShowBoardPaper(submission, user) && !hasDynamicChecklist
   const stage = submission?.current_stage
   const showDynamicChecklist = user && hasDynamicChecklist && (
     (DYNAMIC_CHECKLIST_EDIT_ROLES.includes(user.role) && stage === DYNAMIC_CHECKLIST_EDIT_STAGE) ||
@@ -1202,6 +1204,11 @@ const stageDescriptions = {
                   ) : (
                     isDedicatedForm ? (
                       <div className="card card-compact">
+                        {submission.form_type_code === 'PSC 2-1' && submissionUsesOduRestructureChecklist(submission) && (
+                          <p className="text-xs text-slate-400 dark:text-slate-500 italic mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
+                            Ministry's original request — reference only. See the ODU Board Submission Paper below for the version prepared for the Commission.
+                          </p>
+                        )}
                         {submission.form_type_code === 'PSC 2-1' && <PSCForm21View data={dynamicForm} />}
                         {submission.form_type_code === 'PSC 2-2' && <PSCForm22View data={dynamicForm} />}
                       </div>
@@ -1427,6 +1434,14 @@ const stageDescriptions = {
           {/* ── ODU Restructure Checklist ── */}
           {showOduChecklist && (
             <ODURestructureChecklistForm
+              submissionId={Number(id)}
+              submission={submission}
+            />
+          )}
+
+          {/* ── ODU Board Submission Paper (the Commission-facing document) ── */}
+          {showOduBoardPaper && (
+            <ODUBoardPaperForm
               submissionId={Number(id)}
               submission={submission}
             />
