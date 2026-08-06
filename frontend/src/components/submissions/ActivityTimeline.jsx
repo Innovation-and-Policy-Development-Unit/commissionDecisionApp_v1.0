@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { MessageSquare, GitBranch, Activity, ShieldCheck, Lock } from 'lucide-react'
+import DOMPurify from 'dompurify'
 import { getActivity } from '../../api/activity'
 import MentionText from '../shared/MentionText'
 
@@ -47,10 +48,16 @@ function Entry({ entry, last }) {
           )}
           <span className="ml-1.5 text-[11px] text-slate-400">· {timeAgo(entry.at)}</span>
         </p>
-        {entry.body && (
-          entry.kind === 'comment'
-            ? <MentionText body={entry.body} className="mt-0.5 text-sm text-slate-600 dark:text-slate-400" />
-            : <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words">{entry.body}</p>
+        {entry.kind === 'comment' && entry.body && (
+          <MentionText body={entry.body} className="mt-0.5 text-sm text-slate-600 dark:text-slate-400" />
+        )}
+        {entry.kind !== 'comment' && entry.body_html ? (
+          <div
+            className="rich-note-prose mt-0.5 text-sm text-slate-600 dark:text-slate-400"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.body_html) }}
+          />
+        ) : entry.kind !== 'comment' && entry.body && (
+          <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words">{entry.body}</p>
         )}
       </div>
     </li>

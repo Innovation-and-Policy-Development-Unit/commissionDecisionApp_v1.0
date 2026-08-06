@@ -172,6 +172,7 @@ def build_visual_audit_trail(submission) -> list[dict[str, Any]]:
             "previous_stage": ev.previous_stage,
             "new_stage": ev.new_stage,
             "remarks": ev.remarks or "",
+            "remarks_html": ev.remarks_html or "",
             "description": f"{ev.previous_stage} → {ev.new_stage}",
             "has_decision_proof": bool(ev.content_hash),
             "content_hash": ev.content_hash or "",

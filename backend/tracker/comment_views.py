@@ -346,6 +346,7 @@ def activity_timeline(request):
                 "actor": _actor_name(e.actor, fallback=(e.actor_label or "System")),
                 "summary": summary,
                 "body": e.remarks or "",
+                "body_html": e.remarks_html or "",
                 "is_internal": False,
                 "at": e.created_at,
                 "has_proof": bool(e.content_hash),

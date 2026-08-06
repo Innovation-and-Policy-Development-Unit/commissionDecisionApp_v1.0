@@ -8,6 +8,7 @@ djangorestframework-simplejwt>=5.3
 psycopg[binary]>=3.1
 python-dotenv>=1.0
 Pillow>=10.0.0
+nh3>=0.2.18
 django-axes>=6.0
 django-ratelimit>=4.0
 pyotp>=2.9.0

@@ -1401,6 +1401,12 @@ class PSCFormTypeSerializer(serializers.ModelSerializer):
 class TransitionSerializer(serializers.Serializer):
     new_stage = serializers.ChoiceField(choices=WorkflowStage.choices)
     remarks = serializers.CharField(required=False, allow_blank=True)
+    remarks_html = serializers.CharField(
+        required=False, allow_blank=True,
+        help_text="Rich-text remarks from the note editor. When present, the "
+                   "server derives `remarks` (plain text) from this and ignores "
+                   "any plain `remarks` sent alongside it.",
+    )
     acknowledge_gaps = serializers.BooleanField(required=False, default=False)
     acknowledge_no_form_type = serializers.BooleanField(required=False, default=False)
 

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Modal from '../shared/Modal'
 import BaseSelect from '../shared/BaseSelect'
-import BaseTextarea from '../shared/BaseTextarea'
+import RichNoteEditor from '../shared/RichNoteEditor'
 import { stageLabel, stageMeta } from '../../constants/stages'
 import { ArrowRight } from 'lucide-react'
 
@@ -18,19 +18,18 @@ export default function SubmissionKanbanTransitionDialog({
 }) {
   const { t } = useTranslation()
   const [targetStage, setTargetStage] = useState(initialTarget || '')
-  const [remarks, setRemarks] = useState('')
+  const editorRef = useRef(null)
 
   useEffect(() => {
     if (open) {
       setTargetStage(initialTarget || stageOptions[0] || '')
-      setRemarks('')
     }
   }, [open, initialTarget, stageOptions])
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!targetStage) return
-    onConfirm({ targetStage, remarks })
+    onConfirm({ targetStage, remarksHtml: editorRef.current?.getHTML() || '' })
   }
 
   const showStagePicker = stageOptions.length > 1
@@ -69,14 +68,20 @@ export default function SubmissionKanbanTransitionDialog({
             </span>
           </p>
         )}
-        <BaseTextarea
-          label={t('submission.kanban.remarks')}
-          hint={t('submission.kanban.remarks_hint')}
-          placeholder={t('submission.kanban.remarks_placeholder')}
-          value={remarks}
-          onChange={(e) => setRemarks(e.target.value)}
-          rows={3}
-        />
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
+            {t('submission.kanban.remarks')}
+          </label>
+          <RichNoteEditor
+            ref={editorRef}
+            submissionId={submission?.id}
+            placeholder={t('submission.kanban.remarks_placeholder')}
+            resetKey={open}
+          />
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            {t('submission.kanban.remarks_hint')}
+          </p>
+        </div>
         {error && (
           <p className="text-sm text-red-600 dark:text-red-400" role="alert">
             {error}

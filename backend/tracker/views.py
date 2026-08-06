@@ -38,6 +38,7 @@ from .models import (
     Ministry,
     Notification,
     Profile,
+    RemarksImage,
     Role,
     RoleDefinition,
     SecurityNotice,
@@ -1255,6 +1256,16 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         acknowledge_gaps = bool(ser.validated_data.get("acknowledge_gaps"))
         prev = submission.current_stage
 
+        # ── Rich-text remarks: sanitize, then derive the plain-text `remarks` ──
+        # value that everything else in this view (blank-remarks guards, the
+        # decision proof hash, email notifications, AI context) keeps reading
+        # unchanged. `remarks_html` is stored purely for display.
+        from .rich_text import extract_remarks_image_ids, html_to_plain_text, sanitize_remarks_html
+
+        remarks_html = sanitize_remarks_html(ser.validated_data.get("remarks_html", ""))
+        if remarks_html:
+            remarks = html_to_plain_text(remarks_html)
+
         # ── Approval chain check (dynamic per-section config) ────────────────
         _chain_result = _chain_transition_allowed(submission, profile.role, target, user=request.user)
         if _chain_result is False:
@@ -1688,15 +1699,21 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     remarks=remarks,
                 )
 
-            WorkflowEvent.objects.create(
+            _event = WorkflowEvent.objects.create(
                 submission=submission,
                 actor=request.user,
                 previous_stage=prev,
                 new_stage=target,
                 remarks=remarks,
+                remarks_html=remarks_html,
                 content_hash=proof_hash,
                 proof_payload=proof_payload,
             )
+            _image_ids = extract_remarks_image_ids(remarks_html)
+            if _image_ids:
+                RemarksImage.objects.filter(
+                    submission=submission, id__in=_image_ids, workflow_event__isnull=True,
+                ).update(workflow_event=_event)
 
             # ── Cascade final decisions to attached child submissions ──────────
             _CASCADE_STAGES = {
@@ -3010,6 +3027,36 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if len(created_docs) == 1:
             return Response(SubmissionDocumentSerializer(created_docs[0]).data, status=status.HTTP_201_CREATED)
         return Response(SubmissionDocumentSerializer(created_docs, many=True).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="remarks-images")
+    def upload_remarks_image(self, request, pk=None):
+        """Upload a screenshot pasted/dropped into a workflow-remarks rich-text
+        editor. Not linked to a WorkflowEvent yet — `transition()` links it once
+        the transition it was composed for actually commits. Visibility scoping
+        via get_object() is enough here; the transition itself is where role/stage
+        authorization is enforced."""
+        submission = self.get_object()
+
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        allowed_types = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+        if file.content_type not in allowed_types:
+            return Response(
+                {"detail": f"Unsupported image type '{file.content_type}'. Allowed: PNG, JPEG, GIF, WEBP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if file.size > 8 * 1024 * 1024:
+            return Response({"detail": "Image exceeds the 8 MB limit."}, status=status.HTTP_400_BAD_REQUEST)
+
+        image = RemarksImage.objects.create(
+            submission=submission, file=file, uploaded_by=request.user,
+        )
+        return Response(
+            {"id": image.id, "url": image.file.url},
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/extract-facts")
     def extract_document_facts(self, request, pk=None, doc_id=None):

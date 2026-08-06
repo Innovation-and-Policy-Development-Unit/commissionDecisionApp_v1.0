@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, History, ShieldCheck, FileText } from 'lucide-react'
 import clsx from 'clsx'
+import DOMPurify from 'dompurify'
 import api from '../../api/client'
 import { normalizeFieldPayload } from '../../utils/listPayload'
 import { stageLabel } from '../../constants/stages'
@@ -119,7 +120,12 @@ export default function VisualAuditTrail({ submissionId, className, stageFilter 
                   {ts.toLocaleString('en-VU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   {entry.ip_address ? ` · ${entry.ip_address}` : ''}
                 </span>
-                {entry.remarks && (
+                {entry.remarks_html ? (
+                  <div
+                    className="rich-note-prose text-xs mt-2 rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.remarks_html) }}
+                  />
+                ) : entry.remarks && (
                   <p className="text-xs block mt-2 italic rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                     &ldquo;{entry.remarks}&rdquo;
                   </p>

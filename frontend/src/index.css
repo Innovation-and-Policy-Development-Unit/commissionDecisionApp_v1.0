@@ -951,3 +951,33 @@
     grid-template-columns: 1fr !important;
   }
 }
+
+/* RichNoteModal — TipTap editor for workflow-transition remarks */
+.rich-note-prose p {
+  margin: 0 0 0.5rem;
+}
+.rich-note-prose p:last-child {
+  margin-bottom: 0;
+}
+.rich-note-prose ul,
+.rich-note-prose ol {
+  margin: 0 0 0.5rem 1.25rem;
+}
+.rich-note-prose img {
+  max-width: 100%;
+  border-radius: 0.5rem;
+  margin: 0.5rem 0;
+}
+.rich-note-prose img[data-uploading='true'] {
+  opacity: 0.5;
+}
+.rich-note-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: theme('colors.slate.400');
+}
+.dark .rich-note-prose p.is-editor-empty:first-child::before {
+  color: theme('colors.slate.500');
+}
