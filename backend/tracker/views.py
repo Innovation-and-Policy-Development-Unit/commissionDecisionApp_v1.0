@@ -10103,7 +10103,7 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from rest_framework.exceptions import ValidationError
 
-        from .odu_checklist_rules import submission_eligible_for_checklist_draft
+        from .odu_checklist_rules import CHECKLIST_MINISTRY_ALLOWED_FIELDS, submission_eligible_for_checklist_draft
 
         profile = _profile(self.request.user)
         self._require_ministry_role(profile)
@@ -10115,10 +10115,16 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                     "still in Draft."
                 ),
             })
+        # Ministry may only seed their own 16 items + submission_type — never
+        # ODU-internal routing fields like odu_officer_assigned/manager_odu.
+        for field in list(serializer.validated_data.keys()):
+            if field not in CHECKLIST_MINISTRY_ALLOWED_FIELDS and field != "submission":
+                serializer.validated_data.pop(field)
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
         from .odu_checklist_rules import (
+            CHECKLIST_MINISTRY_ALLOWED_FIELDS,
             CHECKLIST_MINISTRY_ROLES,
             CHECKLIST_ODU_REVIEW_FIELDS,
             ODU_CHECKLIST_ROLES,
@@ -10138,6 +10144,13 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied(
                     "This checklist can only be edited while the submission is still in Draft."
                 )
+            # Ministry may only edit their own 16 items + submission_type —
+            # Ministry/Department is now derived from the Submission (never
+            # stored here), and odu_officer_assigned/manager_odu are
+            # ODU-internal routing info the ministry should never write.
+            for field in list(serializer.validated_data.keys()):
+                if field not in CHECKLIST_MINISTRY_ALLOWED_FIELDS:
+                    serializer.validated_data.pop(field)
             serializer.save()
             return
 

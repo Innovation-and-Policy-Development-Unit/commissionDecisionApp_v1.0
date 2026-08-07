@@ -83,6 +83,14 @@ CHECKLIST_MINISTRY_REQUIRED_FIELDS = frozenset({
     "b14_cost_analysis", "b15_grt_mapping", "b16_consultation",
 })
 
+# Fields the ministry may write while the checklist is Draft. Everything
+# else in Section A (ministry_department, division_unit, odu_officer_assigned,
+# manager_odu) is either auto-derived from the Submission for display
+# (ministry_department/division_unit — see ODURestructureChecklistForm.jsx)
+# or ODU-internal routing info the ministry should never see, let alone
+# write (odu_officer_assigned, manager_odu).
+CHECKLIST_MINISTRY_ALLOWED_FIELDS = frozenset({"submission_type"}) | CHECKLIST_MINISTRY_REQUIRED_FIELDS
+
 # Fields ODU may write once the ministry has submitted the checklist:
 # Section C (recommendation/comments), Section D (sign-off), and items
 # 17-20 (Groups 6-7) which describe ODU's own process, not the ministry's.

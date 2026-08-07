@@ -1214,7 +1214,7 @@ const stageDescriptions = {
                             Ministry's original request — reference only. See the ODU Board Submission Paper below for the version prepared for the Commission.
                           </p>
                         )}
-                        {['PSC 2-1', 'ORG-3.1'].includes(submission.form_type_code) && <PSCForm21View data={dynamicForm} />}
+                        {['PSC 2-1', 'ORG-3.1'].includes(submission.form_type_code) && <PSCForm21View data={dynamicForm} submission={submission} />}
                         {submission.form_type_code === 'PSC 2-2' && <PSCForm22View data={dynamicForm} />}
                       </div>
                     ) : (

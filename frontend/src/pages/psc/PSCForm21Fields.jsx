@@ -66,7 +66,7 @@ function badgeColorClasses(color) {
 
 // Required fields per tab (for validation dot indicator)
 const TAB_REQUIRED_FIELDS = {
-  1: ['ministry_department_name', 'proposal_title', 'submission_date', 'proposal_type', 'restructure_scope'],
+  1: ['proposal_title', 'submission_date', 'proposal_type', 'restructure_scope'],
   2: ['background_reasons'],
   3: [],
   4: [],
@@ -179,17 +179,8 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
   // Auto-populate fields on mount from submission data
   useEffect(() => {
     setForm(prev => {
-      const updates = {}
-      if (!prev.ministry_department_name) {
-        const ministryName = submission?.ministry?.name ?? submission?.ministry_name ?? ''
-        const departmentName = submission?.department?.name ?? submission?.department_name ?? ''
-        const combined = [ministryName, departmentName].filter(Boolean).join(' / ')
-        if (combined) updates.ministry_department_name = combined
-      }
-      if (!prev.proposal_title && submission?.title) {
-        updates.proposal_title = submission.title
-      }
-      return Object.keys(updates).length ? { ...prev, ...updates } : prev
+      if (prev.proposal_title || !submission?.title) return prev
+      return { ...prev, proposal_title: submission.title }
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -239,7 +230,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
         <div>
           <SectionHeader title="Submission Details" />
           <div className="grid grid-cols-2 gap-4">
-            <ReadField label="Ministry / Department" value={form.ministry_department_name} span />
+            <ReadField label="Ministry / Department" value={[submission?.ministry?.name, submission?.department?.name].filter(Boolean).join(' / ')} span />
             <ReadField label="Proposal Title" value={form.proposal_title} span />
             <ReadField label="Submission Date" value={fmt(form.submission_date)} />
             <ReadField label="Proposal Type" value={form.proposal_type} />
@@ -393,13 +384,10 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
         {/* Tab 1 — Submission Details */}
         {activeTab === 1 && (
           <div className="space-y-4">
-            <Field label="Ministry / Department Name" required hasError={!!fieldErrors['ministry_department_name']}>
-              <input
-                className="input"
-                value={form.ministry_department_name || ''}
-                onChange={e => set('ministry_department_name', e.target.value)}
-                placeholder="Enter ministry or department name"
-              />
+            <Field label="Ministry / Department" hint="From the submission's details — shown here for reference.">
+              <p className="text-sm text-slate-800 dark:text-slate-100 py-2">
+                {[submission?.ministry?.name, submission?.department?.name].filter(Boolean).join(' / ') || '—'}
+              </p>
             </Field>
             <Field label="Proposal Title" required hasError={!!fieldErrors['proposal_title']}>
               <input
