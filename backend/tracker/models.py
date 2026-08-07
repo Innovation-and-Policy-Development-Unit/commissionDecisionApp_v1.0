@@ -50,7 +50,7 @@ class WorkflowStage(models.TextChoices):
     # ── Ministry pre-submission ─────────────────────────────────────────────
     DRAFT                      = "draft",                      "Draft"
     PENDING_DG_ENDORSEMENT     = "pending_dg_endorsement",     "Submitted to DG (Pending Endorsement)"
-    DG_APPROVED                = "dg_approved",                "Endorsed by DG — Pending HR Submission"
+    DG_APPROVED                = "dg_approved",                "Endorsed by DG"
     PENDING_MANAGER_APPROVAL   = "pending_manager_approval",   "Pending Manager Approval"
     PENDING_SECOND_APPROVAL    = "pending_second_approval",    "Pending Second Approval"
     SUBMITTED                  = "submitted",                  "Submitted to PSC"
