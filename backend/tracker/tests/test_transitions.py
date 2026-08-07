@@ -198,6 +198,10 @@ class TransitionTests(TestCase):
         targets = iter_allowed_targets(Role.PSC_ADMIN, WorkflowStage.IMPLEMENTATION_REPORT)
         self.assertIn(WorkflowStage.UNDER_IMPLEMENTATION.value, targets)
 
+    def test_approved_can_skip_to_implementation(self):
+        targets = iter_allowed_targets(Role.PSC_ADMIN, WorkflowStage.APPROVED)
+        self.assertIn(WorkflowStage.UNDER_IMPLEMENTATION.value, targets)
+
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
 class OduChecklistDraftGateTests(TestCase):
@@ -258,6 +262,48 @@ class OduChecklistDraftGateTests(TestCase):
         resp = self._transition()
         self.assertEqual(resp.status_code, 200)
 
-    def test_approved_can_skip_to_implementation(self):
-        targets = iter_allowed_targets(Role.PSC_ADMIN, WorkflowStage.APPROVED)
-        self.assertIn(WorkflowStage.UNDER_IMPLEMENTATION.value, targets)
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class DgEndorseActionTests(TestCase):
+    """POST /submissions/{id}/endorse/ chains pending_dg_endorsement ->
+    dg_approved -> submitted in one call. Regression coverage for two real
+    bugs found while pilot-testing a restructure submission: a broken
+    notification import that crashed the whole request after the stage
+    change had already committed, and a missing auto-routing call that left
+    endorsed submissions stuck at 'submitted' with no routed_unit."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(code="TST-E", name="Test Ministry E")
+        self.dg = User.objects.create_user("dguser_endorse", password="x")
+        Profile.objects.create(user=self.dg, role=Role.HEAD_OF_AGENCY, ministry=self.ministry)
+        self.submission = Submission.objects.create(
+            reference_number="SUB-ENDORSE-001",
+            title="Restructure proposal",
+            form_type_code="ORG-3.1",
+            ministry=self.ministry,
+            current_stage=WorkflowStage.PENDING_DG_ENDORSEMENT,
+            received_at=timezone.now(),
+            created_by=self.dg,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.dg)
+
+    def test_endorse_does_not_crash_on_notification_dispatch(self):
+        resp = self.client.post(f"/api/submissions/{self.submission.id}/endorse/")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_endorse_auto_routes_to_manager_checklist_review(self):
+        # ORG-3.1 routes to ODU (intake_routing.py) — ensure endorse() reaches
+        # the same auto-advance transition() gets after every transition.
+        resp = self.client.post(f"/api/submissions/{self.submission.id}/endorse/")
+        self.assertEqual(resp.status_code, 200)
+        self.submission.refresh_from_db()
+        self.assertEqual(self.submission.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        self.assertEqual(self.submission.routed_unit, "odu")
+
+    def test_endorse_stamps_dg_endorsed_by(self):
+        resp = self.client.post(f"/api/submissions/{self.submission.id}/endorse/")
+        self.assertEqual(resp.status_code, 200)
+        self.submission.refresh_from_db()
+        self.assertEqual(self.submission.dg_endorsed_by_id, self.dg.id)
+        self.assertIsNotNone(self.submission.dg_endorsed_at)
