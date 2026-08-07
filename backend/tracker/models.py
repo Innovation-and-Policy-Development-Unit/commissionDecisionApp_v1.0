@@ -2268,6 +2268,12 @@ class RequiredDocument(models.Model):
                   "PSC route (e.g. CSU/ODU appointments of OPSC staff), which have no "
                   "Director-General step in their workflow.",
     )
+    restructure_department_only = models.BooleanField(
+        default=False,
+        help_text="Only required when the submission's Organisation Restructure form "
+                  "(ORG-3.1 / PSC 2-1) has restructure_scope set to 'department' — "
+                  "see resolve_required_documents().",
+    )
 
     class Meta:
         ordering = ['form_category', 'form_type', 'order', 'name']

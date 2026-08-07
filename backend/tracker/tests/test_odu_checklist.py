@@ -15,6 +15,7 @@ from tracker.odu_checklist_prefill import build_odu_checklist_prefill
 from tracker.odu_checklist_rules import (
     submission_eligible_for_odu_checklist,
     submission_in_odu_review_phase,
+    user_can_view_odu_checklist,
 )
 
 User = get_user_model()
@@ -23,6 +24,7 @@ User = get_user_model()
 class OduChecklistRulesTests(TestCase):
     def setUp(self):
         self.ministry = Ministry.objects.create(name="Test Ministry", code="TM")
+        self.creator = User.objects.create_user(username="odu_rules_creator", password="x")
         self.submission = Submission.objects.create(
             reference_number="SUB-ODU-001",
             title="Restructure proposal",
@@ -31,6 +33,7 @@ class OduChecklistRulesTests(TestCase):
             routed_unit=RoutedUnit.ODU,
             current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
             received_at=timezone.now(),
+            created_by=self.creator,
         )
 
     def test_eligible_when_odu_review_restructure(self):
@@ -47,3 +50,68 @@ class OduChecklistRulesTests(TestCase):
         self.assertEqual(prefill["ministry_department"], "Test Ministry")
         self.assertEqual(prefill["submission_type"], ODURestructureChecklist.SubmissionType.FULL_RESTRUCTURE)
         self.assertEqual(prefill["odu_officer_assigned"], "odu_p")
+
+
+class UserCanViewOduChecklistTests(TestCase):
+    """user_can_view_odu_checklist() must mirror canShowOduChecklist() in
+    frontend/src/utils/oduChecklist.js — per-phase role restriction, not
+    just phase eligibility."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(name="Test Ministry V", code="TMV")
+        self.hr = User.objects.create_user(username="hruser_view", password="x")
+
+    def _submission(self, *, stage, routed_unit=None):
+        kwargs = dict(
+            reference_number=f"SUB-ODUV-{Submission.objects.count()}",
+            title="Restructure proposal",
+            form_type_code="ORG-3.1",
+            ministry=self.ministry,
+            current_stage=stage,
+            received_at=timezone.now(),
+            created_by=self.hr,
+        )
+        if routed_unit is not None:
+            kwargs["routed_unit"] = routed_unit
+        return Submission.objects.create(**kwargs)
+
+    def test_ministry_role_can_view_during_draft(self):
+        submission = self._submission(stage=WorkflowStage.DRAFT)
+        self.assertTrue(user_can_view_odu_checklist(submission, "ministry_hr"))
+
+    def test_odu_manager_cannot_view_during_draft(self):
+        submission = self._submission(stage=WorkflowStage.DRAFT)
+        self.assertFalse(user_can_view_odu_checklist(submission, "odu_manager"))
+
+    def test_odu_manager_can_view_during_review(self):
+        submission = self._submission(
+            stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW, routed_unit=RoutedUnit.ODU,
+        )
+        self.assertTrue(user_can_view_odu_checklist(submission, "odu_manager"))
+
+    def test_ministry_role_cannot_view_during_review(self):
+        submission = self._submission(
+            stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW, routed_unit=RoutedUnit.ODU,
+        )
+        self.assertFalse(user_can_view_odu_checklist(submission, "ministry_hr"))
+
+    def test_broad_view_role_can_view_after_review(self):
+        submission = self._submission(
+            stage=WorkflowStage.UNDER_ASSESSMENT, routed_unit=RoutedUnit.ODU,
+        )
+        self.assertTrue(user_can_view_odu_checklist(submission, "psc_officer"))
+
+    def test_ministry_role_cannot_view_after_review(self):
+        submission = self._submission(
+            stage=WorkflowStage.UNDER_ASSESSMENT, routed_unit=RoutedUnit.ODU,
+        )
+        self.assertFalse(user_can_view_odu_checklist(submission, "ministry_hr"))
+
+    def test_admin_can_always_view(self):
+        submission = self._submission(stage=WorkflowStage.DRAFT)
+        self.assertTrue(user_can_view_odu_checklist(submission, "odu_manager", is_admin=True))
+
+    def test_non_restructure_form_type_never_viewable(self):
+        submission = self._submission(stage=WorkflowStage.DRAFT)
+        submission.form_type_code = "PSC 3-6"
+        self.assertFalse(user_can_view_odu_checklist(submission, "ministry_hr"))

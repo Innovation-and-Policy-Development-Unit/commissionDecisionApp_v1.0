@@ -3,6 +3,7 @@
  * Sections: Submission Details → Background → Proposal → Costing →
  *           Implementation → Recommendation → Attachments → Sign-off
  */
+import RestructureCostingTable from './RestructureCostingTable'
 
 function SectionHeader({ title }) {
   return (
@@ -56,6 +57,11 @@ function CheckVal({ value }) {
   )
 }
 
+const RESTRUCTURE_SCOPE_LABELS = {
+  department: 'Department-level',
+  ministry: 'Ministry-level',
+}
+
 export default function PSCForm21View({ data }) {
   if (!data || !Object.keys(data).length) {
     return (
@@ -70,8 +76,6 @@ export default function PSCForm21View({ data }) {
   const isNewPost = data.proposal_type?.includes('New Post')
   const isRestructure = data.proposal_type === 'Organisation Restructure' || data.proposal_type?.includes('Both')
 
-  const net = parseFloat(data.net_salary_difference)
-
   return (
     <div className="text-sm space-y-1">
 
@@ -85,6 +89,7 @@ export default function PSCForm21View({ data }) {
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">Proposal Type</p>
           <ProposalTypeBadge value={data.proposal_type} />
         </div>
+        <Field label="Restructure Scope" value={RESTRUCTURE_SCOPE_LABELS[data.restructure_scope] || data.restructure_scope} />
       </div>
 
       {/* Background */}
@@ -117,25 +122,9 @@ export default function PSCForm21View({ data }) {
 
       {/* Costing */}
       <SectionHeader title="Costing" />
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Savings from Deleted Positions (VT)" value={data.savings_deleted_positions ? `VT ${parseFloat(data.savings_deleted_positions).toLocaleString()}` : null} />
-        <Field label="Cost of New Positions (VT)" value={data.cost_new_positions ? `VT ${parseFloat(data.cost_new_positions).toLocaleString()}` : null} />
-        <div>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">Net Salary Difference (VT)</p>
-          <p className={`text-sm font-semibold ${
-            !isNaN(net) && net < 0
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : !isNaN(net) && net > 0
-                ? 'text-red-600 dark:text-red-400'
-                : 'text-slate-800 dark:text-slate-100'
-          }`}>
-            {!isNaN(net) && data.net_salary_difference !== ''
-              ? `VT ${net.toLocaleString()}`
-              : <span className="text-slate-400 italic font-normal">—</span>}
-          </p>
-        </div>
+      <RestructureCostingTable rows={data.costing_rows} readOnly />
+      <div className="grid grid-cols-2 gap-3 mt-3">
         <Field label="Funds Allocated This Year?" value={data.funds_allocated_current_year} />
-        <Field label="Cost Breakdown Detail" value={data.cost_breakdown_detail} span />
         <Field label="Current Year Funding Statement" value={data.current_year_funding_statement} span />
       </div>
 

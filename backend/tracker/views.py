@@ -1256,6 +1256,23 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         acknowledge_gaps = bool(ser.validated_data.get("acknowledge_gaps"))
         prev = submission.current_stage
 
+        # ── ODU restructure checklist must be Submitted before leaving Draft ────
+        if prev == WorkflowStage.DRAFT:
+            from .odu_checklist_rules import submission_uses_odu_restructure_checklist
+
+            if submission_uses_odu_restructure_checklist(submission):
+                checklist = getattr(submission, "odu_checklist", None)
+                if checklist is None or checklist.status == ODUChecklistStatus.DRAFT:
+                    return Response(
+                        {
+                            "detail": (
+                                "Please complete and submit the ODU Restructure Submission "
+                                "Checklist before submitting this submission."
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
         # ── Rich-text remarks: sanitize, then derive the plain-text `remarks` ──
         # value that everything else in this view (blank-remarks guards, the
         # decision proof hash, email notifications, AI context) keeps reading
@@ -9975,15 +9992,43 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
             )
 
     def get_queryset(self):
+        from .odu_checklist_rules import user_can_view_odu_checklist
+
         profile = _profile(self.request.user)
         self._require_view_role(profile)
         qs = ODURestructureChecklist.objects.select_related(
             "submission", "created_by",
         ).all()
+        if self.action != "list":
+            # Detail lookups (retrieve/update/submit/approve/...) fetch by pk
+            # via get_object(), which re-checks role+phase eligibility below —
+            # don't require a submission filter here or those pk-based
+            # lookups would 404.
+            return qs
+        from rest_framework.exceptions import ValidationError
+
         sub_id = self.request.query_params.get("submission")
-        if sub_id:
-            qs = qs.filter(submission_id=sub_id)
-        return qs
+        if not sub_id:
+            raise ValidationError({"submission": "Query parameter submission is required."})
+        submission = get_object_or_404(Submission, pk=sub_id)
+        is_admin = profile.role == Role.PSC_ADMIN or self.request.user.is_superuser
+        if not user_can_view_odu_checklist(submission, profile.role, is_admin=is_admin):
+            raise PermissionDenied(
+                "You do not have access to the ODU restructure checklist for this submission."
+            )
+        return qs.filter(submission_id=sub_id)
+
+    def get_object(self):
+        from .odu_checklist_rules import user_can_view_odu_checklist
+
+        obj = super().get_object()
+        profile = _profile(self.request.user)
+        is_admin = profile.role == Role.PSC_ADMIN or self.request.user.is_superuser
+        if not user_can_view_odu_checklist(obj.submission, profile.role, is_admin=is_admin):
+            raise PermissionDenied(
+                "You do not have access to the ODU restructure checklist for this submission."
+            )
+        return obj
 
     @action(detail=False, methods=["get"], url_path="ensure")
     def ensure(self, request):
@@ -10002,7 +10047,8 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
             CHECKLIST_MINISTRY_ROLES,
             submission_eligible_for_checklist_draft,
             submission_in_odu_view_phase,
-            submission_viewable_odu_checklist,
+            submission_uses_odu_restructure_checklist,
+            user_can_view_odu_checklist,
         )
 
         profile = _profile(request.user)
@@ -10016,7 +10062,7 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
             Submission.objects.select_related("ministry", "department"),
             pk=submission_id,
         )
-        if not submission_viewable_odu_checklist(submission):
+        if not submission_uses_odu_restructure_checklist(submission):
             return Response(
                 {
                     "detail": (
@@ -10027,9 +10073,15 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser
+        if not user_can_view_odu_checklist(submission, profile.role, is_admin=is_admin):
+            raise PermissionDenied(
+                "You do not have access to the ODU restructure checklist for this submission "
+                "at its current stage."
+            )
+
         # Only create a draft while the ministry is still drafting, and only
         # for ministry roles (or an admin/superuser, for oversight + testing).
-        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser
         allow_create = submission_eligible_for_checklist_draft(submission) and (
             profile.role in CHECKLIST_MINISTRY_ROLES or is_admin
         )
