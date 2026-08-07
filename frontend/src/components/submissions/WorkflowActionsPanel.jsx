@@ -180,14 +180,14 @@ const STAGE_ACTIONS = {
     },
     {
       id: 'return_checklist',
-      label: 'Return for Revision',
-      description: 'Send back for additional documents or corrections',
+      label: 'Return for Clarification',
+      description: 'Send back to ministry with a clarification request',
       icon: RotateCcw,
       variant: 'outline',
       transitionTo: 'returned_for_clarification',
       requiresNote: true,
-      notePlaceholder: 'Describe what needs to be corrected or added…',
-      noteLabel: 'Revision request',
+      notePlaceholder: 'Describe what clarification is needed from the ministry…',
+      noteLabel: 'Clarification request',
     },
   ],
 
