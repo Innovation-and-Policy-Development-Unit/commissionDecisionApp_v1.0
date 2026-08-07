@@ -19,7 +19,7 @@ import {
   stageLabel, stageBadgeClass, stageDotClass, stageMeta,
   needsHrAction, isTerminal, STAGE_LABELS,
 } from '../../constants/stages'
-import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download } from 'lucide-react'
+import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download, FileSignature } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
@@ -47,7 +47,6 @@ import PSCForm21View from './PSCForm21View'
 import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
-import ODUBoardPaperForm from '../odu/ODUBoardPaperForm'
 import SubmissionChecklistPanel from '../../components/submissions/SubmissionChecklistPanel'
 import SittingPackView from '../../components/submissions/SittingPackView'
 import WorkflowActionsPanel from '../../components/submissions/WorkflowActionsPanel'
@@ -161,7 +160,8 @@ export default function SubmissionDetail() {
   const [busy, setBusy]             = useState(false)
   const [checklist, setChecklist]   = useState([])
   const [checklistBusy, setChecklistBusy] = useState(false)
-  const [sittingPackMode, setSittingPackMode] = useState(false)
+  // null = closed, 'checklist' | 'board_paper' = which SittingPackView mode is open
+  const [sittingPackMode, setSittingPackMode] = useState(null)
   const [documents, setDocuments]   = useState([])
   const [uploadBusy, setUploadBusy] = useState(false)
   const [uploadDesc, setUploadDesc] = useState('')
@@ -807,9 +807,18 @@ const stageDescriptions = {
               <BaseButton
                 variant="primary"
                 icon={<ClipboardList size={14} />}
-                onClick={() => setSittingPackMode(true)}
+                onClick={() => setSittingPackMode('checklist')}
               >
                 Review Submission
+              </BaseButton>
+            )}
+            {showOduBoardPaper && (
+              <BaseButton
+                variant="outline"
+                icon={<FileSignature size={14} />}
+                onClick={() => setSittingPackMode('board_paper')}
+              >
+                Draft Board Paper
               </BaseButton>
             )}
             {isAdmin && (
@@ -1450,14 +1459,6 @@ const stageDescriptions = {
             />
           )}
 
-          {/* ── ODU Board Submission Paper (the Commission-facing document) ── */}
-          {showOduBoardPaper && (
-            <ODUBoardPaperForm
-              submissionId={Number(id)}
-              submission={submission}
-            />
-          )}
-
           {/* Visual audit trail (workflow + tamper-evident decision proofs) —
               OPSC-internal only; ministry HR/DG never see this. */}
           {userIsOpscInternal(user) && (
@@ -1825,16 +1826,15 @@ const stageDescriptions = {
         </div>
       </div>
     )}
-    {sittingPackMode && showSittingPack && (
+    {((sittingPackMode === 'checklist' && showSittingPack) || (sittingPackMode === 'board_paper' && showOduBoardPaper)) && (
       <SittingPackView
         submissionId={id}
         submission={submission}
         documents={documents}
-        dynamicForm={dynamicForm}
-        dynamicFormFields={dynamicFormFields}
-        isDedicatedForm={isDedicatedForm}
+        checklist={checklist}
+        mode={sittingPackMode}
         checklistPanel={hasDynamicChecklist ? <SubmissionChecklistPanel submissionId={id} /> : null}
-        onClose={() => setSittingPackMode(false)}
+        onClose={() => setSittingPackMode(null)}
       />
     )}
     </>
