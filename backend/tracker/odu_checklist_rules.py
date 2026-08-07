@@ -150,6 +150,28 @@ def submission_viewable_odu_checklist(submission: Submission) -> bool:
     )
 
 
+def user_can_view_odu_checklist(submission: Submission, role: str | None, *, is_admin: bool = False) -> bool:
+    """Role-AND-phase-aware visibility check — unlike submission_viewable_odu_checklist()
+    above (phase-only), this also restricts *who* can see it at each phase:
+    ministry roles only while it's still theirs to fill in, ODU roles only
+    during their review, broader roles only once review has concluded.
+
+    Backend mirror of canShowOduChecklist() in
+    frontend/src/utils/oduChecklist.js — keep both in sync.
+    """
+    if not submission_uses_odu_restructure_checklist(submission):
+        return False
+    if is_admin:
+        return True
+    if submission_in_checklist_draft_phase(submission):
+        return role in CHECKLIST_MINISTRY_ROLES
+    if submission_in_odu_review_phase(submission):
+        return role in ODU_CHECKLIST_ROLES
+    if submission_in_odu_view_phase(submission):
+        return role in ODU_CHECKLIST_VIEW_ROLES
+    return False
+
+
 # ── ODU Board Paper (the Commission-facing submission ODU prepares) ───────────
 
 # Editable while ODU is actively working the case: their own checklist review,

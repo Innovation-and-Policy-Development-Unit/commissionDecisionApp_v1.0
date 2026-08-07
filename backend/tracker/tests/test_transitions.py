@@ -1,6 +1,18 @@
-from django.test import TestCase
+from django.contrib.auth.models import User
+from django.test import TestCase, override_settings
 from django.core.exceptions import PermissionDenied
-from ..models import Role, WorkflowStage
+from django.utils import timezone
+from rest_framework.test import APIClient
+
+from ..models import (
+    Ministry,
+    ODUChecklistStatus,
+    ODURestructureChecklist,
+    Profile,
+    Role,
+    Submission,
+    WorkflowStage,
+)
 from ..transitions import assert_transition_allowed, iter_allowed_targets
 
 
@@ -185,6 +197,66 @@ class TransitionTests(TestCase):
     def test_implementation_report_can_reopen(self):
         targets = iter_allowed_targets(Role.PSC_ADMIN, WorkflowStage.IMPLEMENTATION_REPORT)
         self.assertIn(WorkflowStage.UNDER_IMPLEMENTATION.value, targets)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class OduChecklistDraftGateTests(TestCase):
+    """A restructure submission (ORG-3.1 / PSC 2-1) can't leave Draft until
+    its ODU Restructure Submission Checklist has been Submitted."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(code="TST-G", name="Test Ministry G")
+        self.hr = User.objects.create_user("hruser_gate", password="x")
+        Profile.objects.create(user=self.hr, role=Role.MINISTRY_HR, ministry=self.ministry)
+        self.submission = Submission.objects.create(
+            reference_number="SUB-GATE-001",
+            title="Restructure proposal",
+            form_type_code="ORG-3.1",
+            ministry=self.ministry,
+            current_stage=WorkflowStage.DRAFT,
+            received_at=timezone.now(),
+            created_by=self.hr,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.hr)
+
+    def _transition(self, new_stage="pending_dg_endorsement"):
+        return self.client.post(
+            f"/api/submissions/{self.submission.id}/transition/",
+            {"new_stage": new_stage},
+            format="json",
+        )
+
+    def test_blocked_with_no_checklist(self):
+        resp = self._transition()
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("ODU Restructure Submission Checklist", resp.data["detail"])
+
+    def test_blocked_with_still_draft_checklist(self):
+        ODURestructureChecklist.objects.create(
+            submission=self.submission, status=ODUChecklistStatus.DRAFT, created_by=self.hr,
+        )
+        resp = self._transition()
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("ODU Restructure Submission Checklist", resp.data["detail"])
+
+    def test_allowed_once_checklist_submitted(self):
+        ODURestructureChecklist.objects.create(
+            submission=self.submission, status=ODUChecklistStatus.SUBMITTED, created_by=self.hr,
+        )
+        resp = self._transition()
+        self.assertEqual(resp.status_code, 200)
+        self.submission.refresh_from_db()
+        self.assertEqual(self.submission.current_stage, WorkflowStage.PENDING_DG_ENDORSEMENT)
+
+    def test_non_restructure_form_type_unaffected(self):
+        # A form type with no seeded RequiredDocument rows, so the unrelated
+        # mandatory-checklist gate (views.py's "Mandatory Checklist/Task
+        # Gate") doesn't interfere with isolating this test to the ODU gate.
+        self.submission.form_type_code = "TEST-NONE-XYZ"
+        self.submission.save(update_fields=["form_type_code"])
+        resp = self._transition()
+        self.assertEqual(resp.status_code, 200)
 
     def test_approved_can_skip_to_implementation(self):
         targets = iter_allowed_targets(Role.PSC_ADMIN, WorkflowStage.APPROVED)
