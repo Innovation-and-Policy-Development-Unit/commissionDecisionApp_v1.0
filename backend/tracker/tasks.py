@@ -1168,7 +1168,11 @@ def extract_document_facts(document_id: int):
         with materialize_file_field(doc.file) as path:
             result, err = run_document_extraction(
                 file_path=path,
-                original_name=doc.original_name,
+                # doc.original_name is a user-editable display title (e.g.
+                # "Director Letter") and may not carry a file extension —
+                # doc.file.name is the real stored path, which always does,
+                # so use that to decide extractability/format.
+                original_name=doc.file.name,
                 description=doc.description,
             )
     except FileNotFoundError as exc:

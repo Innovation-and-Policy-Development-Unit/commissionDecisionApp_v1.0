@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.db.models import Count
@@ -3205,13 +3206,21 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         except Exception:
             return Response({"detail": "File not found on server."}, status=status.HTTP_404_NOT_FOUND)
 
-        content_type, _ = mimetypes.guess_type(doc.original_name)
+        # doc.original_name is a user-editable display title and may lack a
+        # file extension (e.g. "Director Letter") — doc.file.name is the real
+        # stored path, which always has one, so use that to detect format.
+        content_type, _ = mimetypes.guess_type(doc.file.name)
         content_type = content_type or 'application/octet-stream'
-        is_pdf = doc.original_name.lower().endswith('.pdf')
+        is_pdf = doc.file.name.lower().endswith('.pdf')
+
+        download_name = doc.original_name
+        real_ext = Path(doc.file.name).suffix
+        if real_ext and not download_name.lower().endswith(real_ext.lower()):
+            download_name = f"{download_name}{real_ext}"
 
         response = FileResponse(file_handle, content_type=content_type)
         disposition = 'inline' if is_pdf else 'attachment'
-        response['Content-Disposition'] = f'{disposition}; filename="{doc.original_name}"'
+        response['Content-Disposition'] = f'{disposition}; filename="{download_name}"'
         return response
 
     @action(detail=True, methods=["post"], url_path="documents/(?P<doc_id>[0-9]+)/replace")
