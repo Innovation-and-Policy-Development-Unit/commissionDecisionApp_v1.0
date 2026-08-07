@@ -10142,6 +10142,7 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
         from .odu_checklist_rules import (
             CHECKLIST_MINISTRY_ALLOWED_FIELDS,
             CHECKLIST_MINISTRY_ROLES,
+            CHECKLIST_ODU_MANAGER_ONLY_FIELDS,
             CHECKLIST_ODU_REVIEW_FIELDS,
             ODU_CHECKLIST_ROLES,
             submission_eligible_for_checklist_draft,
@@ -10182,9 +10183,15 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                 )
             _require_assigned_officer_or_manager(profile, instance.submission, self.request.user.id)
             # ODU may only add their own recommendation/sign-off — the
-            # ministry's 20 answers are locked to them.
+            # ministry's 20 answers are locked to them. Within that, the
+            # Manager-only subset (final check + manager sign-off) is
+            # further locked to the Manager ODU — a principal doing the
+            # rest of the review can't write these via a direct API call.
+            is_manager_odu = profile.role == Role.ODU_MANAGER or self.request.user.is_superuser
             for field in list(serializer.validated_data.keys()):
                 if field not in CHECKLIST_ODU_REVIEW_FIELDS:
+                    serializer.validated_data.pop(field)
+                elif field in CHECKLIST_ODU_MANAGER_ONLY_FIELDS and not is_manager_odu:
                     serializer.validated_data.pop(field)
             serializer.save()
             return

@@ -200,3 +200,69 @@ class OduChecklistMinistryWriteAllowlistTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.checklist.refresh_from_db()
         self.assertEqual(self.checklist.submission_type, ODURestructureChecklist.SubmissionType.FULL_RESTRUCTURE)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class OduChecklistManagerOnlyWriteAllowlistTests(TestCase):
+    """b20_manager_final_check / manager_verifier_name / manager_verifier_date
+    certify the Manager ODU's own final sign-off — an odu_principal doing the
+    rest of the review (recommendation, comments, b17-b19) must not be able
+    to write these via a direct API call, even though the frontend disables
+    them (frontend-only gates don't stop a direct request)."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(name="Test Ministry MO", code="TMO")
+        self.principal = User.objects.create_user(username="odu_principal_write", password="x")
+        Profile.objects.create(user=self.principal, role=Role.ODU_PRINCIPAL)
+        self.manager = User.objects.create_user(username="odu_manager_write", password="x")
+        Profile.objects.create(user=self.manager, role=Role.ODU_MANAGER)
+        self.submission = Submission.objects.create(
+            reference_number="SUB-ODUMO-001",
+            title="Restructure proposal",
+            form_type_code="ORG-3.1",
+            ministry=self.ministry,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            routed_unit=RoutedUnit.ODU,
+            received_at=timezone.now(),
+            created_by=self.manager,
+        )
+        self.checklist = ODURestructureChecklist.objects.create(
+            submission=self.submission, created_by=self.manager, status=ODUChecklistStatus.SUBMITTED,
+        )
+        self.client = APIClient()
+
+    def test_principal_cannot_write_manager_final_check(self):
+        self.client.force_authenticate(user=self.principal)
+        resp = self.client.patch(
+            f"/api/odu-checklists/{self.checklist.id}/",
+            {"b20_manager_final_check": True, "officer_comments": "Looks complete."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.checklist.refresh_from_db()
+        self.assertIsNone(self.checklist.b20_manager_final_check)
+        self.assertEqual(self.checklist.officer_comments, "Looks complete.")
+
+    def test_principal_cannot_write_manager_verifier_fields(self):
+        self.client.force_authenticate(user=self.principal)
+        resp = self.client.patch(
+            f"/api/odu-checklists/{self.checklist.id}/",
+            {"manager_verifier_name": "Not The Manager", "manager_verifier_date": "2026-08-07"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.checklist.refresh_from_db()
+        self.assertEqual(self.checklist.manager_verifier_name, "")
+        self.assertIsNone(self.checklist.manager_verifier_date)
+
+    def test_manager_can_write_manager_only_fields(self):
+        self.client.force_authenticate(user=self.manager)
+        resp = self.client.patch(
+            f"/api/odu-checklists/{self.checklist.id}/",
+            {"b20_manager_final_check": True, "manager_verifier_name": "Real Manager"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.checklist.refresh_from_db()
+        self.assertTrue(self.checklist.b20_manager_final_check)
+        self.assertEqual(self.checklist.manager_verifier_name, "Real Manager")

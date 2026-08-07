@@ -84,6 +84,52 @@ const SECTION_B = [
   },
 ]
 
+// Best-effort mapping from a checklist item to the RequiredDocument name(s)
+// most likely to answer it, used to jump the Documents pane straight to the
+// relevant file when a reviewer clicks a checklist question. b1/b2/b4 are
+// exact matches (a dedicated required document exists for each); the rest
+// point at the closest supporting document since ODU verifies these by
+// reading that document rather than a document dedicated to the question.
+// b14 (cost analysis) and b15 (GRT mapping) are intentionally omitted — that
+// content lives in the digitised form's costing table, not an uploaded file.
+const ITEM_DOCUMENT_MAP = {
+  b1_cover_letter: ['Official Letter request to restructure', 'DG Endorsement Letter'],
+  b2_org_chart: ['Current Organisation Structure (OPSC-stamped)', 'Proposed Organisation Structure'],
+  b3_positions_list: ['Proposed Organisation Structure'],
+  b4_jds_attached: ['Job Descriptions - PSC Form 2-2 (New Positions, Upgraded Positions, Downgraded Positions, Supervisor for new positions.) (Affected Positions)'],
+  b5_rationale_stated: ['Official Letter request to restructure'],
+  b6_mandate_alignment: ['Proposed Organisation Structure'],
+  b7_reporting_lines: ['Proposed Organisation Structure'],
+  b8_no_duplication: ['Proposed Organisation Structure'],
+  b9_span_of_control: ['Proposed Organisation Structure'],
+  b10_job_purpose_linked: ['Job Descriptions - PSC Form 2-2 (New Positions, Upgraded Positions, Downgraded Positions, Supervisor for new positions.) (Affected Positions)'],
+  b11_kra_kta_kpi: ['Job Descriptions - PSC Form 2-2 (New Positions, Upgraded Positions, Downgraded Positions, Supervisor for new positions.) (Affected Positions)'],
+  b12_competencies: ['Job Descriptions - PSC Form 2-2 (New Positions, Upgraded Positions, Downgraded Positions, Supervisor for new positions.) (Affected Positions)'],
+  b13_qual_experience: ['Job Descriptions - PSC Form 2-2 (New Positions, Upgraded Positions, Downgraded Positions, Supervisor for new positions.) (Affected Positions)'],
+  b16_consultation: ['Other Supporting Documents'],
+}
+
+// b20 despite its "Manager ODU" label was editable by any ODU role — force
+// it read-only for anyone but the Manager, matching the disabled={!isOduManager}
+// gate already used on the Section D Manager sign-off fields below.
+const MANAGER_ONLY_ITEM_FIELDS = ['b20_manager_final_check']
+
+// Resolve a checklist item's mapped RequiredDocument name(s) to the id of an
+// actually-uploaded SubmissionDocument. `checklistItems` is the submission's
+// required-documents checklist (RequiredDocument id + name); `documents` is
+// the uploaded files, each carrying which RequiredDocument id it satisfies.
+function resolveDocumentId(fieldKey, documents, checklistItems) {
+  const names = ITEM_DOCUMENT_MAP[fieldKey]
+  if (!names) return null
+  for (const name of names) {
+    const item = checklistItems.find(ci => ci.document_name === name)
+    if (!item) continue
+    const doc = documents.find(d => d.required_document === item.document)
+    if (doc) return doc.id
+  }
+  return null
+}
+
 const ALL_ITEM_FIELDS = SECTION_B.flatMap(g => g.items.map(i => i.field))
 // Groups 1-4 (items 1-16) — the ministry's checklist. Groups 6-7 (17-20)
 // describe ODU's own subsequent work and are never required from the ministry.
@@ -137,7 +183,7 @@ function TriStateToggle({ value, onChange, readOnly }) {
   )
 }
 
-function SectionGroup({ group, form, onChange, readOnly, collapsed, onToggle }) {
+function SectionGroup({ group, form, onChange, readOnly, collapsed, onToggle, forceReadOnlyFields = [], onNavigateToDocument }) {
   const colors = GROUP_NEUTRAL
   const answered = group.items.filter(i => form[i.field] !== null && form[i.field] !== undefined).length
   const allYes   = group.items.every(i => form[i.field] === true)
@@ -168,18 +214,31 @@ function SectionGroup({ group, form, onChange, readOnly, collapsed, onToggle }) 
         <ul className="divide-y divide-slate-100 dark:divide-slate-700/60">
           {group.items.map((item, idx) => {
             const val = form[item.field] ?? null
+            const itemReadOnly = readOnly || forceReadOnlyFields.includes(item.field)
+            const hasDocument = onNavigateToDocument && ITEM_DOCUMENT_MAP[item.field]
             return (
               <li key={item.field} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                 <span className="text-xs text-slate-400 dark:text-slate-500 w-5 shrink-0 text-right font-mono">
                   {idx + 1}.
                 </span>
-                <span className="flex-1 text-sm text-slate-700 dark:text-slate-300 leading-snug">
-                  {item.label}
-                </span>
+                {hasDocument ? (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToDocument(item.field)}
+                    className="flex-1 text-left text-sm text-slate-700 dark:text-slate-300 leading-snug hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline underline-offset-2 transition-colors"
+                    title="Open the supporting document for this item"
+                  >
+                    {item.label}
+                  </button>
+                ) : (
+                  <span className="flex-1 text-sm text-slate-700 dark:text-slate-300 leading-snug">
+                    {item.label}
+                  </span>
+                )}
                 <TriStateToggle
                   value={val}
                   onChange={v => onChange(item.field, v)}
-                  readOnly={readOnly}
+                  readOnly={itemReadOnly}
                 />
               </li>
             )
@@ -245,7 +304,9 @@ const EMPTY_FORM = {
   manager_verifier_date: '',
 }
 
-export default function ODURestructureChecklistForm({ submissionId, submission }) {
+export default function ODURestructureChecklistForm({
+  submissionId, submission, documents = [], checklistItems = [], onNavigateToDocument,
+}) {
   const { user } = useAuth()
   const toast = useToast()
 
@@ -264,6 +325,17 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
   // Groups 6-7 + Sections C/D are ODU's own work — the ministry never needs
   // to see empty placeholders for content that isn't theirs to fill in.
   const showOduOnlySections = isOduPrincipal || isOduManager || isAdminUser
+
+  // Only wired when the parent (SittingPackView) passed a document-pane
+  // callback — on the main submission page, where this form also renders
+  // for the ministry to fill in, there's no Documents pane beside it.
+  const handleNavigateToDocument = onNavigateToDocument
+    ? (fieldKey) => {
+        const docId = resolveDocumentId(fieldKey, documents, checklistItems)
+        if (docId != null) onNavigateToDocument(docId)
+        else toast.info('No matching document has been uploaded for this item yet.')
+      }
+    : undefined
 
   // Section A (submission info) + Section B (the 20 items) — ministry's own
   // self-certification, filled while the checklist is still a Draft.
@@ -616,6 +688,8 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
                 readOnly={isOduGroup ? readOnlyCD : readOnlyAB}
                 collapsed={!!collapsedGroups[group.group]}
                 onToggle={() => toggleGroup(group.group)}
+                forceReadOnlyFields={isOduGroup && !isOduManager ? MANAGER_ONLY_ITEM_FIELDS : []}
+                onNavigateToDocument={!isOduGroup ? handleNavigateToDocument : undefined}
               />
             )
           })}

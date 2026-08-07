@@ -104,6 +104,16 @@ CHECKLIST_ODU_REVIEW_FIELDS = frozenset({
     "b19_final_docs_ready", "b20_manager_final_check",
 })
 
+# Subset of CHECKLIST_ODU_REVIEW_FIELDS that certifies the Manager ODU's own
+# final sign-off specifically — an odu_principal does the rest of Section
+# C/D and Groups 6-7, but must not be able to write these, matching the
+# frontend's disabled={!isOduManager} gate on the same three fields
+# (ODURestructureChecklistForm.jsx). Without this, a principal could bypass
+# that UI-only gate via a direct API call.
+CHECKLIST_ODU_MANAGER_ONLY_FIELDS = frozenset({
+    "manager_verifier_name", "manager_verifier_date", "b20_manager_final_check",
+})
+
 
 def user_is_odu_principal_worker(role: str | None) -> bool:
     return bool(role and role in ODU_PRINCIPAL_WORKER_ROLES)
