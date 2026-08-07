@@ -3,7 +3,20 @@ from __future__ import annotations
 
 from django.db import models
 
-from .models import PSCFormType, RequiredDocument, Submission, SubmissionChecklistItem
+from .models import PSCFormResponse, PSCFormType, RequiredDocument, Submission, SubmissionChecklistItem
+
+
+def _is_department_level_restructure(submission: Submission) -> bool:
+    """True when the submission's Organisation Restructure form (ORG-3.1 /
+    PSC 2-1, both reuse the same dynamic-form storage) has restructure_scope
+    set to 'department'. Missing form data means "not yet known" — treated
+    as not department-level, so the extra DG letter only appears once the
+    ministry has actually chosen a scope."""
+    try:
+        data = submission.dynamic_form_response.data or {}
+    except PSCFormResponse.DoesNotExist:
+        return False
+    return data.get('restructure_scope') == 'department'
 
 
 def resolve_required_documents(submission: Submission):
@@ -17,6 +30,9 @@ def resolve_required_documents(submission: Submission):
     # appointing OPSC staff) have no Director-General in their workflow, so
     # ministry-only items (DG endorsement letters, etc.) don't apply.
     skip_ministry_only = submission.is_internal and submission.follows_normal_route
+    # ORG-3.1's extra DG Endorsement Letter only applies to department-level
+    # restructures — see 0203_org_3_1_conditional_dg_letter.py.
+    skip_department_only = not _is_department_level_restructure(submission)
 
     form_type_obj = None
     if submission.form_type_code:
@@ -28,6 +44,8 @@ def resolve_required_documents(submission: Submission):
         )
         if skip_ministry_only:
             type_specific = type_specific.exclude(ministry_only=True)
+        if skip_department_only:
+            type_specific = type_specific.exclude(restructure_department_only=True)
         if type_specific.exists():
             return type_specific
         qs = RequiredDocument.objects.filter(
@@ -38,6 +56,8 @@ def resolve_required_documents(submission: Submission):
         )
         if skip_ministry_only:
             qs = qs.exclude(ministry_only=True)
+        if skip_department_only:
+            qs = qs.exclude(restructure_department_only=True)
         return qs
 
     qs = RequiredDocument.objects.filter(
@@ -48,6 +68,8 @@ def resolve_required_documents(submission: Submission):
     )
     if skip_ministry_only:
         qs = qs.exclude(ministry_only=True)
+    if skip_department_only:
+        qs = qs.exclude(restructure_department_only=True)
     return qs
 
 

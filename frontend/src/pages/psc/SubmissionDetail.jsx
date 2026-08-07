@@ -240,7 +240,10 @@ export default function SubmissionDetail() {
   // Sitting Pack is available whenever either checklist type applies
   const showSittingPack = showOduChecklist || showDynamicChecklist
 
-  const isDedicatedForm = ['PSC 2-1', 'PSC 2-2'].includes(submission?.form_type_code)
+  // ORG-3.1 is the same real-world Organisation Restructure form as PSC 2-1
+  // (see 0200_org_3_1_required_documents_odu_confirmed.py) — it reuses the
+  // PSC 2-1 wizard rather than a separate dedicated form.
+  const isDedicatedForm = ['PSC 2-1', 'PSC 2-2', 'ORG-3.1'].includes(submission?.form_type_code)
   // The executive brief is a triage tool for the OPSC unit that receives the
   // submission — while still in Draft (being authored by HR/CSU/VIPAM/Compliance),
   // there's nothing to triage yet; only package validation applies at that point.
@@ -1135,7 +1138,7 @@ const stageDescriptions = {
                   {canEditDigitizedForm ? (
                     isDedicatedForm ? (
                       <>
-                        {submission.form_type_code === 'PSC 2-1' && (
+                        {['PSC 2-1', 'ORG-3.1'].includes(submission.form_type_code) && (
                           <PSCForm21Fields
                             form={dynamicForm}
                             setForm={setDynamicForm}
@@ -1211,7 +1214,7 @@ const stageDescriptions = {
                             Ministry's original request — reference only. See the ODU Board Submission Paper below for the version prepared for the Commission.
                           </p>
                         )}
-                        {submission.form_type_code === 'PSC 2-1' && <PSCForm21View data={dynamicForm} />}
+                        {['PSC 2-1', 'ORG-3.1'].includes(submission.form_type_code) && <PSCForm21View data={dynamicForm} />}
                         {submission.form_type_code === 'PSC 2-2' && <PSCForm22View data={dynamicForm} />}
                       </div>
                     ) : (

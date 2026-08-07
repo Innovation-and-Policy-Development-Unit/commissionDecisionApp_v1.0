@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
+import RestructureCostingTable from './RestructureCostingTable'
 
 const TABS = [
   { id: 1, label: 'Submission Details' },
@@ -29,6 +30,13 @@ const PROPOSAL_TYPES = [
   'Establishment Variation (Regrading)',
   'Establishment Variation (Deletion)',
   'Both Restructure and Establishment Variation',
+]
+
+// Drives which letters the Required Documents checklist expects — see
+// resolve_required_documents() in backend/tracker/submission_checklist.py.
+const RESTRUCTURE_SCOPES = [
+  { value: 'department', label: 'Department-level', hint: 'Affects a single department. Requires the official letter from the Director, plus a separate DG-signed endorsement letter.' },
+  { value: 'ministry', label: 'Ministry-level', hint: 'Affects the whole ministry. Only the DG-signed letter is required.' },
 ]
 
 // Determine what the proposal type requires
@@ -58,7 +66,7 @@ function badgeColorClasses(color) {
 
 // Required fields per tab (for validation dot indicator)
 const TAB_REQUIRED_FIELDS = {
-  1: ['ministry_department_name', 'proposal_title', 'submission_date', 'proposal_type'],
+  1: ['ministry_department_name', 'proposal_title', 'submission_date', 'proposal_type', 'restructure_scope'],
   2: ['background_reasons'],
   3: [],
   4: [],
@@ -185,17 +193,6 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-calculate net salary difference when savings or cost change
-  useEffect(() => {
-    const savings = parseFloat(form.savings_deleted_positions) || 0
-    const cost = parseFloat(form.cost_new_positions) || 0
-    const net = cost - savings
-    const netStr = isNaN(net) ? '' : String(net)
-    if (form.net_salary_difference !== netStr) {
-      setForm(prev => ({ ...prev, net_salary_difference: netStr }))
-    }
-  }, [form.savings_deleted_positions, form.cost_new_positions]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // Validate current tab — marks tab dot AND highlights individual fields
   const validateTab = (tabId) => {
     const required = TAB_REQUIRED_FIELDS[tabId] || []
@@ -246,6 +243,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
             <ReadField label="Proposal Title" value={form.proposal_title} span />
             <ReadField label="Submission Date" value={fmt(form.submission_date)} />
             <ReadField label="Proposal Type" value={form.proposal_type} />
+            <ReadField label="Restructure Scope" value={RESTRUCTURE_SCOPES.find(s => s.value === form.restructure_scope)?.label || form.restructure_scope} />
           </div>
         </div>
 
@@ -277,11 +275,8 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
         {/* Costing */}
         <div>
           <SectionHeader title="Costing" />
-          <div className="grid grid-cols-2 gap-4">
-            <ReadField label="Savings from Deleted Positions (VT)" value={form.savings_deleted_positions} />
-            <ReadField label="Cost of New Positions (VT)" value={form.cost_new_positions} />
-            <ReadField label="Net Salary Difference (VT)" value={form.net_salary_difference} />
-            <ReadField label="Breakdown Detail" value={form.cost_breakdown_detail} span />
+          <RestructureCostingTable rows={form.costing_rows} readOnly />
+          <div className="grid grid-cols-2 gap-4 mt-3">
             <ReadField label="Current Year Funding Statement" value={form.current_year_funding_statement} span />
             <ReadField label="Funds Allocated This Year?" value={form.funds_allocated_current_year} />
           </div>
@@ -448,6 +443,33 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
                 ))}
               </div>
             </Field>
+            <Field label="Restructure Scope" required hasError={!!fieldErrors['restructure_scope']}>
+              <div className="space-y-2 p-1">
+                {RESTRUCTURE_SCOPES.map(scope => (
+                  <label
+                    key={scope.value}
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      form.restructure_scope === scope.value
+                        ? 'border-primary-400 dark:border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="restructure_scope"
+                      value={scope.value}
+                      checked={form.restructure_scope === scope.value}
+                      onChange={() => set('restructure_scope', scope.value)}
+                      className="shrink-0 mt-0.5"
+                    />
+                    <span>
+                      <span className="block text-sm text-slate-800 dark:text-slate-200">{scope.label}</span>
+                      <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">{scope.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </Field>
           </div>
         )}
 
@@ -535,60 +557,18 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
         {/* Tab 4 — Costing */}
         {activeTab === 4 && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Savings from Deleted Positions (VT)" hint="Annual salary savings from positions being deleted or vacated.">
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  value={form.savings_deleted_positions || ''}
-                  onChange={e => set('savings_deleted_positions', e.target.value)}
-                  placeholder="0"
-                />
-              </Field>
-              <Field label="Cost of New Positions (VT)" hint="Annual salary cost of new positions being created.">
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  value={form.cost_new_positions || ''}
-                  onChange={e => set('cost_new_positions', e.target.value)}
-                  placeholder="0"
-                />
-              </Field>
-            </div>
-
-            {/* Auto-calculated net difference */}
-            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3 space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Net Salary Difference (auto-calculated)
-              </p>
-              <p className={`text-lg font-bold ${
-                parseFloat(form.net_salary_difference) < 0
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : parseFloat(form.net_salary_difference) > 0
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-slate-700 dark:text-slate-300'
-              }`}>
-                {form.net_salary_difference !== undefined && form.net_salary_difference !== ''
-                  ? `VT ${parseFloat(form.net_salary_difference).toLocaleString()}`
-                  : '—'}
-              </p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-                Formula: Cost of New Positions − Savings from Deleted Positions
-              </p>
-            </div>
-
-            <Field label="Cost Breakdown Detail" hint="Provide a breakdown of salary costs by position.">
-              <textarea
-                className="input min-h-[100px]"
-                value={form.cost_breakdown_detail || ''}
-                onChange={e => set('cost_breakdown_detail', e.target.value)}
-                placeholder="Itemised cost breakdown..."
+            <Field label="Costing Table" hint="One row per position affected — current post details alongside the proposed post details.">
+              <RestructureCostingTable
+                rows={form.costing_rows}
+                onChange={rows => set('costing_rows', rows)}
               />
             </Field>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+              If a position is vacant, note in the funding statement below whether sufficient funds
+              have been allocated from the current financial year to fill it.
+            </p>
 
-            <Field label="Current Year Funding Statement" hint="Explain how costs will be met in the current budget year.">
+            <Field label="Current Year Funding Statement" hint="Explain how costs will be met in the current budget year — e.g. if a new position is filled partway through the year, only the pro-rated portion is required this year.">
               <textarea
                 className="input min-h-[80px]"
                 value={form.current_year_funding_statement || ''}
