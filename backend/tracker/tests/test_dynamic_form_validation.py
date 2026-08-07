@@ -25,7 +25,7 @@ class ValidateDynamicFormDataTests(TestCase):
         self.form_type = PSCFormType.objects.create(
             code="PSC 3.6",
             name="Appointment",
-            category=cat,
+            form_category=cat,
             is_active=True,
             is_digitized=True,
         )
@@ -51,6 +51,26 @@ class ValidateDynamicFormDataTests(TestCase):
         self.assertTrue(any("salary_step_code" in e and "required" in e for e in errors))
 
 
+class ValidateDedicatedFormWithNoFieldsTests(TestCase):
+    """Dedicated forms (PSC 2-1, PSC 2-2, ORG-3.1) have hardcoded fields in
+    their own React component, not admin-configured PSCFormField rows — a
+    non-empty save must not be rejected just because no schema exists.
+    ORG-3.1 is already seeded by migrations, so fetch it rather than create
+    a duplicate (code is unique)."""
+
+    def setUp(self):
+        self.form_type = PSCFormType.objects.get(code="ORG-3.1")
+
+    def test_non_empty_data_with_no_configured_fields_is_valid(self):
+        errors = validate_dynamic_form_data(
+            self.form_type, {"proposal_title": "Test", "restructure_scope": "department"},
+        )
+        self.assertEqual(errors, [])
+
+    def test_empty_data_with_no_configured_fields_is_valid(self):
+        self.assertEqual(validate_dynamic_form_data(self.form_type, {}), [])
+
+
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
 class DynamicFormApiValidationTests(TestCase):
     def setUp(self):
@@ -59,7 +79,7 @@ class DynamicFormApiValidationTests(TestCase):
         self.form_type = PSCFormType.objects.create(
             code="PSC 3.6",
             name="Appointment",
-            category=cat,
+            form_category=cat,
             is_active=True,
             is_digitized=True,
         )

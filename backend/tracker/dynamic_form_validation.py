@@ -23,11 +23,12 @@ def validate_dynamic_form_data(form_type: PSCFormType, data) -> list[str]:
         )
     )
     if not fields:
-        if data:
-            return [
-                f"No input fields are configured for Form {form_type.code}; "
-                "remove unexpected keys or configure form fields in the Form Builder."
-            ]
+        # No Form Builder schema for this form type. This is expected for
+        # "dedicated" forms (PSC 2-1, PSC 2-2, ORG-3.1) — bespoke React
+        # components (PSCForm21Fields.jsx etc.) with hardcoded field keys
+        # instead of admin-configured PSCFormField rows — so there's
+        # nothing to validate against; let the save through rather than
+        # rejecting every key as "unexpected".
         return []
 
     allowed = {f.field_key: f for f in fields}
