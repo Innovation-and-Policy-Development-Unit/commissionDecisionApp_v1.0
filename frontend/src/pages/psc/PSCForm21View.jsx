@@ -62,7 +62,7 @@ const RESTRUCTURE_SCOPE_LABELS = {
   ministry: 'Ministry-level',
 }
 
-export default function PSCForm21View({ data }) {
+export default function PSCForm21View({ data, submission }) {
   if (!data || !Object.keys(data).length) {
     return (
       <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2">
@@ -82,7 +82,7 @@ export default function PSCForm21View({ data }) {
       {/* Submission Details */}
       <SectionHeader title="Submission Details" />
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Ministry / Department" value={data.ministry_department_name} span />
+        <Field label="Ministry / Department" value={[submission?.ministry?.name, submission?.department?.name].filter(Boolean).join(' / ')} span />
         <Field label="Proposal Title" value={data.proposal_title} span />
         <Field label="Submission Date" value={fmt(data.submission_date)} />
         <div>

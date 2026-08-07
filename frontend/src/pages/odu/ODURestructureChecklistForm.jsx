@@ -486,37 +486,20 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
           Section A — Submission Information
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Derived live from the Submission — same source as the page
+              header — rather than a separately-stored copy that could
+              silently diverge from it. */}
           <div>
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
               Ministry / Department
             </label>
-            {readOnlyAB ? (
-              <p className="text-sm text-slate-800 dark:text-slate-100">{form.ministry_department || '—'}</p>
-            ) : (
-              <input
-                type="text"
-                className="form-input"
-                value={form.ministry_department}
-                onChange={e => handleFieldChange('ministry_department', e.target.value)}
-                placeholder="e.g. Ministry of Finance"
-              />
-            )}
+            <p className="text-sm text-slate-800 dark:text-slate-100">{submission?.ministry?.name || '—'}</p>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
               Division / Unit
             </label>
-            {readOnlyAB ? (
-              <p className="text-sm text-slate-800 dark:text-slate-100">{form.division_unit || '—'}</p>
-            ) : (
-              <input
-                type="text"
-                className="form-input"
-                value={form.division_unit}
-                onChange={e => handleFieldChange('division_unit', e.target.value)}
-                placeholder="e.g. Human Resources Division"
-              />
-            )}
+            <p className="text-sm text-slate-800 dark:text-slate-100">{submission?.department?.name || '—'}</p>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
@@ -550,38 +533,25 @@ export default function ODURestructureChecklistForm({ submissionId, submission }
               </div>
             )}
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-              ODU Officer Assigned
-            </label>
-            {readOnlyAB ? (
-              <p className="text-sm text-slate-800 dark:text-slate-100">{form.odu_officer_assigned || '—'}</p>
-            ) : (
-              <input
-                type="text"
-                className="form-input"
-                value={form.odu_officer_assigned}
-                onChange={e => handleFieldChange('odu_officer_assigned', e.target.value)}
-                placeholder="Officer name"
-              />
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-              Manager ODU
-            </label>
-            {readOnlyAB ? (
-              <p className="text-sm text-slate-800 dark:text-slate-100">{form.manager_odu || '—'}</p>
-            ) : (
-              <input
-                type="text"
-                className="form-input"
-                value={form.manager_odu}
-                onChange={e => handleFieldChange('manager_odu', e.target.value)}
-                placeholder="Manager name"
-              />
-            )}
-          </div>
+          {/* OPSC/ODU-internal routing info — the ministry never sees who's
+              been assigned to review their submission; matches Groups 6-7
+              below and VisualAuditTrail's OPSC-only gating elsewhere. */}
+          {showOduOnlySections && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  ODU Officer Assigned
+                </label>
+                <p className="text-sm text-slate-800 dark:text-slate-100">{form.odu_officer_assigned || '—'}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  Manager ODU
+                </label>
+                <p className="text-sm text-slate-800 dark:text-slate-100">{form.manager_odu || '—'}</p>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

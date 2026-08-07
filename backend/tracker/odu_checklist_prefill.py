@@ -192,12 +192,11 @@ def build_odu_checklist_prefill(submission: Submission, *, user: User | None = N
     for field in _MINISTRY_SELF_CERTIFIED_FIELDS:
         section_b[field] = None
 
-    # Prefer the officer the Manager ODU has actually assigned via the
-    # standard "Allocate to officer" mechanism (Submission.assigned_to) over
-    # whoever merely happens to be viewing the form right now.
+    # Only the officer actually allocated via the standard "Allocate to
+    # officer" mechanism (Submission.assigned_to) — never whoever merely
+    # happens to be viewing/creating the checklist, which during Draft is
+    # the ministry submitter, not an ODU officer.
     officer_name = _user_display_name(submission.assigned_to) if submission.assigned_to_id else ""
-    if not officer_name and user:
-        officer_name = _user_display_name(user)
 
     return {
         "ministry_department": ministry_name,
