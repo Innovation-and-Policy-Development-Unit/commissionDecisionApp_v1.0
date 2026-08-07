@@ -1899,18 +1899,21 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             description=f"DG endorsed and auto-submitted to PSC: {submission.title}",
         )
 
+        # transition() already does this after every transition (line 1837) —
+        # endorse() is a separate code path (auto-chains straight to SUBMITTED)
+        # and was missing it, so DG-endorsed submissions never left SUBMITTED /
+        # never got a routed_unit until someone manually registered & routed them.
+        # Must run BEFORE the notification dispatch below: _resolve_receiver_roles()
+        # reads submission.routed_unit to pick the right unit's manager, and this
+        # is what sets it — dispatching first silently fell back to PSC_OFFICER.
+        self._auto_advance_submitted_to_checklist_review(submission)
+
         try:
             _dispatch_transition_notifications(
                 submission, WorkflowStage.DG_APPROVED, WorkflowStage.SUBMITTED, request.user,
             )
         except Exception:
             pass
-
-        # transition() already does this after every transition (line 1837) —
-        # endorse() is a separate code path (auto-chains straight to SUBMITTED)
-        # and was missing it, so DG-endorsed submissions never left SUBMITTED /
-        # never got a routed_unit until someone manually registered & routed them.
-        self._auto_advance_submitted_to_checklist_review(submission)
 
         invalidate_submission(submission.id)
         return Response(

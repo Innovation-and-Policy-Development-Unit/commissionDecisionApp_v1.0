@@ -6,6 +6,7 @@ from rest_framework.test import APIClient
 
 from ..models import (
     Ministry,
+    Notification,
     ODUChecklistStatus,
     ODURestructureChecklist,
     Profile,
@@ -307,3 +308,26 @@ class DgEndorseActionTests(TestCase):
         self.submission.refresh_from_db()
         self.assertEqual(self.submission.dg_endorsed_by_id, self.dg.id)
         self.assertIsNotNone(self.submission.dg_endorsed_at)
+
+    def test_endorse_notifies_routed_units_manager_not_psc_officer(self):
+        # endorse() used to dispatch the "needs your checklist review"
+        # notification BEFORE auto-routing set submission.routed_unit, so
+        # _resolve_receiver_roles() always fell back to Role.PSC_OFFICER.
+        # Masked for ORG-3.1 by an AgendaSection.receiver_roles override —
+        # PSC 2-2 (agenda_category="other", no override) exposes it directly.
+        odu_manager = User.objects.create_user("odu_mgr_endorse", password="x")
+        Profile.objects.create(user=odu_manager, role=Role.ODU_MANAGER)
+        psc_officer = User.objects.create_user("psc_officer_endorse", password="x")
+        Profile.objects.create(user=psc_officer, role=Role.PSC_OFFICER)
+
+        self.submission.form_type_code = "PSC 2-2"
+        self.submission.save(update_fields=["form_type_code"])
+
+        resp = self.client.post(f"/api/submissions/{self.submission.id}/endorse/")
+        self.assertEqual(resp.status_code, 200)
+
+        recipient_ids = set(
+            Notification.objects.filter(submission=self.submission).values_list("recipient_id", flat=True)
+        )
+        self.assertIn(odu_manager.id, recipient_ids)
+        self.assertNotIn(psc_officer.id, recipient_ids)
