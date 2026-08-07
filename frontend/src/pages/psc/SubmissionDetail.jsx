@@ -223,6 +223,12 @@ export default function SubmissionDetail() {
   // Compliance forms are completed in CMS; portal record is read-only for compliance roles
   const canEditComplianceForm = false
   const canEditDigitizedForm = canEditForm37 || canEditComplianceForm
+  // PSC 2-1 / PSC 2-2 / ORG-3.1 are ministry-authored — once it reaches ODU
+  // or general OPSC staff, they review it read-only (single-page PSCForm21View/
+  // PSCForm22View, not the editable multi-page wizard). Only the originating
+  // ministry can still edit it, plus psc_admin for oversight/override.
+  const canEditRestructureForm = contentEditable && user
+    && ['ministry_hr', 'dept_admin', 'csu_manager', 'psc_admin'].includes(user.role)
   const isComplianceSubmission = isComplianceFormCode(submission?.form_type_code)
 
   // Dynamic checklist — shown when the form type has a linked checklist and the user has a matching role/stage
@@ -1135,7 +1141,7 @@ const stageDescriptions = {
               }>
                 {/* Form editor / read-only view */}
                 <div>
-                  {canEditDigitizedForm ? (
+                  {(isDedicatedForm ? canEditRestructureForm : canEditDigitizedForm) ? (
                     isDedicatedForm ? (
                       <>
                         {['PSC 2-1', 'ORG-3.1'].includes(submission.form_type_code) && (

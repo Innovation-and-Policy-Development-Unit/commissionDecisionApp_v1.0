@@ -1898,15 +1898,19 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             description=f"DG endorsed and auto-submitted to PSC: {submission.title}",
         )
 
-        from .tasks import queue_submission_notification
         try:
-            queue_submission_notification(
-                submission.id, "submission_assigned", actor_id=request.user.id
+            _dispatch_transition_notifications(
+                submission, WorkflowStage.DG_APPROVED, WorkflowStage.SUBMITTED, request.user,
             )
         except Exception:
             pass
 
-        from .cache import invalidate_submission
+        # transition() already does this after every transition (line 1837) —
+        # endorse() is a separate code path (auto-chains straight to SUBMITTED)
+        # and was missing it, so DG-endorsed submissions never left SUBMITTED /
+        # never got a routed_unit until someone manually registered & routed them.
+        self._auto_advance_submitted_to_checklist_review(submission)
+
         invalidate_submission(submission.id)
         return Response(
             SubmissionDetailSerializer(submission, context={"request": request}).data
