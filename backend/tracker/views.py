@@ -2322,9 +2322,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         review or assessment back to their unit manager. Only the manager can
         advance the workflow stage from here — this action doesn't move the
         stage itself, it just flags the work ready and notifies the manager.
+
+        At Under Assessment, the officer's written assessment is the actual
+        deliverable the manager is verifying — a PDF attachment is required.
+        At Manager Checklist Review the deliverable is the checklist itself
+        (already a structured, submitted form), so no file is required there.
         """
         from .audit import log_action as _log
-        from .models import AuditLog as _AL, Notification
+        from .models import AuditLog as _AL, Notification, SubmissionDocument
         from django.contrib.auth.models import User
 
         submission = self.get_object()
@@ -2337,6 +2342,32 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
         ):
             raise PermissionDenied("This can only be done during checklist review or assessment.")
+
+        uploaded = request.FILES.get("file")
+        if submission.current_stage == WorkflowStage.UNDER_ASSESSMENT:
+            if not uploaded:
+                return Response(
+                    {"detail": "Please attach your assessment (PDF) before submitting to your manager."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not uploaded.name.lower().endswith(".pdf"):
+                return Response(
+                    {"detail": "Assessment must be a PDF file."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        if uploaded:
+            doc = SubmissionDocument.objects.create(
+                submission=submission,
+                file=uploaded,
+                original_name=uploaded.name,
+                description=f"Assessment — submitted by {request.user.get_full_name() or request.user.username}",
+                uploaded_by=request.user,
+            )
+            from .tasks import queue_document_classification, queue_document_extraction
+
+            queue_document_extraction(doc.id)
+            queue_document_classification(doc.id)
 
         submission.ready_for_manager_at = timezone.now()
         submission.save(update_fields=["ready_for_manager_at"])

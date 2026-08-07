@@ -185,6 +185,7 @@ export default function SubmissionDetail() {
   const [officers, setOfficers] = useState([])
   const [selectedOfficer, setSelectedOfficer] = useState('')
   const [allocateBusy, setAllocateBusy] = useState(false)
+  const [assessmentFile, setAssessmentFile] = useState(null)
   const isAdmin = user?.role === 'psc_admin'
   const isUnitManager  = user && UNIT_MANAGER_ROLES.includes(user.role)
   // Allocation is an assessment-stage action — routed_unit is set once at intake and
@@ -355,7 +356,15 @@ export default function SubmissionDetail() {
   const submitToManager = async () => {
     setAllocateBusy(true)
     try {
-      await api.post(`/submissions/${id}/submit-to-manager/`)
+      let payload
+      let headers
+      if (assessmentFile) {
+        payload = new FormData()
+        payload.append('file', assessmentFile)
+        headers = { 'Content-Type': 'multipart/form-data' }
+      }
+      await api.post(`/submissions/${id}/submit-to-manager/`, payload, headers ? { headers } : undefined)
+      setAssessmentFile(null)
       await reload()
       toast.success('Submitted back to your unit manager.')
     } catch (err) {
@@ -1625,11 +1634,27 @@ const stageDescriptions = {
               ) : (
                 <>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Once your review is complete, submit it back to your unit manager —
-                    they'll advance it to the next stage.
+                    {submission.current_stage === 'under_assessment'
+                      ? 'Attach your assessment (PDF), then submit it back to your unit manager for final verification.'
+                      : "Once your review is complete, submit it back to your unit manager — they'll advance it to the next stage."}
                   </p>
+                  {submission.current_stage === 'under_assessment' && (
+                    <label className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:border-primary-400">
+                      <Upload size={14} className="shrink-0" />
+                      <span className="truncate flex-1">
+                        {assessmentFile ? assessmentFile.name : 'Choose assessment PDF…'}
+                      </span>
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        className="sr-only"
+                        onChange={e => setAssessmentFile(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  )}
                   <BaseButton type="button" variant="primary" className="w-full"
                     loading={allocateBusy} loadingLabel="Submitting"
+                    disabled={submission.current_stage === 'under_assessment' && !assessmentFile}
                     onClick={submitToManager}>
                     Submit back to Manager
                   </BaseButton>
