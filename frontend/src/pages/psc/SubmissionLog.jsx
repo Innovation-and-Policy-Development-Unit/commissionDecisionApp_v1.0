@@ -15,7 +15,7 @@ import { stageLabel, stageBadgeClass, STAGE_META } from '../../constants/stages'
 import SubmissionProgressBar from '../../components/shared/SubmissionProgressBar'
 import { PlusCircle, RefreshCw, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2, LayoutList, Columns3 } from 'lucide-react'
 import SubmissionKanbanBoard from '../../components/submissions/SubmissionKanbanBoard'
-import SubmissionForm from './SubmissionForm'
+import SubmissionForm, { SUBMISSION_CREATE_ALLOWED_ROLES } from './SubmissionForm'
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { isComplianceRole } from '../../constants/compliance'
@@ -73,8 +73,18 @@ export default function SubmissionLog() {
   const [nlIdSet, setNlIdSet]     = useState(null)
   const [viewMode, setViewMode]   = useState('list')
   const isAdmin = user?.role === 'psc_admin'
+  // Same role set the backend's DELETE /submissions/{id}/ already allows to
+  // trash their own Draft submissions (views.py SubmissionViewSet.destroy) —
+  // the list here only needed a matching frontend affordance.
+  const canDeleteDrafts = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
+  const showActionsColumn = isAdmin || canDeleteDrafts
   const isComplianceUser = user && isComplianceRole(user.role)
-  const canCreateSubmission = user && (!isComplianceUser || user.role === 'compliance_manager')
+  // Also require the role to be one SubmissionForm.jsx actually accepts —
+  // otherwise roles outside that list (e.g. senior_admin_officer, psc_commissioner)
+  // would see a button that just opens the modal to a permission-denied message.
+  const canCreateSubmission = user
+    && (!isComplianceUser || user.role === 'compliance_manager')
+    && SUBMISSION_CREATE_ALLOWED_ROLES.includes(user.role)
   const isTraveller = user?.role === 'traveller'
   const isInternalCreate = user && user.role === 'csu_manager'
   const showCommissionCreate = canCreateSubmission && !isTraveller && !isInternalCreate
@@ -283,7 +293,7 @@ export default function SubmissionLog() {
     } catch { /* handled by api interceptor */ }
   }
 
-  const cols = (isAdmin ? 6 : 4) + (showQualityColumn ? 1 : 0)
+  const cols = (isAdmin ? 1 : 0) + 4 + (showActionsColumn ? 1 : 0) + (showQualityColumn ? 1 : 0)
 
   return (
     <div>
@@ -521,7 +531,7 @@ export default function SubmissionLog() {
                   <th className="w-16">{t('submission.quality_column')}</th>
                 )}
                 <th>{t('submission.deadline_short')}</th>
-                {isAdmin && <th className="sr-only">Actions</th>}
+                {showActionsColumn && <th className="sr-only">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -609,32 +619,41 @@ export default function SubmissionLog() {
                         </div>
                       )}
                     </td>
-                    {isAdmin && (
+                    {showActionsColumn && (
                       <td>
                         <div className="flex items-center gap-0.5">
-                          <BaseButton
-                            variant="ghost" size="icon" iconOnly
-                            aria-label="View"
-                            title="View"
-                            onMouseEnter={() => warmSubmission(r.id)}
-                            onFocus={() => warmSubmission(r.id)}
-                            onClick={() => navigate(`/submissions/${r.id}`)}
-                            icon={<Eye size={13} />}
-                          />
-                          <BaseButton
-                            variant="ghost" size="icon" iconOnly
-                            aria-label="Edit"
-                            title="Edit"
-                            onClick={() => navigate(`/submissions/${r.id}`)}
-                            icon={<Pencil size={13} />}
-                          />
-                          <BaseButton
-                            variant="ghost" size="icon" iconOnly
-                            aria-label="Delete"
-                            title="Delete"
-                            onClick={() => handleDelete(r)}
-                            icon={<Trash2 size={13} />}
-                          />
+                          {isAdmin && (
+                            <>
+                              <BaseButton
+                                variant="ghost" size="icon" iconOnly
+                                aria-label="View"
+                                title="View"
+                                onMouseEnter={() => warmSubmission(r.id)}
+                                onFocus={() => warmSubmission(r.id)}
+                                onClick={() => navigate(`/submissions/${r.id}`)}
+                                icon={<Eye size={13} />}
+                              />
+                              <BaseButton
+                                variant="ghost" size="icon" iconOnly
+                                aria-label="Edit"
+                                title="Edit"
+                                onClick={() => navigate(`/submissions/${r.id}`)}
+                                icon={<Pencil size={13} />}
+                              />
+                            </>
+                          )}
+                          {/* Ministry roles may only trash their own Draft
+                              submissions — matches the backend check in
+                              SubmissionViewSet.destroy(). */}
+                          {(isAdmin || (canDeleteDrafts && r.current_stage === 'draft')) && (
+                            <BaseButton
+                              variant="ghost" size="icon" iconOnly
+                              aria-label="Delete"
+                              title="Delete"
+                              onClick={() => handleDelete(r)}
+                              icon={<Trash2 size={13} />}
+                            />
+                          )}
                         </div>
                       </td>
                     )}
@@ -668,7 +687,7 @@ export default function SubmissionLog() {
                         </Badge>
                       </td>
                       {showQualityColumn && <td />}
-                      <td colSpan={isAdmin ? 2 : 1} />
+                      <td colSpan={showActionsColumn ? 2 : 1} />
                     </tr>
                   ))}
                 </>

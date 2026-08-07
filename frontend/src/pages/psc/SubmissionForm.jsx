@@ -34,6 +34,16 @@ const INTERNAL_ROLES = [
  * rather than the short internal-only path the roles above use. */
 const CSU_ROLE = 'csu_manager'
 
+/** Roles allowed to log a new submission at all — kept in sync with the
+ * `allowed` check below. Exported so list-page "New submission" buttons
+ * (e.g. SubmissionLog.jsx) can hide themselves for roles that would just
+ * land on the "Only PSC staff or Ministry HR/Admin can log submissions"
+ * message here instead of showing a button that doesn't work. */
+export const SUBMISSION_CREATE_ALLOWED_ROLES = [
+  'receptionist', 'psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
+  CSU_ROLE, ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
+]
+
 const DEFAULT_TITLE_PLACEHOLDER = 'e.g. Appointment of Director Finance & Administration'
 
 /** Title/subject placeholder shown once a specific submission type is picked —
@@ -657,10 +667,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   // not the dedicated internal-only catalog.
   const csuFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'hr')
 
-  const allowed =
-    user && ['receptionist', 'psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
-              CSU_ROLE, ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
-              'vipam_manager', 'vipam_principal'].includes(user.role)
+  const allowed = user && SUBMISSION_CREATE_ALLOWED_ROLES.includes(user.role)
 
   useEffect(() => {
     Promise.all([
