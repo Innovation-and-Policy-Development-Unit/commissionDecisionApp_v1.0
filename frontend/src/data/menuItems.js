@@ -129,7 +129,7 @@ const menuItems = [
       { label: 'Flag Monitor',     labelKey: 'nav.flag_monitor',      icon: Flag,          path: '/intelligence/flags' },
       { label: 'Alert Rules',      labelKey: 'nav.alert_rules',       icon: SlidersHorizontal, path: '/intelligence/rules', roles: ['psc_manager'] },
       { label: 'Automations',      labelKey: 'nav.automations',       icon: Zap,           path: '/intelligence/automations', roles: ['psc_manager'] },
-      { label: 'Analytics',        labelKey: 'nav.analytics',         icon: FileText,      path: '/reports' },
+      { label: 'Analytics',        labelKey: 'nav.analytics',         icon: FileText,      path: '/reports', roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'csu_manager'] },
       { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
     ],
   },
