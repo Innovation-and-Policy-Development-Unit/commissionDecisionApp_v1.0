@@ -13,6 +13,16 @@ function RequiredBadge({ t }) {
   )
 }
 
+/** Shown on items with no mandatory_for_stage — they're tracked for
+ * completeness but never block a stage transition, unlike Required items. */
+function InformationalBadge({ t }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-700/60 dark:text-slate-400">
+      {t('submission.checklist_informational_badge')}
+    </span>
+  )
+}
+
 /** Upload-to-satisfy control for ministry-side roles (uploadOnly mode) — no
  * manual self-declare checkbox; presence can only be set by attaching a file. */
 function UploadForItemButton({ item, onUpload, uploadBusy, t }) {
@@ -306,6 +316,13 @@ export default function ChecklistPanel({
   }
 
   const confirmedCount = checklist.filter(i => i.is_present).length
+  // Mirrors WorkflowActionsPanel's own blocking gate: only items with
+  // mandatory_for_stage set can hold up a transition. Items without it are
+  // informational-only — tracked here but never counted against "complete".
+  const mandatoryItems = checklist.filter(i => !!i.mandatory_for_stage)
+  const requiredDoneCount = mandatoryItems.filter(i => i.is_present).length
+  const requiredTotalCount = mandatoryItems.length
+  const informationalCount = checklist.length - requiredTotalCount
 
   return (
     <div className="card p-5">
@@ -316,7 +333,14 @@ export default function ChecklistPanel({
           {t('submission.checklist_panel_title')}
         </h3>
         <span className="text-xs text-slate-400 ml-1">
-          {confirmedCount}/{checklist.length}
+          {requiredTotalCount > 0
+            ? `${requiredDoneCount}/${requiredTotalCount} ${t('submission.checklist_required_badge').toLowerCase()}`
+            : `${confirmedCount}/${checklist.length}`}
+          {informationalCount > 0 && (
+            <span className="ml-1">
+              {t('submission.checklist_informational_count', { count: informationalCount })}
+            </span>
+          )}
         </span>
         {canEdit && autofillEnabled && (
           <button
@@ -437,6 +461,7 @@ export default function ChecklistPanel({
                     {hasSug && <SuggestionBadge suggestion={sug} t={t} />}
                     {item.content_mismatch && <ContentMismatchBadge t={t} />}
                     {isRequiredNow && !item.is_present && <RequiredBadge t={t} />}
+                    {!item.mandatory_for_stage && <InformationalBadge t={t} />}
                   </div>
 
                   {item.document_description && (

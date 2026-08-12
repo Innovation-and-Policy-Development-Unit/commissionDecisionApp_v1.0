@@ -719,6 +719,8 @@
     "checklist_saving": "Saving…",
     "checklist_no_docs_hint": "Upload documents first so AI can analyse them.",
     "checklist_required_badge": "Required",
+    "checklist_informational_badge": "Informational",
+    "checklist_informational_count": "+{{count}} informational",
     "checklist_content_mismatch_badge": "Content mismatch",
     "checklist_attach_file": "Attach file",
     "checklist_replace_file": "Replace file"
