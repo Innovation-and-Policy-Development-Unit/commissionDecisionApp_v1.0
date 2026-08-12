@@ -100,6 +100,12 @@ def _build_status_detail(submission) -> str:
         return "Registered and routed for review"
 
     if stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
+        # Once the assigned principal hands the checklist back (ready_for_manager_at
+        # set), the ball is with the unit manager — "assigned to {principal}" would
+        # be stale and read as if nothing had happened since allocation.
+        if assigned_role and submission.ready_for_manager_at:
+            unit_manager = f"{_unit_label(unit)} Manager" if unit else "the unit manager"
+            return f"Reviewed by {_role_title(assigned_role)} — awaiting {unit_manager}'s decision"
         if assigned_role:
             detail = f"Checklist review assigned to {_role_title(assigned_role)}"
             if has_co_assigned:
@@ -115,6 +121,10 @@ def _build_status_detail(submission) -> str:
             if assigned_role:
                 return f"Assessment overdue — with {_role_title(assigned_role)}"
             return "Assessment overdue — pending escalation"
+        # Same hand-back staleness fix as Manager Checklist Review above.
+        if assigned_role and submission.ready_for_manager_at:
+            unit_manager = f"{_unit_label(unit)} Manager" if unit else "the unit manager"
+            return f"Assessed by {_role_title(assigned_role)} — awaiting {unit_manager}'s decision"
         if assigned_role:
             detail = f"Under assessment by {_role_title(assigned_role)}"
             if has_co_assigned:

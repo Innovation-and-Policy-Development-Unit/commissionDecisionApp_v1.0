@@ -32,7 +32,6 @@ import TravelEndorsementPanel from '../../components/travel/TravelEndorsementPan
 import DocumentSignatureModal from '../../components/shared/DocumentSignatureModal'
 import PSCForm37Fields from './PSCForm37Fields'
 import PSCForm37View from './PSCForm37View'
-import DynamicFormRenderer from '../../components/shared/DynamicFormRenderer'
 import BaseSelect from '../../components/shared/BaseSelect'
 import BaseTextarea from '../../components/shared/BaseTextarea'
 import EmailChipInput from '../../components/shared/EmailChipInput'
@@ -1297,13 +1296,11 @@ const stageDescriptions = {
                         {submission.form_type_code === 'PSC 2-2' && <PSCForm22View data={dynamicForm} />}
                       </div>
                     ) : (
-                      <div className="card card-compact">
-                        <DynamicFormRenderer
-                          fields={dynamicFormFields}
-                          values={dynamicForm}
-                          readOnly
-                        />
-                      </div>
+                      <MultiPageFormRenderer
+                        fields={dynamicFormFields}
+                        values={dynamicForm}
+                        readOnly
+                      />
                     )
                   )}
                 </div>
