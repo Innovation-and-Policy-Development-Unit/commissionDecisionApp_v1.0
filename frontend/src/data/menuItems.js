@@ -126,9 +126,6 @@ const menuItems = [
     groupIcon: Sparkles,
     audience: 'exclude_compliance',
     items: [
-      { label: 'SCDMS Intelligence', labelKey: 'nav.intelligence',     icon: Sparkles,      path: '/intelligence' },
-      { label: 'Dashboards',       labelKey: 'nav.dashboards',        icon: LayoutDashboard, path: '/intelligence/dashboards' },
-      { label: 'Reports & Alerts', labelKey: 'nav.reports_alerts',    icon: Bell,          path: '/intelligence/reports' },
       { label: 'Flag Monitor',     labelKey: 'nav.flag_monitor',      icon: Flag,          path: '/intelligence/flags' },
       { label: 'Alert Rules',      labelKey: 'nav.alert_rules',       icon: SlidersHorizontal, path: '/intelligence/rules', roles: ['psc_manager'] },
       { label: 'Automations',      labelKey: 'nav.automations',       icon: Zap,           path: '/intelligence/automations', roles: ['psc_manager'] },
