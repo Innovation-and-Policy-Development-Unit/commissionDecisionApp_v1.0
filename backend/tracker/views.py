@@ -11990,7 +11990,7 @@ def audit_log_search_view(request):
     if not rbac_user_can_view_audit_log(request.user) and not request.user.is_staff:
         raise PermissionDenied("You do not have permission to view audit logs.")
 
-    qs = AuditLog.objects.select_related("user").order_by("-timestamp")
+    qs = AuditLog.objects.select_related("actor").order_by("-timestamp")
 
     q = request.query_params.get("q", "").strip()
     user_id = request.query_params.get("user_id")
@@ -12000,9 +12000,9 @@ def audit_log_search_view(request):
     date_to = request.query_params.get("date_to")
 
     if q:
-        qs = qs.filter(models.Q(description__icontains=q) | models.Q(resource_label__icontains=q) | models.Q(user__username__icontains=q))
+        qs = qs.filter(models.Q(description__icontains=q) | models.Q(resource_label__icontains=q) | models.Q(actor_username__icontains=q))
     if user_id:
-        qs = qs.filter(user_id=user_id)
+        qs = qs.filter(actor_id=user_id)
     if action_filter:
         qs = qs.filter(action=action_filter)
     if resource_type:
@@ -12022,7 +12022,7 @@ def audit_log_search_view(request):
             {
                 "id": log.id,
                 "timestamp": log.timestamp.isoformat(),
-                "user": log.user.username if log.user else None,
+                "user": log.actor_username or None,
                 "action": log.action,
                 "resource_type": log.resource_type,
                 "resource_id": log.resource_id,

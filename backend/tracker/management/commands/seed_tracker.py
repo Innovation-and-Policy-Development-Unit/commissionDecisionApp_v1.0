@@ -779,7 +779,7 @@ class Command(BaseCommand):
             "Head of Agency (DG/Director) — reviews and endorses submissions prepared by Ministry HR "
             "before they are dispatched to OPSC."
         ), [
-            "view_dashboard", "view_submissions", "view_audit_trail",
+            "view_dashboard", "view_submissions",
         ]),
         ("psc_manager", (
             "OPSC Manager — receives allocated commission decisions from the Secretary after deliberation "
@@ -896,10 +896,10 @@ class Command(BaseCommand):
             "view_reports", "view_audit_trail",
         ]),
         ("ministry_hr", "Submits cases on behalf of their ministry and monitors submission status.", [
-            "view_dashboard", "view_submissions", "view_audit_trail",
+            "view_dashboard", "view_submissions",
         ]),
         ("dept_admin", "Views submissions relevant to their department only.", [
-            "view_submissions", "view_audit_trail",
+            "view_submissions",
         ]),
     ]
 
