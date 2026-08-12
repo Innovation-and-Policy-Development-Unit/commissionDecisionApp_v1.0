@@ -28,7 +28,7 @@ const ALL_QUICK_ACTIONS = [
     icon: Plus,
     path: '/submissions/new',
     kbd: 'N',
-    roles: ['receptionist', 'ministry_hr', 'dept_admin', 'head_of_agency', 'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'hr_unit_manager', 'vipam_manager', 'odu_manager'],
+    roles: ['receptionist', 'ministry_hr', 'dept_admin', 'head_of_agency', 'psc_officer', 'psc_admin', 'psc_secretary', 'csu_manager', 'vipam_manager', 'vipam_principal'],
   },
   {
     id: 'dashboard',
@@ -72,7 +72,7 @@ const ALL_QUICK_ACTIONS = [
     sublabel: 'Commission decision register',
     icon: Gavel,
     path: '/secretariat/decisions',
-    roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'hr_unit_principal', 'vipam_principal'],
+    roles: ['psc_admin', 'psc_secretary', 'senior_admin_officer'],
   },
   {
     id: 'meetings',
