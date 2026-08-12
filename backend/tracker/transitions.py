@@ -384,6 +384,11 @@ _UNIT_PRINCIPAL_ROLES = {
     # compliance_senior is a senior analyst (not a manager); treated as a principal
     # so it is properly role-gated rather than falling through to the generic graph check.
     Role.COMPLIANCE_SENIOR,
+    # Unit senior officers (named per unit, same standing as that unit's
+    # Principal — see OPSC_UNIT_PRINCIPAL_ROLES in opsc_access.py).
+    Role.ODU_SENIOR,
+    Role.HR_UNIT_SENIOR,
+    Role.VIPAM_SENIOR,
     # Senior Officer is a shared "senior" assignee role usable across units
     # (see MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES in opsc_access.py) — same
     # hand-back-to-manager rule applies. Note: Senior Officer is *also* a
@@ -634,7 +639,7 @@ def assert_transition_allowed(
     # still notified — see _dispatch_transition_notifications in views.py.
     if role in _UNIT_PRINCIPAL_ROLES and current_stage in _UNIT_PRINCIPAL_STAGES:
         if (
-            role == Role.ODU_PRINCIPAL
+            role in {Role.ODU_PRINCIPAL, Role.ODU_SENIOR}
             and current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
             and target_stage == WorkflowStage.RETURNED_FOR_CLARIFICATION
             and form_type_code in ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
@@ -797,7 +802,7 @@ def iter_allowed_targets(
     # from Manager Checklist Review — keep in sync with assert_transition_allowed.
     if role in _UNIT_PRINCIPAL_ROLES and current_stage in _UNIT_PRINCIPAL_STAGES:
         if (
-            role == Role.ODU_PRINCIPAL
+            role in {Role.ODU_PRINCIPAL, Role.ODU_SENIOR}
             and current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
             and form_type_code in ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
         ):

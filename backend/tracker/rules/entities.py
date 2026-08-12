@@ -26,6 +26,7 @@ def _is_psc_internal(user):
         Role.HR_UNIT_MANAGER, Role.ODU_MANAGER, Role.COMPLIANCE_MANAGER,
         Role.VIPAM_PRINCIPAL, Role.HR_UNIT_PRINCIPAL, Role.ODU_PRINCIPAL,
         Role.COMPLIANCE_PRINCIPAL,
+        Role.VIPAM_SENIOR, Role.HR_UNIT_SENIOR, Role.ODU_SENIOR,
     }
 
 

@@ -25,14 +25,18 @@ FULL_ACCESS_ROLES = frozenset({
 ROLE_TO_ROUTED_UNIT: dict[str, str] = {
     Role.ODU_MANAGER: "odu",
     Role.ODU_PRINCIPAL: "odu",
+    Role.ODU_SENIOR: "odu",
     Role.VIPAM_MANAGER: "vipam",
     Role.VIPAM_PRINCIPAL: "vipam",
+    Role.VIPAM_SENIOR: "vipam",
     Role.HR_UNIT_MANAGER: "hr",
     Role.HR_UNIT_PRINCIPAL: "hr",
+    Role.HR_UNIT_SENIOR: "hr",
     Role.COMPLIANCE_MANAGER: "compliance",
     Role.COMPLIANCE_PRINCIPAL: "compliance",
     Role.COMPLIANCE_SENIOR: "compliance",
     Role.CSU_MANAGER: "csu",
+    Role.CSU_SENIOR: "csu",
 }
 
 # Keys of an agenda block that stay visible on a redacted placeholder.

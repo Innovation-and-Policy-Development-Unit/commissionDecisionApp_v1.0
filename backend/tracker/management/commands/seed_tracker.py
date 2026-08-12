@@ -669,12 +669,13 @@ class Command(BaseCommand):
         "compliance_senior": "COMPLIANCE",
         "compliance_principal": "COMPLIANCE",
         "csu_manager": "CSU",
+        "csu_senior": "CSU",
     }
 
     _OPSC_STAFF_ROLES = frozenset({
         "psc_admin", "psc_officer", "psc_secretary", "senior_admin_officer",
         "psc_commissioner", "chairperson", "psc_manager", "principal_officer",
-        "senior_officer", "odu_principal",
+        "senior_officer", "odu_principal", "odu_senior",
     })
 
     def _seed_opsc_units(self):
@@ -876,6 +877,45 @@ class Command(BaseCommand):
         ), [
             "view_dashboard", "view_submissions", "transition_workflow",
             "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
+        ]),
+        ("vipam_senior", (
+            "VIPAM Senior Officer — same standing as VIPAM Principal: assessment work assigned "
+            "by the VIPAM Manager; views all Commission minutes and tasks; updates only tasks "
+            "allocated to them."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
+        ]),
+        ("hr_unit_senior", (
+            "HR Unit Senior Officer — same standing as HR Unit Principal: assessment work assigned "
+            "by the HR Unit Manager; views all Commission minutes and tasks; updates only tasks "
+            "allocated to them."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
+        ]),
+        ("odu_senior", (
+            "ODU Senior Officer — same standing as ODU Principal: assessment work assigned by the "
+            "ODU Manager, including the ODU restructure checklist/assessment; views all Commission "
+            "minutes and tasks; updates only tasks allocated to them."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow",
+            "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_audit_trail",
+        ]),
+        ("csu_senior", (
+            "CSU Senior Officer — executes post-decision implementation tasks allocated by the "
+            "CSU Manager. CSU has no submission-review tier of its own (CSU submissions route "
+            "through the HR Unit for checklist review), so this role is post-decision only."
+        ), [
+            "view_submissions", "update_implementation",
             "view_commission_minutes", "view_commission_tasks",
             "view_audit_trail",
         ]),

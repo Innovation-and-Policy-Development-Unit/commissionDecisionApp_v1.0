@@ -27,6 +27,7 @@ const INTERNAL_ROLES = [
   'odu_principal',
   'vipam_manager',
   'vipam_principal',
+  'vipam_senior',
 ]
 
 /** CSU Manager creates OPSC-internal submissions too (PSC-staff-only visible),

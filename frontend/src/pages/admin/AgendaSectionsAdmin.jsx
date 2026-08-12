@@ -58,6 +58,10 @@ const RECEIVER_ROLE_HINTS = [
   'odu_principal',
   'hr_unit_principal',
   'vipam_principal',
+  'odu_senior',
+  'hr_unit_senior',
+  'vipam_senior',
+  'csu_senior',
 ]
 
 export default function AgendaSectionsAdmin() {

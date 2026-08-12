@@ -89,7 +89,7 @@ const ALL_QUICK_ACTIONS = [
     icon: ListTodo,
     path: '/secretariat/tasks',
     kbd: 'G T',
-    roles: ['vipam_manager', 'hr_unit_manager', 'odu_manager', 'csu_manager', 'vipam_principal', 'hr_unit_principal', 'odu_principal', 'psc_manager', 'principal_officer', 'senior_officer'],
+    roles: ['vipam_manager', 'hr_unit_manager', 'odu_manager', 'csu_manager', 'vipam_principal', 'hr_unit_principal', 'odu_principal', 'vipam_senior', 'hr_unit_senior', 'odu_senior', 'csu_senior', 'psc_manager', 'principal_officer', 'senior_officer'],
   },
 ]
 

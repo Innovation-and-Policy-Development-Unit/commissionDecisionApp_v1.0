@@ -39,6 +39,12 @@ class Role(models.TextChoices):
     HR_UNIT_PRINCIPAL     = "hr_unit_principal",     "HR Unit Principal"
     ODU_PRINCIPAL         = "odu_principal",          "ODU Principal"
     COMPLIANCE_PRINCIPAL  = "compliance_principal",  "Compliance Principal"
+    # ── OPSC Unit Senior roles (senior analyst tier, same standing as a unit's
+    #    Principal in every workflow — see compliance_senior above) ─────────
+    VIPAM_SENIOR    = "vipam_senior",    "VIPAM Senior Officer"
+    HR_UNIT_SENIOR  = "hr_unit_senior",  "HR Unit Senior Officer"
+    ODU_SENIOR      = "odu_senior",      "ODU Senior Officer"
+    CSU_SENIOR      = "csu_senior",      "CSU Senior Officer"
     # ── FR-05: Additional compliance-adjacent roles ─────────────────────────
     SECRETARY_OPSC    = "secretary_opsc",    "Secretary, OPSC"
     DG_DIRECTOR       = "dg_director",       "DG / Director (Ministry)"

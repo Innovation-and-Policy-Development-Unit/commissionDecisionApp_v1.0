@@ -45,6 +45,7 @@ export const ODU_ROUTED_UNIT = 'odu'
 
 export const ODU_PRINCIPAL_WORKER_ROLES = [
   'odu_principal',
+  'odu_senior',
 ]
 
 export const ODU_CHECKLIST_ROLES = [...ODU_PRINCIPAL_WORKER_ROLES, 'odu_manager']

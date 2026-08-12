@@ -50,6 +50,7 @@ ODU_CHECKLIST_VIEW_STAGES = frozenset({
 
 ODU_CHECKLIST_ROLES = frozenset({
     "odu_principal",
+    "odu_senior",
     "odu_manager",
 })
 
@@ -69,6 +70,7 @@ ODU_CHECKLIST_VIEW_ROLES = ODU_CHECKLIST_ROLES | frozenset({
 
 ODU_PRINCIPAL_WORKER_ROLES = frozenset({
     "odu_principal",
+    "odu_senior",
 })
 
 # Roles that draft/own the ministry's submission (same set the digitized

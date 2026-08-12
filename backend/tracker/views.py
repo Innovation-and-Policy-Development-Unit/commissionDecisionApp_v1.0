@@ -301,6 +301,9 @@ def _submission_queryset_for(user):
         Role.HR_UNIT_PRINCIPAL,
         Role.VIPAM_PRINCIPAL,
         Role.COMPLIANCE_PRINCIPAL,
+        Role.ODU_SENIOR,
+        Role.HR_UNIT_SENIOR,
+        Role.VIPAM_SENIOR,
     }
     if role in {Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL}:
         # Compliance staff see all OPSC-internal compliance submissions (created
@@ -1160,7 +1163,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             }
             submission = serializer.save(**kwargs)
 
-        elif profile.role in {Role.VIPAM_PRINCIPAL, Role.VIPAM_MANAGER}:
+        elif profile.role in {Role.VIPAM_PRINCIPAL, Role.VIPAM_SENIOR, Role.VIPAM_MANAGER}:
             # VIPAM internal submission — goes through approval chain before Secretary
             org = _resolve_opsc_submission_org(profile)
             kwargs = {
@@ -1593,6 +1596,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.VIPAM_PRINCIPAL: "vipam",
             Role.HR_UNIT_PRINCIPAL: "hr",
             Role.COMPLIANCE_PRINCIPAL: "compliance",
+            Role.ODU_SENIOR: "odu",
+            Role.VIPAM_SENIOR: "vipam",
+            Role.HR_UNIT_SENIOR: "hr",
         }
         if profile.role in _unit_principal_to_routed:
             expected_unit = _unit_principal_to_routed[profile.role]
@@ -2092,6 +2098,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.SENIOR_ADMIN_OFFICER,
             Role.CSU_MANAGER,
             Role.VIPAM_PRINCIPAL,
+            Role.VIPAM_SENIOR,
             Role.COMPLIANCE_MANAGER,
             Role.COMPLIANCE_SENIOR,
             Role.COMPLIANCE_PRINCIPAL,
@@ -12103,7 +12110,7 @@ class DocumentVersionViewSet(
 # Roles that can fill/edit the checklist during manager_checklist_review
 CHECKLIST_EDIT_STAGE   = WorkflowStage.MANAGER_CHECKLIST_REVIEW
 CHECKLIST_EDIT_ROLES   = frozenset({
-    Role.ODU_MANAGER, Role.ODU_PRINCIPAL, Role.PSC_ADMIN,
+    Role.ODU_MANAGER, Role.ODU_PRINCIPAL, Role.ODU_SENIOR, Role.PSC_ADMIN,
 })
 # Roles that can view the completed checklist in later stages
 CHECKLIST_VIEW_STAGES  = frozenset({

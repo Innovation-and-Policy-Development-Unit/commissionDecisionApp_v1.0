@@ -90,7 +90,7 @@ const DEADLINE_DRAFT_ROLES = [
 const PACKAGE_VALIDATE_ROLES = [
   'ministry_hr', 'dept_admin', 'head_of_agency',
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
-  'csu_manager', 'vipam_principal',
+  'csu_manager', 'vipam_principal', 'vipam_senior',
   'compliance_manager', 'compliance_senior', 'compliance_principal',
 ]
 const CHECKLIST_EDIT_ROLES = [
@@ -105,7 +105,7 @@ const CHECKLIST_EDIT_ROLES = [
 const MINISTRY_SUBMITTER_ROLES = ['ministry_hr', 'dept_admin', 'csu_manager']
 
 const DYNAMIC_CHECKLIST_EDIT_ROLES = [
-  'odu_manager', 'odu_principal', 'psc_admin',
+  'odu_manager', 'odu_principal', 'odu_senior', 'psc_admin',
 ]
 const DYNAMIC_CHECKLIST_VIEW_ROLES = [
   ...DYNAMIC_CHECKLIST_EDIT_ROLES,

@@ -13,12 +13,19 @@ export const OPSC_UNIT_PRINCIPAL_ROLES = new Set([
   'hr_unit_principal',
   'odu_principal',
   'compliance_principal',
+  // Unit senior officers: same standing as that unit's Principal.
+  'vipam_senior',
+  'hr_unit_senior',
+  'odu_senior',
 ])
 
 export const OPSC_POST_DECISION_ROLES = new Set([
   'psc_manager',
   'principal_officer',
   'senior_officer',
+  // CSU has no submission-review tier of its own — csu_senior only executes
+  // post-decision tasks.
+  'csu_senior',
 ])
 
 export const COMMISSION_DECISION_VIEW_ROLES = new Set([

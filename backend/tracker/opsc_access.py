@@ -25,12 +25,20 @@ OPSC_UNIT_PRINCIPAL_ROLES: frozenset[str] = frozenset({
     # compliance_senior: senior analyst assigned by compliance_manager;
     # can review/assess submissions but cannot approve checklists (manager-only).
     Role.COMPLIANCE_SENIOR,
+    # Unit senior officers: same standing as that unit's Principal (review/
+    # assess submissions assigned to them, cannot approve checklists).
+    Role.VIPAM_SENIOR,
+    Role.HR_UNIT_SENIOR,
+    Role.ODU_SENIOR,
 })
 
 OPSC_POST_DECISION_ROLES: frozenset[str] = frozenset({
     Role.PSC_MANAGER,
     Role.PRINCIPAL_OFFICER,
     Role.SENIOR_OFFICER,
+    # CSU has no submission-review tier of its own (see MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES
+    # / OPSC_UNIT_PRINCIPAL_ROLES) — csu_senior only executes post-decision tasks.
+    Role.CSU_SENIOR,
 })
 
 # Managers + principals + legacy post-decision execution roles
@@ -54,11 +62,11 @@ MANAGER_ROLE_TO_PRINCIPAL_ROLE: dict[str, str] = {
 }
 
 MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES: dict[str, set[str]] = {
-    Role.ODU_MANAGER: {Role.ODU_PRINCIPAL, Role.SENIOR_OFFICER},
-    Role.VIPAM_MANAGER: {Role.VIPAM_PRINCIPAL, Role.SENIOR_OFFICER},
-    Role.HR_UNIT_MANAGER: {Role.HR_UNIT_PRINCIPAL, Role.SENIOR_OFFICER},
+    Role.ODU_MANAGER: {Role.ODU_PRINCIPAL, Role.ODU_SENIOR},
+    Role.VIPAM_MANAGER: {Role.VIPAM_PRINCIPAL, Role.VIPAM_SENIOR},
+    Role.HR_UNIT_MANAGER: {Role.HR_UNIT_PRINCIPAL, Role.HR_UNIT_SENIOR},
     Role.COMPLIANCE_MANAGER: {Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_SENIOR},
-    Role.CSU_MANAGER: {Role.SENIOR_OFFICER},
+    Role.CSU_MANAGER: {Role.CSU_SENIOR},
 }
 
 # Ministry-side roles — external to OPSC; never see Commission minutes.
