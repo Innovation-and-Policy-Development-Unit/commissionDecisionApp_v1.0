@@ -19,7 +19,7 @@ import {
   stageLabel, stageBadgeClass, stageDotClass, stageMeta,
   needsHrAction, isTerminal, STAGE_LABELS,
 } from '../../constants/stages'
-import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardList, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download, FileSignature } from 'lucide-react'
+import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardCheck, LayoutGrid, MessageSquare, FileSignature, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
@@ -47,8 +47,8 @@ import PSCForm21View from './PSCForm21View'
 import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
+import ODUBoardPaperForm from '../odu/ODUBoardPaperForm'
 import SubmissionChecklistPanel from '../../components/submissions/SubmissionChecklistPanel'
-import SittingPackView from '../../components/submissions/SittingPackView'
 import WorkflowActionsPanel from '../../components/submissions/WorkflowActionsPanel'
 import CarryoverBanner from '../../components/submissions/CarryoverBanner'
 import { canShowOduChecklist, canShowBoardPaper, submissionUsesOduRestructureChecklist } from '../../utils/oduChecklist'
@@ -160,8 +160,8 @@ export default function SubmissionDetail() {
   const [busy, setBusy]             = useState(false)
   const [checklist, setChecklist]   = useState([])
   const [checklistBusy, setChecklistBusy] = useState(false)
-  // null = closed, 'checklist' | 'board_paper' = which SittingPackView mode is open
-  const [sittingPackMode, setSittingPackMode] = useState(null)
+  const [activeTab, setActiveTab] = useState('overview')
+  const [boardPaperDirty, setBoardPaperDirty] = useState(false)
   const [documents, setDocuments]   = useState([])
   const [uploadBusy, setUploadBusy] = useState(false)
   const [uploadDesc, setUploadDesc] = useState('')
@@ -244,9 +244,6 @@ export default function SubmissionDetail() {
     (DYNAMIC_CHECKLIST_VIEW_ROLES.includes(user.role) && DYNAMIC_CHECKLIST_VIEW_STAGES.includes(stage)) ||
     user.is_superuser
   )
-  // Sitting Pack is available whenever either checklist type applies
-  const showSittingPack = showOduChecklist || showDynamicChecklist
-
   // ORG-3.1 is the same real-world Organisation Restructure form as PSC 2-1
   // (see 0200_org_3_1_required_documents_odu_confirmed.py) — it reuses the
   // PSC 2-1 wizard rather than a separate dedicated form.
@@ -269,6 +266,25 @@ export default function SubmissionDetail() {
   // still get a checklist — only the short internal-only path skips it.
   const showChecklist = !submission?.is_attachment && !submission?.secretary_only
     && !(submission?.is_internal && !submission?.follows_normal_route)
+
+  // ── Tab visibility — which of the fixed tab set applies to this
+  // submission/role, so a tab with nothing in it never shows up. ──
+  const showDigitizedFormTab = form37 !== null
+    || (dynamicForm !== null && (dynamicFormFields.length > 0 || isDedicatedForm))
+  const showChecklistTab = showOduChecklist || showDynamicChecklist
+  const showCommissionPaperTab = showOduBoardPaper
+  const TABS = [
+    { key: 'overview', label: 'Overview', Icon: LayoutGrid },
+    showDigitizedFormTab && { key: 'digitized_form', label: 'Digitized Form', Icon: FileText },
+    showCommissionPaperTab && { key: 'commission_paper', label: 'Commission Paper', Icon: FileSignature },
+    { key: 'documents', label: 'Required Documents', Icon: Paperclip },
+    showChecklistTab && { key: 'checklist', label: 'Checklist', Icon: ClipboardCheck },
+    { key: 'activity', label: 'Activity', Icon: MessageSquare },
+  ].filter(Boolean)
+  // If the previously active tab isn't valid for this submission/role (e.g.
+  // navigating from a submission that had a Checklist tab to one that
+  // doesn't), fall back to Overview instead of rendering an empty pane.
+  const effectiveTab = TABS.some(t => t.key === activeTab) ? activeTab : 'overview'
 
   const applyBootstrap = useCallback((data) => {
     const tr = data.allowed_transitions || {}
@@ -793,6 +809,19 @@ const stageDescriptions = {
     }
   }
 
+  const handleTabChange = async (tab) => {
+    if (tab === activeTab) return
+    if (activeTab === 'commission_paper' && boardPaperDirty) {
+      const ok = await confirm({
+        title: 'Unsaved changes',
+        message: 'You have unsaved changes to the Commission paper. Switch tabs without saving?',
+        confirmLabel: 'Switch without saving',
+      })
+      if (!ok) return
+    }
+    setActiveTab(tab)
+  }
+
   if (pageLoading && !submission) {
     return <PageSkeleton detailMode />
   }
@@ -812,24 +841,6 @@ const stageDescriptions = {
         action={
           <div className="flex items-center gap-2">
             <BaseButton variant="outline" as={Link} to="/submissions">Back to log</BaseButton>
-            {showSittingPack && (
-              <BaseButton
-                variant="primary"
-                icon={<ClipboardList size={14} />}
-                onClick={() => setSittingPackMode('checklist')}
-              >
-                Review Submission
-              </BaseButton>
-            )}
-            {showOduBoardPaper && (
-              <BaseButton
-                variant="outline"
-                icon={<FileSignature size={14} />}
-                onClick={() => setSittingPackMode('board_paper')}
-              >
-                Draft Board Paper
-              </BaseButton>
-            )}
             {isAdmin && (
               <>
                 <BaseButton
@@ -913,37 +924,6 @@ const stageDescriptions = {
         </>
       )}
 
-      {showPackageValidation && (
-        <SubmissionPackageValidation
-          submission={submission}
-          submissionId={id}
-          onUpdated={setSubmission}
-        />
-      )}
-
-      {/* Checklist shown only in Review Submission split-screen, not inline */}
-
-      {showSecretariatBrief && (
-        <SecretariatBriefCard
-          submission={submission}
-          submissionId={id}
-          onUpdated={setSubmission}
-          canRegenerate={canRegenerateBrief}
-        />
-      )}
-
-      {showDeadlineDrafts && submission?.assessment_deadline_at && (
-        <div className="card card-compact mb-4">
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">
-            AI deadline reminder drafts
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-            Personalised emails for ministry contacts and assigned officers when the assessment deadline is approaching.
-          </p>
-          <DeadlineReminderDrafts submissionId={id} />
-        </div>
-      )}
-
       {isComplianceSubmission && (
         <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40 px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
           <p className="font-semibold">Compliance matter</p>
@@ -973,11 +953,53 @@ const stageDescriptions = {
         </div>
       )}
 
+      <div className="sticky top-16 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-4 bg-slate-100 dark:bg-slate-900 border-b border-slate-200/70 dark:border-slate-800">
+        <div className="hidden sm:flex items-center gap-1 rounded-lg bg-white/70 dark:bg-slate-800 backdrop-blur-sm p-1 overflow-x-auto">
+          {TABS.map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => handleTabChange(tab.key)}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
+                effectiveTab === tab.key
+                  ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+            >
+              <tab.Icon size={13} />
+              {tab.label}
+              {tab.key === 'commission_paper' && boardPaperDirty && (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Unsaved changes" />
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="flex sm:hidden gap-1 overflow-x-auto pb-1">
+          {TABS.map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => handleTabChange(tab.key)}
+              className={`shrink-0 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap ${
+                effectiveTab === tab.key
+                  ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                  : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              <tab.Icon size={13} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* ── Left: details + timeline ── */}
         <div className="lg:col-span-2 space-y-4">
 
+          {effectiveTab === 'overview' && (
+          <>
           {/* Stage guidance (subway map is at page top) */}
           {submission.current_stage !== 'draft' && (hrAction || terminal || submission.current_stage === 'matters_arising') && (
             <div className={`card card-compact space-y-2 ${hrAction ? 'border-l-4 border-l-orange-400' : terminal ? 'border-l-4 border-l-emerald-400' : ''}`}>
@@ -1079,7 +1101,40 @@ const stageDescriptions = {
             />
           )}
 
+          {showPackageValidation && (
+            <SubmissionPackageValidation
+              submission={submission}
+              submissionId={id}
+              onUpdated={setSubmission}
+            />
+          )}
+
+          {showSecretariatBrief && (
+            <SecretariatBriefCard
+              submission={submission}
+              submissionId={id}
+              onUpdated={setSubmission}
+              canRegenerate={canRegenerateBrief}
+            />
+          )}
+
+          {showDeadlineDrafts && submission?.assessment_deadline_at && (
+            <div className="card card-compact">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">
+                AI deadline reminder drafts
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                Personalised emails for ministry contacts and assigned officers when the assessment deadline is approaching.
+              </p>
+              <DeadlineReminderDrafts submissionId={id} />
+            </div>
+          )}
+          </>
+          )}
+
           {/* ── Digitized PSC Form ── */}
+          {effectiveTab === 'digitized_form' && (
+          <>
           {form37 !== null && (
             <div className="card card-compact">
               <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
@@ -1235,7 +1290,7 @@ const stageDescriptions = {
                       <div className="card card-compact">
                         {submission.form_type_code === 'PSC 2-1' && submissionUsesOduRestructureChecklist(submission) && (
                           <p className="text-xs text-slate-400 dark:text-slate-500 italic mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
-                            Ministry's original request — reference only. See the ODU Board Submission Paper below for the version prepared for the Commission.
+                            Ministry's original request — reference only. See the ODU Commission Submission Paper below for the version prepared for the Commission.
                           </p>
                         )}
                         {['PSC 2-1', 'ORG-3.1'].includes(submission.form_type_code) && <PSCForm21View data={dynamicForm} submission={submission} />}
@@ -1268,25 +1323,40 @@ const stageDescriptions = {
 
           {/* ── Formal decision service + acknowledgement ── */}
           {submission && <DecisionServicePanel submission={submission} />}
+          </>
+          )}
 
-          {/* ── Required Documents Checklist (AI autofill) ── */}
-          {showChecklist && checklist.length > 0 && (
-            <ChecklistPanel
-              checklist={checklist}
-              setChecklist={setChecklist}
-              submissionId={id}
-              canEdit={canEditChecklist}
-              hasDocuments={documents.length > 0}
-              autofillEnabled={user?.ai_checklist_autofill_enabled !== false}
-              uploadOnly={isMinistrySubmitterChecklist}
-              onUploadForItem={isMinistrySubmitterChecklist ? handleUploadForItem : undefined}
-              uploadBusy={uploadBusy}
-              currentStage={submission?.current_stage}
+          {/* ── Commission Paper (ODU Board Paper) ── */}
+          {effectiveTab === 'commission_paper' && showCommissionPaperTab && (
+            <div className="card card-compact">
+              <ODUBoardPaperForm
+                submissionId={Number(id)}
+                submission={submission}
+                onDirtyChange={setBoardPaperDirty}
+              />
+            </div>
+          )}
+
+          {/* ── Checklist — the structured ODU sign-off form only; the
+              plain required-documents tracker lives in Required Documents
+              alongside the files themselves, so the two don't duplicate. ── */}
+          {effectiveTab === 'checklist' && (
+          <>
+          {hasDynamicChecklist && showDynamicChecklist && (
+            <SubmissionChecklistPanel submissionId={id} />
+          )}
+
+          {showOduChecklist && (
+            <ODURestructureChecklistForm
+              submissionId={Number(id)}
+              submission={submission}
             />
+          )}
+          </>
           )}
 
           {/* ── Documents panel (additional, non-checklist attachments) ── */}
-          {(() => {
+          {effectiveTab === 'documents' && (() => {
             const DocActions = ({ doc }) => (
               <div className="flex items-center gap-1 shrink-0 flex-wrap">
                 <BaseButton variant="ghost" size="sm" icon={<ExternalLink size={13} />} onClick={() => openDocument(doc)}>Open</BaseButton>
@@ -1336,6 +1406,25 @@ const stageDescriptions = {
             )
 
             return (
+              <>
+              {/* ── Required Documents Checklist (AI autofill) — the same
+                  required-document set as the file list below, tracked at
+                  the item level (present/absent) rather than by file. ── */}
+              {showChecklist && checklist.length > 0 && (
+                <ChecklistPanel
+                  checklist={checklist}
+                  setChecklist={setChecklist}
+                  submissionId={id}
+                  canEdit={canEditChecklist}
+                  hasDocuments={documents.length > 0}
+                  autofillEnabled={user?.ai_checklist_autofill_enabled !== false}
+                  uploadOnly={isMinistrySubmitterChecklist}
+                  onUploadForItem={isMinistrySubmitterChecklist ? handleUploadForItem : undefined}
+                  uploadBusy={uploadBusy}
+                  currentStage={submission?.current_stage}
+                  onAttached={reload}
+                />
+              )}
               <div className="card card-compact">
                 {/* Panel header */}
                 <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700">
@@ -1457,17 +1546,13 @@ const stageDescriptions = {
                   </div>
                 )}
               </div>
+              </>
             )
           })()}
 
-          {/* ── ODU Restructure Checklist ── */}
-          {showOduChecklist && (
-            <ODURestructureChecklistForm
-              submissionId={Number(id)}
-              submission={submission}
-            />
-          )}
-
+          {/* ── Activity & audit trail ── */}
+          {effectiveTab === 'activity' && (
+          <>
           {/* Visual audit trail (workflow + tamper-evident decision proofs) —
               OPSC-internal only; ministry HR/DG never see this. */}
           {userIsOpscInternal(user) && (
@@ -1504,6 +1589,8 @@ const stageDescriptions = {
 
           {/* ── Activity & Discussion (A7 collaboration) ── */}
           <SubmissionActivity submissionId={id} />
+          </>
+          )}
         </div>
 
         {/* ── Right: transition panel ── */}
@@ -1535,6 +1622,7 @@ const stageDescriptions = {
             submission={submission}
             allowed={allowed}
             canEndorse={canEndorse}
+            checklist={checklist}
             onTransition={performTransition}
             onEndorse={performEndorse}
             busy={busy}
@@ -1670,8 +1758,9 @@ const stageDescriptions = {
             </div>
           )}
 
-          {/* Linked Job Descriptions panel — shown on Form 2-1 when children exist */}
-          {submission.form_type_code === 'PSC 2-1' && submission.attached_submissions?.length > 0 && (
+          {/* Linked Job Descriptions panel — shown on the restructure parent
+              (PSC 2-1 or ORG-3.1 — same real-world form, two codes) when children exist */}
+          {submissionUsesOduRestructureChecklist(submission) && submission.attached_submissions?.length > 0 && (
             <div className="card card-compact space-y-3">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-700">
                 <Paperclip size={14} className="text-violet-500" />
@@ -1850,17 +1939,6 @@ const stageDescriptions = {
           </form>
         </div>
       </div>
-    )}
-    {((sittingPackMode === 'checklist' && showSittingPack) || (sittingPackMode === 'board_paper' && showOduBoardPaper)) && (
-      <SittingPackView
-        submissionId={id}
-        submission={submission}
-        documents={documents}
-        checklist={checklist}
-        mode={sittingPackMode}
-        checklistPanel={hasDynamicChecklist ? <SubmissionChecklistPanel submissionId={id} /> : null}
-        onClose={() => setSittingPackMode(null)}
-      />
     )}
     </>
   )

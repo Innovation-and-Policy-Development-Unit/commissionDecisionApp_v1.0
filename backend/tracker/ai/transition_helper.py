@@ -87,7 +87,8 @@ def generate_transition_guidance(
     submission: Submission, *, role: str, is_internal: bool = False
 ) -> dict[str, Any]:
     allowed = iter_allowed_targets(
-        role, submission.current_stage, is_internal=is_internal, secretary_only=submission.secretary_only
+        role, submission.current_stage, is_internal=is_internal, secretary_only=submission.secretary_only,
+        form_type_code=submission.form_type_code or "",
     )
     suggestions: list[dict[str, Any]] = []
 

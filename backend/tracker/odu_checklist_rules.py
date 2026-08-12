@@ -7,6 +7,20 @@ from .models import RoutedUnit, Submission, WorkflowStage
 # Organisation restructure / establishment variation (includes regrading via PSC 2-1)
 ODU_RESTRUCTURE_CHECKLIST_FORM_CODES = frozenset({"ORG-3.1", "PSC 2-1"})
 
+# Form types where the assigned ODU Principal sends "Return for Clarification"
+# straight to Ministry HR from Manager Checklist Review, without routing
+# through the Manager ODU first — every ODU submission type: restructure/
+# variance (PSC 2-1/ORG-3.1), Job Description (PSC 2-2), Business Plan,
+# Corporate Plan, and Annual Report. The Manager's own action at that stage
+# is then just "Approve & Submit to Secretary". Confirmed workflow; extended
+# to PSC 2-2 2026-08-10, then to Business Plan/Corporate Plan/Annual Report
+# the same day once those three were built, for consistency across every ODU
+# submission type. Kept separate from ODU_RESTRUCTURE_CHECKLIST_FORM_CODES
+# above since only PSC 2-1/ORG-3.1 have the 20-item checklist / board paper.
+ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES = ODU_RESTRUCTURE_CHECKLIST_FORM_CODES | frozenset({
+    "PSC 2-2", "BUSINESS-PLAN", "CORPORATE-PLAN", "ANNUAL-REPORT",
+})
+
 # ODU manager checklist review (workflow diagram: Manager ODU checklist review)
 ODU_CHECKLIST_REVIEW_STAGES = frozenset({WorkflowStage.MANAGER_CHECKLIST_REVIEW})
 

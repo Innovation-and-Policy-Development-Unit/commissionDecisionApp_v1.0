@@ -170,13 +170,14 @@ const STAGE_ACTIONS = {
 
   manager_checklist_review: [
     {
-      id: 'approve_route',
-      label: 'Approve & Route for Assessment',
-      description: 'Checklist is satisfactory — forward for full assessment',
-      icon: CheckCircle2,
+      id: 'submit_to_secretary',
+      label: 'Submit to Secretary',
+      description: 'Checklist is satisfactory — forward to the Secretary',
+      icon: Send,
       variant: 'primary',
-      transitionTo: 'under_assessment',
+      transitionTo: 'pending_secretary_approval',
       requiresNote: false,
+      requiresChecklistComplete: true,
     },
     {
       id: 'return_checklist',
@@ -350,11 +351,29 @@ const STAGE_ACTIONS = {
   ],
 }
 
+// ── Status strip tone → color classes (used above the action buttons) ──────
+const STATUS_TONE_CLASSES = {
+  waiting: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+  ready: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300',
+  pending: 'bg-slate-50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-300',
+}
+
+// Travel submissions (secretary_only) skip the Secretary Approval Gate and go
+// straight from Manager Checklist Review into Secretary Review — where
+// TravelEndorsementPanel handles the actual sign-off — instead of the normal
+// workflow's pending_secretary_approval. Same buttons, different target stage.
+const SECRETARY_ONLY_MANAGER_CHECKLIST_ACTIONS = STAGE_ACTIONS.manager_checklist_review.map(
+  action => action.id === 'submit_to_secretary'
+    ? { ...action, transitionTo: 'secretary_review' }
+    : action
+)
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function WorkflowActionsPanel({
   submission,
   allowed = [],        // array of target stage strings from backend
   canEndorse = false,  // explicit flag from backend for the DG endorse action
+  checklist = [],       // current submission's checklist items — gates "Submit to Secretary"
   onTransition,        // async fn(targetStage, remarks, acknowledgeGaps?)
   onEndorse,           // async fn() — calls /submissions/{id}/endorse/
   busy = false,
@@ -369,7 +388,65 @@ export default function WorkflowActionsPanel({
   const isNormalRouteInternal = !!(submission?.is_internal && submission?.follows_normal_route)
   const stageActions = (stage === 'draft' && isNormalRouteInternal)
     ? STAGE_ACTIONS.draft_internal
+    : (stage === 'manager_checklist_review' && submission?.secretary_only)
+    ? SECRETARY_ONLY_MANAGER_CHECKLIST_ACTIONS
     : (STAGE_ACTIONS[stage] ?? [])
+
+  // Every required checklist item (mandatory_for_stage set — i.e. not one of
+  // the informational-only items) must be marked present before "Submit to
+  // Secretary" is clickable. Matches the backend's own re-verification gate
+  // for this transition (see the Manager Checklist Review gate in views.py).
+  const checklistComplete = (checklist || [])
+    .filter(item => !!item.mandatory_for_stage)
+    .every(item => item.is_present)
+
+  // If the manager has allocated this submission to a principal/senior
+  // officer, the manager's own stage-advancing actions don't make sense until
+  // that assignee has finished their work and handed it back via "Submit to
+  // Manager" (sets ready_for_manager_at). Matches the backend gate in
+  // views.py's transition() action.
+  const awaitingAssignedReview = (
+    (stage === 'manager_checklist_review' || stage === 'under_assessment')
+    && !!submission?.assigned_to
+    && !submission?.ready_for_manager_at
+  )
+
+  // ── At-a-glance status strip ────────────────────────────────────────────
+  // Same "who's turn is it" + "how much is done" summary for every role —
+  // General Manager, OPSC Unit Manager, Secretary, etc. — instead of making
+  // each one infer status from a disabled button's tooltip.
+  const assignedName = submission?.assigned_to_name || 'the assigned principal'
+  const isHandoffStage = stage === 'manager_checklist_review' || stage === 'under_assessment'
+  const mandatoryChecklistItems = (checklist || []).filter(item => !!item.mandatory_for_stage)
+  const checklistDoneCount = mandatoryChecklistItems.filter(item => item.is_present).length
+  const checklistTotalCount = mandatoryChecklistItems.length
+
+  const statusItems = []
+  if (isHandoffStage && submission?.assigned_to) {
+    if (!submission?.ready_for_manager_at) {
+      statusItems.push({
+        Icon: Clock,
+        tone: 'waiting',
+        text: `Waiting on ${assignedName} to complete their review`,
+      })
+    } else {
+      const handedBackDate = new Date(submission.ready_for_manager_at).toLocaleDateString('en-VU', {
+        day: '2-digit', month: 'short', year: 'numeric',
+      })
+      statusItems.push({
+        Icon: CheckCircle2,
+        tone: 'ready',
+        text: `${assignedName} submitted this back on ${handedBackDate} — ready for your review`,
+      })
+    }
+  }
+  if (checklistTotalCount > 0) {
+    statusItems.push({
+      Icon: ClipboardList,
+      tone: checklistDoneCount === checklistTotalCount ? 'ready' : 'pending',
+      text: `${checklistDoneCount} of ${checklistTotalCount} required documents complete`,
+    })
+  }
 
   // Filter to only actions the current user is allowed to perform
   const visibleActions = stageActions
@@ -377,7 +454,15 @@ export default function WorkflowActionsPanel({
       if (action.endpoint === 'endorse') return canEndorse
       return allowed.includes(action.transitionTo)
     })
-    .map(action => ({ ...action, Icon: action.icon }))
+    .map(action => ({
+      ...action,
+      Icon: action.icon,
+      disabledReason: awaitingAssignedReview
+        ? 'Waiting for the assigned principal to complete their review and submit it back to you.'
+        : (action.requiresChecklistComplete && !checklistComplete)
+        ? 'Complete the checklist — mark every required document present — before submitting to the Secretary.'
+        : null,
+    }))
 
   if (visibleActions.length === 0) return null
 
@@ -415,29 +500,41 @@ export default function WorkflowActionsPanel({
         {t('workflow.actions_title', { defaultValue: 'Actions' })}
       </h3>
 
+      {statusItems.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {statusItems.map((item, i) => (
+            <div
+              key={i}
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium ${STATUS_TONE_CLASSES[item.tone]}`}
+            >
+              <item.Icon size={13} className="shrink-0" />
+              {item.text}
+            </div>
+          ))}
+        </div>
+      )}
+
       {error && (
         <BaseMessageBar intent="error">{error}</BaseMessageBar>
       )}
 
       <div className="flex flex-col gap-2">
         {visibleActions.map(action => (
-          <div key={action.id}>
+          <div key={action.id} title={action.disabledReason || undefined}>
             <BaseButton
               variant={action.variant}
               className="w-full justify-start"
               icon={<action.Icon size={15} />}
               onClick={() => handleClick(action)}
-              disabled={executing}
+              disabled={executing || !!action.disabledReason}
               loading={executing && activeAction?.id === action.id}
               loadingLabel="Saving"
             >
               {action.label}
             </BaseButton>
-            {action.description && (
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 ml-1">
-                {action.description}
-              </p>
-            )}
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 ml-1">
+              {action.disabledReason || action.description}
+            </p>
           </div>
         ))}
       </div>

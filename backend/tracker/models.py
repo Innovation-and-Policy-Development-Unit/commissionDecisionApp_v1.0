@@ -3925,6 +3925,15 @@ class ODURestructureBoardPaper(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="odu_board_papers_secretary_approved",
     )
+    returned_at = models.DateTimeField(null=True, blank=True)
+    returned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="odu_board_papers_returned",
+        help_text="Manager ODU who last sent this back to the Principal for changes.",
+    )
+    return_note = models.TextField(
+        blank=True, help_text="Manager's note on what needs changing, from the last return.",
+    )
 
     # ── Header ────────────────────────────────────────────────────────────────
     meeting_number = models.CharField(max_length=100, blank=True)

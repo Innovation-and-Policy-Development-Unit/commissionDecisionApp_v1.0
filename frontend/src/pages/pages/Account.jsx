@@ -37,7 +37,7 @@ import {
   DEFAULT_INACTIVITY_LOCK_MINUTES,
 } from '../../utils/inactivityLock'
 
-const DEFAULT_POLICY = { min_length: 8, require_uppercase: false, require_lowercase: false, require_digits: false, require_special: false, history_count: 5 }
+const DEFAULT_POLICY = { min_length: 8, require_uppercase: false, require_lowercase: false, require_digits: false, require_special: false, history_count: 5, mfa_enabled: true }
 
 const SPECIAL_CHARS = new Set('!@#$%^&*()_+-=[]{}|;:\'",.<>?/~`\\')
 
@@ -748,63 +748,67 @@ export default function Account() {
 
           {/* Two-Factor Authentication */}
           <div className="card p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 rounded-xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 flex-shrink-0">
-                <Shield size={18} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900 dark:text-slate-100">Two-Factor Authentication</h3>
-                <p className="text-xs text-slate-400">Add an extra layer of security to your account using Microsoft Authenticator</p>
-              </div>
-            </div>
+            {policy.mfa_enabled && (
+              <>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-9 h-9 rounded-xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 flex-shrink-0">
+                    <Shield size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900 dark:text-slate-100">Two-Factor Authentication</h3>
+                    <p className="text-xs text-slate-400">Add an extra layer of security to your account using Microsoft Authenticator</p>
+                  </div>
+                </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${user?.two_factor_enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
-                  <ShieldCheck size={20} />
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${user?.two_factor_enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
+                      <ShieldCheck size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        Authenticator App {user?.two_factor_enabled ? '(Enabled)' : '(Disabled)'}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {user?.two_factor_enabled
+                          ? 'Your account is protected with TOTP-based 2FA.'
+                          : 'Microsoft Authenticator, Google Authenticator, etc.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {user?.two_factor_enabled ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ok = await confirm({ title: 'Disable 2FA', message: 'Disable two-factor authentication? This will reduce your account security.', confirmLabel: 'Disable', variant: 'warning' })
+                        if (!ok) return
+                        try {
+                          await api.post('/auth/totp/disable/')
+                          await refreshMe()
+                          toast.success('Two-factor authentication disabled.')
+                        } catch {
+                          toast.error('Failed to disable 2FA.')
+                        }
+                      }}
+                      className="btn-outline py-2 px-4 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-900/30"
+                    >
+                      Disable 2FA
+                    </button>
+                  ) : (
+                    <Link
+                      to="/auth/totp-setup"
+                      className="btn-gradient py-2 px-4 text-xs"
+                    >
+                      Setup 2FA
+                    </Link>
+                  )}
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    Authenticator App {user?.two_factor_enabled ? '(Enabled)' : '(Disabled)'}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {user?.two_factor_enabled 
-                      ? 'Your account is protected with TOTP-based 2FA.' 
-                      : 'Microsoft Authenticator, Google Authenticator, etc.'}
-                  </p>
-                </div>
-              </div>
-              
-              {user?.two_factor_enabled ? (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const ok = await confirm({ title: 'Disable 2FA', message: 'Disable two-factor authentication? This will reduce your account security.', confirmLabel: 'Disable', variant: 'warning' })
-                    if (!ok) return
-                    try {
-                      await api.post('/auth/totp/disable/')
-                      await refreshMe()
-                      toast.success('Two-factor authentication disabled.')
-                    } catch {
-                      toast.error('Failed to disable 2FA.')
-                    }
-                  }}
-                  className="btn-outline py-2 px-4 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-900/30"
-                >
-                  Disable 2FA
-                </button>
-              ) : (
-                <Link
-                  to="/auth/totp-setup"
-                  className="btn-gradient py-2 px-4 text-xs"
-                >
-                  Setup 2FA
-                </Link>
-              )}
-            </div>
+              </>
+            )}
 
             {/* Session PIN (separator) */}
-            <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-700">
+            <div className={policy.mfa_enabled ? "mt-6 pt-5 border-t border-slate-200 dark:border-slate-700" : ""}>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
                   <KeyRound size={18} />

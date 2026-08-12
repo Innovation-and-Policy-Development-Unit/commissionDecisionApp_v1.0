@@ -4,6 +4,7 @@ from django.core.exceptions import PermissionDenied
 
 from .models import Role, WorkflowStage, MeetingType
 from .opsc_access import OPSC_UNIT_MANAGER_ROLES
+from .odu_checklist_rules import ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
 
 # ---------------------------------------------------------------------------
 # Internal submission roles — only unit managers (not principals) create submissions
@@ -186,8 +187,11 @@ _STAGE_GRAPH = {
         WorkflowStage.DRAFT,
     ],
     # ── Manager checklist review ──────────────────────────────────────────
+    # Goes straight to the Secretary — checklist review IS the assessment for
+    # these submissions, so Under Assessment is skipped entirely (it's still
+    # reachable via DEFERRED_BACK_TO_UNIT, for Commission-directed rework).
     WorkflowStage.MANAGER_CHECKLIST_REVIEW: [
-        WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,
         WorkflowStage.RETURNED_FOR_CLARIFICATION,
         WorkflowStage.COMPLIANCE_UNDER_REVIEW,
     ],
@@ -453,11 +457,15 @@ def assert_transition_allowed(
     is_internal: bool = False,
     secretary_only: bool = False,
     remarks: str = "",
+    form_type_code: str = "",
 ) -> None:
     """Raise PermissionDenied if the role cannot move current_stage → target_stage.
 
     Pass is_internal=True for OPSC-internal submissions (CSU/ODU → Secretary workflow).
     Pass secretary_only=True for ministry travel forms (4.4–4.6).
+    Pass form_type_code for the ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES carve-out
+    below (restructure PSC 2-1/ORG-3.1, plus PSC 2-2), where the assigned Principal —
+    not the Manager — sends the clarification request.
     """
 
     # ── Matters Arising must have a resolution note ───────────────────────────
@@ -596,6 +604,21 @@ def assert_transition_allowed(
             raise PermissionDenied(
                 "Unit managers can only act at the Manager Checklist Review and Under Assessment stages."
             )
+        # Restructure/variance (PSC 2-1 / ORG-3.1): the assigned Principal sends
+        # clarification requests directly to Ministry HR — the Manager ODU's only
+        # action at checklist review is to approve and route it forward. See the
+        # mirrored carve-out just below for _UNIT_PRINCIPAL_ROLES.
+        if (
+            role == Role.ODU_MANAGER
+            and current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            and target_stage == WorkflowStage.RETURNED_FOR_CLARIFICATION
+            and form_type_code in ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
+        ):
+            raise PermissionDenied(
+                "For restructure/variance submissions, the assigned Principal sends "
+                "clarification requests to the ministry directly — the Manager ODU "
+                "approves and routes the submission forward."
+            )
         return
 
     # ── OPSC Unit Principals / Senior Officers — do the work, hand it back ──
@@ -603,7 +626,20 @@ def assert_transition_allowed(
     # endpoints, not gated here; assignment enforcement is done in views.py),
     # but cannot advance the workflow stage themselves at these two stages —
     # only their unit manager can, after the "submit-to-manager" hand-back.
+    #
+    # Exception: for restructure/variance (PSC 2-1 / ORG-3.1) submissions, the
+    # assigned Principal sends "Return for Clarification" to Ministry HR
+    # directly from Manager Checklist Review, without routing through the
+    # Manager ODU first (confirmed workflow, 2026-08-09). The Manager ODU is
+    # still notified — see _dispatch_transition_notifications in views.py.
     if role in _UNIT_PRINCIPAL_ROLES and current_stage in _UNIT_PRINCIPAL_STAGES:
+        if (
+            role == Role.ODU_PRINCIPAL
+            and current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            and target_stage == WorkflowStage.RETURNED_FOR_CLARIFICATION
+            and form_type_code in ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
+        ):
+            return
         raise PermissionDenied(
             "You can't move this stage yourself — use \"Submit back to Manager\" once "
             "your review/assessment is ready. Your unit manager will review it and "
@@ -687,7 +723,8 @@ def assert_transition_allowed(
 
 
 def iter_allowed_targets(
-    role: str, current_stage: str, is_internal: bool = False, secretary_only: bool = False
+    role: str, current_stage: str, is_internal: bool = False, secretary_only: bool = False,
+    form_type_code: str = "",
 ) -> list:
     """Return all stage values the role may transition to from current_stage."""
     if secretary_only:
@@ -736,14 +773,35 @@ def iter_allowed_targets(
         return [t.value for (s, t) in _CSU_MANAGER_ALLOWED if s == current_stage]
     if role in _UNIT_MANAGER_ROLES:
         if current_stage in _UNIT_MANAGER_STAGES:
-            return _STAGE_GRAPH.get(current_stage, [])
+            targets = list(_STAGE_GRAPH.get(current_stage, []))
+            # Restructure/variance: Return for Clarification is the Principal's
+            # action here (see _UNIT_PRINCIPAL_ROLES below) — don't offer it to
+            # the Manager ODU too. Keep in sync with assert_transition_allowed.
+            if (
+                role == Role.ODU_MANAGER
+                and current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+                and form_type_code in ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
+                and WorkflowStage.RETURNED_FOR_CLARIFICATION in targets
+            ):
+                targets.remove(WorkflowStage.RETURNED_FOR_CLARIFICATION)
+            return targets
         return []
     # Unit principals/senior officers can't self-transition at the checklist
     # review/assessment stages (must hand back to their manager — see
     # assert_transition_allowed). Outside those two stages, fall through to
     # the generic loop below — needed for Senior Officer's separate
     # post-decision capacity (_STAFF_STAGES).
+    #
+    # Exception: on restructure/variance submissions the assigned ODU
+    # Principal can send Return for Clarification straight to Ministry HR
+    # from Manager Checklist Review — keep in sync with assert_transition_allowed.
     if role in _UNIT_PRINCIPAL_ROLES and current_stage in _UNIT_PRINCIPAL_STAGES:
+        if (
+            role == Role.ODU_PRINCIPAL
+            and current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            and form_type_code in ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
+        ):
+            return [WorkflowStage.RETURNED_FOR_CLARIFICATION]
         return []
     if role in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_SECRETARY}:
         targets = []

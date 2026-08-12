@@ -3193,6 +3193,120 @@ def generate_annual_report_statistics():
     return report.id
 
 
+# ── Business Plan (PSC 2-5) deadline reminder ────────────────────────────────
+
+@shared_task
+def send_business_plan_deadline_reminders():
+    """
+    PSC 2-5 Ministry Business Plan is due 28 February each year. Reminds
+    Ministry HR for any ministry that hasn't yet lodged this year's Business
+    Plan submission. Scheduled twice a year (January and February) — see
+    migration 0212_business_plan_reminder_schedule.py.
+    """
+    from django.contrib.auth import get_user_model
+    from django.utils import timezone
+
+    from .email_notify import send_email_to_user
+    from .models import Ministry, Notification, Role, Submission
+
+    User = get_user_model()
+    year = timezone.localdate().year
+    deadline_label = f"28 February {year}"
+
+    ministries_with_plan = set(
+        Submission.objects.filter(
+            form_type_code="BUSINESS-PLAN",
+            received_at__year=year,
+        ).values_list("ministry_id", flat=True)
+    )
+
+    notified = 0
+    for ministry in Ministry.objects.exclude(id__in=ministries_with_plan):
+        recipients = User.objects.filter(
+            is_active=True,
+            psc_profile__role=Role.MINISTRY_HR,
+            psc_profile__ministry_id=ministry.id,
+        )
+        if not recipients.exists():
+            continue
+        title = f"Business Plan due {deadline_label}"
+        body = (
+            f"{ministry.name}'s Ministry Business Plan (PSC 2-5) for {year} has not yet "
+            f"been submitted in SCDMS. It is due by {deadline_label} — please lodge it as "
+            "soon as possible."
+        )
+        for user in recipients:
+            Notification.objects.create(
+                recipient=user,
+                channel=Notification.Channel.BOTH,
+                title=title,
+                body=body,
+            )
+            send_email_to_user(user, subject=title, body=body)
+            notified += 1
+
+    app_log.info("BUSINESS_PLAN_REMINDER | year=%s notified=%d", year, notified)
+    return notified
+
+
+# ── Annual Report (PSC 2-7) deadline reminder ────────────────────────────────
+# Distinct from generate_annual_report_statistics above — that's SCDMS's own
+# internal statistics report; this reminds ministries to submit PSC 2-7.
+
+@shared_task
+def send_annual_report_deadline_reminders():
+    """
+    PSC 2-7 Ministry Annual Report is due 31 March each year. Reminds
+    Ministry HR for any ministry that hasn't yet lodged this year's Annual
+    Report submission. Scheduled twice a year (February and March) — see
+    migration 0221_annual_report_reminder_schedule.py.
+    """
+    from django.contrib.auth import get_user_model
+    from django.utils import timezone
+
+    from .email_notify import send_email_to_user
+    from .models import Ministry, Notification, Role, Submission
+
+    User = get_user_model()
+    year = timezone.localdate().year
+    deadline_label = f"31 March {year}"
+
+    ministries_with_report = set(
+        Submission.objects.filter(
+            form_type_code="ANNUAL-REPORT",
+            received_at__year=year,
+        ).values_list("ministry_id", flat=True)
+    )
+
+    notified = 0
+    for ministry in Ministry.objects.exclude(id__in=ministries_with_report):
+        recipients = User.objects.filter(
+            is_active=True,
+            psc_profile__role=Role.MINISTRY_HR,
+            psc_profile__ministry_id=ministry.id,
+        )
+        if not recipients.exists():
+            continue
+        title = f"Annual Report due {deadline_label}"
+        body = (
+            f"{ministry.name}'s Ministry Annual Report (PSC 2-7) for {year} has not yet "
+            f"been submitted in SCDMS. It is due by {deadline_label} — please lodge it as "
+            "soon as possible."
+        )
+        for user in recipients:
+            Notification.objects.create(
+                recipient=user,
+                channel=Notification.Channel.BOTH,
+                title=title,
+                body=body,
+            )
+            send_email_to_user(user, subject=title, body=body)
+            notified += 1
+
+    app_log.info("ANNUAL_REPORT_REMINDER | year=%s notified=%d", year, notified)
+    return notified
+
+
 # ── New-meeting HR notification ──────────────────────────────────────────────
 
 @shared_task

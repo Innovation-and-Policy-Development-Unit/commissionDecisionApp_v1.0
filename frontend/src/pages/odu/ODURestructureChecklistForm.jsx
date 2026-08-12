@@ -326,9 +326,9 @@ export default function ODURestructureChecklistForm({
   // to see empty placeholders for content that isn't theirs to fill in.
   const showOduOnlySections = isOduPrincipal || isOduManager || isAdminUser
 
-  // Only wired when the parent (SittingPackView) passed a document-pane
-  // callback — on the main submission page, where this form also renders
-  // for the ministry to fill in, there's no Documents pane beside it.
+  // Optional — only set when a caller renders this form next to a document
+  // pane it can jump to. Not wired from the submission page's Checklist tab,
+  // since Documents lives in its own separate tab there.
   const handleNavigateToDocument = onNavigateToDocument
     ? (fieldKey) => {
         const docId = resolveDocumentId(fieldKey, documents, checklistItems)

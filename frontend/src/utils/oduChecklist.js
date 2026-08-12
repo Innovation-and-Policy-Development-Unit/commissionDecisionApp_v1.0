@@ -4,6 +4,18 @@
 
 export const ODU_RESTRUCTURE_CHECKLIST_FORM_CODES = ['ORG-3.1', 'PSC 2-1']
 
+// Form types where the assigned ODU Principal sends "Return for Clarification"
+// straight to Ministry HR from Manager Checklist Review, without routing
+// through the Manager ODU — every ODU submission type. Kept separate from
+// the checklist-eligibility set above since only PSC 2-1/ORG-3.1 have the
+// 20-item checklist / board paper. Mirrors
+// ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES in odu_checklist_rules.py —
+// keep both in sync.
+export const ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES = [
+  ...ODU_RESTRUCTURE_CHECKLIST_FORM_CODES,
+  'PSC 2-2', 'BUSINESS-PLAN', 'CORPORATE-PLAN', 'ANNUAL-REPORT',
+]
+
 export const ODU_CHECKLIST_REVIEW_STAGE = 'manager_checklist_review'
 
 // Stages after checklist review where the completed checklist stays visible (read-only).

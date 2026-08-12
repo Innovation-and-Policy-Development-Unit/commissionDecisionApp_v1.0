@@ -2641,6 +2641,11 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
     def get_secretary_approved_by_name(self, obj):
         return self._user_name(obj.secretary_approved_by)
 
+    returned_by_name = serializers.SerializerMethodField()
+
+    def get_returned_by_name(self, obj):
+        return self._user_name(obj.returned_by)
+
     class Meta:
         model  = ODURestructureBoardPaper
         fields = [
@@ -2649,6 +2654,7 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
             "submitted_for_review_at", "submitted_for_review_by_name",
             "manager_approved_at", "manager_approved_by_name",
             "secretary_approved_at", "secretary_approved_by_name",
+            "returned_at", "returned_by_name", "return_note",
             # Header
             "meeting_number", "item_number", "submitted_by", "action_officer",
             "psc_file", "prepared_by",
@@ -2666,6 +2672,7 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
             "submitted_for_review_at", "submitted_for_review_by_name",
             "manager_approved_at", "manager_approved_by_name",
             "secretary_approved_at", "secretary_approved_by_name",
+            "returned_at", "returned_by_name", "return_note",
         ]
 
 

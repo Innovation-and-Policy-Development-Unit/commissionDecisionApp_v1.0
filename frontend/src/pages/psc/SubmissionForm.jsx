@@ -7,7 +7,8 @@ import { useToast } from '../../context/ToastContext'
 import NewComplianceCaseForm from '../compliance/NewComplianceCaseForm'
 import { isComplianceRole } from '../../constants/compliance'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
-import { X } from 'lucide-react'
+import { ODU_RESTRUCTURE_CHECKLIST_FORM_CODES } from '../../utils/oduChecklist'
+import { X, Search } from 'lucide-react'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseInput from '../../components/shared/BaseInput'
 import BaseSelect from '../../components/shared/BaseSelect'
@@ -278,6 +279,55 @@ function CommissionSubmissionForm({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // ── Attach to a parent Form 2.1 restructure (PSC 2-2 only) ──────────────
+  // Per the confirmed intake workflow: a Job Description can be lodged
+  // standalone, or attached to a restructure submission the ministry already
+  // filed — in which case it's reviewed alongside the parent (no separate
+  // routing/checklist) instead of going through its own full workflow.
+  const isJobDescription = form.form_type_code === 'PSC 2-2'
+  // A Ministry Business Plan / Annual Report combines and consolidates every
+  // department's plan or performance into one ministry-wide submission — it
+  // doesn't belong to a single department, so Department isn't required.
+  const isMinistryWideForm = ['BUSINESS-PLAN', 'ANNUAL-REPORT'].includes(form.form_type_code)
+  const [attachMode, setAttachMode] = useState(false)
+  const [parentQuery, setParentQuery] = useState('')
+  const [parentResults, setParentResults] = useState([])
+  const [parentSearchLoading, setParentSearchLoading] = useState(false)
+  const [parentSubmission, setParentSubmission] = useState(null)
+
+  useEffect(() => {
+    if (!isJobDescription) {
+      setAttachMode(false)
+      setParentSubmission(null)
+    }
+  }, [isJobDescription])
+
+  useEffect(() => {
+    if (!attachMode || parentSubmission || !parentQuery.trim()) {
+      setParentResults([])
+      return
+    }
+    let cancelled = false
+    setParentSearchLoading(true)
+    const timer = setTimeout(() => {
+      api.get('/submissions/', {
+        params: {
+          search: parentQuery.trim(),
+          form_type_code: ODU_RESTRUCTURE_CHECKLIST_FORM_CODES.join(','),
+          page_size: 8,
+        },
+      })
+        .then(res => {
+          if (cancelled) return
+          const rows = res.data.results ?? res.data
+          setParentResults(Array.isArray(rows) ? rows : [])
+        })
+        .catch(() => { if (!cancelled) setParentResults([]) })
+        .finally(() => { if (!cancelled) setParentSearchLoading(false) })
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [attachMode, parentQuery, parentSubmission])
+
   // Once a broad agenda category is picked, look up the specific digitized
   // form types filed under it (e.g. "Resignation / Retirement / Death" covers
   // Age Retirement, Medical Retirement, Death in Service, and Redundancy —
@@ -336,13 +386,20 @@ function CommissionSubmissionForm({
       setError('Please enter a title / subject.')
       return
     }
-    if (!isMinistryUser && !form.ministry) {
-      setError('Please select a ministry.')
-      return
-    }
-    if (!form.department) {
-      setError('Please select a department.')
-      return
+    if (attachMode) {
+      if (!parentSubmission) {
+        setError('Please search for and select the Form 2.1 restructure this Job Description belongs to.')
+        return
+      }
+    } else {
+      if (!isMinistryUser && !form.ministry) {
+        setError('Please select a ministry.')
+        return
+      }
+      if (!form.department && !isMinistryWideForm) {
+        setError('Please select a department.')
+        return
+      }
     }
     setBusy(true)
     setError('')
@@ -355,9 +412,15 @@ function CommissionSubmissionForm({
         notify_emails: form.notify_emails,
       }
       if (form.form_type_code) payload.form_type_code = form.form_type_code
-      if (!isMinistryUser && form.ministry) payload.ministry = Number(form.ministry)
-      if (form.department) payload.department = Number(form.department)
-      if (form.unit) payload.unit = Number(form.unit)
+      if (attachMode && parentSubmission) {
+        payload.is_attachment = true
+        payload.parent_submission = parentSubmission.id
+        // Ministry/department/unit are copied server-side from the parent.
+      } else {
+        if (!isMinistryUser && form.ministry) payload.ministry = Number(form.ministry)
+        if (form.department) payload.department = Number(form.department)
+        if (form.unit) payload.unit = Number(form.unit)
+      }
 
       const { data: submission } = await api.post('/submissions/', payload)
       toast.success('Submission created. Complete documents and submit when ready.')
@@ -369,6 +432,8 @@ function CommissionSubmissionForm({
       if (typeof detail === 'object' && detail !== null) {
         if (detail.ministry) {
           msg = Array.isArray(detail.ministry) ? detail.ministry.join(' ') : String(detail.ministry)
+        } else if (detail.parent_submission) {
+          msg = Array.isArray(detail.parent_submission) ? detail.parent_submission.join(' ') : String(detail.parent_submission)
         } else if (detail.agenda_category) {
           msg = Array.isArray(detail.agenda_category) ? detail.agenda_category.join(' ') : String(detail.agenda_category)
         } else if (detail.detail) {
@@ -439,49 +504,146 @@ function CommissionSubmissionForm({
           onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
         />
 
-        {isMinistryUser ? (
-          <div className="space-y-4">
-            <BaseInput label="Ministry" readOnly value={userMinistry?.name ?? '—'} />
-            <BaseSelect
-              label="Department"
-              required
-              placeholder="— Select department —"
-              value={form.department}
-              options={departments.map(d => ({ value: String(d.id), label: d.name }))}
-              onChange={(_, value) => setForm(f => ({ ...f, department: value, unit: '' }))}
-            />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <BaseSelect
-              label="Ministry"
-              required
-              disabled={ministries.length === 1}
-              value={form.ministry}
-              options={ministries.map(m => ({ value: String(m.id), label: m.name }))}
-              onChange={(_, value) => setForm(f => ({ ...f, ministry: value, department: '', unit: '' }))}
-            />
-            <BaseSelect
-              label="Department"
-              required
-              placeholder="— Select department —"
-              value={form.department}
-              options={departments
-                .filter(d => !form.ministry || String(d.ministry) === String(form.ministry))
-                .map(d => ({ value: String(d.id), label: d.name }))}
-              onChange={(_, value) => setForm(f => ({ ...f, department: value, unit: '' }))}
-            />
+        {isJobDescription && (
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="jd-attach-mode"
+                className="mt-1"
+                checked={attachMode}
+                onChange={e => {
+                  setAttachMode(e.target.checked)
+                  setParentSubmission(null)
+                  setParentQuery('')
+                }}
+              />
+              <label htmlFor="jd-attach-mode" className="text-sm text-slate-700 dark:text-slate-300">
+                <span className="font-medium">This Job Description is for a position in a Restructure submission we've already lodged.</span>
+                <br />
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Attach it to that Form 2.1 submission instead of lodging it standalone — it'll be reviewed
+                  alongside the restructure, with no separate checklist or Director-General letter required.
+                </span>
+              </label>
+            </div>
+
+            {attachMode && (
+              parentSubmission ? (
+                <div className="flex items-center justify-between gap-3 rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
+                  <div className="min-w-0 text-sm">
+                    <span className="font-mono text-primary-600 dark:text-primary-400">{parentSubmission.reference_number}</span>
+                    {' — '}
+                    <span className="text-slate-700 dark:text-slate-300 truncate">{parentSubmission.title}</span>
+                  </div>
+                  <BaseButton type="button" variant="ghost" size="sm" onClick={() => { setParentSubmission(null); setParentQuery('') }}>
+                    Change
+                  </BaseButton>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      className="input pl-8"
+                      placeholder="Search by reference number or title…"
+                      value={parentQuery}
+                      onChange={e => setParentQuery(e.target.value)}
+                    />
+                  </div>
+                  {parentSearchLoading && (
+                    <p className="text-xs text-slate-400">Searching…</p>
+                  )}
+                  {!parentSearchLoading && parentQuery.trim() && parentResults.length === 0 && (
+                    <p className="text-xs text-slate-400">No matching restructure submissions found.</p>
+                  )}
+                  {parentResults.length > 0 && (
+                    <ul className="divide-y divide-slate-100 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                      {parentResults.map(r => (
+                        <li key={r.id}>
+                          <button
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                            onClick={() => { setParentSubmission(r); setParentQuery('') }}
+                          >
+                            <span className="font-mono text-primary-600 dark:text-primary-400">{r.reference_number}</span>
+                            {' — '}
+                            <span className="text-slate-700 dark:text-slate-300">{r.title}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            )}
           </div>
         )}
-        {availUnits.length > 0 && (
-          <BaseSelect
-            label="Unit (optional)"
-            placeholder="—"
-            value={form.unit}
-            disabled={!form.department}
-            options={availUnits.map(u => ({ value: String(u.id), label: u.name }))}
-            onChange={(_, value) => setForm(f => ({ ...f, unit: value }))}
-          />
+
+        {!attachMode && (
+          <>
+            {isMinistryUser ? (
+              <div className="space-y-4">
+                <BaseInput label="Ministry" readOnly value={userMinistry?.name ?? '—'} />
+                <div>
+                  <BaseSelect
+                    label="Department"
+                    required={!isMinistryWideForm}
+                    placeholder={isMinistryWideForm ? '— Ministry-wide, no single department —' : '— Select department —'}
+                    value={form.department}
+                    options={departments.map(d => ({ value: String(d.id), label: d.name }))}
+                    onChange={(_, value) => setForm(f => ({ ...f, department: value, unit: '' }))}
+                  />
+                  {isMinistryWideForm && (
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      This combines every department's plan or performance — leave this blank unless you're
+                      lodging on behalf of one department specifically.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <BaseSelect
+                  label="Ministry"
+                  required
+                  disabled={ministries.length === 1}
+                  value={form.ministry}
+                  options={ministries.map(m => ({ value: String(m.id), label: m.name }))}
+                  onChange={(_, value) => setForm(f => ({ ...f, ministry: value, department: '', unit: '' }))}
+                />
+                <div>
+                  <BaseSelect
+                    label="Department"
+                    required={!isMinistryWideForm}
+                    placeholder={isMinistryWideForm ? '— Ministry-wide, no single department —' : '— Select department —'}
+                    value={form.department}
+                    options={departments
+                      .filter(d => !form.ministry || String(d.ministry) === String(form.ministry))
+                      .map(d => ({ value: String(d.id), label: d.name }))}
+                    onChange={(_, value) => setForm(f => ({ ...f, department: value, unit: '' }))}
+                  />
+                  {isMinistryWideForm && (
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      This combines every department's plan or performance — leave this blank unless you're
+                      lodging on behalf of one department specifically.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            {availUnits.length > 0 && (
+              <BaseSelect
+                label="Unit (optional)"
+                placeholder="—"
+                value={form.unit}
+                disabled={!form.department}
+                options={availUnits.map(u => ({ value: String(u.id), label: u.name }))}
+                onChange={(_, value) => setForm(f => ({ ...f, unit: value }))}
+              />
+            )}
+          </>
         )}
 
         <BaseTextarea

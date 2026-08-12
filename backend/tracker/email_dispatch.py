@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 
-from .email_templates import get_from_email, get_frontend_base_url
+from .email_templates import auto_html_from_text, get_from_email, get_frontend_base_url
 from .models import Notification
 
 logger = logging.getLogger("scdms.app")
@@ -18,8 +18,11 @@ def dispatch_pending_emails() -> dict[str, int]:
     """
     Send notifications marked for email delivery that have not been emailed yet.
 
-    Uses django.core.mail.send_mail → tracker.email_backend.DynamicEmailBackend
-    (Admin SMTP settings / env).
+    Sends via django.core.mail.EmailMultiAlternatives → tracker.email_backend.
+    DynamicEmailBackend (Admin SMTP settings / env), with a plain-text body plus
+    a branded HTML alternative (auto_html_from_text) so it renders consistently
+    with the rest of the system's emails — a plain-text-only send previously
+    showed as "Empty" in transactional-email dashboards that preview the HTML part.
     """
     stats = {"sent": 0, "failed": 0, "skipped": 0}
     from_email = get_from_email()
@@ -49,16 +52,19 @@ def dispatch_pending_emails() -> dict[str, int]:
             continue
 
         body = (notif.body or "").strip() or notif.title
-        if notif.link:
-            body += f"\n\nOpen in SCDMS: {get_frontend_base_url()}{notif.link}"
+        link_url = f"{get_frontend_base_url()}{notif.link}" if notif.link else ""
+        if link_url:
+            body += f"\n\nOpen in SCDMS: {link_url}"
         try:
-            send_mail(
-                notif.title,
-                body,
-                from_email,
-                [recipient],
-                fail_silently=False,
+            msg = EmailMultiAlternatives(
+                subject=notif.title,
+                body=body,
+                from_email=from_email,
+                to=[recipient],
             )
+            html_body = auto_html_from_text(body, {"submission_url": link_url} if link_url else {})
+            msg.attach_alternative(html_body, "text/html")
+            msg.send(fail_silently=False)
             notif.emailed = True
             notif.save(update_fields=["emailed"])
             stats["sent"] += 1

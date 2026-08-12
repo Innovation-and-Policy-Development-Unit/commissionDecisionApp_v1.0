@@ -207,6 +207,29 @@ def _profile(user):
     return ensure_psc_profile(user)
 
 
+def mfa_globally_enabled():
+    """Super-admin master switch for TOTP-based 2FA (Settings > Security).
+
+    Reads the live SystemSetting row so the Admin Panel toggle takes effect
+    immediately; falls back to the env-configured Django setting when no row
+    exists yet. While disabled, login enforcement and new enrollment are
+    paused system-wide — see LoginView, TOTPSetupView, TOTPVerifySetupView,
+    and UserViewSet.force_mfa_setup. Per-user totp_secret / two_factor_enabled
+    values are left untouched so re-enabling resumes prior enrollments as-is.
+    """
+    from django.conf import settings as django_settings
+    from .models import SystemSetting
+
+    default = getattr(django_settings, "TWO_FACTOR_REQUIRED", False)
+    val = SystemSetting.get_val("TWO_FACTOR_REQUIRED")
+    # A blank stored value (e.g. an unrelated Settings-page save that wrote
+    # every field, including one never explicitly toggled) means "not set by
+    # an admin", not "explicitly false" — treat it the same as no row at all.
+    if val is None or val == "":
+        return default
+    return val.lower() in ("true", "1", "yes", "on")
+
+
 def _resolve_submission_ministry_id(profile, request, validated_data):
     """Resolve ministry for external (Commission) submissions."""
     ministry = validated_data.get("ministry")
@@ -684,6 +707,36 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         )
         title = f"Submission returned: {submission.reference_number}"
         body = f"Your submission '{submission.title}' was returned. Please check the remarks."
+        # Restructure/variance + PSC 2-2: the assigned Principal sends this
+        # straight to Ministry HR without the Manager ODU's sign-off — still
+        # let the Manager know it happened (see the carve-out in transitions.py).
+        from .odu_checklist_rules import ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
+
+        if (
+            actor is not None
+            and submission.assigned_to_id == actor.id
+            and (submission.form_type_code or "") in ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
+        ):
+            actor_profile = _profile(actor)
+            _managers = User.objects.filter(
+                psc_profile__role=Role.ODU_MANAGER, is_active=True,
+            )
+            if actor_profile and actor_profile.unit_id:
+                _managers = _managers.filter(psc_profile__unit_id=actor_profile.unit_id)
+            actor_name = actor.get_full_name() or actor.username
+            reason = (remarks or "").strip()
+            for _u in _managers:
+                NotificationModel.objects.create(
+                    recipient=_u,
+                    submission=submission,
+                    channel=NotificationModel.Channel.BOTH,
+                    title=f"Principal returned for clarification: {submission.reference_number}",
+                    body=(
+                        f"{actor_name} sent '{submission.title}' back to the ministry for "
+                        f"clarification."
+                        + (f"\n\nReason: {reason}" if reason else "")
+                    ),
+                )
 
     elif prev == WorkflowStage.RETURNED_FOR_CLARIFICATION and target == WorkflowStage.SUBMITTED:
         unit_to_role = {
@@ -818,6 +871,39 @@ _SUBMISSION_ORDERING_WHITELIST = {
 }
 
 
+def _mark_required_form_checklist_present(child, *, actor):
+    """If `child` is an attachment whose form type satisfies a required_form
+    checklist item on its parent (e.g. PSC 2-2 on PSC 2-1, or a Corporate
+    Plan copy on a Business Plan), and `child` is Approved, mark that item
+    present. Called both when the attachment reaches Approved via a live
+    transition, and when an already-Approved submission is linked as an
+    attachment after the fact (see `link_as_attachment` action) — the
+    checklist item should reflect reality either way, not just the live-
+    transition case."""
+    if not (child.is_attachment and child.parent_submission_id and child.form_type_code):
+        return
+    if child.current_stage != WorkflowStage.APPROVED:
+        return
+
+    from .models import RequiredDocument, SubmissionChecklistItem
+
+    doc = RequiredDocument.objects.filter(
+        form_type__code=child.parent_submission.form_type_code,
+        required_form__code=child.form_type_code,
+        is_active=True,
+    ).first()
+    if not doc:
+        return
+    item, _ = SubmissionChecklistItem.objects.get_or_create(
+        submission=child.parent_submission, document=doc,
+    )
+    item.is_present = True
+    item.checked_by = actor
+    item.checked_at = timezone.now()
+    item.notes = f"Auto-checked — {child.reference_number} approved."
+    item.save(update_fields=["is_present", "checked_by", "checked_at", "notes"])
+
+
 class SubmissionPagination(PageNumberPagination):
     """Lets the client choose the page size (the list view uses 15; the kanban
     view requests a large cap to group every matching card by stage)."""
@@ -852,6 +938,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ministry = params.get('ministry')
         if ministry:
             qs = qs.filter(ministry__name=ministry)
+
+        # Scope to specific form types — used by the "attach to a parent
+        # submission" picker (e.g. PSC 2-2 searching for its parent PSC 2-1 /
+        # ORG-3.1 restructure) so results aren't polluted by unrelated types.
+        form_type_codes = (params.get('form_type_code') or '').strip()
+        if form_type_codes:
+            codes = [c.strip() for c in form_type_codes.split(',') if c.strip()]
+            if codes:
+                qs = qs.filter(form_type_code__in=codes)
 
         # NL-search returns a set of submission ids to scope the list to.
         ids = params.get('ids')
@@ -1303,6 +1398,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 is_internal=submission.is_internal and not submission.follows_normal_route,
                 secretary_only=submission.secretary_only,
                 remarks=remarks,
+                form_type_code=submission.form_type_code or "",
             )
         # if _chain_result is True: chain explicitly allows — skip assert_transition_allowed
 
@@ -1444,6 +1540,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 )
 
         # ── Unit managers can only transition submissions routed to their unit ──
+        # Exempts prev == DRAFT: CSU Manager is the only role here that also
+        # authors its own submissions (_CSU_MANAGER_ALLOWED permits DRAFT →
+        # SUBMITTED) — at DRAFT, routed_unit is always still blank by design
+        # (it's set once the submission enters Manager Checklist Review), so
+        # this gate would otherwise block a CSU Manager from ever submitting
+        # their own internal draft. The other four roles never hold a DRAFT
+        # submission (not in any DRAFT-stage allowed-transition table), so this
+        # exemption doesn't loosen anything for them.
         _unit_role_to_routed = {
             Role.ODU_MANAGER: "odu",
             Role.VIPAM_MANAGER: "vipam",
@@ -1451,13 +1555,37 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.COMPLIANCE_MANAGER: "compliance",
             Role.CSU_MANAGER: "csu",
         }
-        if profile.role in _unit_role_to_routed:
+        if profile.role in _unit_role_to_routed and prev != WorkflowStage.DRAFT:
             expected = _unit_role_to_routed[profile.role]
             if submission.routed_unit != expected:
                 raise PermissionDenied(
                     f"This submission is routed to {submission.routed_unit}, "
                     f"not your unit ({expected})."
                 )
+
+        # ── Unit managers must wait for the assigned principal's hand-back ──
+        # If the manager has allocated this submission to a principal/senior
+        # officer (assigned_to set), advancing the stage themselves before that
+        # person has finished their review/assessment — signalled by
+        # ready_for_manager_at via the "Submit to Manager" action — would
+        # pre-empt the person actually doing the work. Mirrors the disabled
+        # action buttons in WorkflowActionsPanel on the frontend.
+        if (
+            profile.role in OPSC_UNIT_MANAGER_ROLES
+            and prev in (WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT)
+            and submission.assigned_to_id
+            and not submission.ready_for_manager_at
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This submission is allocated to a principal whose review isn't "
+                        "complete yet. Wait for them to submit it back to you before "
+                        "advancing the stage."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # ── Unit principals can only transition submissions assigned to them ──
         _unit_principal_to_routed = {
@@ -1561,6 +1689,36 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # ── Manager Checklist Review → Submit to Secretary: require every
+        # required document present, not just ones tagged mandatory_for_stage
+        # exactly "manager_checklist_review" ──
+        # The mandatory-doc items for a submission are tagged
+        # mandatory_for_stage="draft" (they block ministry HR from submitting
+        # an incomplete package in the first place — see the gate above), so
+        # the generic check just
+        # above is a no-op by the time a submission reaches this stage. This is
+        # the Manager's own re-verification gate, backing the disabled "Submit
+        # to Secretary" button in the UI: every checklist item that's actually
+        # required (mandatory_for_stage set, i.e. not one of the
+        # informational-only items) must be marked present before the Manager
+        # can forward it — regardless of which specific stage it's tagged for.
+        if (
+            prev == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            and target not in _allowed_targets_with_gaps
+            and not submission.secretary_only
+        ):
+            unchecked_required = submission.checklist_items.exclude(
+                document__mandatory_for_stage__in=["", None]
+            ).filter(
+                is_present=False,
+                document__is_active=True,
+            ).count()
+            if unchecked_required > 0:
+                return Response(
+                    {"detail": f"Cannot submit to Secretary: {unchecked_required} required document(s) are not yet marked present. Complete the checklist first."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # ── Matters Arising must have a resolution note ──
         if prev == WorkflowStage.MATTERS_ARISING and not (remarks or "").strip():
             return Response(
@@ -1586,28 +1744,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             # e.g. PSC Form 2-2 reaching Approved satisfies the "PSC Form 2-2" required
             # item on its parent PSC Form 2-1, which the mandatory-checklist gate above
             # already enforces before the parent can leave Manager Checklist Review.
-            if (
-                target == WorkflowStage.APPROVED
-                and submission.is_attachment
-                and submission.parent_submission_id
-                and submission.form_type_code
-            ):
-                from .models import RequiredDocument, SubmissionChecklistItem
-
-                doc = RequiredDocument.objects.filter(
-                    form_type__code=submission.parent_submission.form_type_code,
-                    required_form__code=submission.form_type_code,
-                    is_active=True,
-                ).first()
-                if doc:
-                    item, _ = SubmissionChecklistItem.objects.get_or_create(
-                        submission=submission.parent_submission, document=doc,
-                    )
-                    item.is_present = True
-                    item.checked_by = request.user
-                    item.checked_at = timezone.now()
-                    item.notes = f"Auto-checked — {submission.reference_number} approved."
-                    item.save(update_fields=["is_present", "checked_by", "checked_at", "notes"])
+            if target == WorkflowStage.APPROVED and submission.is_attachment:
+                _mark_required_form_checklist_present(submission, actor=request.user)
 
             # ── Auto-route to the responsible unit when entering checklist review ──
             # Covers both the Receptionist intake path (DRAFT → checklist review)
@@ -1754,6 +1892,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                         remarks=f"Auto-cascaded from parent submission {submission.reference_number}",
                     )
 
+        # Must run BEFORE the notification dispatch below (same reasoning as
+        # endorse()'s identical ordering): _resolve_receiver_roles() reads
+        # submission.routed_unit to pick the right unit's manager, and a plain
+        # SUBMITTED transition through this generic action (e.g. a CSU Manager
+        # submitting their own internal draft) doesn't set routed_unit until
+        # this call runs — dispatching notifications first silently fell back
+        # to PSC_OFFICER instead of the actual responsible unit's manager.
+        self._auto_advance_submitted_to_checklist_review(submission)
+
         # ── Fire notifications after commit ──
         transaction.on_commit(
             lambda: _dispatch_transition_notifications(
@@ -1835,7 +1982,6 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         )
 
         invalidate_submission(submission.id)
-        self._auto_advance_submitted_to_checklist_review(submission)
         return Response(SubmissionDetailSerializer(submission).data)
 
     @action(detail=True, methods=["post"], url_path="endorse")
@@ -2163,6 +2309,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission.assigned_at = None
             submission.ready_for_manager_at = None
             submission.save(update_fields=["assigned_to", "assigned_at", "ready_for_manager_at"])
+            invalidate_submission(submission.id)
             _log(request, _AL.Action.UPDATE, resource_type="Submission",
                  resource_id=submission.id, resource_label=submission.reference_number,
                  description="Submission unassigned from principal")
@@ -2197,6 +2344,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         submission.assigned_at = timezone.now()
         submission.ready_for_manager_at = None
         submission.save(update_fields=["assigned_to", "assigned_at", "ready_for_manager_at"])
+        invalidate_submission(submission.id)
 
         _log(request, _AL.Action.UPDATE, resource_type="Submission",
              resource_id=submission.id, resource_label=submission.reference_number,
@@ -2371,6 +2519,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         submission.ready_for_manager_at = timezone.now()
         submission.save(update_fields=["ready_for_manager_at"])
+        invalidate_submission(submission.id)
 
         _log(request, _AL.Action.UPDATE, resource_type="Submission",
              resource_id=submission.id, resource_label=submission.reference_number,
@@ -2408,6 +2557,64 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 pass
 
         return Response(SubmissionDetailSerializer(submission).data)
+
+    @action(detail=True, methods=["post"], url_path="link-as-attachment")
+    def link_as_attachment(self, request, pk=None):
+        """
+        Attach an EXISTING standalone submission to a parent as a required_form
+        checklist item — e.g. linking an already-Approved Corporate Plan
+        submission as the "Copy of Signed Ministry Corporate Plan" evidence on
+        a Business Plan, without re-submitting the whole Corporate Plan again.
+
+        Distinct from the is_attachment create-time flow (perform_create),
+        which always makes a brand-new submission. This instead re-parents a
+        submission that already exists — `pk` is the child being attached;
+        `parent_submission` in the body is the parent it's being attached to.
+        """
+        from rest_framework.exceptions import ValidationError
+
+        child = self.get_object()
+        parent_id = request.data.get("parent_submission")
+        if not parent_id:
+            raise ValidationError({"parent_submission": "parent_submission is required."})
+        if child.is_attachment:
+            raise ValidationError({"detail": "This submission is already attached elsewhere."})
+
+        parent = _submission_queryset_for(request.user).filter(
+            pk=parent_id, is_attachment=False,
+        ).first()
+        if not parent:
+            raise ValidationError({
+                "parent_submission": "Parent submission not found or you don't have access to it.",
+            })
+
+        doc = RequiredDocument.objects.filter(
+            form_type__code=parent.form_type_code,
+            required_form__code=child.form_type_code,
+            is_active=True,
+        ).first()
+        if not doc:
+            raise ValidationError({
+                "detail": f"{parent.form_type_code} has no checklist requirement satisfied by "
+                          f"attaching a {child.form_type_code} submission.",
+            })
+
+        child.is_attachment = True
+        child.parent_submission = parent
+        child.save(update_fields=["is_attachment", "parent_submission"])
+
+        _mark_required_form_checklist_present(child, actor=request.user)
+
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        _log(request, _AL.Action.UPDATE, resource_type="Submission",
+             resource_id=child.id, resource_label=child.reference_number,
+             description=f"Linked as attachment to {parent.reference_number}")
+        invalidate_submission(parent.id)
+        invalidate_submission(child.id)
+
+        return Response(SubmissionDetailSerializer(parent).data)
 
     def _assign_scheduled_meeting(self, submission):
         """Queue the submission for the next eligible sitting (carry-over aware).
@@ -2575,6 +2782,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 submission.current_stage,
                 is_internal=submission.is_internal and not submission.follows_normal_route,
                 secretary_only=submission.secretary_only,
+                form_type_code=submission.form_type_code or "",
             )
         guidance = submission.ai_transition_guidance or {}
         stale = (
@@ -4857,6 +5065,7 @@ def password_policy_view(request):
         "require_digits": _bool("PASSWORD_REQUIRE_DIGITS", True),
         "require_special": _bool("PASSWORD_REQUIRE_SPECIAL", True),
         "history_count": _int("PASSWORD_HISTORY_COUNT", 5),
+        "mfa_enabled": mfa_globally_enabled(),
     }
     set_cached_response(cache_key, payload, django_settings.CACHE_PASSWORD_POLICY_TTL)
     return Response(payload)
@@ -5811,6 +6020,11 @@ class UserAdminViewSet(
         from .models import AuditLog as _AL
         if not request.user.is_superuser:
             raise PermissionDenied("Only a super administrator can force MFA setup.")
+        if not mfa_globally_enabled():
+            return Response(
+                {"detail": "Two-factor authentication is currently disabled system-wide. Re-enable it in Settings > Security before forcing individual enrollment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         user = self.get_object()
         try:
             profile = user.psc_profile
@@ -6185,7 +6399,11 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
                     status=status.HTTP_200_OK,
                 )
 
-        if getattr(settings, "TWO_FACTOR_REQUIRED", False) or (profile and profile.two_factor_enabled):
+        # While the Settings > Security master switch is off, 2FA is fully paused —
+        # even for users who previously enrolled — so pilot accounts aren't blocked
+        # by an authenticator prompt. Their totp_secret/two_factor_enabled are left
+        # intact and simply take effect again once the switch is re-enabled.
+        if mfa_globally_enabled():
             # If user hasn't set up TOTP yet, we might need to force setup
             if not profile or not profile.totp_secret:
                 _security_log.info("LOGIN_2FA_SETUP_REQUIRED | username=%s | ip=%s", user.username, ip)
@@ -6277,8 +6495,9 @@ class LogoutView(APIView):
 
 
 # ── Two-Factor Authentication (TOTP / Microsoft Authenticator) ────────────────
-# Not enforced in the login flow unless settings.TWO_FACTOR_REQUIRED = True 
-# or profile.two_factor_enabled = True.
+# Gated by mfa_globally_enabled() (Settings > Security > "Enforce Two-Factor
+# Authentication"), a super-admin master switch. Off = fully paused: no login
+# prompts, no new enrollment. See mfa_globally_enabled() for details.
 
 class TOTPSetupView(APIView):
     """Generate a TOTP secret and QR code for the authenticated user or during login."""
@@ -6286,22 +6505,28 @@ class TOTPSetupView(APIView):
     authentication_classes = [LenientJWTAuthentication]
 
     def post(self, request):
+        if not mfa_globally_enabled():
+            return Response(
+                {"detail": "Two-factor authentication is currently disabled system-wide. Ask a super administrator to re-enable it in Settings before configuring an authenticator app."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Can be authenticated or provide username/password
         user = request.user
         if not user.is_authenticated:
             username = request.data.get("username")
             password = request.data.get("password")
-            
+
             if not username or not password:
                 return Response({"detail": "Username and password are required."}, status=status.HTTP_401_UNAUTHORIZED)
-                
+
             _logging.getLogger("django").info(f"TOTP_SETUP | Attempting authentication for: {username}")
             from django.contrib.auth import authenticate
             user = authenticate(request, username=username, password=password)
             if not user:
                 _logging.getLogger("django").warning(f"TOTP_SETUP | Authentication failed for: {username}")
                 return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
-        
+
         try:
             profile = _profile(user)
         except Exception as e:
@@ -6332,6 +6557,12 @@ class TOTPVerifySetupView(APIView):
     authentication_classes = [LenientJWTAuthentication]
 
     def post(self, request):
+        if not mfa_globally_enabled():
+            return Response(
+                {"detail": "Two-factor authentication is currently disabled system-wide. Ask a super administrator to re-enable it in Settings before configuring an authenticator app."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         code = request.data.get("code")
         user = request.user
         if not user.is_authenticated:
@@ -8025,7 +8256,7 @@ class SystemSettingViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
                 pass
 
         self._invalidate_reference_cache()
-        if any(str(k).startswith("PASSWORD_") for k in settings_dict):
+        if any(str(k).startswith("PASSWORD_") for k in settings_dict) or "TWO_FACTOR_REQUIRED" in settings_dict:
             invalidate_password_policy_cache()
 
         return Response(updated)
@@ -10336,7 +10567,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
 
         if profile.role not in ODU_CHECKLIST_ROLES:
             raise PermissionDenied(
-                "Only ODU Manager or ODU principal analysts can access the board paper."
+                "Only ODU Manager or ODU principal analysts can access the Commission paper."
             )
 
     def _require_view_role(self, profile):
@@ -10344,7 +10575,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
 
         if profile.role not in ODU_CHECKLIST_VIEW_ROLES:
             raise PermissionDenied(
-                "You do not have access to the ODU restructure board paper."
+                "You do not have access to the ODU restructure Commission paper."
             )
 
     def get_queryset(self):
@@ -10386,7 +10617,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "detail": (
-                        "Board paper is only shown for ORG-3.1 / PSC 2-1 submissions "
+                        "Commission paper is only shown for ORG-3.1 / PSC 2-1 submissions "
                         "routed to ODU."
                     ),
                 },
@@ -10399,7 +10630,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
 
         if not submission_eligible_for_board_paper(submission) or profile.role not in ODU_CHECKLIST_ROLES:
             return Response(
-                {"detail": "The board paper has not been started for this submission."},
+                {"detail": "The Commission paper has not been started for this submission."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -10420,7 +10651,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         submission = serializer.validated_data["submission"]
         if not submission_eligible_for_board_paper(submission):
             raise PermissionDenied(
-                "Board paper can only be created while the submission is with ODU."
+                "Commission paper can only be created while the submission is with ODU."
             )
         _require_assigned_officer_or_manager(profile, submission, self.request.user.id)
         serializer.save(created_by=self.request.user)
@@ -10433,7 +10664,7 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         instance = serializer.instance
         if not submission_eligible_for_board_paper(instance.submission):
             raise PermissionDenied(
-                "Board paper can only be edited while the submission is with ODU."
+                "Commission paper can only be edited while the submission is with ODU."
             )
         if instance.status == BoardPaperStatus.DRAFT:
             # The assigned officer (or the manager) may draft it.
@@ -10442,12 +10673,12 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
             # Principal has submitted it — only the manager reviews/edits now.
             if profile.role != Role.ODU_MANAGER:
                 raise PermissionDenied(
-                    "This board paper has been submitted for manager review — only "
+                    "This Commission paper has been submitted for manager review — only "
                     "the Manager ODU can edit it now."
                 )
         else:
             raise PermissionDenied(
-                "This board paper has already been approved and is locked for editing."
+                "This Commission paper has already been approved and is locked for editing."
             )
         serializer.save()
 
@@ -10459,11 +10690,11 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         paper = self.get_object()
         profile = _profile(request.user)
         if profile.role not in ODU_PRINCIPAL_WORKER_ROLES:
-            raise PermissionDenied("Only an ODU principal analyst can submit the board paper.")
+            raise PermissionDenied("Only an ODU principal analyst can submit the Commission paper.")
         _require_assigned_officer_or_manager(profile, paper.submission, request.user.id)
         if paper.status != BoardPaperStatus.DRAFT:
             return Response(
-                {"detail": "Only a Draft board paper can be submitted."},
+                {"detail": "Only a Draft Commission paper can be submitted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         paper.status = BoardPaperStatus.SUBMITTED
@@ -10478,10 +10709,10 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         paper = self.get_object()
         profile = _profile(request.user)
         if profile.role != Role.ODU_MANAGER:
-            raise PermissionDenied("Only the Manager ODU can approve the board paper.")
+            raise PermissionDenied("Only the Manager ODU can approve the Commission paper.")
         if paper.status not in (BoardPaperStatus.DRAFT, BoardPaperStatus.SUBMITTED):
             return Response(
-                {"detail": "Only a Draft or Submitted board paper can be approved by the manager."},
+                {"detail": "Only a Draft or Submitted Commission paper can be approved by the manager."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         paper.status = BoardPaperStatus.MANAGER_APPROVED
@@ -10490,16 +10721,55 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         paper.save(update_fields=["status", "manager_approved_at", "manager_approved_by"])
         return Response(ODUBoardPaperSerializer(paper).data)
 
+    @action(detail=True, methods=["post"], url_path="return-to-principal")
+    def return_to_principal(self, request, pk=None):
+        """Manager: Submitted -> Draft, with a note on what needs to change."""
+        paper = self.get_object()
+        profile = _profile(request.user)
+        if profile.role != Role.ODU_MANAGER:
+            raise PermissionDenied("Only the Manager ODU can return the Commission paper for changes.")
+        if paper.status != BoardPaperStatus.SUBMITTED:
+            return Response(
+                {"detail": "Only a Submitted Commission paper can be returned for changes."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        note = (request.data.get("note") or "").strip()
+        if not note:
+            return Response(
+                {"detail": "Please describe what needs to change before returning it to the Principal."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        paper.status = BoardPaperStatus.DRAFT
+        paper.returned_at = timezone.now()
+        paper.returned_by = request.user
+        paper.return_note = note
+        paper.save(update_fields=["status", "returned_at", "returned_by", "return_note"])
+
+        recipient = paper.submitted_for_review_by or paper.submission.assigned_to
+        if recipient and recipient.is_active:
+            manager_name = request.user.get_full_name() or request.user.username
+            Notification.objects.create(
+                recipient=recipient,
+                submission=paper.submission,
+                channel=Notification.Channel.BOTH,
+                title=f"Commission paper returned for changes: {paper.submission.reference_number}",
+                body=(
+                    f"{manager_name} returned the ODU submission paper for '{paper.submission.title}' "
+                    f"for changes.\n\nNote: {note}"
+                ),
+            )
+        return Response(ODUBoardPaperSerializer(paper).data)
+
     @action(detail=True, methods=["post"], url_path="secretary-approve")
     def secretary_approve(self, request, pk=None):
         """Secretary: Manager Approved -> Secretary Approved (final sign-off)."""
         paper = self.get_object()
         profile = _profile(request.user)
         if profile.role not in BOARD_PAPER_SECRETARY_ROLES:
-            raise PermissionDenied("Only the Secretary can give final sign-off on the board paper.")
+            raise PermissionDenied("Only the Secretary can give final sign-off on the Commission paper.")
         if paper.status != BoardPaperStatus.MANAGER_APPROVED:
             return Response(
-                {"detail": "The board paper must be approved by the Manager ODU first."},
+                {"detail": "The Commission paper must be approved by the Manager ODU first."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         paper.status = BoardPaperStatus.SECRETARY_APPROVED

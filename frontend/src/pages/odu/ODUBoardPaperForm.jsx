@@ -185,13 +185,14 @@ const EMPTY_FORM = {
   costing_rows: [], costing_notes: '',
 }
 
-export default function ODUBoardPaperForm({ submissionId, submission }) {
+export default function ODUBoardPaperForm({ submissionId, submission, onDirtyChange }) {
   const { user } = useAuth()
   const toast = useToast()
 
   const [paper, setPaper] = useState(undefined) // undefined = loading
   const [loadMessage, setLoadMessage] = useState('')
   const [form, setForm] = useState(EMPTY_FORM)
+  const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [managerApproving, setManagerApproving] = useState(false)
@@ -220,7 +221,13 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
       if (data[k] !== undefined && data[k] !== null) filled[k] = data[k]
     })
     setForm(filled)
+    setDirty(false)
   }, [])
+
+  useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
+  // Unmounting (e.g. navigating away) counts as exiting too — clear the flag
+  // on the parent so it doesn't linger past this form's lifetime.
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
 
   const fetchPaper = useCallback(async () => {
     if (!submissionId) return
@@ -235,18 +242,21 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
       const detail = err.response?.data?.detail
       setPaper(null)
       if (s === 404) {
-        setLoadMessage(typeof detail === 'string' ? detail : 'The board paper has not been started for this submission.')
+        setLoadMessage(typeof detail === 'string' ? detail : 'The Commission paper has not been started for this submission.')
       } else if (s === 400) {
-        setLoadMessage(typeof detail === 'string' ? detail : 'The board paper is not available for this submission.')
+        setLoadMessage(typeof detail === 'string' ? detail : 'The Commission paper is not available for this submission.')
       } else {
-        setLoadMessage('Unable to load the board paper.')
+        setLoadMessage('Unable to load the Commission paper.')
       }
     }
   }, [submissionId, populateForm])
 
   useEffect(() => { fetchPaper() }, [fetchPaper])
 
-  const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
+  const set = (field, value) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+    setDirty(true)
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -264,9 +274,10 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
         r = await api.post('/odu-board-papers/', payload)
       }
       setPaper(r.data)
-      toast.success('Board paper saved.')
+      setDirty(false)
+      toast.success('Commission paper saved.')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to save board paper.')
+      toast.error(err.response?.data?.detail || 'Failed to save Commission paper.')
     } finally {
       setSaving(false)
     }
@@ -278,9 +289,9 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
     try {
       const r = await api.post(`/odu-board-papers/${paper.id}/submit/`)
       setPaper(r.data)
-      toast.success('Board paper submitted to Manager ODU.')
+      toast.success('Commission paper submitted to Manager ODU.')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to submit board paper.')
+      toast.error(err.response?.data?.detail || 'Failed to submit Commission paper.')
     } finally {
       setSubmitting(false)
     }
@@ -292,9 +303,9 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
     try {
       const r = await api.post(`/odu-board-papers/${paper.id}/manager-approve/`)
       setPaper(r.data)
-      toast.success('Board paper approved — ready for Secretary sign-off.')
+      toast.success('Commission paper approved — ready for Secretary sign-off.')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to approve board paper.')
+      toast.error(err.response?.data?.detail || 'Failed to approve Commission paper.')
     } finally {
       setManagerApproving(false)
     }
@@ -306,9 +317,9 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
     try {
       const r = await api.post(`/odu-board-papers/${paper.id}/secretary-approve/`)
       setPaper(r.data)
-      toast.success('Board paper approved by Secretary.')
+      toast.success('Commission paper approved by Secretary.')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to approve board paper.')
+      toast.error(err.response?.data?.detail || 'Failed to approve Commission paper.')
     } finally {
       setSecretaryApproving(false)
     }
@@ -317,7 +328,7 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
   if (paper === undefined) {
     return (
       <div className="card card-compact">
-        <p className="text-sm text-slate-400 dark:text-slate-500 italic py-4 text-center">Loading board paper…</p>
+        <p className="text-sm text-slate-400 dark:text-slate-500 italic py-4 text-center">Loading Commission paper…</p>
       </div>
     )
   }
@@ -327,7 +338,7 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
       <div className="card card-compact">
         <div className="flex items-center gap-2 mb-2">
           <FileSignature size={14} className="text-slate-400" />
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">ODU Board Submission Paper</h3>
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">ODU Commission Submission Paper</h3>
         </div>
         <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2">{loadMessage}</p>
       </div>
@@ -340,7 +351,7 @@ export default function ODUBoardPaperForm({ submissionId, submission }) {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <FileSignature size={14} className="text-slate-400" />
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">ODU Board Submission Paper</h3>
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">ODU Commission Submission Paper</h3>
             <StatusBadge status={status} />
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500">

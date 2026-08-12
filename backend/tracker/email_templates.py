@@ -82,7 +82,7 @@ def _brand_frame(inner_html: str, context: dict[str, Any]) -> str:
     )
 
 
-def _auto_html_from_text(text_body: str, context: dict[str, Any]) -> str:
+def auto_html_from_text(text_body: str, context: dict[str, Any]) -> str:
     """
     Render a professional default HTML wrapper when a template has no explicit HTML body.
     """
@@ -149,7 +149,7 @@ def render_template_record(tpl, context: dict[str, Any]):
     text_body = render_template_string(tpl.body_text_template, context)
     html_body = render_template_string(tpl.body_html_template, context).strip()
     if not html_body:
-        html_body = _auto_html_from_text(text_body, context)
+        html_body = auto_html_from_text(text_body, context)
     else:
         html_body = _brand_frame(html_body, context)
     return subject, text_body, html_body

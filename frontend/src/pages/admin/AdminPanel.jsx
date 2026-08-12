@@ -1600,6 +1600,9 @@ export function SettingsTab({ settings, onRefresh }) {
     if (s.INTAKE_HR_ENABLED === '') s.INTAKE_HR_ENABLED = 'true'
     if (s.AI_PACKAGE_VALIDATION_ENABLED === '') s.AI_PACKAGE_VALIDATION_ENABLED = 'true'
     if (s.AI_CHECKLIST_AUTOFILL_ENABLED === '') s.AI_CHECKLIST_AUTOFILL_ENABLED = 'true'
+    // Mirrors the backend's fallback (mfa_globally_enabled()) so the toggle reflects
+    // real enforcement — not "off" — before a super admin has ever saved this setting.
+    if (s.TWO_FACTOR_REQUIRED === '') s.TWO_FACTOR_REQUIRED = 'true'
     if (!s.PASSWORD_MIN_LENGTH)    s.PASSWORD_MIN_LENGTH    = '8'
     if (!s.PASSWORD_HISTORY_COUNT) s.PASSWORD_HISTORY_COUNT = '5'
     if (s.PASSWORD_MAX_AGE_DAYS === '') s.PASSWORD_MAX_AGE_DAYS = '0'
@@ -1966,7 +1969,11 @@ export function SettingsTab({ settings, onRefresh }) {
           <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-slate-800/40">
             <div>
               <p className="text-sm font-medium">Enforce Two-Factor Authentication (2FA)</p>
-              <p className="text-xs text-slate-500">Code verification required at login.</p>
+              <p className="text-xs text-slate-500">
+                Master switch for authenticator-app (Microsoft/Google Authenticator) login. Off pauses it system-wide —
+                no new setup prompts, and the 2FA section is hidden from every user's profile. Existing enrollments
+                aren't deleted; they simply resume once this is switched back on.
+              </p>
             </div>
             <button type="button" onClick={() => toggle('TWO_FACTOR_REQUIRED')}>
               {form.TWO_FACTOR_REQUIRED === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}

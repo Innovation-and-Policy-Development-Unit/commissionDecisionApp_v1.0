@@ -11,6 +11,7 @@ from ..models import (
     ODURestructureChecklist,
     Profile,
     Role,
+    RoutedUnit,
     Submission,
     WorkflowStage,
 )
@@ -89,21 +90,32 @@ class TransitionTests(TestCase):
         self.assertEqual(targets, [WorkflowStage.MANAGER_CHECKLIST_REVIEW.value])
 
     # ── Unit manager roles ────────────────────────────────────────────────
-    def test_vipam_manager_can_review_checklist(self):
-        self._call(Role.VIPAM_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT)
+    # Manager Checklist Review goes straight to Pending Secretary Approval —
+    # Under Assessment is skipped entirely (checklist review IS the
+    # assessment for these submissions).
+    def test_vipam_manager_can_submit_to_secretary(self):
+        self._call(Role.VIPAM_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     def test_vipam_manager_cannot_transition_outside_checklist(self):
         self._denied(Role.VIPAM_MANAGER, WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.FORWARDED_TO_COMMISSION)
 
-    def test_hr_unit_manager_can_review_checklist(self):
-        self._call(Role.HR_UNIT_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT)
+    def test_hr_unit_manager_can_submit_to_secretary(self):
+        self._call(Role.HR_UNIT_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
-    def test_compliance_manager_can_review_checklist(self):
-        self._call(Role.COMPLIANCE_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT)
+    def test_hr_unit_manager_targets_no_longer_include_under_assessment(self):
+        targets = iter_allowed_targets(Role.HR_UNIT_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        self.assertIn(WorkflowStage.PENDING_SECRETARY_APPROVAL.value, targets)
+        self.assertNotIn(WorkflowStage.UNDER_ASSESSMENT.value, targets)
+
+    def test_compliance_manager_can_submit_to_secretary(self):
+        self._call(Role.COMPLIANCE_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     # ── PSC Officer ───────────────────────────────────────────────────────
-    def test_officer_can_assess(self):
-        self._call(Role.PSC_OFFICER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT)
+    def test_officer_cannot_review_checklist(self):
+        # Manager Checklist Review now goes straight to Pending Secretary
+        # Approval (Under Assessment is skipped entirely) and is exclusively
+        # the unit Manager's action — PSC Officer isn't a unit manager role.
+        self._denied(Role.PSC_OFFICER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT)
 
     def test_officer_cannot_forward_to_commission(self):
         self._denied(Role.PSC_OFFICER, WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.FORWARDED_TO_COMMISSION)
@@ -202,6 +214,242 @@ class TransitionTests(TestCase):
     def test_approved_can_skip_to_implementation(self):
         targets = iter_allowed_targets(Role.PSC_ADMIN, WorkflowStage.APPROVED)
         self.assertIn(WorkflowStage.UNDER_IMPLEMENTATION.value, targets)
+
+
+class RestructurePrincipalDirectClarificationTests(TestCase):
+    """Restructure/variance (PSC 2-1 / ORG-3.1) and standalone Job Description
+    (PSC 2-2): the assigned Principal sends Return for Clarification to
+    Ministry HR directly from Manager Checklist Review, without the Manager
+    ODU's sign-off — confirmed workflow, 2026-08-09, extended to PSC 2-2
+    2026-08-10. The Manager ODU's own remaining action at that stage is to
+    approve and route forward; they no longer return for clarification
+    themselves there."""
+
+    def test_odu_principal_can_return_for_clarification_on_restructure(self):
+        assert_transition_allowed(
+            role=Role.ODU_PRINCIPAL,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            form_type_code="PSC 2-1",
+        )
+
+    def test_odu_principal_still_blocked_on_non_odu_submission(self):
+        # LEAVE-PAYOUT is a plain HR-routed submission, not an ODU form type —
+        # the carve-out must not leak into other units' principals.
+        with self.assertRaises(PermissionDenied):
+            assert_transition_allowed(
+                role=Role.ODU_PRINCIPAL,
+                current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+                form_type_code="LEAVE-PAYOUT",
+            )
+
+    def test_odu_principal_still_cannot_approve_route_on_restructure(self):
+        with self.assertRaises(PermissionDenied):
+            assert_transition_allowed(
+                role=Role.ODU_PRINCIPAL,
+                current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                target_stage=WorkflowStage.UNDER_ASSESSMENT,
+                form_type_code="PSC 2-1",
+            )
+
+    def test_odu_manager_can_no_longer_return_for_clarification_on_restructure(self):
+        with self.assertRaises(PermissionDenied):
+            assert_transition_allowed(
+                role=Role.ODU_MANAGER,
+                current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+                form_type_code="ORG-3.1",
+            )
+
+    def test_odu_manager_still_returns_clarification_on_non_odu_submission(self):
+        assert_transition_allowed(
+            role=Role.ODU_MANAGER,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            form_type_code="LEAVE-PAYOUT",
+        )
+
+    def test_odu_manager_can_still_approve_route_on_restructure(self):
+        assert_transition_allowed(
+            role=Role.ODU_MANAGER,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            target_stage=WorkflowStage.UNDER_ASSESSMENT,
+            form_type_code="PSC 2-1",
+        )
+
+    def test_vipam_manager_unaffected_by_odu_carve_out(self):
+        # Sanity: the carve-out is ODU-specific, not a blanket unit-manager change.
+        assert_transition_allowed(
+            role=Role.VIPAM_MANAGER,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            form_type_code="PSC 2-1",
+        )
+
+    def test_iter_allowed_targets_principal_sees_only_clarification(self):
+        targets = iter_allowed_targets(
+            Role.ODU_PRINCIPAL, WorkflowStage.MANAGER_CHECKLIST_REVIEW, form_type_code="PSC 2-1",
+        )
+        self.assertEqual(targets, [WorkflowStage.RETURNED_FOR_CLARIFICATION.value])
+
+    def test_iter_allowed_targets_manager_no_longer_offers_clarification(self):
+        targets = iter_allowed_targets(
+            Role.ODU_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, form_type_code="ORG-3.1",
+        )
+        self.assertNotIn(WorkflowStage.RETURNED_FOR_CLARIFICATION.value, targets)
+        self.assertIn(WorkflowStage.PENDING_SECRETARY_APPROVAL.value, targets)
+
+    # ── PSC 2-2 (Job Description) — same treatment, extended 2026-08-10 ────
+
+    def test_odu_principal_can_return_for_clarification_on_job_description(self):
+        assert_transition_allowed(
+            role=Role.ODU_PRINCIPAL,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            form_type_code="PSC 2-2",
+        )
+
+    def test_odu_manager_can_no_longer_return_for_clarification_on_job_description(self):
+        with self.assertRaises(PermissionDenied):
+            assert_transition_allowed(
+                role=Role.ODU_MANAGER,
+                current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+                form_type_code="PSC 2-2",
+            )
+
+    def test_odu_manager_can_still_approve_route_on_job_description(self):
+        assert_transition_allowed(
+            role=Role.ODU_MANAGER,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            target_stage=WorkflowStage.UNDER_ASSESSMENT,
+            form_type_code="PSC 2-2",
+        )
+
+    # ── Business Plan / Corporate Plan / Annual Report — same treatment,
+    # extended 2026-08-10 for consistency across every ODU submission type ──
+
+    def test_odu_principal_can_return_for_clarification_on_business_plan(self):
+        assert_transition_allowed(
+            role=Role.ODU_PRINCIPAL,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            form_type_code="BUSINESS-PLAN",
+        )
+
+    def test_odu_manager_can_no_longer_return_for_clarification_on_business_plan(self):
+        with self.assertRaises(PermissionDenied):
+            assert_transition_allowed(
+                role=Role.ODU_MANAGER,
+                current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+                form_type_code="BUSINESS-PLAN",
+            )
+
+    def test_odu_principal_can_return_for_clarification_on_corporate_plan(self):
+        assert_transition_allowed(
+            role=Role.ODU_PRINCIPAL,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            form_type_code="CORPORATE-PLAN",
+        )
+
+    def test_odu_manager_can_no_longer_return_for_clarification_on_corporate_plan(self):
+        with self.assertRaises(PermissionDenied):
+            assert_transition_allowed(
+                role=Role.ODU_MANAGER,
+                current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+                form_type_code="CORPORATE-PLAN",
+            )
+
+    def test_odu_principal_can_return_for_clarification_on_annual_report(self):
+        assert_transition_allowed(
+            role=Role.ODU_PRINCIPAL,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+            form_type_code="ANNUAL-REPORT",
+        )
+
+    def test_odu_manager_can_no_longer_return_for_clarification_on_annual_report(self):
+        with self.assertRaises(PermissionDenied):
+            assert_transition_allowed(
+                role=Role.ODU_MANAGER,
+                current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                target_stage=WorkflowStage.RETURNED_FOR_CLARIFICATION,
+                form_type_code="ANNUAL-REPORT",
+            )
+
+    def test_odu_manager_can_still_approve_route_on_business_corporate_annual(self):
+        for code in ("BUSINESS-PLAN", "CORPORATE-PLAN", "ANNUAL-REPORT"):
+            assert_transition_allowed(
+                role=Role.ODU_MANAGER,
+                current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                target_stage=WorkflowStage.UNDER_ASSESSMENT,
+                form_type_code=code,
+            )
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class RestructurePrincipalDirectClarificationEndpointTests(TestCase):
+    """End-to-end: POST /submissions/{id}/transition/ as the assigned ODU
+    Principal, returning a PSC 2-1 submission for clarification straight to
+    Ministry HR. The Manager ODU doesn't approve this, but must be notified."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(code="TST-PDC", name="Test Ministry PDC")
+        self.hr = User.objects.create_user("hruser_pdc", password="x")
+        Profile.objects.create(user=self.hr, role=Role.MINISTRY_HR, ministry=self.ministry)
+        self.principal = User.objects.create_user("odu_principal_pdc", password="x")
+        Profile.objects.create(user=self.principal, role=Role.ODU_PRINCIPAL)
+        self.manager = User.objects.create_user("odu_manager_pdc", password="x")
+        Profile.objects.create(user=self.manager, role=Role.ODU_MANAGER)
+
+        self.submission = Submission.objects.create(
+            reference_number="SUB-PDC-001",
+            title="Restructure proposal",
+            form_type_code="PSC 2-1",
+            ministry=self.ministry,
+            routed_unit=RoutedUnit.ODU,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            assigned_to=self.principal,
+            received_at=timezone.now(),
+            created_by=self.hr,
+        )
+        self.client = APIClient()
+
+    def test_principal_returns_for_clarification_directly(self):
+        self.client.force_authenticate(user=self.principal)
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post(
+                f"/api/submissions/{self.submission.id}/transition/",
+                {"new_stage": "returned_for_clarification", "remarks": "Please attach the org chart."},
+                format="json",
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.submission.refresh_from_db()
+        self.assertEqual(self.submission.current_stage, WorkflowStage.RETURNED_FOR_CLARIFICATION)
+
+        # HR (the creator) is notified, same as any Return for Clarification.
+        self.assertTrue(
+            Notification.objects.filter(recipient=self.hr, submission=self.submission).exists()
+        )
+        # The Manager ODU didn't act, but is kept in the loop.
+        manager_note = Notification.objects.filter(
+            recipient=self.manager, submission=self.submission,
+        ).first()
+        self.assertIsNotNone(manager_note)
+        self.assertIn("Please attach the org chart.", manager_note.body)
+
+    def test_manager_can_no_longer_return_for_clarification_via_endpoint(self):
+        self.client.force_authenticate(user=self.manager)
+        resp = self.client.post(
+            f"/api/submissions/{self.submission.id}/transition/",
+            {"new_stage": "returned_for_clarification"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])

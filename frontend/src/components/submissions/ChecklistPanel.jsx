@@ -43,6 +43,110 @@ function UploadForItemButton({ item, onUpload, uploadBusy, t }) {
   )
 }
 
+/** Satisfies a required_form checklist item (e.g. "Copy of Signed Ministry
+ * Corporate Plan") by searching for and attaching an existing submission of
+ * that form type — a real cross-reference instead of a plain file upload.
+ * Mirrors the search UX in SubmissionForm.jsx's PSC 2-2 attach picker. */
+function AttachRequiredFormButton({ item, submissionId, onAttached }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [attaching, setAttaching] = useState(false)
+  const [error, setError] = useState('')
+  const timerRef = useRef(null)
+
+  const search = (value) => {
+    setQuery(value)
+    setError('')
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (!value.trim()) { setResults([]); return }
+    setSearching(true)
+    timerRef.current = setTimeout(() => {
+      api.get('/submissions/', {
+        params: { search: value.trim(), form_type_code: item.required_form_code, page_size: 8 },
+      })
+        .then(res => setResults(res.data.results ?? res.data ?? []))
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false))
+    }, 300)
+  }
+
+  const attach = async (candidate) => {
+    setAttaching(true)
+    setError('')
+    try {
+      await api.post(`/submissions/${candidate.id}/link-as-attachment/`, {
+        parent_submission: Number(submissionId),
+      })
+      setOpen(false)
+      setQuery('')
+      setResults([])
+      onAttached?.()
+    } catch (err) {
+      setError(err.response?.data?.detail || `Could not attach ${item.required_form_name}.`)
+    } finally {
+      setAttaching(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+      >
+        <Paperclip size={11} />
+        Attach {item.required_form_name}
+      </button>
+    )
+  }
+
+  return (
+    <div className="w-64 rounded-md border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800 absolute z-10 right-0 mt-6">
+      <input
+        type="text"
+        autoFocus
+        className="input text-xs py-1 w-full"
+        placeholder={`Search ${item.required_form_name}…`}
+        value={query}
+        onChange={e => search(e.target.value)}
+      />
+      {error && <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">{error}</p>}
+      {searching && <p className="mt-1 text-[11px] text-slate-400">Searching…</p>}
+      {!searching && query.trim() && results.length === 0 && (
+        <p className="mt-1 text-[11px] text-slate-400">No matching submissions found.</p>
+      )}
+      {results.length > 0 && (
+        <ul className="mt-1 max-h-40 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
+          {results.map(r => (
+            <li key={r.id}>
+              <button
+                type="button"
+                disabled={attaching}
+                onClick={() => attach(r)}
+                className="w-full text-left px-1.5 py-1 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+              >
+                <span className="font-mono text-primary-600 dark:text-primary-400">{r.reference_number}</span>
+                {' — '}
+                <span className="text-slate-700 dark:text-slate-300">{r.title}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={() => { setOpen(false); setQuery(''); setResults([]); setError('') }}
+        className="mt-1 text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+      >
+        Cancel
+      </button>
+    </div>
+  )
+}
+
 function ContentMismatchBadge({ t }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
@@ -82,6 +186,7 @@ export default function ChecklistPanel({
   onUploadForItem,
   uploadBusy = false,
   currentStage,
+  onAttached,
 }) {
   const { t } = useTranslation()
   const [autofilling, setAutofilling] = useState(false)
@@ -272,8 +377,9 @@ export default function ChecklistPanel({
             currentStage && item.mandatory_for_stage && item.mandatory_for_stage === currentStage,
           )
           // Items satisfied by an attached child submission (required_form_id)
-          // aren't plain file uploads — no attach button for those.
+          // aren't plain file uploads — they get a search-and-link control instead.
           const canUploadForItem = uploadOnly && onUploadForItem && !item.required_form_id
+          const canLinkForItem = uploadOnly && item.required_form_id && !item.is_present
 
           return (
             <li
@@ -376,13 +482,19 @@ export default function ChecklistPanel({
                 </div>
 
                 {/* Action buttons */}
-                <div className="shrink-0 flex items-center gap-1">
+                <div className="shrink-0 flex items-center gap-1 relative">
                   {canUploadForItem ? (
                     <UploadForItemButton
                       item={item}
                       onUpload={onUploadForItem}
                       uploadBusy={uploadBusy}
                       t={t}
+                    />
+                  ) : canLinkForItem ? (
+                    <AttachRequiredFormButton
+                      item={item}
+                      submissionId={submissionId}
+                      onAttached={onAttached}
                     />
                   ) : hasSug ? (
                     <>
