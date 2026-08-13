@@ -12125,6 +12125,7 @@ CHECKLIST_EDIT_STAGE   = WorkflowStage.MANAGER_CHECKLIST_REVIEW
 CHECKLIST_EDIT_ROLES   = frozenset({
     Role.ODU_MANAGER, Role.ODU_PRINCIPAL, Role.ODU_SENIOR,
     Role.HR_UNIT_MANAGER, Role.HR_UNIT_PRINCIPAL, Role.HR_UNIT_SENIOR,
+    Role.VIPAM_MANAGER, Role.VIPAM_PRINCIPAL, Role.VIPAM_SENIOR,
     Role.PSC_ADMIN,
 })
 # Roles that can view the completed checklist in later stages
