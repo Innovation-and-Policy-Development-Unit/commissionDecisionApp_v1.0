@@ -12239,6 +12239,17 @@ class SubmissionChecklistViewSet(viewsets.GenericViewSet):
             defaults={"created_by": request.user, "data": {}},
         )
 
+        # Compile in whatever the system can already verify (the ministry's
+        # own digitized form answers, Required Documents, workflow facts) —
+        # only ever fills currently-empty fields, never overwrites an answer
+        # a reviewer already gave. Re-applied on every load while still
+        # Draft so a newly-uploaded document gets picked up too.
+        if checklist.status == SubmissionChecklistResponse.Status.DRAFT:
+            from .submission_checklist_prefill import apply_prefill
+
+            if apply_prefill(checklist, submission, checklist_ft.code):
+                checklist.save(update_fields=["data"])
+
         serializer = SubmissionChecklistResponseSerializer(checklist)
         data = serializer.data
         data["can_edit"] = can_edit
