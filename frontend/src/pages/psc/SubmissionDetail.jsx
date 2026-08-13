@@ -1340,7 +1340,7 @@ const stageDescriptions = {
           {effectiveTab === 'checklist' && (
           <>
           {hasDynamicChecklist && showDynamicChecklist && (
-            <SubmissionChecklistPanel submissionId={id} />
+            <SubmissionChecklistPanel submissionId={id} autofillEnabled={user?.ai_checklist_autofill_enabled !== false} />
           )}
 
           {showOduChecklist && (

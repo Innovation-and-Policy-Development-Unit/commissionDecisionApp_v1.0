@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckSquare, Square, ChevronDown, ChevronUp, RefreshCw, Send, ThumbsUp, RotateCcw, AlertCircle } from 'lucide-react'
+import { CheckSquare, Square, ChevronDown, ChevronUp, RefreshCw, Send, ThumbsUp, RotateCcw, AlertCircle, Sparkles, Check, X } from 'lucide-react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { formatApiError } from '../../utils/apiError'
@@ -14,8 +14,33 @@ const STATUS_LABEL = {
   draft: 'Draft', submitted: 'Pending review', approved: 'Approved', returned: 'Returned for revision',
 }
 
-function FieldRenderer({ field, value, onChange, readOnly }) {
+function SuggestionHint({ suggestion, onAccept, onDismiss }) {
+  if (!suggestion) return null
+  const shown = typeof suggestion.value === 'boolean' ? (suggestion.value ? 'Yes' : 'No') : String(suggestion.value)
+  return (
+    <div className="mt-1 flex items-start gap-2 rounded-md bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/40 px-2 py-1.5 text-xs">
+      <Sparkles size={12} className="text-violet-500 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-violet-800 dark:text-violet-200">
+          <span className="font-medium">AI suggests:</span> {shown}
+        </p>
+        {suggestion.notes && <p className="text-violet-500 dark:text-violet-400 mt-0.5">{suggestion.notes}</p>}
+      </div>
+      <button type="button" onClick={onAccept} className="shrink-0 p-1 rounded hover:bg-violet-100 dark:hover:bg-violet-900/40 text-violet-600 dark:text-violet-300" aria-label="Accept suggestion">
+        <Check size={13} />
+      </button>
+      <button type="button" onClick={onDismiss} className="shrink-0 p-1 rounded hover:bg-violet-100 dark:hover:bg-violet-900/40 text-violet-400" aria-label="Dismiss suggestion">
+        <X size={13} />
+      </button>
+    </div>
+  )
+}
+
+function FieldRenderer({ field, value, onChange, readOnly, suggestion, onAcceptSuggestion, onDismissSuggestion }) {
   const base = 'transition-colors'
+  const hint = suggestion
+    ? <SuggestionHint suggestion={suggestion} onAccept={() => onAcceptSuggestion(field.field_key)} onDismiss={() => onDismissSuggestion(field.field_key)} />
+    : null
 
   if (field.field_type === 'section_header') {
     return (
@@ -29,25 +54,28 @@ function FieldRenderer({ field, value, onChange, readOnly }) {
   if (field.field_type === 'checkbox') {
     const checked = value === true || value === 'true'
     return (
-      <div className="flex items-start justify-between gap-3 py-1">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-slate-700 dark:text-slate-200">
-            {field.label}
-            {field.is_required && <span className="text-rose-500 ml-0.5">*</span>}
-          </p>
-          {field.help_text && <p className="text-xs text-slate-400">{field.help_text}</p>}
+      <div className="py-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-slate-700 dark:text-slate-200">
+              {field.label}
+              {field.is_required && <span className="text-rose-500 ml-0.5">*</span>}
+            </p>
+            {field.help_text && <p className="text-xs text-slate-400">{field.help_text}</p>}
+          </div>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => !readOnly && onChange(!checked)}
+            className={`shrink-0 mt-0.5 ${readOnly ? 'opacity-60 cursor-default' : 'hover:opacity-80'} ${base}`}
+            aria-label={checked ? 'Yes' : 'No'}
+          >
+            {checked
+              ? <CheckSquare size={20} className="text-primary-500" />
+              : <Square size={20} className="text-slate-300 dark:text-slate-600" />}
+          </button>
         </div>
-        <button
-          type="button"
-          disabled={readOnly}
-          onClick={() => !readOnly && onChange(!checked)}
-          className={`shrink-0 mt-0.5 ${readOnly ? 'opacity-60 cursor-default' : 'hover:opacity-80'} ${base}`}
-          aria-label={checked ? 'Yes' : 'No'}
-        >
-          {checked
-            ? <CheckSquare size={20} className="text-primary-500" />
-            : <Square size={20} className="text-slate-300 dark:text-slate-600" />}
-        </button>
+        {hint}
       </div>
     )
   }
@@ -69,6 +97,7 @@ function FieldRenderer({ field, value, onChange, readOnly }) {
           <option value="">— Select —</option>
           {options.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
+        {hint}
       </div>
     )
   }
@@ -87,6 +116,7 @@ function FieldRenderer({ field, value, onChange, readOnly }) {
           value={value ?? ''}
           onChange={e => onChange(e.target.value)}
         />
+        {hint}
       </div>
     )
   }
@@ -105,6 +135,7 @@ function FieldRenderer({ field, value, onChange, readOnly }) {
           value={value ?? ''}
           onChange={e => onChange(e.target.value)}
         />
+        {hint}
       </div>
     )
   }
@@ -124,11 +155,12 @@ function FieldRenderer({ field, value, onChange, readOnly }) {
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
       />
+      {hint}
     </div>
   )
 }
 
-export default function SubmissionChecklistPanel({ submissionId }) {
+export default function SubmissionChecklistPanel({ submissionId, autofillEnabled = true }) {
   const toast = useToast()
   const [checklist, setChecklist] = useState(null)   // API response
   const [data, setData]           = useState({})     // local answer state
@@ -139,10 +171,14 @@ export default function SubmissionChecklistPanel({ submissionId }) {
   const [error, setError]         = useState('')
   const [managerNote, setManagerNote] = useState('')
   const [collapsed, setCollapsed] = useState(false)
+  const [suggestions, setSuggestions] = useState({})  // { field_key: { value, notes } }
+  const [autofilling, setAutofilling] = useState(false)
+  const [autofillError, setAutofillError] = useState('')
 
   const fetch = useCallback(async () => {
     setLoading(true)
     setError('')
+    setSuggestions({})
     try {
       const r = await api.get(`/submission-checklists/ensure/?submission=${submissionId}`)
       setChecklist(r.data)
@@ -167,6 +203,50 @@ export default function SubmissionChecklistPanel({ submissionId }) {
   useEffect(() => { fetch() }, [fetch])
 
   const handleChange = (key, val) => setData(prev => ({ ...prev, [key]: val }))
+
+  const handleAutofill = async () => {
+    setAutofilling(true)
+    setAutofillError('')
+    setSuggestions({})
+    try {
+      const r = await api.post(`/submission-checklists/${checklist.id}/autofill/`)
+      setSuggestions(r.data.suggestions || {})
+      if (r.data.error) setAutofillError(r.data.error)
+      else if (Object.keys(r.data.suggestions || {}).length === 0) {
+        toast.info?.('No suggestions found in the uploaded documents.')
+      }
+    } catch (err) {
+      setAutofillError(formatApiError(err, 'AI autofill failed.'))
+    } finally {
+      setAutofilling(false)
+    }
+  }
+
+  const acceptSuggestion = (key) => {
+    const sug = suggestions[key]
+    if (!sug) return
+    handleChange(key, sug.value)
+    setSuggestions(prev => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
+  const dismissSuggestion = (key) => setSuggestions(prev => {
+    const next = { ...prev }
+    delete next[key]
+    return next
+  })
+
+  const acceptAllSuggestions = () => {
+    setData(prev => {
+      const next = { ...prev }
+      for (const [key, sug] of Object.entries(suggestions)) next[key] = sug.value
+      return next
+    })
+    setSuggestions({})
+  }
 
   const save = async () => {
     setSaving(true)
@@ -291,6 +371,33 @@ export default function SubmissionChecklistPanel({ submissionId }) {
             </div>
           )}
 
+          {/* AI autofill */}
+          {canEdit && autofillEnabled && status === 'draft' && (
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                type="button"
+                onClick={handleAutofill}
+                disabled={autofilling}
+                className="btn-outline text-xs px-3 py-1.5 flex items-center gap-1.5"
+              >
+                {autofilling ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {autofilling ? 'Reading documents…' : 'AI autofill from documents'}
+              </button>
+              {Object.keys(suggestions).length > 1 && (
+                <button
+                  type="button"
+                  onClick={acceptAllSuggestions}
+                  className="text-xs text-primary-600 hover:underline"
+                >
+                  Accept all {Object.keys(suggestions).length}
+                </button>
+              )}
+            </div>
+          )}
+          {autofillError && (
+            <p className="mb-3 text-xs text-amber-600 dark:text-amber-400">{autofillError}</p>
+          )}
+
           {/* Fields */}
           <div className="space-y-3">
             {fields.map(field => (
@@ -300,6 +407,9 @@ export default function SubmissionChecklistPanel({ submissionId }) {
                 value={data[field.field_key]}
                 onChange={val => handleChange(field.field_key, val)}
                 readOnly={readOnly}
+                suggestion={suggestions[field.field_key]}
+                onAcceptSuggestion={acceptSuggestion}
+                onDismissSuggestion={dismissSuggestion}
               />
             ))}
           </div>

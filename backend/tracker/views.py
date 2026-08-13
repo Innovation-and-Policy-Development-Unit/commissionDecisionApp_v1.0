@@ -12291,6 +12291,44 @@ class SubmissionChecklistViewSet(viewsets.GenericViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=["post"])
+    def autofill(self, request, pk=None):
+        """AI suggestions for the checklist's still-blank fields, extracted
+        from this submission's uploaded documents. Never writes anything —
+        the reviewer accepts each suggestion via the normal PATCH, same as
+        the Required Documents checklist's autofill."""
+        from .ai.checklist_autofill import suggest_checklist_field_values
+        from .ai_settings import checklist_autofill_enabled
+
+        checklist = get_object_or_404(SubmissionChecklistResponse, pk=pk)
+        profile = _profile(request.user)
+        if not (profile.role in CHECKLIST_EDIT_ROLES or request.user.is_superuser):
+            raise PermissionDenied("Only checklist reviewers can use AI autofill.")
+        if not checklist_autofill_enabled():
+            return Response(
+                {"detail": "AI checklist autofill is currently disabled by the administrator."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        current_data = checklist.data or {}
+        blank_fields = [
+            {
+                "field_key": f.field_key,
+                "label": f.label,
+                "field_type": f.field_type,
+                "help_text": f.help_text,
+            }
+            for f in checklist.checklist_form_type.fields.exclude(field_type="section_header")
+            if current_data.get(f.field_key) in (None, "")
+        ]
+
+        suggestions, err = suggest_checklist_field_values(checklist.submission, blank_fields)
+        return Response({
+            "disclaimer": "AI draft — verify before accepting.",
+            "suggestions": suggestions,
+            "error": err,
+        })
+
+    @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):
         """Principal submits the checklist for manager review."""
         from django.utils import timezone
