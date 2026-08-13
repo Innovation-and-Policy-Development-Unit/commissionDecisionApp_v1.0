@@ -301,3 +301,25 @@ register_prefill("RECRUIT-CONTRACT-CHECKLIST", {
     # comments, checked_by, and opsc_recommendation_approved have no
     # submitted fact to check against — left blank for HR Unit's own review.
 })
+
+# ── Confirmation of Appointment ─────────────────────────────────────────────
+
+register_prefill("RECRUIT-CONFIRM-CHECKLIST", {
+    "dg_endorsement_letter": lambda s: _first(
+        True if s.dg_endorsed_at else None,
+        _required_document_present(s, "DG's Endorsement Letter"),
+    ),
+    "officer_name": lambda s: _dynamic_form_data(s).get("officer_name"),
+    "position_title": lambda s: _dynamic_form_data(s).get("position_title"),
+    "department": lambda s: _first(s.department.name if s.department_id else None, _dynamic_form_data(s).get("department")),
+    "ministry": lambda s: _first(s.ministry.name if s.ministry_id else None, _dynamic_form_data(s).get("ministry")),
+    "date_received": lambda s: s.received_at.date().isoformat() if s.received_at else None,
+    "salary_level": lambda s: _dynamic_form_data(s).get("salary_level"),
+    "officer_pa_rating": lambda s: _dynamic_form_data(s).get("pa_rating"),
+    "performance_assessment_satisfactory": lambda s: _first(
+        _required_document_present(s, "Performance Appraisal Report"),
+        _truthy(_dynamic_form_data(s).get("pa_attached")),
+    ),
+    # opsc_recommendation_approved has no submitted fact to check against —
+    # left blank for HR Unit's own review.
+})
