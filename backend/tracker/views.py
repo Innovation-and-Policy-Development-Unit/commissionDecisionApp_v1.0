@@ -12123,7 +12123,9 @@ class DocumentVersionViewSet(
 # Roles that can fill/edit the checklist during manager_checklist_review
 CHECKLIST_EDIT_STAGE   = WorkflowStage.MANAGER_CHECKLIST_REVIEW
 CHECKLIST_EDIT_ROLES   = frozenset({
-    Role.ODU_MANAGER, Role.ODU_PRINCIPAL, Role.ODU_SENIOR, Role.PSC_ADMIN,
+    Role.ODU_MANAGER, Role.ODU_PRINCIPAL, Role.ODU_SENIOR,
+    Role.HR_UNIT_MANAGER, Role.HR_UNIT_PRINCIPAL, Role.HR_UNIT_SENIOR,
+    Role.PSC_ADMIN,
 })
 # Roles that can view the completed checklist in later stages
 CHECKLIST_VIEW_STAGES  = frozenset({
