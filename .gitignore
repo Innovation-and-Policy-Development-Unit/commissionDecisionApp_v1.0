@@ -65,3 +65,6 @@ email_*.txt
 # Database backups
 backups/
 ~$*
+
+# ── Local certbot working state (keys/config, never commit) ───────────────────
+.certbot-tmp/

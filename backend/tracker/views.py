@@ -3134,6 +3134,19 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def checklist_toggle(self, request, pk=None, item_id=None):
         """Toggle is_present on a checklist item; optionally persist notes."""
         submission = self.get_object()
+        profile = _profile(request.user)
+        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff
+        if (
+            not is_admin
+            and profile.role in OPSC_UNIT_MANAGER_ROLES
+            and submission.assigned_to_id
+            and submission.assigned_to_id != request.user.id
+        ):
+            assignee_name = submission.assigned_to.get_full_name() or submission.assigned_to.username
+            raise PermissionDenied(
+                f"This submission is assigned to {assignee_name} for review — unassign it first "
+                "if you need to update the checklist yourself."
+            )
         item = get_object_or_404(SubmissionChecklistItem, id=item_id, submission=submission)
         is_present = bool(request.data.get("is_present", False))
         item.is_present = is_present
@@ -12238,6 +12251,20 @@ class SubmissionChecklistViewSet(viewsets.GenericViewSet):
 
         if not (profile.role in CHECKLIST_EDIT_ROLES or request.user.is_superuser):
             raise PermissionDenied("Only checklist reviewers can edit this checklist.")
+        assigned_to_id = checklist.submission.assigned_to_id
+        if (
+            not request.user.is_superuser
+            and profile.role != Role.PSC_ADMIN
+            and profile.role in OPSC_UNIT_MANAGER_ROLES
+            and assigned_to_id
+            and assigned_to_id != request.user.id
+        ):
+            assignee = checklist.submission.assigned_to
+            assignee_name = assignee.get_full_name() or assignee.username
+            raise PermissionDenied(
+                f"This submission is assigned to {assignee_name} for review — unassign it first "
+                "if you need to edit the checklist yourself."
+            )
         if checklist.status == SubmissionChecklistResponse.Status.APPROVED:
             return Response({"detail": "Approved checklists cannot be edited."}, status=400)
 
