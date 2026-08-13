@@ -689,6 +689,20 @@ def _strip_ai_brief_if_ministry(data: dict, request) -> dict:
     return data
 
 
+def _strip_internal_allocation_if_ministry(data: dict, request) -> dict:
+    """Who a submission is currently allocated to within OPSC is internal
+    staffing detail — never expose it to a ministry-side viewer, even though
+    the frontend also hides the column."""
+    from .opsc_access import is_opsc_internal
+
+    if not request or not getattr(request, "user", None) or request.user.is_anonymous:
+        return data
+    if not is_opsc_internal(request.user):
+        data["assigned_to_name"] = None
+        data["co_assignments"] = []
+    return data
+
+
 class SubmissionListSerializer(serializers.ModelSerializer):
     ministry_name = serializers.CharField(source="ministry.name", read_only=True)
     department_name = serializers.CharField(source="department.name", read_only=True, default=None)
@@ -727,7 +741,8 @@ class SubmissionListSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        return _strip_ai_brief_if_ministry(data, self.context.get("request"))
+        data = _strip_ai_brief_if_ministry(data, self.context.get("request"))
+        return _strip_internal_allocation_if_ministry(data, self.context.get("request"))
 
     class Meta:
         model = Submission
@@ -848,6 +863,17 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
 
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.get_full_name() or obj.assigned_to.username if obj.assigned_to else None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        from .opsc_access import is_opsc_internal
+
+        if request and getattr(request, "user", None) and not request.user.is_anonymous:
+            if not is_opsc_internal(request.user):
+                data["assigned_to"] = None
+                data["assigned_to_name"] = None
+        return data
 
     def get_dg_endorsed_by_name(self, obj):
         return obj.dg_endorsed_by.username if obj.dg_endorsed_by else None

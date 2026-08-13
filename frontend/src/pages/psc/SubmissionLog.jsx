@@ -19,6 +19,7 @@ import SubmissionForm, { SUBMISSION_CREATE_ALLOWED_ROLES } from './SubmissionFor
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { isComplianceRole } from '../../constants/compliance'
+import { userIsOpscInternal } from '../../utils/opscAccess'
 import BulkOperationsBar from '../../components/shared/BulkOperationsBar'
 import { useToast } from '../../context/ToastContext'
 import { QualityScoreBadge } from '../../components/submissions/SubmissionQualityScore'
@@ -107,6 +108,9 @@ export default function SubmissionLog() {
     'odu_manager', 'hr_unit_manager', 'vipam_manager', 'compliance_manager',
     'compliance_senior', 'compliance_principal',
   ].includes(user.role)
+  // Who a submission is currently allocated to — internal OPSC staffing
+  // detail, never shown to ministry-side viewers (API strips it for them too).
+  const showAssignedColumn = userIsOpscInternal(user)
 
   const localeForDates = useMemo(() => {
     const map = { en: 'en-GB', fr: 'fr-FR', bi: 'en-GB' }
@@ -293,7 +297,7 @@ export default function SubmissionLog() {
     } catch { /* handled by api interceptor */ }
   }
 
-  const cols = (isAdmin ? 1 : 0) + 4 + (showActionsColumn ? 1 : 0) + (showQualityColumn ? 1 : 0)
+  const cols = (isAdmin ? 1 : 0) + 4 + (showActionsColumn ? 1 : 0) + (showQualityColumn ? 1 : 0) + (showAssignedColumn ? 1 : 0)
 
   return (
     <div>
@@ -527,6 +531,9 @@ export default function SubmissionLog() {
                 <th>{t('submission.reference_short')}</th>
                 <th className="min-w-[220px]">{t('submission.title')}</th>
                 <th>{t('submission.stage')}</th>
+                {showAssignedColumn && (
+                  <th>{t('submission.assigned_to', { defaultValue: 'Allocated to' })}</th>
+                )}
                 {showQualityColumn && (
                   <th className="w-16">{t('submission.quality_column')}</th>
                 )}
@@ -595,6 +602,11 @@ export default function SubmissionLog() {
                         </div>
                       )}
                     </td>
+                    {showAssignedColumn && (
+                      <td className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        {r.assigned_to_name || <span className="text-slate-400 dark:text-slate-500">Unassigned</span>}
+                      </td>
+                    )}
                     {showQualityColumn && (
                       <td>
                         <QualityScoreBadge submission={r} compact />
@@ -686,6 +698,7 @@ export default function SubmissionLog() {
                           {stageLabel(child.current_stage, t)}
                         </Badge>
                       </td>
+                      {showAssignedColumn && <td />}
                       {showQualityColumn && <td />}
                       <td colSpan={showActionsColumn ? 2 : 1} />
                     </tr>
