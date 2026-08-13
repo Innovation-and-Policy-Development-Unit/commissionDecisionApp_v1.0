@@ -182,3 +182,36 @@ register_prefill("CESSATION-RESIGNATION-CHECKLIST", {
     # opsc_recommendation_approved have no submitted fact to check against —
     # left blank for HR Unit's own review.
 })
+
+# ── Direct Appointment ──────────────────────────────────────────────────────
+
+register_prefill("RECRUIT-DIRECT-CHECKLIST", {
+    "dg_endorsement_letter": lambda s: _first(
+        True if s.dg_endorsed_at else None,
+        _required_document_present(s, "DG's Endorsement Letter"),
+    ),
+    "officer_name": lambda s: _dynamic_form_data(s).get("officer_name"),
+    "position_title": lambda s: _dynamic_form_data(s).get("position_title"),
+    "post_number": lambda s: _dynamic_form_data(s).get("post_number"),
+    "department": lambda s: _first(s.department.name if s.department_id else None, _dynamic_form_data(s).get("department")),
+    "ministry": lambda s: _first(s.ministry.name if s.ministry_id else None, _dynamic_form_data(s).get("ministry")),
+    "date_received": lambda s: s.received_at.date().isoformat() if s.received_at else None,
+    "salary_level": lambda s: _dynamic_form_data(s).get("salary_grade"),
+    "approved_fv_attached": lambda s: _first(
+        _required_document_present(s, "Approved Financial Visa"),
+        _truthy(_dynamic_form_data(s).get("financial_visa_attached")),
+    ),
+    "psc_form_36_attached": lambda s: _first(
+        _required_document_present(s, "PSC Form 3-6"),
+        _truthy(_dynamic_form_data(s).get("psc_form_36_attached")),
+    ),
+    "officer_pa_rating": lambda s: _dynamic_form_data(s).get("pa_rating"),
+    "performance_assessment_satisfactory": lambda s: _first(
+        _required_document_present(s, "Performance Appraisal Report"),
+        _truthy(_dynamic_form_data(s).get("pa_attached")),
+    ),
+    "copies_of_academic_qualifications": lambda s: _required_document_present(s, "Academic Qualifications"),
+    # criteria_of_post_as_per_jd, highest_qualification_trainings, experience,
+    # comments, checked_by, and opsc_recommendation_approved have no
+    # submitted fact to check against — left blank for HR Unit's own review.
+})
