@@ -73,6 +73,18 @@ def _first(*values: Any) -> Any:
     return None
 
 
+def _only_if(condition: Callable[[Submission], bool], getter: PrefillGetter) -> PrefillGetter:
+    """Gate a getter behind a submission-level condition — e.g. a field that
+    only means something for a contract *extension* shouldn't be answered
+    from Required Document evidence when the submission is actually a new
+    (first-time) contract, even if that document happens to be marked
+    present (auto-created checklist items default across all configured
+    documents regardless of whether they apply to this submission)."""
+    def wrapped(s: Submission) -> Any:
+        return getter(s) if condition(s) else None
+    return wrapped
+
+
 _PREFILL_SPECS: dict[str, dict[str, PrefillGetter]] = {}
 
 
@@ -212,6 +224,80 @@ register_prefill("RECRUIT-DIRECT-CHECKLIST", {
     ),
     "copies_of_academic_qualifications": lambda s: _required_document_present(s, "Academic Qualifications"),
     # criteria_of_post_as_per_jd, highest_qualification_trainings, experience,
+    # comments, checked_by, and opsc_recommendation_approved have no
+    # submitted fact to check against — left blank for HR Unit's own review.
+})
+
+# ── Contract Employment ─────────────────────────────────────────────────────
+
+_CONTRACT_HISTORY_MAP = {
+    "new": "First Time",
+    "new contract": "First Time",
+    "extension": "Been Engaged Before",
+    "extension of existing contract": "Been Engaged Before",
+}
+
+
+def _contract_history(s: Submission) -> str | None:
+    raw = str(_dynamic_form_data(s).get("contract_type") or "").strip().lower()
+    return _CONTRACT_HISTORY_MAP.get(raw)
+
+
+register_prefill("RECRUIT-CONTRACT-CHECKLIST", {
+    "dg_endorsement_letter": lambda s: _first(
+        True if s.dg_endorsed_at else None,
+        _required_document_present(s, "DG's Endorsement Letter"),
+    ),
+    "officer_name": lambda s: _dynamic_form_data(s).get("officer_name"),
+    "position_title": lambda s: _dynamic_form_data(s).get("position_title"),
+    "department": lambda s: _first(s.department.name if s.department_id else None, _dynamic_form_data(s).get("department")),
+    "ministry": lambda s: _first(s.ministry.name if s.ministry_id else None, _dynamic_form_data(s).get("ministry")),
+    "date_received": lambda s: s.received_at.date().isoformat() if s.received_at else None,
+    "contract_history": _contract_history,
+    "salary_level": lambda s: _dynamic_form_data(s).get("salary_level"),
+    "required_qualification_stated": lambda s: bool(_dynamic_form_data(s).get("required_qualification")) or None,
+    "start_date": lambda s: _dynamic_form_data(s).get("start_date"),
+    "end_date": lambda s: _dynamic_form_data(s).get("end_date"),
+    "merit_process_followed": lambda s: _first(
+        _required_document_present(s, "Evidence of Merit Process"),
+        _truthy(_dynamic_form_data(s).get("merit_evidence")),
+    ),
+    "approved_fv_attached": lambda s: _first(
+        _required_document_present(s, "Approved Financial Visa"),
+        _truthy(_dynamic_form_data(s).get("financial_visa_attached")),
+    ),
+    "psc_form_37_attached": lambda s: _first(
+        _required_document_present(s, "PSC Form 3-7"),
+        _truthy(_dynamic_form_data(s).get("psc_form_37_attached")),
+    ),
+    "tor_jd_attached": lambda s: _first(
+        _required_document_present(s, "Terms of Reference", "Job Description"),
+        _truthy(_dynamic_form_data(s).get("tor_jd_attached")),
+    ),
+    "candidates_qualification": lambda s: _dynamic_form_data(s).get("candidate_qualification"),
+    # performance_assessment_satisfactory and break_in_service_observed only
+    # apply to an extension — gated on contract_type first, so a Required
+    # Document that happens to be marked present (auto-created for every
+    # submission of this form type regardless of applicability) can't
+    # answer "Yes" for a first-time contract where the item is N/A, not No.
+    "performance_assessment_satisfactory": _only_if(
+        lambda s: _contract_history(s) == "Been Engaged Before",
+        lambda s: _first(
+            _required_document_present(s, "Performance Assessment"),
+            _truthy(_dynamic_form_data(s).get("pa_attached")),
+        ),
+    ),
+    "break_in_service_observed": _only_if(
+        lambda s: _contract_history(s) == "Been Engaged Before",
+        lambda s: _first(
+            _required_document_present(s, "Break-in-Service"),
+            _truthy(_dynamic_form_data(s).get("break_in_service_observed")),
+        ),
+    ),
+    "unsigned_agreement_attached": lambda s: _first(
+        _required_document_present(s, "Unsigned Agreement of Service"),
+        _truthy(_dynamic_form_data(s).get("unsigned_agreement_attached")),
+    ),
     # comments, checked_by, and opsc_recommendation_approved have no
     # submitted fact to check against — left blank for HR Unit's own review.
 })
