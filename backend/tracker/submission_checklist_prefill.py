@@ -323,3 +323,58 @@ register_prefill("RECRUIT-CONFIRM-CHECKLIST", {
     # opsc_recommendation_approved has no submitted fact to check against —
     # left blank for HR Unit's own review.
 })
+
+# ── Appointment (Probation) ─────────────────────────────────────────────────
+
+
+def _merit_process_evidence(s: Submission) -> bool | None:
+    data = _dynamic_form_data(s)
+    documented = any(
+        (data.get(k) or "").strip()
+        for k in ("panel_constitution", "shortlist_results", "interview_results")
+    )
+    return _first(
+        True if documented else None,
+        _required_document_present(s, "Comparative Assessment", "Selection Outcome Report"),
+    )
+
+
+register_prefill("RECRUIT-PROBATION-CHECKLIST", {
+    "dg_endorsement_letter": lambda s: _first(
+        True if s.dg_endorsed_at else None,
+        _required_document_present(s, "DG's Endorsement Letter"),
+    ),
+    "recommended_officer_name": lambda s: _dynamic_form_data(s).get("recommended_name"),
+    "eligible_officer_name": lambda s: _dynamic_form_data(s).get("eligible_name"),
+    "position_title": lambda s: _dynamic_form_data(s).get("position_title"),
+    "post_number": lambda s: _dynamic_form_data(s).get("post_number"),
+    "department": lambda s: _first(s.department.name if s.department_id else None, _dynamic_form_data(s).get("department")),
+    "ministry": lambda s: _first(s.ministry.name if s.ministry_id else None, _dynamic_form_data(s).get("ministry")),
+    "essential_productive_services": lambda s: _truthy(_dynamic_form_data(s).get("is_essential_service")),
+    "salary_grade": lambda s: _dynamic_form_data(s).get("salary_grade"),
+    "merit_process_followed": _merit_process_evidence,
+    "approved_fv_attached": lambda s: _first(
+        _required_document_present(s, "Approved Financial Visa"),
+        _truthy(_dynamic_form_data(s).get("financial_visa_attached")),
+    ),
+    "comparative_selection_outcome_report_attached": lambda s: _required_document_present(
+        s, "Selection Outcome Report", "Comparative Assessment",
+    ),
+    "jd_structure_attached": lambda s: _required_document_present(
+        s, "Job Description", "Organisation Structure Chart",
+    ),
+    "vacancy_notice_attached": lambda s: _required_document_present(s, "Vacancy Notice"),
+    "application_recommend_eligible_attached": lambda s: _required_document_present(
+        s, "Recommended Candidate's Application", "Eligible Candidate's Application",
+    ),
+    "psc_form_32_attached": lambda s: _required_document_present(
+        s, "Recommended Candidate's Application", "Eligible Candidate's Application",
+    ),
+    "recommended_highest_qualification": lambda s: _dynamic_form_data(s).get("recommended_qualification"),
+    "recommended_work_experience": lambda s: _dynamic_form_data(s).get("recommended_experience"),
+    "eligible_highest_qualification": lambda s: _dynamic_form_data(s).get("eligible_qualification"),
+    "eligible_work_experience": lambda s: _dynamic_form_data(s).get("eligible_experience"),
+    # qualification_as_per_jd, special_business_education, comments,
+    # checked_by, and opsc_recommendation_approved have no submitted fact
+    # to check against — left blank for HR Unit's own review.
+})
