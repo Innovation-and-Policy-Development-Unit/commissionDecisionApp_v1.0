@@ -210,6 +210,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 class MeSerializer(serializers.ModelSerializer):
     """GET /me/ — profile plus flags for admin UI and RBAC."""
 
+    id = serializers.IntegerField(source="user.id", read_only=True)
     username = serializers.CharField(source="user.username", read_only=True)
     full_name = serializers.SerializerMethodField()
     email = serializers.CharField(source="user.email", read_only=True)
@@ -237,6 +238,7 @@ class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = (
+            "id",
             "username",
             "full_name",
             "email",
@@ -805,6 +807,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         source="parent_submission.title", read_only=True, default=None
     )
     attached_submissions = AttachedSubmissionSerializer(many=True, read_only=True)
+    co_assignments = CoAssignmentSerializer(many=True, read_only=True)
     preliminary_quality_score = serializers.SerializerMethodField()
     subway_map = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
@@ -841,10 +844,6 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             return None
         return can_edit_submission(profile_role(request.user), obj)
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        return _strip_ai_brief_if_ministry(data, self.context.get("request"))
-
     def get_subway_map(self, obj):
         from .subway_map import build_subway_map
 
@@ -867,12 +866,14 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get("request")
+        data = _strip_ai_brief_if_ministry(data, request)
+        data = _strip_internal_allocation_if_ministry(data, request)
+
         from .opsc_access import is_opsc_internal
 
         if request and getattr(request, "user", None) and not request.user.is_anonymous:
             if not is_opsc_internal(request.user):
                 data["assigned_to"] = None
-                data["assigned_to_name"] = None
         return data
 
     def get_dg_endorsed_by_name(self, obj):
@@ -970,6 +971,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "parent_reference",
             "parent_title",
             "attached_submissions",
+            "co_assignments",
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",

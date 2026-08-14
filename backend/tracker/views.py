@@ -126,7 +126,6 @@ from .serializers import (
     MeetingTranscriptSerializer,
     MinutesGenerateSerializer,
     TranscriptGenerateSerializer,
-    SessionPinSetupSerializer,
     SessionPinVerifySerializer,
     DecisionExtractSerializer,
     CommissionSubTaskSerializer,
@@ -935,8 +934,33 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         params = self.request.query_params
 
         stage = params.get('current_stage')
-        if stage:
+        if stage == '__all__':
+            pass  # explicit "All statuses" — bypass the default narrowing below
+        elif stage:
             qs = qs.filter(current_stage=stage)
+        else:
+            # Unit managers/principals/seniors are scoped to their whole unit's
+            # queryset (routed_unit for ODU/HR/VIPAM, form_category for
+            # Compliance — see _submission_queryset_for), which never shrinks —
+            # a submission they've forwarded on (to the Secretary, Commission,
+            # etc.) stays in that queryset forever and clutters their default
+            # list. With no explicit stage requested, narrow to the stages
+            # still actually in their court; everything else is still one
+            # click away via the Stage filter's "All statuses" option.
+            profile = _profile(self.request.user)
+            _unit_scoped_roles = {
+                Role.ODU_MANAGER, Role.ODU_PRINCIPAL, Role.ODU_SENIOR,
+                Role.HR_UNIT_MANAGER, Role.HR_UNIT_PRINCIPAL, Role.HR_UNIT_SENIOR,
+                Role.VIPAM_MANAGER, Role.VIPAM_PRINCIPAL, Role.VIPAM_SENIOR,
+                Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_SENIOR,
+            }
+            if profile and profile.role in _unit_scoped_roles:
+                qs = qs.filter(current_stage__in={
+                    WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                    WorkflowStage.UNDER_ASSESSMENT,
+                    WorkflowStage.DEFERRED_BACK_TO_HR,
+                    WorkflowStage.DEFERRED_BACK_TO_UNIT,
+                })
 
         ministry = params.get('ministry')
         if ministry:
@@ -2388,6 +2412,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         """
         from .models import AuditLog as _AL, SubmissionCoAssignment, Notification
         from django.contrib.auth.models import User
+        from .audit import log_action as _log
 
         submission = self.get_object()
         profile = _profile(request.user)
@@ -2423,6 +2448,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             _log(request, _AL.Action.UPDATE, resource_type="Submission",
                  resource_id=submission.id, resource_label=submission.reference_number,
                  description=f"Co-assignment removed for {principal.username}")
+            invalidate_submission(submission.id)
             return Response(SubmissionDetailSerializer(submission).data)
 
         # Verify eligibility
@@ -2468,6 +2494,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
              resource_id=submission.id, resource_label=submission.reference_number,
              description=f"Co-assignment {'added' if created else 'updated'} for {principal.username}")
 
+        invalidate_submission(submission.id)
         return Response(SubmissionDetailSerializer(submission).data)
 
     @action(detail=True, methods=["post"], url_path="submit-to-manager")
@@ -3765,9 +3792,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             except PSCForm37Data.DoesNotExist:
                 return Response({}, status=status.HTTP_200_OK)
 
-        # POST / PUT — ministry HR, dept admin, PSC officer/admin/secretary may write
+        # POST / PUT — ministry HR, dept admin, CSU manager, PSC officer/admin/secretary may write
         allowed_write_roles = {
-            Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY,
+            Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.CSU_MANAGER,
             Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY,
         }
         if profile.role not in allowed_write_roles:
@@ -6687,41 +6714,16 @@ class DisableTOTPView(APIView):
 # ── Session PIN (Trusted Device Re-authentication) ────────────────────────────
 
 class SessionPinSetupView(APIView):
-    """Set or change the session PIN for trusted-device re-authentication.
-    Requires authentication. When changing an existing PIN, current_password
-    is required for verification."""
+    """Session PIN feature is disabled system-wide — no one (existing or newly
+    onboarded) may set one, so the trusted-session PIN shortcut in the login
+    flow stays permanently inert."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        ser = SessionPinSetupSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-
-        profile = _profile(request.user)
-        new_pin = ser.validated_data["pin"]
-
-        # If changing an existing PIN, verify current password
-        if profile.session_pin:
-            current_password = ser.validated_data.get("current_password", "")
-            if not request.user.check_password(current_password):
-                return Response(
-                    {"detail": "Current password is required to change the session PIN."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        from django.contrib.auth.hashers import make_password
-        profile.session_pin = make_password(new_pin)
-        profile.session_pin_set_at = timezone.now()
-        profile.save(update_fields=["session_pin", "session_pin_set_at"])
-
-        _security_log.info("SESSION_PIN_SET | username=%s", request.user.username)
-        from .audit import log_action as _log
-        from .models import AuditLog as _AL
-        _log(request, _AL.Action.SETTINGS,
-             resource_type="User", resource_id=request.user.id,
-             resource_label=request.user.username,
-             description=f"Session PIN {'set' if not profile.session_pin_set_at else 'changed'} for {request.user.username}")
-
-        return Response({"detail": "Session PIN has been set successfully."})
+        return Response(
+            {"detail": "Session PIN sign-in is disabled. Please use your full password to sign in."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
 
 class SessionPinVerifyView(APIView):
@@ -10217,28 +10219,18 @@ class MySignatureView(APIView):
 
 
 class VerifyPinView(APIView):
-    """Quick in-app PIN check — confirms identity without issuing new tokens."""
+    """Quick in-app identity re-confirmation (document e-signing, signature
+    management) — confirms the current password without issuing new tokens.
+    Session PIN is disabled system-wide, so this checks the account password
+    instead of a PIN."""
 
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [SessionPinVerifyThrottle]
 
     def post(self, request):
-        from django.contrib.auth.hashers import check_password
-        pin = str(request.data.get('pin', ''))
-        try:
-            profile = _profile(request.user)
-        except Exception:
-            return Response(
-                {'detail': 'User profile not found.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not profile.session_pin:
-            return Response(
-                {'detail': 'No Session PIN configured. Please set one up in Account Settings first.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not pin or not check_password(pin, profile.session_pin):
-            return Response({'detail': 'Incorrect PIN. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
+        password = str(request.data.get('password', '') or request.data.get('pin', ''))
+        if not password or not request.user.check_password(password):
+            return Response({'detail': 'Incorrect password. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'ok': True})
 
 

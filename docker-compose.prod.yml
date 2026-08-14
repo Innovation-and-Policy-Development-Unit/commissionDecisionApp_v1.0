@@ -17,3 +17,19 @@ services:
       - scdms_media:/var/scdms/media:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./frontend/nginx-docker-ssl.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/app-locations.conf:/etc/nginx/app-locations.conf:ro
+
+  # Cloudflare Tunnel — outbound-only connector, no inbound firewall/port-forward
+  # needed. Token-based (remotely-managed): public hostname → origin service
+  # routing is configured in the Cloudflare Zero Trust dashboard (Networks >
+  # Tunnels > this tunnel > Public Hostname), not here.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      web:
+        condition: service_started
+        required: true
+    networks:
+      - app
+    restart: unless-stopped

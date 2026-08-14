@@ -55,15 +55,6 @@ class TrackerConfig(AppConfig):
             )
 
         try:
-            from .compliance_scheduler import sync_compliance_sla_scheduler
-            sync_compliance_sla_scheduler()
-        except Exception as exc:  # noqa: BLE001
-            import logging
-            logging.getLogger("scdms.security").warning(
-                "Compliance SLA schedule could not be synced: %s", exc
-            )
-
-        try:
             from .intelligence.reports import sync_intelligence_reports_scheduler
             sync_intelligence_reports_scheduler()
         except Exception as exc:  # noqa: BLE001

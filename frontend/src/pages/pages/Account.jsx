@@ -186,15 +186,6 @@ export default function Account() {
     api.get('/auth/password-policy/').then(r => setPolicy(r.data)).catch(() => {})
   }, [])
 
-  // Session PIN state
-  const [pinFormOpen,    setPinFormOpen]    = useState(false)
-  const [pinInput,       setPinInput]       = useState('')
-  const [pinConfirm,     setPinConfirm]     = useState('')
-  const [pinCurrentPw,   setPinCurrentPw]   = useState('')
-  const [pinLoading,     setPinLoading]     = useState(false)
-  const [pinError,       setPinError]       = useState('')
-  const [pinSuccess,     setPinSuccess]     = useState('')
-
   const [inactivityMinutes, setInactivityMinutes] = useState(DEFAULT_INACTIVITY_LOCK_MINUTES)
 
   useEffect(() => {
@@ -208,37 +199,7 @@ export default function Account() {
     setInactivityMinutes(minutes)
     if (user?.username) {
       setInactivityLockMinutes(user.username, minutes)
-      toast.success(minutes === 0 ? 'Automatic screen lock disabled.' : `Screen will lock after ${minutes} minutes of inactivity.`)
-    }
-  }
-
-  const resetPinForm = () => {
-    setPinInput(''); setPinConfirm(''); setPinCurrentPw(''); setPinError('')
-  }
-
-  const handlePinSetup = async e => {
-    e.preventDefault()
-    setPinError('')
-    setPinSuccess('')
-    if (pinInput !== pinConfirm) { setPinError('PINs do not match.'); return }
-    if (pinInput.length < 4)    { setPinError('PIN must be at least 4 digits.'); return }
-    if (user?.session_pin_set && !pinCurrentPw) {
-      setPinError('Enter your current password to change the PIN.')
-      return
-    }
-    setPinLoading(true)
-    try {
-      const payload = { pin: pinInput }
-      if (user?.session_pin_set) payload.current_password = pinCurrentPw
-      await api.post('/auth/session-pin/setup/', payload)
-      await refreshMe()
-      setPinSuccess('Session PIN set successfully.')
-      setPinFormOpen(false)
-      resetPinForm()
-    } catch (err) {
-      setPinError(err.response?.data?.detail || 'Failed to set PIN.')
-    } finally {
-      setPinLoading(false)
+      toast.success(minutes === 0 ? 'Automatic sign-out disabled.' : `You'll be signed out after ${minutes} minutes of inactivity.`)
     }
   }
 
@@ -548,7 +509,7 @@ export default function Account() {
             <p className="text-xs text-slate-400 mb-4">
               Your pre-saved signature is placed on PDF documents when you sign them.
               {!storedSig && ' Upload an image or draw your signature below — no PIN needed for the first upload.'}
-              {storedSig && ' To change or delete your existing signature, your Session PIN is required.'}
+              {storedSig && ' To change or delete your existing signature, your password is required.'}
             </p>
 
             {/* Preview */}
@@ -807,98 +768,6 @@ export default function Account() {
               </>
             )}
 
-            {/* Session PIN (separator) */}
-            <div className={policy.mfa_enabled ? "mt-6 pt-5 border-t border-slate-200 dark:border-slate-700" : ""}>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
-                  <KeyRound size={18} />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Session PIN</h3>
-                  <p className="text-xs text-slate-400">Unlock the screen after inactivity or manual lock (valid until 5pm, or 12h after full login if signing in after 5pm)</p>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${user?.session_pin_set ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
-                    <KeyRound size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      PIN {user?.session_pin_set ? '(Set)' : '(Not Set)'}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {user?.session_pin_set
-                        ? 'Use your PIN for quick sign-in within the trusted session window.'
-                        : 'Set a 4-6 digit PIN for faster re-authentication.'}
-                    </p>
-                  </div>
-                </div>
-
-                {pinFormOpen ? (
-                  <form onSubmit={handlePinSetup} className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                    {/* Current password — only required when changing existing PIN */}
-                    {user?.session_pin_set && (
-                      <input
-                        type="password"
-                        className="input !py-1.5 !px-3 text-sm"
-                        style={{ width: 140, borderRadius: 8 }}
-                        placeholder="current password"
-                        value={pinCurrentPw}
-                        onChange={e => setPinCurrentPw(e.target.value)}
-                        required
-                        autoFocus
-                      />
-                    )}
-                    <input
-                      type="password"
-                      className="input !py-1.5 !px-3 text-center text-sm font-mono"
-                      style={{ width: 100, borderRadius: 8, letterSpacing: '0.3em' }}
-                      maxLength={6}
-                      placeholder="new PIN"
-                      value={pinInput}
-                      onChange={e => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      required
-                      autoFocus={!user?.session_pin_set}
-                    />
-                    <input
-                      type="password"
-                      className="input !py-1.5 !px-3 text-center text-sm font-mono"
-                      style={{ width: 100, borderRadius: 8, letterSpacing: '0.3em' }}
-                      maxLength={6}
-                      placeholder="confirm"
-                      value={pinConfirm}
-                      onChange={e => setPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      required
-                    />
-                    <button type="submit"
-                      disabled={pinLoading || pinInput.length < 4 || pinInput !== pinConfirm || (user?.session_pin_set && !pinCurrentPw)}
-                      className="btn-gradient py-1.5 px-3 text-xs">
-                      {pinLoading ? 'Saving…' : 'Save'}
-                    </button>
-                    <button type="button" onClick={() => { setPinFormOpen(false); resetPinForm() }}
-                      className="py-1.5 px-2 text-xs text-slate-400 hover:text-slate-600">
-                      Cancel
-                    </button>
-                  </form>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setPinFormOpen(true)}
-                    className="btn-gradient py-2 px-4 text-xs"
-                  >
-                    {user?.session_pin_set ? 'Change PIN' : 'Set PIN'}
-                  </button>
-                )}
-              </div>
-              {pinError && (
-                <p className="mt-2 text-xs text-red-500">{pinError}</p>
-              )}
-              {pinSuccess && (
-                <p className="mt-2 text-xs text-emerald-600">{pinSuccess}</p>
-              )}
-            </div>
           </div>
 
           {/* Automatic screen lock — own card so it is easy to find */}
@@ -908,16 +777,16 @@ export default function Account() {
                 <Clock size={18} />
               </div>
               <div>
-                <h3 className="font-semibold text-slate-900 dark:text-slate-100">Automatic screen lock</h3>
+                <h3 className="font-semibold text-slate-900 dark:text-slate-100">Automatic sign-out</h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  After inactivity, the screen locks. Enter your session PIN to continue — you stay signed in.
+                  After inactivity, you're signed out automatically and returned to the login screen.
                 </p>
               </div>
             </div>
 
             <div className="space-y-3">
               <label htmlFor="inactivity-lock-minutes" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                Lock screen after
+                Sign out after
               </label>
               <select
                 id="inactivity-lock-minutes"
@@ -931,15 +800,8 @@ export default function Account() {
                 <option value={30}>30 minutes</option>
                 <option value={45}>45 minutes</option>
                 <option value={60}>60 minutes</option>
-                <option value={0}>Never (manual lock only)</option>
+                <option value={0}>Never</option>
               </select>
-
-              {inactivityMinutes > 0 && !user?.session_pin_set && (
-                <p className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 px-3 py-2">
-                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                  Set a session PIN in the card above first; otherwise automatic lock cannot unlock.
-                </p>
-              )}
             </div>
           </div>
 

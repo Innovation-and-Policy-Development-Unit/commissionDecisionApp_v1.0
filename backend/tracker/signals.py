@@ -37,19 +37,6 @@ def feedback_comment_post_save(sender, instance, created, **kwargs):
     transaction.on_commit(lambda: process_feedback_with_ai.delay(instance.id))
 
 
-@receiver(post_save, sender="tracker.ComplianceCase")
-def compliance_case_post_save(sender, instance, created, **kwargs):
-    """Materialise the statutory stage timeline when a compliance case is created."""
-    if not created:
-        return
-    from .compliance_workflows import materialize_stages
-
-    try:
-        materialize_stages(instance)
-    except Exception as exc:  # noqa: BLE001
-        log.error("Could not materialise compliance stages for case %s: %s", instance.pk, exc)
-
-
 # ── Act engine event triggers ─────────────────────────────────────────────────
 # Each save dispatches created/updated automations for the entity. Wrapped so a
 # missing table during migrations, or any automation error, never breaks a save.

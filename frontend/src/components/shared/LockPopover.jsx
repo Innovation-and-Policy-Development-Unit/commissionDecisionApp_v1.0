@@ -3,15 +3,15 @@ import { Lock, ArrowRight, Loader2, X, ShieldAlert } from 'lucide-react'
 import api from '../../api/client'
 
 /**
- * Inline PIN confirmation overlay.
+ * Inline password confirmation overlay.
  * Props:
  *   title      – heading text (default "Confirm Identity")
  *   message    – subtext shown above the input
- *   onVerified – called when PIN is correct
+ *   onVerified – called when the password is correct
  *   onCancel   – called when user dismisses
  */
 export default function LockPopover({ title = 'Confirm Identity', message, onVerified, onCancel }) {
-  const [pin,     setPin]     = useState('')
+  const [password, setPassword] = useState('')
   const [error,   setError]   = useState('')
   const [loading, setLoading] = useState(false)
   const inputRef = useRef(null)
@@ -24,16 +24,16 @@ export default function LockPopover({ title = 'Confirm Identity', message, onVer
 
   const handleSubmit = async e => {
     e.preventDefault()
-    if (pin.length < 4) return
+    if (password.length < 1) return
     setError('')
     setLoading(true)
     try {
-      await api.post('/auth/verify-pin/', { pin })
+      await api.post('/auth/verify-pin/', { password })
       onVerified()
     } catch (err) {
       const detail = err.response?.data?.detail || 'Verification failed.'
       setError(detail)
-      setPin('')
+      setPassword('')
       inputRef.current?.focus()
     } finally {
       setLoading(false)
@@ -76,33 +76,29 @@ export default function LockPopover({ title = 'Confirm Identity', message, onVer
           {error && (
             <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-3 py-2.5 text-xs text-red-700 dark:text-red-300">
               <ShieldAlert size={13} className="mt-0.5 shrink-0" />
-              {error.includes('No Session PIN') ? (
-                <span>{error} Go to <strong>Account Settings → Session PIN</strong>.</span>
-              ) : error}
+              {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 text-center">
-                Session PIN (4–6 digits)
+                Password
               </label>
               <input
                 ref={inputRef}
                 type="password"
-                inputMode="numeric"
-                className="input text-center text-xl font-mono tracking-[0.4em]"
-                maxLength={6}
-                placeholder="••••••"
-                value={pin}
-                onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                autoComplete="off"
+                className="input text-center text-sm"
+                placeholder="Enter your password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
                 required
               />
             </div>
             <button
               type="submit"
-              disabled={loading || pin.length < 4}
+              disabled={loading || password.length < 1}
               className="w-full btn-gradient py-2.5 flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-50"
             >
               {loading ? (

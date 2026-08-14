@@ -1,9 +1,9 @@
 import {
   LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo, PenLine,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
-  Mail, FolderOpen, BookOpen, Languages, Sparkles,
+  Mail, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, CalendarCheck, AlertCircle, Tablet, Trash2,
-  ListChecks, Megaphone, Inbox, Flag, SlidersHorizontal, Zap, Scale,
+  ListChecks, Flag, SlidersHorizontal, Zap,
 } from 'lucide-react'
 import {
   userCanAccessAdminPanel,
@@ -31,30 +31,6 @@ const menuItems = [
     items: [
       { label: 'Dashboard',   labelKey: 'nav.dashboard',   icon: LayoutDashboard, path: '/' },
       { label: 'Submissions', labelKey: 'nav.submissions', icon: FileText,        path: '/submissions' },
-    ],
-  },
-  {
-    // Compliance staff see the full case management sub-menus.
-    // Ministry staff see only "Lodge a Complaint" inside Case Intake.
-    group: 'Compliance',
-    groupKey: 'nav.group_compliance',
-    groupIcon: FolderOpen,
-    audience: 'all',
-    items: [
-      { label: 'Compliance Cases',    labelKey: 'nav.compliance_cases',    icon: ListChecks, path: '/compliance/cases',          audience: 'compliance' },
-      { label: 'Complaints Register', labelKey: 'nav.complaints_register', icon: Inbox,      path: '/compliance/complaints',     audience: 'compliance' },
-      { label: 'Lodge a Complaint',   labelKey: 'nav.lodge_complaint',     icon: Megaphone,  path: '/compliance/lodge-complaint', roles: ['head_of_agency', 'ministry_hr', 'dept_admin'] },
-      {
-        label: 'Reports & Litigation',
-        labelKey: 'nav.compliance_reports_lit',
-        icon: BarChart3,
-        audience: 'compliance',
-        children: [
-          { label: 'Case Reports',       labelKey: 'nav.compliance_reports',   icon: BarChart3, path: '/compliance/reports',    audience: 'compliance' },
-          { label: 'Litigation Tracker', labelKey: 'nav.compliance_litigation', icon: Scale,    path: '/compliance/litigation', audience: 'compliance' },
-        ],
-      },
-      { label: 'Offence Catalogue',   labelKey: 'nav.offence_catalogue',   icon: Gavel,      path: '/compliance/offence-catalogue', roles: ['psc_admin', 'compliance_manager'] },
     ],
   },
   {

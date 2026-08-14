@@ -14,7 +14,6 @@ import {
   TrendingUp, TrendingDown, FileText, CheckCircle2,
   AlertTriangle, Activity, Zap, ArrowRight,
 } from 'lucide-react'
-import ComplianceDashboardPanel from './ComplianceDashboardPanel'
 
 // ── Static mock data (replace with API when endpoints exist) ──────────────────
 
@@ -662,9 +661,6 @@ export default function PscDashboard() {
           </Link>
         </div>
       </div>
-
-      {/* ── Section 6: Compliance Overview ───────────────────────────────────── */}
-      <ComplianceDashboardPanel />
 
     </div>
   )

@@ -4436,23 +4436,3 @@ class AutomationRun(models.Model):
 
     def __str__(self):
         return f"{self.automation_id} {self.status} @ {self.created_at:%Y-%m-%d}"
-
-
-# ── Compliance Case Management models (merged in) ──────────────────────────────
-# Defined in a sibling module and imported here so Django discovers them as part of
-# the ``tracker`` app. The import sits at the bottom of this file because the
-# compliance models reference ``Submission`` / ``Ministry`` / ``ReferenceCounter``
-# defined above.
-from .compliance_models import (  # noqa: E402,F401
-    CaseFamily,
-    CaseNote,
-    Complaint,
-    ComplaintStatus,
-    ComplianceCase,
-    ComplianceCaseStage,
-    ComplianceCaseStatus,
-    ComplianceDecisionOutcome,
-    LitigationRecord,
-    SLAStatus,
-    StageStatus,
-)

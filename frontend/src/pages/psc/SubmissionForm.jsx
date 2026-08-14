@@ -4,7 +4,6 @@ import PageHeader from '../../components/shared/PageHeader'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import NewComplianceCaseForm from '../compliance/NewComplianceCaseForm'
 import { isComplianceRole } from '../../constants/compliance'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import { ODU_RESTRUCTURE_CHECKLIST_FORM_CODES } from '../../utils/oduChecklist'
@@ -830,6 +829,9 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   // not the dedicated internal-only catalog.
   const csuFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'hr')
 
+  // Compliance unit: COMP-* submission types (routed_unit === 'compliance').
+  const complianceFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'compliance')
+
   const allowed = user && SUBMISSION_CREATE_ALLOWED_ROLES.includes(user.role)
 
   useEffect(() => {
@@ -882,10 +884,16 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
       : <div><PageHeader title="New submission" subtitle={msg} /></div>
   }
 
-  // ── Compliance: open a compliance case directly in SCDMS ───────────────
+  // ── Compliance: same internal-submission form as CSU/HR, COMP-* types ──
   if (isComplianceUser) {
     return (
-      <NewComplianceCaseForm modal={modal} onSuccess={onSuccess} onClose={onClose} />
+      <InternalSubmissionForm
+        modal={modal}
+        onClose={onClose}
+        onSuccess={onSuccess}
+        internalFormTypes={complianceFormTypesResolved}
+        isCsuUser={false}
+      />
     )
   }
 

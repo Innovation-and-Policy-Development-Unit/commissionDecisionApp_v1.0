@@ -10,7 +10,6 @@ import ResetPassword from '../pages/auth/ResetPassword'
 import PasswordResetConfirm from '../pages/auth/PasswordResetConfirm'
 import TwoSteps from '../pages/auth/TwoSteps'
 import TOTPSetup from '../pages/auth/TOTPSetup'
-import SetupSecurity from '../pages/auth/SetupSecurity'
 import Error404 from '../pages/auth/Error404'
 import TrackSubmission from '../pages/public/TrackSubmission'
 
@@ -72,15 +71,6 @@ const PendingDecisions = lazy(() => import('../pages/psc/PendingDecisions'))
 const MinistryPerformance = lazy(() => import('../pages/psc/MinistryPerformance'))
 const ImplementationDashboard = lazy(() => import('../pages/psc/ImplementationDashboard'))
 const AnnualReport = lazy(() => import('../pages/psc/AnnualReport'))
-const ComplianceCases = lazy(() => import('../pages/compliance/ComplianceCases'))
-const ComplianceCaseDetail = lazy(() => import('../pages/compliance/ComplianceCaseDetail'))
-const NewComplianceCaseForm = lazy(() => import('../pages/compliance/NewComplianceCaseForm'))
-const ComplaintsRegister = lazy(() => import('../pages/compliance/ComplaintsRegister'))
-const LodgeComplaint = lazy(() => import('../pages/compliance/LodgeComplaint'))
-const ComplianceDashboard = lazy(() => import('../pages/compliance/ComplianceDashboard'))
-const ComplianceReports = lazy(() => import('../pages/compliance/ComplianceReports'))
-const LitigationTracker = lazy(() => import('../pages/compliance/LitigationTracker'))
-const OffenceCatalogueAdmin = lazy(() => import('../pages/compliance/OffenceCatalogueAdmin'))
 
 function RouteFallback({ detail = false }) {
   return <PageSkeleton detailMode={detail} />
@@ -99,7 +89,6 @@ export default function AppRouter() {
       <Route path="/auth/reset-password/confirm"   element={<PasswordResetConfirm />} />
       <Route path="/auth/2fa"                      element={<TwoSteps />} />
       <Route path="/auth/totp-setup"               element={<TOTPSetup />} />
-      <Route path="/auth/setup-security"            element={<SetupSecurity />} />
       <Route path="/track"                         element={<TrackSubmission />} />
 
       <Route element={<RequireAuth />}>
@@ -135,15 +124,6 @@ export default function AppRouter() {
           <Route path="/annual-report"        element={<S><AnnualReport /></S>} />
 
           {/* ── Compliance ── */}
-          <Route path="/compliance/dashboard"      element={<S><ComplianceDashboard /></S>} />
-          <Route path="/compliance/cases"          element={<S><ComplianceCases /></S>} />
-          <Route path="/compliance/cases/new"      element={<S><NewComplianceCaseForm /></S>} />
-          <Route path="/compliance/cases/:id"      element={<S detail><ComplianceCaseDetail /></S>} />
-          <Route path="/compliance/complaints"     element={<S><ComplaintsRegister /></S>} />
-          <Route path="/compliance/lodge-complaint" element={<S><LodgeComplaint /></S>} />
-          <Route path="/compliance/reports"        element={<S><ComplianceReports /></S>} />
-          <Route path="/compliance/litigation"     element={<S><LitigationTracker /></S>} />
-          <Route path="/compliance/offence-catalogue" element={<S><OffenceCatalogueAdmin /></S>} />
 
           {/* ── Admin ── */}
           <Route path="/admin/roles-permissions" element={<S><AdminPanel /></S>} />

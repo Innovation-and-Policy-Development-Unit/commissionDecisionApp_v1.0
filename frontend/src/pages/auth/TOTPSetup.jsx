@@ -73,12 +73,8 @@ export default function TOTPSetup() {
       
       if (data.access) {
         setTokens(data.access, data.refresh)
-        const me = await refreshMe()
+        await refreshMe()
         sessionStorage.removeItem('psc_setup_username')
-        if (!me?.session_pin_set) {
-          navigate('/auth/setup-security', { replace: true, state: location.state })
-          return
-        }
         const from = location.state?.from?.pathname || '/'
         navigate(from, { replace: true })
       } else {

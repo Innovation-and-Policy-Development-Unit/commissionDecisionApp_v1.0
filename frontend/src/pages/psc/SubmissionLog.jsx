@@ -398,9 +398,16 @@ export default function SubmissionLog() {
             className="lg:col-span-3"
             placeholder="All stages"
             value={stageFilter}
-            options={Object.entries(stageGroups).flatMap(([, codes]) =>
-              codes.map(code => ({ value: code, label: stageLabel(code, t) }))
-            )}
+            options={[
+              // Unit managers/principals/seniors get a narrowed default list
+              // (stages still in their unit's court) when no stage is picked —
+              // this is the explicit escape hatch back to everything, including
+              // submissions they've already forwarded on.
+              { value: '__all__', label: 'All statuses (incl. forwarded on)' },
+              ...Object.entries(stageGroups).flatMap(([, codes]) =>
+                codes.map(code => ({ value: code, label: stageLabel(code, t) }))
+              ),
+            ]}
             onChange={(_, v) => { setStageFilter(v); setPage(1) }}
           />
           <BaseSelect

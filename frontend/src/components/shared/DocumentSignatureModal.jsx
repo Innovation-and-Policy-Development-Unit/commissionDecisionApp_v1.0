@@ -428,7 +428,7 @@ export default function DocumentSignatureModal({ document: doc, submissionId, on
       {step === 'lock' && storedSig && (
         <LockPopover
           title="Confirm Identity"
-          message="Enter your Session PIN to place your signature on this document."
+          message="Enter your password to place your signature on this document."
           onVerified={handleVerified}
           onCancel={onClose}
         />

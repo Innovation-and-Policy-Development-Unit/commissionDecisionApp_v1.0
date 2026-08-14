@@ -40,6 +40,7 @@ import BaseInput from '../../components/shared/BaseInput'
 import BaseMessageBar from '../../components/shared/BaseMessageBar'
 import BaseCheckbox from '../../components/shared/BaseCheckbox'
 import MultiPageFormRenderer from '../../components/shared/MultiPageFormRenderer'
+import DynamicFormRenderer from '../../components/shared/DynamicFormRenderer'
 import PSCForm22Preview from '../../components/shared/PSCForm22Preview'
 import PSCForm21Fields from './PSCForm21Fields'
 import PSCForm21View from './PSCForm21View'
@@ -105,7 +106,11 @@ const CHECKLIST_EDIT_ROLES = [
 const MINISTRY_SUBMITTER_ROLES = ['ministry_hr', 'dept_admin', 'csu_manager']
 
 const DYNAMIC_CHECKLIST_EDIT_ROLES = [
-  'odu_manager', 'odu_principal', 'odu_senior', 'psc_admin',
+  'odu_manager', 'odu_principal', 'odu_senior',
+  'hr_unit_manager', 'hr_unit_principal', 'hr_unit_senior',
+  'vipam_manager', 'vipam_principal', 'vipam_senior',
+  'compliance_manager', 'compliance_principal', 'compliance_senior',
+  'psc_admin',
 ]
 const DYNAMIC_CHECKLIST_VIEW_ROLES = [
   ...DYNAMIC_CHECKLIST_EDIT_ROLES,
@@ -1135,47 +1140,42 @@ const stageDescriptions = {
           {effectiveTab === 'digitized_form' && (
           <>
           {form37 !== null && (
-            <div className="card card-compact">
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 px-1">
                 <FileText size={14} className="text-slate-400" />
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                   PSC Form 3-7 — Request to Employ
                 </h3>
-                <span className="ml-auto text-[11px] text-slate-400 bg-slate-100 dark:bg-slate-700 dark:text-slate-400 px-2 py-0.5 rounded-full">
+                <span className="text-[11px] text-slate-400 bg-slate-100 dark:bg-slate-700 dark:text-slate-400 px-2 py-0.5 rounded-full">
                   Digitized
                 </span>
               </div>
 
               {canEditForm37 ? (
-                <>
-                  <PSCForm37Fields form37={form37} setForm37={setForm37} />
-                  <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                    <BaseButton
-                      variant="primary"
-                      loading={form37Busy}
-                      loadingLabel="Saving"
-                      onClick={async () => {
-                        setForm37Busy(true)
-                        try {
-                          const payload = { ...form37 }
-                          ;['period_from', 'period_to', 'director_date', 'dg_date'].forEach(k => {
-                            if (!payload[k]) payload[k] = null
-                          })
-                          await api.post(`/submissions/${id}/form37/`, payload)
-                          toast.success('Form 3-7 saved.')
-                        } catch {
-                          toast.error('Failed to save Form 3-7.')
-                        } finally {
-                          setForm37Busy(false)
-                        }
-                      }}
-                    >
-                      Save Form 3-7
-                    </BaseButton>
-                  </div>
-                </>
+                <PSCForm37Fields
+                  form37={form37}
+                  setForm37={setForm37}
+                  isSaving={form37Busy}
+                  onSave={async () => {
+                    setForm37Busy(true)
+                    try {
+                      const payload = { ...form37 }
+                      ;['period_from', 'period_to', 'director_date', 'dg_date'].forEach(k => {
+                        if (!payload[k]) payload[k] = null
+                      })
+                      await api.post(`/submissions/${id}/form37/`, payload)
+                      toast.success('Form 3-7 saved.')
+                    } catch {
+                      toast.error('Failed to save Form 3-7.')
+                    } finally {
+                      setForm37Busy(false)
+                    }
+                  }}
+                />
               ) : (
-                <PSCForm37View data={form37} />
+                <div className="card card-compact">
+                  <PSCForm37View data={form37} />
+                </div>
               )}
             </div>
           )}
@@ -1296,11 +1296,13 @@ const stageDescriptions = {
                         {submission.form_type_code === 'PSC 2-2' && <PSCForm22View data={dynamicForm} />}
                       </div>
                     ) : (
-                      <MultiPageFormRenderer
-                        fields={dynamicFormFields}
-                        values={dynamicForm}
-                        readOnly
-                      />
+                      <div className="card card-compact">
+                        <DynamicFormRenderer
+                          fields={dynamicFormFields}
+                          values={dynamicForm}
+                          readOnly
+                        />
+                      </div>
                     )
                   )}
                 </div>

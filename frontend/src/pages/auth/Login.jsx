@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom'
-import { ArrowRight, ShieldCheck, Lock, KeyRound } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Lock } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/client'
 import BaseButton from '../../components/shared/BaseButton'
@@ -48,9 +48,7 @@ export default function Login() {
   const [error,            setError]            = useState('')
   const [loading,          setLoading]          = useState(false)
   const [show2FA,          setShow2FA]          = useState(false)
-  const [showPIN,          setShowPIN]          = useState(false)
   const [otp,              setOtp]              = useState('')
-  const [pin,              setPin]              = useState('')
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword,      setNewPassword]      = useState('')
   const [confirmPassword,  setConfirmPassword]  = useState('')
@@ -91,9 +89,7 @@ export default function Login() {
   }
 
   const applyLoginResponse = data => {
-    if (data?.pin_required) {
-      setShowPIN(true)
-    } else if (data?.two_factor_required) {
+    if (data?.two_factor_required) {
       if (data.setup_required) {
         sessionStorage.setItem('psc_setup_username', username)
         navigate('/auth/totp-setup', { state: { from: location.state?.from } })
@@ -137,26 +133,6 @@ export default function Login() {
       goToApp()
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid verification code.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleVerifyPIN = async e => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      const { data } = await api.post('/auth/session-pin/verify/', { username, pin })
-      setTokens(data.access, data.refresh)
-      const me = await refreshMe()
-      if (me?.must_change_password) {
-        setShowPasswordChange(true)
-        return
-      }
-      goToApp()
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid PIN or session expired.')
     } finally {
       setLoading(false)
     }
@@ -317,7 +293,7 @@ export default function Login() {
                   </BaseButton>
                 </form>
               </>
-            ) : !show2FA && !showPIN ? (
+            ) : !show2FA ? (
               <>
                 <div className="mb-7">
                   <h1 className="text-2xl font-bold text-slate-900 mb-1 tracking-tight">PSC Submission Portal</h1>
@@ -379,7 +355,7 @@ export default function Login() {
                   <span className="text-[11px] text-slate-400">Secured with 256-bit TLS encryption</span>
                 </div>
               </>
-            ) : show2FA ? (
+            ) : (
               /* ── 2FA (TOTP) step ── */
               <>
                 <div className="flex justify-center mb-5">
@@ -426,57 +402,6 @@ export default function Login() {
                   <div className="text-center mt-4">
                     <BaseButton type="button" variant="ghost" size="sm"
                       onClick={() => { setShow2FA(false); setOtp(''); setError('') }}>
-                      Back to sign in
-                    </BaseButton>
-                  </div>
-                </form>
-              </>
-            ) : (
-              /* ── Session PIN step ── */
-              <>
-                <div className="flex justify-center mb-5">
-                  <div className="relative">
-                    <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #0c2451, #1a4080)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <KeyRound size={26} color="white" />
-                    </div>
-                  </div>
-                </div>
-                <h1 className="text-xl font-bold text-center text-slate-900 mb-1">Session PIN</h1>
-                <p className="text-sm text-center text-slate-500 mb-7">
-                  Enter your session PIN to re-authenticate. Your trusted session is valid until 5pm or 8 hours from your last full login.
-                </p>
-
-                {error && (
-                  <BaseMessageBar intent="error" className="mb-4">
-                    {error}
-                  </BaseMessageBar>
-                )}
-
-                <form onSubmit={handleVerifyPIN} className="space-y-5">
-                  <BaseInput
-                    label="PIN (4–6 digits)"
-                    type="password"
-                    maxLength={6}
-                    placeholder="••••••"
-                    value={pin}
-                    onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    required
-                    autoFocus
-                    input={{ className: 'text-center text-2xl font-mono', style: { letterSpacing: '0.4em' } }}
-                  />
-                  <BaseButton
-                    type="submit"
-                    variant="primary"
-                    className="w-full !py-3"
-                    loading={loading}
-                    loadingLabel="Verifying"
-                    disabled={pin.length < 4}
-                  >
-                    Verify PIN &amp; Continue
-                  </BaseButton>
-                  <div className="text-center">
-                    <BaseButton type="button" variant="ghost" size="sm"
-                      onClick={() => { setShowPIN(false); setPin(''); setError('') }}>
                       Back to sign in
                     </BaseButton>
                   </div>

@@ -5,7 +5,6 @@ import PscDashboard from './psc/PscDashboard'
 import { useAuth } from '../context/AuthContext'
 import { PageSkeleton } from '../components/shared/Skeleton'
 import { isComplianceRole, isReadOnlyComplianceRole } from '../constants/compliance'
-import ComplianceDashboardPanel from './psc/ComplianceDashboardPanel'
 
 // The ministry dashboard is code-split — only loaded for ministry / admin users.
 const MinistryDashboard = lazy(() => import('./ministry/MinistryDashboard'))
