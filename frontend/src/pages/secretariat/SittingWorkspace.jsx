@@ -203,6 +203,54 @@ export default function SittingWorkspace() {
     } finally { setBusy(false) }
   }
 
+  // Bulk-fill: auto-populate the agenda from the backlog up to remaining
+  // capacity, in the order the backend already ranks it (items the system
+  // has recommended for this specific meeting float to the top — see
+  // `scheduled_here`/`scheduled_meeting` — then oldest-received next).
+  // The SAO reviews/reorders/removes afterward; this is a starting point,
+  // not a silent auto-assignment.
+  const fillFromQueue = async () => {
+    const remaining = capacity > 0 ? Math.max(capacity - placed, 0) : backlog.length
+    if (remaining <= 0) {
+      toast.error(capacity > 0 ? 'This agenda is already at capacity.' : 'The backlog is empty.')
+      return
+    }
+    const toAdd = backlog.slice(0, remaining)
+    if (toAdd.length === 0) {
+      toast.error('The backlog is empty.')
+      return
+    }
+    const ok = await confirm({
+      title: 'Fill agenda from queue?',
+      message: `Add the next ${toAdd.length} submission${toAdd.length === 1 ? '' : 's'} from the backlog to this `
+        + `agenda${capacity > 0 ? ` (up to the ${capacity}-item capacity)` : ''}? You can remove or reorder any `
+        + `of them afterward.`,
+      confirmLabel: 'Fill agenda',
+    })
+    if (!ok) return
+    setBusy(true)
+    let succeeded = 0
+    const failed = []
+    for (const s of toAdd) {
+      try {
+        await api.post('/agenda-items/', { meeting: meetingId, submission: s.submission_id, category: 'other' })
+        succeeded += 1
+      } catch (err) {
+        failed.push({ ref: s.ref, detail: err.response?.data?.detail || 'failed' })
+      }
+    }
+    await fetchWorkspace({ silent: true })
+    setBusy(false)
+    if (failed.length === 0) {
+      toast.success(`Added ${succeeded} submission${succeeded === 1 ? '' : 's'} to the agenda.`)
+    } else {
+      toast.error(
+        `Added ${succeeded}, but ${failed.length} could not be added `
+        + `(${failed.map(f => f.ref).join(', ')}).`,
+      )
+    }
+  }
+
   const removeItem = async (item) => {
     const ok = await confirm({
       title: 'Remove from agenda?',
@@ -359,6 +407,16 @@ export default function SittingWorkspace() {
             Forwarded to Commission, not yet on this agenda.
             {canEdit && ' Drag a card onto a section to schedule it.'}
           </p>
+          {canEdit && backlog.length > 0 && (
+            <button
+              onClick={fillFromQueue}
+              disabled={busy || (capacity > 0 && placed >= capacity)}
+              className="w-full mb-2 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary-200 dark:border-primary-800 text-primary-600 dark:text-primary-400 text-xs font-medium hover:bg-primary-50 dark:hover:bg-primary-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="Auto-add backlog items up to capacity — you can still remove or reorder afterward"
+            >
+              <ListChecks size={13} /> Fill from queue
+            </button>
+          )}
           <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
             {backlog.length === 0 && (
               <p className="text-xs text-slate-400 italic px-1 py-6 text-center">Backlog is empty.</p>

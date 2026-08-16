@@ -355,9 +355,10 @@ export default function Agenda() {
                 {canManageAgenda && (
                   <Link
                     to={`/secretariat/meetings/${selectedId}/workspace`}
-                    className="btn-outline flex items-center gap-2 px-4 py-2"
+                    className="btn-primary flex items-center gap-2 px-4 py-2"
+                    title="Build the agenda visually — drag backlog submissions onto sections, or use Fill from queue"
                   >
-                    <LayoutGrid size={15} /> Workspace
+                    <LayoutGrid size={15} /> Sitting Workspace
                   </Link>
                 )}
                 {canSittingPack && (
@@ -380,7 +381,8 @@ export default function Agenda() {
                 {!readOnly && (
                 <button
                   onClick={() => { fetchSubmissions(); setModalOpen(true) }}
-                  className="btn-primary flex items-center gap-2"
+                  className="btn-outline flex items-center gap-2"
+                  title="Add a single item directly, e.g. to record a Matters Arising reference"
                 >
                   <Plus size={16} /> Add Item
                 </button>
@@ -690,6 +692,11 @@ export default function Agenda() {
         onClose={() => setModalOpen(false)}
         size="md"
       >
+          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-1 mb-3">
+            For general scheduling, <strong>Sitting Workspace</strong> is faster — drag backlog
+            submissions onto sections, or use its Fill from queue button. Use this form for one-off
+            adds, e.g. recording a Matters Arising reference.
+          </p>
           <form onSubmit={handleAdd} className="space-y-4">
             {/* Submission — pick first so we can auto-fill category */}
             <div>
