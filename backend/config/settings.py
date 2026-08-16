@@ -454,6 +454,10 @@ CACHE_REF_RETRIEVE_TTL = int(os.getenv('CACHE_REF_RETRIEVE_TTL', '180'))
 CACHE_SETTINGS_TTL = int(os.getenv('CACHE_SETTINGS_TTL', '60'))
 CACHE_BOOTSTRAP_TTL = int(os.getenv('CACHE_BOOTSTRAP_TTL', '60'))
 CACHE_PASSWORD_POLICY_TTL = int(os.getenv('CACHE_PASSWORD_POLICY_TTL', '300'))
+# Dashboard/analytics aggregates change whenever a submission is written, so a
+# much shorter TTL than reference data — just enough to absorb repeat hits
+# within a page load / short polling window without serving stale-for-long.
+CACHE_DASHBOARD_TTL = int(os.getenv('CACHE_DASHBOARD_TTL', '30'))
 
 if CACHE_ENABLED:
     from config.cache_urls import redis_cache_url_from_broker

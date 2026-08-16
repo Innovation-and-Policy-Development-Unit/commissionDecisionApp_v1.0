@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from django.contrib.auth.models import User
 from django.db import models, transaction
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.urls import get_resolver
@@ -44,6 +44,7 @@ from .models import (
     RoleDefinition,
     SecurityNotice,
     Submission,
+    SubmissionCoAssignment,
     SystemPermission,
     SystemSetting,
     EmailTemplate,
@@ -272,7 +273,14 @@ def _submission_queryset_for(user):
         "scheduled_meeting",
         "assigned_to",
         "dg_endorsed_by",
-    ).prefetch_related("events__actor", "attached_submissions")
+    ).prefetch_related(
+        "events__actor",
+        "attached_submissions",
+        Prefetch(
+            "co_assignments",
+            queryset=SubmissionCoAssignment.objects.select_related("principal"),
+        ),
+    )
     if user.is_superuser or user.is_staff:
         return qs
     profile = _profile(user)
@@ -11025,7 +11033,17 @@ def _odu_action_officer_default() -> str:
 @permission_classes([permissions.IsAuthenticated])
 def dashboard_stats_view(request):
     """Enhanced dashboard KPIs: submission counts, SLA health, stage breakdown."""
+    from django.conf import settings as _settings
     from django.db.models import Count, Q
+
+    from .api_cache import _user_scope, cache_enabled, get_cached_response, set_cached_response
+
+    cache_key = f"scdms:dashboard-stats:v1:{_user_scope(request)}"
+    if cache_enabled():
+        hit = get_cached_response(cache_key)
+        if hit is not None:
+            return Response(hit)
+
     profile = _profile(request.user)
     qs = Submission.objects.all()
     if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
@@ -11076,7 +11094,7 @@ def dashboard_stats_view(request):
     ai_brief_done = qs.filter(ai_brief_processed=True).count()
     ai_risk_done = qs.filter(ai_risk_processed=True).count()
 
-    return Response({
+    data = {
         "total_submissions": total,
         "submitted_this_month": submitted_this_month,
         "submitted_this_week": submitted_this_week,
@@ -11088,7 +11106,9 @@ def dashboard_stats_view(request):
         "ai_brief_processing_rate": round(ai_brief_done / total * 100) if total else 0,
         "ai_risk_processing_rate": round(ai_risk_done / total * 100) if total else 0,
         "generated_at": now.isoformat(),
-    })
+    }
+    set_cached_response(cache_key, data, _settings.CACHE_DASHBOARD_TTL)
+    return Response(data)
 
 
 # ── Submission SLA ─────────────────────────────────────────────────────────────
@@ -11474,43 +11494,95 @@ def ministry_performance_view(request):
 @permission_classes([permissions.IsAuthenticated])
 def analytics_overview_view(request):
     """Aggregated analytics overview."""
+    from django.conf import settings as _settings
     from django.db.models import Count
+    from django.db.models.functions import TruncMonth
+
+    from .api_cache import _user_scope, cache_enabled, get_cached_response, set_cached_response
+
+    cache_key = f"scdms:analytics-overview:v1:{_user_scope(request)}"
+    if cache_enabled():
+        hit = get_cached_response(cache_key)
+        if hit is not None:
+            return Response(hit)
+
     qs = Submission.objects.all()
     now = timezone.now()
     total = qs.count()
 
-    return Response({
+    # Decision outcome stages — was referencing DECIDED_APPROVED/DECIDED_REJECTED/
+    # WITHDRAWN, none of which exist on WorkflowStage (this endpoint 500'd on
+    # every call); use the real terminal stages instead.
+    approved_count = qs.filter(current_stage=WorkflowStage.APPROVED).count()
+    rejected_count = qs.filter(current_stage=WorkflowStage.REJECTED).count()
+    deferred_count = qs.filter(current_stage=WorkflowStage.DEFERRED).count()
+    decided_stages = [
+        WorkflowStage.APPROVED, WorkflowStage.REJECTED, WorkflowStage.DEFERRED,
+        WorkflowStage.RECALLED,
+    ]
+
+    monthly_counts = dict(
+        qs.filter(received_at__year=now.year)
+        .annotate(month=TruncMonth("received_at"))
+        .values("month")
+        .annotate(n=Count("id"))
+        .values_list("month", "n")
+    )
+    monthly_by_number = {m.month: n for m, n in monthly_counts.items() if m}
+
+    data = {
         "total": total,
-        "approved": qs.filter(current_stage=WorkflowStage.DECIDED_APPROVED).count(),
-        "rejected": qs.filter(current_stage=WorkflowStage.DECIDED_REJECTED).count(),
-        "deferred": qs.filter(current_stage=WorkflowStage.DEFERRED).count(),
-        "pending": qs.exclude(current_stage__in=[
-            WorkflowStage.DECIDED_APPROVED, WorkflowStage.DECIDED_REJECTED,
-            WorkflowStage.DEFERRED, WorkflowStage.WITHDRAWN,
-        ]).count(),
+        "approved": approved_count,
+        "rejected": rejected_count,
+        "deferred": deferred_count,
+        "pending": qs.exclude(current_stage__in=decided_stages).count(),
         "by_form_type": [
             {"form_type": ft, "count": c}
             for ft, c in qs.values("form_type_code").annotate(n=Count("id")).order_by("-n")[:10].values_list("form_type_code", "n")
         ],
         "monthly_submissions": [
-            {"month": m, "count": qs.filter(submitted_at__year=now.year, submitted_at__month=m).count()}
+            {"month": m, "count": monthly_by_number.get(m, 0)}
             for m in range(1, now.month + 1)
         ],
         "year": now.year,
-    })
+    }
+    set_cached_response(cache_key, data, _settings.CACHE_DASHBOARD_TTL)
+    return Response(data)
 
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def analytics_trends_view(request):
     """Weekly submission trends over the last 12 weeks."""
+    from django.conf import settings as _settings
+
+    from .api_cache import _user_scope, cache_enabled, get_cached_response, set_cached_response
+
+    cache_key = f"scdms:analytics-trends:v1:{_user_scope(request)}"
+    if cache_enabled():
+        hit = get_cached_response(cache_key)
+        if hit is not None:
+            return Response(hit)
+
+    span_end = timezone.now().date()
+    span_start = span_end - timedelta(weeks=11, days=6)
+    # One query for the whole 12-week span, bucketed in Python — same rolling
+    # 7-day-window boundaries as before, just without a COUNT(*) per week.
+    submitted_dates = list(
+        Submission.objects.filter(
+            received_at__date__gte=span_start, received_at__date__lte=span_end,
+        ).values_list("received_at__date", flat=True)
+    )
     weeks = []
     for i in range(11, -1, -1):
-        week_end = timezone.now().date() - timedelta(weeks=i)
+        week_end = span_end - timedelta(weeks=i)
         week_start = week_end - timedelta(days=6)
-        count = Submission.objects.filter(submitted_at__date__gte=week_start, submitted_at__date__lte=week_end).count()
+        count = sum(1 for d in submitted_dates if week_start <= d <= week_end)
         weeks.append({"week_start": week_start.isoformat(), "week_end": week_end.isoformat(), "count": count})
-    return Response({"weekly_trends": weeks})
+
+    data = {"weekly_trends": weeks}
+    set_cached_response(cache_key, data, _settings.CACHE_DASHBOARD_TTL)
+    return Response(data)
 
 
 # ── Implementation Dashboard ───────────────────────────────────────────────────

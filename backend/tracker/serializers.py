@@ -1789,12 +1789,18 @@ class MeetingSerializer(serializers.ModelSerializer):
     def get_agenda_adopted_by_name(self, obj):
         return obj.agenda_adopted_by.username if obj.agenda_adopted_by else None
 
+    def _agenda_item_count(self, obj):
+        # len() on the already-`prefetch_related`d manager (MeetingViewSet.queryset)
+        # reuses the cached rows instead of issuing a fresh COUNT(*) — obj.agenda_items
+        # .count() always hits the DB even when the same rows are already loaded.
+        return len(obj.agenda_items.all())
+
     def get_agenda_count(self, obj):
-        return obj.agenda_items.count()
+        return self._agenda_item_count(obj)
 
     def get_agenda_readiness(self, obj):
         # Chairman's "enough agenda to convene?" signal.
-        return obj.agenda_readiness()
+        return obj.agenda_readiness(count=self._agenda_item_count(obj))
 
     def get_flying_minute_signatures(self, obj):
         if obj.type != MeetingType.FLYING_MINUTE:

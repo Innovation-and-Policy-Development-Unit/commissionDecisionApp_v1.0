@@ -1803,6 +1803,13 @@ class Submission(models.Model):
     class Meta:
         ordering = ["-created_at"]
         base_manager_name = "all_objects"
+        indexes = [
+            # current_stage is the most-filtered column in the app (list views,
+            # dashboards, analytics); received_at is the default list ordering
+            # (views.py SubmissionViewSet) and a common date-range filter — this
+            # composite index covers both the filter and the sort in one pass.
+            models.Index(fields=["current_stage", "-received_at"], name="submission_stage_received_idx"),
+        ]
 
     def __str__(self):
         return f"{self.reference_number} — {self.title}"
