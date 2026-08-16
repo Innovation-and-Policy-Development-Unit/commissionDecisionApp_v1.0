@@ -1492,6 +1492,29 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # ── Commission Sitting requires an actual agenda placement ─────────────
+        # Only Meetings → Sitting Workspace (or the Agenda page) creates a real
+        # AgendaItem tying the submission to a specific meeting. Without this
+        # guard, this raw transition could flip the stage directly and the
+        # submission would drop off the Sitting Workspace backlog (which filters
+        # on current_stage=FORWARDED_TO_COMMISSION) without ever landing on a
+        # real agenda — orphaned from the meeting it's supposedly sitting at.
+        if (
+            prev == WorkflowStage.FORWARDED_TO_COMMISSION
+            and target == WorkflowStage.COMMISSION_SITTING
+            and not submission.agenda_placements.exists()
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This submission must be scheduled on a specific meeting's agenda "
+                        "before it can move to Commission Sitting. Use Meetings → Sitting "
+                        "Workspace (or the Agenda page) to place it on the agenda first."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # ── Warn when a non-draft submission has no form type ─────────────────
         # Admins can override with acknowledge_no_form_type=true in the payload.
         if (
@@ -3022,21 +3045,78 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="visual-audit-trail")
     def visual_audit_trail(self, request, pk=None):
-        """Readable merged timeline: workflow events + audit log entries.
-        OPSC-internal only — ministry-side roles (HR, DG) never see this."""
+        """Readable merged timeline: workflow events + audit log entries, for
+        anyone who can already view this submission (access is enforced by
+        get_object()/get_queryset(), same as every other submission action).
+
+        Ministry-side roles (HR, DG) get the same accountability trail — who
+        did what and when on *their own* submission — but with `ip_address`
+        stripped from each entry: that's OPSC-internal infrastructure detail,
+        not something external users need to see the full timeline of who-did-
+        what-when. (Note this is a different concern from Commission minutes,
+        which ministry-side roles never see at all — that restriction lives
+        elsewhere, unaffected by this endpoint.)
+        """
         from .decision_proof import build_visual_audit_trail
         from .opsc_access import MINISTRY_SIDE_ROLES
 
         profile = _profile(request.user)
-        if profile.role in MINISTRY_SIDE_ROLES:
-            raise PermissionDenied("The audit trail is only available to OPSC staff.")
-
         submission = self.get_object()
+        entries = build_visual_audit_trail(submission)
+        if profile.role in MINISTRY_SIDE_ROLES:
+            for entry in entries:
+                entry.pop("ip_address", None)
         return Response({
             "submission_id": submission.id,
             "reference_number": submission.reference_number,
-            "entries": build_visual_audit_trail(submission),
+            "entries": entries,
         })
+
+    @action(detail=True, methods=["get"], url_path="audit-trail-pdf")
+    def audit_trail_pdf(self, request, pk=None):
+        """Printable/downloadable PDF snapshot of the audit trail — for offline
+        or legal record-keeping when the submission needs to exist as a
+        standalone exhibit outside the app. Same access and ip_address
+        redaction rules as visual_audit_trail(); generated fresh on every
+        request (point-in-time snapshot, not stored)."""
+        from io import BytesIO
+
+        from django.http import FileResponse
+        from django.template.loader import render_to_string
+        from weasyprint import HTML
+
+        from .audit import log_action as _log
+        from .decision_proof import build_visual_audit_trail
+        from .models import AuditLog as _AL, WorkflowStage
+        from .opsc_access import MINISTRY_SIDE_ROLES
+
+        profile = _profile(request.user)
+        submission = self.get_object()
+        entries = build_visual_audit_trail(submission)
+        if profile.role in MINISTRY_SIDE_ROLES:
+            for entry in entries:
+                entry.pop("ip_address", None)
+
+        stage_labels = dict(WorkflowStage.choices)
+        html = render_to_string("tracker/audit_trail_pdf.html", {
+            "submission": submission,
+            "stage_label": stage_labels.get(submission.current_stage, submission.current_stage),
+            "entries": entries,
+            "generated_at": timezone.now(),
+            "generated_by": request.user.get_full_name() or request.user.username,
+        })
+
+        buf = BytesIO()
+        HTML(string=html).write_pdf(buf)
+        buf.seek(0)
+
+        _log(request, _AL.Action.EXPORT,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Audit trail exported as PDF for {submission.reference_number}")
+
+        filename = f"audit_trail_{submission.reference_number}.pdf".replace("/", "-")
+        return FileResponse(buf, as_attachment=True, filename=filename, content_type="application/pdf")
 
     @action(detail=True, methods=["get"], url_path="decision-proof")
     def decision_proof(self, request, pk=None):
@@ -3160,6 +3240,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="checklist/(?P<item_id>[0-9]+)")
     def checklist_toggle(self, request, pk=None, item_id=None):
         """Toggle is_present on a checklist item; optionally persist notes."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
         submission = self.get_object()
         profile = _profile(request.user)
         is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff
@@ -3189,6 +3272,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         # clear the flag so a stale warning badge doesn't linger after review.
         item.content_mismatch = False
         item.save()
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Required-document checklist item marked "
+                         f"{'present' if is_present else 'not present'} on {submission.reference_number}"
+                         + (f" | {item.document.name}" if item.document_id else ""),
+             extra_data={"checklist_item_id": item.id})
         invalidate_submission(submission.id)
         return Response(ChecklistItemSerializer(item).data)
 
@@ -3333,6 +3423,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
             sid = submission.id
             transaction.on_commit(lambda: queue_submission_quality_score(sid))
+
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        for doc in created_docs:
+            _log(request, _AL.Action.CREATE,
+                 resource_type="Submission", resource_id=submission.id,
+                 resource_label=submission.reference_number,
+                 description=f"Document uploaded: {doc.original_name} on {submission.reference_number}",
+                 extra_data={"document_id": doc.id})
 
         invalidate_submission(submission.id)
         if len(created_docs) == 1:
@@ -3815,6 +3914,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         )
         ser.is_valid(raise_exception=True)
         ser.save(submission=submission)
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        _log(request, _AL.Action.CREATE if instance is None else _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"PSC Form 3-7 data {'created' if instance is None else 'updated'} "
+                         f"on {submission.reference_number}")
         code = status.HTTP_200_OK if instance else status.HTTP_201_CREATED
         return Response(ser.data, status=code)
 
@@ -3854,6 +3960,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         )
         ser.is_valid(raise_exception=True)
         ser.save(submission=submission)
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        _log(request, _AL.Action.CREATE if instance is None else _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Organisation Restructure form data "
+                         f"{'created' if instance is None else 'updated'} on {submission.reference_number}")
         code = status.HTTP_200_OK if instance else status.HTTP_201_CREATED
         return Response(ser.data, status=code)
 
@@ -3912,6 +4025,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        was_create = instance is None
         if instance:
             instance.data = data_payload
             instance.save()
@@ -3922,6 +4036,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 form_type=resolved_form_type,
                 data=data_payload,
             )
+
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        _log(request, _AL.Action.CREATE if was_create else _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"{resolved_form_type.name} form data "
+                         f"{'created' if was_create else 'updated'} on {submission.reference_number}",
+             extra_data={"form_response_id": resp.id})
 
         if submission.current_stage == WorkflowStage.DRAFT:
             from .ai.policy_guardrail import policy_guardrail_applies
@@ -8055,6 +8178,9 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         submission = serializer.validated_data["submission"]
         category   = serializer.validated_data.get("category", "other")
 
+        if AgendaItem.objects.filter(meeting=meeting, submission=submission).exists():
+            raise exceptions.ValidationError({"submission": "This submission is already on this meeting's agenda."})
+
         # Prefer lodge-time agenda section, then form type mapping.
         if category == "other":
             if submission.agenda_category and submission.agenda_category != "other":
@@ -10393,6 +10519,8 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from rest_framework.exceptions import ValidationError
 
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
         from .odu_checklist_rules import CHECKLIST_MINISTRY_ALLOWED_FIELDS, submission_eligible_for_checklist_draft
 
         profile = _profile(self.request.user)
@@ -10410,9 +10538,16 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
         for field in list(serializer.validated_data.keys()):
             if field not in CHECKLIST_MINISTRY_ALLOWED_FIELDS and field != "submission":
                 serializer.validated_data.pop(field)
-        serializer.save(created_by=self.request.user)
+        checklist = serializer.save(created_by=self.request.user)
+        _log(self.request, _AL.Action.CREATE,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"ODU restructure checklist started on {submission.reference_number}",
+             extra_data={"odu_checklist_id": checklist.id})
 
     def perform_update(self, serializer):
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
         from .odu_checklist_rules import (
             CHECKLIST_MINISTRY_ALLOWED_FIELDS,
             CHECKLIST_MINISTRY_ROLES,
@@ -10442,7 +10577,15 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
             for field in list(serializer.validated_data.keys()):
                 if field not in CHECKLIST_MINISTRY_ALLOWED_FIELDS:
                     serializer.validated_data.pop(field)
+            edited_fields = sorted(serializer.validated_data.keys())
             serializer.save()
+            _log(self.request, _AL.Action.UPDATE,
+                 resource_type="Submission", resource_id=instance.submission_id,
+                 resource_label=instance.submission.reference_number,
+                 description=f"ODU restructure checklist edited by ministry on "
+                             f"{instance.submission.reference_number}"
+                             + (f" | fields: {', '.join(edited_fields)}" if edited_fields else ""),
+                 extra_data={"odu_checklist_id": instance.id})
             return
 
         if profile.role in ODU_CHECKLIST_ROLES:
@@ -10467,7 +10610,15 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
                     serializer.validated_data.pop(field)
                 elif field in CHECKLIST_ODU_MANAGER_ONLY_FIELDS and not is_manager_odu:
                     serializer.validated_data.pop(field)
+            edited_fields = sorted(serializer.validated_data.keys())
             serializer.save()
+            _log(self.request, _AL.Action.UPDATE,
+                 resource_type="Submission", resource_id=instance.submission_id,
+                 resource_label=instance.submission.reference_number,
+                 description=f"ODU restructure checklist reviewed by {profile.role} on "
+                             f"{instance.submission.reference_number}"
+                             + (f" | fields: {', '.join(edited_fields)}" if edited_fields else ""),
+                 extra_data={"odu_checklist_id": instance.id})
             return
 
         raise PermissionDenied("You do not have access to edit this checklist.")
@@ -10479,6 +10630,8 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
         Ministry only, once their 16 items are answered — this locks it for
         ODU's review. Items 17-20 are ODU's own and never gate this.
         """
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
         from .odu_checklist_rules import (
             CHECKLIST_MINISTRY_REQUIRED_FIELDS,
             submission_eligible_for_checklist_draft,
@@ -10509,6 +10662,12 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
         checklist.status = ODUChecklistStatus.SUBMITTED
         checklist.submitted_at = timezone.now()
         checklist.save(update_fields=["status", "submitted_at"])
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=checklist.submission_id,
+             resource_label=checklist.submission.reference_number,
+             description=f"ODU restructure checklist submitted to ODU for review on "
+                         f"{checklist.submission.reference_number}",
+             extra_data={"odu_checklist_id": checklist.id})
         return Response(ODUChecklistSerializer(checklist).data)
 
     @action(detail=True, methods=["post"], url_path="approve")
@@ -10517,6 +10676,9 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
         Transition checklist from Submitted → Approved.
         Restricted to ODU_MANAGER.
         """
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
         checklist = self.get_object()
         profile = _profile(request.user)
         if profile.role != Role.ODU_MANAGER:
@@ -10534,6 +10696,12 @@ class ODUChecklistViewSet(viewsets.ModelViewSet):
         if not checklist.manager_verifier_date:
             checklist.manager_verifier_date = timezone.now().date()
         checklist.save(update_fields=["status", "manager_verifier_name", "manager_verifier_date"])
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=checklist.submission_id,
+             resource_label=checklist.submission.reference_number,
+             description=f"ODU restructure checklist approved by ODU Manager "
+                         f"({checklist.manager_verifier_name}) on {checklist.submission.reference_number}",
+             extra_data={"odu_checklist_id": checklist.id})
         return Response(ODUChecklistSerializer(checklist).data)
 
 
@@ -10697,6 +10865,8 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="submit")
     def submit(self, request, pk=None):
         """Principal: Draft -> Submitted, for the Manager to review."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
         from .odu_checklist_rules import ODU_PRINCIPAL_WORKER_ROLES
 
         paper = self.get_object()
@@ -10713,11 +10883,20 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         paper.submitted_for_review_at = timezone.now()
         paper.submitted_for_review_by = request.user
         paper.save(update_fields=["status", "submitted_for_review_at", "submitted_for_review_by"])
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=paper.submission_id,
+             resource_label=paper.submission.reference_number,
+             description=f"Commission paper submitted to Manager ODU for review on "
+                         f"{paper.submission.reference_number}",
+             extra_data={"board_paper_id": paper.id})
         return Response(ODUBoardPaperSerializer(paper).data)
 
     @action(detail=True, methods=["post"], url_path="manager-approve")
     def manager_approve(self, request, pk=None):
         """Manager: Draft (self-authored) or Submitted -> Manager Approved."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
         paper = self.get_object()
         profile = _profile(request.user)
         if profile.role != Role.ODU_MANAGER:
@@ -10731,11 +10910,21 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         paper.manager_approved_at = timezone.now()
         paper.manager_approved_by = request.user
         paper.save(update_fields=["status", "manager_approved_at", "manager_approved_by"])
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=paper.submission_id,
+             resource_label=paper.submission.reference_number,
+             description=f"Commission paper approved by ODU Manager "
+                         f"({request.user.get_full_name() or request.user.username}) on "
+                         f"{paper.submission.reference_number}",
+             extra_data={"board_paper_id": paper.id})
         return Response(ODUBoardPaperSerializer(paper).data)
 
     @action(detail=True, methods=["post"], url_path="return-to-principal")
     def return_to_principal(self, request, pk=None):
         """Manager: Submitted -> Draft, with a note on what needs to change."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
         paper = self.get_object()
         profile = _profile(request.user)
         if profile.role != Role.ODU_MANAGER:
@@ -10756,6 +10945,12 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         paper.returned_by = request.user
         paper.return_note = note
         paper.save(update_fields=["status", "returned_at", "returned_by", "return_note"])
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=paper.submission_id,
+             resource_label=paper.submission.reference_number,
+             description=f"Commission paper returned to Principal by ODU Manager on "
+                         f"{paper.submission.reference_number} | {note}",
+             extra_data={"board_paper_id": paper.id})
 
         recipient = paper.submitted_for_review_by or paper.submission.assigned_to
         if recipient and recipient.is_active:
@@ -10775,6 +10970,9 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="secretary-approve")
     def secretary_approve(self, request, pk=None):
         """Secretary: Manager Approved -> Secretary Approved (final sign-off)."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
         paper = self.get_object()
         profile = _profile(request.user)
         if profile.role not in BOARD_PAPER_SECRETARY_ROLES:
@@ -10788,6 +10986,13 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         paper.secretary_approved_at = timezone.now()
         paper.secretary_approved_by = request.user
         paper.save(update_fields=["status", "secretary_approved_at", "secretary_approved_by"])
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=paper.submission_id,
+             resource_label=paper.submission.reference_number,
+             description=f"Commission paper given final sign-off by Secretary "
+                         f"({request.user.get_full_name() or request.user.username}) on "
+                         f"{paper.submission.reference_number}",
+             extra_data={"board_paper_id": paper.id})
         return Response(ODUBoardPaperSerializer(paper).data)
 
 

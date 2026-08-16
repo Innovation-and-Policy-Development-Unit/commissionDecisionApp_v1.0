@@ -812,6 +812,15 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     subway_map = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
     carryover_status = serializers.SerializerMethodField()
+    on_commission_agenda = serializers.SerializerMethodField()
+
+    def get_on_commission_agenda(self, obj):
+        """Whether this submission is actually placed on a meeting's agenda
+        (an AgendaItem exists) — same condition the backend enforces before
+        allowing forwarded_to_commission -> commission_sitting. Lets the UI
+        disable "Add to Commission Sitting" until it's true, instead of
+        letting the user click it and get rejected."""
+        return obj.agenda_placements.exists()
 
     def get_carryover_status(self, obj):
         """Late/queued status (target sitting + due dates) so HR and unit managers
@@ -944,6 +953,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "closing_deadline_at",
             "scheduled_meeting",
             "carryover_status",
+            "on_commission_agenda",
             "implementation_status",
             "implementation_due_date",
             "commission_approved_at",

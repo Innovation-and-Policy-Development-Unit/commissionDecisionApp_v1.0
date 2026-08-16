@@ -223,8 +223,13 @@ export default function SubmissionDetail() {
   const contentEditable = submission?.can_edit !== false
   const canUploadDocs  = contentEditable && user && ['ministry_hr', 'dept_admin', 'head_of_agency',
                                    'psc_admin', 'psc_officer', 'psc_secretary', 'csu_manager'].includes(user.role)
+  // Digitized form (submission paper) is edit mode only for the one drafting
+  // it — ministry HR / dept admin, or CSU Manager for OPSC-internal
+  // submissions — plus psc_admin for oversight/override. Everyone else
+  // (including psc_secretary/psc_officer once forwarded) gets the read-only
+  // single-page view. Mirrors canEditRestructureForm below — keep in sync.
   const canEditForm37  = contentEditable && user && ['ministry_hr', 'dept_admin', 'psc_admin',
-                                   'psc_officer', 'psc_secretary', 'csu_manager'].includes(user.role)
+                                   'csu_manager'].includes(user.role)
   // Compliance forms are completed in CMS; portal record is read-only for compliance roles
   const canEditComplianceForm = false
   const canEditDigitizedForm = canEditForm37 || canEditComplianceForm
@@ -646,6 +651,22 @@ export default function SubmissionDetail() {
         setTimeout(() => URL.revokeObjectURL(url), 5000)
       })
       .catch(() => toast.error('Could not download this version.'))
+  }
+
+  const [auditPdfBusy, setAuditPdfBusy] = useState(false)
+  const downloadAuditTrailPdf = () => {
+    setAuditPdfBusy(true)
+    api.get(`/submissions/${id}/audit-trail-pdf/`, { responseType: 'blob' })
+      .then(r => {
+        const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }))
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `audit_trail_${submission?.reference_number || id}.pdf`
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(url), 5000)
+      })
+      .catch(() => toast.error('Could not export the audit trail.'))
+      .finally(() => setAuditPdfBusy(false))
   }
 
   const handleDeleteDoc = async (doc) => {
@@ -1553,38 +1574,49 @@ const stageDescriptions = {
           {effectiveTab === 'activity' && (
           <>
           {/* Visual audit trail (workflow + tamper-evident decision proofs) —
-              OPSC-internal only; ministry HR/DG never see this. */}
-          {userIsOpscInternal(user) && (
-            <div id="audit-trail" className="card card-compact scroll-mt-24">
-              <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700 flex-wrap">
-                <FileText size={14} className="text-slate-400" />
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  Visual Audit Trail
-                </h3>
-                {submission.events?.some((e) => e.has_decision_proof || e.content_hash) && (
-                  <VerificationBadge
-                    submissionId={id}
-                    workflowEventId={
-                      [...(submission.events || [])]
-                        .reverse()
-                        .find((e) => e.has_decision_proof || e.content_hash)?.id
-                    }
-                    contentHash={
-                      [...(submission.events || [])]
-                        .reverse()
-                        .find((e) => e.content_hash)?.content_hash
-                    }
-                  />
-                )}
-              </div>
-              <VisualAuditTrail
-                submissionId={id}
-                stageFilter={auditStationFilter?.stages}
-                filterLabel={auditStationFilter?.label}
-                onClearFilter={() => setAuditStationFilter(null)}
-              />
+              visible to anyone who can open this submission, including
+              ministry HR/DG (backend strips ip_address for ministry-side
+              roles; see visual_audit_trail() in views.py). */}
+          <div id="audit-trail" className="card card-compact scroll-mt-24">
+            <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700 flex-wrap">
+              <FileText size={14} className="text-slate-400" />
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Visual Audit Trail
+              </h3>
+              {submission.events?.some((e) => e.has_decision_proof || e.content_hash) && (
+                <VerificationBadge
+                  submissionId={id}
+                  workflowEventId={
+                    [...(submission.events || [])]
+                      .reverse()
+                      .find((e) => e.has_decision_proof || e.content_hash)?.id
+                  }
+                  contentHash={
+                    [...(submission.events || [])]
+                      .reverse()
+                      .find((e) => e.content_hash)?.content_hash
+                  }
+                />
+              )}
+              <BaseButton
+                variant="outline"
+                size="sm"
+                className="ml-auto"
+                icon={<Download size={13} />}
+                onClick={downloadAuditTrailPdf}
+                disabled={auditPdfBusy}
+                title="Download this audit trail as a PDF for offline or legal record-keeping"
+              >
+                {auditPdfBusy ? 'Exporting…' : 'Export PDF'}
+              </BaseButton>
             </div>
-          )}
+            <VisualAuditTrail
+              submissionId={id}
+              stageFilter={auditStationFilter?.stages}
+              filterLabel={auditStationFilter?.label}
+              onClearFilter={() => setAuditStationFilter(null)}
+            />
+          </div>
 
           {/* ── Activity & Discussion (A7 collaboration) ── */}
           <SubmissionActivity submissionId={id} />

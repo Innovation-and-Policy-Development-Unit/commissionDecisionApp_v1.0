@@ -68,6 +68,19 @@ _COMPLIANCE_CREATOR_ALLOWED = {
 # path without changing PSC / OPSC behaviour.
 _DRAFT_ONLY_EDIT_ROLES = {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.CSU_MANAGER}
 
+# The digitized form (submission paper) is edit mode only for the one drafting
+# it — ministry HR/dept admin, or CSU Manager for OPSC-internal submissions
+# (see _DRAFT_ONLY_EDIT_ROLES above). PSC Secretary and PSC Officer review and
+# route ministry-drafted submissions but never author that paper, so their
+# access to it is always read-only, at every stage — same as the DG.
+#
+# The one carve-out: PSC Secretary/Officer/Admin (and the DG) can themselves
+# create "secretary-only" travel submissions (4.4-4.6, submission.secretary_only)
+# — there they *are* the drafter, so the normal draft-only-edit pattern applies
+# to those, exactly as it does for ministry HR on a ministry-drafted paper.
+_CONTENT_VIEW_ONLY_ROLES = {Role.HEAD_OF_AGENCY, Role.PSC_SECRETARY, Role.PSC_OFFICER}
+_SECRETARY_OWN_DRAFT_ROLES = {Role.PSC_SECRETARY, Role.PSC_OFFICER}
+
 
 def can_edit_submission(role, submission) -> bool:
     """Whether a user with ``role`` may edit the *content* of ``submission``.
@@ -77,7 +90,9 @@ def can_edit_submission(role, submission) -> bool:
     """
     if role in _DRAFT_ONLY_EDIT_ROLES:
         return submission.current_stage == WorkflowStage.DRAFT
-    if role == Role.HEAD_OF_AGENCY:
+    if role in _SECRETARY_OWN_DRAFT_ROLES and submission.secretary_only:
+        return submission.current_stage == WorkflowStage.DRAFT
+    if role in _CONTENT_VIEW_ONLY_ROLES:
         return False
     return True
 
@@ -90,6 +105,11 @@ def assert_can_edit_submission(role, submission) -> None:
         raise PermissionDenied(
             "The Director-General has view-only access to submission content. "
             "Use “Return to HR” to request changes; HR will revise and resubmit for endorsement."
+        )
+    if role in _CONTENT_VIEW_ONLY_ROLES:
+        raise PermissionDenied(
+            "The digitized form is read-only once forwarded — only the drafting "
+            "ministry HR / CSU Manager can edit its content."
         )
     raise PermissionDenied(
         "This submission is read-only because it is no longer in draft. It can only be "

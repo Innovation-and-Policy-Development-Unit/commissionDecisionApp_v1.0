@@ -265,12 +265,13 @@ const STAGE_ACTIONS = {
   forwarded_to_commission: [
     {
       id: 'commission_sitting',
-      label: 'Add to Commission Sitting',
-      description: 'Place on the agenda for the next Commission sitting',
+      label: 'Mark as Sitting for Commission Decision',
+      description: 'Requires this submission to already be scheduled on a meeting’s agenda via Sitting Workspace',
       icon: Users,
       variant: 'primary',
       transitionTo: 'commission_sitting',
       requiresNote: false,
+      requiresAgendaPlacement: true,
     },
   ],
 
@@ -461,6 +462,8 @@ export default function WorkflowActionsPanel({
         ? 'Waiting for the assigned principal to complete their review and submit it back to you.'
         : (action.requiresChecklistComplete && !checklistComplete)
         ? 'Complete the checklist — mark every required document present — before submitting to the Secretary.'
+        : (action.requiresAgendaPlacement && !submission?.on_commission_agenda)
+        ? 'Not yet scheduled — use Meetings → Sitting Workspace to place this submission on a meeting’s agenda first.'
         : null,
     }))
 
