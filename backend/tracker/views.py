@@ -3203,13 +3203,19 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="nl-search")
     def nl_search(self, request):
         """Smart search — natural language → filter JSON + matching submission ids."""
+        from .ai.reliability import FEATURE_NL_SEARCH, log_ai_call, timed_call
         from .ai.smart_search import apply_smart_filters, parse_nl_search_query
+        from .models import AIGenerationLog
 
         query = (request.data.get("query") or "").strip()
         profile = _profile(request.user)
-        parsed, err = parse_nl_search_query(query, role=profile.role)
+        with timed_call() as elapsed:
+            parsed, err = parse_nl_search_query(query, role=profile.role)
         if not parsed:
+            log_ai_call(feature=FEATURE_NL_SEARCH, status=AIGenerationLog.Status.FAILED,
+                        error_detail=err or "Could not parse query.", latency_ms=elapsed())
             return Response({"detail": err or "Could not parse query."}, status=400)
+        log_ai_call(feature=FEATURE_NL_SEARCH, status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed())
         qs = _submission_queryset_for(request.user).filter(is_attachment=False)
         qs = apply_smart_filters(qs, parsed.get("filters") or {})
         ids = list(qs.values_list("id", flat=True)[:200])
@@ -3327,7 +3333,16 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
         )
 
-        suggestions, err = suggest_checklist_items(submission, items)
+        from .ai.reliability import FEATURE_CHECKLIST_AUTOFILL, log_ai_call, timed_call
+        from .models import AIGenerationLog
+
+        with timed_call() as elapsed:
+            suggestions, err = suggest_checklist_items(submission, items)
+        log_ai_call(
+            feature=FEATURE_CHECKLIST_AUTOFILL, submission_id=submission.id,
+            status=AIGenerationLog.Status.FAILED if err else AIGenerationLog.Status.SUCCESS,
+            error_detail=err or "", latency_ms=elapsed(),
+        )
 
         return Response({
             "disclaimer": "AI draft — verify before marking checklist items present.",
@@ -5637,13 +5652,19 @@ def ai_smart_report_view(request):
         f"SCDMS data snapshot:\n{json.dumps(snapshot, default=str)}"
     )
 
-    data, err = complete_json_with_error(
-        system=system_prompt,
-        user=user_prompt,
-        tier="sonnet",
-        max_tokens=4096,
-    )
+    from .ai.reliability import FEATURE_SMART_REPORT, log_ai_call, timed_call
+    from .models import AIGenerationLog
+
+    with timed_call() as elapsed:
+        data, err = complete_json_with_error(
+            system=system_prompt,
+            user=user_prompt,
+            tier="sonnet",
+            max_tokens=4096,
+        )
     if err:
+        log_ai_call(feature=FEATURE_SMART_REPORT, status=AIGenerationLog.Status.FAILED,
+                    error_detail=err, model_tier="sonnet", latency_ms=elapsed())
         return Response(
             {
                 "summary": "I could not run the AI report right now. Please try again later.",
@@ -5652,10 +5673,14 @@ def ai_smart_report_view(request):
             status=502,
         )
     if not isinstance(data, dict):
+        log_ai_call(feature=FEATURE_SMART_REPORT, status=AIGenerationLog.Status.FAILED,
+                    error_detail="Unexpected AI response format.", model_tier="sonnet", latency_ms=elapsed())
         return Response(
             {"detail": "Unexpected AI response format."},
             status=502,
         )
+    log_ai_call(feature=FEATURE_SMART_REPORT, status=AIGenerationLog.Status.SUCCESS,
+                model_tier="sonnet", latency_ms=elapsed())
     return Response(data)
 
 
@@ -12262,10 +12287,113 @@ def workload_suggest_assignment_view(request):
         for o in officers
     ) or "No PSC officers available."
 
-    data, err = suggest_assignment(submission_ctx, officers_ctx)
+    from .ai.reliability import FEATURE_WORKLOAD_SUGGESTION, log_ai_call, timed_call
+    from .models import AIGenerationLog
+
+    with timed_call() as elapsed:
+        data, err = suggest_assignment(submission_ctx, officers_ctx)
     if err or not data:
-        return Response({"detail": f"AI suggestion failed: {err or 'empty response'}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        detail = err or "empty response"
+        log_ai_call(feature=FEATURE_WORKLOAD_SUGGESTION, submission_id=submission.id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=detail, latency_ms=elapsed())
+        return Response({"detail": f"AI suggestion failed: {detail}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    log_ai_call(feature=FEATURE_WORKLOAD_SUGGESTION, submission_id=submission.id,
+                status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed())
     return Response(data)
+
+
+# ── AI Reliability Dashboard ───────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def ai_reliability_view(request):
+    """Per-feature AI call success/failure rates and recent failures —
+    Administration -> AI reliability. Reads AIGenerationLog, populated by
+    every AI Celery task and synchronous AI view (see tracker/ai/reliability.py).
+    """
+    from django.db.models import Avg, Count, Q
+
+    from .ai.reliability import ALL_FEATURES
+    from .models import AIGenerationLog
+
+    profile = _profile(request.user)
+    if profile.role != Role.PSC_ADMIN and not request.user.is_staff:
+        raise PermissionDenied("Administrators only.")
+
+    try:
+        window_hours = int(request.query_params.get("window_hours", 24))
+    except (TypeError, ValueError):
+        window_hours = 24
+    window_hours = max(1, min(window_hours, 24 * 30))
+    since = timezone.now() - timedelta(hours=window_hours)
+
+    qs = AIGenerationLog.objects.filter(created_at__gte=since)
+
+    by_feature = {
+        row["feature"]: row
+        for row in qs.values("feature").annotate(
+            total=Count("id"),
+            success=Count("id", filter=Q(status=AIGenerationLog.Status.SUCCESS)),
+            failed=Count("id", filter=Q(status=AIGenerationLog.Status.FAILED)),
+            retrying=Count("id", filter=Q(status=AIGenerationLog.Status.RETRYING)),
+            avg_latency_ms=Avg("latency_ms", filter=Q(status=AIGenerationLog.Status.SUCCESS)),
+        )
+    }
+    last_failures = {
+        row["feature"]: row
+        for row in qs.filter(status=AIGenerationLog.Status.FAILED)
+        .values("feature")
+        .annotate(last_failure_at=models.Max("created_at"))
+    }
+
+    features = []
+    for name in ALL_FEATURES:
+        row = by_feature.get(name)
+        total = row["total"] if row else 0
+        success = row["success"] if row else 0
+        failed = row["failed"] if row else 0
+        retrying = row["retrying"] if row else 0
+        last_failure_at = last_failures.get(name, {}).get("last_failure_at")
+        last_failure_log = None
+        if last_failure_at:
+            last_failure_log = (
+                qs.filter(feature=name, status=AIGenerationLog.Status.FAILED)
+                .order_by("-created_at")
+                .values("created_at", "error_detail")
+                .first()
+            )
+        features.append({
+            "feature": name,
+            "total": total,
+            "success": success,
+            "failed": failed,
+            "retrying": retrying,
+            "success_rate_pct": round(success / total * 100) if total else None,
+            "avg_latency_ms": round(row["avg_latency_ms"]) if row and row["avg_latency_ms"] else None,
+            "last_failure_at": last_failure_log["created_at"].isoformat() if last_failure_log else None,
+            "last_failure_detail": last_failure_log["error_detail"] if last_failure_log else "",
+        })
+
+    recent_failures = [
+        {
+            "feature": row.feature,
+            "submission_id": row.submission_id,
+            "submission_ref": row.submission.reference_number if row.submission_id and row.submission else None,
+            "detail": row.error_detail,
+            "attempt": row.attempt,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in qs.filter(status=AIGenerationLog.Status.FAILED)
+        .select_related("submission")
+        .order_by("-created_at")[:25]
+    ]
+
+    return Response({
+        "window_hours": window_hours,
+        "generated_at": timezone.now().isoformat(),
+        "features": features,
+        "recent_failures": recent_failures,
+    })
 
 
 # ── Audit Log Search ───────────────────────────────────────────────────────────

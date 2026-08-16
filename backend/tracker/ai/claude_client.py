@@ -135,6 +135,26 @@ def _api_error_message(exc: Exception) -> str:
     return str(exc)
 
 
+_RETRYABLE_HTTP_CODES = ("429", "500", "502", "503", "504")
+_RETRYABLE_KEYWORDS = (
+    "timeout", "timed out", "connection", "overloaded",
+    "high demand", "temporarily unavailable", "unavailable",
+)
+
+
+def is_retryable_ai_error(message: str) -> bool:
+    """True for transient AI-provider errors worth an automatic retry — rate
+    limits, momentary overload, timeouts — as opposed to permanent failures
+    (missing API key, bad request, invalid response) that won't resolve
+    themselves no matter how many times the call is repeated."""
+    if not message:
+        return False
+    msg = message.lower()
+    if any(f"http {code}" in msg for code in _RETRYABLE_HTTP_CODES):
+        return True
+    return any(kw in msg for kw in _RETRYABLE_KEYWORDS)
+
+
 def _extract_text(response) -> str:
     return (getattr(response, "text", None) or "").strip()
 

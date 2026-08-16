@@ -370,12 +370,21 @@ def _format_submission_brief(data: dict) -> str:
     return "\n".join(parts).strip()
 
 
-@shared_task
-def generate_submission_brief(submission_id: int, force: bool = False):
-    """Generate an AI executive brief for PSC Secretary review."""
+@shared_task(bind=True, max_retries=3)
+def generate_submission_brief(self, submission_id: int, force: bool = False):
+    """Generate an AI executive brief for PSC Secretary review.
+
+    Transient provider errors (rate limit, momentary overload, timeout) are
+    retried with backoff instead of being permanently cached as a failure —
+    previously ANY error, including a plain "high demand, try again later"
+    503, set ai_brief_processed=True forever, so the next viewer saw a
+    dead-end error instead of the brief just quietly completing shortly after.
+    """
+    from celery.exceptions import Retry
     from django.utils import timezone
 
-    from .models import Submission
+    from .ai.reliability import FEATURE_SUBMISSION_BRIEF, log_ai_call, timed_call
+    from .models import AIGenerationLog, Submission
 
     try:
         submission = Submission.objects.select_related(
@@ -388,7 +397,7 @@ def generate_submission_brief(submission_id: int, force: bool = False):
     if not force and not submission_brief_needs_refresh(submission):
         return
 
-    from .ai.claude_client import ai_enabled, complete_json_with_error, get_model_id
+    from .ai.claude_client import ai_enabled, complete_json_with_error, get_model_id, is_retryable_ai_error
 
     if not ai_enabled():
         _mark_submission_brief_failed(
@@ -397,23 +406,40 @@ def generate_submission_brief(submission_id: int, force: bool = False):
             "An administrator can add it under Administration → System config → AI Features, "
             "then click Regenerate.",
         )
+        log_ai_call(feature=FEATURE_SUBMISSION_BRIEF, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail="GEMINI_API_KEY missing")
         app_log.error("BRIEF_FAIL | Submission %s | GEMINI_API_KEY missing", submission_id)
         return
 
+    from .ai.feature_registry import get_model_tier
+
     context = build_submission_brief_context(submission)
     user_input = f"Submission context:\n\n{context}"
+    tier = get_model_tier("submission_executive_brief")
 
     try:
-        from .ai.feature_registry import get_model_tier
-
-        data, api_err = complete_json_with_error(
-            system=SUBMISSION_BRIEF_INSTRUCTION,
-            user=user_input,
-            tier=get_model_tier("submission_executive_brief"),
-            max_tokens=2048,
-        )
+        with timed_call() as elapsed:
+            data, api_err = complete_json_with_error(
+                system=SUBMISSION_BRIEF_INSTRUCTION,
+                user=user_input,
+                tier=tier,
+                max_tokens=2048,
+            )
         if not data:
             detail = api_err or "Unknown error"
+            attempt = self.request.retries + 1
+            if is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+                log_ai_call(feature=FEATURE_SUBMISSION_BRIEF, submission_id=submission_id,
+                            status=AIGenerationLog.Status.RETRYING, error_detail=detail,
+                            model_tier=tier, latency_ms=elapsed(), attempt=attempt)
+                app_log.warning(
+                    "BRIEF_RETRY | Submission %s | attempt %s/%s | %s",
+                    submission_id, attempt, self.max_retries, detail,
+                )
+                raise self.retry(countdown=30 * (2 ** self.request.retries))
+            log_ai_call(feature=FEATURE_SUBMISSION_BRIEF, submission_id=submission_id,
+                        status=AIGenerationLog.Status.FAILED, error_detail=detail,
+                        model_tier=tier, latency_ms=elapsed(), attempt=attempt)
             _mark_submission_brief_failed(
                 submission,
                 f"AI brief could not be generated: {detail} "
@@ -435,8 +461,25 @@ def generate_submission_brief(submission_id: int, force: bool = False):
             "ai_brief_context_key",
             "updated_at",
         ])
+        log_ai_call(feature=FEATURE_SUBMISSION_BRIEF, submission_id=submission_id,
+                    status=AIGenerationLog.Status.SUCCESS, model_tier=tier,
+                    latency_ms=elapsed(), attempt=self.request.retries + 1)
         app_log.info("BRIEF_COMPLETE | Submission %s", submission_id)
+    except Retry:
+        raise
     except Exception as exc:
+        detail = str(exc)
+        attempt = self.request.retries + 1
+        if is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+            log_ai_call(feature=FEATURE_SUBMISSION_BRIEF, submission_id=submission_id,
+                        status=AIGenerationLog.Status.RETRYING, error_detail=detail, attempt=attempt)
+            app_log.warning(
+                "BRIEF_RETRY | Submission %s | attempt %s/%s | %s",
+                submission_id, attempt, self.max_retries, detail,
+            )
+            raise self.retry(exc=exc, countdown=30 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_SUBMISSION_BRIEF, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=detail, attempt=attempt)
         _mark_submission_brief_failed(
             submission,
             f"AI brief could not be generated: {exc}. "
@@ -1440,12 +1483,14 @@ def _mark_submission_quality_failed(submission, message: str) -> None:
     )
 
 
-@shared_task
-def score_submission_quality(submission_id: int, *, force: bool = False):
+@shared_task(bind=True, max_retries=3)
+def score_submission_quality(self, submission_id: int, *, force: bool = False):
     """Assign AI quality score (0–100) for compliance / unit review triage."""
     from django.utils import timezone
 
-    from .models import Submission
+    from .ai.claude_client import is_retryable_ai_error
+    from .ai.reliability import FEATURE_QUALITY_SCORE, log_ai_call, timed_call
+    from .models import AIGenerationLog, Submission
 
     try:
         submission = Submission.objects.select_related(
@@ -1464,14 +1509,30 @@ def score_submission_quality(submission_id: int, *, force: bool = False):
     from .ai.submission_quality_score import score_submission_from_context
 
     context = build_submission_brief_context(submission)
-    result, err = score_submission_from_context(context)
+    try:
+        with timed_call() as elapsed:
+            result, err = score_submission_from_context(context)
+    except Exception as exc:
+        result, err = None, str(exc)
+
     if not result:
-        _mark_submission_quality_failed(
-            submission,
-            err or "Quality score could not be generated. Check GEMINI_API_KEY and try again.",
-        )
+        detail = err or "Quality score could not be generated. Check GEMINI_API_KEY and try again."
+        attempt = self.request.retries + 1
+        if is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+            log_ai_call(feature=FEATURE_QUALITY_SCORE, submission_id=submission_id,
+                        status=AIGenerationLog.Status.RETRYING, error_detail=detail, attempt=attempt)
+            app_log.warning("QUALITY_RETRY | Submission %s | attempt %s/%s | %s",
+                            submission_id, attempt, self.max_retries, detail)
+            raise self.retry(countdown=30 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_QUALITY_SCORE, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=detail, attempt=attempt)
+        _mark_submission_quality_failed(submission, detail)
         app_log.error("QUALITY_FAIL | Submission %s | %s", submission_id, err)
         return
+
+    log_ai_call(feature=FEATURE_QUALITY_SCORE, submission_id=submission_id,
+                status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(),
+                attempt=self.request.retries + 1)
 
     submission.ai_quality_score = result["score"]
     submission.ai_quality_explanation = result["explanation"]
@@ -1711,13 +1772,35 @@ def queue_agenda_item_blurb(agenda_item_id: int) -> None:
         generate_agenda_item_blurb(agenda_item_id)
 
 
-@shared_task
-def generate_agenda_item_blurb(agenda_item_id: int):
+@shared_task(bind=True, max_retries=3)
+def generate_agenda_item_blurb(self, agenda_item_id: int):
     from .ai.agenda_blurb import generate_agenda_blurb
-    from .models import AgendaItem
+    from .ai.claude_client import is_retryable_ai_error
+    from .ai.reliability import FEATURE_AGENDA_BLURB, log_ai_call, timed_call
+    from .models import AgendaItem, AIGenerationLog
 
     item = AgendaItem.objects.select_related("submission", "meeting").get(pk=agenda_item_id)
-    blurb, _err = generate_agenda_blurb(submission=item.submission, meeting=item.meeting)
+    with timed_call() as elapsed:
+        blurb, err = generate_agenda_blurb(submission=item.submission, meeting=item.meeting)
+
+    if err:
+        attempt = self.request.retries + 1
+        if is_retryable_ai_error(err) and self.request.retries < self.max_retries:
+            log_ai_call(feature=FEATURE_AGENDA_BLURB, submission_id=item.submission_id,
+                        status=AIGenerationLog.Status.RETRYING, error_detail=err, attempt=attempt)
+            app_log.warning("AGENDA_BLURB_RETRY | item %s | attempt %s/%s | %s",
+                            agenda_item_id, attempt, self.max_retries, err)
+            raise self.retry(countdown=30 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_AGENDA_BLURB, submission_id=item.submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=err, attempt=attempt)
+        app_log.warning("AGENDA_BLURB_FALLBACK_TEXT | item %s | %s", agenda_item_id, err)
+        # Fall through and still save the template fallback text generate_agenda_blurb
+        # returns on failure — a plain blurb beats a blank one on the sitting pack.
+    else:
+        log_ai_call(feature=FEATURE_AGENDA_BLURB, submission_id=item.submission_id,
+                    status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(),
+                    attempt=self.request.retries + 1)
+
     item.agenda_blurb = blurb
     item.agenda_blurb_processed = True
     item.save(update_fields=["agenda_blurb", "agenda_blurb_processed"])
@@ -1943,13 +2026,14 @@ def _build_submission_context(submission) -> str:
 
 # ── A4: Duplicate Detection ───────────────────────────────────────────────────
 
-@shared_task
-def detect_submission_duplicates(submission_id: int, force: bool = False):
+@shared_task(bind=True, max_retries=3)
+def detect_submission_duplicates(self, submission_id: int, force: bool = False):
     """A4 — Detect duplicate/similar submissions using Claude Sonnet."""
     from django.utils import timezone
-    from .models import Submission
+    from .models import AIGenerationLog, Submission
     from .ai.A4_duplicate_detector import detect_duplicates
-    from .ai.claude_client import ai_enabled
+    from .ai.claude_client import ai_enabled, is_retryable_ai_error
+    from .ai.reliability import FEATURE_DUPLICATE_DETECTION, log_ai_call, timed_call
 
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
@@ -1969,6 +2053,18 @@ def detect_submission_duplicates(submission_id: int, force: bool = False):
             "ai_duplicate_generated_at", "updated_at",
         ])
 
+    def _retry_or_fail(detail: str):
+        attempt = self.request.retries + 1
+        if is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+            log_ai_call(feature=FEATURE_DUPLICATE_DETECTION, submission_id=submission_id,
+                        status=AIGenerationLog.Status.RETRYING, error_detail=detail, attempt=attempt)
+            app_log.warning("A4_DUPLICATE_RETRY | Sub %s | attempt %s/%s | %s",
+                            submission_id, attempt, self.max_retries, detail)
+            raise self.retry(countdown=30 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_DUPLICATE_DETECTION, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=detail, attempt=attempt)
+        _fail(f"AI error: {detail}")
+
     # Always terminate polling with a recorded state — a silent return here
     # (missing API key, unexpected exception) would otherwise leave the
     # frontend polling ai-duplicate/ forever with no feedback.
@@ -1987,16 +2083,22 @@ def detect_submission_duplicates(submission_id: int, force: bool = False):
             _build_submission_context(c) for c in candidates
         ) or "No existing submissions found."
 
-        data, err = detect_duplicates(submission_ctx, existing_ctx)
+        with timed_call() as elapsed:
+            data, err = detect_duplicates(submission_ctx, existing_ctx)
     except Exception as exc:
         app_log.exception("A4_DUPLICATE | Sub %s | unexpected failure", submission_id)
-        _fail(f"AI error: {exc}")
+        _retry_or_fail(str(exc))
         return
 
     if err or not data:
-        app_log.error("A4_DUPLICATE | Sub %s | Error: %s", submission_id, err)
-        _fail(f"AI error: {err or 'empty response'}")
+        detail = err or "empty response"
+        app_log.error("A4_DUPLICATE | Sub %s | Error: %s", submission_id, detail)
+        _retry_or_fail(detail)
         return
+
+    log_ai_call(feature=FEATURE_DUPLICATE_DETECTION, submission_id=submission_id,
+                status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(),
+                attempt=self.request.retries + 1)
 
     submission.ai_duplicate_processed = True
     submission.ai_duplicate_is_duplicate = data.get("is_duplicate", False)
@@ -2024,13 +2126,14 @@ def queue_duplicate_detection(submission_id: int, force: bool = False) -> None:
 
 # ── B2: Risk Assessment ───────────────────────────────────────────────────────
 
-@shared_task
-def run_risk_assessment(submission_id: int, force: bool = False):
+@shared_task(bind=True, max_retries=3)
+def run_risk_assessment(self, submission_id: int, force: bool = False):
     """B2 — Risk assessment using Claude Sonnet."""
     from django.utils import timezone
-    from .models import Submission
+    from .models import AIGenerationLog, Submission
     from .ai.B2_risk_assessment import assess_risk
-    from .ai.claude_client import ai_enabled
+    from .ai.claude_client import ai_enabled, is_retryable_ai_error
+    from .ai.reliability import FEATURE_RISK_ASSESSMENT, log_ai_call, timed_call
 
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
@@ -2048,21 +2151,38 @@ def run_risk_assessment(submission_id: int, force: bool = False):
             "ai_risk_processed", "ai_risk_recommendation", "ai_risk_generated_at", "updated_at"
         ])
 
+    def _retry_or_fail(detail: str):
+        attempt = self.request.retries + 1
+        if is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+            log_ai_call(feature=FEATURE_RISK_ASSESSMENT, submission_id=submission_id,
+                        status=AIGenerationLog.Status.RETRYING, error_detail=detail, attempt=attempt)
+            app_log.warning("B2_RISK_RETRY | Sub %s | attempt %s/%s | %s",
+                            submission_id, attempt, self.max_retries, detail)
+            raise self.retry(countdown=30 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_RISK_ASSESSMENT, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=detail, attempt=attempt)
+        _fail(f"AI error: {detail}")
+
     if not ai_enabled():
         _fail("AI is not configured (GEMINI_API_KEY missing).")
         return
 
     try:
         submission_ctx = _build_submission_context(submission)
-        data, err = assess_risk(submission_ctx)
+        with timed_call() as elapsed:
+            data, err = assess_risk(submission_ctx)
     except Exception as exc:
         app_log.exception("B2_RISK | Sub %s | unexpected failure", submission_id)
-        _fail(f"AI error: {exc}")
+        _retry_or_fail(str(exc))
         return
 
     if err or not data:
-        _fail(f"AI error: {err or 'empty response'}")
+        _retry_or_fail(err or "empty response")
         return
+
+    log_ai_call(feature=FEATURE_RISK_ASSESSMENT, submission_id=submission_id,
+                status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(),
+                attempt=self.request.retries + 1)
 
     submission.ai_risk_processed = True
     submission.ai_risk_score = data.get("risk_score", 0)
@@ -2090,13 +2210,14 @@ def queue_risk_assessment(submission_id: int, force: bool = False) -> None:
 
 # ── B3: Recommended Outcome ───────────────────────────────────────────────────
 
-@shared_task
-def generate_recommended_outcome(submission_id: int, force: bool = False):
+@shared_task(bind=True, max_retries=3)
+def generate_recommended_outcome(self, submission_id: int, force: bool = False):
     """B3 — Recommend decision outcome using Claude Sonnet."""
     from django.utils import timezone
-    from .models import Submission
+    from .models import AIGenerationLog, Submission
     from .ai.B3_recommended_outcome import recommend_outcome
-    from .ai.claude_client import ai_enabled
+    from .ai.claude_client import ai_enabled, is_retryable_ai_error
+    from .ai.reliability import FEATURE_RECOMMENDED_OUTCOME, log_ai_call, timed_call
 
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
@@ -2114,21 +2235,38 @@ def generate_recommended_outcome(submission_id: int, force: bool = False):
             "ai_outcome_processed", "ai_outcome_rationale", "ai_outcome_generated_at", "updated_at"
         ])
 
+    def _retry_or_fail(detail: str):
+        attempt = self.request.retries + 1
+        if is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+            log_ai_call(feature=FEATURE_RECOMMENDED_OUTCOME, submission_id=submission_id,
+                        status=AIGenerationLog.Status.RETRYING, error_detail=detail, attempt=attempt)
+            app_log.warning("B3_OUTCOME_RETRY | Sub %s | attempt %s/%s | %s",
+                            submission_id, attempt, self.max_retries, detail)
+            raise self.retry(countdown=30 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_RECOMMENDED_OUTCOME, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=detail, attempt=attempt)
+        _fail(f"AI error: {detail}")
+
     if not ai_enabled():
         _fail("AI is not configured (GEMINI_API_KEY missing).")
         return
 
     try:
         submission_ctx = _build_submission_context(submission)
-        data, err = recommend_outcome(submission_ctx)
+        with timed_call() as elapsed:
+            data, err = recommend_outcome(submission_ctx)
     except Exception as exc:
         app_log.exception("B3_OUTCOME | Sub %s | unexpected failure", submission_id)
-        _fail(f"AI error: {exc}")
+        _retry_or_fail(str(exc))
         return
 
     if err or not data:
-        _fail(f"AI error: {err or 'empty response'}")
+        _retry_or_fail(err or "empty response")
         return
+
+    log_ai_call(feature=FEATURE_RECOMMENDED_OUTCOME, submission_id=submission_id,
+                status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(),
+                attempt=self.request.retries + 1)
 
     submission.ai_outcome_processed = True
     submission.ai_outcome_recommendation = data.get("recommendation", "")
@@ -2158,13 +2296,14 @@ def queue_recommended_outcome(submission_id: int, force: bool = False) -> None:
 
 # ── B5: Notice of Allegation ──────────────────────────────────────────────────
 
-@shared_task
-def generate_notice_of_allegation(submission_id: int, response_deadline_days: int = 14, force: bool = False):
+@shared_task(bind=True, max_retries=3)
+def generate_notice_of_allegation(self, submission_id: int, response_deadline_days: int = 14, force: bool = False):
     """B5 — Draft notice of allegation letter using Claude Sonnet."""
     from django.utils import timezone
-    from .models import Submission
+    from .models import AIGenerationLog, Submission
     from .ai.B5_notice_of_allegation import draft_notice_of_allegation
-    from .ai.claude_client import ai_enabled
+    from .ai.claude_client import ai_enabled, is_retryable_ai_error
+    from .ai.reliability import FEATURE_NOTICE_OF_ALLEGATION, log_ai_call, timed_call
 
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
@@ -2182,21 +2321,38 @@ def generate_notice_of_allegation(submission_id: int, response_deadline_days: in
             "ai_noa_processed", "ai_noa_content", "ai_noa_generated_at", "updated_at"
         ])
 
+    def _retry_or_fail(detail: str):
+        attempt = self.request.retries + 1
+        if is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+            log_ai_call(feature=FEATURE_NOTICE_OF_ALLEGATION, submission_id=submission_id,
+                        status=AIGenerationLog.Status.RETRYING, error_detail=detail, attempt=attempt)
+            app_log.warning("B5_NOA_RETRY | Sub %s | attempt %s/%s | %s",
+                            submission_id, attempt, self.max_retries, detail)
+            raise self.retry(countdown=30 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_NOTICE_OF_ALLEGATION, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=detail, attempt=attempt)
+        _fail(f"AI error: {detail}")
+
     if not ai_enabled():
         _fail("AI is not configured (GEMINI_API_KEY missing).")
         return
 
     try:
         submission_ctx = _build_submission_context(submission)
-        data, err = draft_notice_of_allegation(submission_ctx, response_deadline_days=response_deadline_days)
+        with timed_call() as elapsed:
+            data, err = draft_notice_of_allegation(submission_ctx, response_deadline_days=response_deadline_days)
     except Exception as exc:
         app_log.exception("B5_NOA | Sub %s | unexpected failure", submission_id)
-        _fail(f"AI error: {exc}")
+        _retry_or_fail(str(exc))
         return
 
     if err or not data:
-        _fail(f"AI error: {err or 'empty response'}")
+        _retry_or_fail(err or "empty response")
         return
+
+    log_ai_call(feature=FEATURE_NOTICE_OF_ALLEGATION, submission_id=submission_id,
+                status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(),
+                attempt=self.request.retries + 1)
 
     submission.ai_noa_processed = True
     submission.ai_noa_content = data.get("letter_content", "")
@@ -2220,13 +2376,14 @@ def queue_notice_of_allegation(submission_id: int, response_deadline_days: int =
 
 # ── F3: Outcome Letter ────────────────────────────────────────────────────────
 
-@shared_task
-def generate_outcome_letter(submission_id: int, outcome: str = "", conditions: list = None, force: bool = False):
+@shared_task(bind=True, max_retries=3)
+def generate_outcome_letter(self, submission_id: int, outcome: str = "", conditions: list = None, force: bool = False):
     """F3 — Draft formal outcome letter using Claude Sonnet."""
     from django.utils import timezone
-    from .models import Submission
+    from .models import AIGenerationLog, Submission
     from .ai.F3_outcome_letter import draft_outcome_letter
-    from .ai.claude_client import ai_enabled
+    from .ai.claude_client import ai_enabled, is_retryable_ai_error
+    from .ai.reliability import FEATURE_OUTCOME_LETTER, log_ai_call, timed_call
 
     try:
         submission = Submission.objects.select_related("ministry").get(pk=submission_id)
@@ -2244,21 +2401,38 @@ def generate_outcome_letter(submission_id: int, outcome: str = "", conditions: l
             "ai_letter_processed", "ai_letter_content", "ai_letter_generated_at", "updated_at"
         ])
 
+    def _retry_or_fail(detail: str):
+        attempt = self.request.retries + 1
+        if is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+            log_ai_call(feature=FEATURE_OUTCOME_LETTER, submission_id=submission_id,
+                        status=AIGenerationLog.Status.RETRYING, error_detail=detail, attempt=attempt)
+            app_log.warning("F3_LETTER_RETRY | Sub %s | attempt %s/%s | %s",
+                            submission_id, attempt, self.max_retries, detail)
+            raise self.retry(countdown=30 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_OUTCOME_LETTER, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=detail, attempt=attempt)
+        _fail(f"AI error: {detail}")
+
     if not ai_enabled():
         _fail("AI is not configured (GEMINI_API_KEY missing).")
         return
 
     try:
         submission_ctx = _build_submission_context(submission)
-        data, err = draft_outcome_letter(submission_ctx, outcome=outcome, conditions=conditions or [])
+        with timed_call() as elapsed:
+            data, err = draft_outcome_letter(submission_ctx, outcome=outcome, conditions=conditions or [])
     except Exception as exc:
         app_log.exception("F3_LETTER | Sub %s | unexpected failure", submission_id)
-        _fail(f"AI error: {exc}")
+        _retry_or_fail(str(exc))
         return
 
     if err or not data:
-        _fail(f"AI error: {err or 'empty response'}")
+        _retry_or_fail(err or "empty response")
         return
+
+    log_ai_call(feature=FEATURE_OUTCOME_LETTER, submission_id=submission_id,
+                status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(),
+                attempt=self.request.retries + 1)
 
     submission.ai_letter_processed = True
     submission.ai_letter_content = data.get("letter_content", "")

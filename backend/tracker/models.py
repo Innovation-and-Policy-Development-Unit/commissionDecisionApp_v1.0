@@ -1303,6 +1303,45 @@ class AuditLog(models.Model):
         return f"{self.timestamp:%Y-%m-%d %H:%M} | {self.actor_username} | {self.action}"
 
 
+class AIGenerationLog(models.Model):
+    """One row per AI-provider call attempt — success, transient retry, or
+    permanent failure. Distinct from AuditLog: this is reliability telemetry
+    for the AI features themselves (which feature, which model tier, how
+    long, did it fail and why), not a record of a user action. Feeds the AI
+    reliability dashboard (Administration → AI reliability)."""
+
+    class Status(models.TextChoices):
+        SUCCESS  = "success",  "Success"
+        RETRYING = "retrying", "Transient failure — retrying"
+        FAILED   = "failed",   "Failed"
+
+    # Stable feature identifiers used consistently across tasks.py/views.py —
+    # see FEATURE_* constants in tracker/ai/reliability.py.
+    feature      = models.CharField(max_length=64, db_index=True)
+    submission   = models.ForeignKey(
+        "Submission", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="ai_generation_logs",
+    )
+    status       = models.CharField(max_length=16, choices=Status.choices, db_index=True)
+    error_detail = models.TextField(blank=True)
+    model_tier   = models.CharField(max_length=16, blank=True)
+    latency_ms   = models.PositiveIntegerField(null=True, blank=True)
+    attempt      = models.PositiveSmallIntegerField(default=1)
+    created_at   = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "AI Generation Log"
+        verbose_name_plural = "AI Generation Logs"
+        indexes = [
+            models.Index(fields=["feature", "created_at"]),
+            models.Index(fields=["status", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.created_at:%Y-%m-%d %H:%M} | {self.feature} | {self.status}"
+
+
 # ── NCSS 2030 CSP-4 / ISO 27001 A.16.1 ───────────────────────────────────────
 
 class SecurityIncident(models.Model):

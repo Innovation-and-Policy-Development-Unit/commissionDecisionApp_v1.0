@@ -144,6 +144,7 @@ from .views import (
     pending_decisions_view,
     ministry_performance_view,
     audit_log_search_view,
+    ai_reliability_view,
     WebPushSubscriptionViewSet,
     DocumentVersionViewSet,
 )
@@ -312,4 +313,5 @@ urlpatterns = [
     path("ops/ministry-performance/",      ministry_performance_view,          name="ministry-performance"),
     # Audit log search
     path("audit-logs/search/",             audit_log_search_view,              name="audit-log-search"),
+    path("ai-reliability/",                ai_reliability_view,                name="ai-reliability"),
 ]
