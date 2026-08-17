@@ -458,6 +458,9 @@ CACHE_PASSWORD_POLICY_TTL = int(os.getenv('CACHE_PASSWORD_POLICY_TTL', '300'))
 # much shorter TTL than reference data — just enough to absorb repeat hits
 # within a page load / short polling window without serving stale-for-long.
 CACHE_DASHBOARD_TTL = int(os.getenv('CACHE_DASHBOARD_TTL', '30'))
+# System-wide live-stats strip (same numbers for every viewer) — a longer TTL
+# than the dashboard is fine since it's decorative-but-real, not a working view.
+CACHE_SYSTEM_STATS_TTL = int(os.getenv('CACHE_SYSTEM_STATS_TTL', '300'))
 
 if CACHE_ENABLED:
     from config.cache_urls import redis_cache_url_from_broker

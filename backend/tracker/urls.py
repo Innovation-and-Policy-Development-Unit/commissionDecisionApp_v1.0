@@ -109,6 +109,7 @@ from .views import (
     global_search_view,
     # ── P1–P4 New Views ─────────────────────────────────────────────────────
     dashboard_stats_view,
+    system_stats_view,
     submission_sla_view,
     submission_bulk_action_view,
     trigger_ai_duplicate,
@@ -271,6 +272,7 @@ urlpatterns = [
     path("search/", global_search_view),
     # ── P1–P4 New Endpoints ───────────────────────────────────────────────────
     path("dashboard/stats/",                dashboard_stats_view,               name="dashboard-stats"),
+    path("system-stats/",                   system_stats_view,                  name="system-stats"),
     path("submissions/<int:pk>/sla/",       submission_sla_view,                name="submission-sla"),
     path("submissions/bulk-action/",        submission_bulk_action_view,        name="submission-bulk-action"),
     # AI triggers + result getters

@@ -11136,6 +11136,80 @@ def dashboard_stats_view(request):
     return Response(data)
 
 
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def system_stats_view(request):
+    """Three system-wide, real (not decorative) numbers for the live-stats
+    strip shown to every role — ministry HR/DG and OPSC staff alike. Same
+    figures for everyone (not per-ministry): this is about showcasing the
+    system's overall capability, not personal analytics, so nothing here is
+    ministry-specific or otherwise sensitive to show externally.
+    """
+    from django.conf import settings as _settings
+
+    from .api_cache import cache_enabled, get_cached_response, set_cached_response
+    from .models import AIGenerationLog, WorkflowEvent
+
+    # Flat cache key (not per-user) — the numbers are identical for every
+    # viewer, so one cached copy serves the whole app instead of one per role.
+    cache_key = "scdms:system-stats:v1"
+    if cache_enabled():
+        hit = get_cached_response(cache_key)
+        if hit is not None:
+            return Response(hit)
+
+    now = timezone.now()
+    year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    decisions_verified = (
+        WorkflowEvent.objects.filter(created_at__gte=year_start)
+        .exclude(content_hash="")
+        .count()
+    )
+
+    submissions_this_month = Submission.objects.filter(
+        received_at__gte=month_start, is_attachment=False,
+    )
+    total_this_month = submissions_this_month.count()
+    ai_assisted_ids = (
+        AIGenerationLog.objects.filter(
+            status=AIGenerationLog.Status.SUCCESS,
+            created_at__gte=month_start,
+            submission_id__isnull=False,
+        )
+        .values_list("submission_id", flat=True)
+        .distinct()
+    )
+    ai_assisted_count = submissions_this_month.filter(id__in=ai_assisted_ids).count()
+    ai_assisted_pct = round(ai_assisted_count / total_this_month * 100) if total_this_month else None
+
+    # Same SLA definition as dashboard_stats_view, system-wide (no ministry filter).
+    active_stages = [
+        WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED,
+        WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECOND_APPROVAL,
+        WorkflowStage.SUBMITTED, WorkflowStage.RECEIVED_BY_PSC, WorkflowStage.REGISTERED_ROUTED,
+        WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+        WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.PENDING_SECRETARY_APPROVAL,
+        WorkflowStage.FORWARDED_TO_COMMISSION, WorkflowStage.COMMISSION_SITTING,
+        WorkflowStage.SECRETARY_REVIEW,
+    ]
+    overdue = Submission.objects.filter(
+        current_stage=WorkflowStage.UNDER_ASSESSMENT, assessment_deadline_at__lt=now,
+    ).count()
+    pending_active = Submission.objects.filter(current_stage__in=active_stages).count()
+    sla_pct = round((1 - overdue / pending_active) * 100) if pending_active else 100
+
+    data = {
+        "decisions_verified": decisions_verified,
+        "ai_assisted_pct": ai_assisted_pct,
+        "sla_compliance_pct": sla_pct,
+        "generated_at": now.isoformat(),
+    }
+    set_cached_response(cache_key, data, _settings.CACHE_SYSTEM_STATS_TTL)
+    return Response(data)
+
+
 # ── Submission SLA ─────────────────────────────────────────────────────────────
 
 @api_view(["GET"])

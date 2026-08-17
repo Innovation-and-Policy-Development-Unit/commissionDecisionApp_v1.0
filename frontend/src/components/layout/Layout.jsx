@@ -8,6 +8,7 @@ import Header from './Header'
 import HorizontalMenu from './HorizontalMenu'
 import SettingsPanel from './SettingsPanel'
 import SecurityNoticesBanner from '../shared/SecurityNoticesBanner'
+import SystemStatsStrip from '../shared/SystemStatsStrip'
 import FeedbackPanel from '../shared/FeedbackPanel'
 import LockOverlay from '../auth/LockOverlay'
 import KeyboardShortcutsModal from '../shared/KeyboardShortcutsModal'
@@ -93,6 +94,7 @@ export default function Layout() {
         aria-label={t('accessibility.main_content')}
         className={clsx('min-h-screen transition-all duration-300', mainMargin, mainTopOffset)}
       >
+        <SystemStatsStrip />
         <SecurityNoticesBanner />
         <div className="p-4 sm:p-6 max-w-screen-2xl mx-auto">
           <Outlet />
