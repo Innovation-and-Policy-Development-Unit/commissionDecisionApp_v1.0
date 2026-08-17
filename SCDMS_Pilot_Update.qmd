@@ -1,0 +1,69 @@
+---
+title: "SCDMS Pre-Test Pilot"
+subtitle: "Update & Manager Actions"
+author: "Herman Tevilili, PO"
+date: today
+format:
+  revealjs:
+    theme: simple
+    slide-number: true
+    embed-resources: true
+    transition: fade
+---
+
+```{=html}
+<style>
+.reveal h1, .reveal h2 { color: #12235C; }
+.reveal .slide-background { background-color: #FBFAF7; }
+.stat-row { display: flex; gap: 2.2em; margin: 0.6em 0 1em 0; }
+.stat { text-align: left; }
+.stat .num { font-size: 2.6em; font-weight: 700; color: #C9A227; line-height: 1; }
+.stat .lbl { font-size: 0.5em; color: #57628A; text-transform: uppercase; letter-spacing: 0.04em; }
+.cols { display: flex; gap: 2em; margin-top: 0.6em; }
+.col { flex: 1; text-align: left; }
+.col h3 { color: #12235C; border-bottom: 2px solid #C9A227; padding-bottom: 0.2em; font-size: 0.85em; }
+.col ul { font-size: 0.62em; line-height: 1.35; }
+.feedback { margin-top: 1em; background: #12235C; color: white; padding: 0.5em 0.8em; border-radius: 6px; font-size: 0.6em; text-align: left; }
+.feedback b { color: #C9A227; }
+</style>
+```
+
+## Pre-Test Pilot — Where We Are
+
+Submission & Commission Decision Management System — in **pre-test pilot** ahead of full ministry-wide training rollout.
+
+::: {.stat-row}
+::: {.stat}
+<div class="num">45</div><div class="lbl">Submissions processed</div>
+:::
+::: {.stat}
+<div class="num">12</div><div class="lbl">Ministries participating</div>
+:::
+::: {.stat}
+<div class="num">59</div><div class="lbl">Active user accounts</div>
+:::
+::: {.stat}
+<div class="num">30</div><div class="lbl">Form types digitized</div>
+:::
+:::
+
+::: {.cols}
+::: {.col}
+### What Unit Managers Deliver
+- Assign a test submission to **each** Principal/Senior Officer in their unit — everyone gets hands-on practice, not just the manager
+- Allocate pilot submissions for checklist review and assessment
+- Complete checklist review and assessment for every pilot case assigned to their unit
+- Sign off and hand back completed pilot cases so they progress to Secretary review
+:::
+::: {.col}
+### What to Review
+- Does the unit's digitized checklist match the real requirements for that form type?
+- Is document upload and required-document matching working correctly?
+- Turnaround time against expected SLA
+- Any confusing steps or workflow gaps to flag
+:::
+:::
+
+::: {.feedback}
+<b>Feedback:</b> report issues immediately so they're fixed before full ministry rollout.
+:::
