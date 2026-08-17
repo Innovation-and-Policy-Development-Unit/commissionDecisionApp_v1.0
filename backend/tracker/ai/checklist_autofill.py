@@ -17,6 +17,14 @@ from .feature_registry import FEATURE_MODEL_TIER
 
 logger = logging.getLogger("scdms.app")
 
+# Per-document cap on extracted text sent to the model. 3000 chars (~1 page)
+# was fine for the CVs/cover-letters this feature was originally built for,
+# but starves multi-page documents like Annual/Business/Corporate Plan
+# reports of everything past their first page. Haiku's context window has
+# plenty of headroom for this; the real limit worth watching is the total
+# across all of a submission's documents, not any single one.
+PER_DOCUMENT_TEXT_CAP = 20000
+
 SYSTEM = """You are a document analyst for the Vanuatu Public Service Commission.
 
 You are given:
@@ -65,10 +73,9 @@ def _build_context(submission, items: list) -> str:
         for doc in docs:
             lines.append(f"\n--- {doc.original_name} ---")
             if doc.extracted_text:
-                # Cap per-document text to keep tokens reasonable
-                text = doc.extracted_text[:3000]
+                text = doc.extracted_text[:PER_DOCUMENT_TEXT_CAP]
                 lines.append(text)
-                if len(doc.extracted_text) > 3000:
+                if len(doc.extracted_text) > PER_DOCUMENT_TEXT_CAP:
                     lines.append("[... text truncated ...]")
             elif doc.extracted_facts and isinstance(doc.extracted_facts, dict):
                 summary = doc.extracted_facts.get("document_summary") or ""
@@ -236,9 +243,9 @@ def _build_field_context(submission, fields: list[dict]) -> str:
         for doc in docs:
             lines.append(f"\n--- {doc.original_name} ---")
             if doc.extracted_text:
-                text = doc.extracted_text[:3000]
+                text = doc.extracted_text[:PER_DOCUMENT_TEXT_CAP]
                 lines.append(text)
-                if len(doc.extracted_text) > 3000:
+                if len(doc.extracted_text) > PER_DOCUMENT_TEXT_CAP:
                     lines.append("[... text truncated ...]")
             elif doc.extracted_facts and isinstance(doc.extracted_facts, dict):
                 summary = doc.extracted_facts.get("document_summary") or ""

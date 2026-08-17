@@ -92,6 +92,33 @@ def register_prefill(checklist_code: str, spec: dict[str, PrefillGetter]) -> Non
     _PREFILL_SPECS[checklist_code] = spec
 
 
+def _has_content(source_key: str) -> PrefillGetter:
+    """Tri-state presence check against a digitized-form field: True/False
+    once the ministry has a form on record, None (leave for the reviewer) if
+    no dynamic form has been submitted at all yet — matches the other
+    getters' convention of only asserting what the system actually knows."""
+    def getter(s: Submission) -> bool | None:
+        data = _dynamic_form_data(s)
+        if not data:
+            return None
+        val = data.get(source_key)
+        if val is None:
+            return None
+        return bool(str(val).strip())
+    return getter
+
+
+def register_field_presence_checklist(checklist_code: str, field_to_source: dict[str, str]) -> None:
+    """Register a checklist made up mostly of "is this digitized-form field
+    filled in" items — the report checklists (Annual Report, Business Plan,
+    Corporate Plan) are ~30 such items each, so this avoids writing near-
+    identical lambdas by hand for every one."""
+    register_prefill(checklist_code, {
+        field_key: _has_content(source_key)
+        for field_key, source_key in field_to_source.items()
+    })
+
+
 def build_prefill(submission: Submission, checklist_code: str) -> dict[str, Any]:
     spec = _PREFILL_SPECS.get(checklist_code)
     if not spec:
@@ -377,4 +404,124 @@ register_prefill("RECRUIT-PROBATION-CHECKLIST", {
     # qualification_as_per_jd, special_business_education, comments,
     # checked_by, and opsc_recommendation_approved have no submitted fact
     # to check against — left blank for HR Unit's own review.
+})
+
+# ── ODU Planning & Reporting Checklists ─────────────────────────────────────
+# Annual Report, Business Plan, and Corporate Plan are digitized forms (each
+# guideline section is its own field), so almost every checklist item is a
+# straight "is this field filled in" presence check via _has_content(). Items
+# with no corresponding digitized-form field (see seed_report_checklists.py's
+# source_key=None entries) are deliberately left out here — nothing to check
+# against, so they stay manual/AI-review only. Half Yearly and Quarterly
+# Report have no digitized form at all yet, so neither is registered here.
+
+register_field_presence_checklist("ANNUAL-REPORT-CHECKLIST", {
+    "minister_statement_check": "minister_statement",
+    "dg_statement_check": "dg_statement",
+    "dg_issues_table_check": "dg_issues_table",
+    "org_chart_check": "org_chart_reference",
+    "structural_changes_check": "structural_changes",
+    "ministry_functions_check": "ministry_functions",
+    "vision_statement_check": "vision_statement",
+    "mission_statement_check": "mission_statement",
+    "core_values_check": "core_values",
+    "objectives_performance_check": "objectives_performance",
+    "main_activities_check": "main_activities",
+    "service_delivery_check": "service_delivery",
+    "adr_targets_check": "adr_targets",
+    "budget_performance_check": "budget_performance",
+    "policy_summary_check": "policy_summary",
+    "legislation_changes_check": "legislation_changes",
+    "conventions_check": "conventions",
+    "major_risks_check": "major_risks",
+    "staffing_data_check": "staffing_data",
+    "cessation_data_check": "cessation_data",
+    "compliance_report_check": "compliance_report",
+    "training_delivered_check": "training_delivered",
+    "scholarships_check": "scholarships",
+    "equity_initiatives_check": "equity_initiatives",
+    "financial_note_check": "financial_note",
+    "dev_projects_check": "dev_projects",
+    "statutory_authorities_check": "statutory_authorities",
+    "non_statutory_bodies_check": "non_statutory_bodies",
+    "auditor_general_reports_check": "auditor_general_reports",
+    "ombudsman_response_check": "ombudsman_response",
+    "rti_requests_check": "rti_requests",
+    "court_decisions_check": "court_decisions",
+    "complaints_summary_check": "complaints_summary",
+    # capital_expenditure_check, fraud_control_check, and contact_officer_check
+    # have no field in the digitized Annual Report form — see the seed
+    # command's docstring. Left blank for ODU's own review.
+})
+
+register_field_presence_checklist("BUSINESS-PLAN-CHECKLIST", {
+    "department_name_check": "department_name",
+    "ministry_check": "ministry",
+    "responsible_head_check": "responsible_head",
+    "plan_type_check": "plan_type",
+    "period_dates_check": "period_start_date",
+    "key_outcomes_check": "key_outcomes",
+    "main_programs_check": "main_programs",
+    "nsdp_alignment_check": "nsdp_alignment",
+    "me_matrix_check": "me_matrix",
+    "kpis_check": "kpis",
+    "risks_mitigation_check": "risks_mitigation",
+    "staffing_table_check": "staffing_table",
+    "retirement_severance_check": "retirement_severance",
+    "vacancy_plan_check": "vacancy_plan",
+    "training_budget_check": "training_budget",
+    "scholarship_programs_check": "scholarship_programs",
+    "cashflow_matrix_check": "cashflow_matrix",
+    "payroll_projection_check": "payroll_projection",
+    "overheads_forecast_check": "overheads_forecast",
+    "funding_gaps_check": "funding_gaps",
+    "procurement_schedule_check": "procurement_schedule",
+    "capital_equipment_check": "capital_equipment",
+    "service_contracts_check": "service_contracts",
+    "procurement_risks_check": "procurement_risks",
+    "issue_check": "issue",
+    "discussion_check": "discussion",
+    "recommendation_check": "recommendation",
+    # me_matrix_columns_check, the Budget Narrative group, the two procurement
+    # approval-chain items, and provincial_priorities_check have no field in
+    # the digitized Business Plan form. Left blank for ODU's own review.
+})
+
+register_field_presence_checklist("CORPORATE-PLAN-CHECKLIST", {
+    "ministry_name_check": "ministry_name",
+    "minister_name_check": "minister_name",
+    "ps_name_check": "ps_name",
+    "plan_duration_check": "plan_duration",
+    "vision_statement_check": "vision_statement",
+    "mission_statement_check": "mission_statement",
+    "core_values_check": "core_values",
+    "nsdp_alignment_check": "nsdp_alignment",
+    "strategic_programs_check": "strategic_programs",
+    "program_activity_matrix_check": "program_activity_matrix",
+    "strategic_priorities_check": "strategic_priorities",
+    "kpis_by_program_check": "kpis_by_program",
+    "org_structure_check": "org_structure",
+    "org_chart_reference_check": "org_chart_reference",
+    "staffing_structure_check": "staffing_structure",
+    "staffing_allocation_check": "staffing_allocation",
+    "capability_gaps_check": "capability_gaps",
+    "budget_allocation_check": "budget_allocation",
+    "payroll_costs_check": "payroll_costs",
+    "operational_expenses_check": "operational_expenses",
+    "capital_investment_check": "capital_investment",
+    "resource_gaps_check": "resource_gaps",
+    "training_programs_check": "training_programs",
+    "succession_planning_check": "succession_planning",
+    "technology_upgrades_check": "technology_upgrades",
+    "institutional_strengthening_check": "institutional_strengthening",
+    "major_risks_check": "major_risks",
+    "risk_mitigation_check": "risk_mitigation",
+    "compliance_requirements_check": "compliance_requirements",
+    "me_framework_check": "me_framework",
+    "issue_check": "issue",
+    "discussion_check": "discussion",
+    "recommendation_check": "recommendation",
+    # minister_preface_check, fit_for_purpose_check, and retirement_plan_check
+    # have no field in the digitized Corporate Plan form. Left blank for
+    # ODU's own review.
 })
