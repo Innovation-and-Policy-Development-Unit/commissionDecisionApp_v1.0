@@ -407,13 +407,18 @@ register_prefill("RECRUIT-PROBATION-CHECKLIST", {
 })
 
 # ── ODU Planning & Reporting Checklists ─────────────────────────────────────
-# Annual Report, Business Plan, and Corporate Plan are digitized forms (each
-# guideline section is its own field), so almost every checklist item is a
-# straight "is this field filled in" presence check via _has_content(). Items
-# with no corresponding digitized-form field (see seed_report_checklists.py's
-# source_key=None entries) are deliberately left out here — nothing to check
-# against, so they stay manual/AI-review only. Half Yearly and Quarterly
-# Report have no digitized form at all yet, so neither is registered here.
+# Originally built against ANNUAL-REPORT / BUSINESS-PLAN / CORPORATE-PLAN /
+# HALF-YEARLY-REPORT / QUARTERLY-REPORT as digitized forms (each guideline
+# section its own field), so most items were a straight "is this field
+# filled in" presence check via _has_content(). Per stasombo's (ODU
+# Principal) feedback, ministries now attach their report as a document
+# instead (see seed_report_document_upload_mode.py) — real submissions
+# won't have dynamic form data going forward, so _has_content() naturally
+# returns None for every field below and review falls through to AI
+# autofill reading the attached document instead. Left in place rather
+# than removed: it's what still answers the checklist correctly on the
+# older filled-in-form test submissions (PSC-2026-00037 through 00041),
+# and costs nothing on a real submission with no form data.
 
 register_field_presence_checklist("ANNUAL-REPORT-CHECKLIST", {
     "minister_statement_check": "minister_statement",
