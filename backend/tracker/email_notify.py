@@ -467,6 +467,30 @@ def notify_account_locked(user: User, *, ip: str = "", hard: bool = False, minut
     )
 
 
+def notify_account_unlocked(user: User) -> None:
+    """
+    Notify the affected user that a super administrator unlocked their
+    account. Best-effort; never raises.
+    """
+    import logging
+    from django.utils import timezone
+
+    log = logging.getLogger("scdms.security")
+    base = get_frontend_base_url()
+    when = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M %Z")
+
+    user_email = (user.email or "").strip()
+    if user_email:
+        ctx = merge_recipient_context(
+            user,
+            unlocked_time=when,
+            login_url=f"{base}/auth/login",
+        )
+        send_templated_email(slug="account_unlocked_user", to=[user_email], context=ctx)
+
+    log.info("ACCOUNT_UNLOCK_NOTIFIED | username=%s | user_email=%s", user.username, bool(user_email))
+
+
 def commission_members() -> list[User]:
     """Active Commission members + Chairperson — recipients of agenda/minutes notices."""
     from .models import Role

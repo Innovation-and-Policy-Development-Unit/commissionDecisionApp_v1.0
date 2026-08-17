@@ -162,6 +162,37 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "account_unlocked_user",
+        "name": "Account unlocked (user notice)",
+        "category": "authentication",
+        "description": "Sent to a user when a super administrator unlocks their account.",
+        "placeholders": _ph("unlocked_time, unlocked_by, login_url"),
+        "subject_template": "Your SCDMS account has been unlocked",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "Your SCDMS account has been unlocked by a system administrator and you can now sign in again.\n\n"
+            "Username: {{username}}\n"
+            "Time: {{unlocked_time}}\n\n"
+            "Sign in here: {{login_url}}\n\n"
+            "If you did not expect this, or you're not sure why your account was locked in the first place, "
+            "please contact your SCDMS administrator."
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">Your SCDMS account has been unlocked by a system administrator "
+            "and you can now sign in again.</p>"
+            "<div style=\"background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;margin:0 0 16px 0;\">"
+            "<p style=\"margin:0;\"><strong>Username:</strong> {{username}}</p>"
+            "<p style=\"margin:6px 0 0 0;\"><strong>Time:</strong> {{unlocked_time}}</p>"
+            "</div>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{login_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">Sign in to SCDMS</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">If you did not expect this, or you're not sure "
+            "why your account was locked in the first place, contact your SCDMS administrator.</p>"
+        ),
+    },
+    {
         "slug": "agenda_circulated",
         "name": "Agenda circulated to Commission members",
         "category": "submission_workflow",

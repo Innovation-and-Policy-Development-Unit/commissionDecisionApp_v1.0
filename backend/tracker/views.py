@@ -6244,6 +6244,8 @@ class UserAdminViewSet(
              resource_type="User", resource_id=user.id,
              resource_label=user.username,
              description=f"Account lockout cleared for: {user.username} ({deleted} record(s) removed)")
+        from .email_notify import notify_account_unlocked
+        notify_account_unlocked(user)
         return Response({
             "detail": f"Account unlocked for '{user.username}'. {deleted} lockout record(s) cleared.",
             "username": user.username,
