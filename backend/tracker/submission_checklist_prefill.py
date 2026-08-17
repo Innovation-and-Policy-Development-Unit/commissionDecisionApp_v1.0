@@ -525,3 +525,37 @@ register_field_presence_checklist("CORPORATE-PLAN-CHECKLIST", {
     # have no field in the digitized Corporate Plan form. Left blank for
     # ODU's own review.
 })
+
+register_field_presence_checklist("HALF-YEARLY-REPORT-CHECKLIST", {
+    "dg_statement_check": "dg_statement",
+    "business_plan_objectives_check": "business_plan_objectives",
+    "main_activities_check": "main_activities",
+    "service_delivery_check": "service_delivery",
+    "quarterly_followup_check": "quarterly_followup",
+    "adr_targets_check": "adr_targets",
+    "budget_narrative_check": "budget_narrative",
+    "policy_development_check": "policy_development",
+    "legislation_check": "legislation",
+    "conventions_check": "conventions",
+    "staffing_totals_check": "staffing_totals",
+    "staffing_breakdown_check": "staffing_breakdown",
+    "retirements_check": "retirements",
+    "redundancies_check": "redundancies",
+    "leave_accrual_check": "leave_accrual",
+    "scholarships_check": "scholarships",
+    "training_check": "training",
+    "financial_statements_check": "financial_statements",
+    "dev_projects_check": "dev_projects",
+    "capital_expenditure_check": "capital_expenditure",
+    "com_decisions_current_check": "com_decisions_current",
+    "com_decisions_prior_check": "com_decisions_prior",
+    "template1_check": "template1",
+    "template2_check": "template2",
+    "template3_check": "template3",
+})
+
+register_field_presence_checklist("QUARTERLY-REPORT-CHECKLIST", {
+    "dg_statement_check": "dg_statement",
+    "budget_narrative_check": "budget_narrative",
+    "template1_check": "template1",
+})
