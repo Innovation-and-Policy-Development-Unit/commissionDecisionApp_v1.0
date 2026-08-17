@@ -33,6 +33,28 @@ const STAGE_ACTIONS = {
       transitionTo: 'pending_dg_endorsement',
       requiresNote: false,
     },
+    // Internal (OPSC-unit) drafts that route through a manager-approval step
+    // before the Secretary — e.g. Compliance Principal/Senior, VIPAM Principal.
+    {
+      id: 'submit_for_manager_approval',
+      label: 'Submit for Manager Approval',
+      description: 'Send to your unit manager for review before it goes to the Secretary',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'pending_manager_approval',
+      requiresNote: false,
+    },
+    // Internal (OPSC-unit) drafts that route straight to the Secretary —
+    // e.g. Compliance Manager's own draft, secretary-only travel forms.
+    {
+      id: 'submit_internal',
+      label: 'Submit',
+      description: 'Send directly to the Secretary for review',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'submitted',
+      requiresNote: false,
+    },
   ],
 
   // OPSC-internal submissions that follow the normal PSC route (e.g. CSU/ODU
@@ -47,6 +69,31 @@ const STAGE_ACTIONS = {
       variant: 'primary',
       transitionTo: 'submitted',
       requiresNote: false,
+    },
+  ],
+
+  // Manager-approval gate for internal (OPSC-unit) submissions — e.g.
+  // Compliance Manager reviewing a Principal/Senior-created submission.
+  pending_manager_approval: [
+    {
+      id: 'approve_to_secretary',
+      label: 'Approve & Send to Secretary',
+      description: 'Approve and forward to the Secretary for review',
+      icon: CheckCircle2,
+      variant: 'primary',
+      transitionTo: 'submitted',
+      requiresNote: false,
+    },
+    {
+      id: 'return_for_changes',
+      label: 'Return for Changes',
+      description: 'Send back to the drafter for changes',
+      icon: RotateCcw,
+      variant: 'outline',
+      transitionTo: 'draft',
+      requiresNote: true,
+      notePlaceholder: 'Describe what changes are needed…',
+      noteLabel: 'Feedback',
     },
   ],
 

@@ -664,6 +664,43 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         )
         title = f"New internal submission: {submission.reference_number}"
         body = f"'{submission.title}' has completed all approvals and is ready for your review."
+
+    # ── Compliance Manager approval gate (Principal/Senior-created submissions) ──
+    elif target == WorkflowStage.PENDING_MANAGER_APPROVAL and submission.routed_unit == RoutedUnit.COMPLIANCE:
+        recipients = User.objects.filter(
+            psc_profile__role=Role.COMPLIANCE_MANAGER, is_active=True,
+        )
+        actor_name = (actor.get_full_name() or actor.username) if actor else "Compliance staff"
+        title = f"Approval required: {submission.reference_number}"
+        body = (
+            f"'{submission.title}' submitted by {actor_name} is awaiting your approval "
+            f"before it is sent to the Secretary."
+        )
+    elif (
+        prev == WorkflowStage.PENDING_MANAGER_APPROVAL
+        and target == WorkflowStage.DRAFT
+        and submission.routed_unit == RoutedUnit.COMPLIANCE
+    ):
+        recipients = User.objects.filter(pk=submission.created_by_id, is_active=True)
+        approver_name = (actor.get_full_name() or actor.username) if actor else "Compliance Manager"
+        title = f"Returned for changes: {submission.reference_number}"
+        reason = (remarks or "").strip()
+        body = (
+            f"'{submission.title}' was returned by {approver_name} for changes."
+            + (f"\n\nReason: {reason}" if reason else "")
+        )
+    elif (
+        prev == WorkflowStage.PENDING_MANAGER_APPROVAL
+        and target == WorkflowStage.SUBMITTED
+        and submission.routed_unit == RoutedUnit.COMPLIANCE
+    ):
+        recipients = User.objects.filter(
+            psc_profile__role__in=[Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER],
+            is_active=True,
+        )
+        title = f"New internal submission: {submission.reference_number}"
+        body = f"'{submission.title}' has been approved by the Compliance Manager and is ready for your review."
+
     elif (
         prev in (WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED)
         and target == WorkflowStage.SUBMITTED
@@ -1655,7 +1692,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.VIPAM_SENIOR: "vipam",
             Role.HR_UNIT_SENIOR: "hr",
         }
-        if profile.role in _unit_principal_to_routed:
+        # Self-created internal submissions (VIPAM/Compliance Principal or
+        # Senior authoring and submitting their own COMP-*/VIPAM draft) were
+        # never routed to them via unit-manager allocation, so there's no
+        # assigned_to to check — this gate only applies to ministry-routed
+        # cases a unit principal reviews.
+        if profile.role in _unit_principal_to_routed and not submission.is_internal:
             expected_unit = _unit_principal_to_routed[profile.role]
             if submission.routed_unit != expected_unit:
                 raise PermissionDenied(

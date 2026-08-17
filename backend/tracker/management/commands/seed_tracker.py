@@ -172,6 +172,7 @@ USERS = [
     ("m.compliance",   "m.compliance@psc.gov.vu",    "Manager123!",       "compliance_manager",     "MPM"),
     ("s.compliance",   "s.compliance@psc.gov.vu",    "Officer123!",       "compliance_senior",      "MPM"),
     ("p.compliance",   "p.compliance@psc.gov.vu",    "Officer123!",       "compliance_principal",   "MPM"),
+    ("m.csu",          "m.csu@psc.gov.vu",           "Manager123!",       "csu_manager",            "MPM"),
     # OPSC Manager — allocates decisions to staff after Chairperson signs minutes
     ("m.opsc",         "m.opsc@psc.gov.vu",          "Manager123!",       "psc_manager",            None),
     # Ministry HR
