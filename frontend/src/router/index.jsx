@@ -66,6 +66,7 @@ const ExecutiveDashboard = lazy(() => import('../pages/psc/ExecutiveDashboard'))
 const CommissionCalendar = lazy(() => import('../pages/psc/CommissionCalendar'))
 const AuditTrailExplorer = lazy(() => import('../pages/psc/AuditTrailExplorer'))
 const AIReliabilityPage = lazy(() => import('../pages/admin/AIReliabilityPage'))
+const IntegrityFlagsPage = lazy(() => import('../pages/admin/IntegrityFlagsPage'))
 const AnalyticsDashboard = lazy(() => import('../pages/psc/AnalyticsDashboard'))
 const WorkloadDashboard = lazy(() => import('../pages/psc/WorkloadDashboard'))
 const PendingDecisions = lazy(() => import('../pages/psc/PendingDecisions'))
@@ -118,6 +119,7 @@ export default function AppRouter() {
           <Route path="/calendar"             element={<S><CommissionCalendar /></S>} />
           <Route path="/audit-trail"          element={<S><AuditTrailExplorer /></S>} />
           <Route path="/ai-reliability"       element={<S><AIReliabilityPage /></S>} />
+          <Route path="/integrity-flags"      element={<S><IntegrityFlagsPage /></S>} />
           <Route path="/analytics"            element={<S><AnalyticsDashboard /></S>} />
           <Route path="/workload"             element={<S><WorkloadDashboard /></S>} />
           <Route path="/pending-decisions"    element={<S><PendingDecisions /></S>} />

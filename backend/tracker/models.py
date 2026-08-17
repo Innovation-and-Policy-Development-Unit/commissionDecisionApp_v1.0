@@ -1342,6 +1342,38 @@ class AIGenerationLog(models.Model):
         return f"{self.created_at:%Y-%m-%d %H:%M} | {self.feature} | {self.status}"
 
 
+class IntegrityFlag(models.Model):
+    """A submission caught by the daily workflow-integrity sweep in a state
+    that shouldn't be reachable — e.g. Commission Sitting with no agenda
+    placement (see tracker/integrity_sweep.py for the check definitions).
+
+    One open row per (submission, check_name); the sweep auto-resolves a
+    flag (stamps resolved_at) once its condition no longer holds, so this
+    table always reflects what's currently wrong, not a growing history —
+    for history, the flag's own audit trail (created_at/resolved_at) plus
+    the submission's own WorkflowEvent/AuditLog cover it."""
+
+    submission  = models.ForeignKey(
+        "Submission", on_delete=models.CASCADE, related_name="integrity_flags",
+    )
+    check_name  = models.CharField(max_length=64, db_index=True)
+    detail      = models.TextField(blank=True)
+    detected_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        ordering = ["-detected_at"]
+        verbose_name = "Integrity Flag"
+        verbose_name_plural = "Integrity Flags"
+        indexes = [
+            models.Index(fields=["check_name", "resolved_at"]),
+        ]
+
+    def __str__(self):
+        state = "open" if self.resolved_at is None else "resolved"
+        return f"{self.check_name} | {self.submission_id} | {state}"
+
+
 # ── NCSS 2030 CSP-4 / ISO 27001 A.16.1 ───────────────────────────────────────
 
 class SecurityIncident(models.Model):

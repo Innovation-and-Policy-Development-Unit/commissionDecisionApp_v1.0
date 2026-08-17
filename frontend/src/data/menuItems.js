@@ -148,6 +148,7 @@ const menuItems = [
           { label: 'System Config',   labelKey: 'nav.system_config', icon: Settings,  path: '/admin/system-config', visibility: 'roles' },
           { label: 'Audit Trail',     labelKey: 'nav.audit_trail',   icon: History,   path: '/audit-trail',         visibility: 'audit' },
           { label: 'AI Reliability',  labelKey: 'nav.ai_reliability',icon: Zap,       path: '/ai-reliability',      visibility: 'roles' },
+          { label: 'Integrity Flags', labelKey: 'nav.integrity_flags',icon: Flag,     path: '/integrity-flags',     visibility: 'roles' },
           { label: 'Backup & Restore',labelKey: 'nav.backup_restore',icon: HardDrive, path: '/admin/backup-restore',visibility: 'roles' },
           { label: 'Trash Bin',       labelKey: 'nav.trash_bin',     icon: Trash2,    path: '/admin/trash',         visibility: 'roles' },
         ],

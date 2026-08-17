@@ -90,6 +90,15 @@ class TrackerConfig(AppConfig):
                 "Force-logout schedule could not be synced: %s", exc
             )
 
+        try:
+            from .integrity_sweep import sync_integrity_sweep_scheduler
+            sync_integrity_sweep_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger("scdms.security").warning(
+                "Workflow-integrity sweep schedule could not be synced: %s", exc
+            )
+
         # Wire up signal handlers for AI feedback analysis
         try:
             import tracker.signals  # noqa: F401

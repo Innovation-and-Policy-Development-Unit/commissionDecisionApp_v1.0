@@ -12396,6 +12396,54 @@ def ai_reliability_view(request):
     })
 
 
+@api_view(["GET", "POST"])
+@permission_classes([permissions.IsAuthenticated])
+def integrity_flags_view(request):
+    """GET: list open/resolved workflow-integrity flags (Administration ->
+    Integrity Flags). POST: run the sweep on demand instead of waiting for
+    the nightly schedule — see tracker/integrity_sweep.py for the checks.
+    """
+    from .integrity_sweep import CHECKS
+    from .models import IntegrityFlag
+
+    profile = _profile(request.user)
+    if profile.role != Role.PSC_ADMIN and not request.user.is_staff:
+        raise PermissionDenied("Administrators only.")
+
+    if request.method == "POST":
+        from .integrity_sweep import run_sweep
+
+        run_sweep()
+        return Response({"detail": "Sweep complete."})
+
+    show = request.query_params.get("show", "open")
+    qs = IntegrityFlag.objects.select_related("submission").order_by("-detected_at")
+    if show == "open":
+        qs = qs.filter(resolved_at__isnull=True)
+    elif show == "resolved":
+        qs = qs.filter(resolved_at__isnull=False)
+    # show == "all" — no filter
+
+    flags = [
+        {
+            "id": f.id,
+            "check_name": f.check_name,
+            "submission_id": f.submission_id,
+            "submission_ref": f.submission.reference_number if f.submission_id else None,
+            "submission_title": f.submission.title if f.submission_id else None,
+            "detail": f.detail,
+            "detected_at": f.detected_at.isoformat(),
+            "resolved_at": f.resolved_at.isoformat() if f.resolved_at else None,
+        }
+        for f in qs[:200]
+    ]
+    return Response({
+        "checks": list(CHECKS.keys()),
+        "open_count": IntegrityFlag.objects.filter(resolved_at__isnull=True).count(),
+        "flags": flags,
+    })
+
+
 # ── Audit Log Search ───────────────────────────────────────────────────────────
 
 @api_view(["GET"])

@@ -3361,3 +3361,16 @@ def force_logout_non_admin_users():
         len(target_user_ids), blacklisted, deactivated,
     )
     return {"blacklisted": blacklisted, "deactivated": deactivated}
+
+
+# ── Workflow integrity sweep ────────────────────────────────────────────────
+
+@shared_task
+def run_integrity_sweep():
+    """Daily sweep flagging submissions in a state that shouldn't be
+    reachable (orphaned Commission Sitting, stale stages, etc.) — see
+    tracker/integrity_sweep.py for the check definitions. Scheduled via
+    sync_integrity_sweep_scheduler(), synced in AppConfig.ready()."""
+    from .integrity_sweep import run_sweep
+
+    run_sweep()
