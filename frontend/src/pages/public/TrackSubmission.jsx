@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Search, FileSearch, Check } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Search, FileSearch, Check, ArrowLeft } from 'lucide-react'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
 import BaseButton from '../../components/shared/BaseButton'
@@ -242,7 +242,16 @@ export default function TrackSubmission() {
             )}
           </div>
 
-          <div className="mt-6 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div className="mt-6 flex justify-center anim-fade-in" style={{ animationDelay: '0.14s' }}>
+            <Link
+              to="/auth/login"
+              className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-primary-600 transition-colors font-medium"
+            >
+              <ArrowLeft size={15} /> Back to Login
+            </Link>
+          </div>
+
+          <div className="mt-4 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
             <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
           </div>
         </div>
