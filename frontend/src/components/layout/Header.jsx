@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext'
 import clsx from 'clsx'
 import {
   Menu, Search, Bell, Settings, Sun, Moon, ChevronDown,
-  User, LogOut, Lock, CreditCard, HelpCircle, Shield, X,
+  User, LogOut, CreditCard, HelpCircle, Shield, X,
   CheckCircle2, AlertCircle, Info, ChevronRight, MessageSquare,
   Plus, LayoutDashboard, FileText, Gavel, Headphones, BarChart3,
   CalendarDays, ListTodo, Zap, Keyboard,
@@ -154,7 +154,7 @@ const UserMenuItem = memo(function UserMenuItem({ Icon, label, item, onClick }) 
 
 export default function Header({ onMenuClick }) {
   const { t } = useTranslation()
-  const { user, logout, lock } = useAuth()
+  const { user, logout } = useAuth()
   const { theme, isDark, toggleDark, cycleTheme, openSettingsPanel, sidebarCollapsed, isHorizontal } = useTheme()
   const {
     notifications,
@@ -294,10 +294,6 @@ export default function Header({ onMenuClick }) {
     logout()
     navigate('/auth/login')
   }, [logout, navigate])
-
-  const handleLock = useCallback(() => {
-    lock()
-  }, [lock])
 
   const initials = useMemo(() => {
     const name = user?.username || 'PSC'
@@ -703,17 +699,6 @@ export default function Header({ onMenuClick }) {
         <Settings size={20} aria-hidden="true" />
       </button>
 
-      {/* Quick lock */}
-      <button
-        type="button"
-        onClick={handleLock}
-        aria-label={t('header.lock_session_hint')}
-        title={t('header.lock_session_hint')}
-        className="p-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 text-slate-600 dark:text-slate-400 hover:text-amber-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-      >
-        <Lock size={18} aria-hidden="true" />
-      </button>
-
       {/* User dropdown */}
       <div className="relative" ref={userRef}>
         <button
@@ -765,15 +750,6 @@ export default function Header({ onMenuClick }) {
               ))}
             </div>
             <div className="py-2 border-t border-slate-100 dark:border-slate-700">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={handleLock}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors focus:outline-none focus-visible:bg-amber-50 dark:focus-visible:bg-amber-900/20"
-              >
-                <Lock size={16} aria-hidden="true" />
-                {t('user_menu.lock_session')}
-              </button>
               <button
                 type="button"
                 role="menuitem"

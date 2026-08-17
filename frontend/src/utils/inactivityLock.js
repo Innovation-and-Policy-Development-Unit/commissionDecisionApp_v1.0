@@ -1,11 +1,17 @@
 /** Per-user auto-lock after inactivity (minutes). Stored in localStorage.
  *  On timeout the session is locked (session PIN re-entry required to resume);
  *  a user with no PIN set is fully logged out instead, since locking would be
- *  a dead end. */
+ *  a dead end.
+ *
+ *  No account currently has a session PIN configured, so every user hits the
+ *  full-logout path — default is 0 (never) until PIN setup is offered again.
+ *  Re-raise this once PIN is back or before real (non-dummy) data is in the
+ *  system, since an indefinitely open session is a real exposure on
+ *  confidential submissions. */
 
 export const INACTIVITY_LOCK_SETTINGS_EVENT = 'psc-auth:inactivity-settings-changed'
 
-export const DEFAULT_INACTIVITY_LOCK_MINUTES = 15
+export const DEFAULT_INACTIVITY_LOCK_MINUTES = 0
 export const MIN_INACTIVITY_LOCK_MINUTES = 5
 export const MAX_INACTIVITY_LOCK_MINUTES = 120
 
