@@ -213,6 +213,8 @@ class MeSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source="user.id", read_only=True)
     username = serializers.CharField(source="user.username", read_only=True)
     full_name = serializers.SerializerMethodField()
+    first_name = serializers.CharField(source="user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user.last_name", read_only=True)
     email = serializers.CharField(source="user.email", read_only=True)
     ministry = MinistrySerializer(read_only=True, allow_null=True)
     department = DepartmentSerializer(read_only=True, allow_null=True)
@@ -241,6 +243,8 @@ class MeSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "full_name",
+            "first_name",
+            "last_name",
             "email",
             "role",
             "ministry",
@@ -701,6 +705,7 @@ def _strip_internal_allocation_if_ministry(data: dict, request) -> dict:
         return data
     if not is_opsc_internal(request.user):
         data["assigned_to_name"] = None
+        data["allocated_to_label"] = None
         data["co_assignments"] = []
     return data
 
@@ -712,6 +717,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
     scheduled_meeting_reference = serializers.CharField(source="scheduled_meeting.reference_number", read_only=True, default=None)
     logged_by = serializers.CharField(source="created_by.username", read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
+    allocated_to_label = serializers.SerializerMethodField()
     co_assignments = CoAssignmentSerializer(many=True, read_only=True)
     is_assessment_overdue = serializers.SerializerMethodField()
     estimated_meeting_date = serializers.SerializerMethodField()
@@ -730,6 +736,17 @@ class SubmissionListSerializer(serializers.ModelSerializer):
 
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.get_full_name() or obj.assigned_to.username if obj.assigned_to else None
+
+    def get_allocated_to_label(self, obj):
+        """Role-aware "who has it now" label for the Submissions list —
+        "Principal Samuel", "Manager ODU", "Secretary" — falling back to the
+        plain assignee name (or None) for stages not covered by that logic."""
+        from .subway_map import allocated_to_label
+
+        label = allocated_to_label(obj)
+        if label:
+            return label
+        return self.get_assigned_to_name(obj)
 
     def get_form_agenda_category(self, obj):
         """Agenda section for this submission: lodge-time choice, else form type, else other."""
@@ -768,6 +785,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "is_assessment_overdue",
             "assigned_to",
             "assigned_to_name",
+            "allocated_to_label",
             "assigned_at",
             "ready_for_manager_at",
             "co_assignments",
@@ -796,6 +814,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     events = WorkflowEventSerializer(many=True, read_only=True)
     logged_by = serializers.CharField(source="created_by.username", read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
+    allocated_to_label = serializers.SerializerMethodField()
     is_assessment_overdue = serializers.SerializerMethodField()
     estimated_meeting_date = serializers.SerializerMethodField()
     dg_endorsed_by_name = serializers.SerializerMethodField()
@@ -871,6 +890,15 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
 
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.get_full_name() or obj.assigned_to.username if obj.assigned_to else None
+
+    def get_allocated_to_label(self, obj):
+        """Role-aware "who has it now" label — see SubmissionListSerializer."""
+        from .subway_map import allocated_to_label
+
+        label = allocated_to_label(obj)
+        if label:
+            return label
+        return self.get_assigned_to_name(obj)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -963,6 +991,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "created_by",
             "assigned_to",
             "assigned_to_name",
+            "allocated_to_label",
             "assigned_at",
             "created_at",
             "updated_at",
@@ -1467,7 +1496,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            "id", "username", "email", "is_active", "date_joined",
+            "id", "username", "email", "first_name", "last_name", "is_active", "date_joined",
             "role", "ministry_id", "ministry_name", "department_id", "department_name",
             "unit_id", "unit_name",
             "is_locked", "hard_locked", "failed_attempts", "two_factor_enabled",
@@ -1684,6 +1713,8 @@ class UserAdminUpdateSerializer(serializers.Serializer):
     """Update User fields + Profile role/ministry/department."""
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField(required=False, allow_blank=True)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
     role = serializers.ChoiceField(choices=Role.choices)
     ministry_id = serializers.IntegerField(required=False, allow_null=True)
     department_id = serializers.IntegerField(required=False, allow_null=True)
@@ -1716,6 +1747,10 @@ class UserAdminUpdateSerializer(serializers.Serializer):
     def update(self, instance, validated_data):
         instance.username = validated_data.get("username", instance.username)
         instance.email = validated_data.get("email", instance.email) or ""
+        if "first_name" in validated_data:
+            instance.first_name = validated_data["first_name"] or ""
+        if "last_name" in validated_data:
+            instance.last_name = validated_data["last_name"] or ""
         if "is_active" in validated_data:
             instance.is_active = validated_data["is_active"]
         instance.save()
@@ -2045,6 +2080,8 @@ class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True, min_length=8)
     email = serializers.EmailField(required=False, allow_blank=True)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
     role = serializers.ChoiceField(choices=Role.choices)
     ministry_id = serializers.IntegerField(required=False, allow_null=True)
     department_id = serializers.IntegerField(required=False, allow_null=True)
@@ -2070,10 +2107,14 @@ class RegisterSerializer(serializers.Serializer):
         role = validated_data.pop("role")
         password = validated_data.pop("password")
         email = validated_data.pop("email", "") or ""
+        first_name = validated_data.pop("first_name", "") or ""
+        last_name = validated_data.pop("last_name", "") or ""
         user = User.objects.create_user(
             username=validated_data["username"],
             password=password,
             email=email,
+            first_name=first_name,
+            last_name=last_name,
         )
         profile_kwargs = {"user": user, "role": role}
         if ministry_id:

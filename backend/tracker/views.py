@@ -5151,6 +5151,18 @@ def me_view(request):
     except PermissionDenied:
         return Response({"detail": PROFILE_MISSING_MSG}, status=403)
     if request.method == "PATCH":
+        # first_name/last_name live on User, not Profile — ProfileSerializer
+        # below can't reach them, so they're handled directly here.
+        name_fields = {}
+        if "first_name" in request.data:
+            name_fields["first_name"] = str(request.data.get("first_name") or "").strip()[:150]
+        if "last_name" in request.data:
+            name_fields["last_name"] = str(request.data.get("last_name") or "").strip()[:150]
+        if name_fields:
+            for field, value in name_fields.items():
+                setattr(user, field, value)
+            user.save(update_fields=list(name_fields.keys()))
+
         serializer = ProfileSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()

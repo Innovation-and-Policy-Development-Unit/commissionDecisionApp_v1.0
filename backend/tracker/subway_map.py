@@ -55,6 +55,34 @@ def _unit_label(unit: str | None) -> str:
     return _UNIT_LABEL.get(unit, unit.upper())
 
 
+def allocated_to_label(submission) -> str | None:
+    """Short, role-aware label for who currently has this submission — e.g.
+    "Principal Samuel", "Manager ODU", "Secretary" — for the OPSC-internal
+    Submissions list "Allocated To" column. Returns None for stages not
+    explicitly covered here (e.g. pre-PSC-intake, Commission, post-decision),
+    letting the caller fall back to the plain assigned-officer name / blank.
+    """
+    stage = submission.current_stage
+    if stage in (WorkflowStage.PENDING_SECRETARY_APPROVAL, WorkflowStage.SECRETARY_REVIEW):
+        return "Secretary"
+
+    if stage in (WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT):
+        assignee = submission.assigned_to
+        if assignee and not submission.ready_for_manager_at:
+            profile = getattr(assignee, "psc_profile", None)
+            role = (profile.role if profile else "") or ""
+            first = assignee.first_name or assignee.username
+            if "principal" in role:
+                return f"Principal {first}"
+            if "senior" in role:
+                return f"Senior {first}"
+            return first
+        # Nobody assigned yet, or handed back by the assignee — it's with the manager.
+        return f"Manager {_unit_label(submission.routed_unit)}" if submission.routed_unit else "Manager"
+
+    return None
+
+
 def _build_status_detail(submission) -> str:
     """
     Return a short, human-readable status line for the current station.

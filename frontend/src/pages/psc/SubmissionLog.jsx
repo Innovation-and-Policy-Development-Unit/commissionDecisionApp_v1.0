@@ -611,7 +611,7 @@ export default function SubmissionLog() {
                     </td>
                     {showAssignedColumn && (
                       <td className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                        {r.assigned_to_name || <span className="text-slate-400 dark:text-slate-500">Unassigned</span>}
+                        {r.allocated_to_label || <span className="text-slate-400 dark:text-slate-500">Unassigned</span>}
                       </td>
                     )}
                     {showQualityColumn && (

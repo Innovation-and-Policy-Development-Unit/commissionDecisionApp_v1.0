@@ -166,6 +166,31 @@ export default function Account() {
   const fileInputRef = useRef(null)
   const sigFileRef = useRef(null)
 
+  // Name state
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName]   = useState('')
+  const [nameLoading, setNameLoading] = useState(false)
+
+  useEffect(() => {
+    setFirstName(user?.first_name ?? '')
+    setLastName(user?.last_name ?? '')
+  }, [user?.first_name, user?.last_name])
+
+  const nameChanged = firstName !== (user?.first_name ?? '') || lastName !== (user?.last_name ?? '')
+
+  const saveName = async () => {
+    setNameLoading(true)
+    try {
+      await api.patch('/me/', { first_name: firstName.trim(), last_name: lastName.trim() })
+      await refreshMe()
+      toast.success('Name updated.')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not update name.')
+    } finally {
+      setNameLoading(false)
+    }
+  }
+
   // Photo state
   const [previewUrl, setPreviewUrl]     = useState(null)
   const [photoLoading, setPhotoLoading] = useState(false)
@@ -611,11 +636,47 @@ export default function Account() {
               </div>
               <div>
                 <h3 className="font-semibold text-slate-900 dark:text-slate-100">Personal Information</h3>
-                <p className="text-xs text-slate-400">Your account details managed by the system</p>
+                <p className="text-xs text-slate-400">Your name is editable; the rest is managed by the system</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">First Name</label>
+                <div className="relative">
+                  <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    className="input pl-10 py-2.5 text-sm"
+                    value={firstName}
+                    onChange={e => setFirstName(e.target.value)}
+                    placeholder="Not set"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Last Name</label>
+                <div className="relative">
+                  <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    className="input pl-10 py-2.5 text-sm"
+                    value={lastName}
+                    onChange={e => setLastName(e.target.value)}
+                    placeholder="Not set"
+                  />
+                </div>
+              </div>
+              {nameChanged && (
+                <div className="md:col-span-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={saveName}
+                    disabled={nameLoading}
+                    className="px-4 py-2 text-xs font-semibold rounded-lg bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-50 transition-colors"
+                  >
+                    {nameLoading ? 'Saving…' : 'Save Name'}
+                  </button>
+                </div>
+              )}
               <ReadonlyField icon={User}      label="Username"       value={user?.username} />
               <ReadonlyField icon={Mail}      label="Email Address"  value={user?.email} />
               <ReadonlyField icon={Briefcase} label="System Role"    value={roleLabel} />

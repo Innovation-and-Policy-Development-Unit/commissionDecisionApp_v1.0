@@ -208,6 +208,8 @@ const EMPTY_USER_FORM = {
   username: '',
   email: '',
   password: '',
+  first_name: '',
+  last_name: '',
   role: 'psc_officer',
   ministry_id: '',
   department_id: '',
@@ -280,6 +282,8 @@ function UsersTab({ users, ministries, departments, units, onRefresh }) {
       username: u.username,
       email: u.email || '',
       password: '',
+      first_name: u.first_name || '',
+      last_name: u.last_name || '',
       role: u.role || 'psc_officer',
       ministry_id: u.ministry_id ?? '',
       department_id: u.department_id ?? '',
@@ -306,6 +310,8 @@ function UsersTab({ users, ministries, departments, units, onRefresh }) {
       const payload = {
         username: form.username,
         email: form.email,
+        first_name: form.first_name,
+        last_name: form.last_name,
         role: form.role,
         ministry_id: form.ministry_id || null,
         department_id: form.department_id || null,
@@ -647,6 +653,24 @@ function UsersTab({ users, ministries, departments, units, onRefresh }) {
                   className="input text-sm"
                   value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">First Name</label>
+                <input
+                  className="input text-sm"
+                  value={form.first_name}
+                  onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Last Name</label>
+                <input
+                  className="input text-sm"
+                  value={form.last_name}
+                  onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))}
                 />
               </div>
             </div>
