@@ -3403,6 +3403,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             "error": err,
         })
 
+    # Real government reports (scanned Corporate Plans etc.) routinely exceed
+    # 20MB — matches nginx's client_max_body_size (frontend/app-locations.conf).
+    MAX_UPLOAD_FILE_SIZE = 50 * 1024 * 1024
+
     @action(detail=True, methods=["get", "post"])
     def documents(self, request, pk=None):
         """List or upload documents for a submission."""
@@ -3434,9 +3438,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         created_docs = []
         for idx, uploaded in enumerate(files):
-            if uploaded.size > 20 * 1024 * 1024:
+            if uploaded.size > self.MAX_UPLOAD_FILE_SIZE:
                 return Response(
-                    {"detail": f"File '{uploaded.name}' exceeds the 20 MB limit."},
+                    {"detail": f"File '{uploaded.name}' exceeds the {self.MAX_UPLOAD_FILE_SIZE // (1024*1024)} MB limit."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             # For internal submissions, the user may supply a human-readable name per file.
@@ -3713,9 +3717,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         uploaded = request.FILES.get("file")
         if not uploaded:
             return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
-        if uploaded.size > 20 * 1024 * 1024:
+        if uploaded.size > self.MAX_UPLOAD_FILE_SIZE:
             return Response(
-                {"detail": f"File '{uploaded.name}' exceeds the 20 MB limit."},
+                {"detail": f"File '{uploaded.name}' exceeds the {self.MAX_UPLOAD_FILE_SIZE // (1024*1024)} MB limit."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
