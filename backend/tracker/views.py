@@ -449,7 +449,14 @@ def _updated_fields(submission, prev, target):
     if prev == WorkflowStage.PENDING_DG_ENDORSEMENT and target == WorkflowStage.SUBMITTED:
         fields.add("dg_endorsed_by")
         fields.add("dg_endorsed_at")
-    if prev == WorkflowStage.DRAFT and target == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
+    if target == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
+        # Auto-derived from form type whenever routed_unit was still blank
+        # (see the transition() body above) — not just on the DRAFT ->
+        # Manager Checklist Review (Receptionist intake) path. Missing the
+        # SUBMITTED -> Manager Checklist Review path here (the ministry
+        # HR -> DG -> PSC route added by the Aug 5 auto-routing change) meant
+        # the computed unit was silently dropped on save — the in-memory
+        # object had it, the database never did.
         fields.add("routed_unit")
     if target == WorkflowStage.MANAGER_CHECKLIST_REVIEW and submission.checklist_review_started_at is not None:
         fields.add("checklist_review_started_at")

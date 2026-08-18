@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Send, CheckCircle2, RotateCcw, ClipboardCheck, ClipboardList,
-  PlayCircle, ArrowRight, Clock, XCircle, Users,
+  ArrowRight, Clock, XCircle, Users,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import BaseButton from '../shared/BaseButton'
@@ -157,60 +157,18 @@ const STAGE_ACTIONS = {
     },
   ],
 
+  // Routing unit is auto-derived from the submission's form type the moment
+  // it enters Manager Checklist Review (see intake_routing.py) — there's no
+  // judgement call left to make, so this is a single action straight there.
+  // received_by_psc / registered_routed are no longer reachable stages.
   submitted: [
     {
-      id: 'receive',
-      label: 'Receive & Register',
-      description: 'Acknowledge receipt and begin PSC registration',
-      icon: ClipboardCheck,
-      variant: 'primary',
-      transitionTo: 'received_by_psc',
-      requiresNote: false,
-    },
-    {
-      id: 'return_clarification',
-      label: 'Return for Clarification',
-      description: 'Send back to ministry with a clarification request',
-      icon: RotateCcw,
-      variant: 'outline',
-      transitionTo: 'returned_for_clarification',
-      requiresNote: true,
-      notePlaceholder: 'Describe what clarification is needed from the ministry…',
-      noteLabel: 'Clarification request',
-    },
-  ],
-
-  received_by_psc: [
-    {
-      id: 'register_route',
-      label: 'Register & Route',
-      description: 'Register the submission and route it to the relevant PSC unit',
+      id: 'route_to_manager',
+      label: 'Route to Manager',
+      description: 'Route the submission to the responsible unit manager for checklist review',
       icon: ClipboardList,
       variant: 'primary',
-      transitionTo: 'registered_routed',
-      requiresNote: false,
-    },
-    {
-      id: 'return_clarification_intake',
-      label: 'Return for Clarification',
-      description: 'Request additional information from the ministry',
-      icon: RotateCcw,
-      variant: 'outline',
-      transitionTo: 'returned_for_clarification',
-      requiresNote: true,
-      notePlaceholder: 'Describe what clarification is needed…',
-      noteLabel: 'Clarification request',
-    },
-  ],
-
-  registered_routed: [
-    {
-      id: 'begin_assessment',
-      label: 'Begin Assessment',
-      description: 'Move to assessment phase and start the SLA timer',
-      icon: PlayCircle,
-      variant: 'primary',
-      transitionTo: 'under_assessment',
+      transitionTo: 'manager_checklist_review',
       requiresNote: false,
     },
   ],
