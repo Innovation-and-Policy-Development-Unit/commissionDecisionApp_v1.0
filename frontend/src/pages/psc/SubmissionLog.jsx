@@ -539,7 +539,7 @@ export default function SubmissionLog() {
                 <th className="min-w-[220px]">{t('submission.title')}</th>
                 <th>{t('submission.stage')}</th>
                 {showAssignedColumn && (
-                  <th>{t('submission.assigned_to', { defaultValue: 'Allocated to' })}</th>
+                  <th>{t('submission.assigned_to', { defaultValue: 'With' })}</th>
                 )}
                 {showQualityColumn && (
                   <th className="w-16">{t('submission.quality_column')}</th>
