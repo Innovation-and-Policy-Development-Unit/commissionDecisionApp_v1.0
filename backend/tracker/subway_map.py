@@ -79,8 +79,27 @@ def allocated_to_label(submission) -> str | None:
     letting the caller fall back to the plain assigned-officer name / blank.
     """
     stage = submission.current_stage
-    if stage in (WorkflowStage.PENDING_SECRETARY_APPROVAL, WorkflowStage.SECRETARY_REVIEW):
+    if stage in (
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,
+        WorkflowStage.SECRETARY_REVIEW,
+        WorkflowStage.MINUTES_DRAFTED_SIGNED,
+    ):
         return "Secretary"
+
+    # Once forwarded on, the checklist reviewer's involvement is over —
+    # submission.assigned_to is never cleared, so without this the caller's
+    # get_assigned_to_name() fallback keeps showing that officer's name
+    # indefinitely (reported live on PSC-2026-00049: still showed "fmele"
+    # after it had moved to forwarded_to_commission).
+    if stage in (
+        WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.COMMISSION_SITTING,
+        WorkflowStage.MATTERS_ARISING,
+        WorkflowStage.APPROVED,
+        WorkflowStage.NOTED,
+        WorkflowStage.NOT_APPROVED,
+    ):
+        return "Commission"
 
     if stage in _PRE_INTAKE_STAGES:
         creator = submission.created_by
