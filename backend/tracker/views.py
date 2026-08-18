@@ -12626,14 +12626,26 @@ def active_sessions_view(request):
     "logged out" hours ago while they were actively using it, for exactly
     this reason. last_login reflects genuine ongoing activity instead.
 
-    A user counts as online unless either happened since their last login:
-    they logged out manually (a LOGOUT audit entry after it), or — for
-    everyone except PSC Administrators, who are exempt from the cap (see
-    logout_scheduler.py / tasks.force_logout_non_admin_users) — their
-    session passed its cap (5pm Vanuatu time same day, or 12h after login,
-    whichever is sooner). "Last seen" is whichever of those actually ended
-    the session.
+    A user counts as online when all of the following hold: they haven't
+    logged out manually (a LOGOUT audit entry after their last login), their
+    session hasn't passed its cap (5pm Vanuatu time same day, or 12h after
+    login, whichever is sooner — doesn't apply to PSC Administrators, who
+    are exempt, see logout_scheduler.py / tasks.force_logout_non_admin_users),
+    and — this is what makes it "who's active right now" rather than "whose
+    session is still theoretically valid" — last_login is recent enough that
+    their browser must still be open and talking to the API. last_login only
+    moves on real activity (sign-in, or the reactive refresh the frontend
+    fires when an access token expires), so anyone genuinely still using the
+    system will have refreshed within one access-token lifetime; anyone who
+    closed the tab simply stops generating that signal even though nothing
+    "ended" their session. Applies uniformly, including to admins: cap
+    exemption is about forced-logout policy, not about what counts as active
+    for display. "Last seen" is whichever of the three actually ended the
+    session (logout, cap expiry, or last_login itself once it's gone stale).
     """
+    from datetime import timedelta
+
+    from django.conf import settings
     from django.contrib.auth.models import User as _User
 
     from .models import AuditLog, TrustedSession
@@ -12643,6 +12655,13 @@ def active_sessions_view(request):
         raise PermissionDenied("Administrators only.")
 
     now = timezone.now()
+    # A little more than the access-token lifetime: the frontend only
+    # refreshes reactively (on a 401 from a real API call), so there's a
+    # short window right after expiry where a genuinely-active user hasn't
+    # refreshed yet.
+    recent_activity_cutoff = now - (
+        settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"] + timedelta(minutes=10)
+    )
 
     last_logout = {
         row["actor_id"]: row["timestamp"]
@@ -12681,6 +12700,8 @@ def active_sessions_view(request):
                 last_seen_at = logout_at
             elif not is_exempt_from_cap and session and session.expires_at <= now:
                 last_seen_at = session.expires_at
+            elif login_at < recent_activity_cutoff:
+                last_seen_at = login_at
             else:
                 is_online = True
 
