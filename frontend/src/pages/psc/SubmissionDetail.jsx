@@ -163,7 +163,6 @@ export default function SubmissionDetail() {
   const [error, setError]           = useState('')
   const [busy, setBusy]             = useState(false)
   const [checklist, setChecklist]   = useState([])
-  const [checklistBusy, setChecklistBusy] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [boardPaperDirty, setBoardPaperDirty] = useState(false)
   const [documents, setDocuments]   = useState([])
@@ -455,20 +454,6 @@ export default function SubmissionDetail() {
   useOnTabVisible(() => {
     if (!isRateLimited()) fetchSubmission()
   }, Boolean(submission))
-
-  const toggleChecklistItem = async (item) => {
-    setChecklistBusy(true)
-    try {
-      const r = await api.patch(`/submissions/${id}/checklist/${item.id}/`, {
-        is_present: !item.is_present,
-      })
-      setChecklist(prev => prev.map(i => i.id === item.id ? r.data : i))
-    } catch {
-      // keep current state on failure
-    } finally {
-      setChecklistBusy(false)
-    }
-  }
 
   const fetchDocuments = useCallback(async () => {
     try {

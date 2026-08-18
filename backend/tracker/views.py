@@ -3315,6 +3315,16 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
         item = get_object_or_404(SubmissionChecklistItem, id=item_id, submission=submission)
         is_present = bool(request.data.get("is_present", False))
+        if is_present and item.document.item_type == RequiredDocument.ItemType.DOCUMENT:
+            has_attached_file = SubmissionDocument.objects.filter(
+                submission=submission, required_document=item.document,
+            ).exists()
+            if not has_attached_file:
+                return Response(
+                    {"detail": f'"{item.document.name}" can\'t be marked present without an attached '
+                                'file — upload it first.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         item.is_present = is_present
         if is_present:
             item.checked_by = request.user

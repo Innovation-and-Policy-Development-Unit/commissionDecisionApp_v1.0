@@ -709,6 +709,7 @@
     "checklist_autofill": "AI Autofill",
     "checklist_autofilling": "Analysing documents…",
     "checklist_autofill_failed": "AI autofill failed.",
+    "checklist_item_update_failed": "Could not update checklist item.",
     "checklist_accept_all": "Accept all suggestions",
     "checklist_accept": "Accept",
     "checklist_reject": "Reject",

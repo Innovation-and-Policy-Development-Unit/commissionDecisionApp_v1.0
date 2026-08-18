@@ -4,6 +4,7 @@ import { ClipboardList, Square, CheckSquare, Wand2, Loader2, Check, X, ChevronDo
 import clsx from 'clsx'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
+import { useToast } from '../../context/ToastContext'
 
 function RequiredBadge({ t }) {
   return (
@@ -199,6 +200,7 @@ export default function ChecklistPanel({
   onAttached,
 }) {
   const { t } = useTranslation()
+  const toast = useToast()
   const [autofilling, setAutofilling] = useState(false)
   const [autofillError, setAutofillError] = useState('')
   const [suggestions, setSuggestions] = useState({})
@@ -268,6 +270,8 @@ export default function ChecklistPanel({
         delete next[item.id]
         return next
       })
+    } catch (err) {
+      toast.error(formatApiError(err, t('submission.checklist_item_update_failed')))
     } finally {
       setSavingItems(prev => {
         const next = new Set(prev)
