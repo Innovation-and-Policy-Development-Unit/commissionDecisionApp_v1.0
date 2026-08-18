@@ -1650,6 +1650,18 @@ const stageDescriptions = {
             <div className="card card-compact space-y-3">
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Allocate to officer</h3>
 
+              {/* Without this, "Primary: X" looks identical whether X is still
+                  working on it or already finished and handed it back — the
+                  Manager had no way to tell "act now" from "still in
+                  progress" without opening the Checklist/Assessment tab. */}
+              {submission.ready_for_manager_at && (
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+                  <span className="font-semibold">Handed back — ready for your review.</span>{' '}
+                  {submission.assigned_to_name} submitted this on{' '}
+                  {new Date(submission.ready_for_manager_at).toLocaleString('en-VU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}.
+                </div>
+              )}
+
               {/* Primary assignee */}
               {submission.assigned_to_name ? (
                 <div className="flex items-center justify-between gap-2 text-sm">
