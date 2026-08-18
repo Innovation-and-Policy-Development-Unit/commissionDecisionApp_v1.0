@@ -12562,6 +12562,109 @@ def integrity_flags_view(request):
     })
 
 
+# ── Active Sessions (Administration -> Security -> Active Sessions) ────────────
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def active_sessions_view(request):
+    """Per-user online/last-seen status, computed from AuditLog LOGIN/LOGOUT
+    entries plus each user's current TrustedSession — a Messenger-style
+    "online now" / "last seen 45 minutes ago" view for admins, not a new
+    tracking mechanism of its own.
+
+    A user counts as online unless either happened since their last login:
+    they logged out manually (a LOGOUT audit entry after it), or — for
+    everyone except PSC Administrators, who are exempt from the cap (see
+    logout_scheduler.py / tasks.force_logout_non_admin_users) — their
+    session passed its cap (5pm Vanuatu time same day, or 12h after login,
+    whichever is sooner). "Last seen" is whichever of those actually ended
+    the session.
+    """
+    from django.contrib.auth.models import User as _User
+
+    from .models import AuditLog, TrustedSession
+
+    profile = _profile(request.user)
+    if profile.role != Role.PSC_ADMIN and not request.user.is_staff and not request.user.is_superuser:
+        raise PermissionDenied("Administrators only.")
+
+    now = timezone.now()
+
+    last_login = {
+        row["actor_id"]: row["timestamp"]
+        for row in (
+            AuditLog.objects.filter(action=AuditLog.Action.LOGIN, actor_id__isnull=False)
+            .order_by("actor_id", "-timestamp").distinct("actor_id")
+            .values("actor_id", "timestamp")
+        )
+    }
+    last_logout = {
+        row["actor_id"]: row["timestamp"]
+        for row in (
+            AuditLog.objects.filter(action=AuditLog.Action.LOGOUT, actor_id__isnull=False)
+            .order_by("actor_id", "-timestamp").distinct("actor_id")
+            .values("actor_id", "timestamp")
+        )
+    }
+    last_session = {
+        row.user_id: row
+        for row in TrustedSession.objects.order_by("user_id", "-started_at").distinct("user_id")
+    }
+
+    users = (
+        _User.objects.filter(is_active=True)
+        .select_related("psc_profile")
+        .order_by("username")
+    )
+
+    results = []
+    for u in users:
+        u_profile = getattr(u, "psc_profile", None)
+        role = u_profile.role if u_profile else ""
+        is_exempt_from_cap = role == Role.PSC_ADMIN or u.is_superuser
+
+        login_at = last_login.get(u.id)
+        logout_at = last_logout.get(u.id)
+        session = last_session.get(u.id)
+
+        is_online = False
+        last_seen_at = None
+
+        if login_at is not None:
+            if logout_at and logout_at > login_at:
+                last_seen_at = logout_at
+            elif not is_exempt_from_cap and session and session.expires_at <= now:
+                last_seen_at = session.expires_at
+            else:
+                is_online = True
+
+        results.append({
+            "id": u.id,
+            "username": u.username,
+            "full_name": (f"{u.first_name} {u.last_name}".strip()) or u.username,
+            "email": u.email,
+            "role": role,
+            "last_login_at": login_at,
+            "is_online": is_online,
+            "last_seen_at": last_seen_at,
+            "session_expires_at": session.expires_at if (session and is_online and not is_exempt_from_cap) else None,
+        })
+
+    def _sort_key(r):
+        if r["is_online"]:
+            return (0, -(r["last_login_at"].timestamp() if r["last_login_at"] else 0))
+        if r["last_seen_at"]:
+            return (1, -(r["last_seen_at"].timestamp()))
+        return (2, 0)
+
+    results.sort(key=_sort_key)
+
+    return Response({
+        "online_count": sum(1 for r in results if r["is_online"]),
+        "users": results,
+    })
+
+
 # ── Audit Log Search ───────────────────────────────────────────────────────────
 
 @api_view(["GET"])

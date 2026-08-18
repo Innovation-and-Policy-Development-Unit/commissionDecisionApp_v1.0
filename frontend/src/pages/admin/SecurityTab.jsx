@@ -1,6 +1,6 @@
 /**
  * SecurityTab — NCSS 2030 / ISO 27001 security features
- * Sub-tabs: Audit Trail | Vulnerability Scan | Incident Response
+ * Sub-tabs: Audit Trail | Active Sessions | System Audit | Vulnerability Scan | Incident Response
  * Rendered from /admin/security (AdminSecurityPage).
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -23,6 +23,7 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Users,
   X,
 } from 'lucide-react'
 import api from '../../api/client'
@@ -243,6 +244,137 @@ function AuditTrailPanel() {
                 <ChevronRight size={14} />
               </button>
             </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Active Sessions ────────────────────────────────────────────────────────
+
+function timeAgo(iso) {
+  if (!iso) return ''
+  const secs = Math.round((Date.now() - new Date(iso).getTime()) / 1000)
+  if (secs < 60) return 'just now'
+  const mins = Math.round(secs / 60)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.round(hrs / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(iso).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+const ROLE_LABELS = {
+  psc_admin: 'PSC Admin', psc_secretary: 'PSC Secretary', psc_manager: 'PSC Manager',
+  psc_officer: 'PSC Officer', psc_commissioner: 'Commissioner', chairperson: 'Chairperson',
+  senior_admin_officer: 'Senior Admin Officer', head_of_agency: 'Head of Agency',
+  ministry_hr: 'Ministry HR',
+}
+function roleLabel(role) {
+  if (!role) return '—'
+  return ROLE_LABELS[role] || role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+const REFRESH_INTERVAL_MS = 30000
+
+function ActiveSessionsPanel() {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await api.get('/admin/active-sessions/')
+      setData(res.data)
+      setError('')
+    } catch {
+      setError('Could not load active sessions.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+    const id = setInterval(load, REFRESH_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [load])
+
+  const users = data?.users ?? []
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-green-500" />
+            {data ? `${data.online_count} online now` : '—'}
+          </span>
+          <span className="text-xs text-slate-400 dark:text-slate-500">Auto-refreshes every 30s</span>
+        </div>
+        <button onClick={load} disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        {loading && !data ? (
+          <div className="flex items-center justify-center h-40 text-slate-400 text-sm gap-2">
+            <RefreshCw size={15} className="animate-spin" /> Loading sessions…
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-sm gap-2">
+            <AlertCircle size={24} className="opacity-30" />
+            {error}
+          </div>
+        ) : users.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-sm gap-2">
+            <Activity size={24} className="opacity-30" />
+            No users found.
+          </div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="table">
+              <thead>
+                <tr>
+                  {['Status', 'User', 'Role', 'Last Login'].map(h => <th key={h}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id}>
+                    <td className="whitespace-nowrap">
+                      {u.is_online ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 dark:text-green-300">
+                          <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                          Online now
+                        </span>
+                      ) : u.last_seen_at ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                          <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 flex-shrink-0" />
+                          Logged out {timeAgo(u.last_seen_at)}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 italic">
+                          <span className="w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
+                          Never logged in
+                        </span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap">
+                      <div className="font-medium text-slate-700 dark:text-slate-200">{u.full_name}</div>
+                      <div className="text-xs text-slate-400 dark:text-slate-500">{u.username} · {u.email || '—'}</div>
+                    </td>
+                    <td className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{roleLabel(u.role)}</td>
+                    <td className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{fmt(u.last_login_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -878,6 +1010,7 @@ function SystemAuditPanel() {
 
 const ALL_SUB_TABS = [
   { id: 'audit',    label: 'Audit Trail',        icon: Activity,   adminOnly: false },
+  { id: 'sessions', label: 'Active Sessions',    icon: Users,      adminOnly: true  },
   { id: 'sysaudit', label: 'System Audit',       icon: Shield,     adminOnly: true  },
   { id: 'scan',     label: 'Vulnerability Scan', icon: FileSearch, adminOnly: true  },
   { id: 'incident', label: 'Incident Response',  icon: ShieldAlert,adminOnly: true  },
@@ -914,6 +1047,7 @@ export default function SecurityTab({ isAdmin = false }) {
       )}
 
       {activeSub === 'audit'    && <AuditTrailPanel />}
+      {activeSub === 'sessions' && isAdmin && <ActiveSessionsPanel />}
       {activeSub === 'sysaudit' && isAdmin && <SystemAuditPanel />}
       {activeSub === 'scan'     && isAdmin && <VulnScanPanel />}
       {activeSub === 'incident' && isAdmin && <IncidentResponsePanel />}

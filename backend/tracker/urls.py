@@ -147,6 +147,7 @@ from .views import (
     audit_log_search_view,
     ai_reliability_view,
     integrity_flags_view,
+    active_sessions_view,
     WebPushSubscriptionViewSet,
     DocumentVersionViewSet,
 )
@@ -318,4 +319,5 @@ urlpatterns = [
     path("audit-logs/search/",             audit_log_search_view,              name="audit-log-search"),
     path("ai-reliability/",                ai_reliability_view,                name="ai-reliability"),
     path("integrity-flags/",               integrity_flags_view,               name="integrity-flags"),
+    path("admin/active-sessions/",         active_sessions_view,               name="active-sessions"),
 ]
