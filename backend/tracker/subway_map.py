@@ -55,16 +55,42 @@ def _unit_label(unit: str | None) -> str:
     return _UNIT_LABEL.get(unit, unit.upper())
 
 
+# Stages before OPSC has even registered/routed the submission — it's still
+# sitting with whoever created it (ministry HR, DG, or an OPSC-internal
+# creator), so "who created it" is the only meaningful answer to "who has it".
+_PRE_INTAKE_STAGES = frozenset({
+    WorkflowStage.DRAFT,
+    WorkflowStage.PENDING_DG_ENDORSEMENT,
+    WorkflowStage.DG_APPROVED,
+    WorkflowStage.PENDING_MANAGER_APPROVAL,
+    WorkflowStage.PENDING_SECOND_APPROVAL,
+    WorkflowStage.SUBMITTED,
+    WorkflowStage.RECEIVED_BY_PSC,
+    WorkflowStage.RETURNED_FOR_CLARIFICATION,
+    WorkflowStage.RESUBMITTED,
+})
+
+
 def allocated_to_label(submission) -> str | None:
     """Short, role-aware label for who currently has this submission — e.g.
-    "Principal Samuel", "Manager ODU", "Secretary" — for the OPSC-internal
-    Submissions list "Allocated To" column. Returns None for stages not
-    explicitly covered here (e.g. pre-PSC-intake, Commission, post-decision),
+    "Principal Samuel", "Manager ODU", "Secretary", "Created by Julie" — for
+    the OPSC-internal Submissions list "Allocated To" column. Returns None
+    for stages not explicitly covered here (Commission, post-decision),
     letting the caller fall back to the plain assigned-officer name / blank.
     """
     stage = submission.current_stage
     if stage in (WorkflowStage.PENDING_SECRETARY_APPROVAL, WorkflowStage.SECRETARY_REVIEW):
         return "Secretary"
+
+    if stage in _PRE_INTAKE_STAGES:
+        creator = submission.created_by
+        if not creator:
+            return None
+        return f"Created by {creator.first_name or creator.username}"
+
+    if stage == WorkflowStage.REGISTERED_ROUTED:
+        # Just landed with the unit — nobody's picked it up to assign yet.
+        return f"Manager {_unit_label(submission.routed_unit)}" if submission.routed_unit else "Manager"
 
     if stage in (WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT):
         assignee = submission.assigned_to
