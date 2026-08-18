@@ -6,6 +6,19 @@ from django.db import models
 from .models import PSCFormResponse, PSCFormType, RequiredDocument, Submission, SubmissionChecklistItem
 
 
+def resolve_checklist_form_type(submission: Submission):
+    """Return the dynamic checklist PSCFormType (SubmissionChecklistResponse's
+    checklist_form_type) linked to this submission's form type, or None when
+    this submission type has no structured checklist configured — same
+    lookup used by SubmissionChecklistViewSet.ensure()."""
+    if not submission.form_type_code:
+        return None
+    ft = PSCFormType.objects.select_related("checklist_form_type").filter(
+        code=submission.form_type_code
+    ).first()
+    return ft.checklist_form_type if ft else None
+
+
 def _is_department_level_restructure(submission: Submission) -> bool:
     """True when the submission's Organisation Restructure form (ORG-3.1 /
     PSC 2-1, both reuse the same dynamic-form storage) has restructure_scope

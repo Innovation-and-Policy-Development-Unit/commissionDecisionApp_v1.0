@@ -160,7 +160,7 @@ function FieldRenderer({ field, value, onChange, readOnly, suggestion, onAcceptS
   )
 }
 
-export default function SubmissionChecklistPanel({ submissionId, autofillEnabled = true }) {
+export default function SubmissionChecklistPanel({ submissionId, autofillEnabled = true, onStatusChange }) {
   const toast = useToast()
   const [checklist, setChecklist] = useState(null)   // API response
   const [data, setData]           = useState({})     // local answer state
@@ -174,6 +174,17 @@ export default function SubmissionChecklistPanel({ submissionId, autofillEnabled
   const [suggestions, setSuggestions] = useState({})  // { field_key: { value, notes } }
   const [autofilling, setAutofilling] = useState(false)
   const [autofillError, setAutofillError] = useState('')
+
+  // Let the parent (SubmissionDetail's "Submit back to Manager" panel) know
+  // whether this structured checklist has actually been submitted — it's a
+  // separate hand-back action and shouldn't be usable ahead of this one.
+  // `hasChecklist: false` (a 404 — this submission type has none configured)
+  // means the parent shouldn't gate on checklist status at all, same as the
+  // server-side check.
+  useEffect(() => {
+    if (loading) return
+    onStatusChange?.({ hasChecklist: !!checklist, status: checklist?.status ?? null })
+  }, [loading, checklist, onStatusChange])
 
   const fetch = useCallback(async () => {
     setLoading(true)

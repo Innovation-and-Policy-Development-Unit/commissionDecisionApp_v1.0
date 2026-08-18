@@ -2621,6 +2621,31 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ):
             raise PermissionDenied("This can only be done during checklist review or assessment.")
 
+        # At Manager Checklist Review the deliverable IS the structured checklist
+        # form (see SubmissionChecklistViewSet) — without this check, a principal/
+        # senior could hand the submission back to their manager without ever
+        # clicking "Submit for review" (or after the manager returned it for
+        # revision and it was edited but not resubmitted), so the manager would
+        # be reviewing a draft/stale checklist that looks untouched.
+        if submission.current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
+            from .models import SubmissionChecklistResponse
+            from .submission_checklist import resolve_checklist_form_type
+
+            checklist_ft = resolve_checklist_form_type(submission)
+            if checklist_ft:
+                checklist = SubmissionChecklistResponse.objects.filter(
+                    submission=submission, checklist_form_type=checklist_ft,
+                ).first()
+                if not checklist or checklist.status in (
+                    SubmissionChecklistResponse.Status.DRAFT,
+                    SubmissionChecklistResponse.Status.RETURNED,
+                ):
+                    return Response(
+                        {"detail": "Submit the checklist for manager review (\"Submit for review\") before "
+                                   "handing this back to your manager."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
         uploaded = request.FILES.get("file")
         if submission.current_stage == WorkflowStage.UNDER_ASSESSMENT:
             if not uploaded:
@@ -12943,16 +12968,9 @@ class SubmissionChecklistViewSet(viewsets.GenericViewSet):
 
         profile, submission = self._profile_and_submission(request, submission_id)
 
-        # Resolve linked checklist form type via the submission's form type
-        checklist_ft = None
-        if submission.form_type_code:
-            try:
-                ft = PSCFormType.objects.select_related("checklist_form_type").get(
-                    code=submission.form_type_code
-                )
-                checklist_ft = ft.checklist_form_type
-            except PSCFormType.DoesNotExist:
-                pass
+        from .submission_checklist import resolve_checklist_form_type
+
+        checklist_ft = resolve_checklist_form_type(submission)
 
         if not checklist_ft:
             return Response(

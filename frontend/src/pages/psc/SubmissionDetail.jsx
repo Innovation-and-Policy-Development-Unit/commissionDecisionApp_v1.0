@@ -163,6 +163,10 @@ export default function SubmissionDetail() {
   const [error, setError]           = useState('')
   const [busy, setBusy]             = useState(false)
   const [checklist, setChecklist]   = useState([])
+  // Status of the structured checklist form (SubmissionChecklistPanel) — reported
+  // up so "Submit back to Manager" can be gated on it having actually been
+  // submitted first. null until known / not applicable to this submission type.
+  const [checklistFormStatus, setChecklistFormStatus] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [boardPaperDirty, setBoardPaperDirty] = useState(false)
   const [documents, setDocuments]   = useState([])
@@ -242,6 +246,16 @@ export default function SubmissionDetail() {
 
   // Dynamic checklist — shown when the form type has a linked checklist and the user has a matching role/stage
   const hasDynamicChecklist = Boolean(submission?.form_type_detail?.checklist_form_type)
+  // Mirrors the server-side guard in submit_to_manager(): at Manager Checklist
+  // Review, when this submission type has a structured checklist, it must be
+  // submitted (or already approved) before handing the whole submission back
+  // to the unit manager — otherwise the manager reviews a draft/stale form.
+  // checklistFormStatus is null until the Checklist tab has been opened this
+  // session, so we fail closed (block) rather than assume it's fine.
+  const checklistBlocksHandback = (
+    submission?.current_stage === 'manager_checklist_review' && hasDynamicChecklist
+    && !(checklistFormStatus?.hasChecklist && ['submitted', 'approved'].includes(checklistFormStatus.status))
+  )
 
   // Suppress the legacy hardcoded ODU form when a dynamic XML checklist is configured for this form type
   const showOduChecklist = canShowOduChecklist(submission, user) && !hasDynamicChecklist
@@ -1348,7 +1362,11 @@ const stageDescriptions = {
           {effectiveTab === 'checklist' && (
           <>
           {hasDynamicChecklist && showDynamicChecklist && (
-            <SubmissionChecklistPanel submissionId={id} autofillEnabled={user?.ai_checklist_autofill_enabled !== false} />
+            <SubmissionChecklistPanel
+              submissionId={id}
+              autofillEnabled={user?.ai_checklist_autofill_enabled !== false}
+              onStatusChange={setChecklistFormStatus}
+            />
           )}
 
           {showOduChecklist && (
@@ -1768,9 +1786,18 @@ const stageDescriptions = {
                       />
                     </label>
                   )}
+                  {checklistBlocksHandback && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Submit the{' '}
+                      <button type="button" className="underline font-medium" onClick={() => setActiveTab('checklist')}>
+                        checklist
+                      </button>
+                      {' '}for review first — the server won't accept this until it's been submitted.
+                    </p>
+                  )}
                   <BaseButton type="button" variant="primary" className="w-full"
                     loading={allocateBusy} loadingLabel="Submitting"
-                    disabled={submission.current_stage === 'under_assessment' && !assessmentFile}
+                    disabled={(submission.current_stage === 'under_assessment' && !assessmentFile) || checklistBlocksHandback}
                     onClick={submitToManager}>
                     Submit back to Manager
                   </BaseButton>
