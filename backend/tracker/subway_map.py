@@ -103,8 +103,15 @@ def allocated_to_label(submission) -> str | None:
             if "senior" in role:
                 return f"Senior {first}"
             return first
-        # Nobody assigned yet, or handed back by the assignee — it's with the manager.
-        return f"Manager {_unit_label(submission.routed_unit)}" if submission.routed_unit else "Manager"
+        if assignee and submission.ready_for_manager_at:
+            # Handed back by the Principal/Senior — genuinely with the Manager
+            # for action now, distinct from the never-assigned case below (the
+            # list's "Manager {unit}" used to mean both, so a Manager had no
+            # way to tell "my team finished, act now" from "nobody's touched
+            # this yet" — see caller's Unassigned fallback for the latter).
+            return f"Manager {_unit_label(submission.routed_unit)}" if submission.routed_unit else "Manager"
+        # Nobody assigned yet — falls through to the caller's "Unassigned" label.
+        return None
 
     return None
 
