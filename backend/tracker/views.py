@@ -1030,6 +1030,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if ministry:
             qs = qs.filter(ministry__name=ministry)
 
+        unit = params.get('unit')
+        if unit:
+            qs = qs.filter(routed_unit=unit)
+
         # Scope to specific form types — used by the "attach to a parent
         # submission" picker (e.g. PSC 2-2 searching for its parent PSC 2-1 /
         # ORG-3.1 restructure) so results aren't polluted by unrelated types.

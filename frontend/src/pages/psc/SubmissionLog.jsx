@@ -19,7 +19,7 @@ import SubmissionForm, { SUBMISSION_CREATE_ALLOWED_ROLES } from './SubmissionFor
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { isComplianceRole } from '../../constants/compliance'
-import { userIsOpscInternal } from '../../utils/opscAccess'
+import { userIsOpscInternal, userHasCrossUnitView } from '../../utils/opscAccess'
 import BulkOperationsBar from '../../components/shared/BulkOperationsBar'
 import { useToast } from '../../context/ToastContext'
 import { QualityScoreBadge } from '../../components/submissions/SubmissionQualityScore'
@@ -31,6 +31,15 @@ const PER_PAGE = 15
 // Kanban groups every matching card by stage, so it fetches in one capped page
 // rather than paginating. Mirrors the backend SubmissionPagination.max_page_size.
 const KANBAN_CAP = 500
+
+// Mirrors backend RoutedUnit choices / subway_map.py's _UNIT_LABEL.
+const UNIT_OPTIONS = [
+  { value: 'odu', label: 'ODU' },
+  { value: 'hr', label: 'HR Unit' },
+  { value: 'vipam', label: 'VIPAM' },
+  { value: 'compliance', label: 'Compliance Unit' },
+  { value: 'csu', label: 'Corporate Services Unit' },
+]
 
 // Map workflow stages to Badge variants
 const STAGE_VARIANT = {
@@ -63,6 +72,7 @@ export default function SubmissionLog() {
   const [qDebounced, setQDebounced] = useState('')
   const [stageFilter, setStageFilter] = useState('')
   const [ministryFilter, setMinistryFilter] = useState('')
+  const [unitFilter, setUnitFilter] = useState('')
   const [page, setPage]           = useState(1)
   const [modalOpen, setModalOpen] = useState(false)
   /** @type {'commission'|'secretary'|null} */
@@ -111,6 +121,10 @@ export default function SubmissionLog() {
   // Who a submission is currently allocated to — internal OPSC staffing
   // detail, never shown to ministry-side viewers (API strips it for them too).
   const showAssignedColumn = userIsOpscInternal(user)
+  // Per-unit pending-count filter — only useful to viewers with a cross-unit
+  // queryset (admin, secretary, etc.); unit managers/principals are already
+  // hard-scoped to their own unit server-side, so it'd be a no-op for them.
+  const showUnitFilter = userHasCrossUnitView(user)
 
   const localeForDates = useMemo(() => {
     const map = { en: 'en-GB', fr: 'fr-FR', bi: 'en-GB' }
@@ -129,10 +143,11 @@ export default function SubmissionLog() {
     if (qDebounced) p.search = qDebounced
     if (stageFilter) p.current_stage = stageFilter
     if (ministryFilter) p.ministry = ministryFilter
+    if (unitFilter) p.unit = unitFilter
     if (dashboardFilter && dashboardFilter !== 'all') p.dashboard = dashboardFilter
     if (nlIdSet) p.ids = [...nlIdSet].join(',')
     return p
-  }, [qDebounced, stageFilter, ministryFilter, dashboardFilter, nlIdSet])
+  }, [qDebounced, stageFilter, ministryFilter, unitFilter, dashboardFilter, nlIdSet])
 
   // The api client unwraps DRF pagination to a bare array (r.data) and exposes
   // the total on r.pagination.count — normalise both into { results, count }.
@@ -235,7 +250,7 @@ export default function SubmissionLog() {
   useEffect(() => {
     setSelected(new Set())
     setPage(1)
-  }, [qDebounced, stageFilter, ministryFilter, dashboardFilter, nlIdSet])
+  }, [qDebounced, stageFilter, ministryFilter, unitFilter, dashboardFilter, nlIdSet])
 
   // Clamp the page if a delete/filter shrinks the result set below it.
   useEffect(() => {
@@ -386,7 +401,7 @@ export default function SubmissionLog() {
             hideLabel
             label={t('submission.filter_placeholder')}
             type="search"
-            className="lg:col-span-5"
+            className={showUnitFilter ? 'lg:col-span-4' : 'lg:col-span-5'}
             placeholder={t('submission.filter_placeholder')}
             value={q}
             onChange={e => setQ(e.target.value)}
@@ -395,7 +410,7 @@ export default function SubmissionLog() {
           <BaseSelect
             hideLabel
             label="Stage"
-            className="lg:col-span-3"
+            className={showUnitFilter ? 'lg:col-span-2' : 'lg:col-span-3'}
             placeholder="All stages"
             value={stageFilter}
             options={[
@@ -419,6 +434,17 @@ export default function SubmissionLog() {
             options={ministryOptions}
             onChange={(_, value) => { setMinistryFilter(value); setPage(1) }}
           />
+          {showUnitFilter && (
+            <BaseSelect
+              hideLabel
+              label="Unit"
+              className="lg:col-span-2"
+              value={unitFilter}
+              placeholder="All units"
+              options={UNIT_OPTIONS}
+              onChange={(_, value) => { setUnitFilter(value); setPage(1) }}
+            />
+          )}
           <div className="lg:col-span-2 flex gap-2">
             {isAdmin && selected.size > 0 && (
               <BaseButton
@@ -561,7 +587,7 @@ export default function SubmissionLog() {
                 <tr>
                   <td colSpan={cols} className="py-16 text-center text-slate-400 dark:text-slate-500">
                     <FileText size={32} className="mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">{(q || stageFilter || ministryFilter || dashboardFilter || nlIdSet) ? t('submission.no_matches') : t('submission.empty_state_title')}</p>
+                    <p className="text-sm">{(q || stageFilter || ministryFilter || unitFilter || dashboardFilter || nlIdSet) ? t('submission.no_matches') : t('submission.empty_state_title')}</p>
                   </td>
                 </tr>
               )}

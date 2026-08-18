@@ -63,6 +63,31 @@ export function userCanRegenerateAiBrief(user) {
   return Boolean(user.can_regenerate_ai_brief)
 }
 
+/** Roles the backend gives an unrestricted, all-units submissions queryset
+ * (mirrors the unit-scoped filters in views.py's _submission_queryset_for —
+ * unit managers/principals/seniors and Compliance/CSU are hard-scoped to
+ * their own unit there, so a per-unit filter would be a no-op or return
+ * nothing for them). Used to gate the Submissions list's "Unit" filter to
+ * viewers who can actually see across units. */
+export const CROSS_UNIT_VIEW_ROLES = new Set([
+  'psc_admin',
+  'psc_secretary',
+  'senior_admin_officer',
+  'psc_manager',
+  'psc_officer',
+  'receptionist',
+  'chairperson',
+  'psc_commissioner',
+  'principal_officer',
+  'senior_officer',
+])
+
+export function userHasCrossUnitView(user) {
+  if (!user) return false
+  if (user.is_superuser || user.is_staff) return true
+  return Boolean(user.role && CROSS_UNIT_VIEW_ROLES.has(user.role))
+}
+
 export function userIsOpscUnitManager(user) {
   return Boolean(user?.role && OPSC_UNIT_MANAGER_ROLES.has(user.role))
 }
