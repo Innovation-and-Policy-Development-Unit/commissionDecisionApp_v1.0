@@ -19,17 +19,32 @@ def _is_department_level_restructure(submission: Submission) -> bool:
     return data.get('restructure_scope') == 'department'
 
 
+# Compliance cases originate inside OPSC itself (is_internal=True) and, unlike
+# other OPSC-internal submission types, never set follows_normal_route=True —
+# they have a genuinely different, simpler process with no ministry HR/DG
+# involved. That's correct for skipping ministry-only items (DG endorsement
+# etc.), but it also made the internal/normal-route check below skip these
+# form types' required-document checklist entirely, which was never the
+# intent — a discipline case still has real supporting documents (Notice of
+# Allegations, witness statements, warning letters, etc.) worth tracking.
+_COMPLIANCE_FORM_TYPE_CODES = frozenset({
+    "COMP-SMDR", "COMP-PAR", "COMP-PSDB", "COMP-14D", "COMP-OMB", "COMP-PSA",
+})
+
+
 def resolve_required_documents(submission: Submission):
     """Return RequiredDocument queryset for this submission (same rules as GET checklist)."""
     if submission.is_attachment or submission.secretary_only:
         return RequiredDocument.objects.none()
-    if submission.is_internal and not submission.follows_normal_route:
+    is_compliance_case = submission.form_type_code in _COMPLIANCE_FORM_TYPE_CODES
+    if submission.is_internal and not submission.follows_normal_route and not is_compliance_case:
         return RequiredDocument.objects.none()
 
     # OPSC-internal submissions that follow the normal route (e.g. CSU/ODU
     # appointing OPSC staff) have no Director-General in their workflow, so
-    # ministry-only items (DG endorsement letters, etc.) don't apply.
-    skip_ministry_only = submission.is_internal and submission.follows_normal_route
+    # ministry-only items (DG endorsement letters, etc.) don't apply. Same
+    # reasoning applies to Compliance cases (also DG-less and internal-origin).
+    skip_ministry_only = submission.is_internal and (submission.follows_normal_route or is_compliance_case)
     # ORG-3.1's extra DG Endorsement Letter only applies to department-level
     # restructures — see 0203_org_3_1_conditional_dg_letter.py.
     skip_department_only = not _is_department_level_restructure(submission)

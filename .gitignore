@@ -68,3 +68,4 @@ backups/
 
 # ── Local certbot working state (keys/config, never commit) ───────────────────
 .certbot-tmp/
+uploads/
