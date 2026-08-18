@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckSquare, Square, ChevronDown, ChevronUp, RefreshCw, Send, ThumbsUp, RotateCcw, AlertCircle, Sparkles, Check, X } from 'lucide-react'
+import { CheckSquare, Square, ChevronDown, ChevronUp, RefreshCw, ThumbsUp, RotateCcw, AlertCircle, Sparkles, Check, X } from 'lucide-react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { formatApiError } from '../../utils/apiError'
@@ -160,7 +160,7 @@ function FieldRenderer({ field, value, onChange, readOnly, suggestion, onAcceptS
   )
 }
 
-export default function SubmissionChecklistPanel({ submissionId, autofillEnabled = true, onStatusChange }) {
+export default function SubmissionChecklistPanel({ submissionId, autofillEnabled = true }) {
   const toast = useToast()
   const [checklist, setChecklist] = useState(null)   // API response
   const [data, setData]           = useState({})     // local answer state
@@ -174,17 +174,6 @@ export default function SubmissionChecklistPanel({ submissionId, autofillEnabled
   const [suggestions, setSuggestions] = useState({})  // { field_key: { value, notes } }
   const [autofilling, setAutofilling] = useState(false)
   const [autofillError, setAutofillError] = useState('')
-
-  // Let the parent (SubmissionDetail's "Submit back to Manager" panel) know
-  // whether this structured checklist has actually been submitted — it's a
-  // separate hand-back action and shouldn't be usable ahead of this one.
-  // `hasChecklist: false` (a 404 — this submission type has none configured)
-  // means the parent shouldn't gate on checklist status at all, same as the
-  // server-side check.
-  useEffect(() => {
-    if (loading) return
-    onStatusChange?.({ hasChecklist: !!checklist, status: checklist?.status ?? null })
-  }, [loading, checklist, onStatusChange])
 
   const fetch = useCallback(async () => {
     setLoading(true)
@@ -267,22 +256,6 @@ export default function SubmissionChecklistPanel({ submissionId, autofillEnabled
       toast.success('Checklist saved.')
     } catch (err) {
       toast.error(formatApiError(err, 'Save failed.'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const submit = async () => {
-    setSaving(true)
-    try {
-      // save first, then submit
-      await api.patch(`/submission-checklists/${checklist.id}/`, { data })
-      const r = await api.post(`/submission-checklists/${checklist.id}/submit/`)
-      setChecklist(r.data)
-      setCanEdit(false)
-      toast.success('Checklist submitted for manager review.')
-    } catch (err) {
-      toast.error(formatApiError(err, 'Submit failed.'))
     } finally {
       setSaving(false)
     }
@@ -443,24 +416,14 @@ export default function SubmissionChecklistPanel({ submissionId, autofillEnabled
           {/* Actions */}
           <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-700">
             {canEdit && status !== 'approved' && status !== 'submitted' && (
-              <>
-                <button
-                  type="button"
-                  onClick={save}
-                  disabled={saving}
-                  className="btn-secondary text-xs px-3 py-1.5"
-                >
-                  {saving ? 'Saving…' : 'Save draft'}
-                </button>
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={saving}
-                  className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
-                >
-                  <Send size={12} /> Submit for review
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={save}
+                disabled={saving}
+                className="btn-secondary text-xs px-3 py-1.5"
+              >
+                {saving ? 'Saving…' : 'Save draft'}
+              </button>
             )}
             {canApprove && status === 'submitted' && (
               <>

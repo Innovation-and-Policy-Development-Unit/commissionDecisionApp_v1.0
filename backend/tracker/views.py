@@ -2597,14 +2597,18 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def submit_to_manager(self, request, pk=None):
         """
         The assigned principal/senior officer hands their completed checklist
-        review or assessment back to their unit manager. Only the manager can
-        advance the workflow stage from here — this action doesn't move the
-        stage itself, it just flags the work ready and notifies the manager.
+        review or assessment back to their unit manager — one action, mirroring
+        the paper process (the principal sends the whole submission, checklist
+        included, back to their manager; they don't submit the checklist to the
+        manager separately). Only the manager can advance the workflow stage
+        from here — this action doesn't move the stage itself, it just finalizes
+        the checklist, flags the work ready, and notifies the manager.
 
         At Under Assessment, the officer's written assessment is the actual
         deliverable the manager is verifying — a PDF attachment is required.
-        At Manager Checklist Review the deliverable is the checklist itself
-        (already a structured, submitted form), so no file is required there.
+        At Manager Checklist Review the deliverable is the checklist itself:
+        this call finalizes it (Draft/Returned -> Submitted) rather than
+        requiring a separate "submit the checklist" step first.
         """
         from .audit import log_action as _log
         from .models import AuditLog as _AL, Notification, SubmissionDocument
@@ -2621,30 +2625,26 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ):
             raise PermissionDenied("This can only be done during checklist review or assessment.")
 
-        # At Manager Checklist Review the deliverable IS the structured checklist
-        # form (see SubmissionChecklistViewSet) — without this check, a principal/
-        # senior could hand the submission back to their manager without ever
-        # clicking "Submit for review" (or after the manager returned it for
-        # revision and it was edited but not resubmitted), so the manager would
-        # be reviewing a draft/stale checklist that looks untouched.
+        # Finalize the structured checklist as part of the same hand-back —
+        # see the docstring above. Approved checklists are left untouched, and
+        # submissions whose form type has no checklist configured are a no-op.
         if submission.current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
             from .models import SubmissionChecklistResponse
             from .submission_checklist import resolve_checklist_form_type
 
             checklist_ft = resolve_checklist_form_type(submission)
             if checklist_ft:
-                checklist = SubmissionChecklistResponse.objects.filter(
+                checklist, _created = SubmissionChecklistResponse.objects.get_or_create(
                     submission=submission, checklist_form_type=checklist_ft,
-                ).first()
-                if not checklist or checklist.status in (
+                    defaults={"created_by": request.user, "data": {}},
+                )
+                if checklist.status in (
                     SubmissionChecklistResponse.Status.DRAFT,
                     SubmissionChecklistResponse.Status.RETURNED,
                 ):
-                    return Response(
-                        {"detail": "Submit the checklist for manager review (\"Submit for review\") before "
-                                   "handing this back to your manager."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+                    checklist.status = SubmissionChecklistResponse.Status.SUBMITTED
+                    checklist.submitted_at = timezone.now()
+                    checklist.save(update_fields=["status", "submitted_at", "updated_at"])
 
         uploaded = request.FILES.get("file")
         if submission.current_stage == WorkflowStage.UNDER_ASSESSMENT:

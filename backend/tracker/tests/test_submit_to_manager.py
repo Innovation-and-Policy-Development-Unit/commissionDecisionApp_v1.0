@@ -85,14 +85,16 @@ class SubmitToManagerAssessmentAttachmentTests(TestCase):
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
-class SubmitToManagerChecklistGateTests(TestCase):
-    """A principal/senior could previously hand a submission straight back to
-    their manager at Manager Checklist Review without ever submitting the
-    structured checklist form (SubmissionChecklistPanel's "Submit for
-    review") — including after the manager returned it for revision and it
-    was edited but never resubmitted. BUSINESS-PLAN is one of the form types
-    with an actual checklist_form_type configured (unlike ORG-3.1, used
-    above, which has none — see test_manager_checklist_review_does_not_require_file)."""
+class SubmitToManagerAutoSubmitsChecklistTests(TestCase):
+    """Hand-back to the unit manager is a single action, mirroring the paper
+    process — the principal sends their manager the whole submission with its
+    completed checklist in one motion, not the checklist separately first.
+    submit_to_manager() must finalize the structured checklist itself (Draft/
+    Returned -> Submitted) rather than requiring — or worse, silently
+    skipping past — a separate "submit the checklist" step. BUSINESS-PLAN is
+    one of the form types with an actual checklist_form_type configured
+    (unlike ORG-3.1, used above, which has none — see
+    test_manager_checklist_review_does_not_require_file)."""
 
     def setUp(self):
         self.ministry = Ministry.objects.create(code="TST-GATE", name="Test Ministry GATE")
@@ -122,49 +124,52 @@ class SubmitToManagerChecklistGateTests(TestCase):
     def _post(self):
         return self.client.post(f"/api/submissions/{self.submission.id}/submit-to-manager/")
 
-    def test_blocks_when_checklist_never_submitted(self):
-        resp = self._post()
-        self.assertEqual(resp.status_code, 400)
-        self.submission.refresh_from_db()
-        self.assertIsNone(self.submission.ready_for_manager_at)
+    def _checklist(self):
+        return SubmissionChecklistResponse.objects.get(
+            submission=self.submission, checklist_form_type=self.checklist_ft,
+        )
 
-    def test_blocks_when_checklist_still_draft(self):
+    def test_creates_and_submits_checklist_when_none_exists_yet(self):
+        # The principal never opened the Checklist tab at all — there's no
+        # SubmissionChecklistResponse row yet. Hand-back must still succeed
+        # and leave a Submitted checklist behind for the manager to see.
+        self.assertFalse(SubmissionChecklistResponse.objects.filter(submission=self.submission).exists())
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        self.submission.refresh_from_db()
+        self.assertIsNotNone(self.submission.ready_for_manager_at)
+        checklist = self._checklist()
+        self.assertEqual(checklist.status, SubmissionChecklistResponse.Status.SUBMITTED)
+        self.assertIsNotNone(checklist.submitted_at)
+
+    def test_submits_checklist_left_in_draft(self):
         SubmissionChecklistResponse.objects.create(
             submission=self.submission,
             checklist_form_type=self.checklist_ft,
             created_by=self.principal,
             status=SubmissionChecklistResponse.Status.DRAFT,
+            data={"note": "in progress"},
         )
         resp = self._post()
-        self.assertEqual(resp.status_code, 400)
-        self.submission.refresh_from_db()
-        self.assertIsNone(self.submission.ready_for_manager_at)
+        self.assertEqual(resp.status_code, 200)
+        checklist = self._checklist()
+        self.assertEqual(checklist.status, SubmissionChecklistResponse.Status.SUBMITTED)
+        self.assertEqual(checklist.data, {"note": "in progress"})
 
-    def test_blocks_when_checklist_returned_and_not_resubmitted(self):
+    def test_resubmits_checklist_that_was_returned_for_revision(self):
         SubmissionChecklistResponse.objects.create(
             submission=self.submission,
             checklist_form_type=self.checklist_ft,
             created_by=self.principal,
             status=SubmissionChecklistResponse.Status.RETURNED,
-        )
-        resp = self._post()
-        self.assertEqual(resp.status_code, 400)
-        self.submission.refresh_from_db()
-        self.assertIsNone(self.submission.ready_for_manager_at)
-
-    def test_allows_when_checklist_submitted(self):
-        SubmissionChecklistResponse.objects.create(
-            submission=self.submission,
-            checklist_form_type=self.checklist_ft,
-            created_by=self.principal,
-            status=SubmissionChecklistResponse.Status.SUBMITTED,
+            manager_comments="Please double-check section B.",
         )
         resp = self._post()
         self.assertEqual(resp.status_code, 200)
-        self.submission.refresh_from_db()
-        self.assertIsNotNone(self.submission.ready_for_manager_at)
+        checklist = self._checklist()
+        self.assertEqual(checklist.status, SubmissionChecklistResponse.Status.SUBMITTED)
 
-    def test_allows_when_checklist_already_approved(self):
+    def test_leaves_already_approved_checklist_untouched(self):
         SubmissionChecklistResponse.objects.create(
             submission=self.submission,
             checklist_form_type=self.checklist_ft,
@@ -173,3 +178,5 @@ class SubmitToManagerChecklistGateTests(TestCase):
         )
         resp = self._post()
         self.assertEqual(resp.status_code, 200)
+        checklist = self._checklist()
+        self.assertEqual(checklist.status, SubmissionChecklistResponse.Status.APPROVED)
