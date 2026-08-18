@@ -322,6 +322,18 @@ def _submission_queryset_for(user):
     if role in _UNIT_PRINCIPAL_ROLES:
         # Principals see only submissions explicitly assigned to them
         return qs.filter(assigned_to=user)
+    if role == Role.SENIOR_OFFICER:
+        # Senior Officer has two unrelated capacities (see _UNIT_PRINCIPAL_ROLES
+        # in transitions.py): a per-unit checklist-review assignee — scoped like
+        # the other unit seniors, assigned_to=user only — and a post-decision
+        # execution role (_STAFF_STAGES) that's unrestricted like the other PSC
+        # roles below. Was previously falling all the way through to the
+        # unrestricted bucket, exposing every unit's in-review submission
+        # content during the checklist-review/assessment phase specifically.
+        _review_stages = {WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT}
+        return qs.exclude(current_stage__in=_review_stages) | qs.filter(
+            current_stage__in=_review_stages, assigned_to=user,
+        )
     # CSU Manager sees only internal submissions
     if role == Role.CSU_MANAGER:
         return qs.filter(is_internal=True)

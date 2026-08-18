@@ -2458,11 +2458,17 @@ def queue_outcome_letter(submission_id: int, outcome: str = "", conditions: list
 def auto_transition_submitted_to_received():
     """
     SLA enforcement: auto-transition submissions that have been in SUBMITTED
-    state past the configured registration SLA (default 2 working days) to
-    RECEIVED_BY_PSC, and log the action.
+    state past the configured registration SLA (default 2 working days)
+    straight to MANAGER_CHECKLIST_REVIEW, routing to the responsible unit —
+    mirroring the manual "Route to Manager" action (transition() in views.py)
+    since the Aug 5 change removed RECEIVED_BY_PSC/REGISTERED_ROUTED as legal
+    stages. This task used to target RECEIVED_BY_PSC, which has no outbound
+    edge in _STAGE_GRAPH at all — a permanent dead end for every submission
+    it touched.
     """
     from django.conf import settings as django_settings
     from django.utils import timezone
+    from .intake_routing import routed_unit_for_form_type
     from .models import Submission, WorkflowStage, WorkflowEvent
 
     sla_days = getattr(django_settings, 'PSC_REGISTRATION_SLA_DAYS', 2)
@@ -2478,19 +2484,32 @@ def auto_transition_submitted_to_received():
         if not submission.is_registration_overdue:
             continue
         prev = submission.current_stage
-        submission.current_stage = WorkflowStage.RECEIVED_BY_PSC
-        submission.save(update_fields=["current_stage", "updated_at"])
+        update_fields = ["current_stage", "updated_at"]
+        submission.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+
+        if not submission.routed_unit:
+            routed = routed_unit_for_form_type(submission.form_type_code)
+            if routed:
+                submission.routed_unit = routed
+                update_fields.append("routed_unit")
+
+        if submission.checklist_review_started_at is None:
+            submission.checklist_review_started_at = timezone.now()
+            submission._set_checklist_review_deadline_from_start()
+            update_fields += ["checklist_review_started_at", "checklist_review_deadline_at"]
+
+        submission.save(update_fields=update_fields)
         WorkflowEvent.objects.create(
             submission=submission,
             previous_stage=prev,
-            new_stage=WorkflowStage.RECEIVED_BY_PSC,
+            new_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
             remarks=f"Auto-transitioned by system: registration SLA of {sla_days} working day(s) exceeded.",
             actor=None,
         )
         transitioned += 1
         app_log.info(
-            "SLA_AUTO_RECEIVE | Submission %s auto-transitioned SUBMITTED → RECEIVED_BY_PSC",
-            submission.reference_number,
+            "SLA_AUTO_RECEIVE | Submission %s auto-transitioned SUBMITTED → MANAGER_CHECKLIST_REVIEW (unit=%s)",
+            submission.reference_number, submission.routed_unit or "unresolved",
         )
 
     app_log.info("SLA_AUTO_RECEIVE | Processed %d submission(s)", transitioned)
