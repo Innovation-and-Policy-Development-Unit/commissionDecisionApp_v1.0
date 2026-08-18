@@ -12612,10 +12612,19 @@ def integrity_flags_view(request):
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def active_sessions_view(request):
-    """Per-user online/last-seen status, computed from AuditLog LOGIN/LOGOUT
-    entries plus each user's current TrustedSession — a Messenger-style
-    "online now" / "last seen 45 minutes ago" view for admins, not a new
-    tracking mechanism of its own.
+    """Per-user online/last-seen status, computed from User.last_login plus
+    AuditLog LOGOUT entries and each user's current TrustedSession — a
+    Messenger-style "online now" / "last seen 45 minutes ago" view for
+    admins, not a new tracking mechanism of its own.
+
+    Uses User.last_login (SIMPLE_JWT's UPDATE_LAST_LOGIN, refreshed on every
+    token refresh — not just the initial sign-in) rather than AuditLog's own
+    LOGIN entries: those are written from one specific code path in the
+    login view and go stale for anyone who authenticates via 2FA or a
+    PIN-based trusted-session unlock, which don't hit that path — the
+    original version of this view showed a PSC Admin's own live session as
+    "logged out" hours ago while they were actively using it, for exactly
+    this reason. last_login reflects genuine ongoing activity instead.
 
     A user counts as online unless either happened since their last login:
     they logged out manually (a LOGOUT audit entry after it), or — for
@@ -12635,14 +12644,6 @@ def active_sessions_view(request):
 
     now = timezone.now()
 
-    last_login = {
-        row["actor_id"]: row["timestamp"]
-        for row in (
-            AuditLog.objects.filter(action=AuditLog.Action.LOGIN, actor_id__isnull=False)
-            .order_by("actor_id", "-timestamp").distinct("actor_id")
-            .values("actor_id", "timestamp")
-        )
-    }
     last_logout = {
         row["actor_id"]: row["timestamp"]
         for row in (
@@ -12668,7 +12669,7 @@ def active_sessions_view(request):
         role = u_profile.role if u_profile else ""
         is_exempt_from_cap = role == Role.PSC_ADMIN or u.is_superuser
 
-        login_at = last_login.get(u.id)
+        login_at = u.last_login
         logout_at = last_logout.get(u.id)
         session = last_session.get(u.id)
 
