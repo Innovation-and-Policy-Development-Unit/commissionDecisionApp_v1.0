@@ -130,6 +130,28 @@ CHECKLIST_ODU_MANAGER_ONLY_FIELDS = frozenset({
     "manager_verifier_name", "manager_verifier_date", "b20_manager_final_check",
 })
 
+# The 3 Groups 6-7 items that are the assigned Principal/Senior's own to
+# answer (b20 is Manager ODU's final check — see CHECKLIST_ODU_MANAGER_ONLY_FIELDS
+# — so it's deliberately excluded here; a principal can never satisfy it).
+# Used to gate "Submit back to Manager": a principal must not be able to hand
+# the submission back while their own part of the checklist is still blank —
+# see submit_to_manager() in views.py.
+CHECKLIST_ODU_PRINCIPAL_REQUIRED_FIELDS = frozenset({
+    "b17_odu_analysis", "b18_feedback_provided", "b19_final_docs_ready",
+})
+
+
+def odu_checklist_principal_review_complete(checklist) -> bool:
+    """True once the assigned Principal/Senior has answered every Groups 6-7
+    item that's theirs to answer (b20, Manager ODU's own check, doesn't
+    count). `checklist` is an ODURestructureChecklist instance or None."""
+    if checklist is None:
+        return False
+    return all(
+        getattr(checklist, field) is not None
+        for field in CHECKLIST_ODU_PRINCIPAL_REQUIRED_FIELDS
+    )
+
 
 def user_is_odu_principal_worker(role: str | None) -> bool:
     return bool(role and role in ODU_PRINCIPAL_WORKER_ROLES)

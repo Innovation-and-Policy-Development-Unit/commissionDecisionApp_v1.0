@@ -12,6 +12,8 @@ from rest_framework.test import APIClient
 
 from ..models import (
     Ministry,
+    ODUChecklistStatus,
+    ODURestructureChecklist,
     Profile,
     PSCFormType,
     Role,
@@ -36,7 +38,10 @@ class SubmitToManagerAssessmentAttachmentTests(TestCase):
         self.submission = Submission.objects.create(
             reference_number="SUB-STM-001",
             title="Restructure proposal",
-            form_type_code="ORG-3.1",
+            # Deliberately not ORG-3.1/PSC 2-1 — this class tests the file-
+            # attachment requirement in isolation from either checklist gate
+            # (see SubmitToManagerOduChecklistGateTests for the ODU one).
+            form_type_code="TST-STM-NOCHECKLIST",
             ministry=self.ministry,
             current_stage=WorkflowStage.UNDER_ASSESSMENT,
             routed_unit=RoutedUnit.ODU,
@@ -180,3 +185,78 @@ class SubmitToManagerAutoSubmitsChecklistTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         checklist = self._checklist()
         self.assertEqual(checklist.status, SubmissionChecklistResponse.Status.APPROVED)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class SubmitToManagerOduChecklistGateTests(TestCase):
+    """ORG-3.1/PSC 2-1 submissions use the ODU Restructure Submission Checklist
+    (real Yes/No judgment calls in Groups 6-7), not the dynamic structured
+    checklist covered above — so unlike that one, an incomplete checklist here
+    must actually BLOCK hand-back rather than be auto-finalized. Reported bug:
+    the principal had "Submit back to Manager" enabled with Group 7 only 1/2
+    answered (PSC-2026-00031)."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(code="TST-ODUGATE", name="Test Ministry ODUGATE")
+        self.principal = User.objects.create_user(username="odu_principal_odugate", password="x")
+        Profile.objects.create(user=self.principal, role=Role.ODU_PRINCIPAL)
+        self.submission = Submission.objects.create(
+            reference_number="SUB-ODUGATE-001",
+            title="Proposed Restructure",
+            form_type_code="ORG-3.1",
+            ministry=self.ministry,
+            current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            routed_unit=RoutedUnit.ODU,
+            assigned_to=self.principal,
+            received_at=timezone.now(),
+            created_by=self.principal,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.principal)
+
+    def _post(self):
+        return self.client.post(f"/api/submissions/{self.submission.id}/submit-to-manager/")
+
+    def test_blocks_when_no_odu_checklist_exists(self):
+        resp = self._post()
+        self.assertEqual(resp.status_code, 400)
+        self.submission.refresh_from_db()
+        self.assertIsNone(self.submission.ready_for_manager_at)
+
+    def test_blocks_when_groups_6_7_partially_answered(self):
+        # Matches the screenshot: Group 6 done (b17/b18), Group 7 only
+        # half-done (b19 answered, b20 is the manager's own field so it's
+        # never the principal's to fill in — but b19 alone isn't enough).
+        ODURestructureChecklist.objects.create(
+            submission=self.submission, created_by=self.principal,
+            status=ODUChecklistStatus.SUBMITTED,
+            b17_odu_analysis=True, b18_feedback_provided=True,
+        )
+        resp = self._post()
+        self.assertEqual(resp.status_code, 400)
+        self.submission.refresh_from_db()
+        self.assertIsNone(self.submission.ready_for_manager_at)
+
+    def test_allows_once_principals_items_all_answered(self):
+        # b20_manager_final_check deliberately left blank — that's the
+        # Manager ODU's own field, not something the principal can supply.
+        ODURestructureChecklist.objects.create(
+            submission=self.submission, created_by=self.principal,
+            status=ODUChecklistStatus.SUBMITTED,
+            b17_odu_analysis=True, b18_feedback_provided=True, b19_final_docs_ready=True,
+        )
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        self.submission.refresh_from_db()
+        self.assertIsNotNone(self.submission.ready_for_manager_at)
+
+    def test_a_no_answer_still_counts_as_answered(self):
+        # "No" is a completed judgment call too — only "not yet answered"
+        # (None) should block.
+        ODURestructureChecklist.objects.create(
+            submission=self.submission, created_by=self.principal,
+            status=ODUChecklistStatus.SUBMITTED,
+            b17_odu_analysis=True, b18_feedback_provided=False, b19_final_docs_ready=True,
+        )
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200)

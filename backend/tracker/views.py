@@ -2606,9 +2606,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         At Under Assessment, the officer's written assessment is the actual
         deliverable the manager is verifying — a PDF attachment is required.
-        At Manager Checklist Review the deliverable is the checklist itself:
-        this call finalizes it (Draft/Returned -> Submitted) rather than
-        requiring a separate "submit the checklist" step first.
+        At Manager Checklist Review the deliverable is the checklist itself.
+        Two different checklist systems exist: the ODU Restructure Submission
+        Checklist (ORG-3.1/PSC 2-1 — real Yes/No judgment calls the principal
+        must actually make, so an incomplete one blocks hand-back rather than
+        being silently finalized) and the dynamic structured checklist used
+        by every other ODU/HR/VIPAM/Compliance form type with a checklist
+        configured (finalized here — Draft/Returned -> Submitted — as part of
+        the hand-back, since there's no separate judgment call left to make).
         """
         from .audit import log_action as _log
         from .models import AuditLog as _AL, Notification, SubmissionDocument
@@ -2625,26 +2630,47 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ):
             raise PermissionDenied("This can only be done during checklist review or assessment.")
 
-        # Finalize the structured checklist as part of the same hand-back —
-        # see the docstring above. Approved checklists are left untouched, and
-        # submissions whose form type has no checklist configured are a no-op.
         if submission.current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
-            from .models import SubmissionChecklistResponse
-            from .submission_checklist import resolve_checklist_form_type
+            from .odu_checklist_rules import (
+                odu_checklist_principal_review_complete,
+                submission_uses_odu_restructure_checklist,
+            )
 
-            checklist_ft = resolve_checklist_form_type(submission)
-            if checklist_ft:
-                checklist, _created = SubmissionChecklistResponse.objects.get_or_create(
-                    submission=submission, checklist_form_type=checklist_ft,
-                    defaults={"created_by": request.user, "data": {}},
-                )
-                if checklist.status in (
-                    SubmissionChecklistResponse.Status.DRAFT,
-                    SubmissionChecklistResponse.Status.RETURNED,
-                ):
-                    checklist.status = SubmissionChecklistResponse.Status.SUBMITTED
-                    checklist.submitted_at = timezone.now()
-                    checklist.save(update_fields=["status", "submitted_at", "updated_at"])
+            if submission_uses_odu_restructure_checklist(submission):
+                # Groups 6-7 are real judgment calls the principal makes while
+                # reviewing — nothing to auto-finalize, so an incomplete
+                # checklist blocks hand-back instead (unlike the dynamic
+                # checklist branch below).
+                from .models import ODURestructureChecklist
+
+                odu_checklist = ODURestructureChecklist.objects.filter(submission=submission).first()
+                if not odu_checklist_principal_review_complete(odu_checklist):
+                    return Response(
+                        {"detail": "Complete Groups 6-7 of the ODU checklist (your own review items) "
+                                   "before handing this back to your manager."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            else:
+                # Finalize the structured checklist as part of the same hand-back
+                # (see the docstring above). Approved checklists are left
+                # untouched, and submissions whose form type has no checklist
+                # configured are a no-op.
+                from .models import SubmissionChecklistResponse
+                from .submission_checklist import resolve_checklist_form_type
+
+                checklist_ft = resolve_checklist_form_type(submission)
+                if checklist_ft:
+                    checklist, _created = SubmissionChecklistResponse.objects.get_or_create(
+                        submission=submission, checklist_form_type=checklist_ft,
+                        defaults={"created_by": request.user, "data": {}},
+                    )
+                    if checklist.status in (
+                        SubmissionChecklistResponse.Status.DRAFT,
+                        SubmissionChecklistResponse.Status.RETURNED,
+                    ):
+                        checklist.status = SubmissionChecklistResponse.Status.SUBMITTED
+                        checklist.submitted_at = timezone.now()
+                        checklist.save(update_fields=["status", "submitted_at", "updated_at"])
 
         uploaded = request.FILES.get("file")
         if submission.current_stage == WorkflowStage.UNDER_ASSESSMENT:

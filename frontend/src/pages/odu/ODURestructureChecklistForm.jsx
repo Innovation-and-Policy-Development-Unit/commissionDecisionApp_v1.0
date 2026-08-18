@@ -21,7 +21,7 @@ import {
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { userIsOduPrincipalWorker, userIsChecklistMinistryRole } from '../../utils/oduChecklist'
+import { userIsOduPrincipalWorker, userIsChecklistMinistryRole, oduChecklistPrincipalReviewComplete } from '../../utils/oduChecklist'
 
 // ── Checklist item definitions ────────────────────────────────────────────────
 
@@ -305,7 +305,7 @@ const EMPTY_FORM = {
 }
 
 export default function ODURestructureChecklistForm({
-  submissionId, submission, documents = [], checklistItems = [], onNavigateToDocument,
+  submissionId, submission, documents = [], checklistItems = [], onNavigateToDocument, onCompletionChange,
 }) {
   const { user } = useAuth()
   const toast = useToast()
@@ -317,6 +317,16 @@ export default function ODURestructureChecklistForm({
   const [submitting, setSubmitting] = useState(false)
   const [approving, setApproving] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState({})
+
+  // Let the parent (SubmissionDetail's "Submit back to Manager" panel) know
+  // whether the principal's own Groups 6-7 items are all answered — mirrors
+  // the server-side gate in submit_to_manager(). Based on the last-saved
+  // `checklist`, not unsaved `form` edits, so it matches what the server
+  // will actually see.
+  useEffect(() => {
+    if (checklist === undefined) return
+    onCompletionChange?.(oduChecklistPrincipalReviewComplete(checklist))
+  }, [checklist, onCompletionChange])
 
   const isMinistryRole = userIsChecklistMinistryRole(user?.role)
   const isOduPrincipal = userIsOduPrincipalWorker(user?.role)

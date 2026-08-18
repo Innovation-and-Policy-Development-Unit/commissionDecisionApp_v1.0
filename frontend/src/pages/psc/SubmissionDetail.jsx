@@ -163,6 +163,10 @@ export default function SubmissionDetail() {
   const [error, setError]           = useState('')
   const [busy, setBusy]             = useState(false)
   const [checklist, setChecklist]   = useState([])
+  // Whether the assigned principal/senior's own Groups 6-7 items on the ODU
+  // Restructure Submission Checklist are all answered — null until the
+  // Checklist tab has reported in (or not applicable to this submission).
+  const [oduChecklistComplete, setOduChecklistComplete] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [boardPaperDirty, setBoardPaperDirty] = useState(false)
   const [documents, setDocuments]   = useState([])
@@ -251,6 +255,17 @@ export default function SubmissionDetail() {
     (DYNAMIC_CHECKLIST_EDIT_ROLES.includes(user.role) && stage === DYNAMIC_CHECKLIST_EDIT_STAGE) ||
     (DYNAMIC_CHECKLIST_VIEW_ROLES.includes(user.role) && DYNAMIC_CHECKLIST_VIEW_STAGES.includes(stage)) ||
     user.is_superuser
+  )
+  // Mirrors the server-side gate in submit_to_manager(): at Manager Checklist
+  // Review on an ORG-3.1/PSC 2-1 submission, the principal's own Groups 6-7
+  // items are real judgment calls, not something to auto-finalize — block
+  // hand-back until they're all answered. oduChecklistComplete is null until
+  // the Checklist tab has reported in, so we fail closed (block) rather than
+  // assume it's fine — same reasoning as the dynamic-checklist case used to.
+  const oduChecklistBlocksHandback = (
+    submission?.current_stage === 'manager_checklist_review'
+    && submissionUsesOduRestructureChecklist(submission)
+    && !oduChecklistComplete
   )
   // ORG-3.1 is the same real-world Organisation Restructure form as PSC 2-1
   // (see 0200_org_3_1_required_documents_odu_confirmed.py) — it reuses the
@@ -1355,6 +1370,7 @@ const stageDescriptions = {
             <ODURestructureChecklistForm
               submissionId={Number(id)}
               submission={submission}
+              onCompletionChange={setOduChecklistComplete}
             />
           )}
           </>
@@ -1768,9 +1784,18 @@ const stageDescriptions = {
                       />
                     </label>
                   )}
+                  {oduChecklistBlocksHandback && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Finish the{' '}
+                      <button type="button" className="underline font-medium" onClick={() => setActiveTab('checklist')}>
+                        ODU checklist
+                      </button>
+                      {' '}(Groups 6-7) before submitting this back to your manager.
+                    </p>
+                  )}
                   <BaseButton type="button" variant="primary" className="w-full"
                     loading={allocateBusy} loadingLabel="Submitting"
-                    disabled={submission.current_stage === 'under_assessment' && !assessmentFile}
+                    disabled={(submission.current_stage === 'under_assessment' && !assessmentFile) || oduChecklistBlocksHandback}
                     onClick={submitToManager}>
                     Submit back to Manager
                   </BaseButton>

@@ -50,6 +50,23 @@ export const ODU_PRINCIPAL_WORKER_ROLES = [
 
 export const ODU_CHECKLIST_ROLES = [...ODU_PRINCIPAL_WORKER_ROLES, 'odu_manager']
 
+// The 3 Groups 6-7 items that are the assigned Principal/Senior's own to
+// answer — b20_manager_final_check is the Manager ODU's own field (see
+// MANAGER_ONLY_ITEM_FIELDS in ODURestructureChecklistForm.jsx), so a
+// principal can never satisfy it and it's deliberately excluded here.
+// Mirrors CHECKLIST_ODU_PRINCIPAL_REQUIRED_FIELDS in odu_checklist_rules.py
+// — keep both in sync.
+export const CHECKLIST_ODU_PRINCIPAL_REQUIRED_FIELDS = [
+  'b17_odu_analysis', 'b18_feedback_provided', 'b19_final_docs_ready',
+]
+
+export function oduChecklistPrincipalReviewComplete(checklist) {
+  if (!checklist) return false
+  return CHECKLIST_ODU_PRINCIPAL_REQUIRED_FIELDS.every(
+    field => checklist[field] !== null && checklist[field] !== undefined,
+  )
+}
+
 // Roles allowed to view (read-only) the completed checklist after review.
 export const ODU_CHECKLIST_VIEW_ROLES = [
   ...ODU_CHECKLIST_ROLES,
