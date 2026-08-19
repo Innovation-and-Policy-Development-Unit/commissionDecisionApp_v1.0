@@ -34,6 +34,125 @@ def send_web_push_notification(notification_id):
 
 
 @shared_task
+def send_transition_notification_emails(
+    submission_id, prev, target, user_ids, *, decision_label="", remarks="",
+):
+    """Send the email side of a workflow-stage transition. Split out from
+    _dispatch_transition_notifications() in views.py so the outbound network
+    call (Resend HTTP API — measured at ~1.2-1.5s per recipient just for the
+    TLS handshake+request from this server) doesn't block the transition
+    response; the in-app Notification rows it's paired with are still
+    written synchronously since those are just local DB inserts."""
+    from django.contrib.auth.models import User
+
+    from .email_notify import send_transition_emails
+    from .models import Submission
+
+    try:
+        submission = Submission.objects.get(pk=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("TRANSITION_EMAIL_SKIP | Submission %s not found", submission_id)
+        return
+    users = list(User.objects.filter(pk__in=user_ids, is_active=True))
+    send_transition_emails(submission, prev, target, users, decision_label=decision_label, remarks=remarks)
+
+
+def queue_transition_emails(submission_id, prev, target, user_ids, *, decision_label="", remarks=""):
+    try:
+        send_transition_notification_emails.delay(
+            submission_id, prev, target, user_ids, decision_label=decision_label, remarks=remarks,
+        )
+    except Exception as exc:
+        app_log.warning("TRANSITION_EMAIL_QUEUE_FALLBACK | Submission %s | %s", submission_id, exc)
+        send_transition_notification_emails(
+            submission_id, prev, target, user_ids, decision_label=decision_label, remarks=remarks,
+        )
+
+
+@shared_task
+def send_external_submission_confirmation_emails(submission_id, user_ids):
+    from django.contrib.auth.models import User
+
+    from .email_notify import notify_external_submission_confirmation
+    from .models import Submission
+
+    try:
+        submission = Submission.objects.get(pk=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("SUBMIT_CONFIRM_EMAIL_SKIP | Submission %s not found", submission_id)
+        return
+    users = list(User.objects.filter(pk__in=user_ids, is_active=True))
+    notify_external_submission_confirmation(submission, users)
+
+
+def queue_external_submission_confirmation_emails(submission_id, user_ids):
+    try:
+        send_external_submission_confirmation_emails.delay(submission_id, user_ids)
+    except Exception as exc:
+        app_log.warning("SUBMIT_CONFIRM_EMAIL_QUEUE_FALLBACK | Submission %s | %s", submission_id, exc)
+        send_external_submission_confirmation_emails(submission_id, user_ids)
+
+
+@shared_task
+def send_submission_ready_for_manager_email(submission_id, assignee_id, manager_ids):
+    """Email the unit manager(s) after a principal/senior hands a submission
+    back — same rationale as send_transition_notification_emails above."""
+    from django.contrib.auth.models import User
+
+    from .email_notify import notify_submission_ready_for_manager
+    from .models import Submission
+
+    try:
+        submission = Submission.objects.get(pk=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("READY_FOR_MANAGER_EMAIL_SKIP | Submission %s not found", submission_id)
+        return
+    try:
+        assignee = User.objects.get(pk=assignee_id)
+    except User.DoesNotExist:
+        return
+    managers = list(User.objects.filter(pk__in=manager_ids, is_active=True))
+    notify_submission_ready_for_manager(submission, assignee, managers)
+
+
+def queue_submission_ready_for_manager_email(submission_id, assignee_id, manager_ids):
+    try:
+        send_submission_ready_for_manager_email.delay(submission_id, assignee_id, manager_ids)
+    except Exception as exc:
+        app_log.warning("READY_FOR_MANAGER_EMAIL_QUEUE_FALLBACK | Submission %s | %s", submission_id, exc)
+        send_submission_ready_for_manager_email(submission_id, assignee_id, manager_ids)
+
+
+@shared_task
+def send_assignment_notification_email(submission_id, assignee_id, *, manager_name=""):
+    """Email an officer when a unit manager allocates a submission to them —
+    same rationale as send_transition_notification_emails above."""
+    from django.contrib.auth.models import User
+
+    from .email_notify import send_assignment_email
+    from .models import Submission
+
+    try:
+        submission = Submission.objects.get(pk=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("ASSIGNMENT_EMAIL_SKIP | Submission %s not found", submission_id)
+        return
+    try:
+        assignee = User.objects.get(pk=assignee_id)
+    except User.DoesNotExist:
+        return
+    send_assignment_email(submission, assignee, manager_name=manager_name)
+
+
+def queue_assignment_email(submission_id, assignee_id, *, manager_name=""):
+    try:
+        send_assignment_notification_email.delay(submission_id, assignee_id, manager_name=manager_name)
+    except Exception as exc:
+        app_log.warning("ASSIGNMENT_EMAIL_QUEUE_FALLBACK | Submission %s | %s", submission_id, exc)
+        send_assignment_notification_email(submission_id, assignee_id, manager_name=manager_name)
+
+
+@shared_task
 def run_backup():
     """Execute the backup_db management command via Celery."""
     log.info("BACKUP_SCHEDULED | starting scheduled backup")

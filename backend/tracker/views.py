@@ -903,21 +903,22 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         )
 
     if recipient_list and title:
-        from .email_notify import send_transition_emails
+        from .tasks import queue_transition_emails
 
         label = ""
         if target in (WorkflowStage.APPROVED, WorkflowStage.REJECTED):
             label = "approved" if target == WorkflowStage.APPROVED else "rejected"
-        send_transition_emails(
-            submission, prev, target, recipient_list, decision_label=label, remarks=remarks
+        queue_transition_emails(
+            submission.id, prev, target, [u.id for u in recipient_list],
+            decision_label=label, remarks=remarks,
         )
 
     if target == WorkflowStage.SUBMITTED:
-        from .email_notify import notify_external_submission_confirmation
+        from .tasks import queue_external_submission_confirmation_emails
 
-        notify_external_submission_confirmation(
-            submission,
-            _dg_recipients_for_submission(submission) + _hr_recipients_for_submission(submission),
+        confirm_recipients = _dg_recipients_for_submission(submission) + _hr_recipients_for_submission(submission)
+        queue_external_submission_confirmation_emails(
+            submission.id, [u.id for u in confirm_recipients],
         )
 
 
@@ -2488,12 +2489,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 f"{manager_name} has allocated '{submission.title}' to you for assessment."
             ),
         )
-        try:
-            from .email_notify import send_assignment_email
+        from .tasks import queue_assignment_email
 
-            send_assignment_email(submission, assignee, manager_name=manager_name)
-        except Exception:
-            pass
+        queue_assignment_email(submission.id, assignee.id, manager_name=manager_name)
 
         return Response(SubmissionDetailSerializer(submission).data)
 
@@ -2730,12 +2728,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 ),
             )
         if managers:
-            try:
-                from .email_notify import notify_submission_ready_for_manager
+            from .tasks import queue_submission_ready_for_manager_email
 
-                notify_submission_ready_for_manager(submission, request.user, managers)
-            except Exception:
-                pass
+            queue_submission_ready_for_manager_email(
+                submission.id, request.user.id, [m.id for m in managers],
+            )
 
         return Response(SubmissionDetailSerializer(submission).data)
 
