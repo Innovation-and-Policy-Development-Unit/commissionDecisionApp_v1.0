@@ -2020,6 +2020,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
             submission.save(update_fields=_updated_fields(submission, prev, target))
 
+            # ── Secretary approval: auto-place directly onto the correct agenda ──
+            if target == WorkflowStage.FORWARDED_TO_COMMISSION:
+                self._auto_place_on_agenda(submission)
+
             if is_decision_stage(target):
                 proof_hash, proof_payload = create_decision_proof(
                     submission=submission,
@@ -2850,6 +2854,65 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         """
         from .agenda_carryover import compute_scheduled_meeting
         submission.scheduled_meeting = compute_scheduled_meeting(submission)
+
+    def _auto_place_on_agenda(self, submission):
+        """
+        Once the Secretary forwards a submission to the Commission, place it
+        directly onto its meeting's agenda — in its correct type-grouped
+        position — instead of leaving it in the Sitting Workspace backlog for
+        someone to manually "add item" or drag-and-drop into place.
+
+        Reuses the exact meeting-selection (cutoff/carry-over aware, via
+        compute_scheduled_meeting — same helper _assign_scheduled_meeting
+        uses) and category-resolution logic AgendaItemViewSet.perform_create
+        uses for a manually-added item, so an auto-placed item is
+        indistinguishable from one added by hand — same category, appended
+        to the end of that category's group (grouping items of the same
+        submission type together, e.g. all Voluntary Resignations, for the
+        sitting). The Secretary can still reorder/move it afterward via the
+        Sitting Workspace for exceptions.
+
+        No-ops (leaves it for manual placement) when there's no eligible
+        upcoming meeting yet, or a placement already exists.
+        """
+        if AgendaItem.objects.filter(submission=submission).exists():
+            return
+
+        from .agenda_carryover import compute_scheduled_meeting
+
+        meeting = compute_scheduled_meeting(submission)
+        if not meeting:
+            return
+
+        category = "other"
+        if submission.agenda_category and submission.agenda_category != "other":
+            category = submission.agenda_category
+        elif submission.form_type_code:
+            try:
+                ft = PSCFormType.objects.get(code=submission.form_type_code)
+                if ft.agenda_category and ft.agenda_category != "other":
+                    category = ft.agenda_category
+            except PSCFormType.DoesNotExist:
+                pass
+
+        last_in_cat = (
+            AgendaItem.objects.filter(meeting=meeting, category=category)
+            .order_by("-sequence")
+            .first()
+        )
+        next_seq = (last_in_cat.sequence + 1) if last_in_cat else 1
+
+        item = AgendaItem.objects.create(
+            meeting=meeting, submission=submission, category=category, sequence=next_seq,
+        )
+        if submission.scheduled_meeting_id != meeting.id:
+            submission.scheduled_meeting = meeting
+            submission.save(update_fields=["scheduled_meeting", "updated_at"])
+
+        from .tasks import queue_agenda_item_blurb
+
+        aid = item.id
+        transaction.on_commit(lambda: queue_agenda_item_blurb(aid))
 
     def _auto_advance_submitted_to_checklist_review(self, submission):
         """
