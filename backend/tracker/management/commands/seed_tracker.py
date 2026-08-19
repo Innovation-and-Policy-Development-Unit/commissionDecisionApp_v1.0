@@ -173,6 +173,7 @@ USERS = [
     ("s.compliance",   "s.compliance@psc.gov.vu",    "Officer123!",       "compliance_senior",      "MPM"),
     ("p.compliance",   "p.compliance@psc.gov.vu",    "Officer123!",       "compliance_principal",   "MPM"),
     ("m.csu",          "m.csu@psc.gov.vu",           "Manager123!",       "csu_manager",            "MPM"),
+    ("m.ipdu",         "m.ipdu@psc.gov.vu",          "Manager123!",       "ipdu_manager",           "MPM"),
     # OPSC Manager — allocates decisions to staff after Chairperson signs minutes
     ("m.opsc",         "m.opsc@psc.gov.vu",          "Manager123!",       "psc_manager",            None),
     # Ministry HR
@@ -671,6 +672,7 @@ class Command(BaseCommand):
         "compliance_principal": "COMPLIANCE",
         "csu_manager": "CSU",
         "csu_senior": "CSU",
+        "ipdu_manager": "IPDU",
     }
 
     _OPSC_STAFF_ROLES = frozenset({
@@ -838,6 +840,16 @@ class Command(BaseCommand):
         ("csu_manager", (
             "CSU Manager — lodges internal OPSC submissions; views all Commission minutes and tasks; "
             "works only on tasks allocated to CSU."
+        ), [
+            "view_dashboard", "view_submissions", "transition_workflow", "create_submission",
+            "assign_task", "update_implementation",
+            "view_commission_minutes", "view_commission_tasks",
+            "view_reports", "view_audit_trail",
+        ]),
+        ("ipdu_manager", (
+            "Manager IPDU — prepares and submits Task Force and Allowance Payment board papers "
+            "directly to the Secretary; no separate principal/senior tier, so also does their own "
+            "checklist review and assessment on IPDU-routed submissions."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow", "create_submission",
             "assign_task", "update_implementation",

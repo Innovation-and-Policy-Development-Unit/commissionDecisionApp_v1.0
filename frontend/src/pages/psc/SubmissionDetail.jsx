@@ -48,10 +48,12 @@ import PSCForm22Fields from './PSCForm22Fields'
 import PSCForm22View from './PSCForm22View'
 import ODURestructureChecklistForm from '../odu/ODURestructureChecklistForm'
 import ODUBoardPaperForm from '../odu/ODUBoardPaperForm'
+import IPDUBoardPaperForm from '../ipdu/IPDUBoardPaperForm'
 import SubmissionChecklistPanel from '../../components/submissions/SubmissionChecklistPanel'
 import WorkflowActionsPanel from '../../components/submissions/WorkflowActionsPanel'
 import CarryoverBanner from '../../components/submissions/CarryoverBanner'
 import { canShowOduChecklist, canShowBoardPaper, submissionUsesOduRestructureChecklist } from '../../utils/oduChecklist'
+import { canShowIpduBoardPaper } from '../../utils/ipduBoardPaper'
 import { isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
 import { formatApiError } from '../../utils/apiError'
 import { PageSkeleton } from '../../components/shared/Skeleton'
@@ -250,6 +252,7 @@ export default function SubmissionDetail() {
   // Suppress the legacy hardcoded ODU form when a dynamic XML checklist is configured for this form type
   const showOduChecklist = canShowOduChecklist(submission, user) && !hasDynamicChecklist
   const showOduBoardPaper = canShowBoardPaper(submission, user) && !hasDynamicChecklist
+  const showIpduBoardPaper = canShowIpduBoardPaper(submission, user)
   const stage = submission?.current_stage
   const showDynamicChecklist = user && hasDynamicChecklist && (
     (DYNAMIC_CHECKLIST_EDIT_ROLES.includes(user.role) && stage === DYNAMIC_CHECKLIST_EDIT_STAGE) ||
@@ -295,7 +298,7 @@ export default function SubmissionDetail() {
   const showDigitizedFormTab = form37 !== null
     || (dynamicForm !== null && (dynamicFormFields.length > 0 || isDedicatedForm))
   const showChecklistTab = showOduChecklist || showDynamicChecklist
-  const showCommissionPaperTab = showOduBoardPaper
+  const showCommissionPaperTab = showOduBoardPaper || showIpduBoardPaper
   const TABS = [
     { key: 'overview', label: 'Overview', Icon: LayoutGrid },
     showDigitizedFormTab && { key: 'digitized_form', label: 'Digitized Form', Icon: FileText },
@@ -1346,14 +1349,22 @@ const stageDescriptions = {
           </>
           )}
 
-          {/* ── Commission Paper (ODU Board Paper) ── */}
+          {/* ── Commission Paper (ODU Board Paper / IPDU Board Paper) ── */}
           {effectiveTab === 'commission_paper' && showCommissionPaperTab && (
             <div className="card card-compact">
-              <ODUBoardPaperForm
-                submissionId={Number(id)}
-                submission={submission}
-                onDirtyChange={setBoardPaperDirty}
-              />
+              {showOduBoardPaper ? (
+                <ODUBoardPaperForm
+                  submissionId={Number(id)}
+                  submission={submission}
+                  onDirtyChange={setBoardPaperDirty}
+                />
+              ) : showIpduBoardPaper ? (
+                <IPDUBoardPaperForm
+                  submissionId={Number(id)}
+                  submission={submission}
+                  onDirtyChange={setBoardPaperDirty}
+                />
+              ) : null}
             </div>
           )}
 

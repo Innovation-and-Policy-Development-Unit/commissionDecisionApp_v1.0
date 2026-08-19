@@ -80,7 +80,7 @@ _COMPLIANCE_MANAGER_APPROVAL_ALLOWED = {
 # Other roles are intentionally unaffected here (their write rights are governed
 # at each endpoint), so this can be called as a guard on any submission write
 # path without changing PSC / OPSC behaviour.
-_DRAFT_ONLY_EDIT_ROLES = {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.CSU_MANAGER}
+_DRAFT_ONLY_EDIT_ROLES = {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.CSU_MANAGER, Role.IPDU_MANAGER}
 
 # The digitized form (submission paper) is edit mode only for the one drafting
 # it — ministry HR/dept admin, or CSU Manager for OPSC-internal submissions
@@ -389,6 +389,22 @@ _CSU_MANAGER_ALLOWED = {
     (WorkflowStage.SUBMITTED,                  WorkflowStage.RECALLED),
 }
 
+# Manager IPDU: same OPSC-internal, normal-route pattern as CSU Manager above
+# (draft goes straight to Submitted — no external ministry DG), but unlike
+# CSU, Manager IPDU also acts at every later stage themselves (there's no
+# separate principal/senior tier to review — see OPSC_UNIT_MANAGER_ROLES).
+# This set only governs the pre-submission draft/clarification steps; the
+# check that uses it (below) falls through to the generic unit-manager block
+# for Manager Checklist Review / Under Assessment instead of returning early,
+# which is what CSU's equivalent check does (CSU never acts again after
+# Submitted, so it doesn't need that fall-through).
+_IPDU_MANAGER_ALLOWED = {
+    (WorkflowStage.DRAFT,                      WorkflowStage.SUBMITTED),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
+    (WorkflowStage.SUBMITTED,                  WorkflowStage.RECALLED),
+}
+
 # Receptionist (registry front desk): lodges a scanned submission and routes it
 # to the responsible unit Manager (Manager Checklist Review).
 _RECEPTIONIST_ALLOWED = {
@@ -649,6 +665,20 @@ def assert_transition_allowed(
             )
         return
 
+    # ── Manager IPDU (OPSC-internal, normal-route, no principal tier) ───────
+    # Governs only the pre-submission draft/clarification steps. Unlike the
+    # CSU check above, this does NOT return unconditionally: at Manager
+    # Checklist Review / Under Assessment, execution must fall through to
+    # the generic OPSC Unit Managers block just below, since Manager IPDU
+    # (not a separate principal/senior) does that work themselves.
+    if role == Role.IPDU_MANAGER and current_stage not in _UNIT_MANAGER_STAGES:
+        if (current_stage, target_stage) not in _IPDU_MANAGER_ALLOWED:
+            raise PermissionDenied(
+                "Manager IPDU can submit a draft, respond to a clarification request, "
+                "or recall a submission before it is registered."
+            )
+        return
+
     # ── OPSC Unit Managers — checklist review and assessment ────────────────
     if role in _UNIT_MANAGER_ROLES:
         if current_stage not in _UNIT_MANAGER_STAGES:
@@ -826,6 +856,12 @@ def iter_allowed_targets(
         return [t.value for (s, t) in _RECEPTIONIST_ALLOWED if s == current_stage]
     if role == Role.CSU_MANAGER:
         return [t.value for (s, t) in _CSU_MANAGER_ALLOWED if s == current_stage]
+    # Manager IPDU: same fall-through reasoning as assert_transition_allowed
+    # above — only short-circuit for the pre-submission stages; at Manager
+    # Checklist Review / Under Assessment, fall through to the generic
+    # OPSC Unit Managers block since there's no separate principal tier.
+    if role == Role.IPDU_MANAGER and current_stage not in _UNIT_MANAGER_STAGES:
+        return [t.value for (s, t) in _IPDU_MANAGER_ALLOWED if s == current_stage]
     if role in _UNIT_MANAGER_ROLES:
         if current_stage in _UNIT_MANAGER_STAGES:
             targets = list(_STAGE_GRAPH.get(current_stage, []))

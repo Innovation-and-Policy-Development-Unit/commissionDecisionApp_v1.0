@@ -34,6 +34,7 @@ class Role(models.TextChoices):
     COMPLIANCE_MANAGER  = "compliance_manager",  "Compliance Manager"
     COMPLIANCE_SENIOR   = "compliance_senior",   "Compliance Senior Officer"
     CSU_MANAGER         = "csu_manager",         "CSU Manager"
+    IPDU_MANAGER        = "ipdu_manager",        "Manager IPDU"
     # ── OPSC Unit Principal roles (assigned checklist/assessment work) ──────
     VIPAM_PRINCIPAL       = "vipam_principal",       "VIPAM Principal"
     HR_UNIT_PRINCIPAL     = "hr_unit_principal",     "HR Unit Principal"
@@ -149,6 +150,7 @@ class RoutedUnit(models.TextChoices):
     VIPAM = "vipam", "VIPAM"
     COMPLIANCE = "compliance", "Compliance"
     CSU = "csu", "Corporate Services Unit"
+    IPDU = "ipdu", "IPDU"
 
 
 class Classification(models.TextChoices):
@@ -4059,6 +4061,89 @@ class ODURestructureBoardPaper(models.Model):
 
     def __str__(self):
         return f"ODU Board Paper — {self.submission.reference_number}"
+
+
+class IPDUBoardPaper(models.Model):
+    """
+    The PSC Board Submission Paper for an IPDU Task Force / Allowance Payment
+    submission (IPDU-TASKFORCE / IPDU-ALLOWANCE), authored directly by
+    Manager IPDU. One per submission.
+
+    Unlike the ODU Restructure Board Paper, there is no separate Principal/
+    Manager tier here — Manager IPDU drafts and submits the whole paper
+    themselves, straight to the Secretary. See BoardPaperStatus — this model
+    only ever uses DRAFT / SUBMITTED / SECRETARY_APPROVED (never
+    MANAGER_APPROVED, which is ODU-specific).
+    """
+
+    submission = models.OneToOneField(
+        Submission, on_delete=models.CASCADE,
+        related_name="ipdu_board_paper",
+        help_text="The IPDU submission this board paper belongs to.",
+    )
+
+    status = models.CharField(
+        max_length=20, choices=BoardPaperStatus.choices,
+        default=BoardPaperStatus.DRAFT, db_index=True,
+    )
+    submitted_for_review_at = models.DateTimeField(null=True, blank=True)
+    submitted_for_review_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="ipdu_board_papers_submitted",
+    )
+    secretary_approved_at = models.DateTimeField(null=True, blank=True)
+    secretary_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="ipdu_board_papers_secretary_approved",
+    )
+    returned_at = models.DateTimeField(null=True, blank=True)
+    returned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="ipdu_board_papers_returned",
+        help_text="Secretary who last sent this back to Manager IPDU for changes.",
+    )
+    return_note = models.TextField(
+        blank=True, help_text="Secretary's note on what needs changing, from the last return.",
+    )
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    meeting_number = models.CharField(max_length=100, blank=True)
+    item_number    = models.CharField(max_length=100, blank=True)
+    submitted_by   = models.CharField(max_length=255, blank=True, default="Secretary")
+    action_officer = models.CharField(max_length=255, blank=True)
+    psc_file       = models.CharField(max_length=255, blank=True)
+    prepared_by    = models.CharField(max_length=255, blank=True)
+    date_submitted_to_psc_by_ministry = models.DateField(null=True, blank=True)
+    date_submitted_to_pscb            = models.DateField(null=True, blank=True)
+
+    # ── Body ──────────────────────────────────────────────────────────────────
+    subject        = models.CharField(max_length=512, blank=True)
+    background     = models.TextField(blank=True)
+    issues         = models.TextField(blank=True)
+    discussions    = models.TextField(blank=True)
+    recommendation = models.TextField(blank=True)
+
+    # ── Deliverables / allowance table ──────────────────────────────────────
+    # Array of {deliverable_no, description, activities, proposed_allowance}.
+    # proposed_allowance is blank/0 for pure-governance submissions (e.g. a
+    # taskforce membership/TOR revision with no financial ask).
+    deliverable_rows = models.JSONField(default=list, blank=True)
+
+    # ── Meta ──────────────────────────────────────────────────────────────────
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="ipdu_board_papers_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name        = "IPDU Board Paper"
+        verbose_name_plural = "IPDU Board Papers"
+
+    def __str__(self):
+        return f"IPDU Board Paper — {self.submission.reference_number}"
 
 
 class StaffChatSession(models.Model):

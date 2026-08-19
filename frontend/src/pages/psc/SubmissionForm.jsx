@@ -35,6 +35,11 @@ const INTERNAL_ROLES = [
  * rather than the short internal-only path the roles above use. */
 const CSU_ROLE = 'csu_manager'
 
+/** Manager IPDU creates OPSC-internal Task Force / Allowance Payment board
+ * papers — same normal-route pattern as CSU above, but with its own
+ * dedicated submission-type catalog (routed_unit === 'ipdu'). */
+const IPDU_ROLE = 'ipdu_manager'
+
 /** Roles allowed to log a new submission at all — kept in sync with the
  * `allowed` check below. Exported so list-page "New submission" buttons
  * (e.g. SubmissionLog.jsx) can hide themselves for roles that would just
@@ -42,7 +47,7 @@ const CSU_ROLE = 'csu_manager'
  * message here instead of showing a button that doesn't work. */
 export const SUBMISSION_CREATE_ALLOWED_ROLES = [
   'receptionist', 'psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
-  CSU_ROLE, ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
+  CSU_ROLE, IPDU_ROLE, ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
 ]
 
 const DEFAULT_TITLE_PLACEHOLDER = 'e.g. Appointment of Director Finance & Administration'
@@ -817,6 +822,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
 
   const isInternalUser = user && INTERNAL_ROLES.includes(user.role)
   const isCsuUser = user && user.role === CSU_ROLE
+  const isIpduUser = user && user.role === IPDU_ROLE
   const isComplianceUser = user && isComplianceRole(user.role)
   const isMinistryUser = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
 
@@ -828,6 +834,9 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   // CSU Manager: same submission types as the HR Unit (routed_unit === 'hr'),
   // not the dedicated internal-only catalog.
   const csuFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'hr')
+
+  // Manager IPDU: its own dedicated catalog (IPDU-TASKFORCE / IPDU-ALLOWANCE).
+  const ipduFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'ipdu')
 
   // Compliance unit: COMP-* submission types (routed_unit === 'compliance').
   const complianceFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'compliance')
@@ -906,6 +915,22 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
         onSuccess={onSuccess}
         internalFormTypes={csuFormTypesResolved}
         isCsuUser
+      />
+    )
+  }
+
+  // ── Manager IPDU: simplified internal form, IPDU's own submission types ──
+  // The Task Force / Allowance Payment board paper itself is filled in
+  // afterward on the submission detail page (IPDUBoardPaperForm), same as
+  // ORG-3.1's checklist/board paper — this form only captures title + type.
+  if (isIpduUser) {
+    return (
+      <InternalSubmissionForm
+        modal={modal}
+        onClose={onClose}
+        onSuccess={onSuccess}
+        internalFormTypes={ipduFormTypesResolved}
+        isCsuUser={false}
       />
     )
   }

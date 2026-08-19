@@ -15,6 +15,7 @@ OPSC_UNIT_MANAGER_ROLES: frozenset[str] = frozenset({
     Role.ODU_MANAGER,
     Role.COMPLIANCE_MANAGER,
     Role.CSU_MANAGER,
+    Role.IPDU_MANAGER,
 })
 
 OPSC_UNIT_PRINCIPAL_ROLES: frozenset[str] = frozenset({
@@ -52,6 +53,7 @@ MANAGER_ROLE_TO_ROUTED_UNIT: dict[str, str] = {
     Role.HR_UNIT_MANAGER: "hr",
     Role.COMPLIANCE_MANAGER: "compliance",
     Role.CSU_MANAGER: "csu",
+    Role.IPDU_MANAGER: "ipdu",
 }
 
 MANAGER_ROLE_TO_PRINCIPAL_ROLE: dict[str, str] = {
@@ -67,6 +69,13 @@ MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES: dict[str, set[str]] = {
     Role.HR_UNIT_MANAGER: {Role.HR_UNIT_PRINCIPAL, Role.HR_UNIT_SENIOR},
     Role.COMPLIANCE_MANAGER: {Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_SENIOR},
     Role.CSU_MANAGER: {Role.CSU_SENIOR},
+    # IPDU has no principal/senior tier — Manager IPDU handles checklist
+    # review and assessment personally. Listed explicitly as an empty set
+    # rather than left out: manager_allowed_staff_roles() below falls back
+    # to the broad default (every unit's principals/seniors) for any role
+    # missing from this dict, which would otherwise let Manager IPDU assign
+    # an IPDU submission to another unit's staff.
+    Role.IPDU_MANAGER: set(),
 }
 
 # Ministry-side roles — external to OPSC; never see Commission minutes.

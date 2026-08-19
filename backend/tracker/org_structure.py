@@ -10,7 +10,7 @@ OPSC_DEPARTMENT_CODES = frozenset({"OPSC", "OPM_OPSC"})
 OPSC_DEPARTMENT_NAME = "Office of the Public Service Commission"
 
 OPSC_UNIT_SEED = (
-    ("IPDU", "Innovation and Policy Development Unit", ""),
+    ("IPDU", "Innovation and Policy Development Unit", "ipdu"),
     ("ODU", "Organisation Development Unit", "odu"),
     ("VIPAM", "VIPAM Unit", "vipam"),
     ("HR", "HR Unit", "hr"),
