@@ -2865,6 +2865,18 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         No-ops for internal short-path submissions (VIPAM/Compliance), which
         go to Secretary Review next by human judgement, not mechanical
         routing, and for anything without a form type to route by.
+
+        IPDU Task Force / Allowance Payment submissions skip Manager
+        Checklist Review entirely and land straight at Pending Secretary
+        Approval: Manager IPDU is the sole author of the board paper (see
+        IPDUBoardPaper's docstring in models.py) — there's no separate unit
+        checklist review to do on their own already-finished paper, and the
+        real-world process is literally "prepare, then hand to the
+        Secretary" (confirmed with the user). This is the one case where the
+        destination stage isn't Manager Checklist Review — everything else
+        about this mechanical routing (routed_unit still set to "ipdu" for
+        tracking/notifications, same System-actor WorkflowEvent pattern)
+        stays the same.
         """
         if submission.current_stage != WorkflowStage.SUBMITTED:
             return
@@ -2874,13 +2886,26 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             return
 
         from .intake_routing import routed_unit_for_form_type
+        from .ipdu_rules import submission_uses_ipdu_board_paper
         routed = routed_unit_for_form_type(submission.form_type_code)
         if not routed:
             return
 
+        target_stage = (
+            WorkflowStage.PENDING_SECRETARY_APPROVAL
+            if submission_uses_ipdu_board_paper(submission)
+            else WorkflowStage.MANAGER_CHECKLIST_REVIEW
+        )
+        remarks = (
+            "Automatically routed to the Secretary — Manager IPDU is the sole author "
+            "of the board paper, so there's no separate unit checklist review."
+            if target_stage == WorkflowStage.PENDING_SECRETARY_APPROVAL
+            else "Automatically routed to the responsible unit — form type determines the unit, no manual routing needed."
+        )
+
         with transaction.atomic():
             submission.routed_unit = routed
-            submission.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            submission.current_stage = target_stage
             update_fields = ["routed_unit", "current_stage"]
             if submission.checklist_review_started_at is None:
                 submission.checklist_review_started_at = timezone.now()
@@ -2892,8 +2917,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 actor=None,
                 actor_label="System",
                 previous_stage=WorkflowStage.SUBMITTED,
-                new_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
-                remarks="Automatically routed to the responsible unit — form type determines the unit, no manual routing needed.",
+                new_stage=target_stage,
+                remarks=remarks,
             )
         invalidate_submission(submission.id)
 
@@ -11250,17 +11275,22 @@ def _ipdu_action_officer_default() -> str:
 
 class IPDUBoardPaperViewSet(viewsets.ModelViewSet):
     """
-    CRUD + approval chain for the IPDU Board Paper — the Commission-facing
+    CRUD for the IPDU Board Paper — the content of the Commission-facing
     Task Force / Allowance Payment submission Manager IPDU prepares.
 
-    Simpler chain than ODU's: Manager IPDU drafts and submits it straight to
-    the Secretary — no separate principal/manager-approval step (see
-    IPDUBoardPaper's docstring in models.py).
+    Unlike ODU's board paper, this has no separate submit/approve chain of
+    its own: the paper is just content, editable while the parent Submission
+    is still in Draft. The actual hand-off to the Secretary — and the
+    Secretary's approve/return decision — is the Submission's own single
+    "Submit" action and the generic workflow-transition buttons on the
+    Submission page (Pending Secretary Approval -> Forwarded to Commission,
+    or back for changes), exactly like every other submission type. Having
+    a second, disconnected "submit the paper" step here was confusing (two
+    unrelated-looking submit buttons for what is really one action) and is
+    what this replaced.
 
     GET /ipdu-board-papers/ensure/?submission=<id>  — load or create draft.
-    POST .../submit/            — Manager IPDU: Draft -> Submitted.
-    POST .../secretary-approve/ — Secretary: Submitted -> Secretary Approved.
-    POST .../return-to-manager/ — Secretary: Submitted -> Draft, with a note.
+    PATCH /ipdu-board-papers/{id}/                  — save content (Draft only).
     """
 
     serializer_class   = IPDUBoardPaperSerializer
@@ -11279,9 +11309,7 @@ class IPDUBoardPaperViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         profile = _profile(self.request.user)
         self._require_view_role(profile)
-        qs = IPDUBoardPaper.objects.select_related(
-            "submission", "created_by", "submitted_for_review_by", "secretary_approved_by",
-        ).all()
+        qs = IPDUBoardPaper.objects.select_related("submission", "created_by").all()
         sub_id = self.request.query_params.get("submission")
         if sub_id:
             qs = qs.filter(submission_id=sub_id)
@@ -11356,115 +11384,10 @@ class IPDUBoardPaperViewSet(viewsets.ModelViewSet):
         instance = serializer.instance
         if not submission_eligible_for_board_paper(instance.submission):
             raise PermissionDenied(
-                "Commission paper can only be edited while the submission is with IPDU."
-            )
-        if instance.status != BoardPaperStatus.DRAFT:
-            raise PermissionDenied(
-                "This Commission paper has already been submitted and is locked for editing."
+                "Commission paper can only be edited while the submission is still a Draft — "
+                "use the Submit button on the submission itself to hand it to the Secretary."
             )
         serializer.save()
-
-    @action(detail=True, methods=["post"], url_path="submit")
-    def submit(self, request, pk=None):
-        """Manager IPDU: Draft -> Submitted, for the Secretary to review."""
-        from .audit import log_action as _log
-        from .models import AuditLog as _AL
-
-        paper = self.get_object()
-        profile = _profile(request.user)
-        self._require_ipdu_role(profile)
-        if paper.status != BoardPaperStatus.DRAFT:
-            return Response(
-                {"detail": "Only a Draft Commission paper can be submitted."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        paper.status = BoardPaperStatus.SUBMITTED
-        paper.submitted_for_review_at = timezone.now()
-        paper.submitted_for_review_by = request.user
-        paper.save(update_fields=["status", "submitted_for_review_at", "submitted_for_review_by"])
-        _log(request, _AL.Action.UPDATE,
-             resource_type="Submission", resource_id=paper.submission_id,
-             resource_label=paper.submission.reference_number,
-             description=f"Commission paper submitted to Secretary for review on "
-                         f"{paper.submission.reference_number}",
-             extra_data={"board_paper_id": paper.id})
-        return Response(IPDUBoardPaperSerializer(paper).data)
-
-    @action(detail=True, methods=["post"], url_path="return-to-manager")
-    def return_to_manager(self, request, pk=None):
-        """Secretary: Submitted -> Draft, with a note on what needs to change."""
-        from .audit import log_action as _log
-        from .models import AuditLog as _AL
-
-        paper = self.get_object()
-        profile = _profile(request.user)
-        if profile.role not in BOARD_PAPER_SECRETARY_ROLES:
-            raise PermissionDenied("Only the Secretary can return the Commission paper for changes.")
-        if paper.status != BoardPaperStatus.SUBMITTED:
-            return Response(
-                {"detail": "Only a Submitted Commission paper can be returned for changes."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        note = (request.data.get("note") or "").strip()
-        if not note:
-            return Response(
-                {"detail": "Please describe what needs to change before returning it to Manager IPDU."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        paper.status = BoardPaperStatus.DRAFT
-        paper.returned_at = timezone.now()
-        paper.returned_by = request.user
-        paper.return_note = note
-        paper.save(update_fields=["status", "returned_at", "returned_by", "return_note"])
-        _log(request, _AL.Action.UPDATE,
-             resource_type="Submission", resource_id=paper.submission_id,
-             resource_label=paper.submission.reference_number,
-             description=f"Commission paper returned to Manager IPDU by Secretary on "
-                         f"{paper.submission.reference_number} | {note}",
-             extra_data={"board_paper_id": paper.id})
-
-        recipient = paper.submitted_for_review_by or paper.submission.created_by
-        if recipient and recipient.is_active:
-            secretary_name = request.user.get_full_name() or request.user.username
-            Notification.objects.create(
-                recipient=recipient,
-                submission=paper.submission,
-                channel=Notification.Channel.BOTH,
-                title=f"Commission paper returned for changes: {paper.submission.reference_number}",
-                body=(
-                    f"{secretary_name} returned the IPDU submission paper for "
-                    f"'{paper.submission.title}' for changes.\n\nNote: {note}"
-                ),
-            )
-        return Response(IPDUBoardPaperSerializer(paper).data)
-
-    @action(detail=True, methods=["post"], url_path="secretary-approve")
-    def secretary_approve(self, request, pk=None):
-        """Secretary: Submitted -> Secretary Approved (final sign-off)."""
-        from .audit import log_action as _log
-        from .models import AuditLog as _AL
-
-        paper = self.get_object()
-        profile = _profile(request.user)
-        if profile.role not in BOARD_PAPER_SECRETARY_ROLES:
-            raise PermissionDenied("Only the Secretary can give final sign-off on the Commission paper.")
-        if paper.status != BoardPaperStatus.SUBMITTED:
-            return Response(
-                {"detail": "The Commission paper must be submitted by Manager IPDU first."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        paper.status = BoardPaperStatus.SECRETARY_APPROVED
-        paper.secretary_approved_at = timezone.now()
-        paper.secretary_approved_by = request.user
-        paper.save(update_fields=["status", "secretary_approved_at", "secretary_approved_by"])
-        _log(request, _AL.Action.UPDATE,
-             resource_type="Submission", resource_id=paper.submission_id,
-             resource_label=paper.submission.reference_number,
-             description=f"Commission paper given final sign-off by Secretary "
-                         f"({request.user.get_full_name() or request.user.username}) on "
-                         f"{paper.submission.reference_number}",
-             extra_data={"board_paper_id": paper.id})
-        return Response(IPDUBoardPaperSerializer(paper).data)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

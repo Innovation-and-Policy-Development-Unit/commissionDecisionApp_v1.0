@@ -1,10 +1,24 @@
 """Manager IPDU: creating Task Force / Allowance Payment submissions, the
-IPDU Board Paper wizard, and the access-control wiring that has to exist
+IPDU Board Paper content, and the access-control wiring that has to exist
 for a brand-new OPSC unit with no principal/senior tier — see the plan at
 review time (glistening-sleeping-aurora.md) for why each of these matters:
 queryset visibility, the transition "expected unit" gate, the staff-role
 assignment fallback, and the CSU-style short-circuit bug that would block
-Manager IPDU from ever acting at their own Manager Checklist Review stage."""
+Manager IPDU from ever acting at their own Manager Checklist Review stage
+(now only reachable as an edge case — see below).
+
+Revised after live testing surfaced two issues with the first version:
+1. The board paper was invisible while the submission was still Draft
+   (submission_in_board_paper_edit_phase required routed_unit, which isn't
+   set until after Submit) — fixed, covered by IpduBoardPaperDraftVisibilityTests.
+2. Submit used to land at Manager Checklist Review, needing a second,
+   separate "submit the board paper" click before the Secretary ever saw
+   it — confusing, and not how the real process works (Manager IPDU hands
+   the whole thing to the Secretary directly). Fixed: submit now auto-
+   routes straight to Pending Secretary Approval, and the board paper lost
+   its own submit/secretary-approve/return-to-manager actions entirely —
+   it's just content now, editable while Draft, read-only after. The
+   Submission's own generic transition buttons ARE the hand-off."""
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
@@ -12,7 +26,6 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from ..models import (
-    BoardPaperStatus,
     IPDUBoardPaper,
     Ministry,
     Profile,
@@ -78,10 +91,12 @@ class IpduSubmissionCreationTests(TestCase):
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
-class IpduAutoRoutingAndSelfServiceTests(TestCase):
-    """Covers the auto-advance-on-submit mechanism and the decision-4
-    regression: Manager IPDU must be able to act at Manager Checklist
-    Review themselves (no separate principal exists to hand it back)."""
+class IpduAutoRoutingTests(TestCase):
+    """Submit is the one hand-off action: Draft -> Submitted auto-advances
+    straight to Pending Secretary Approval, skipping Manager Checklist
+    Review/Under Assessment entirely — Manager IPDU is the sole author of
+    the board paper, so there's no separate unit checklist review to do on
+    it (see _auto_advance_submitted_to_checklist_review's IPDU carve-out)."""
 
     def setUp(self):
         self.ministry = Ministry.objects.create(code="TST-IPDU-R", name="Test Ministry IPDU-R")
@@ -99,7 +114,7 @@ class IpduAutoRoutingAndSelfServiceTests(TestCase):
         self.assertEqual(resp.status_code, 201, resp.data)
         return Submission.objects.get(pk=resp.data["id"])
 
-    def test_submit_auto_routes_to_ipdu_and_advances_to_checklist_review(self):
+    def test_submit_auto_routes_directly_to_pending_secretary_approval(self):
         sub = self._create_draft()
         resp = self.client.post(
             f"/api/submissions/{sub.id}/transition/",
@@ -109,23 +124,23 @@ class IpduAutoRoutingAndSelfServiceTests(TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         sub.refresh_from_db()
         self.assertEqual(sub.routed_unit, RoutedUnit.IPDU)
-        self.assertEqual(sub.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        self.assertEqual(sub.current_stage, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
-    def test_manager_ipdu_self_advances_past_checklist_review(self):
-        # The decision-4 regression: if the IPDU_MANAGER check in
-        # transitions.py unconditionally returned (like CSU's does), this
-        # would 403 — there's no separate principal to do it instead.
+    def test_manager_ipdu_can_still_self_advance_if_ever_at_checklist_review(self):
+        # Edge-case regression (decision-4 from the original plan): Manager
+        # Checklist Review is no longer the normal landing stage, but it's
+        # still reachable manually (e.g. Commission DEFERRED -> Manager
+        # Checklist Review reset), and Manager IPDU must still be able to
+        # act there themselves — no separate principal exists to hand it
+        # back to. If the IPDU_MANAGER check in transitions.py unconditionally
+        # returned (like CSU's does), this would 403.
         from ..models import SubmissionChecklistItem
         from ..submission_checklist import ensure_submission_checklist_items
 
         sub = self._create_draft()
-        self.client.post(
-            f"/api/submissions/{sub.id}/transition/",
-            {"new_stage": WorkflowStage.SUBMITTED, "acknowledge_gaps": True},
-            format="json",
-        )
-        sub.refresh_from_db()
-        self.assertEqual(sub.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        sub.routed_unit = RoutedUnit.IPDU
+        sub.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+        sub.save(update_fields=["routed_unit", "current_stage"])
 
         # Satisfy the (unrelated) required-documents checklist gate so this
         # test isolates the decision-4 permission question specifically.
@@ -136,12 +151,12 @@ class IpduAutoRoutingAndSelfServiceTests(TestCase):
 
         resp = self.client.post(
             f"/api/submissions/{sub.id}/transition/",
-            {"new_stage": WorkflowStage.UNDER_ASSESSMENT},
+            {"new_stage": WorkflowStage.PENDING_SECRETARY_APPROVAL},
             format="json",
         )
         self.assertEqual(resp.status_code, 200, resp.data)
         sub.refresh_from_db()
-        self.assertEqual(sub.current_stage, WorkflowStage.UNDER_ASSESSMENT)
+        self.assertEqual(sub.current_stage, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     def test_manager_ipdu_sees_own_draft_in_submission_list(self):
         # Queryset-visibility regression: without the IPDU branch in
@@ -171,7 +186,10 @@ class IpduStaffRoleFallbackTests(TestCase):
     """Manager IPDU has no principal/senior tier — MANAGER_ROLE_TO_ALLOWED_STAFF_ROLES
     must map it to an explicit empty set, not fall back to the broad default
     (every unit's principals/seniors), or Manager IPDU could hand an IPDU
-    submission to another unit's staff via /assign/."""
+    submission to another unit's staff via /assign/. /assign/ only works at
+    Manager Checklist Review/Under Assessment, which IPDU submissions no
+    longer land at automatically (see IpduAutoRoutingTests) — set the stage
+    directly to exercise this edge case."""
 
     def setUp(self):
         self.ministry = Ministry.objects.create(code="TST-IPDU-A", name="Test Ministry IPDU-A")
@@ -188,11 +206,9 @@ class IpduStaffRoleFallbackTests(TestCase):
             format="json",
         )
         self.submission = Submission.objects.get(pk=resp.data["id"])
-        self.client.post(
-            f"/api/submissions/{self.submission.id}/transition/",
-            {"new_stage": WorkflowStage.SUBMITTED, "acknowledge_gaps": True},
-            format="json",
-        )
+        self.submission.routed_unit = RoutedUnit.IPDU
+        self.submission.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+        self.submission.save(update_fields=["routed_unit", "current_stage"])
 
     def test_cannot_assign_to_another_units_principal(self):
         resp = self.client.post(
@@ -204,93 +220,110 @@ class IpduStaffRoleFallbackTests(TestCase):
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
-class IpduBoardPaperViewSetTests(TestCase):
+class IpduBoardPaperDraftVisibilityTests(TestCase):
+    """The board paper must be viewable and editable while the submission is
+    still in Draft — before it's ever submitted, when routed_unit is still
+    blank. Manager IPDU is the sole author from the very start (no separate
+    ministry-drafting phase like ODU's PSC 2-1/ORG-3.1), so without the fix
+    in ipdu_rules.py's submission_in_board_paper_edit_phase(), this stayed
+    invisible for the entire time it was actually being written."""
+
     def setUp(self):
-        self.ministry = Ministry.objects.create(code="TST-IPDU-BP", name="Test Ministry IPDU-BP")
-        self.manager = User.objects.create_user(username="ipdu_mgr_bp", password="x")
+        self.ministry = Ministry.objects.create(code="TST-IPDU-DRAFT", name="Test Ministry IPDU-DRAFT")
+        self.manager = User.objects.create_user(username="ipdu_mgr_draft", password="x")
         Profile.objects.create(user=self.manager, role=Role.IPDU_MANAGER, ministry=self.ministry)
-        self.secretary = User.objects.create_user(username="secretary_for_ipdu_test", password="x")
-        Profile.objects.create(user=self.secretary, role=Role.PSC_SECRETARY)
-        self.other_hr = User.objects.create_user(username="other_hr_ipdu_bp", password="x")
+        self.other_hr = User.objects.create_user(username="other_hr_ipdu_draft", password="x")
         Profile.objects.create(user=self.other_hr, role=Role.MINISTRY_HR, ministry=self.ministry)
 
         self.client = APIClient()
         self.client.force_authenticate(user=self.manager)
         resp = self.client.post(
             "/api/submissions/",
-            {"title": "Test Taskforce Board Paper", "form_type_code": "IPDU-TASKFORCE", "received_at": timezone.now().isoformat()},
+            {"title": "Draft Taskforce Board Paper", "form_type_code": "IPDU-TASKFORCE", "received_at": timezone.now().isoformat()},
             format="json",
         )
         self.submission = Submission.objects.get(pk=resp.data["id"])
+        self.assertEqual(self.submission.current_stage, WorkflowStage.DRAFT)
+        self.assertEqual(self.submission.routed_unit, "")
+
+    def test_ensure_creates_draft_board_paper_while_submission_is_draft(self):
+        resp = self.client.get(f"/api/ipdu-board-papers/ensure/?submission={self.submission.id}")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(IPDUBoardPaper.objects.filter(submission=self.submission).exists())
+
+    def test_manager_can_save_content_while_submission_is_draft(self):
+        ensure_resp = self.client.get(f"/api/ipdu-board-papers/ensure/?submission={self.submission.id}")
+        paper_id = ensure_resp.data["id"]
+        resp = self.client.patch(
+            f"/api/ipdu-board-papers/{paper_id}/",
+            {"submission": self.submission.id, "background": "Test background text written while still Draft."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["background"], "Test background text written while still Draft.")
+
+    def test_other_role_still_cannot_ensure_while_submission_is_draft(self):
+        self.client.force_authenticate(user=self.other_hr)
+        resp = self.client.get(f"/api/ipdu-board-papers/ensure/?submission={self.submission.id}")
+        self.assertEqual(resp.status_code, 403)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class IpduBoardPaperReadOnlyAfterSubmitTests(TestCase):
+    """Once the submission has been handed to the Secretary (Pending
+    Secretary Approval), the board paper is content Manager IPDU wrote —
+    it stays visible for everyone with view access, but is no longer
+    editable by anyone. There's no separate board-paper submit/approve
+    action anymore (removed — see module docstring): the Submission's own
+    workflow transitions are the only way forward from here."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(code="TST-IPDU-RO", name="Test Ministry IPDU-RO")
+        self.manager = User.objects.create_user(username="ipdu_mgr_ro", password="x")
+        Profile.objects.create(user=self.manager, role=Role.IPDU_MANAGER, ministry=self.ministry)
+        self.secretary = User.objects.create_user(username="secretary_for_ipdu_ro", password="x")
+        Profile.objects.create(user=self.secretary, role=Role.PSC_SECRETARY)
+        self.other_hr = User.objects.create_user(username="other_hr_ipdu_ro", password="x")
+        Profile.objects.create(user=self.other_hr, role=Role.MINISTRY_HR, ministry=self.ministry)
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.manager)
+        resp = self.client.post(
+            "/api/submissions/",
+            {"title": "Test Taskforce Read Only", "form_type_code": "IPDU-TASKFORCE", "received_at": timezone.now().isoformat()},
+            format="json",
+        )
+        self.submission = Submission.objects.get(pk=resp.data["id"])
+        ensure_resp = self.client.get(f"/api/ipdu-board-papers/ensure/?submission={self.submission.id}")
+        self.paper_id = ensure_resp.data["id"]
+
         self.client.post(
             f"/api/submissions/{self.submission.id}/transition/",
             {"new_stage": WorkflowStage.SUBMITTED, "acknowledge_gaps": True},
             format="json",
         )
         self.submission.refresh_from_db()
-        self.assertEqual(self.submission.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        self.assertEqual(self.submission.current_stage, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
-    def test_ensure_creates_draft_board_paper(self):
+    def test_manager_can_still_view_after_submit(self):
         resp = self.client.get(f"/api/ipdu-board-papers/ensure/?submission={self.submission.id}")
         self.assertEqual(resp.status_code, 200, resp.data)
-        self.assertEqual(resp.data["status"], BoardPaperStatus.DRAFT)
-        self.assertTrue(IPDUBoardPaper.objects.filter(submission=self.submission).exists())
+        self.assertEqual(resp.data["id"], self.paper_id)
 
-    def test_other_role_cannot_ensure(self):
-        self.client.force_authenticate(user=self.other_hr)
-        resp = self.client.get(f"/api/ipdu-board-papers/ensure/?submission={self.submission.id}")
+    def test_manager_cannot_edit_after_submit(self):
+        resp = self.client.patch(
+            f"/api/ipdu-board-papers/{self.paper_id}/",
+            {"submission": self.submission.id, "background": "Trying to edit after handoff."},
+            format="json",
+        )
         self.assertEqual(resp.status_code, 403)
 
-    def _ensure_paper(self):
+    def test_secretary_can_view_after_submit(self):
+        self.client.force_authenticate(user=self.secretary)
         resp = self.client.get(f"/api/ipdu-board-papers/ensure/?submission={self.submission.id}")
-        return resp.data["id"]
-
-    def test_submit_moves_draft_to_submitted(self):
-        paper_id = self._ensure_paper()
-        resp = self.client.post(f"/api/ipdu-board-papers/{paper_id}/submit/")
         self.assertEqual(resp.status_code, 200, resp.data)
-        self.assertEqual(resp.data["status"], BoardPaperStatus.SUBMITTED)
 
-    def test_secretary_approve_gates_on_submitted_not_manager_approved(self):
-        # Regression for the easy copy-paste-from-ODU mistake: IPDU's 3-state
-        # model has no MANAGER_APPROVED, so secretary-approve must accept a
-        # paper straight from SUBMITTED.
-        paper_id = self._ensure_paper()
-        self.client.post(f"/api/ipdu-board-papers/{paper_id}/submit/")
-
-        self.client.force_authenticate(user=self.secretary)
-        resp = self.client.post(f"/api/ipdu-board-papers/{paper_id}/secretary-approve/")
-        self.assertEqual(resp.status_code, 200, resp.data)
-        self.assertEqual(resp.data["status"], BoardPaperStatus.SECRETARY_APPROVED)
-
-    def test_secretary_approve_rejects_draft(self):
-        paper_id = self._ensure_paper()
-        self.client.force_authenticate(user=self.secretary)
-        resp = self.client.post(f"/api/ipdu-board-papers/{paper_id}/secretary-approve/")
-        self.assertEqual(resp.status_code, 400)
-
-    def test_return_to_manager_requires_note(self):
-        paper_id = self._ensure_paper()
-        self.client.post(f"/api/ipdu-board-papers/{paper_id}/submit/")
-
-        self.client.force_authenticate(user=self.secretary)
-        resp = self.client.post(f"/api/ipdu-board-papers/{paper_id}/return-to-manager/", {})
-        self.assertEqual(resp.status_code, 400)
-
-    def test_return_to_manager_sends_it_back_to_draft(self):
-        paper_id = self._ensure_paper()
-        self.client.post(f"/api/ipdu-board-papers/{paper_id}/submit/")
-
-        self.client.force_authenticate(user=self.secretary)
-        resp = self.client.post(
-            f"/api/ipdu-board-papers/{paper_id}/return-to-manager/",
-            {"note": "Please add the workplan."},
-        )
-        self.assertEqual(resp.status_code, 200, resp.data)
-        self.assertEqual(resp.data["status"], BoardPaperStatus.DRAFT)
-
-    def test_manager_cannot_secretary_approve_their_own_paper(self):
-        paper_id = self._ensure_paper()
-        self.client.post(f"/api/ipdu-board-papers/{paper_id}/submit/")
-        resp = self.client.post(f"/api/ipdu-board-papers/{paper_id}/secretary-approve/")
+    def test_other_role_still_cannot_view(self):
+        self.client.force_authenticate(user=self.other_hr)
+        resp = self.client.get(f"/api/ipdu-board-papers/ensure/?submission={self.submission.id}")
         self.assertEqual(resp.status_code, 403)

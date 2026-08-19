@@ -75,6 +75,14 @@ export const BOARD_PAPER_VIEW_STAGES = [
 ]
 
 export function submissionInIpduBoardPaperEditPhase(submission) {
+  // Manager IPDU is the sole author from the very start (no separate
+  // ministry-drafting phase like ODU's PSC 2-1/ORG-3.1) — gate Draft on
+  // form type alone, since routed_unit is still blank at that point (only
+  // auto-derived once submitted). Mirrors ipdu_rules.py's
+  // submission_in_board_paper_edit_phase — keep both in sync.
+  if (submission?.current_stage === 'draft') {
+    return submissionUsesIpduBoardPaper(submission)
+  }
   return (
     submission?.routed_unit === IPDU_ROUTED_UNIT
     && BOARD_PAPER_EDIT_STAGES.includes(submission?.current_stage)

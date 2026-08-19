@@ -2765,41 +2765,25 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
 # ── IPDU Board Paper ────────────────────────────────────────────────────────────
 
 class IPDUBoardPaperSerializer(serializers.ModelSerializer):
-    """Full read/write serializer for the IPDU Board Paper — the Commission-
-    facing Task Force / Allowance Payment submission Manager IPDU prepares."""
+    """Read/write serializer for the IPDU Board Paper content — the
+    Commission-facing Task Force / Allowance Payment submission Manager IPDU
+    prepares. No status/approval-chain fields: this is just content, editable
+    while the parent Submission is in Draft; the Submission's own workflow
+    transitions (Submit, then the Secretary's approve/return) drive the
+    actual hand-off — see IPDUBoardPaperViewSet's docstring."""
 
     created_by_name = serializers.SerializerMethodField()
-    submitted_for_review_by_name = serializers.SerializerMethodField()
-    secretary_approved_by_name = serializers.SerializerMethodField()
-    returned_by_name = serializers.SerializerMethodField()
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
-
-    def _user_name(self, u):
-        if not u:
-            return ""
-        full = f"{u.first_name} {u.last_name}".strip()
-        return full or u.username
 
     def get_created_by_name(self, obj):
-        return self._user_name(obj.created_by)
-
-    def get_submitted_for_review_by_name(self, obj):
-        return self._user_name(obj.submitted_for_review_by)
-
-    def get_secretary_approved_by_name(self, obj):
-        return self._user_name(obj.secretary_approved_by)
-
-    def get_returned_by_name(self, obj):
-        return self._user_name(obj.returned_by)
+        if not obj.created_by:
+            return ""
+        full = f"{obj.created_by.first_name} {obj.created_by.last_name}".strip()
+        return full or obj.created_by.username
 
     class Meta:
         model  = IPDUBoardPaper
         fields = [
             "id", "submission",
-            "status", "status_display",
-            "submitted_for_review_at", "submitted_for_review_by_name",
-            "secretary_approved_at", "secretary_approved_by_name",
-            "returned_at", "returned_by_name", "return_note",
             # Header
             "meeting_number", "item_number", "submitted_by", "action_officer",
             "psc_file", "prepared_by",
@@ -2811,13 +2795,7 @@ class IPDUBoardPaperSerializer(serializers.ModelSerializer):
             # Meta
             "created_by", "created_by_name", "created_at", "updated_at",
         ]
-        read_only_fields = [
-            "id", "status", "status_display", "created_by", "created_by_name",
-            "created_at", "updated_at",
-            "submitted_for_review_at", "submitted_for_review_by_name",
-            "secretary_approved_at", "secretary_approved_by_name",
-            "returned_at", "returned_by_name", "return_note",
-        ]
+        read_only_fields = ["id", "created_by", "created_by_name", "created_at", "updated_at"]
 
 
 # ── Organisation Restructure Submission Data ──────────────────────────────────

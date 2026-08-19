@@ -2,10 +2,15 @@
  * IPDUBoardPaperForm.jsx
  *
  * The PSC Board Submission Paper Manager IPDU prepares for a Task Force or
- * Allowance Payment submission. Modeled closely on ODUBoardPaperForm.jsx,
- * but simpler: Manager IPDU drafts and submits it straight to the
- * Secretary — no separate principal/manager-approval step (see
- * IPDUBoardPaper's docstring in models.py).
+ * Allowance Payment submission — the content itself, editable while the
+ * parent Submission is still in Draft. This has no submit/approve chain of
+ * its own: the hand-off to the Secretary is the Submission's own single
+ * "Submit" action (see the Actions panel on the submission detail page),
+ * and the Secretary's approve/return decision is that same page's generic
+ * workflow-transition buttons — exactly like every other submission type.
+ * A second, disconnected "submit the paper" button here was confusing (two
+ * unrelated-looking submit actions for what's really one), so this form
+ * only ever saves content.
  *
  * Props:
  *   submissionId  – numeric ID of the parent Submission
@@ -13,33 +18,11 @@
  */
 
 import { useEffect, useState, useCallback } from 'react'
-import { FileSignature, Save, Send, CheckCircle2, RotateCcw, Plus, Trash2 } from 'lucide-react'
+import { FileSignature, Save, Plus, Trash2 } from 'lucide-react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import {
-  userIsIpduManager, userIsIpduBoardPaperSecretary, submissionInIpduBoardPaperEditPhase,
-} from '../../utils/ipduBoardPaper'
-
-const STATUS_LABELS = {
-  draft: 'Draft',
-  submitted: 'Submitted to Secretary',
-  secretary_approved: 'Approved by Secretary',
-}
-
-const STATUS_STYLES = {
-  draft: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
-  submitted: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  secretary_approved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-}
-
-function StatusBadge({ status }) {
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[status] || STATUS_STYLES.draft}`}>
-      {STATUS_LABELS[status] || status}
-    </span>
-  )
-}
+import { userIsIpduManager, submissionInIpduBoardPaperEditPhase } from '../../utils/ipduBoardPaper'
 
 function fmtDateTime(v) {
   if (!v) return null
@@ -183,23 +166,11 @@ export default function IPDUBoardPaperForm({ submissionId, submission, onDirtyCh
   const [form, setForm] = useState(EMPTY_FORM)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [secretaryApproving, setSecretaryApproving] = useState(false)
-  const [returning, setReturning] = useState(false)
-  const [returnNote, setReturnNote] = useState('')
 
   const isIpduManager = userIsIpduManager(user?.role)
-  const isSecretary = userIsIpduBoardPaperSecretary(user?.role)
   const inEditWindow = submissionInIpduBoardPaperEditPhase(submission)
-  const status = paper?.status || 'draft'
-
-  const canEdit = inEditWindow && status === 'draft' && isIpduManager
+  const canEdit = inEditWindow && isIpduManager
   const readOnly = !canEdit
-  const canSubmit = inEditWindow && isIpduManager && status === 'draft'
-  // Not gated to the IPDU edit window — by the time it's Submitted the
-  // submission may already have moved past IPDU's own stages to the Secretary.
-  const canSecretaryApprove = isSecretary && status === 'submitted'
-  const canReturnToManager = isSecretary && status === 'submitted'
 
   const populateForm = useCallback((data) => {
     const filled = { ...EMPTY_FORM }
@@ -267,49 +238,6 @@ export default function IPDUBoardPaperForm({ submissionId, submission, onDirtyCh
     }
   }
 
-  const handleSubmit = async () => {
-    if (!paper?.id) return
-    setSubmitting(true)
-    try {
-      const r = await api.post(`/ipdu-board-papers/${paper.id}/submit/`)
-      setPaper(r.data)
-      toast.success('Commission paper submitted to the Secretary.')
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to submit Commission paper.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleSecretaryApprove = async () => {
-    if (!paper?.id) return
-    setSecretaryApproving(true)
-    try {
-      const r = await api.post(`/ipdu-board-papers/${paper.id}/secretary-approve/`)
-      setPaper(r.data)
-      toast.success('Commission paper approved by Secretary.')
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to approve Commission paper.')
-    } finally {
-      setSecretaryApproving(false)
-    }
-  }
-
-  const handleReturnToManager = async () => {
-    if (!paper?.id || !returnNote.trim()) return
-    setReturning(true)
-    try {
-      const r = await api.post(`/ipdu-board-papers/${paper.id}/return-to-manager/`, { note: returnNote.trim() })
-      setPaper(r.data)
-      setReturnNote('')
-      toast.success('Commission paper returned to Manager IPDU for changes.')
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to return Commission paper.')
-    } finally {
-      setReturning(false)
-    }
-  }
-
   if (paper === undefined) {
     return (
       <div className="card card-compact">
@@ -337,26 +265,24 @@ export default function IPDUBoardPaperForm({ submissionId, submission, onDirtyCh
           <div className="flex items-center gap-2">
             <FileSignature size={14} className="text-slate-400" />
             <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">IPDU Commission Submission Paper</h3>
-            <StatusBadge status={status} />
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+              readOnly
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+            }`}>
+              {readOnly ? 'Submitted' : 'Draft'}
+            </span>
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500">
-            {readOnly ? 'This is the paper that was — or will be — presented to the Commission.' : 'Once submitted, only the Secretary can approve or return it.'}
+            {readOnly
+              ? 'This is the paper that was — or will be — presented to the Commission.'
+              : "Fill this in, then use the Submit button in the Actions panel to hand the whole submission to the Secretary."}
           </p>
         </div>
-        {paper?.return_note && status === 'draft' && (
-          <div className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-            <span className="font-semibold">Returned for changes:</span> {paper.return_note}
-          </div>
-        )}
-        {(paper?.submitted_for_review_at || paper?.secretary_approved_at) && (
-          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-            {paper?.submitted_for_review_at && (
-              <span>Submitted by {paper.submitted_for_review_by_name || '—'} on {fmtDateTime(paper.submitted_for_review_at)}</span>
-            )}
-            {paper?.secretary_approved_at && (
-              <span>Secretary-approved by {paper.secretary_approved_by_name || '—'} on {fmtDateTime(paper.secretary_approved_at)}</span>
-            )}
-          </div>
+        {paper?.created_at && (
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+            Started by {paper.created_by_name || '—'} on {fmtDateTime(paper.created_at)}
+          </p>
         )}
       </div>
 
@@ -466,62 +392,17 @@ export default function IPDUBoardPaperForm({ submissionId, submission, onDirtyCh
         </div>
       </div>
 
-      {(!readOnly || canSubmit || canSecretaryApprove || canReturnToManager) && (
-        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            {!readOnly && (
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="btn-outline inline-flex items-center gap-1.5"
-              >
-                <Save size={14} />
-                {saving ? 'Saving…' : 'Save Draft'}
-              </button>
-            )}
-            {canSubmit && (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="inline-flex items-center gap-1.5 text-sm font-medium bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <Send size={14} />
-                {submitting ? 'Submitting…' : 'Submit to Secretary'}
-              </button>
-            )}
-            {canSecretaryApprove && (
-              <button
-                type="button"
-                onClick={handleSecretaryApprove}
-                disabled={secretaryApproving}
-                className="inline-flex items-center gap-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <CheckCircle2 size={14} />
-                {secretaryApproving ? 'Approving…' : 'Secretary Sign-off'}
-              </button>
-            )}
-          </div>
-          {canReturnToManager && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className="input text-sm flex-1 min-w-[220px]"
-                placeholder="Note on what needs to change…"
-                value={returnNote}
-                onChange={e => setReturnNote(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={handleReturnToManager}
-                disabled={returning || !returnNote.trim()}
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-700 dark:text-rose-400 dark:hover:bg-rose-900/20 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <RotateCcw size={13} />
-                {returning ? 'Returning…' : 'Return to Manager IPDU'}
-              </button>
-            </div>
-          )}
+      {!readOnly && (
+        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="btn-outline inline-flex items-center gap-1.5"
+          >
+            <Save size={14} />
+            {saving ? 'Saving…' : 'Save Draft'}
+          </button>
         </div>
       )}
     </div>

@@ -44,6 +44,16 @@ def submission_uses_ipdu_board_paper(submission: Submission) -> bool:
 
 
 def submission_in_board_paper_edit_phase(submission: Submission) -> bool:
+    # Unlike ODU (ministry drafts PSC 2-1/ORG-3.1 first; ODU only authors the
+    # board paper once it reaches them at Manager Checklist Review), Manager
+    # IPDU is the sole author from the very start — there's no separate
+    # ministry-drafting phase to wait out. Gate Draft on form type alone:
+    # routed_unit is still blank at that point (only auto-derived once
+    # submitted), so the routed_unit check below would otherwise always fail
+    # and leave the board paper invisible for the entire time it's actually
+    # being written.
+    if submission.current_stage == WorkflowStage.DRAFT:
+        return submission_uses_ipdu_board_paper(submission)
     return (
         submission.routed_unit == RoutedUnit.IPDU
         and submission.current_stage in BOARD_PAPER_EDIT_STAGES
