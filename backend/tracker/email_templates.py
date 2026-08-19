@@ -44,9 +44,108 @@ def _stringify_context(context: dict[str, Any]) -> dict[str, str]:
     return {k: "" if v is None else str(v) for k, v in context.items()}
 
 
-def _brand_frame(inner_html: str, context: dict[str, Any]) -> str:
+# ── Icon badge + tone system ───────────────────────────────────────────────
+# Small Feather-style line icons (stroke-based, 24x24 viewBox), reused across
+# templates so every notification gets a badge matching what actually happened.
+
+# Email clients (Gmail in particular) strip inline <svg> from received HTML
+# mail as a security measure, so a line-icon badge silently renders as an
+# empty circle. Plain-text emoji glyphs are just Unicode text — they survive
+# every sanitizer and render natively everywhere, so the badge uses those.
+ICONS: dict[str, str] = {
+    "lock": "\U0001F512",  # 🔒
+    "unlock": "\U0001F513",  # 🔓
+    "shield-alert": "⚠️",  # ⚠️
+    "user-plus": "\U0001F195",  # 🆕
+    "user-check": "✅",  # ✅
+    "megaphone": "\U0001F4E3",  # 📣
+    "calendar": "\U0001F4C5",  # 📅
+    "calendar-x": "\U0001F5D3️",  # 🗓️
+    "edit-3": "✍️",  # ✍️
+    "send": "\U0001F4E8",  # 📨
+    "check-circle": "✅",  # ✅
+    "x-circle": "❌",  # ❌
+    "message-square": "\U0001F4AC",  # 💬
+    "refresh-cw": "\U0001F504",  # 🔄
+    "arrow-right-circle": "➡️",  # ➡️
+    "corner-down-left": "↩️",  # ↩️
+    "clock": "⏰",  # ⏰
+    "clipboard-list": "\U0001F4CB",  # 📋
+    "clipboard-check": "\U0001F4CB",  # 📋
+    "sun": "☀️",  # ☀️
+    "bell": "\U0001F514",  # 🔔
+}
+
+# tone → (flat fallback colour for Outlook, gradient start, gradient end)
+TONES: dict[str, tuple[str, str, str]] = {
+    "indigo": ("#4f46e5", "#6366f1", "#4338ca"),
+    "success": ("#16a34a", "#22c55e", "#15803d"),
+    "danger": ("#dc2626", "#f87171", "#b91c1c"),
+    "amber": ("#d97706", "#fbbf24", "#b45309"),
+}
+
+# slug → (icon key, tone key, on-page heading)
+SLUG_META: dict[str, tuple[str, str, str]] = {
+    "new_user_welcome": ("user-plus", "indigo", "Welcome to SCDMS"),
+    "password_reset": ("lock", "indigo", "Forgot your password?"),
+    "account_locked_user": ("lock", "danger", "Your account was locked"),
+    "account_locked_admin": ("shield-alert", "danger", "Security alert: account lockout"),
+    "account_unlocked_user": ("unlock", "success", "Your account is unlocked"),
+    "agenda_circulated": ("megaphone", "indigo", "Agenda circulated"),
+    "meeting_scheduled": ("calendar", "indigo", "Meeting scheduled"),
+    "meeting_postponed": ("calendar-x", "amber", "Meeting postponed"),
+    "minutes_signed": ("edit-3", "success", "Minutes signed"),
+    "submission_submitted": ("send", "indigo", "Submission sent to PSC"),
+    "submission_received_confirmation": ("check-circle", "success", "We've received your submission"),
+    "submission_returned_clarification": ("message-square", "amber", "Clarification needed"),
+    "submission_resubmitted": ("refresh-cw", "indigo", "Submission resubmitted"),
+    "submission_forwarded_commission": ("arrow-right-circle", "indigo", "Forwarded to the Commission"),
+    "submission_deferred_back_hr": ("corner-down-left", "amber", "Deferred back to your ministry"),
+    "submission_pending_dg_endorsement": ("clock", "amber", "Awaiting DG endorsement"),
+    "submission_returned_to_hr": ("corner-down-left", "amber", "Returned for changes"),
+    "submission_approved": ("check-circle", "success", "Submission approved"),
+    "submission_rejected": ("x-circle", "danger", "Submission not approved"),
+    "submission_stage_changed": ("refresh-cw", "indigo", "Submission status updated"),
+    "submission_assigned_officer": ("user-check", "indigo", "A submission was allocated to you"),
+    "submission_ready_for_manager": ("clipboard-check", "indigo", "Ready for your review"),
+    "task_assigned": ("clipboard-list", "indigo", "A task was assigned to you"),
+    "task_due_soon": ("clock", "amber", "Task due soon"),
+    "subtask_due_soon": ("clock", "amber", "Subtask due soon"),
+    "daily_brief_staff": ("sun", "indigo", "Your daily brief"),
+    "daily_brief_manager": ("sun", "indigo", "Your daily brief"),
+}
+
+_DEFAULT_META = ("bell", "indigo", "SCDMS notification")
+
+# Shared CTA button style — used by every default template body and by the
+# auto-generated fallback below, so all emails get the same pill button.
+BTN_STYLE = (
+    "display:inline-block;background-color:#4f46e5;color:#ffffff;"
+    "text-decoration:none;padding:13px 26px;border-radius:999px;"
+    "font:700 14px/1 Arial,sans-serif;letter-spacing:.2px;"
+)
+
+
+def _icon_badge_html(icon_key: str, tone_key: str) -> str:
+    solid, grad_from, grad_to = TONES.get(tone_key, TONES["indigo"])
+    emoji = ICONS.get(icon_key, ICONS["bell"])
+    return (
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'<td class="opsc-badge" width="64" height="64" align="center" valign="middle" style="'
+        f"width:64px;height:64px;border-radius:50%;background-color:{solid};"
+        f"background-image:linear-gradient(135deg,{grad_from},{grad_to});"
+        'font-size:28px;line-height:64px;text-align:center;mso-line-height-rule:exactly;">'
+        f"{emoji}"
+        "</td></tr></table>"
+    )
+
+
+def _brand_frame(inner_html: str, context: dict[str, Any], *, slug: str | None = None) -> str:
     """
-    Wrap template HTML in OPSC-branded shell so all emails share identity.
+    Wrap template HTML in the OPSC-branded shell so all emails share one
+    smooth, elegant identity: soft lavender background, a white rounded
+    card, a tone-coded animated icon badge for the notification type, and a
+    minimal footer.
     """
     if not inner_html:
         inner_html = ""
@@ -55,38 +154,61 @@ def _brand_frame(inner_html: str, context: dict[str, Any]) -> str:
         return inner_html
 
     portal_url = html.escape(get_frontend_base_url(), quote=True)
+    icon_key, tone_key, heading = SLUG_META.get(slug or "", _DEFAULT_META)
+    icon_badge = _icon_badge_html(icon_key, tone_key)
 
     return (
-        '<div data-opsc-email-frame="1" style="margin:0;padding:24px;background:#e6edf8;">'
-        '<div style="max-width:680px;margin:0 auto;background:#ffffff;'
-        'border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;">'
-        '<div style="background:#0f172a;padding:18px 22px;color:#ffffff;'
-        'border-bottom:1px solid #dbe3ef;">'
-        '<div style="font:700 17px/1.3 Arial,sans-serif;letter-spacing:.2px;">'
-        "SCDMS — Office of the Public Service Commission"
-        "</div>"
-        '<div style="font:500 12px/1.4 Arial,sans-serif;color:#cbd5e1;margin-top:4px;">'
+        "<!DOCTYPE html>"
+        '<html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<meta name="color-scheme" content="light only">'
+        "<title>SCDMS</title>"
+        "<style>"
+        "@keyframes opscPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}"
+        ".opsc-badge{animation:opscPulse 2.4s ease-in-out infinite}"
+        "</style></head>"
+        '<body data-opsc-email-frame="1" style="margin:0;padding:0;background-color:#e8ecfb;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+        'style="background-color:#e8ecfb;">'
+        '<tr><td align="center" style="padding:40px 16px;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">'
+        "<tr><td>"
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="'
+        "background-color:#ffffff;border-radius:22px;overflow:hidden;"
+        'box-shadow:0 12px 32px -10px rgba(79,70,229,.25);">'
+        '<tr><td style="padding:40px 36px 38px 36px;">'
+        f"{icon_badge}"
+        '<div style="font:700 25px/1.3 \'Segoe UI\',Arial,sans-serif;color:#312e81;margin:22px 0 14px 0;">'
+        f"{html.escape(heading)}</div>"
+        '<div style="color:#1e293b;font:400 15px/1.65 Arial,sans-serif;">'
+        f"{inner_html}</div>"
+        "</td></tr>"
+        "</table>"
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;">'
+        '<tr><td align="center" style="font:700 13px/1.5 Arial,sans-serif;color:#4338ca;letter-spacing:.3px;">SCDMS</td></tr>'
+        '<tr><td align="center" style="padding-top:4px;font:400 12px/1.7 Arial,sans-serif;color:#64748b;">'
+        "Office of the Public Service Commission<br>"
         "Government of the Republic of Vanuatu"
-        "</div>"
-        "</div>"
-        '<div style="padding:22px 24px;color:#0f172a;font:400 15px/1.65 Arial,sans-serif;">'
-        f"{inner_html}"
-        "</div>"
-        '<div style="border-top:1px solid #dbe3ef;padding:12px 24px;'
-        'background:#f1f5f9;color:#334155;font:500 12px/1.5 Arial,sans-serif;">'
-        "This is an automated message from the Submission &amp; Commission Decision Management System (SCDMS). "
-        f'Open portal: <a href="{portal_url}" style="color:#1e40af;text-decoration:none;font-weight:700;">{portal_url}</a>'
-        "</div>"
-        "</div>"
-        "</div>"
+        "</td></tr>"
+        '<tr><td align="center" style="padding-top:8px;font:400 12px/1.6 Arial,sans-serif;">'
+        f'<a href="{portal_url}" style="color:#4f46e5;text-decoration:none;font-weight:700;">{portal_url}</a>'
+        "</td></tr>"
+        '<tr><td align="center" style="padding-top:16px;font:400 11px/1.6 Arial,sans-serif;color:#94a3b8;">'
+        "This is an automated message from the Submission &amp; Commission Decision Management System (SCDMS)."
+        "</td></tr>"
+        "</table>"
+        "</td></tr>"
+        "</table>"
+        "</td></tr>"
+        "</table>"
+        "</body></html>"
     )
 
 
-def auto_html_from_text(text_body: str, context: dict[str, Any]) -> str:
+def auto_html_from_text(text_body: str, context: dict[str, Any], *, slug: str | None = None) -> str:
     """
     Render a professional default HTML wrapper when a template has no explicit HTML body.
     """
-    safe_text = html.escape(text_body or "").replace("\n", "<br>")
     ctx = _stringify_context(context or {})
 
     action_url = (
@@ -96,6 +218,17 @@ def auto_html_from_text(text_body: str, context: dict[str, Any]) -> str:
         or ctx.get("login_url")
         or ""
     ).strip()
+
+    # The plain-text body usually ends with a "Label: {{url}}" line (e.g.
+    # "View submission: https://..."); once we add a real button + fallback
+    # link below, repeating that raw URL a third time inside the paragraph
+    # just reads as clutter, so drop that trailing line from the HTML copy.
+    body_for_html = text_body or ""
+    if action_url:
+        lines = body_for_html.rstrip().split("\n")
+        if lines and action_url in lines[-1] and len(lines[-1]) < len(action_url) + 40:
+            body_for_html = "\n".join(lines[:-1]).rstrip()
+    safe_text = html.escape(body_for_html).replace("\n", "<br>")
     action_label = "Open in Commission Decision App"
     if ctx.get("reset_url"):
         action_label = "Reset password"
@@ -111,17 +244,16 @@ def auto_html_from_text(text_body: str, context: dict[str, Any]) -> str:
         safe_action_url = html.escape(action_url, quote=True)
         cta_html = (
             f'<p style="margin:0 0 16px 0;">'
-            f'<a href="{safe_action_url}" '
-            f'style="display:inline-block;background:#2563eb;color:#ffffff;'
-            f'text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">'
+            f'<a href="{safe_action_url}" style="{BTN_STYLE}">'
             f"{html.escape(action_label)}</a></p>"
             f'<p style="margin:0 0 16px 0;color:#64748b;font-size:13px;word-break:break-all;">'
-            f'<a href="{safe_action_url}" style="color:#2563eb;">{safe_action_url}</a></p>'
+            f'<a href="{safe_action_url}" style="color:#4f46e5;">{safe_action_url}</a></p>'
         )
 
     return _brand_frame(
         f'<div style="margin:0 0 16px 0;">{safe_text}</div>{cta_html}',
         context,
+        slug=slug,
     )
 
 
@@ -149,9 +281,9 @@ def render_template_record(tpl, context: dict[str, Any]):
     text_body = render_template_string(tpl.body_text_template, context)
     html_body = render_template_string(tpl.body_html_template, context).strip()
     if not html_body:
-        html_body = auto_html_from_text(text_body, context)
+        html_body = auto_html_from_text(text_body, context, slug=tpl.slug)
     else:
-        html_body = _brand_frame(html_body, context)
+        html_body = _brand_frame(html_body, context, slug=tpl.slug)
     return subject, text_body, html_body
 
 

@@ -88,7 +88,6 @@ export default function SubmissionLog() {
   // trash their own Draft submissions (views.py SubmissionViewSet.destroy) —
   // the list here only needed a matching frontend affordance.
   const canDeleteDrafts = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
-  const showActionsColumn = isAdmin || canDeleteDrafts
   const isComplianceUser = user && isComplianceRole(user.role)
   // Also require the role to be one SubmissionForm.jsx actually accepts —
   // otherwise roles outside that list (e.g. senior_admin_officer, psc_commissioner)
@@ -182,6 +181,12 @@ export default function SubmissionLog() {
 
   const rows = listQuery.data?.results ?? []
   const totalCount = listQuery.data?.count ?? 0
+  // Anyone may delete a draft they authored themselves, on top of the
+  // isAdmin/canDeleteDrafts roles above — matches the backend check in
+  // SubmissionViewSet.destroy(). logged_by is created_by.username; comparing
+  // usernames avoids needing a raw created_by id in SubmissionListSerializer.
+  const isOwnDraft = row => row.current_stage === 'draft' && row.logged_by === user?.username
+  const showActionsColumn = isAdmin || canDeleteDrafts || rows.some(isOwnDraft)
   const kanbanRows = kanbanQuery.data?.results ?? []
   const kanbanCount = kanbanQuery.data?.count ?? 0
 
@@ -687,10 +692,11 @@ export default function SubmissionLog() {
                               />
                             </>
                           )}
-                          {/* Ministry roles may only trash their own Draft
-                              submissions — matches the backend check in
-                              SubmissionViewSet.destroy(). */}
-                          {(isAdmin || (canDeleteDrafts && r.current_stage === 'draft')) && (
+                          {/* Ministry roles may trash any Draft submission in
+                              their ministry; anyone may trash a Draft they
+                              authored themselves — matches the backend check
+                              in SubmissionViewSet.destroy(). */}
+                          {(isAdmin || (canDeleteDrafts && r.current_stage === 'draft') || isOwnDraft(r)) && (
                             <BaseButton
                               variant="ghost" size="icon" iconOnly
                               aria-label="Delete"

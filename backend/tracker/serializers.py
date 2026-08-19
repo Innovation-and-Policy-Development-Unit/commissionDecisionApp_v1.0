@@ -1775,6 +1775,7 @@ class AgendaItemSerializer(serializers.ModelSerializer):
     submission_title     = serializers.CharField(source="submission.title", read_only=True)
     submission_ministry  = serializers.SerializerMethodField()
     category_display     = serializers.SerializerMethodField()
+    form_type_display    = serializers.SerializerMethodField()
 
     def get_submission_ministry(self, obj):
         return obj.submission.ministry.name if obj.submission.ministry else ""
@@ -1782,6 +1783,13 @@ class AgendaItemSerializer(serializers.ModelSerializer):
     def get_category_display(self, obj):
         from .agenda_sections import agenda_section_label
         return agenda_section_label(obj.category or "")
+
+    def get_form_type_display(self, obj):
+        from .models import PSCFormType
+        if not obj.form_type_code:
+            return ""
+        ft = PSCFormType.objects.filter(code=obj.form_type_code).first()
+        return ft.name if ft else obj.form_type_code
 
     def validate_category(self, value):
         from rest_framework.exceptions import ValidationError
@@ -1801,10 +1809,11 @@ class AgendaItemSerializer(serializers.ModelSerializer):
         fields = (
             "id", "meeting", "submission", "submission_reference", "submission_title",
             "submission_ministry", "sequence", "category", "category_display",
+            "form_type_code", "form_type_display",
             "matters_arising_agenda_no", "matters_arising_meeting_ref",
             "agenda_blurb", "agenda_blurb_processed",
         )
-        read_only_fields = ("agenda_blurb", "agenda_blurb_processed")
+        read_only_fields = ("agenda_blurb", "agenda_blurb_processed", "form_type_code")
 
 
 class MeetingSerializer(serializers.ModelSerializer):
@@ -2708,6 +2717,16 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
     manager_approved_by_name = serializers.SerializerMethodField()
     secretary_approved_by_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    # Header fields that used to be hand-typed (meeting_number, item_number,
+    # submitted_by, date_submitted_to_pscb) are now computed from real data —
+    # the submission's actual agenda placement, and the Secretary who signed
+    # off — instead of stored free text a drafter had to guess at before any
+    # of it existed. See get_meeting_reference/get_agenda_item_number below;
+    # "Submitted By" and "submitted to PSCB" reuse secretary_approved_by_name
+    # and submitted_for_review_at above, which already carry this.
+    meeting_reference = serializers.SerializerMethodField()
+    meeting_date = serializers.SerializerMethodField()
+    agenda_item_number = serializers.SerializerMethodField()
 
     def _user_name(self, u):
         if not u:
@@ -2732,6 +2751,24 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
     def get_returned_by_name(self, obj):
         return self._user_name(obj.returned_by)
 
+    def get_meeting_reference(self, obj):
+        meeting = obj.submission.scheduled_meeting
+        return meeting.reference_number if meeting else None
+
+    def get_meeting_date(self, obj):
+        meeting = obj.submission.scheduled_meeting
+        return meeting.date if meeting else None
+
+    def get_agenda_item_number(self, obj):
+        meeting = obj.submission.scheduled_meeting
+        if not meeting:
+            return None
+        item = obj.submission.agenda_placements.filter(meeting=meeting).first()
+        if not item:
+            return None
+        from .agenda_sections import agenda_section_label
+        return f"{agenda_section_label(item.category)} — Item {item.sequence}"
+
     class Meta:
         model  = ODURestructureBoardPaper
         fields = [
@@ -2742,9 +2779,9 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
             "secretary_approved_at", "secretary_approved_by_name",
             "returned_at", "returned_by_name", "return_note",
             # Header
-            "meeting_number", "item_number", "submitted_by", "action_officer",
-            "psc_file", "prepared_by",
-            "date_submitted_to_psc_by_ministry", "date_submitted_to_pscb",
+            "meeting_reference", "meeting_date", "agenda_item_number",
+            "action_officer", "psc_file", "prepared_by",
+            "date_submitted_to_psc_by_ministry",
             # Body
             "subject", "background", "issues", "discussions", "odu_assessment",
             # Costing
@@ -2759,6 +2796,7 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
             "manager_approved_at", "manager_approved_by_name",
             "secretary_approved_at", "secretary_approved_by_name",
             "returned_at", "returned_by_name", "return_note",
+            "meeting_reference", "meeting_date", "agenda_item_number",
         ]
 
 
@@ -2770,9 +2808,21 @@ class IPDUBoardPaperSerializer(serializers.ModelSerializer):
     prepares. No status/approval-chain fields: this is just content, editable
     while the parent Submission is in Draft; the Submission's own workflow
     transitions (Submit, then the Secretary's approve/return) drive the
-    actual hand-off — see IPDUBoardPaperViewSet's docstring."""
+    actual hand-off — see IPDUBoardPaperViewSet's docstring.
+
+    meeting_number/item_number/submitted_by/date_submitted_to_pscb used to be
+    hand-typed header fields. They're now computed instead: the submission
+    isn't on any agenda while this is being drafted, so meeting/item can only
+    be known once it's actually placed; "Submitted By" is institutionally
+    always the Secretary, not a per-paper fact; and "submitted to PSCB" is
+    exactly when the submission itself left Draft (there's no board-paper-
+    level submit step here, unlike ODU's)."""
 
     created_by_name = serializers.SerializerMethodField()
+    meeting_reference = serializers.SerializerMethodField()
+    meeting_date = serializers.SerializerMethodField()
+    agenda_item_number = serializers.SerializerMethodField()
+    date_submitted_to_pscb = serializers.SerializerMethodField()
 
     def get_created_by_name(self, obj):
         if not obj.created_by:
@@ -2780,14 +2830,43 @@ class IPDUBoardPaperSerializer(serializers.ModelSerializer):
         full = f"{obj.created_by.first_name} {obj.created_by.last_name}".strip()
         return full or obj.created_by.username
 
+    def get_meeting_reference(self, obj):
+        meeting = obj.submission.scheduled_meeting
+        return meeting.reference_number if meeting else None
+
+    def get_meeting_date(self, obj):
+        meeting = obj.submission.scheduled_meeting
+        return meeting.date if meeting else None
+
+    def get_agenda_item_number(self, obj):
+        meeting = obj.submission.scheduled_meeting
+        if not meeting:
+            return None
+        item = obj.submission.agenda_placements.filter(meeting=meeting).first()
+        if not item:
+            return None
+        from .agenda_sections import agenda_section_label
+        return f"{agenda_section_label(item.category)} — Item {item.sequence}"
+
+    def get_date_submitted_to_pscb(self, obj):
+        from .models import WorkflowStage
+
+        event = (
+            obj.submission.stage_events
+            .exclude(stage=WorkflowStage.DRAFT)
+            .order_by("occurred_at")
+            .first()
+        )
+        return event.occurred_at if event else None
+
     class Meta:
         model  = IPDUBoardPaper
         fields = [
             "id", "submission",
             # Header
-            "meeting_number", "item_number", "submitted_by", "action_officer",
-            "psc_file", "prepared_by",
-            "date_submitted_to_psc_by_ministry", "date_submitted_to_pscb",
+            "meeting_reference", "meeting_date", "agenda_item_number",
+            "date_submitted_to_pscb",
+            "action_officer", "psc_file", "prepared_by",
             # Body
             "subject", "background", "issues", "discussions", "recommendation",
             # Deliverables / allowance table
@@ -2795,7 +2874,11 @@ class IPDUBoardPaperSerializer(serializers.ModelSerializer):
             # Meta
             "created_by", "created_by_name", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "created_by", "created_by_name", "created_at", "updated_at"]
+        read_only_fields = [
+            "id", "created_by", "created_by_name", "created_at", "updated_at",
+            "meeting_reference", "meeting_date", "agenda_item_number",
+            "date_submitted_to_pscb",
+        ]
 
 
 # ── Organisation Restructure Submission Data ──────────────────────────────────

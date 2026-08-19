@@ -529,17 +529,27 @@ def _render_agenda_pdf(meeting) -> bytes | None:
         from weasyprint import HTML
 
         from .agenda_sections import agenda_section_label
+        from .models import PSCFormType
+
+        items = list(meeting.agenda_items.select_related("submission").order_by("category", "sequence"))
+        type_labels = dict(
+            PSCFormType.objects.filter(
+                code__in={i.form_type_code for i in items if i.form_type_code}
+            ).values_list("code", "name")
+        )
 
         rows = []
-        for item in meeting.agenda_items.select_related("submission").order_by("category", "sequence"):
+        for item in items:
             sub = item.submission
             ref = _html.escape((getattr(sub, "reference_number", "") or "") if sub else "")
             title = _html.escape((getattr(sub, "title", "") or "") if sub else "")
             section = _html.escape(agenda_section_label(item.category or "") or "Other")
+            type_label = _html.escape(type_labels.get(item.form_type_code, item.form_type_code) or "")
             rows.append(
-                f"<tr><td>{item.sequence}</td><td>{section}</td><td>{ref}</td><td>{title}</td></tr>"
+                f"<tr><td>{item.sequence}</td><td>{section}</td><td>{type_label}</td>"
+                f"<td>{ref}</td><td>{title}</td></tr>"
             )
-        body_rows = "".join(rows) or "<tr><td colspan='4'>No agenda items.</td></tr>"
+        body_rows = "".join(rows) or "<tr><td colspan='5'>No agenda items.</td></tr>"
         doc = (
             "<html><body style=\"font-family:Arial,sans-serif;font-size:12px;color:#1e293b;\">"
             f"<h2 style=\"margin:0 0 4px 0;\">Agenda — {_html.escape(meeting.reference_number or '')}</h2>"
@@ -548,6 +558,7 @@ def _render_agenda_pdf(meeting) -> bytes | None:
             "<thead><tr style=\"background:#f1f5f9;\">"
             "<th style=\"border:1px solid #cbd5e1;text-align:left;\">#</th>"
             "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Section</th>"
+            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Type</th>"
             "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Reference</th>"
             "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Title</th>"
             "</tr></thead>"

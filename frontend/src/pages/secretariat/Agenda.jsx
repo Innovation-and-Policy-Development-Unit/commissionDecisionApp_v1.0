@@ -12,7 +12,7 @@
  *   N. [Item]  …
  *   [Signature block]
  */
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, Fragment } from 'react'
 import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
@@ -79,6 +79,8 @@ export default function Agenda() {
   const confirm = useConfirm()
   const { user } = useAuth()
   const printRef = useRef()
+  const advancedMenuRef = useRef()
+  const [advancedMenuOpen, setAdvancedMenuOpen] = useState(false)
   const {
     sections: CATEGORIES,
     categoryOrder: CATEGORY_ORDER,
@@ -155,6 +157,18 @@ export default function Agenda() {
 
   useEffect(() => { fetchMeetings() }, [])
   useEffect(() => { if (selectedId) fetchItems(selectedId) }, [selectedId])
+
+  // Close the "Advanced" (manual placement) menu on outside click
+  useEffect(() => {
+    if (!advancedMenuOpen) return
+    const onClickOutside = (e) => {
+      if (advancedMenuRef.current && !advancedMenuRef.current.contains(e.target)) {
+        setAdvancedMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [advancedMenuOpen])
 
   const selectedMeeting = useMemo(
     () => meetings.find(m => String(m.id) === String(selectedId)),
@@ -307,8 +321,9 @@ export default function Agenda() {
   const isAdminUser = Boolean(user?.is_superuser || user?.is_staff)
   const isSecretaryOrAdmin = isAdminUser
     || ['psc_secretary', 'senior_admin_officer', 'psc_admin'].includes(role)
-  // Stage-B agenda chain roles: SAO builds & submits → Secretary reviews & forwards → Chairman endorses.
-  const isAgendaBuilder    = ['senior_admin_officer', 'psc_admin'].includes(role) || isAdminUser
+  // Stage-B agenda chain: Senior Admin Officer and Secretary can both build/
+  // edit the agenda's content (canManageAgenda below); only the Secretary
+  // submits it to the Chairman, who then endorses it.
   const isSecretary        = ['psc_secretary', 'psc_admin'].includes(role) || isAdminUser
   const isChairperson      = ['chairperson', 'psc_admin'].includes(role) || isAdminUser
   const canSittingPack = isAdminUser || [
@@ -352,15 +367,6 @@ export default function Agenda() {
           action={
             selectedMeeting && (
               <div className="flex items-center gap-2 flex-wrap justify-end">
-                {canManageAgenda && (
-                  <Link
-                    to={`/secretariat/meetings/${selectedId}/workspace`}
-                    className="btn-primary flex items-center gap-2 px-4 py-2"
-                    title="Build the agenda visually — drag backlog submissions onto sections, or use Fill from queue"
-                  >
-                    <LayoutGrid size={15} /> Sitting Workspace
-                  </Link>
-                )}
                 {canSittingPack && (
                   <Link
                     to={`/secretariat/agenda/sitting-pack?meeting=${selectedId}`}
@@ -378,14 +384,53 @@ export default function Agenda() {
                   <Printer size={15} /> Print / Export
                 </button>
                 )}
-                {!readOnly && (
-                <button
-                  onClick={() => { fetchSubmissions(); setModalOpen(true) }}
-                  className="btn-outline flex items-center gap-2"
-                  title="Add a single item directly, e.g. to record a Matters Arising reference"
-                >
-                  <Plus size={16} /> Add Item
-                </button>
+                {/* Manual placement tools — approved submissions place themselves
+                    automatically; these are only needed for exceptions (no meeting
+                    scheduled yet, carry-overs, or reordering), so they're tucked
+                    behind Advanced rather than sitting alongside everyday actions. */}
+                {(canManageAgenda || !readOnly) && (
+                  <div className="relative" ref={advancedMenuRef}>
+                    <button
+                      onClick={() => setAdvancedMenuOpen(o => !o)}
+                      className="btn-outline flex items-center gap-2 px-4 py-2"
+                      title="Manual placement tools for exceptions — approved submissions place themselves automatically"
+                    >
+                      Advanced <ChevronDown size={15} />
+                    </button>
+                    {advancedMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-72 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-20 py-1">
+                        {canManageAgenda && (
+                          <Link
+                            to={`/secretariat/meetings/${selectedId}/workspace`}
+                            onClick={() => setAdvancedMenuOpen(false)}
+                            className="flex items-start gap-2 px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                          >
+                            <LayoutGrid size={15} className="mt-0.5 shrink-0" />
+                            <span>
+                              <span className="block font-medium text-slate-800 dark:text-slate-100">Sitting Workspace</span>
+                              <span className="block text-xs text-slate-500 dark:text-slate-400">
+                                Drag-and-drop for exceptions: no meeting scheduled yet, carry-overs, or reordering.
+                              </span>
+                            </span>
+                          </Link>
+                        )}
+                        {!readOnly && (
+                          <button
+                            onClick={() => { fetchSubmissions(); setModalOpen(true); setAdvancedMenuOpen(false) }}
+                            className="w-full flex items-start gap-2 px-4 py-2.5 text-sm text-left hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                          >
+                            <Plus size={16} className="mt-0.5 shrink-0" />
+                            <span>
+                              <span className="block font-medium text-slate-800 dark:text-slate-100">Add Item</span>
+                              <span className="block text-xs text-slate-500 dark:text-slate-400">
+                                One-off adds, e.g. a Matters Arising reference. Normal approvals place themselves.
+                              </span>
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )
@@ -461,12 +506,10 @@ export default function Agenda() {
             status={agendaStatus}
             isCompleted={isCompleted}
             isSecretaryOrAdmin={isSecretaryOrAdmin}
-            isAgendaBuilder={isAgendaBuilder}
             isSecretary={isSecretary}
             isChairperson={isChairperson}
             busy={workflowBusy}
-            onSubmit={() => doWorkflowAction('submit-agenda',   'Submit to Secretary')}
-            onForward={() => doWorkflowAction('forward-agenda', 'Forward to Chairman')}
+            onSubmit={() => doWorkflowAction('submit-to-chairman', 'Submit to Chairman')}
             onApprove={() => doWorkflowAction('approve-agenda', 'Endorse Agenda')}
             onCirculate={() => doWorkflowAction('circulate-agenda', 'Circulate Agenda')}
             onAdopt={() => doWorkflowAction('adopt-agenda', 'Adopt Agenda')}
@@ -625,26 +668,43 @@ export default function Agenda() {
             {CATEGORY_ORDER.slice(2).map(cat => {
               const catItems = numberedItems[cat] || []
               if (catItems.length === 0) return null
+              // Sub-group by submission type (e.g. all Voluntary Resignations
+              // together) — only show the sub-headers when the category
+              // actually mixes more than one type.
+              const distinctTypes = new Set(catItems.map(it => it.form_type_code || ''))
+              const showTypeHeaders = distinctTypes.size > 1
               return (
                 <div key={cat}>
                   <AgendaSection label={categoryLabel(cat)} />
-                  {catItems.map((item, idx) => (
-                    <StandardRow
-                      key={item.id}
-                      item={item}
-                      isCompleted={readOnly}
-                      canDefer={isSecretaryOrAdmin}
-                      editingItem={editingItem}
-                      setEditingItem={setEditingItem}
-                      onRemove={handleRemove}
-                      onCategoryUpdate={handleCategoryUpdate}
-                      onMoveUp={() => handleMove(item, 'up')}
-                      onMoveDown={() => handleMove(item, 'down')}
-                      onPushToNext={() => handlePushToNext(item)}
-                      isFirst={idx === 0}
-                      isLastInCat={idx === catItems.length - 1}
-                    />
-                  ))}
+                  {catItems.map((item, idx) => {
+                    const isNewTypeGroup = showTypeHeaders &&
+                      (idx === 0 || item.form_type_code !== catItems[idx - 1].form_type_code)
+                    return (
+                      <Fragment key={item.id}>
+                        {isNewTypeGroup && (
+                          <div className="px-8 pt-2 pb-1">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 print:text-black">
+                              {item.form_type_display || 'Other'}
+                            </p>
+                          </div>
+                        )}
+                        <StandardRow
+                          item={item}
+                          isCompleted={readOnly}
+                          canDefer={isSecretaryOrAdmin}
+                          editingItem={editingItem}
+                          setEditingItem={setEditingItem}
+                          onRemove={handleRemove}
+                          onCategoryUpdate={handleCategoryUpdate}
+                          onMoveUp={() => handleMove(item, 'up')}
+                          onMoveDown={() => handleMove(item, 'down')}
+                          onPushToNext={() => handlePushToNext(item)}
+                          isFirst={idx === 0}
+                          isLastInCat={idx === catItems.length - 1}
+                        />
+                      </Fragment>
+                    )
+                  })}
                 </div>
               )
             })}
@@ -653,29 +713,10 @@ export default function Agenda() {
             {totalItems === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400 print:hidden">
                 <ClipboardList size={40} className="mb-3 opacity-40" />
-                <p className="text-sm">No agenda items yet. Click <strong>Add Item</strong> to begin.</p>
+                <p className="text-sm">No agenda items yet. Approved submissions place themselves automatically — or use <strong>Advanced → Add Item</strong> for a one-off.</p>
               </div>
             )}
 
-            {/* ── Signature block ── */}
-            <div className="px-8 py-8 mt-4 border-t border-slate-200 dark:border-slate-700 print:border-slate-400">
-              <div className="flex items-end justify-between">
-                <div className="space-y-1">
-                  <div className="w-48 border-b border-slate-400 mb-1" />
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 print:text-black">
-                    Manager – CSU
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 print:text-black">
-                    Office of the Public Service Commission
-                  </p>
-                </div>
-                <div className="text-right space-y-1 print:hidden">
-                  <p className="text-xs text-slate-400">
-                    {totalItems} submission{totalItems !== 1 ? 's' : ''} on agenda
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       ) : (
@@ -829,13 +870,12 @@ export default function Agenda() {
 // Agenda workflow status + action bar
 const WORKFLOW_STEPS = [
   { key: 'draft',             label: 'Draft' },
-  { key: 'with_secretary',    label: 'With Secretary' },
   { key: 'with_chairman',     label: 'With Chairman' },
   { key: 'chairman_approved', label: 'Chairman Endorsed' },
   { key: 'circulated',        label: 'Circulated' },
 ]
 
-function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isAgendaBuilder, isSecretary, isChairperson, busy, onSubmit, onForward, onApprove, onCirculate, onAdopt, agendaAdopted }) {
+function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isSecretary, isChairperson, busy, onSubmit, onApprove, onCirculate, onAdopt, agendaAdopted }) {
   const currentIdx = WORKFLOW_STEPS.findIndex(s => s.key === status)
 
   return (
@@ -876,22 +916,13 @@ function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isAgendaBu
       {/* Action button(s) for current step */}
       {!isCompleted && (
         <div className="flex flex-wrap gap-2">
-          {status === 'draft' && isAgendaBuilder && (
+          {status === 'draft' && isSecretary && (
             <button
               onClick={onSubmit}
               disabled={busy}
               className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
             >
-              <Send size={14} /> Submit to Secretary
-            </button>
-          )}
-          {status === 'with_secretary' && isSecretary && (
-            <button
-              onClick={onForward}
-              disabled={busy}
-              className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
-            >
-              <ChevronsRight size={14} /> Forward to Chairman
+              <Send size={14} /> Submit to Chairman
             </button>
           )}
           {status === 'with_chairman' && isChairperson && (

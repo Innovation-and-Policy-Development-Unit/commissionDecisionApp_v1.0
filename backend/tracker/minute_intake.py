@@ -42,7 +42,7 @@ def _agenda_title_description(item: AgendaItem) -> tuple[str, str]:
 def ensure_intake_rows(meeting: Meeting) -> list[MinuteAgendaIntake]:
     """Create empty intake rows for each agenda item if missing."""
     rows = []
-    for item in meeting.agenda_items.select_related("submission").order_by("sequence", "id"):
+    for item in meeting.agenda_items.select_related("submission").order_by("category", "sequence", "id"):
         title, description = _agenda_title_description(item)
         row, _ = MinuteAgendaIntake.objects.get_or_create(
             meeting=meeting,
@@ -75,7 +75,7 @@ def apply_intake_to_minutes(meeting: Meeting, user) -> Minutes:
     rows = (
         MinuteAgendaIntake.objects.filter(meeting=meeting)
         .select_related("agenda_item", "agenda_item__submission")
-        .order_by("agenda_item__sequence", "agenda_item__id")
+        .order_by("agenda_item__category", "agenda_item__sequence", "agenda_item__id")
     )
 
     agenda_items = []

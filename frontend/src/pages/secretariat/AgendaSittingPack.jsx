@@ -241,6 +241,13 @@ export default function AgendaSittingPack() {
                       </div>
                     )
                   }
+                  if (row.type === 'subheading') {
+                    return (
+                      <div key={row.id} className="px-4 pt-2 pb-1">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{row.label}</span>
+                      </div>
+                    )
+                  }
                   const { item } = row
                   const selected = selectedItemId === row.id
                   const blurbPending = item.agenda_blurb_processed === false && !item.agenda_blurb

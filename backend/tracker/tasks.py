@@ -612,7 +612,7 @@ def generate_submission_brief(self, submission_id: int, force: bool = False):
 
 def _meeting_agenda_block(meeting) -> str:
     lines = []
-    for item in meeting.agenda_items.select_related("submission").order_by("sequence"):
+    for item in meeting.agenda_items.select_related("submission").order_by("category", "sequence"):
         sub = item.submission
         ref = getattr(sub, "reference_number", "") if sub else ""
         title = getattr(sub, "title", "") if sub else ""

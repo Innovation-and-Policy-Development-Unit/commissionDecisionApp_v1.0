@@ -53,8 +53,8 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p style=\"margin:6px 0 0 0;\"><strong>Temporary password:</strong> {{initial_password}}</p>"
             "</div>"
             "<p style=\"margin:0 0 16px 0;\">"
-            "<a href=\"{{login_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;"
-            "text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;\">"
+            "<a href=\"{{login_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;"
+            "text-decoration:none;padding:10px 18px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">"
             "Sign in to SCDMS</a>"
             "</p>"
             "<p style=\"margin:0 0 10px 0;color:#475569;font-size:13px;word-break:break-all;\">"
@@ -91,11 +91,11 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p style=\"margin:0 0 10px 0;\">You requested a password reset for your account.</p>"
             "<p style=\"margin:0 0 16px 0;\"><strong>Username:</strong> {{username}}</p>"
             "<p style=\"margin:0 0 16px 0;\">"
-            "<a href=\"{{reset_url}}\" style=\"display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">Reset password</a>"
+            "<a href=\"{{reset_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">Reset password</a>"
             "</p>"
             "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">This link expires in {{expiry_hours}} hour(s).</p>"
             "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">If the button does not open, copy this link:</p>"
-            "<p style=\"margin:0 0 16px 0;word-break:break-all;font-size:13px;\"><a href=\"{{reset_url}}\" style=\"color:#2563eb;\">{{reset_url}}</a></p>"
+            "<p style=\"margin:0 0 16px 0;word-break:break-all;font-size:13px;\"><a href=\"{{reset_url}}\" style=\"color:#4f46e5;\">{{reset_url}}</a></p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">If you did not request this, you can ignore this email.</p>"
         ),
     },
@@ -156,7 +156,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p style=\"margin:6px 0 0 0;\"><strong>IP address:</strong> {{ip_address}}</p>"
             "</div>"
             "<p style=\"margin:0 0 16px 0;\">"
-            "<a href=\"{{admin_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">Open Admin panel</a>"
+            "<a href=\"{{admin_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">Open Admin panel</a>"
             "</p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">Permanently locked accounts can only be unlocked by a super administrator.</p>"
         ),
@@ -186,7 +186,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p style=\"margin:6px 0 0 0;\"><strong>Time:</strong> {{unlocked_time}}</p>"
             "</div>"
             "<p style=\"margin:0 0 16px 0;\">"
-            "<a href=\"{{login_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">Sign in to SCDMS</a>"
+            "<a href=\"{{login_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">Sign in to SCDMS</a>"
             "</p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">If you did not expect this, or you're not sure "
             "why your account was locked in the first place, contact your SCDMS administrator.</p>"
@@ -213,7 +213,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<strong>{{meeting_date}}</strong> ({{meeting_reference}}).</p>"
             "<p style=\"margin:0 0 16px 0;\">The approved agenda is attached, and is also available in the Agenda menu.</p>"
             "<p style=\"margin:0 0 16px 0;\">"
-            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the agenda</a>"
+            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">View the agenda</a>"
             "</p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">During the sitting, open the Sitting Pack to follow each item.</p>"
         ),
@@ -253,7 +253,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Submission deadline</td><td style=\"padding:3px 0;color:#b91c1c;\"><strong>{{submission_deadline}}</strong></td></tr>"
             "</table>"
             "<p style=\"margin:0 0 16px 0;\">"
-            "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the sitting</a>"
+            "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">View the sitting</a>"
             "</p>"
             "<p style=\"margin:0;color:#64748b;font-size:13px;\">Please ensure any submissions for this sitting are lodged before the submission deadline.</p>"
         ),
@@ -297,7 +297,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "</table>"
             "<p style=\"margin:0 0 16px 0;font-weight:600;\">{{deadline_change_note}}</p>"
             "<p style=\"margin:0 0 16px 0;\">"
-            "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the sitting</a>"
+            "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">View the sitting</a>"
             "</p>"
         ),
     },
@@ -320,7 +320,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p style=\"margin:0 0 14px 0;\">The signed minutes for the Commission sitting of "
             "<strong>{{meeting_date}}</strong> ({{meeting_reference}}) have been uploaded and are now the official record.</p>"
             "<p style=\"margin:0 0 16px 0;\">"
-            "<a href=\"{{minutes_url}}\" style=\"display:inline-block;background:#1e40af;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;\">View the minutes</a>"
+            "<a href=\"{{minutes_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">View the minutes</a>"
             "</p>"
         ),
     },
@@ -593,7 +593,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p>{{greeting}}</p>"
             "<p>Your daily brief for <strong>{{brief_date}}</strong>.</p>"
             "{{sections_html}}"
-            "<p style=\"margin-top:1.5em;\"><a href=\"{{portal_url}}\" style=\"color:#2563eb;\">"
+            "<p style=\"margin-top:1.5em;\"><a href=\"{{portal_url}}\" style=\"color:#4f46e5;\">"
             "Open SCDMS</a></p></div>"
         ),
     },
@@ -615,7 +615,7 @@ DEFAULT_EMAIL_TEMPLATES = [
             "<p>{{greeting}}</p>"
             "<p>Manager daily brief for <strong>{{brief_date}}</strong>.</p>"
             "{{kpis_html}}"
-            "<p style=\"margin-top:1.5em;\"><a href=\"{{portal_url}}\" style=\"color:#2563eb;\">"
+            "<p style=\"margin-top:1.5em;\"><a href=\"{{portal_url}}\" style=\"color:#4f46e5;\">"
             "Open SCDMS</a></p></div>"
         ),
     },
@@ -631,6 +631,90 @@ SAMPLE_EMAIL_CONTEXTS = {
         "reset_url": "http://localhost:8080/auth/reset-password/confirm?token=sample",
         "expiry_hours": "1",
         "login_url": "http://localhost:8080/auth/login",
+    },
+    "account_locked_user": {
+        "lock_summary": "temporarily locked after 5 failed sign-in attempts",
+        "unlock_instructions": "Your account will unlock automatically in 15 minutes, or a super administrator can unlock it sooner.",
+        "ip_address": "203.0.113.42",
+        "attempt_time": "19 Aug 2026, 14:32",
+        "login_url": "http://localhost:8080/auth/login",
+    },
+    "account_locked_admin": {
+        "target_username": "hr.finance",
+        "target_email": "hr@mfem.gov.vu",
+        "lock_summary": "permanently locked after repeated failed sign-in attempts",
+        "ip_address": "203.0.113.42",
+        "attempt_time": "19 Aug 2026, 14:32",
+        "admin_url": "http://localhost:8080/admin/users",
+    },
+    "account_unlocked_user": {
+        "unlocked_time": "19 Aug 2026, 15:10",
+        "unlocked_by": "Admin",
+        "login_url": "http://localhost:8080/auth/login",
+    },
+    "agenda_circulated": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_date": "30 June 2026",
+        "agenda_url": "http://localhost:8080/secretariat/agenda",
+    },
+    "minutes_signed": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_date": "30 June 2026",
+        "minutes_url": "http://localhost:8080/secretariat/minutes",
+    },
+    "submission_approved": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Senior appointment — Ministry of Finance",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "new_stage": "Approved",
+        "decision_label": "approved",
+    },
+    "submission_rejected": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Senior appointment — Ministry of Finance",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "new_stage": "Rejected",
+        "decision_label": "not approved",
+    },
+    "submission_returned_clarification": {
+        "submission_reference": "PSC-2026-0001",
+        "submission_title": "Direct Appointment — Harbour Master, Ports and Marine",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "new_stage": "Returned for Clarification",
+    },
+    "submission_resubmitted": {
+        "submission_reference": "PSC-2026-0001",
+        "submission_title": "Direct Appointment — Harbour Master, Ports and Marine",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "new_stage": "Under Assessment",
+    },
+    "submission_forwarded_commission": {
+        "submission_reference": "PSC-2026-0001",
+        "submission_title": "Direct Appointment — Harbour Master, Ports and Marine",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "new_stage": "Forwarded to Commission",
+    },
+    "submission_deferred_back_hr": {
+        "submission_reference": "PSC-2026-0001",
+        "submission_title": "Direct Appointment — Harbour Master, Ports and Marine",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "new_stage": "Deferred to Ministry",
+    },
+    "daily_brief_staff": {
+        "brief_date": "19 August 2026",
+        "sections_html": (
+            '<div style="margin:10px 0;padding:12px 14px;background:#f8fafc;border-radius:10px;">'
+            "<strong>3 tasks due this week</strong> &middot; 2 submissions awaiting your review</div>"
+        ),
+        "portal_url": "http://localhost:8080",
+    },
+    "daily_brief_manager": {
+        "brief_date": "19 August 2026",
+        "kpis_html": (
+            '<div style="margin:10px 0;padding:12px 14px;background:#f8fafc;border-radius:10px;">'
+            "<strong>12 open submissions</strong> &middot; 4 overdue tasks &middot; 1 sitting this week</div>"
+        ),
+        "portal_url": "http://localhost:8080",
     },
     "submission_submitted": {
         "submission_reference": "PSC-2026-0042",

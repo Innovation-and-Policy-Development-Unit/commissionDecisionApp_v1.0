@@ -12,7 +12,7 @@ from rest_framework.test import APIClient
 
 from tracker.models import (
     AgendaItem, AgendaSection, Meeting, MeetingStatus, Ministry, Profile,
-    Role, Submission, WorkflowStage,
+    PSCFormType, Role, Submission, WorkflowStage,
 )
 
 
@@ -90,6 +90,58 @@ class AgendaAutoPlacementTests(TestCase):
         other_item = AgendaItem.objects.get(submission=other)
         self.assertEqual(other_item.category, "appointment")
         self.assertEqual(other_item.sequence, 1)
+
+    def test_interleaved_types_within_shared_category_are_grouped(self):
+        """Real seed data often maps several submission types onto one shared
+        AgendaSection (e.g. Resignation/Retirement/Death). Grouping must be by
+        submission *type* (form_type_code), not just by that shared category,
+        so mixed types don't end up interleaved in arrival order."""
+        shared_section = AgendaSection.objects.create(
+            code="resignation_retirement_death", label="Resignation / Retirement / Death",
+            display_order=6, is_active=True,
+        )
+        vr_type = PSCFormType.objects.create(
+            code="psc_voluntary_resignation", name="Voluntary Resignation",
+            agenda_category=shared_section.code,
+        )
+        ret_type = PSCFormType.objects.create(
+            code="psc_retirement", name="Retirement",
+            agenda_category=shared_section.code,
+        )
+
+        def typed_submission(title, form_type_code):
+            return Submission.objects.create(
+                title=title,
+                received_at=timezone.now(),
+                created_by=self.secretary,
+                ministry=self.ministry,
+                is_internal=False,
+                form_type_code=form_type_code,
+                current_stage=WorkflowStage.PENDING_SECRETARY_APPROVAL,
+            )
+
+        vr1 = typed_submission("Resignation 1", vr_type.code)
+        ret1 = typed_submission("Retirement 1", ret_type.code)
+        vr2 = typed_submission("Resignation 2", vr_type.code)
+        ret2 = typed_submission("Retirement 2", ret_type.code)
+        vr3 = typed_submission("Resignation 3", vr_type.code)
+
+        for sub in (vr1, ret1, vr2, ret2, vr3):
+            res = self._approve(sub)
+            self.assertEqual(res.status_code, 200)
+
+        items = list(
+            AgendaItem.objects.filter(meeting=self.meeting, category=shared_section.code)
+            .order_by("sequence")
+        )
+        self.assertEqual(
+            [i.submission_id for i in items],
+            [vr1.id, vr2.id, vr3.id, ret1.id, ret2.id],
+        )
+        self.assertEqual([i.sequence for i in items], [1, 2, 3, 4, 5])
+        self.assertEqual([i.form_type_code for i in items], [
+            vr_type.code, vr_type.code, vr_type.code, ret_type.code, ret_type.code,
+        ])
 
     def test_no_duplicate_agenda_item_if_already_manually_placed(self):
         sub = self._submission("Already placed")

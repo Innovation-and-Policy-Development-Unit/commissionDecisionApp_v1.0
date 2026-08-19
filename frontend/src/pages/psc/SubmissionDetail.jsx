@@ -188,15 +188,37 @@ export default function SubmissionDetail() {
   const [showPreview, setShowPreview] = useState(false)
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ title: '', agenda_category: '', notes: '', notify_emails: [] })
+  // 'full' is the admin quick-edit (title/agenda section/notes/notify emails,
+  // unchanged); 'limited' is what a draft's own creator gets — title and
+  // submission type only, matching the backend's field allow-list for that
+  // path in SubmissionViewSet.perform_update.
+  const [editMode, setEditMode] = useState('full')
+  const [editForm, setEditForm] = useState({ title: '', agenda_category: '', notes: '', notify_emails: [], form_type_code: '' })
   const [editBusy, setEditBusy] = useState(false)
   const [editError, setEditError] = useState('')
+  const [editTypeOptions, setEditTypeOptions] = useState([])
+  const [editTypeOptionsLoading, setEditTypeOptionsLoading] = useState(false)
   const [officers, setOfficers] = useState([])
   const [selectedOfficer, setSelectedOfficer] = useState('')
   const [allocateBusy, setAllocateBusy] = useState(false)
   const [assessmentFile, setAssessmentFile] = useState(null)
   const isAdmin = user?.role === 'psc_admin'
   const isUnitManager  = user && UNIT_MANAGER_ROLES.includes(user.role)
+  // Same rule as SubmissionLog.jsx / SubmissionViewSet.destroy(): PSC Admin
+  // may delete anything; ministry_hr/dept_admin/head_of_agency may delete
+  // any draft in their own ministry; anyone may delete a draft they
+  // authored themselves.
+  const canDeleteDraftRole = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
+  const isOwnDraft = submission?.current_stage === 'draft' && submission?.logged_by === user?.username
+  const canDeleteSubmission = isAdmin
+    || (canDeleteDraftRole && submission?.current_stage === 'draft')
+    || isOwnDraft
+  // A draft's own creator may fix its title and submission type before
+  // submitting, even without one of the roles above — matches the
+  // "own-draft" allow-list branch in SubmissionViewSet.perform_update
+  // (title/form_type_code/form_category only, nothing else). Admin already
+  // gets the fuller edit modal below, so this is for everyone else.
+  const canEditOwnDraft = !isAdmin && isOwnDraft
   // Allocation is an assessment-stage action — routed_unit is set once at intake and
   // never cleared, so without this the panel would stay usable at every later stage too.
   // Matches STAGE_META's "Assessment" category (constants/stages.js): checklist review
@@ -837,6 +859,26 @@ const stageDescriptions = {
     }
   }
 
+  const openOwnDraftEdit = async () => {
+    setEditMode('limited')
+    setEditForm(f => ({ ...f, title: submission.title || '', form_type_code: submission.form_type_code || '' }))
+    setEditError('')
+    setEditOpen(true)
+    setEditTypeOptionsLoading(true)
+    try {
+      const params = submission.agenda_category
+        ? { agenda_category: submission.agenda_category, active_only: '1' }
+        : { active_only: '1' }
+      const { data } = await api.get('/form-types/', { params })
+      const rows = data.results ?? data
+      setEditTypeOptions(Array.isArray(rows) ? rows : [])
+    } catch {
+      setEditTypeOptions([])
+    } finally {
+      setEditTypeOptionsLoading(false)
+    }
+  }
+
   const handleTabChange = async (tab) => {
     if (tab === activeTab) return
     if (activeTab === 'commission_paper' && boardPaperDirty) {
@@ -870,31 +912,42 @@ const stageDescriptions = {
           <div className="flex items-center gap-2">
             <BaseButton variant="outline" as={Link} to="/submissions">Back to log</BaseButton>
             {isAdmin && (
-              <>
-                <BaseButton
-                  variant="outline"
-                  icon={<Pencil size={14} />}
-                  onClick={() => {
-                    setEditForm({
-                      title: submission.title || '',
-                      agenda_category: submission.agenda_category || '',
-                      notes: submission.notes || '',
-                      notify_emails: submission.notify_emails || [],
-                    })
-                    setEditError('')
-                    setEditOpen(true)
-                  }}
-                >
-                  Edit
-                </BaseButton>
-                <BaseButton
-                  variant="danger"
-                  icon={<Trash2 size={14} />}
-                  onClick={handleDeleteSubmission}
-                >
-                  Delete
-                </BaseButton>
-              </>
+              <BaseButton
+                variant="outline"
+                icon={<Pencil size={14} />}
+                onClick={() => {
+                  setEditMode('full')
+                  setEditForm(f => ({
+                    ...f,
+                    title: submission.title || '',
+                    agenda_category: submission.agenda_category || '',
+                    notes: submission.notes || '',
+                    notify_emails: submission.notify_emails || [],
+                  }))
+                  setEditError('')
+                  setEditOpen(true)
+                }}
+              >
+                Edit
+              </BaseButton>
+            )}
+            {canEditOwnDraft && (
+              <BaseButton
+                variant="outline"
+                icon={<Pencil size={14} />}
+                onClick={openOwnDraftEdit}
+              >
+                Edit
+              </BaseButton>
+            )}
+            {canDeleteSubmission && (
+              <BaseButton
+                variant="danger"
+                icon={<Trash2 size={14} />}
+                onClick={handleDeleteSubmission}
+              >
+                Delete
+              </BaseButton>
             )}
           </div>
         }
@@ -1945,14 +1998,26 @@ const stageDescriptions = {
             onSubmit={async e => {
               e.preventDefault()
               if (!editForm.title.trim()) { setEditError('Title is required.'); return }
+              if (editMode === 'limited' && !editForm.form_type_code) {
+                setEditError('Please select a submission type.'); return
+              }
               setEditBusy(true); setEditError('')
               try {
-                const { data } = await api.patch(`/submissions/${id}/`, {
-                  title: editForm.title.trim(),
-                  agenda_category: editForm.agenda_category || undefined,
-                  notes: editForm.notes,
-                  notify_emails: editForm.notify_emails,
-                })
+                const payload = editMode === 'limited'
+                  ? {
+                      title: editForm.title.trim(),
+                      form_type_code: editForm.form_type_code,
+                      ...(editTypeOptions.find(t => t.code === editForm.form_type_code)?.form_category
+                        ? { form_category: editTypeOptions.find(t => t.code === editForm.form_type_code).form_category }
+                        : {}),
+                    }
+                  : {
+                      title: editForm.title.trim(),
+                      agenda_category: editForm.agenda_category || undefined,
+                      notes: editForm.notes,
+                      notify_emails: editForm.notify_emails,
+                    }
+                const { data } = await api.patch(`/submissions/${id}/`, payload)
                 setSubmission(data)
                 toast.success('Submission updated.')
                 setEditOpen(false)
@@ -1973,27 +2038,41 @@ const stageDescriptions = {
               onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
               placeholder="Enter submission title"
             />
-            <BaseSelect
-              label="Agenda section"
-              placeholder="— None —"
-              value={editForm.agenda_category}
-              options={agendaSections.map(s => ({ value: s.value, label: s.label }))}
-              onChange={(_, value) => setEditForm(f => ({ ...f, agenda_category: value }))}
-            />
-            <BaseTextarea
-              label="Notes"
-              rows={3}
-              value={editForm.notes}
-              onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-              placeholder="Internal notes (optional)"
-            />
-            <EmailChipInput
-              label="Notify additional people (optional)"
-              hint="They'll get an email with the reference number and a link to track progress — no account needed."
-              value={editForm.notify_emails}
-              onChange={emails => setEditForm(f => ({ ...f, notify_emails: emails }))}
-              max={8}
-            />
+            {editMode === 'limited' ? (
+              <BaseSelect
+                label="Submission type"
+                required
+                disabled={editTypeOptionsLoading}
+                placeholder={editTypeOptionsLoading ? 'Loading…' : '— Select submission type —'}
+                value={editForm.form_type_code}
+                options={editTypeOptions.map(t => ({ value: t.code, label: t.name }))}
+                onChange={(_, value) => setEditForm(f => ({ ...f, form_type_code: value }))}
+              />
+            ) : (
+              <>
+                <BaseSelect
+                  label="Agenda section"
+                  placeholder="— None —"
+                  value={editForm.agenda_category}
+                  options={agendaSections.map(s => ({ value: s.value, label: s.label }))}
+                  onChange={(_, value) => setEditForm(f => ({ ...f, agenda_category: value }))}
+                />
+                <BaseTextarea
+                  label="Notes"
+                  rows={3}
+                  value={editForm.notes}
+                  onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Internal notes (optional)"
+                />
+                <EmailChipInput
+                  label="Notify additional people (optional)"
+                  hint="They'll get an email with the reference number and a link to track progress — no account needed."
+                  value={editForm.notify_emails}
+                  onChange={emails => setEditForm(f => ({ ...f, notify_emails: emails }))}
+                  max={8}
+                />
+              </>
+            )}
             <div className="flex gap-3 pt-1">
               <BaseButton type="submit" variant="primary" loading={editBusy} loadingLabel="Saving">
                 Save Changes

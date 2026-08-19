@@ -39,7 +39,7 @@ class TrashBinTests(TestCase):
             form_type_code="PSC 3.6",
             ministry=self.ministry,
             received_at=timezone.now(),
-            created_by=self.hr,
+            created_by=kw.pop("created_by", self.hr),
             current_stage=stage,
             **kw,
         )
@@ -96,6 +96,28 @@ class TrashBinTests(TestCase):
         sub = self._submission(stage=WorkflowStage.UNDER_ASSESSMENT)
         self.client.force_authenticate(user=self.officer)
         self.assertEqual(self.client.delete(f"/api/submissions/{sub.id}/").status_code, 403)
+
+    def test_creator_can_trash_own_draft_regardless_of_role(self):
+        # PSC_OFFICER isn't in {MINISTRY_HR, DEPT_ADMIN, HEAD_OF_AGENCY} and
+        # isn't admin, but deleting a draft they authored themselves must
+        # still work.
+        own_draft = self._submission(stage=WorkflowStage.DRAFT, created_by=self.officer)
+        self.client.force_authenticate(user=self.officer)
+        self.assertEqual(self.client.delete(f"/api/submissions/{own_draft.id}/").status_code, 204)
+
+    def test_creator_cannot_trash_own_submission_once_past_draft(self):
+        own_submitted = self._submission(stage=WorkflowStage.SUBMITTED, created_by=self.officer)
+        self.client.force_authenticate(user=self.officer)
+        self.assertEqual(
+            self.client.delete(f"/api/submissions/{own_submitted.id}/").status_code, 403,
+        )
+
+    def test_creator_cannot_trash_someone_elses_draft_without_a_qualifying_role(self):
+        others_draft = self._submission(stage=WorkflowStage.DRAFT, created_by=self.hr)
+        self.client.force_authenticate(user=self.officer)
+        self.assertEqual(
+            self.client.delete(f"/api/submissions/{others_draft.id}/").status_code, 403,
+        )
 
     # ── Trash list + restore ─────────────────────────────────────────────────
 

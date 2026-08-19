@@ -4,8 +4,10 @@ Covers GET /api/meetings/{id}/workspace/ and the section-aware agenda reorder
 used to move items between lanes by drag-and-drop.
 """
 
+from datetime import timedelta
+
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -15,6 +17,7 @@ from tracker.models import (
 )
 
 
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
 class SittingWorkspaceTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -34,9 +37,16 @@ class SittingWorkspaceTests(TestCase):
             code="ws_dis", label="Discipline", display_order=2, is_active=True,
         )
 
+        # Must stay ahead of `timezone.now()` — the submissions below are
+        # received_at=now, and Meeting.effective_cutoff (date minus
+        # CUTOFF_DAYS_BEFORE) has to fall after that or is_carryover()
+        # reclassifies them as late, landing them in "carryover" instead of
+        # "backlog" and silently emptying the set this test asserts against.
+        # A hardcoded date (e.g. "2026-07-01") eventually falls into the past
+        # and breaks this the same way.
         self.meeting = Meeting.objects.create(
-            title="Workspace Sitting", date="2026-07-01", time="09:00",
-            venue="Boardroom", min_items=2, max_items=10,
+            title="Workspace Sitting", date=(timezone.now() + timedelta(days=30)).date(),
+            time="09:00", venue="Boardroom", min_items=2, max_items=10,
         )
 
         # One submission already placed on the agenda, one still in the backlog.
@@ -111,8 +121,17 @@ class SittingWorkspaceTests(TestCase):
         self.assertEqual(res.status_code, 400)
 
 
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
 class AgendaApprovalChainTests(TestCase):
-    """Stage-B chain: SAO builds & submits → Secretary forwards → Chairman endorses."""
+    """Stage-B chain: Secretary submits directly → Chairman endorses.
+
+    There used to be a separate "with_secretary" holding stage the Senior
+    Admin Officer had to submit into before the Secretary could forward it.
+    Removed at the Secretary's request — see AgendaStatus's docstring. The
+    Senior Admin Officer still has full agenda edit rights (canManageAgenda
+    on the frontend covers both roles identically); only the *submit* action
+    is Secretary-only now.
+    """
 
     def setUp(self):
         self.client = APIClient()
@@ -133,19 +152,13 @@ class AgendaApprovalChainTests(TestCase):
         return self.meeting.agenda_status
 
     def test_full_chain_advances_through_each_party(self):
-        # 1. SAO submits the draft to the Secretary.
-        self.client.force_authenticate(user=self.sao)
-        res = self.client.post(f"/api/meetings/{self.meeting.id}/submit-agenda/")
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(self._status(), "with_secretary")
-
-        # 2. Secretary forwards to the Chairman.
+        # 1. Secretary submits the draft directly to the Chairman.
         self.client.force_authenticate(user=self.secretary)
-        res = self.client.post(f"/api/meetings/{self.meeting.id}/forward-agenda/")
+        res = self.client.post(f"/api/meetings/{self.meeting.id}/submit-to-chairman/")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(self._status(), "with_chairman")
 
-        # 3. Chairman endorses.
+        # 2. Chairman endorses.
         self.client.force_authenticate(user=self.chair)
         res = self.client.post(f"/api/meetings/{self.meeting.id}/approve-agenda/")
         self.assertEqual(res.status_code, 200)
@@ -153,22 +166,16 @@ class AgendaApprovalChainTests(TestCase):
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.agenda_approved_by_id, self.chair.id)
 
-    def test_secretary_cannot_submit_draft(self):
-        self.client.force_authenticate(user=self.secretary)
-        res = self.client.post(f"/api/meetings/{self.meeting.id}/submit-agenda/")
-        self.assertEqual(res.status_code, 403)
-
-    def test_chairman_cannot_endorse_before_secretary_forwards(self):
+    def test_sao_cannot_submit_to_chairman(self):
+        # SAO can still edit the agenda's content, but only the Secretary
+        # may advance its status.
         self.client.force_authenticate(user=self.sao)
-        self.client.post(f"/api/meetings/{self.meeting.id}/submit-agenda/")
-        # Still only with_secretary — Chairman endorsement must be blocked.
+        res = self.client.post(f"/api/meetings/{self.meeting.id}/submit-to-chairman/")
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(self._status(), "draft")
+
+    def test_chairman_cannot_endorse_while_still_in_draft(self):
         self.client.force_authenticate(user=self.chair)
         res = self.client.post(f"/api/meetings/{self.meeting.id}/approve-agenda/")
         self.assertEqual(res.status_code, 400)
-        self.assertEqual(self._status(), "with_secretary")
-
-    def test_sao_cannot_forward_to_chairman(self):
-        self.client.force_authenticate(user=self.sao)
-        self.client.post(f"/api/meetings/{self.meeting.id}/submit-agenda/")
-        res = self.client.post(f"/api/meetings/{self.meeting.id}/forward-agenda/")
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(self._status(), "draft")

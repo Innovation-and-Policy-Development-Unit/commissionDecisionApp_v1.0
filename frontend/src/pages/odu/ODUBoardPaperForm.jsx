@@ -59,12 +59,12 @@ function Field({ label, children, span }) {
   )
 }
 
-function ReadField({ label, value, span }) {
+function ReadField({ label, value, span, placeholder = '—' }) {
   return (
     <div className={span ? 'sm:col-span-2' : ''}>
       <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words">
-        {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">—</span>}
+        {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">{placeholder}</span>}
       </p>
     </div>
   )
@@ -177,10 +177,15 @@ function CostingTable({ rows, onChange, readOnly }) {
   )
 }
 
+// Meeting/item number, "Submitted By", and "submitted to PSCB" aren't part
+// of the editable form any more — they're read-only, computed server-side
+// (meeting_reference/agenda_item_number on the fetched `paper`; "Submitted
+// By" and "submitted to PSCB" reuse the existing secretary_approved_by_name/
+// submitted_for_review_at approval-chain fields), since there's nothing
+// correct for the drafter to type here before any of those have happened.
 const EMPTY_FORM = {
-  meeting_number: '', item_number: '', submitted_by: 'Secretary', action_officer: '',
-  psc_file: '', prepared_by: '',
-  date_submitted_to_psc_by_ministry: '', date_submitted_to_pscb: '',
+  action_officer: '', psc_file: '', prepared_by: '',
+  date_submitted_to_psc_by_ministry: '',
   subject: '', background: '', issues: '', discussions: '', odu_assessment: '',
   costing_rows: [], costing_notes: '',
 }
@@ -265,7 +270,6 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
         submission: submissionId,
         ...form,
         date_submitted_to_psc_by_ministry: form.date_submitted_to_psc_by_ministry || null,
-        date_submitted_to_pscb: form.date_submitted_to_pscb || null,
       }
       let r
       if (paper?.id) {
@@ -383,30 +387,42 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
         <div>
           <SectionHeader title="Header" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Meeting Number, Item Number, Submitted By, and Date Submitted
+                to PSCB are always read-only — computed from the submission's
+                actual agenda placement and approval chain, never hand-typed. */}
+            <ReadField
+              label="Meeting Number"
+              value={paper?.meeting_reference}
+              placeholder="— pending agenda placement —"
+            />
+            <ReadField
+              label="Item Number"
+              value={paper?.agenda_item_number}
+              placeholder="— pending agenda placement —"
+            />
+            <ReadField
+              label="Submitted By"
+              value={paper?.secretary_approved_by_name || 'Secretary'}
+            />
+            <ReadField
+              label="Date Submitted to PSCB"
+              value={fmtDateTime(paper?.submitted_for_review_at)}
+              placeholder="— not yet submitted —"
+            />
             {readOnly ? (
               <>
-                <ReadField label="Meeting Number" value={form.meeting_number} />
-                <ReadField label="Item Number" value={form.item_number} />
-                <ReadField label="Submitted By" value={form.submitted_by} />
                 <ReadField label="Action Officer" value={form.action_officer} />
                 <ReadField label="PSC File" value={form.psc_file} />
                 <ReadField label="Prepared By" value={form.prepared_by} />
                 <ReadField label="Date Submitted to PSC by Ministry" value={form.date_submitted_to_psc_by_ministry} />
-                <ReadField label="Date Submitted to PSCB" value={form.date_submitted_to_pscb} />
               </>
             ) : (
               <>
-                <Field label="Meeting Number"><input className="input" value={form.meeting_number} onChange={e => set('meeting_number', e.target.value)} /></Field>
-                <Field label="Item Number"><input className="input" value={form.item_number} onChange={e => set('item_number', e.target.value)} /></Field>
-                <Field label="Submitted By"><input className="input" value={form.submitted_by} onChange={e => set('submitted_by', e.target.value)} placeholder="e.g. Secretary" /></Field>
                 <Field label="Action Officer"><input className="input" value={form.action_officer} onChange={e => set('action_officer', e.target.value)} placeholder="Name, Manager ODU" /></Field>
-                <Field label="PSC File"><input className="input" value={form.psc_file} onChange={e => set('psc_file', e.target.value)} /></Field>
+                <Field label="PSC File"><input className="input" value={form.psc_file} onChange={e => set('psc_file', e.target.value)} placeholder="Physical/paper file no., if applicable — optional" /></Field>
                 <Field label="Prepared By"><input className="input" value={form.prepared_by} onChange={e => set('prepared_by', e.target.value)} placeholder="Name, Principal OD Analyst" /></Field>
                 <Field label="Date Submitted to PSC by Ministry">
                   <input type="date" className="input" value={form.date_submitted_to_psc_by_ministry || ''} onChange={e => set('date_submitted_to_psc_by_ministry', e.target.value)} />
-                </Field>
-                <Field label="Date Submitted to PSCB">
-                  <input type="date" className="input" value={form.date_submitted_to_pscb || ''} onChange={e => set('date_submitted_to_pscb', e.target.value)} />
                 </Field>
               </>
             )}

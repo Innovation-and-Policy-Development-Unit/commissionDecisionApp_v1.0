@@ -107,14 +107,19 @@ class MeetingStatus(models.TextChoices):
 
 
 class AgendaStatus(models.TextChoices):
-    # Stage-B agenda workflow — a three-party chain:
-    #   draft             — Senior Administration Officer builds the agenda, then submits →
-    #   with_secretary    — PSC Secretary reviews, then forwards →
+    # Stage-B agenda workflow:
+    #   draft             — Senior Admin Officer builds/edits the agenda (Secretary can too);
+    #                        the Secretary submits it directly to the Chairman →
     #   with_chairman     — Chairperson endorses →
     #   chairman_approved — endorsed; ready to circulate →
     #   circulated        — issued to Commission members.
+    # There used to be a separate "with_secretary" holding stage between draft
+    # and with_chairman, requiring the Senior Admin Officer to hand the draft
+    # to the Secretary before the Secretary could forward it. Removed at the
+    # Secretary's request: since approved submissions already auto-place onto
+    # the correct agenda position, that manual hand-off added no value — the
+    # Secretary can just submit straight to the Chairman.
     DRAFT = "draft", "Draft"
-    WITH_SECRETARY = "with_secretary", "With Secretary for Review"
     WITH_CHAIRMAN = "with_chairman", "With Chairman for Endorsement"
     CHAIRMAN_APPROVED = "chairman_approved", "Chairman Endorsed"
     CIRCULATED = "circulated", "Circulated to Members"
@@ -636,7 +641,7 @@ class Meeting(models.Model):
     # ── Agenda approval gate (SOP Stage 3, steps 2-3) ─────────────────────
     agenda_status = models.CharField(
         max_length=24, choices=AgendaStatus.choices, default=AgendaStatus.DRAFT,
-        help_text="Tracking: draft → with Secretary → with Chairman → endorsed → circulated.",
+        help_text="Tracking: draft → with Chairman → endorsed → circulated.",
     )
     agenda_approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
@@ -733,6 +738,16 @@ class AgendaItem(models.Model):
         blank=True,
         default="",
         help_text="Agenda section code (AgendaSection.code) for this item.",
+    )
+    form_type_code = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=(
+            "Denormalized from submission.form_type_code at placement time. "
+            "Items of the same type are kept contiguous within a category's "
+            "sequence so the agenda groups e.g. all Voluntary Resignations together."
+        ),
     )
     # Matters Arising only — reference back to a previous meeting/agenda item
     matters_arising_meeting_ref = models.CharField(
@@ -4022,14 +4037,17 @@ class ODURestructureBoardPaper(models.Model):
     )
 
     # ── Header ────────────────────────────────────────────────────────────────
-    meeting_number = models.CharField(max_length=100, blank=True)
-    item_number    = models.CharField(max_length=100, blank=True)
-    submitted_by   = models.CharField(max_length=255, blank=True, default="Secretary")
+    # meeting_number, item_number, submitted_by, and date_submitted_to_pscb
+    # used to be hand-typed here — but a submission isn't on any agenda yet
+    # while this paper is being drafted, "Submitted By" is institutionally
+    # always the Secretary (not a per-paper fact), and "submitted to PSCB" is
+    # exactly submitted_for_review_at above. All four are now served as
+    # read-only computed fields (ODUBoardPaperSerializer) instead of stored
+    # here, so there's nothing here to go stale.
     action_officer = models.CharField(max_length=255, blank=True)
     psc_file       = models.CharField(max_length=255, blank=True)
     prepared_by    = models.CharField(max_length=255, blank=True)
     date_submitted_to_psc_by_ministry = models.DateField(null=True, blank=True)
-    date_submitted_to_pscb            = models.DateField(null=True, blank=True)
 
     # ── Body ──────────────────────────────────────────────────────────────────
     subject         = models.CharField(max_length=512, blank=True)
@@ -4107,14 +4125,19 @@ class IPDUBoardPaper(models.Model):
     )
 
     # ── Header ────────────────────────────────────────────────────────────────
-    meeting_number = models.CharField(max_length=100, blank=True)
-    item_number    = models.CharField(max_length=100, blank=True)
-    submitted_by   = models.CharField(max_length=255, blank=True, default="Secretary")
+    # meeting_number, item_number, submitted_by, date_submitted_to_pscb, and
+    # date_submitted_to_psc_by_ministry used to be hand-typed here — but a
+    # submission isn't on any agenda yet while this paper is being drafted,
+    # "Submitted By" is institutionally always the Secretary (not a per-paper
+    # fact), "submitted to PSCB" is exactly when the submission itself left
+    # Draft, and "submitted to PSC by ministry" never applied to IPDU in the
+    # first place (IPDU drafts its own papers; it isn't a ministry submitting
+    # one to PSC). All are now served as read-only computed fields
+    # (IPDUBoardPaperSerializer) instead of stored here, so there's nothing
+    # here to go stale.
     action_officer = models.CharField(max_length=255, blank=True)
     psc_file       = models.CharField(max_length=255, blank=True)
     prepared_by    = models.CharField(max_length=255, blank=True)
-    date_submitted_to_psc_by_ministry = models.DateField(null=True, blank=True)
-    date_submitted_to_pscb            = models.DateField(null=True, blank=True)
 
     # ── Body ──────────────────────────────────────────────────────────────────
     subject        = models.CharField(max_length=512, blank=True)

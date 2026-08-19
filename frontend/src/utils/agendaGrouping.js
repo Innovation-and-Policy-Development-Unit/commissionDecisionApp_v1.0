@@ -57,7 +57,22 @@ export function buildSittingPackRows(
         })
       })
     } else {
+      // Sub-group by submission type (e.g. all Voluntary Resignations
+      // together) — only insert sub-headings when the category actually
+      // mixes more than one type.
+      const distinctTypes = new Set(catItems.map((it) => it.form_type_code || ''))
+      const showTypeHeadings = distinctTypes.size > 1
+      let prevType = null
       catItems.forEach((item) => {
+        if (showTypeHeadings && item.form_type_code !== prevType) {
+          rows.push({
+            type: 'subheading',
+            id: `sh-${cat}-${item.form_type_code || 'other'}`,
+            category: cat,
+            label: item.form_type_display || 'Other',
+          })
+          prevType = item.form_type_code
+        }
         rows.push({
           type: 'item',
           id: item.id,

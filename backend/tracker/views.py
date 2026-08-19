@@ -987,6 +987,46 @@ def _mark_required_form_checklist_present(child, *, actor):
     item.save(update_fields=["is_present", "checked_by", "checked_at", "notes"])
 
 
+def _compute_type_grouped_sequence(meeting, category, form_type_code):
+    """
+    Compute the `sequence` for a new AgendaItem so that items of the same
+    submission type (form_type_code) stay contiguous within `category`.
+
+    Inserts the new item immediately after the last existing item of the
+    same type in this category; if this is the first item of that type,
+    appends it to the end of the category's block. Shifts the sequence of
+    any items after the insertion point up by one to make room, so the
+    caller only needs to create the new AgendaItem with the returned value.
+
+    Runs inside a transaction so the shift and the new row are atomic.
+    """
+    with transaction.atomic():
+        items = list(
+            AgendaItem.objects.select_for_update()
+            .filter(meeting=meeting, category=category)
+            .order_by("sequence", "added_at")
+        )
+        if not items:
+            return 1
+
+        insert_after_index = None
+        for idx, item in enumerate(items):
+            if item.form_type_code == (form_type_code or ""):
+                insert_after_index = idx
+
+        if insert_after_index is None:
+            return items[-1].sequence + 1
+
+        insert_seq = items[insert_after_index].sequence + 1
+        to_shift = [it for it in items[insert_after_index + 1:] if it.sequence >= insert_seq]
+        for it in to_shift:
+            it.sequence += 1
+        if to_shift:
+            AgendaItem.objects.bulk_update(to_shift, ["sequence"])
+
+        return insert_seq
+
+
 class SubmissionPagination(PageNumberPagination):
     """Lets the client choose the page size (the list view uses 15; the kanban
     view requests a large cap to group every matching card by stage)."""
@@ -1398,10 +1438,40 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(
                 "Public servants have read-only access. Contact ministry HR to update a submission."
             )
-        if profile.role not in {Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.CSU_MANAGER}:
+        _EDITOR_ROLES = {
+            Role.PSC_OFFICER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER,
+            Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.CSU_MANAGER,
+            # transitions.py's _DRAFT_ONLY_EDIT_ROLES has always included
+            # IPDU_MANAGER alongside MINISTRY_HR/DEPT_ADMIN/CSU_MANAGER, but
+            # this gate was never updated to match — IPDU managers could
+            # never get past the role check below to reach that logic at all.
+            Role.IPDU_MANAGER,
+        }
+        is_own_draft = (
+            submission.created_by_id == self.request.user.id
+            and submission.current_stage == WorkflowStage.DRAFT
+        )
+        if profile.role in _EDITOR_ROLES:
+            from .transitions import assert_can_edit_submission
+            assert_can_edit_submission(profile.role, submission)
+        elif is_own_draft:
+            # A draft's own creator may fix its title/type before submitting,
+            # even without one of the roles above — but only those two
+            # fields, not the full content-editing rights those roles get.
+            allowed_fields = {"title", "form_type_code", "form_category"}
+            extra = set(self.request.data.keys()) - allowed_fields
+            if extra:
+                raise PermissionDenied(
+                    "You may only edit the title and submission type on your own draft."
+                )
+        else:
             raise PermissionDenied("Only PSC staff or Ministry users can edit submissions.")
-        from .transitions import assert_can_edit_submission
-        assert_can_edit_submission(profile.role, submission)
+
+        if "form_type_code" in serializer.validated_data:
+            new_code = serializer.validated_data["form_type_code"]
+            if new_code != submission.form_type_code and submission.current_stage != WorkflowStage.DRAFT:
+                raise PermissionDenied("Submission type can only be changed while still in Draft.")
+
         submission = serializer.save()
         invalidate_submission(submission.id)
         if submission.secretary_only:
@@ -1420,8 +1490,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         Nothing is destroyed: the row is stamped deleted_at/by and hidden by
         the default manager; PSC Admin can restore it from Admin → Trash Bin.
-        Ministry-side roles may only trash their own drafts; PSC Admin may
-        trash anything.
+        PSC Admin may trash anything; ministry-side roles may trash any draft
+        in their own ministry/department; anyone may trash a draft they
+        authored themselves, regardless of role.
         """
         from .audit import log_action as _log
         from .models import AuditLog as _AL
@@ -1429,7 +1500,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         submission = self.get_object()
         profile = _profile(request.user)
         is_admin = profile.role == Role.PSC_ADMIN or request.user.is_staff or request.user.is_superuser
-        if not is_admin:
+        is_own_draft = (
+            submission.created_by_id == request.user.id
+            and submission.current_stage == WorkflowStage.DRAFT
+        )
+        if not is_admin and not is_own_draft:
             if profile.role not in {Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY}:
                 raise PermissionDenied("Only PSC Admin or the submitting ministry may delete submissions.")
             if submission.current_stage != WorkflowStage.DRAFT:
@@ -2866,11 +2941,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         compute_scheduled_meeting — same helper _assign_scheduled_meeting
         uses) and category-resolution logic AgendaItemViewSet.perform_create
         uses for a manually-added item, so an auto-placed item is
-        indistinguishable from one added by hand — same category, appended
-        to the end of that category's group (grouping items of the same
-        submission type together, e.g. all Voluntary Resignations, for the
-        sitting). The Secretary can still reorder/move it afterward via the
-        Sitting Workspace for exceptions.
+        indistinguishable from one added by hand — same category, and slotted
+        in via _compute_type_grouped_sequence so items of the same submission
+        type (e.g. all Voluntary Resignations) stay contiguous within that
+        category for the sitting. The Secretary can still reorder/move it
+        afterward via the Sitting Workspace for exceptions.
 
         No-ops (leaves it for manual placement) when there's no eligible
         upcoming meeting yet, or a placement already exists.
@@ -2895,15 +2970,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             except PSCFormType.DoesNotExist:
                 pass
 
-        last_in_cat = (
-            AgendaItem.objects.filter(meeting=meeting, category=category)
-            .order_by("-sequence")
-            .first()
-        )
-        next_seq = (last_in_cat.sequence + 1) if last_in_cat else 1
+        next_seq = _compute_type_grouped_sequence(meeting, category, submission.form_type_code)
 
         item = AgendaItem.objects.create(
             meeting=meeting, submission=submission, category=category, sequence=next_seq,
+            form_type_code=submission.form_type_code or "",
         )
         if submission.scheduled_meeting_id != meeting.id:
             submission.scheduled_meeting = meeting
@@ -7308,7 +7379,7 @@ def _build_claude_minutes_prompt(meeting):
     from .agenda_sections import agenda_section_label
 
     agenda_lines = []
-    for item in meeting.agenda_items.select_related("submission").order_by("sequence"):
+    for item in meeting.agenda_items.select_related("submission").order_by("category", "sequence"):
         sub = item.submission
         ref = getattr(sub, "reference_number", "") if sub else ""
         title = getattr(sub, "title", "") if sub else ""
@@ -7643,10 +7714,10 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 except PSCFormType.DoesNotExist:
                     pass
 
-        last = AgendaItem.objects.filter(meeting=meeting, category=category).order_by("-sequence").first()
+        next_seq = _compute_type_grouped_sequence(meeting, category, submission.form_type_code)
         item = AgendaItem.objects.create(
             meeting=meeting, submission=submission, category=category,
-            sequence=(last.sequence + 1) if last else 1,
+            sequence=next_seq, form_type_code=submission.form_type_code or "",
         )
         submission.scheduled_meeting = meeting
         submission.save(update_fields=["scheduled_meeting"])
@@ -8081,38 +8152,22 @@ class MeetingViewSet(viewsets.ModelViewSet):
         minutes = apply_intake_to_minutes(meeting, request.user)
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
-    @action(detail=True, methods=["post"], url_path="submit-agenda")
-    def submit_agenda_to_secretary(self, request, pk=None):
-        """Senior Admin Officer submits the draft agenda to the Secretary for review.
+    @action(detail=True, methods=["post"], url_path="submit-to-chairman")
+    def submit_agenda_to_chairman(self, request, pk=None):
+        """PSC Secretary submits the agenda directly to the Chairperson for endorsement.
 
-        First leg of the Stage-B chain: draft → with_secretary.
-        """
-        meeting = self.get_object()
-        profile = _profile(request.user)
-        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Senior Admin Officer can submit the agenda for review.")
-        meeting.agenda_status = AgendaStatus.WITH_SECRETARY
-        meeting.save(update_fields=["agenda_status"])
-        return Response({"detail": "Agenda submitted to the Secretary for review."})
-
-    @action(detail=True, methods=["post"], url_path="forward-agenda")
-    def forward_agenda_to_chairman(self, request, pk=None):
-        """PSC Secretary forwards the reviewed agenda to the Chairperson for endorsement.
-
-        Second leg of the Stage-B chain: with_secretary → with_chairman.
+        First (and only) leg of the Stage-B chain: draft → with_chairman. The
+        Senior Admin Officer (and the Secretary) can still build/edit the
+        agenda's content beforehand — see canManageAgenda on the frontend —
+        but only the Secretary advances its status.
         """
         meeting = self.get_object()
         profile = _profile(request.user)
         if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the PSC Secretary can forward the agenda to the Chairperson.")
-        if meeting.agenda_status != AgendaStatus.WITH_SECRETARY:
-            return Response(
-                {"detail": "Agenda must first be submitted by the Senior Admin Officer for review."},
-                status=400,
-            )
+            raise PermissionDenied("Only the PSC Secretary can submit the agenda to the Chairperson.")
         meeting.agenda_status = AgendaStatus.WITH_CHAIRMAN
         meeting.save(update_fields=["agenda_status"])
-        return Response({"detail": "Agenda forwarded to the Chairperson for endorsement."})
+        return Response({"detail": "Agenda submitted to the Chairperson for endorsement."})
 
     @action(detail=True, methods=["post"], url_path="approve-agenda")
     def approve_agenda(self, request, pk=None):
@@ -8123,7 +8178,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only the Chairperson can endorse the agenda.")
         if meeting.agenda_status != AgendaStatus.WITH_CHAIRMAN:
             return Response(
-                {"detail": "Agenda must first be forwarded by the Secretary for endorsement."},
+                {"detail": "Agenda must first be submitted by the Secretary for endorsement."},
                 status=400,
             )
         meeting.agenda_status = AgendaStatus.CHAIRMAN_APPROVED
@@ -8518,15 +8573,15 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
                     f" It cannot be added to {meeting.reference_number}.{hint}"
                 )
 
-        # Sequence = last sequence within the same category + 1 (append to end of category group)
-        last_in_cat = (
-            AgendaItem.objects.filter(meeting=meeting, category=category)
-            .order_by("-sequence")
-            .first()
-        )
-        next_seq = (last_in_cat.sequence + 1) if last_in_cat else 1
+        # Sequence: slot in next to other items of the same submission type within
+        # the category (see _compute_type_grouped_sequence), so a hand-added item
+        # groups the same way an auto-placed one does.
+        next_seq = _compute_type_grouped_sequence(meeting, category, submission.form_type_code)
 
-        item = serializer.save(category=category, sequence=next_seq)
+        item = serializer.save(
+            category=category, sequence=next_seq,
+            form_type_code=submission.form_type_code or "",
+        )
         from .tasks import queue_agenda_item_blurb
 
         aid = item.id
@@ -8559,13 +8614,8 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Append to the end of the same category in the next meeting
-        last_in_cat = (
-            AgendaItem.objects.filter(meeting=next_meeting, category=item.category)
-            .order_by("-sequence")
-            .first()
-        )
-        new_seq = (last_in_cat.sequence + 1) if last_in_cat else 1
+        # Slot into the same type-group within the same category in the next meeting
+        new_seq = _compute_type_grouped_sequence(next_meeting, item.category, item.form_type_code)
 
         from_meeting = item.meeting
         item.meeting  = next_meeting
