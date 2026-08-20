@@ -7676,6 +7676,57 @@ class MeetingViewSet(viewsets.ModelViewSet):
             },
         })
 
+    @action(detail=True, methods=["get"], url_path="my-notes")
+    def my_notes(self, request, pk=None):
+        """Every one of the requesting user's private prep notes for this
+        meeting's agenda, in agenda order — the "read through all my notes
+        before the sitting" view. Items with no note yet are still listed
+        (empty body) so a Commissioner can see the whole agenda and jump
+        straight into writing one."""
+        from .agenda_sections import agenda_section_label
+        from .models import SubmissionPrivateNote
+
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_COMMISSIONER, Role.CHAIRPERSON, Role.PSC_ADMIN}:
+            raise PermissionDenied("Private notes are only available to Commission members.")
+
+        items = (
+            meeting.agenda_items
+            .select_related("submission")
+            .order_by("category", "sequence", "added_at")
+        )
+        submission_ids = [it.submission_id for it in items if it.submission_id]
+        notes_by_submission = {
+            n.submission_id: n
+            for n in SubmissionPrivateNote.objects.filter(
+                submission_id__in=submission_ids, author=request.user,
+            )
+        }
+        rows = []
+        for it in items:
+            note = notes_by_submission.get(it.submission_id)
+            rows.append({
+                "agenda_item_id": it.id,
+                "submission_id": it.submission_id,
+                "submission_reference": it.submission.reference_number if it.submission_id else "",
+                "submission_title": it.submission.title if it.submission_id else "",
+                "category": it.category or "",
+                "category_display": agenda_section_label(it.category or ""),
+                "sequence": it.sequence,
+                "note_body": note.body if note else "",
+                "note_updated_at": note.updated_at if note else None,
+            })
+        return Response({
+            "meeting": {
+                "id": meeting.id,
+                "reference_number": meeting.reference_number,
+                "date": meeting.date,
+                "title": meeting.title,
+            },
+            "items": rows,
+        })
+
     @action(detail=True, methods=["post"], url_path="admit-reserve")
     def admit_reserve(self, request, pk=None):
         """Chairman or Secretary admits a carry-over (late) submission into the draft agenda.

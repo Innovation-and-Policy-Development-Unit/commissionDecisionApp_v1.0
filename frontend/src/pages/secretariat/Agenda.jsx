@@ -27,7 +27,7 @@ import { useTranslation } from 'react-i18next'
 import {
   Plus, X, RefreshCw, Printer, Check, Tag,
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
-  Send, ThumbsUp, ChevronsRight, Tablet, LayoutGrid,
+  Send, ThumbsUp, ChevronsRight, Tablet, LayoutGrid, StickyNote,
 } from 'lucide-react'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import AgendaReadinessChip, { computeReadiness } from '../../components/shared/AgendaReadinessChip'
@@ -378,6 +378,14 @@ export default function Agenda() {
                   >
                     <Tablet size={15} />
                     {t('sitting_pack.enter', { defaultValue: 'Sitting Pack' })}
+                  </Link>
+                )}
+                {(isCommissionMember || isAdminUser) && (
+                  <Link
+                    to={`/secretariat/agenda/my-notes?meeting=${selectedId}`}
+                    className="btn-outline flex items-center gap-2 px-4 py-2"
+                  >
+                    <StickyNote size={15} /> My Notes
                   </Link>
                 )}
                 {!isCompleted && (

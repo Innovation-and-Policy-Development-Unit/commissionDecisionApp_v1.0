@@ -8,17 +8,28 @@ import api from '../../api/client'
  * user. Strictly private: nobody else, PSC Admin included, can read this
  * through the API. Auto-saves shortly after the user stops typing.
  *
- * Reused on the submission detail page and in the Sitting Pack so a
- * Commissioner's pre-meeting notes are right there on the sitting day.
+ * Reused on the submission detail page, in the Sitting Pack, and in the
+ * consolidated "My Notes" agenda review page.
+ *
+ * Props:
+ *   submissionId  – required
+ *   initialBody   – skips the initial GET when the caller already has the
+ *                   note body on hand (the consolidated My Notes page fetches
+ *                   every item's note in one call) — avoids one request per
+ *                   item and the loading flash.
+ *   compact       – renders just the textarea + save indicator, no card
+ *                   wrapper or "My Notes" heading, for embedding inside a
+ *                   page/list that already provides its own heading.
  */
-export default function PrivateNotePanel({ submissionId }) {
-  const [body, setBody] = useState('')
-  const [loaded, setLoaded] = useState(false)
+export default function PrivateNotePanel({ submissionId, initialBody, compact = false }) {
+  const [body, setBody] = useState(initialBody ?? '')
+  const [loaded, setLoaded] = useState(initialBody !== undefined)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const saveTimer = useRef(null)
 
   useEffect(() => {
+    if (initialBody !== undefined) return undefined
     let cancelled = false
     setLoaded(false)
     api.get(`/submissions/${submissionId}/my-note/`)
@@ -26,6 +37,7 @@ export default function PrivateNotePanel({ submissionId }) {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoaded(true) })
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody is only read on mount
   }, [submissionId])
 
   useEffect(() => () => clearTimeout(saveTimer.current), [])
@@ -52,6 +64,41 @@ export default function PrivateNotePanel({ submissionId }) {
 
   if (!loaded) return null
 
+  // A <textarea>'s scrolled-off content doesn't reliably print past its
+  // visible height in most browsers — a note longer than the box would
+  // silently get cut off in the printed/exported output. Print a plain,
+  // unclipped text block instead and hide the textarea for print.
+  const textarea = (
+    <textarea
+      className="input min-h-[100px] text-sm w-full print:hidden"
+      value={body}
+      onChange={onChange}
+      placeholder="Jot down questions or points to raise during the sitting…"
+    />
+  )
+  const printBody = (
+    <p className="hidden print:block text-sm text-black whitespace-pre-wrap">
+      {body.trim() || '—'}
+    </p>
+  )
+
+  if (compact) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-1 print:hidden">
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">
+            Private to you — not visible to other Commission members or staff.
+          </span>
+          <span className="text-[11px] text-slate-400">
+            {saving ? 'Saving…' : saved ? 'Saved' : ''}
+          </span>
+        </div>
+        {textarea}
+        {printBody}
+      </div>
+    )
+  }
+
   return (
     <div className="card card-compact">
       <div className="flex items-center gap-2 mb-1">
@@ -64,12 +111,8 @@ export default function PrivateNotePanel({ submissionId }) {
       <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
         Private to you — not visible to other Commission members or staff.
       </p>
-      <textarea
-        className="input min-h-[100px] text-sm w-full"
-        value={body}
-        onChange={onChange}
-        placeholder="Jot down questions or points to raise during the sitting…"
-      />
+      {textarea}
+      {printBody}
     </div>
   )
 }

@@ -252,3 +252,37 @@ class SubmissionPrivateNoteTests(TestCase):
         self.client.force_authenticate(user=self.officer)
         res = self.client.get(f"/api/submissions/{self.submission.id}/my-note/")
         self.assertEqual(res.status_code, 403)
+
+    def test_my_notes_lists_full_agenda_in_order_with_notes_and_blanks(self):
+        meeting = Meeting.objects.create(
+            title="Notes Sitting", date="2026-09-01", time="09:00", venue="Boardroom",
+        )
+        section = AgendaSection.objects.create(
+            code="pn_appointments", label="Appointments", display_order=1, is_active=True,
+        )
+        other_sub = Submission.objects.create(
+            title="Second paper", received_at=timezone.now(), ministry=self.ministry,
+            current_stage=WorkflowStage.FORWARDED_TO_COMMISSION, created_by=self.creator,
+        )
+        AgendaItem.objects.create(meeting=meeting, submission=self.submission, category=section.code, sequence=1)
+        AgendaItem.objects.create(meeting=meeting, submission=other_sub, category=section.code, sequence=2)
+        SubmissionPrivateNote.objects.create(
+            submission=self.submission, author=self.commissioner_a, body="Only on the first item.",
+        )
+
+        self.client.force_authenticate(user=self.commissioner_a)
+        res = self.client.get(f"/api/meetings/{meeting.id}/my-notes/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data["items"]), 2)
+        self.assertEqual(res.data["items"][0]["submission_id"], self.submission.id)
+        self.assertEqual(res.data["items"][0]["note_body"], "Only on the first item.")
+        self.assertEqual(res.data["items"][1]["submission_id"], other_sub.id)
+        self.assertEqual(res.data["items"][1]["note_body"], "")
+
+    def test_my_notes_requires_commission_role(self):
+        meeting = Meeting.objects.create(
+            title="Notes Sitting 2", date="2026-09-02", time="09:00", venue="Boardroom",
+        )
+        self.client.force_authenticate(user=self.officer)
+        res = self.client.get(f"/api/meetings/{meeting.id}/my-notes/")
+        self.assertEqual(res.status_code, 403)
