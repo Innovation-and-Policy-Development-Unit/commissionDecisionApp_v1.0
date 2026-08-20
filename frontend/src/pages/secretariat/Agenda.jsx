@@ -25,7 +25,7 @@ import { useConfirm } from '../../context/ConfirmContext'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  Plus, X, RefreshCw, Printer, Pencil, Check,
+  Plus, X, RefreshCw, Printer, Check, Tag,
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
   Send, ThumbsUp, Mail, ChevronsRight, Tablet, LayoutGrid,
 } from 'lucide-react'
@@ -260,7 +260,9 @@ export default function Agenda() {
       await fetchItems(selectedId)
       setEditingItem(null)
       toast.success('Category updated.')
-    } catch { toast.error('Failed to update category.') }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update category.')
+    }
   }
 
   const handleMove = async (item, direction) => {
@@ -692,6 +694,7 @@ export default function Agenda() {
                           item={item}
                           isCompleted={readOnly}
                           canDefer={isSecretaryOrAdmin}
+                          categories={CATEGORIES}
                           editingItem={editingItem}
                           setEditingItem={setEditingItem}
                           onRemove={handleRemove}
@@ -991,7 +994,13 @@ function MattersArisingRow({ item, isCompleted, canDefer, onRemove, onMoveUp, on
           {item.matters_arising_agenda_no && (
             <span className="font-semibold">{item.matters_arising_agenda_no}: </span>
           )}
-          {item.submission_title}
+          <Link
+            to={`/submissions/${item.submission}`}
+            className="hover:underline hover:text-primary-600 dark:hover:text-primary-400 print:no-underline print:text-black"
+            title="Open submission"
+          >
+            {item.submission_title}
+          </Link>
           {item.submission_ministry && (
             <span className="text-slate-400 dark:text-slate-500"> — {item.submission_ministry}</span>
           )}
@@ -1014,7 +1023,7 @@ function MattersArisingRow({ item, isCompleted, canDefer, onRemove, onMoveUp, on
   )
 }
 
-function StandardRow({ item, isCompleted, canDefer, editingItem, setEditingItem, onRemove, onCategoryUpdate, onMoveUp, onMoveDown, onPushToNext, isFirst, isLastInCat }) {
+function StandardRow({ item, isCompleted, canDefer, categories, editingItem, setEditingItem, onRemove, onCategoryUpdate, onMoveUp, onMoveDown, onPushToNext, isFirst, isLastInCat }) {
   const isEditing = editingItem === item.id
   const [pendingCat, setPendingCat] = useState(item.category)
 
@@ -1025,7 +1034,13 @@ function StandardRow({ item, isCompleted, canDefer, editingItem, setEditingItem,
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-slate-800 dark:text-slate-200 print:text-black leading-snug">
-          {item.submission_title}
+          <Link
+            to={`/submissions/${item.submission}`}
+            className="hover:underline hover:text-primary-600 dark:hover:text-primary-400 print:no-underline print:text-black"
+            title="Open submission"
+          >
+            {item.submission_title}
+          </Link>
           {item.submission_ministry && (
             <span className="text-slate-400 dark:text-slate-500"> — {item.submission_ministry}</span>
           )}
@@ -1056,7 +1071,7 @@ function StandardRow({ item, isCompleted, canDefer, editingItem, setEditingItem,
               onChange={e => setPendingCat(e.target.value)}
               autoFocus
             >
-              {CATEGORIES.map(c => (
+              {categories.map(c => (
                 <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
@@ -1086,7 +1101,7 @@ function StandardRow({ item, isCompleted, canDefer, editingItem, setEditingItem,
             className="p-1 rounded text-slate-400 hover:text-primary-500"
             title="Change category"
           >
-            <Pencil size={12} />
+            <Tag size={12} />
           </button>
           {canDefer && (
             <button
