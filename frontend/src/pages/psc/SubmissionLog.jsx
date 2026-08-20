@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import clsx from 'clsx'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
@@ -13,7 +14,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { queryClient } from '../../api/queryClient'
 import { stageLabel, stageBadgeClass, STAGE_META } from '../../constants/stages'
 import SubmissionProgressBar from '../../components/shared/SubmissionProgressBar'
-import { PlusCircle, RefreshCw, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Eye, FileText, Sparkles, Loader2, LayoutList, Columns3 } from 'lucide-react'
+import { PlusCircle, RefreshCw, Trash2, Search, ChevronLeft, ChevronRight, FileText, Sparkles, Loader2, LayoutList, Columns3 } from 'lucide-react'
 import SubmissionKanbanBoard from '../../components/submissions/SubmissionKanbanBoard'
 import SubmissionForm, { SUBMISSION_CREATE_ALLOWED_ROLES } from './SubmissionForm'
 import { useAuth } from '../../context/AuthContext'
@@ -599,9 +600,13 @@ export default function SubmissionLog() {
               {!loading && rows.map(r => (
                 <>
                   {/* ── Parent row ── */}
-                  <tr key={r.id} className={selected.has(r.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}>
+                  <tr
+                    key={r.id}
+                    onClick={() => navigate(`/submissions/${r.id}`)}
+                    className={clsx('cursor-pointer', selected.has(r.id) && 'bg-primary-50/50 dark:bg-primary-900/10')}
+                  >
                     {isAdmin && (
-                      <td>
+                      <td onClick={e => e.stopPropagation()}>
                         <BaseCheckbox
                           checked={selected.has(r.id)}
                           onChange={() => toggleOne(r.id)}
@@ -670,28 +675,8 @@ export default function SubmissionLog() {
                       )}
                     </td>
                     {showActionsColumn && (
-                      <td>
+                      <td onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-0.5">
-                          {isAdmin && (
-                            <>
-                              <BaseButton
-                                variant="ghost" size="icon" iconOnly
-                                aria-label="View"
-                                title="View"
-                                onMouseEnter={() => warmSubmission(r.id)}
-                                onFocus={() => warmSubmission(r.id)}
-                                onClick={() => navigate(`/submissions/${r.id}`)}
-                                icon={<Eye size={13} />}
-                              />
-                              <BaseButton
-                                variant="ghost" size="icon" iconOnly
-                                aria-label="Edit"
-                                title="Edit"
-                                onClick={() => navigate(`/submissions/${r.id}`)}
-                                icon={<Pencil size={13} />}
-                              />
-                            </>
-                          )}
                           {/* Ministry roles may trash any Draft submission in
                               their ministry; anyone may trash a Draft they
                               authored themselves — matches the backend check
@@ -711,7 +696,11 @@ export default function SubmissionLog() {
                   </tr>
                   {/* ── Attached child submissions (indented) ── */}
                   {r.attached_submissions?.map(child => (
-                    <tr key={`child-${child.id}`} className="bg-slate-50/60 dark:bg-slate-800/40">
+                    <tr
+                      key={`child-${child.id}`}
+                      onClick={() => navigate(`/submissions/${child.id}`)}
+                      className="bg-slate-50/60 dark:bg-slate-800/40 cursor-pointer"
+                    >
                       {isAdmin && <td />}
                       <td>
                         <div className="flex items-center gap-1.5 pl-4">
