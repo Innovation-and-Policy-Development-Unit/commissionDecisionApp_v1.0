@@ -107,6 +107,7 @@ from .serializers import (
     SetPasswordSerializer,
     SubmissionDetailSerializer,
     SubmissionListSerializer,
+    SubmissionPrivateNoteSerializer,
     SubmissionWriteSerializer,
     SystemPermissionSerializer,
     TransitionSerializer,
@@ -1551,6 +1552,32 @@ class SubmissionViewSet(viewsets.ModelViewSet):
              resource_label=submission.reference_number,
              description=f"Submission viewed: {submission.title}")
         return Response(SubmissionDetailSerializer(submission, context={"request": request}).data)
+
+    @action(detail=True, methods=["get", "put"], url_path="my-note")
+    def my_note(self, request, pk=None):
+        """The requesting user's own private prep note on this submission.
+
+        Strictly personal — always scoped to request.user, both to read and
+        to write, so there is no way for one Commission member to see
+        another's notes (or for anyone else, PSC Admin included, to read
+        them through this endpoint).
+        """
+        from .models import SubmissionPrivateNote
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_COMMISSIONER, Role.CHAIRPERSON, Role.PSC_ADMIN}:
+            raise PermissionDenied("Private notes are only available to Commission members.")
+
+        note, _ = SubmissionPrivateNote.objects.get_or_create(
+            submission=submission, author=request.user,
+        )
+        if request.method == "PUT":
+            serializer = SubmissionPrivateNoteSerializer(note, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        return Response(SubmissionPrivateNoteSerializer(note).data)
 
     @action(detail=True, methods=["post"])
     def transition(self, request, pk=None):
@@ -8171,7 +8198,11 @@ class MeetingViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="approve-agenda")
     def approve_agenda(self, request, pk=None):
-        """Chairperson endorses the agenda for circulation (final leg of the chain)."""
+        """Chairperson endorses the agenda — this both records the endorsement
+        and immediately circulates it to Commission members. There used to be
+        a separate manual "Circulate to Members" step after endorsement; per
+        the Secretary's request that's now automatic, so endorsing IS
+        circulating (final leg of the chain, one action)."""
         meeting = self.get_object()
         profile = _profile(request.user)
         if profile.role not in {Role.CHAIRPERSON, Role.PSC_ADMIN}:
@@ -8181,12 +8212,21 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 {"detail": "Agenda must first be submitted by the Secretary for endorsement."},
                 status=400,
             )
-        meeting.agenda_status = AgendaStatus.CHAIRMAN_APPROVED
+        meeting.agenda_status = AgendaStatus.CIRCULATED
         meeting.agenda_approved_by = request.user
         meeting.agenda_approved_at = timezone.now()
         meeting.save(update_fields=["agenda_status", "agenda_approved_by", "agenda_approved_at"])
         self._queue_agenda_briefs(meeting)
-        return Response({"detail": "Agenda endorsed by the Chairperson."})
+        self._ensure_meeting_briefing_pack_queued(meeting, request.user)
+
+        def _notify_circulated():
+            try:
+                from .email_notify import notify_agenda_circulated
+                notify_agenda_circulated(meeting)
+            except Exception:
+                _security_log.exception("AGENDA_CIRCULATE_NOTIFY_FAIL | meeting=%s", meeting.id)
+        transaction.on_commit(_notify_circulated)
+        return Response({"detail": "Agenda endorsed and circulated to Commission members."})
 
     @staticmethod
     def _queue_agenda_briefs(meeting):
@@ -8251,29 +8291,6 @@ class MeetingViewSet(viewsets.ModelViewSet):
         if not session:
             return Response({"active": False})
         return Response(session_payload(session, user=request.user))
-
-    @action(detail=True, methods=["post"], url_path="circulate-agenda")
-    def circulate_agenda(self, request, pk=None):
-        """Senior Admin Officer circulates the approved agenda to members."""
-        meeting = self.get_object()
-        profile = _profile(request.user)
-        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_SECRETARY, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Senior Admin Officer or Secretary can circulate the agenda.")
-        if meeting.agenda_status != AgendaStatus.CHAIRMAN_APPROVED:
-            return Response({"detail": "Agenda must be approved by the Chairperson first."}, status=400)
-        meeting.agenda_status = AgendaStatus.CIRCULATED
-        meeting.save(update_fields=["agenda_status"])
-        self._queue_agenda_briefs(meeting)
-        self._ensure_meeting_briefing_pack_queued(meeting, request.user)
-        # Notify Commission members the (approved) agenda is available to view.
-        def _notify_circulated():
-            try:
-                from .email_notify import notify_agenda_circulated
-                notify_agenda_circulated(meeting)
-            except Exception:
-                _security_log.exception("AGENDA_CIRCULATE_NOTIFY_FAIL | meeting=%s", meeting.id)
-        transaction.on_commit(_notify_circulated)
-        return Response({"detail": "Agenda circulated to Commission members."})
 
     @action(detail=True, methods=["post"], url_path="adopt-agenda")
     def adopt_agenda(self, request, pk=None):

@@ -16,7 +16,6 @@ from .models import (
 
 
 APPROVED_AGENDA_STATUSES = {
-    AgendaStatus.CHAIRMAN_APPROVED,
     AgendaStatus.CIRCULATED,
 }
 

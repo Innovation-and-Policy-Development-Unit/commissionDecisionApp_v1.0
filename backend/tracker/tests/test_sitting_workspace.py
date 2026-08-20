@@ -5,6 +5,7 @@ used to move items between lanes by drag-and-drop.
 """
 
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
@@ -13,7 +14,7 @@ from rest_framework.test import APIClient
 
 from tracker.models import (
     AgendaItem, AgendaSection, Meeting, Ministry, Profile, Role,
-    Submission, WorkflowStage,
+    Submission, SubmissionPrivateNote, WorkflowStage,
 )
 
 
@@ -158,11 +159,12 @@ class AgendaApprovalChainTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(self._status(), "with_chairman")
 
-        # 2. Chairman endorses.
+        # 2. Chairman endorses — this now also circulates in the same action,
+        # there's no separate "chairman_approved" resting stage any more.
         self.client.force_authenticate(user=self.chair)
         res = self.client.post(f"/api/meetings/{self.meeting.id}/approve-agenda/")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(self._status(), "chairman_approved")
+        self.assertEqual(self._status(), "circulated")
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.agenda_approved_by_id, self.chair.id)
 
@@ -179,3 +181,74 @@ class AgendaApprovalChainTests(TestCase):
         res = self.client.post(f"/api/meetings/{self.meeting.id}/approve-agenda/")
         self.assertEqual(res.status_code, 400)
         self.assertEqual(self._status(), "draft")
+
+    @patch("tracker.email_notify.notify_agenda_circulated")
+    def test_endorsing_auto_circulates_and_notifies(self, mock_notify):
+        # Get the agenda to with_chairman first.
+        self.client.force_authenticate(user=self.secretary)
+        self.client.post(f"/api/meetings/{self.meeting.id}/submit-to-chairman/")
+
+        self.client.force_authenticate(user=self.chair)
+        with self.captureOnCommitCallbacks(execute=True):
+            res = self.client.post(f"/api/meetings/{self.meeting.id}/approve-agenda/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self._status(), "circulated")
+        mock_notify.assert_called_once()
+        self.assertEqual(mock_notify.call_args[0][0].id, self.meeting.id)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class SubmissionPrivateNoteTests(TestCase):
+    """Commission members' private prep notes — GET/PUT /submissions/{id}/my-note/."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.ministry = Ministry.objects.create(code="ZZ_PN", name="Private Notes Ministry")
+        self.creator = self._user("pn_creator", Role.PSC_SECRETARY)
+        self.submission = Submission.objects.create(
+            title="Paper", received_at=timezone.now(), ministry=self.ministry,
+            current_stage=WorkflowStage.FORWARDED_TO_COMMISSION, created_by=self.creator,
+        )
+
+        self.commissioner_a = self._user("pn_commissioner_a", Role.PSC_COMMISSIONER)
+        self.commissioner_b = self._user("pn_commissioner_b", Role.PSC_COMMISSIONER)
+        self.officer = self._user("pn_officer", Role.PSC_OFFICER)
+
+    def _user(self, username, role):
+        user = User.objects.create_user(username=username, password="pass")
+        Profile.objects.create(user=user, role=role)
+        return user
+
+    def test_commissioner_can_read_and_write_own_note(self):
+        self.client.force_authenticate(user=self.commissioner_a)
+        res = self.client.get(f"/api/submissions/{self.submission.id}/my-note/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["body"], "")
+
+        res = self.client.put(
+            f"/api/submissions/{self.submission.id}/my-note/", {"body": "Ask about funding."}, format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["body"], "Ask about funding.")
+
+        note = SubmissionPrivateNote.objects.get(submission=self.submission, author=self.commissioner_a)
+        self.assertEqual(note.body, "Ask about funding.")
+
+    def test_note_is_private_to_its_author(self):
+        SubmissionPrivateNote.objects.create(
+            submission=self.submission, author=self.commissioner_a, body="A's private note",
+        )
+        self.client.force_authenticate(user=self.commissioner_b)
+        res = self.client.get(f"/api/submissions/{self.submission.id}/my-note/")
+        self.assertEqual(res.status_code, 200)
+        # B gets their own (empty) note, never A's.
+        self.assertEqual(res.data["body"], "")
+        self.assertNotEqual(
+            SubmissionPrivateNote.objects.get(submission=self.submission, author=self.commissioner_b).id,
+            SubmissionPrivateNote.objects.get(submission=self.submission, author=self.commissioner_a).id,
+        )
+
+    def test_non_commission_role_cannot_use_private_notes(self):
+        self.client.force_authenticate(user=self.officer)
+        res = self.client.get(f"/api/submissions/{self.submission.id}/my-note/")
+        self.assertEqual(res.status_code, 403)

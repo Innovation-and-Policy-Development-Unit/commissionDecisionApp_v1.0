@@ -7,6 +7,7 @@ import VisualAuditTrail from '../../components/audit/VisualAuditTrail'
 import VerificationBadge from '../../components/audit/VerificationBadge'
 import SubmissionPresenceBar from '../../components/submissions/SubmissionPresenceBar'
 import SubmissionActivity from '../../components/submissions/SubmissionActivity'
+import PrivateNotePanel from '../../components/submissions/PrivateNotePanel'
 import PolicyGuardrailDrawer from '../../components/submissions/PolicyGuardrailDrawer'
 import { policyGuardrailApplies } from '../../utils/policyGuardrail'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
@@ -204,6 +205,8 @@ export default function SubmissionDetail() {
   const [assessmentFile, setAssessmentFile] = useState(null)
   const isAdmin = user?.role === 'psc_admin'
   const isUnitManager  = user && UNIT_MANAGER_ROLES.includes(user.role)
+  // Matches the backend's my-note permission check (SubmissionViewSet.my_note).
+  const isCommissionMember = user && ['psc_commissioner', 'chairperson', 'psc_admin'].includes(user.role)
   // Same rule as SubmissionLog.jsx / SubmissionViewSet.destroy(): PSC Admin
   // may delete anything; ministry_hr/dept_admin/head_of_agency may delete
   // any draft in their own ministry; anyone may delete a draft they
@@ -1691,6 +1694,8 @@ const stageDescriptions = {
 
         {/* ── Right: transition panel ── */}
         <div className="space-y-5">
+
+          {isCommissionMember && <PrivateNotePanel submissionId={id} />}
 
           {submission?.ai_clarification_bilingual?.processed && (
             <div className="card card-compact space-y-3 border border-sky-200/60 dark:border-sky-900/40">

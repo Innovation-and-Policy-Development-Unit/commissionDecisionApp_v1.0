@@ -27,7 +27,7 @@ import { useTranslation } from 'react-i18next'
 import {
   Plus, X, RefreshCw, Printer, Check, Tag,
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
-  Send, ThumbsUp, Mail, ChevronsRight, Tablet, LayoutGrid,
+  Send, ThumbsUp, ChevronsRight, Tablet, LayoutGrid,
 } from 'lucide-react'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import AgendaReadinessChip, { computeReadiness } from '../../components/shared/AgendaReadinessChip'
@@ -113,8 +113,10 @@ export default function Agenda() {
       const r = await api.get('/meetings/')
       let data = normalizeListPayload(r.data)
       if (endorsedOnlyViewer) {
-        // Read-only OPSC viewers only ever see endorsed / circulated agendas.
-        data = data.filter(m => ['chairman_approved', 'circulated'].includes(m.agenda_status))
+        // Read-only OPSC viewers only ever see circulated agendas — endorsing
+        // now auto-circulates, so there's no separate "endorsed but not yet
+        // circulated" state to include any more.
+        data = data.filter(m => m.agenda_status === 'circulated')
       }
       setMeetings(data)
       if (data.length > 0 && !selectedId) setSelectedId(String(data[0].id))
@@ -507,13 +509,11 @@ export default function Agenda() {
           <AgendaWorkflowBar
             status={agendaStatus}
             isCompleted={isCompleted}
-            isSecretaryOrAdmin={isSecretaryOrAdmin}
             isSecretary={isSecretary}
             isChairperson={isChairperson}
             busy={workflowBusy}
             onSubmit={() => doWorkflowAction('submit-to-chairman', 'Submit to Chairman')}
-            onApprove={() => doWorkflowAction('approve-agenda', 'Endorse Agenda')}
-            onCirculate={() => doWorkflowAction('circulate-agenda', 'Circulate Agenda')}
+            onApprove={() => doWorkflowAction('approve-agenda', 'Endorse & circulate agenda')}
             onAdopt={() => doWorkflowAction('adopt-agenda', 'Adopt Agenda')}
             agendaAdopted={Boolean(selectedMeeting?.agenda_adopted_at)}
           />
@@ -872,13 +872,12 @@ export default function Agenda() {
 
 // Agenda workflow status + action bar
 const WORKFLOW_STEPS = [
-  { key: 'draft',             label: 'Draft' },
-  { key: 'with_chairman',     label: 'With Chairman' },
-  { key: 'chairman_approved', label: 'Chairman Endorsed' },
-  { key: 'circulated',        label: 'Circulated' },
+  { key: 'draft',         label: 'Draft' },
+  { key: 'with_chairman', label: 'With Chairman' },
+  { key: 'circulated',    label: 'Circulated' },
 ]
 
-function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isSecretary, isChairperson, busy, onSubmit, onApprove, onCirculate, onAdopt, agendaAdopted }) {
+function AgendaWorkflowBar({ status, isCompleted, isSecretary, isChairperson, busy, onSubmit, onApprove, onAdopt, agendaAdopted }) {
   const currentIdx = WORKFLOW_STEPS.findIndex(s => s.key === status)
 
   return (
@@ -932,18 +931,10 @@ function AgendaWorkflowBar({ status, isCompleted, isSecretaryOrAdmin, isSecretar
             <button
               onClick={onApprove}
               disabled={busy}
+              title="Endorsing immediately circulates the agenda to Commission members — no separate step."
               className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
             >
-              <ThumbsUp size={14} /> Endorse Agenda
-            </button>
-          )}
-          {status === 'chairman_approved' && isSecretaryOrAdmin && (
-            <button
-              onClick={onCirculate}
-              disabled={busy}
-              className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
-            >
-              <Mail size={14} /> Circulate to Members
+              <ThumbsUp size={14} /> Endorse &amp; Circulate to Members
             </button>
           )}
           {status === 'circulated' && !agendaAdopted && (

@@ -1,5 +1,5 @@
 """
-Seed commission sittings eligible for Minute intake (chairman_approved / circulated + agenda items).
+Seed commission sittings eligible for Minute intake (circulated + agenda items).
 
 Usage:
     python manage.py seed_minute_intake
@@ -22,7 +22,7 @@ from tracker.models import (
 # (reference_number, agenda_status after seed)
 MINUTE_INTAKE_SITTINGS = (
     ("MTG-2026-011", AgendaStatus.CIRCULATED),
-    ("MTG-2026-012", AgendaStatus.CHAIRMAN_APPROVED),
+    ("MTG-2026-012", AgendaStatus.CIRCULATED),
 )
 
 SAMPLE_BLURBS = (
@@ -89,7 +89,7 @@ class Command(BaseCommand):
 
         # Any other meeting already circulated/approved but empty — top up agenda items
         for meeting in Meeting.objects.filter(
-            agenda_status__in=[AgendaStatus.CHAIRMAN_APPROVED, AgendaStatus.CIRCULATED],
+            agenda_status=AgendaStatus.CIRCULATED,
         ).exclude(reference_number__in=[r for r, _ in MINUTE_INTAKE_SITTINGS]):
             if meeting.agenda_items.exists():
                 ensure_intake_rows(meeting)

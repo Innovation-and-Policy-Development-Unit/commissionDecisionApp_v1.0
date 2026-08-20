@@ -11,6 +11,7 @@ import { useAgendaSections } from '../../hooks/useAgendaSections'
 import DigitalSealOverlay from '../../components/sitting-pack/DigitalSealOverlay'
 import ExecutiveBriefPanel from '../../components/sitting-pack/ExecutiveBriefPanel'
 import SittingPackPapersPanel from '../../components/sitting-pack/SittingPackPapersPanel'
+import PrivateNotePanel from '../../components/submissions/PrivateNotePanel'
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseBadge from '../../components/shared/BaseBadge'
@@ -43,6 +44,8 @@ export default function AgendaSittingPack() {
 
   const canViewBrief = userIsOpscInternal(user)
   const canRegenerateBrief = userCanRegenerateAiBrief(user)
+  // Matches the backend's my-note permission check (SubmissionViewSet.my_note).
+  const canUseNotes = user && ['psc_commissioner', 'chairperson', 'psc_admin'].includes(user.role)
 
   const { categoryOrder, allSections } = useAgendaSections()
   const rows = useMemo(() => buildSittingPackRows(items, categoryOrder, allSections), [items, categoryOrder, allSections])
@@ -286,6 +289,7 @@ export default function AgendaSittingPack() {
             {[
               { key: 'papers', label: t('sitting_pack.papers_tab') },
               ...(canViewBrief ? [{ key: 'brief', label: t('sitting_pack.brief_tab') }] : []),
+              ...(canUseNotes ? [{ key: 'notes', label: t('sitting_pack.notes_tab') }] : []),
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -305,6 +309,8 @@ export default function AgendaSittingPack() {
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {rightTab === 'papers' ? (
               <SittingPackPapersPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} />
+            ) : rightTab === 'notes' && canUseNotes ? (
+              selectedSubmissionId && <PrivateNotePanel submissionId={selectedSubmissionId} />
             ) : canViewBrief ? (
               <ExecutiveBriefPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} canRegenerate={canRegenerateBrief} />
             ) : null}

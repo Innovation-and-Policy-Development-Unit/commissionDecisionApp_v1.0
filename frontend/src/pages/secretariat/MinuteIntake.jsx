@@ -12,7 +12,7 @@ import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
 import { normalizeListPayload, normalizeFieldPayload } from '../../utils/listPayload'
 
-const INTAKE_AGENDA_STATUSES = new Set(['chairman_approved', 'circulated'])
+const INTAKE_AGENDA_STATUSES = new Set(['circulated'])
 const CONTEXT_PANEL_PREF = 'minute_intake.context_panel'
 
 function IntakeItemCard({

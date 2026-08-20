@@ -37,6 +37,7 @@ from .models import (
     SecurityNotice,
     SecurityScan,
     Submission,
+    SubmissionPrivateNote,
     SystemPermission,
     WorkflowEvent,
     WorkflowStage,
@@ -1298,6 +1299,13 @@ def assert_notify_emails_match_ministry(ministry_id, emails):
             "notify_emails": f"These addresses aren't in your ministry's domain ({allowed}): "
                               f"{', '.join(bad)}.",
         })
+
+
+class SubmissionPrivateNoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubmissionPrivateNote
+        fields = ("id", "submission", "body", "updated_at")
+        read_only_fields = ("id", "submission", "updated_at")
 
 
 class SubmissionWriteSerializer(serializers.ModelSerializer):

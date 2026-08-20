@@ -108,20 +108,19 @@ class MeetingStatus(models.TextChoices):
 
 class AgendaStatus(models.TextChoices):
     # Stage-B agenda workflow:
-    #   draft             — Senior Admin Officer builds/edits the agenda (Secretary can too);
-    #                        the Secretary submits it directly to the Chairman →
-    #   with_chairman     — Chairperson endorses →
-    #   chairman_approved — endorsed; ready to circulate →
-    #   circulated        — issued to Commission members.
+    #   draft         — Senior Admin Officer builds/edits the agenda (Secretary can too);
+    #                    the Secretary submits it directly to the Chairman →
+    #   with_chairman — Chairperson endorses →
+    #   circulated    — endorsing IS circulating: issued to Commission members
+    #                    immediately, same action, no separate step.
     # There used to be a separate "with_secretary" holding stage between draft
-    # and with_chairman, requiring the Senior Admin Officer to hand the draft
-    # to the Secretary before the Secretary could forward it. Removed at the
-    # Secretary's request: since approved submissions already auto-place onto
-    # the correct agenda position, that manual hand-off added no value — the
-    # Secretary can just submit straight to the Chairman.
+    # and with_chairman (removed at the Secretary's request — see git history)
+    # and a separate "chairman_approved" resting stage between with_chairman
+    # and circulated, requiring someone to manually click "Circulate to
+    # Members" after the Chairman endorsed. Also removed at the Secretary's
+    # request: endorsement now auto-circulates in the same action.
     DRAFT = "draft", "Draft"
     WITH_CHAIRMAN = "with_chairman", "With Chairman for Endorsement"
-    CHAIRMAN_APPROVED = "chairman_approved", "Chairman Endorsed"
     CIRCULATED = "circulated", "Circulated to Members"
 
 class MeetingType(models.TextChoices):
@@ -932,6 +931,34 @@ class SubmissionPresence(models.Model):
 
     def __str__(self):
         return f"{self.user_id} on submission {self.submission_id}"
+
+
+class SubmissionPrivateNote(models.Model):
+    """A Commission member's own prep notes on a submission — strictly
+    private to the author, never returned to or editable by anyone else
+    (not even PSC Admin — see the API-level check in views.py). One
+    editable note per (submission, author), meant to be jotted down while
+    reading the circulated agenda pack and revisited on the sitting day."""
+
+    submission = models.ForeignKey(
+        "Submission",
+        on_delete=models.CASCADE,
+        related_name="private_notes",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="submission_private_notes",
+    )
+    body = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("submission", "author")
+
+    def __str__(self):
+        return f"Private note by {self.author_id} on submission {self.submission_id}"
 
 
 class Profile(models.Model):
