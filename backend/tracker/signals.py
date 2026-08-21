@@ -43,15 +43,14 @@ def feedback_comment_post_save(sender, instance, created, **kwargs):
 # Tag/shift actions use queryset.update() (no signal) so there's no recursion.
 
 def _dispatch_automation(entity, instance, created):
-    # Savepoint: if the Automation table is absent (early migrations) or an
-    # automation errors, the rollback is contained and never poisons the outer
-    # transaction (or the request).
-    try:
-        with transaction.atomic():
-            from .automation.engine import run_event
-            run_event(entity, instance, "created" if created else "updated")
-    except Exception:  # noqa: BLE001
-        pass
+    # Deferred to transaction.on_commit() + Celery so the automation engine's
+    # outbound notify/escalate/remind email sends never run inline inside the
+    # caller's open transaction (they used to hold row locks for the duration
+    # of the SMTP call — see P0-04, SCDMS Pre-Production Readiness Audit).
+    from .tasks import queue_automation_event
+
+    trigger = "created" if created else "updated"
+    transaction.on_commit(lambda: queue_automation_event(entity, instance.pk, trigger))
 
 
 @receiver(post_save, sender="tracker.Submission")
