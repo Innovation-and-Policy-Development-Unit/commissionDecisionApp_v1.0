@@ -2554,6 +2554,7 @@ export function BackupTab() {
     setSuccess('')
     const fd = new FormData()
     fd.append('file', restoreFile)
+    fd.append('confirm', 'RESTORE')
     try {
       await api.post('/backup/restore/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       setSuccess('Database restored successfully from uploaded file.')
@@ -2575,7 +2576,7 @@ export function BackupTab() {
     setError('')
     setSuccess('')
     try {
-      await api.post('/backup/restore/', { filename })
+      await api.post('/backup/restore/', { filename, confirm: 'RESTORE' })
       setSuccess(`Database restored from ${filename}.`)
       toast.success(`Database restored from ${filename}.`)
       setConfirmRestore(null)

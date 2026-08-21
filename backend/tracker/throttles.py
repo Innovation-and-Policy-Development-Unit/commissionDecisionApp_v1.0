@@ -56,3 +56,9 @@ class SubmissionTrackThrottle(AnonRateThrottle):
     """Limit public submission-tracking lookups per IP — prevents reference-number
     enumeration on the unauthenticated track-my-submission portal."""
     scope = 'submission_track'
+
+
+class BackupRestoreThrottle(UserRateThrottle):
+    """Limit database-restore attempts per admin user — a destructive,
+    whole-database-overwriting action that should never be high-frequency."""
+    scope = 'backup_restore'

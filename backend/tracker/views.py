@@ -9355,6 +9355,12 @@ class BackupViewSet(viewsets.ViewSet):
     """
     permission_classes = [permissions.IsAuthenticated, HasManageRoles]
 
+    def get_throttles(self):
+        if self.action == 'restore':
+            from .throttles import BackupRestoreThrottle
+            return [BackupRestoreThrottle()]
+        return super().get_throttles()
+
     # ── list backups ──────────────────────────────────────────────────────────
     def list(self, request):
         """GET /backup/ — list all backup files with size and timestamp."""
@@ -9446,27 +9452,41 @@ class BackupViewSet(viewsets.ViewSet):
         Accepts either:
           - multipart file upload (field: 'file')
           - JSON body {"filename": "scdms_backup_....json"} to restore from stored file
+        Requires body field "confirm": "RESTORE" (exact match).
         WARNING: This overwrites existing data.
+
+        Content is structurally validated as a Django fixture (list of
+        {model, pk, fields} rows, each model resolvable) before it ever
+        reaches `loaddata` — this is untrusted input (an admin-uploaded
+        file), not a file we generated ourselves, so it gets the same
+        scrutiny as any other user-supplied payload. See P0-02, SCDMS
+        Pre-Production Readiness Audit — Findings Register.
         """
+        import json
+        from django.apps import apps as _apps
         from django.core.management import call_command
+
+        if request.data.get("confirm") != "RESTORE":
+            return Response(
+                {"detail": "Restore requires body field 'confirm': 'RESTORE'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         uploaded = request.FILES.get("file")
         stored_fn = request.data.get("filename")
 
         if uploaded:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
-                for chunk in uploaded.chunks():
-                    tmp.write(chunk)
-                tmp_path = tmp.name
-            restore_path = tmp_path
-            cleanup = True
+            raw = uploaded.read()
+            restore_name = uploaded.name
         elif stored_fn:
             if ".." in stored_fn or not stored_fn.startswith("scdms_backup_"):
                 return Response({"detail": "Invalid filename."}, status=status.HTTP_400_BAD_REQUEST)
-            restore_path = _os.path.join(_BACKUP_DIR, stored_fn)
-            if not _os.path.isfile(restore_path):
+            candidate_path = _os.path.join(_BACKUP_DIR, stored_fn)
+            if not _os.path.isfile(candidate_path):
                 return Response({"detail": "Backup file not found."}, status=status.HTTP_404_NOT_FOUND)
-            cleanup = False
+            with open(candidate_path, "rb") as f:
+                raw = f.read()
+            restore_name = stored_fn
         else:
             return Response(
                 {"detail": "Provide 'file' upload or 'filename' to restore."},
@@ -9474,8 +9494,35 @@ class BackupViewSet(viewsets.ViewSet):
             )
 
         try:
+            rows = json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return Response({"detail": "Backup content is not valid JSON."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not isinstance(rows, list) or not rows:
+            return Response(
+                {"detail": "Backup content must be a non-empty list of fixture rows."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        for row in rows:
+            if not isinstance(row, dict) or not {"model", "pk", "fields"} <= row.keys():
+                return Response(
+                    {"detail": "Backup content is not a valid Django fixture."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                _apps.get_model(row["model"])
+            except (LookupError, ValueError):
+                return Response(
+                    {"detail": "Backup content is not a valid Django fixture."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
+            tmp.write(raw)
+            restore_path = tmp.name
+
+        try:
             call_command("loaddata", restore_path)
-            restore_name = uploaded.name if uploaded else stored_fn
             _security_log.info(
                 "BACKUP_RESTORE | file=%s | user=%s",
                 restore_name,
@@ -9487,10 +9534,16 @@ class BackupViewSet(viewsets.ViewSet):
                  resource_type="Database", resource_label=restore_name,
                  description=f"Database restored from backup: {restore_name}")
             return Response({"detail": "Database restored successfully."})
-        except Exception as exc:
-            return Response({"detail": f"Restore failed: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            _security_log.exception(
+                "BACKUP_RESTORE_FAILED | file=%s | user=%s", restore_name, request.user.username,
+            )
+            return Response(
+                {"detail": "Restore failed. See server logs for details."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         finally:
-            if cleanup and _os.path.exists(restore_path):
+            if _os.path.exists(restore_path):
                 _os.unlink(restore_path)
 
     # ── schedule ──────────────────────────────────────────────────────────────
