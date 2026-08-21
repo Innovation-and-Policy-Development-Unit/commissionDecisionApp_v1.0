@@ -34,6 +34,41 @@ def send_web_push_notification(notification_id):
 
 
 @shared_task
+def run_automation_event_task(entity, obj_id, trigger):
+    """Run event-triggered automations for one entity object. Split out of
+    tracker.signals._dispatch_automation (P0-04, SCDMS Pre-Production
+    Readiness Audit — Findings Register) so the automation-engine's
+    outbound notify/escalate/remind email sends (automation.engine._send_notify,
+    synchronous EmailMultiAlternatives.send()) never run inline inside the
+    caller's open DB transaction — they used to fire from a post_save signal
+    nested inside view code like transition()'s transaction.atomic() block,
+    holding row locks for the duration of the SMTP call."""
+    from .automation.engine import run_event
+    from .rules.entities import get_adapter
+
+    adapter = get_adapter(entity)
+    if adapter is None:
+        return
+    try:
+        obj = adapter.base_qs().get(pk=obj_id)
+    except Exception:
+        app_log.warning("AUTOMATION_EVENT_SKIP | entity=%s pk=%s not found", entity, obj_id)
+        return
+    try:
+        run_event(entity, obj, trigger)
+    except Exception as exc:  # noqa: BLE001 — e.g. Automation table absent during early migrations
+        app_log.warning("AUTOMATION_EVENT_FAILED | entity=%s pk=%s | %s", entity, obj_id, exc)
+
+
+def queue_automation_event(entity, obj_id, trigger):
+    try:
+        run_automation_event_task.delay(entity, obj_id, trigger)
+    except Exception as exc:
+        app_log.warning("AUTOMATION_EVENT_QUEUE_FALLBACK | entity=%s pk=%s | %s", entity, obj_id, exc)
+        run_automation_event_task(entity, obj_id, trigger)
+
+
+@shared_task
 def send_transition_notification_emails(
     submission_id, prev, target, user_ids, *, decision_label="", remarks="",
 ):

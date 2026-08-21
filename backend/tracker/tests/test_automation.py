@@ -2,11 +2,11 @@
 
 from django.contrib.auth.models import User
 from django.core import mail
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from tracker.automation.engine import run_automation_now
+from tracker.automation.engine import run_automation_now, run_event
 from tracker.models import (
     Automation, AutomationRun, Ministry, Notification, Profile, Role, Submission,
 )
@@ -28,6 +28,9 @@ class AutomationEngineTests(TestCase):
         )
 
     def test_tag_action_on_update_trigger(self):
+        # Dispatch (post_save signal → transaction.on_commit → Celery .delay) is
+        # tested separately in test_automation_async.py; here we exercise the
+        # engine itself via run_event() directly, same as test_run_now_acts_on_matching.
         Automation.objects.create(
             name="tag returned", entity="submission", trigger="updated", match="all",
             conditions=[{"field": "current_stage", "op": "eq", "value": "returned_for_clarification"}],
@@ -35,7 +38,8 @@ class AutomationEngineTests(TestCase):
         )
         s = self._sub(current_stage="returned_for_clarification")  # create fires 'created', not 'updated'
         s.title = "edited"
-        s.save()  # fires 'updated' → automation runs
+        s.save()
+        run_event("submission", s, "updated")
         s.refresh_from_db()
         self.assertIn("needs-followup", s.tags)
         self.assertTrue(AutomationRun.objects.filter(submission=s, status="ran").exists())
@@ -46,7 +50,8 @@ class AutomationEngineTests(TestCase):
             actions=[{"type": "notify", "params": {"to_assignee": True, "message": "hi"}}], cooldown_minutes=0,
         )
         mail.outbox = []
-        s = self._sub(assigned_to=self.admin)  # 'created' → notify assignee
+        s = self._sub(assigned_to=self.admin)
+        run_event("submission", s, "created")
         self.assertEqual(len(mail.outbox), 1)
         self.assertTrue(Notification.objects.filter(recipient=self.admin, submission=s).exists())
 
@@ -56,6 +61,7 @@ class AutomationEngineTests(TestCase):
             actions=[{"type": "tag", "params": {"tag": "x"}}], test_mode=True, cooldown_minutes=0,
         )
         s = self._sub()
+        run_event("submission", s, "created")
         s.refresh_from_db()
         self.assertNotIn("x", s.tags or [])
         self.assertEqual(AutomationRun.objects.get(submission=s).status, "simulated")
@@ -78,11 +84,12 @@ class AutomationEngineTests(TestCase):
             actions=[{"type": "tag", "params": {"tag": "y"}}], cooldown_minutes=60,
         )
         s = self._sub()
-        s.save()  # first 'updated' → runs
-        s.save()  # within cooldown → skipped
+        run_event("submission", s, "updated")  # first 'updated' → runs
+        run_event("submission", s, "updated")  # within cooldown → skipped
         self.assertEqual(AutomationRun.objects.filter(submission=s).count(), 1)
 
 
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
 class AutomationAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
