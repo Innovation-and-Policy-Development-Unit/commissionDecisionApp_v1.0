@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../context/ThemeContext'
-import { useAuth } from '../../context/AuthContext'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import HorizontalMenu from './HorizontalMenu'
@@ -10,7 +9,6 @@ import SettingsPanel from './SettingsPanel'
 import SecurityNoticesBanner from '../shared/SecurityNoticesBanner'
 import SystemStatsStrip from '../shared/SystemStatsStrip'
 import FeedbackPanel from '../shared/FeedbackPanel'
-import LockOverlay from '../auth/LockOverlay'
 import KeyboardShortcutsModal from '../shared/KeyboardShortcutsModal'
 import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts'
 import clsx from 'clsx'
@@ -26,7 +24,6 @@ export default function Layout() {
     toggleFeedbackPanel,
     feedbackEnabled
   } = useTheme()
-  const { isLocked } = useAuth()
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -57,15 +54,6 @@ export default function Layout() {
       : 'lg:ms-64'
 
   const mainTopOffset = isHorizontal ? 'mt-28 lg:mt-28' : 'mt-16'
-
-  // If locked, only render the LockOverlay to prevent DOM inspection bypass
-  if (isLocked) {
-    return (
-      <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
-        <LockOverlay />
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
@@ -119,9 +107,6 @@ export default function Layout() {
           {t('feedback.tab')}
         </button>
       )}
-
-      {/* Lock Screen Overlay */}
-      <LockOverlay />
 
       {/* Keyboard shortcuts help modal */}
       <KeyboardShortcutsModal

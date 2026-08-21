@@ -14,15 +14,27 @@ import clsx from 'clsx'
 
 const MINUTES_STATUS = {
   draft:    { label: 'Draft',    bg: 'bg-amber-100 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
+  pending_secretariat_review: { label: 'Pending Secretary & Chairman Review', bg: 'bg-orange-100 dark:bg-orange-900/20', text: 'text-orange-700 dark:text-orange-300', border: 'border-orange-200 dark:border-orange-800' },
   reviewed: { label: 'Reviewed', bg: 'bg-blue-100 dark:bg-blue-900/20',  text: 'text-blue-700 dark:text-blue-300',  border: 'border-blue-200 dark:border-blue-800'  },
+  circulated_to_commissioners: { label: 'Circulated to Commissioners', bg: 'bg-cyan-100 dark:bg-cyan-900/20', text: 'text-cyan-700 dark:text-cyan-300', border: 'border-cyan-200 dark:border-cyan-800' },
+  returned: { label: 'Returned to Secretariat', bg: 'bg-teal-100 dark:bg-teal-900/20', text: 'text-teal-700 dark:text-teal-300', border: 'border-teal-200 dark:border-teal-800' },
   awaiting_signature: { label: 'Awaiting Signature', bg: 'bg-violet-100 dark:bg-violet-900/20', text: 'text-violet-700 dark:text-violet-300', border: 'border-violet-200 dark:border-violet-800' },
   signed:   { label: 'Signed',   bg: 'bg-emerald-100 dark:bg-emerald-900/20', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
 }
 
-// Roles permitted to upload the scanned, manually-signed minutes (and thereby
-// move them to the decision/task workflow). Mirrors the backend gate.
+// Roles permitted to upload the scanned, manually-signed minutes. Mirrors the backend gate.
 const SIGNED_UPLOAD_ROLES = new Set(['senior_admin_officer', 'psc_admin'])
 const SEND_FOR_SIGNATURE_ROLES = new Set(['senior_admin_officer', 'psc_secretary', 'psc_admin'])
+const SUBMIT_REVIEW_ROLES = new Set(['senior_admin_officer', 'psc_secretary', 'psc_admin'])
+const SECRETARIAT_APPROVE_ROLES = new Set(['psc_secretary', 'chairperson', 'psc_admin'])
+const CIRCULATE_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'psc_admin'])
+const COMMISSIONER_COMMENT_ROLES = new Set(['psc_commissioner', 'chairperson', 'psc_secretary', 'psc_admin'])
+const ALLOCATE_TASKS_ROLES = new Set(['psc_secretary', 'psc_admin'])
+
+function formatDateTime(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
 
 function SectionEditor({ label, value, onChange, placeholder }) {
   return (
@@ -317,17 +329,25 @@ export default function MinutesEditor() {
     try {
       const methodMap = {
         sign: 'sign',
-        review: 'mark-reviewed',
+        submit_review: 'submit-for-review',
+        approve: 'secretariat-approve',
+        circulate: 'circulate-to-commissioners',
+        return: 'return-to-secretariat',
         send_for_signature: 'mark-for-signature',
+        allocate_tasks: 'allocate-tasks',
       }
-      const method = methodMap[action] || 'mark-reviewed'
+      const method = methodMap[action] || 'submit-for-review'
       const payload = action === 'sign' ? { pin } : {}
       const res = await api.post(`/minutes/${minutes.id}/${method}/`, payload)
       setMinutes(res.data)
       const messages = {
         sign: 'Minutes signed.',
-        review: 'Minutes marked as reviewed.',
+        submit_review: 'Minutes submitted to the Secretary and Chairman for review.',
+        approve: 'Your approval has been recorded.',
+        circulate: 'Minutes circulated to Commissioners for comment.',
+        return: 'Minutes returned to the Secretariat.',
         send_for_signature: 'Minutes sent for signature — print and obtain signatures at the next sitting.',
+        allocate_tasks: 'Decision tasks allocated to unit managers.',
       }
       setSuccess(messages[action] || 'Minutes updated.')
     } catch (err) {
@@ -337,8 +357,8 @@ export default function MinutesEditor() {
     }
   }
 
-  // Upload the scanned, manually (wet-ink) signed minutes. This single action
-  // marks the minutes Signed and dispatches the post-decision workflow.
+  // Upload the scanned, manually (wet-ink) signed minutes and mark them Signed.
+  // Allocating decision tasks to managers is a separate, explicit Secretary step.
   const uploadSignedMinutes = async (file) => {
     if (!file) return
     setSaving(true)
@@ -351,9 +371,27 @@ export default function MinutesEditor() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setMinutes(res.data)
-      setSuccess('Signed minutes uploaded and moved to decisions & task allocation.')
+      setSuccess('Signed minutes uploaded. The Secretary can now allocate decision tasks.')
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to upload signed minutes.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const [commentInput, setCommentInput] = useState('')
+
+  const addComment = async () => {
+    const body = commentInput.trim()
+    if (!body || !minutes?.id) return
+    setSaving(true)
+    setError('')
+    try {
+      const res = await api.post(`/minutes/${minutes.id}/comments/`, { body })
+      setMinutes(prev => ({ ...prev, comments: [...(prev.comments || []), res.data] }))
+      setCommentInput('')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to add comment.')
     } finally {
       setSaving(false)
     }
@@ -444,6 +482,53 @@ export default function MinutesEditor() {
         <div className="mb-4 flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-700 dark:text-emerald-300 text-sm">
           <CheckCircle2 size={14} />
           {success}
+        </div>
+      )}
+
+      {minutes?.id && minutes.status === 'pending_secretariat_review' && (
+        <div className="card card-compact mb-6 border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10 text-sm">
+          <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">Awaiting Secretary & Chairman review</p>
+          <p className="text-slate-600 dark:text-slate-400">Due {formatDateTime(minutes.review_due_at)} (1 working day)</p>
+          <p className="mt-2 text-slate-600 dark:text-slate-400">
+            Secretary: {minutes.secretary_reviewed_by_name ? `✓ approved ${formatDateTime(minutes.secretary_reviewed_at)}` : 'awaiting approval'}
+            {' · '}
+            Chairman: {minutes.chairman_reviewed_by_name ? `✓ approved ${formatDateTime(minutes.chairman_reviewed_at)}` : 'awaiting approval'}
+          </p>
+        </div>
+      )}
+
+      {minutes?.id && (minutes.status === 'circulated_to_commissioners' || minutes.status === 'returned') && (
+        <div className="card card-compact mb-6 border-cyan-200 dark:border-cyan-800 bg-cyan-50/50 dark:bg-cyan-900/10 text-sm">
+          <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">
+            {minutes.status === 'circulated_to_commissioners' ? 'Circulated to Commissioners for comment' : 'Returned to Secretariat'}
+          </p>
+          {minutes.status === 'circulated_to_commissioners' && (
+            <p className="text-slate-600 dark:text-slate-400">Due {formatDateTime(minutes.commissioner_review_due_at)} (2 working days)</p>
+          )}
+          <div className="mt-3 space-y-2">
+            {(minutes.comments || []).length === 0 && (
+              <p className="text-slate-400 dark:text-slate-500 italic">No comments yet.</p>
+            )}
+            {(minutes.comments || []).map(c => (
+              <div key={c.id} className="bg-white dark:bg-slate-800 rounded-lg px-3 py-2 border border-slate-100 dark:border-slate-700">
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300">{c.author_name} <span className="font-normal text-slate-400">— {formatDateTime(c.created_at)}</span></p>
+                <p className="text-slate-700 dark:text-slate-200 mt-0.5">{c.body}</p>
+              </div>
+            ))}
+          </div>
+          {minutes.status === 'circulated_to_commissioners' && COMMISSIONER_COMMENT_ROLES.has(user?.role) && (
+            <div className="mt-3 flex items-start gap-2">
+              <textarea
+                className="input text-sm flex-1 min-h-[60px]"
+                placeholder="Add a comment on these minutes..."
+                value={commentInput}
+                onChange={e => setCommentInput(e.target.value)}
+              />
+              <button onClick={addComment} disabled={saving || !commentInput.trim()} className="btn-secondary px-4 py-2 text-sm disabled:opacity-60">
+                Post
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -557,15 +642,33 @@ export default function MinutesEditor() {
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             {saving ? 'Saving...' : minutes?.id ? 'Save Draft' : 'Create Draft'}
           </button>
-          {minutes?.id && minutes.status !== 'signed' && (
+          {minutes?.id && (
             <>
-              {minutes.status === 'draft' && (
-                <button onClick={() => changeStatus('review')} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2">
+              {minutes.status === 'draft' && SUBMIT_REVIEW_ROLES.has(user?.role) && (
+                <button onClick={() => changeStatus('submit_review')} disabled={saving} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
                   <CheckCircle2 size={16} />
-                  Mark Reviewed
+                  Submit for Review
                 </button>
               )}
-              {minutes.status === 'reviewed' && SEND_FOR_SIGNATURE_ROLES.has(user?.role) && (
+              {minutes.status === 'pending_secretariat_review' && SECRETARIAT_APPROVE_ROLES.has(user?.role) && (
+                <button onClick={() => changeStatus('approve')} disabled={saving} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-orange-500/20 disabled:opacity-60">
+                  <CheckCircle2 size={16} />
+                  Approve
+                </button>
+              )}
+              {minutes.status === 'reviewed' && CIRCULATE_ROLES.has(user?.role) && (
+                <button onClick={() => changeStatus('circulate')} disabled={saving} className="bg-cyan-600 hover:bg-cyan-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-cyan-500/20 disabled:opacity-60">
+                  <CheckCircle2 size={16} />
+                  Circulate to Commissioners
+                </button>
+              )}
+              {minutes.status === 'circulated_to_commissioners' && COMMISSIONER_COMMENT_ROLES.has(user?.role) && (
+                <button onClick={() => changeStatus('return')} disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-teal-500/20 disabled:opacity-60">
+                  <CheckCircle2 size={16} />
+                  Return to Secretariat
+                </button>
+              )}
+              {minutes.status === 'returned' && SEND_FOR_SIGNATURE_ROLES.has(user?.role) && (
                 <button onClick={() => changeStatus('send_for_signature')} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-violet-500/20 disabled:opacity-60">
                   <PenSquare size={16} />
                   Send for Signature
@@ -593,6 +696,19 @@ export default function MinutesEditor() {
                     </>
                   )}
                 </>
+              )}
+              {minutes.status === 'signed' && ALLOCATE_TASKS_ROLES.has(user?.role) && (
+                minutes.tasks_allocated_at ? (
+                  <span className="text-sm text-emerald-600 dark:text-emerald-400 font-semibold inline-flex items-center gap-2">
+                    <CheckCircle2 size={16} />
+                    Decision tasks allocated {formatDateTime(minutes.tasks_allocated_at)}
+                  </span>
+                ) : (
+                  <button onClick={() => changeStatus('allocate_tasks')} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60">
+                    <CheckCircle2 size={16} />
+                    Allocate Decision Tasks to Managers
+                  </button>
+                )
               )}
             </>
           )}

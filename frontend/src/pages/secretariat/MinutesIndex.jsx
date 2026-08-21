@@ -24,9 +24,24 @@ const STATUS_META = {
     cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     icon: Clock,
   },
+  pending_secretariat_review: {
+    i18nKey: 'secretariat.minutes_status_pending_secretariat_review',
+    cls: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+    icon: Clock,
+  },
   reviewed: {
     i18nKey: 'secretariat.minutes_status_reviewed',
     cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    icon: AlertCircle,
+  },
+  circulated_to_commissioners: {
+    i18nKey: 'secretariat.minutes_status_circulated_to_commissioners',
+    cls: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+    icon: Clock,
+  },
+  returned: {
+    i18nKey: 'secretariat.minutes_status_returned',
+    cls: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
     icon: AlertCircle,
   },
   awaiting_signature: {
@@ -163,7 +178,10 @@ export default function MinutesIndex() {
           >
             <option value="">{t('secretariat.minutes_filter_all_statuses')}</option>
             <option value="draft">{t('secretariat.minutes_status_draft')}</option>
+            <option value="pending_secretariat_review">{t('secretariat.minutes_status_pending_secretariat_review')}</option>
             <option value="reviewed">{t('secretariat.minutes_status_reviewed')}</option>
+            <option value="circulated_to_commissioners">{t('secretariat.minutes_status_circulated_to_commissioners')}</option>
+            <option value="returned">{t('secretariat.minutes_status_returned')}</option>
             <option value="awaiting_signature">{t('secretariat.minutes_status_awaiting_signature')}</option>
             <option value="signed">{t('secretariat.minutes_status_signed')}</option>
           </select>

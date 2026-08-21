@@ -27,6 +27,17 @@ function clearStoredTokens() {
   window.dispatchEvent(new CustomEvent('psc-auth:cleared'))
 }
 
+/** Hard redirect to a fresh login screen — same reasoning as the inactivity-
+ * logout path in AuthContext: reloads the app so in-memory state can't leave
+ * a component stuck showing a stale error instead of the login form. Guarded
+ * against firing while already on the login page (e.g. a stray background
+ * request from an unmounting component). */
+function redirectToLogin() {
+  if (!window.location.pathname.startsWith('/auth/login')) {
+    window.location.assign('/auth/login')
+  }
+}
+
 function storeTokens(access, refresh) {
   localStorage.setItem('psc_access', access)
   if (refresh) {
@@ -56,6 +67,16 @@ function isObtainPairRequest(config) {
 
 function isRefreshRequest(config) {
   return requestPath(config).includes('/auth/token/refresh')
+}
+
+/** The explicit logout call itself must never trigger a refresh-and-retry or
+ * an auto-redirect: it's fired with whatever access token happens to be on
+ * hand (often already expired — that's frequently why the user is logging
+ * out), the caller (AuthContext.logout) already ignores its outcome and
+ * handles all cleanup/navigation itself, and letting the interceptor react
+ * here races that navigation with its own hard redirect. */
+function isLogoutRequest(config) {
+  return requestPath(config).includes('/auth/logout')
 }
 
 async function refreshAccessToken() {
@@ -107,6 +128,10 @@ api.interceptors.response.use(
     const originalRequest = err.config
     const status = err.response?.status
 
+    if (originalRequest && isLogoutRequest(originalRequest)) {
+      return Promise.reject(err)
+    }
+
     if (
       originalRequest &&
       status === 401 &&
@@ -137,6 +162,7 @@ api.interceptors.response.use(
       } catch (refreshErr) {
         processRefreshQueue(refreshErr, null)
         clearStoredTokens()
+        redirectToLogin()
         return Promise.reject(refreshErr)
       } finally {
         isRefreshing = false
@@ -145,6 +171,7 @@ api.interceptors.response.use(
 
     if (status === 401 && !isObtainPairRequest(originalRequest)) {
       clearStoredTokens()
+      redirectToLogin()
     }
 
     if (status === 429 && originalRequest && !originalRequest._rateLimitRetry) {

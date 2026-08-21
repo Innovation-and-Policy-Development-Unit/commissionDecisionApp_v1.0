@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext'
 import clsx from 'clsx'
 import {
   Menu, Search, Bell, Settings, Sun, Moon, ChevronDown,
-  User, LogOut, CreditCard, HelpCircle, Shield, X,
+  User, LogOut, Lock, CreditCard, HelpCircle, Shield, X,
   CheckCircle2, AlertCircle, Info, ChevronRight, MessageSquare,
   Plus, LayoutDashboard, FileText, Gavel, Headphones, BarChart3,
   CalendarDays, ListTodo, Zap, Keyboard,
@@ -154,7 +154,7 @@ const UserMenuItem = memo(function UserMenuItem({ Icon, label, item, onClick }) 
 
 export default function Header({ onMenuClick }) {
   const { t } = useTranslation()
-  const { user, logout } = useAuth()
+  const { user, logout, lock } = useAuth()
   const { theme, isDark, toggleDark, cycleTheme, openSettingsPanel, sidebarCollapsed, isHorizontal } = useTheme()
   const {
     notifications,
@@ -294,6 +294,9 @@ export default function Header({ onMenuClick }) {
     logout()
     navigate('/auth/login')
   }, [logout, navigate])
+  const handleLockSession = useCallback(() => {
+    lock()
+  }, [lock])
 
   const initials = useMemo(() => {
     const name = user?.username || 'PSC'
@@ -698,6 +701,19 @@ export default function Header({ onMenuClick }) {
       >
         <Settings size={20} aria-hidden="true" />
       </button>
+
+      {/* Lock session */}
+      {user?.session_pin_set && (
+        <button
+          type="button"
+          onClick={handleLockSession}
+          aria-label={t('user_menu.lock_session')}
+          title={t('header.lock_session_hint')}
+          className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        >
+          <Lock size={20} aria-hidden="true" />
+        </button>
+      )}
 
       {/* User dropdown */}
       <div className="relative" ref={userRef}>

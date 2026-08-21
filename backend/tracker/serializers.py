@@ -21,6 +21,7 @@ from .models import (
     RecordingAudioSource,
     TranscriptSource,
     Minutes,
+    MinutesComment,
     AgendaItem,
     AgendaSection,
     Ministry,
@@ -2362,6 +2363,15 @@ class SecurityScanSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class MinutesCommentSerializer(serializers.ModelSerializer):
+    author_name = serializers.CharField(source="author.username", read_only=True)
+
+    class Meta:
+        model = MinutesComment
+        fields = ("id", "minutes", "author", "author_name", "body", "created_at")
+        read_only_fields = ("id", "minutes", "author", "author_name", "created_at")
+
+
 class MinutesSerializer(serializers.ModelSerializer):
     meeting_title = serializers.CharField(source="meeting.title", read_only=True)
     meeting_reference = serializers.CharField(source="meeting.reference_number", read_only=True)
@@ -2369,6 +2379,12 @@ class MinutesSerializer(serializers.ModelSerializer):
     signed_by_name = serializers.SerializerMethodField()
     signed_uploaded_by_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
+    submitted_for_review_by_name = serializers.SerializerMethodField()
+    secretary_reviewed_by_name = serializers.SerializerMethodField()
+    chairman_reviewed_by_name = serializers.SerializerMethodField()
+    returned_by_name = serializers.SerializerMethodField()
+    tasks_allocated_by_name = serializers.SerializerMethodField()
+    comments = MinutesCommentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Minutes
@@ -2378,13 +2394,41 @@ class MinutesSerializer(serializers.ModelSerializer):
             "signed_document", "signed_uploaded_by", "signed_uploaded_by_name",
             "signed_by", "signed_by_name", "signed_at",
             "circulated_at", "minutes_due_at",
+            "submitted_for_review_by", "submitted_for_review_by_name", "submitted_for_review_at", "review_due_at",
+            "secretary_reviewed_by", "secretary_reviewed_by_name", "secretary_reviewed_at",
+            "chairman_reviewed_by", "chairman_reviewed_by_name", "chairman_reviewed_at",
+            "commissioner_circulated_at", "commissioner_review_due_at",
+            "returned_by", "returned_by_name", "returned_at",
+            "tasks_allocated_by", "tasks_allocated_by_name", "tasks_allocated_at",
+            "comments",
             "created_by", "created_by_name",
             "created_at", "updated_at",
         )
         read_only_fields = (
             "id", "created_at", "updated_at", "created_by",
             "signed_document", "signed_uploaded_by",
+            "submitted_for_review_by", "submitted_for_review_at", "review_due_at",
+            "secretary_reviewed_by", "secretary_reviewed_at",
+            "chairman_reviewed_by", "chairman_reviewed_at",
+            "commissioner_circulated_at", "commissioner_review_due_at",
+            "returned_by", "returned_at",
+            "tasks_allocated_by", "tasks_allocated_at",
         )
+
+    def get_submitted_for_review_by_name(self, obj):
+        return obj.submitted_for_review_by.username if obj.submitted_for_review_by else None
+
+    def get_secretary_reviewed_by_name(self, obj):
+        return obj.secretary_reviewed_by.username if obj.secretary_reviewed_by else None
+
+    def get_chairman_reviewed_by_name(self, obj):
+        return obj.chairman_reviewed_by.username if obj.chairman_reviewed_by else None
+
+    def get_returned_by_name(self, obj):
+        return obj.returned_by.username if obj.returned_by else None
+
+    def get_tasks_allocated_by_name(self, obj):
+        return obj.tasks_allocated_by.username if obj.tasks_allocated_by else None
 
     def get_signed_by_name(self, obj):
         return obj.signed_by.username if obj.signed_by else None

@@ -3628,7 +3628,14 @@ class DeadlineReminderDraft(models.Model):
 
 class MinutesStatus(models.TextChoices):
     DRAFT = "draft", "Draft"
+    # Submitted by the minute-taker to the Secretary and Chairman, who must
+    # each independently approve (1 working day SLA) before the minutes move on.
+    PENDING_SECRETARIAT_REVIEW = "pending_secretariat_review", "Pending Secretary & Chairman Review"
     REVIEWED = "reviewed", "Reviewed"
+    # Out to every Commissioner for comment ahead of the next sitting where the
+    # minutes will be tabled for endorsement (2 working day SLA).
+    CIRCULATED_TO_COMMISSIONERS = "circulated_to_commissioners", "Circulated to Commissioners"
+    RETURNED = "returned", "Returned to Secretariat"
     # Minutes have been finalised and printed for manual (wet-ink) signature at
     # the next sitting; awaiting the scanned signed copy. Interim state until the
     # DCDT digital-signature policy is in force.
@@ -3640,7 +3647,7 @@ class Minutes(models.Model):
     """Formal minutes document for a Commission sitting."""
 
     meeting = models.OneToOneField(Meeting, on_delete=models.CASCADE, related_name="minutes")
-    status = models.CharField(max_length=20, choices=MinutesStatus.choices, default=MinutesStatus.DRAFT)
+    status = models.CharField(max_length=30, choices=MinutesStatus.choices, default=MinutesStatus.DRAFT)
     content = models.JSONField(
         default=dict, blank=True,
         help_text=(
@@ -3677,6 +3684,39 @@ class Minutes(models.Model):
         help_text="When signed minutes were circulated to managers for task allocation.")
     minutes_due_at = models.DateTimeField(null=True, blank=True,
         help_text="SLA: minutes must be finalised within 3 days of the meeting.")
+    # ── Secretariat dual review: Secretary + Chairman, 1 working day SLA ──
+    submitted_for_review_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="submitted_minutes_for_review",
+    )
+    submitted_for_review_at = models.DateTimeField(null=True, blank=True)
+    review_due_at = models.DateTimeField(null=True, blank=True)
+    secretary_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="secretary_reviewed_minutes",
+    )
+    secretary_reviewed_at = models.DateTimeField(null=True, blank=True)
+    chairman_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="chairman_reviewed_minutes",
+    )
+    chairman_reviewed_at = models.DateTimeField(null=True, blank=True)
+    # ── Commissioner circulation (pre-signature), 2 working day SLA ───────
+    commissioner_circulated_at = models.DateTimeField(null=True, blank=True)
+    commissioner_review_due_at = models.DateTimeField(null=True, blank=True)
+    returned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="returned_minutes",
+    )
+    returned_at = models.DateTimeField(null=True, blank=True)
+    # ── Post-signing task allocation: explicit Secretary trigger, decoupled
+    # from the signed-scan upload so a bad upload can be caught before
+    # managers are notified of their decision tasks.
+    tasks_allocated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="allocated_minutes_tasks",
+    )
+    tasks_allocated_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
         related_name="created_minutes",
@@ -3690,6 +3730,23 @@ class Minutes(models.Model):
 
     def __str__(self):
         return f"Minutes — {self.meeting.reference_number} ({self.get_status_display()})"
+
+
+class MinutesComment(models.Model):
+    """A Commissioner's feedback on draft minutes while they're circulated for
+    review (MinutesStatus.CIRCULATED_TO_COMMISSIONERS). Visible to the
+    Secretariat and other Commissioners — not private, unlike SubmissionPrivateNote."""
+
+    minutes = models.ForeignKey(Minutes, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="minutes_comments")
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Comment by {self.author} on {self.minutes}"
 
 
 class MinuteAgendaIntake(models.Model):

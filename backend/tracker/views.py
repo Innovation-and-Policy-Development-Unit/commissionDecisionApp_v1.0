@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import get_resolver
 from django.urls.resolvers import URLPattern, URLResolver
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from rest_framework import mixins, parsers, permissions, status, viewsets, exceptions
 from rest_framework.decorators import action, api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.exceptions import PermissionDenied
@@ -123,11 +123,13 @@ from .serializers import (
     FeedbackChecklistResponseSerializer,
     NotificationSerializer,
     MinutesSerializer,
+    MinutesCommentSerializer,
     MinuteAgendaIntakeSerializer,
     MinuteAgendaIntakeBulkSerializer,
     MeetingTranscriptSerializer,
     MinutesGenerateSerializer,
     TranscriptGenerateSerializer,
+    SessionPinSetupSerializer,
     SessionPinVerifySerializer,
     DecisionExtractSerializer,
     CommissionSubTaskSerializer,
@@ -173,7 +175,9 @@ from .models import (
     Meeting,
     MeetingTranscript,
     Minutes,
+    MinutesComment,
     MinutesStatus,
+    add_working_days,
     AgendaItem,
     Ministry,
     Profile,
@@ -7244,16 +7248,42 @@ class DisableTOTPView(APIView):
 # ── Session PIN (Trusted Device Re-authentication) ────────────────────────────
 
 class SessionPinSetupView(APIView):
-    """Session PIN feature is disabled system-wide — no one (existing or newly
-    onboarded) may set one, so the trusted-session PIN shortcut in the login
-    flow stays permanently inert."""
+    """Set or change the session PIN for trusted-device re-authentication and
+    inactivity unlock. Requires authentication. When changing an existing
+    PIN, current_password is required for verification."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        return Response(
-            {"detail": "Session PIN sign-in is disabled. Please use your full password to sign in."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+        ser = SessionPinSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        profile = _profile(request.user)
+        new_pin = ser.validated_data["pin"]
+
+        # If changing an existing PIN, verify current password
+        if profile.session_pin:
+            current_password = ser.validated_data.get("current_password", "")
+            if not request.user.check_password(current_password):
+                return Response(
+                    {"detail": "Current password is required to change the session PIN."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        from django.contrib.auth.hashers import make_password
+        was_set = bool(profile.session_pin)
+        profile.session_pin = make_password(new_pin)
+        profile.session_pin_set_at = timezone.now()
+        profile.save(update_fields=["session_pin", "session_pin_set_at"])
+
+        _security_log.info("SESSION_PIN_SET | username=%s", request.user.username)
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        _log(request, _AL.Action.SETTINGS,
+             resource_type="User", resource_id=request.user.id,
+             resource_label=request.user.username,
+             description=f"Session PIN {'changed' if was_set else 'set'} for {request.user.username}")
+
+        return Response({"detail": "Session PIN has been set successfully."})
 
 
 class SessionPinVerifyView(APIView):
@@ -10465,32 +10495,200 @@ class MinutesViewSet(viewsets.ModelViewSet):
         filename = f"minutes_{minutes.meeting.reference_number}_signed.pdf"
         minutes.pdf_version.save(filename, ContentFile(buf.read()), save=True)
 
-        # Post-signing automation: allocate decisions to unit managers, run AI
-        # decision extraction, and queue outcome-letter drafts for the Secretariat.
-        self._run_post_signing_automation(minutes, request.user)
-
+        # Signing itself is complete; task allocation to managers is now a
+        # separate, explicit Secretary action (see allocate_tasks below) so a
+        # bad signature/upload can be caught before managers are notified.
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="mark-reviewed")
     def mark_reviewed(self, request, pk=None):
-        """Mark minutes as reviewed (ready for signing)."""
+        """Manual override: force minutes straight to Reviewed, bypassing the
+        Secretary/Chairman dual-approval flow. PSC Admin only — for correcting
+        an edge case, not the normal path (use submit-for-review instead)."""
         minutes = self.get_object()
         profile = _profile(self.request.user)
-        if profile.role not in {Role.CHAIRPERSON, Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.PSC_COMMISSIONER, Role.SENIOR_ADMIN_OFFICER}:
-            raise PermissionDenied("Only PSC Secretary, Admin, Commissioners, Chairperson, or Senior Admin can review minutes.")
+        if profile.role != Role.PSC_ADMIN:
+            raise PermissionDenied("Only PSC Admin can force minutes to Reviewed. Use submit-for-review instead.")
         if minutes.status == MinutesStatus.SIGNED:
             return Response({"detail": "Cannot review signed minutes."}, status=400)
         minutes.status = MinutesStatus.REVIEWED
         minutes.save()
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
+    @action(detail=True, methods=["post"], url_path="submit-for-review")
+    def submit_for_review(self, request, pk=None):
+        """Minute-taker submits drafted minutes to the Secretary and Chairman,
+        who each have 1 working day to independently approve."""
+        minutes = self.get_object()
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_SECRETARY, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the minute-taker (Senior Admin Officer), Secretary, or Admin can submit minutes for review.")
+        if minutes.status != MinutesStatus.DRAFT:
+            return Response({"detail": "Only draft minutes can be submitted for review."}, status=400)
+
+        now = timezone.now()
+        minutes.status = MinutesStatus.PENDING_SECRETARIAT_REVIEW
+        minutes.submitted_for_review_by = request.user
+        minutes.submitted_for_review_at = now
+        minutes.review_due_at = timezone.make_aware(
+            datetime.combine(add_working_days(now, 1), time(23, 59, 59)), timezone.get_current_timezone(),
+        )
+        minutes.secretary_reviewed_by = None
+        minutes.secretary_reviewed_at = None
+        minutes.chairman_reviewed_by = None
+        minutes.chairman_reviewed_at = None
+        minutes.save()
+
+        try:
+            from .email_notify import notify_minutes_submitted_for_review
+            notify_minutes_submitted_for_review(minutes)
+        except Exception:
+            import logging
+            logging.getLogger("scdms.app").exception("MINUTES_SUBMIT_NOTIFY_FAIL | minutes=%s", minutes.id)
+
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="secretariat-approve")
+    def secretariat_approve(self, request, pk=None):
+        """Secretary or Chairman independently approves minutes that are
+        pending secretariat review. Once both have approved, status advances
+        to Reviewed and the minute-taker is notified."""
+        minutes = self.get_object()
+        profile = _profile(self.request.user)
+        if minutes.status != MinutesStatus.PENDING_SECRETARIAT_REVIEW:
+            return Response({"detail": "Minutes are not pending secretariat review."}, status=400)
+        if profile.role not in {Role.PSC_SECRETARY, Role.CHAIRPERSON, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Secretary or Chairperson can approve minutes at this stage.")
+
+        now = timezone.now()
+        acted = False
+        if profile.role in {Role.PSC_SECRETARY, Role.PSC_ADMIN} and not minutes.secretary_reviewed_by:
+            minutes.secretary_reviewed_by = request.user
+            minutes.secretary_reviewed_at = now
+            acted = True
+        if profile.role in {Role.CHAIRPERSON, Role.PSC_ADMIN} and not minutes.chairman_reviewed_by:
+            minutes.chairman_reviewed_by = request.user
+            minutes.chairman_reviewed_at = now
+            acted = True
+        if not acted:
+            return Response({"detail": "You have already approved these minutes."}, status=400)
+
+        if minutes.secretary_reviewed_by and minutes.chairman_reviewed_by:
+            minutes.status = MinutesStatus.REVIEWED
+        minutes.save()
+
+        if minutes.status == MinutesStatus.REVIEWED:
+            try:
+                from .email_notify import notify_minutes_secretariat_approved
+                notify_minutes_secretariat_approved(minutes)
+            except Exception:
+                import logging
+                logging.getLogger("scdms.app").exception("MINUTES_APPROVED_NOTIFY_FAIL | minutes=%s", minutes.id)
+
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="circulate-to-commissioners")
+    def circulate_to_commissioners(self, request, pk=None):
+        """Secretary circulates reviewed minutes to every Commissioner for
+        comment ahead of the sitting where they'll be tabled for endorsement.
+        2 working day SLA."""
+        minutes = self.get_object()
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Secretary, minute-taker, or Admin can circulate minutes to Commissioners.")
+        if minutes.status != MinutesStatus.REVIEWED:
+            return Response({"detail": "Minutes must be Reviewed before circulating to Commissioners."}, status=400)
+
+        now = timezone.now()
+        minutes.status = MinutesStatus.CIRCULATED_TO_COMMISSIONERS
+        minutes.commissioner_circulated_at = now
+        minutes.commissioner_review_due_at = timezone.make_aware(
+            datetime.combine(add_working_days(now, 2), time(23, 59, 59)), timezone.get_current_timezone(),
+        )
+        minutes.save()
+
+        try:
+            from .email_notify import notify_minutes_circulated_to_commissioners
+            notify_minutes_circulated_to_commissioners(minutes)
+        except Exception:
+            import logging
+            logging.getLogger("scdms.app").exception("MINUTES_CIRCULATE_NOTIFY_FAIL | minutes=%s", minutes.id)
+
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["get", "post"], url_path="comments")
+    def comments(self, request, pk=None):
+        """List or add Commissioner comments on circulated minutes."""
+        minutes = self.get_object()
+        if request.method == "GET":
+            qs = minutes.comments.select_related("author")
+            return Response(MinutesCommentSerializer(qs, many=True).data)
+
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_COMMISSIONER, Role.CHAIRPERSON, Role.PSC_SECRETARY, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only Commission members can comment on minutes.")
+        body = (request.data.get("body") or "").strip()
+        if not body:
+            return Response({"detail": "Comment body is required."}, status=400)
+        comment = MinutesComment.objects.create(minutes=minutes, author=request.user, body=body)
+        return Response(MinutesCommentSerializer(comment).data, status=201)
+
+    @action(detail=True, methods=["post"], url_path="return-to-secretariat")
+    def return_to_secretariat(self, request, pk=None):
+        """A Commissioner (or the Secretary, once feedback has been collected)
+        closes the Commissioner-review window and hands the minutes back to
+        the minute-taker. The Secretary is notified they're back."""
+        minutes = self.get_object()
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.PSC_COMMISSIONER, Role.CHAIRPERSON, Role.PSC_SECRETARY, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only Commission members or the Secretary can return minutes to the Secretariat.")
+        if minutes.status != MinutesStatus.CIRCULATED_TO_COMMISSIONERS:
+            return Response({"detail": "Minutes are not currently circulated to Commissioners."}, status=400)
+
+        minutes.status = MinutesStatus.RETURNED
+        minutes.returned_by = request.user
+        minutes.returned_at = timezone.now()
+        minutes.save()
+
+        try:
+            from .email_notify import notify_minutes_returned
+            notify_minutes_returned(minutes)
+        except Exception:
+            import logging
+            logging.getLogger("scdms.app").exception("MINUTES_RETURNED_NOTIFY_FAIL | minutes=%s", minutes.id)
+
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="allocate-tasks")
+    def allocate_tasks(self, request, pk=None):
+        """Secretary's explicit trigger, after signed minutes are on record,
+        to advance decided submissions and allocate decision tasks to unit
+        managers. Decoupled from upload-signed/sign so the Secretary can
+        confirm the right scan was uploaded before managers are notified."""
+        minutes = self.get_object()
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Secretary or Admin can allocate decision tasks.")
+        if minutes.status != MinutesStatus.SIGNED:
+            return Response({"detail": "Minutes must be signed before tasks can be allocated."}, status=400)
+        if minutes.tasks_allocated_at:
+            return Response({"detail": "Decision tasks have already been allocated for these minutes."}, status=400)
+
+        self._run_post_signing_automation(minutes, request.user)
+        minutes.tasks_allocated_by = request.user
+        minutes.tasks_allocated_at = timezone.now()
+        minutes.save(update_fields=["tasks_allocated_by", "tasks_allocated_at"])
+
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
     @staticmethod
     def _run_post_signing_automation(minutes, user):
         """Advance decided submissions, allocate decisions to unit managers, run
         AI decision extraction, queue outcome-letter drafts, and notify Commission
-        members that the signed minutes are on record. Shared by the digital
-        ``sign`` path and the manual ``upload-signed`` path so both produce the
-        same downstream effects. Runs once, on first signing."""
+        members that the signed minutes are on record. Invoked by the Secretary's
+        explicit ``allocate-tasks`` action once minutes are signed, rather than
+        automatically by ``sign``/``upload-signed``, so a bad signature/scan can
+        be caught before managers are notified."""
         from .decision_allocation import (
             advance_submissions_for_signed_minutes,
             allocate_decision_tasks,
@@ -10534,9 +10732,10 @@ class MinutesViewSet(viewsets.ModelViewSet):
             )
         if minutes.status == MinutesStatus.SIGNED:
             return Response({"detail": "Minutes are already signed."}, status=400)
-        if minutes.status not in {MinutesStatus.REVIEWED, MinutesStatus.AWAITING_SIGNATURE} and profile.role != Role.PSC_ADMIN:
+        eligible = {MinutesStatus.REVIEWED, MinutesStatus.RETURNED, MinutesStatus.AWAITING_SIGNATURE}
+        if minutes.status not in eligible and profile.role != Role.PSC_ADMIN:
             return Response(
-                {"detail": "Minutes must be reviewed before they can be sent for signature."},
+                {"detail": "Minutes must be reviewed (and returned by Commissioners, if circulated) before they can be sent for signature."},
                 status=400,
             )
         minutes.status = MinutesStatus.AWAITING_SIGNATURE
@@ -10545,14 +10744,14 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="upload-signed")
     def upload_signed(self, request, pk=None):
-        """Upload the scanned, manually-signed minutes and, in the same action,
-        finalise them and dispatch the post-decision workflow.
+        """Upload the scanned, manually-signed minutes and mark them SIGNED.
 
         Per the interim manual-signature process: the minutes are printed,
         signed on paper by the Chairperson and Commissioners at the next sitting,
-        then the Senior Admin Officer uploads the signed scan here. Uploading
-        marks the minutes SIGNED and immediately runs decision allocation,
-        minute-decision tasks, and task allocation.
+        then the minute-taker (Senior Admin Officer) uploads the signed scan
+        here. Task allocation to unit managers is a separate, explicit
+        Secretary action (see allocate-tasks) so a bad upload can be caught
+        before managers are notified.
 
         Minutes remain editable after signing (Secretary / Chairperson / Admin),
         and a corrected signed scan may be re-uploaded.
@@ -10570,7 +10769,6 @@ class MinutesViewSet(viewsets.ModelViewSet):
                 status=400,
             )
 
-        already_signed = minutes.status == MinutesStatus.SIGNED
         minutes.signed_document.save(
             f"minutes_{minutes.meeting.reference_number}_signed_scan.{signed_file.name.rsplit('.', 1)[-1].lower()}",
             signed_file,
@@ -10581,11 +10779,6 @@ class MinutesViewSet(viewsets.ModelViewSet):
         if not minutes.signed_at:
             minutes.signed_at = timezone.now()
         minutes.save()
-
-        # Run downstream automation only on the first signing so re-uploading a
-        # corrected scan does not duplicate decision tasks.
-        if not already_signed:
-            self._run_post_signing_automation(minutes, request.user)
 
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 

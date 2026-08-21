@@ -1,27 +1,26 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useLocation, Navigate } from 'react-router-dom'
-import { Lock, ArrowRight } from 'lucide-react'
+import { useState } from 'react'
+import { useLocation, useNavigate, Navigate } from 'react-router-dom'
+import { ShieldCheck, ArrowRight } from 'lucide-react'
+import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 
-export default function LockScreen() {
+/** Mandatory session-PIN setup — every user is routed here (by RequireAuth)
+ * on first login and on any login where they haven't set one yet. The PIN
+ * is what lets the inactivity-lock screen and trusted-device re-login work
+ * without falling back to a full password re-entry. */
+export default function SetPinPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { unlock, isLocked, accessToken, user, authReady, logout } = useAuth()
-  const [username, setUsername] = useState('')
+  const { accessToken, user, authReady, refreshMe, logout } = useAuth()
   const [pin, setPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    const stored = sessionStorage.getItem('psc-lock-username')
-    if (!stored) {
-      navigate('/auth/login', { replace: true })
-      return
-    }
-    setUsername(stored)
-  }, [navigate])
-
-  if (accessToken && user && authReady && !isLocked) {
+  if (!accessToken) {
+    return <Navigate to="/auth/login" replace />
+  }
+  if (authReady && user?.session_pin_set) {
     const from = location.state?.from?.pathname || '/'
     return <Navigate to={from} replace />
   }
@@ -29,15 +28,22 @@ export default function LockScreen() {
   const handleSubmit = async e => {
     e.preventDefault()
     setError('')
+    if (pin.length < 4) {
+      setError('PIN must be at least 4 digits.')
+      return
+    }
+    if (pin !== confirmPin) {
+      setError('PINs do not match.')
+      return
+    }
     setLoading(true)
     try {
-      const result = await unlock(pin)
-      if (!result.ok) {
-        setError(result.detail)
-        return
-      }
+      await api.post('/auth/session-pin/setup/', { pin })
+      await refreshMe()
       const from = location.state?.from?.pathname || '/'
       navigate(from, { replace: true })
+    } catch (err) {
+      setError(err.response?.data?.detail || err.response?.data?.pin?.[0] || 'Failed to set PIN.')
     } finally {
       setLoading(false)
     }
@@ -48,7 +54,7 @@ export default function LockScreen() {
       className="min-h-screen flex flex-col items-center justify-center px-4 py-10"
       style={{ background: 'linear-gradient(145deg, #f0f4f9 0%, #e5eaf3 100%)' }}
     >
-      <div style={{ maxWidth: 400 }} className="w-full">
+      <div style={{ maxWidth: 420 }} className="w-full">
         <div
           className="anim-slide-up"
           style={{
@@ -71,16 +77,14 @@ export default function LockScreen() {
                 justifyContent: 'center',
               }}
             >
-              <Lock size={28} color="white" />
+              <ShieldCheck size={28} color="white" />
             </div>
           </div>
 
-          <h1 className="text-xl font-bold text-center text-slate-900 mb-1">Session Locked</h1>
-          <p className="text-sm text-center text-slate-500 mb-2">
-            Your session has been locked. Enter your PIN to resume.
-          </p>
-          <p className="text-xs text-center text-slate-400 mb-7">
-            Signed in as <strong className="text-slate-700">{username}</strong>
+          <h1 className="text-xl font-bold text-center text-slate-900 mb-1">Set Your Session PIN</h1>
+          <p className="text-sm text-center text-slate-500 mb-7">
+            A 4–6 digit PIN is required on this account. It's used to unlock your session after a
+            period of inactivity and for quick sign-in on this device — your password stays private.
           </p>
 
           {error && (
@@ -92,7 +96,7 @@ export default function LockScreen() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2 text-center">
-                Session PIN (4–6 digits)
+                New PIN (4–6 digits)
               </label>
               <input
                 type="password"
@@ -106,6 +110,21 @@ export default function LockScreen() {
                 autoFocus
               />
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2 text-center">
+                Confirm PIN
+              </label>
+              <input
+                type="password"
+                className="input text-center text-2xl font-mono"
+                style={{ borderRadius: 10, letterSpacing: '0.4em' }}
+                maxLength={6}
+                placeholder="••••••"
+                value={confirmPin}
+                onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                required
+              />
+            </div>
             <button
               type="submit"
               className="w-full py-3 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -114,30 +133,17 @@ export default function LockScreen() {
                 borderRadius: 10,
                 boxShadow: '0 4px 14px rgba(12,36,81,0.3)',
               }}
-              disabled={loading || pin.length < 4}
+              disabled={loading || pin.length < 4 || confirmPin.length < 4}
             >
-              {loading ? (
-                <>
-                  <svg className="animate-spin" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                    <circle cx="12" cy="12" r="10" strokeOpacity={0.25} />
-                    <path d="M12 2a10 10 0 0 1 10 10" />
-                  </svg>
-                  Unlocking…
-                </>
-              ) : (
-                <>Unlock <ArrowRight size={16} /></>
-              )}
+              {loading ? 'Saving…' : <>Save PIN <ArrowRight size={16} /></>}
             </button>
             <div className="text-center">
               <button
                 type="button"
-                onClick={async () => {
-                  await logout('manual')
-                  navigate('/auth/login', { replace: true })
-                }}
+                onClick={() => logout('manual')}
                 className="text-xs text-slate-400 hover:text-primary-600 underline"
               >
-                Sign in as a different user
+                Log out instead
               </button>
             </div>
           </form>

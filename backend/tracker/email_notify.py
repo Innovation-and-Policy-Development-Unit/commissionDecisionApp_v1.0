@@ -810,6 +810,80 @@ def notify_minutes_signed(minutes) -> None:
     )
 
 
+def _notify_users(users, *, title: str, body: str, link: str = "/secretariat/minutes") -> None:
+    from .models import Notification
+
+    for user in users:
+        Notification.objects.create(
+            recipient=user, channel=Notification.Channel.IN_APP, push=True,
+            title=title, body=body, link=link,
+        )
+
+
+def notify_minutes_submitted_for_review(minutes) -> None:
+    """Tell the Secretary and Chairperson that minutes are waiting on their
+    1-day review. Best-effort, in-app only."""
+    from .models import Role
+
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    reviewers = list(
+        User.objects.filter(
+            is_active=True, psc_profile__role__in=[Role.PSC_SECRETARY, Role.CHAIRPERSON],
+        ).select_related("psc_profile")
+    )
+    _notify_users(
+        reviewers,
+        title=f"Minutes awaiting your review — {ref}".strip(),
+        body="Draft minutes have been submitted and need your review and approval within 1 working day.",
+    )
+
+
+def notify_minutes_secretariat_approved(minutes) -> None:
+    """Tell the minute-taker that both Secretary and Chairman have approved."""
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    if minutes.submitted_for_review_by:
+        _notify_users(
+            [minutes.submitted_for_review_by],
+            title=f"Minutes approved by Secretary & Chairman — {ref}".strip(),
+            body="Both the Secretary and Chairperson have approved the minutes. You can now circulate them to Commissioners.",
+        )
+
+
+def notify_minutes_circulated_to_commissioners(minutes) -> None:
+    """Tell every Commissioner the minutes are out for their 2-day review."""
+    from .models import Role
+
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    commissioners = list(
+        User.objects.filter(
+            is_active=True, psc_profile__role=Role.PSC_COMMISSIONER,
+        ).select_related("psc_profile")
+    )
+    _notify_users(
+        commissioners,
+        title=f"Minutes ready for your review — {ref}".strip(),
+        body="Draft minutes are ready for your review and comment ahead of the next sitting. Please respond within 2 working days.",
+    )
+
+
+def notify_minutes_returned(minutes) -> None:
+    """Tell the Secretary that Commissioner review is done and minutes are
+    back with the Secretariat."""
+    from .models import Role
+
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    secretaries = list(
+        User.objects.filter(
+            is_active=True, psc_profile__role=Role.PSC_SECRETARY,
+        ).select_related("psc_profile")
+    )
+    _notify_users(
+        secretaries,
+        title=f"Minutes back from Commissioners — {ref}".strip(),
+        body="Commissioner review is complete and the minutes are back with the Secretariat, ready to be printed for signature.",
+    )
+
+
 def sample_context_for_slug(slug: str) -> dict[str, str]:
     from .email_template_defaults import SAMPLE_RECIPIENT
 

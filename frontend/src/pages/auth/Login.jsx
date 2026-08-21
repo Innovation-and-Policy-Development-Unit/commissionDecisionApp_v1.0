@@ -96,6 +96,11 @@ export default function Login() {
       } else {
         setShow2FA(true)
       }
+    } else if (data?.pin_required) {
+      // Trusted device/session on this account — the backend skips issuing
+      // tokens and asks for just the PIN instead of the full password again.
+      sessionStorage.setItem('psc-lock-username', data.username || username)
+      navigate('/auth/lock', { state: { from: location.state?.from } })
     } else if (data?.must_change_password) {
       setShowPasswordChange(true)
     }

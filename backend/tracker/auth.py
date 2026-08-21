@@ -30,6 +30,14 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
     Custom authentication for API Keys.
     Expects header: X-API-Key: psc_...
     """
+    def authenticate_header(self, request):
+        # Without this, DRF's exception handler has no WWW-Authenticate header
+        # to fall back on when JWTAuthentication (listed after this class in
+        # DEFAULT_AUTHENTICATION_CLASSES) rejects an expired/invalid Bearer
+        # token, and downgrades what should be a 401 to a 403 — which the
+        # frontend's refresh-and-retry logic only ever triggers on 401.
+        return 'Bearer'
+
     def authenticate(self, request):
         key_header = request.META.get("HTTP_X_API_KEY")
         if not key_header:
