@@ -41,6 +41,8 @@ import BaseInput from '../../components/shared/BaseInput'
 import BaseMessageBar from '../../components/shared/BaseMessageBar'
 import BaseCheckbox from '../../components/shared/BaseCheckbox'
 import MultiPageFormRenderer from '../../components/shared/MultiPageFormRenderer'
+import RichNoteEditor from '../../components/shared/RichNoteEditor'
+import DOMPurify from 'dompurify'
 import DynamicFormRenderer from '../../components/shared/DynamicFormRenderer'
 import PSCForm22Preview from '../../components/shared/PSCForm22Preview'
 import PSCForm21Fields from './PSCForm21Fields'
@@ -202,7 +204,8 @@ export default function SubmissionDetail() {
   const [officers, setOfficers] = useState([])
   const [selectedOfficer, setSelectedOfficer] = useState('')
   const [allocateBusy, setAllocateBusy] = useState(false)
-  const [assessmentFile, setAssessmentFile] = useState(null)
+  const [hasAssessmentText, setHasAssessmentText] = useState(false)
+  const assessmentEditorRef = useRef(null)
   const isAdmin = user?.role === 'psc_admin'
   const isUnitManager  = user && UNIT_MANAGER_ROLES.includes(user.role)
   // Matches the backend's my-note permission check (SubmissionViewSet.my_note).
@@ -423,15 +426,11 @@ export default function SubmissionDetail() {
   const submitToManager = async () => {
     setAllocateBusy(true)
     try {
-      let payload
-      let headers
-      if (assessmentFile) {
-        payload = new FormData()
-        payload.append('file', assessmentFile)
-        headers = { 'Content-Type': 'multipart/form-data' }
-      }
-      await api.post(`/submissions/${id}/submit-to-manager/`, payload, headers ? { headers } : undefined)
-      setAssessmentFile(null)
+      const payload = submission.current_stage === 'under_assessment'
+        ? { assessment_html: assessmentEditorRef.current?.getHTML() || '' }
+        : undefined
+      await api.post(`/submissions/${id}/submit-to-manager/`, payload)
+      setHasAssessmentText(false)
       await reload()
       toast.success('Submitted back to your unit manager.')
     } catch (err) {
@@ -1744,6 +1743,12 @@ const stageDescriptions = {
                   <span className="font-semibold">Handed back — ready for your review.</span>{' '}
                   {submission.assigned_to_name} submitted this on{' '}
                   {new Date(submission.ready_for_manager_at).toLocaleString('en-VU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}.
+                  {submission.assessment_html && (
+                    <div
+                      className="rich-note-prose mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800 text-slate-700 dark:text-slate-200"
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(submission.assessment_html) }}
+                    />
+                  )}
                 </div>
               )}
 
@@ -1836,22 +1841,17 @@ const stageDescriptions = {
                 <>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     {submission.current_stage === 'under_assessment'
-                      ? 'Attach your assessment (PDF), then submit it back to your unit manager for final verification.'
+                      ? 'Write your assessment, then submit it back to your unit manager for final verification.'
                       : "Once your review is complete, submit it back to your unit manager — they'll advance it to the next stage."}
                   </p>
                   {submission.current_stage === 'under_assessment' && (
-                    <label className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:border-primary-400">
-                      <Upload size={14} className="shrink-0" />
-                      <span className="truncate flex-1">
-                        {assessmentFile ? assessmentFile.name : 'Choose assessment PDF…'}
-                      </span>
-                      <input
-                        type="file"
-                        accept="application/pdf,.pdf"
-                        className="sr-only"
-                        onChange={e => setAssessmentFile(e.target.files?.[0] || null)}
-                      />
-                    </label>
+                    <RichNoteEditor
+                      ref={assessmentEditorRef}
+                      submissionId={submission.id}
+                      placeholder="Write your assessment…"
+                      resetKey={submission.id}
+                      onHasTextChange={setHasAssessmentText}
+                    />
                   )}
                   {oduChecklistBlocksHandback && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -1864,7 +1864,7 @@ const stageDescriptions = {
                   )}
                   <BaseButton type="button" variant="primary" className="w-full"
                     loading={allocateBusy} loadingLabel="Submitting"
-                    disabled={(submission.current_stage === 'under_assessment' && !assessmentFile) || oduChecklistBlocksHandback}
+                    disabled={(submission.current_stage === 'under_assessment' && !hasAssessmentText) || oduChecklistBlocksHandback}
                     onClick={submitToManager}>
                     Submit back to Manager
                   </BaseButton>

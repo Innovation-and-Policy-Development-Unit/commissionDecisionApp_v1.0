@@ -1005,6 +1005,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "is_internal",
             "follows_normal_route",
             "ready_for_manager_at",
+            "assessment_html",
             "secretary_only",
             "requires_travel_letter",
             "travel_endorsers",

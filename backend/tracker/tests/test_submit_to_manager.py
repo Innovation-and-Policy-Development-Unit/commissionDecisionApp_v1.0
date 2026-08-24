@@ -1,11 +1,11 @@
 """POST /submissions/{id}/submit-to-manager/ — the assigned principal hands
 their completed checklist review or assessment back to their unit manager.
-At Under Assessment, a PDF assessment attachment is required (the written
-deliverable the manager is verifying); at Manager Checklist Review it isn't
-(the checklist itself, already a submitted structured form, is)."""
+At Under Assessment, a typed rich-text assessment (assessment_html) is
+required (the written deliverable the manager is verifying); at Manager
+Checklist Review it isn't (the checklist itself, already a submitted
+structured form, is)."""
 
 from django.contrib.auth.models import User
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -25,12 +25,8 @@ from ..models import (
 )
 
 
-def _pdf(name="assessment.pdf"):
-    return SimpleUploadedFile(name, b"%PDF-1.4 fake assessment", content_type="application/pdf")
-
-
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
-class SubmitToManagerAssessmentAttachmentTests(TestCase):
+class SubmitToManagerAssessmentTextTests(TestCase):
     def setUp(self):
         self.ministry = Ministry.objects.create(code="TST-STM", name="Test Ministry STM")
         self.principal = User.objects.create_user(username="odu_principal_stm", password="x")
@@ -38,9 +34,9 @@ class SubmitToManagerAssessmentAttachmentTests(TestCase):
         self.submission = Submission.objects.create(
             reference_number="SUB-STM-001",
             title="Restructure proposal",
-            # Deliberately not ORG-3.1/PSC 2-1 — this class tests the file-
-            # attachment requirement in isolation from either checklist gate
-            # (see SubmitToManagerOduChecklistGateTests for the ODU one).
+            # Deliberately not ORG-3.1/PSC 2-1 — this class tests the
+            # assessment-text requirement in isolation from either checklist
+            # gate (see SubmitToManagerOduChecklistGateTests for the ODU one).
             form_type_code="TST-STM-NOCHECKLIST",
             ministry=self.ministry,
             current_stage=WorkflowStage.UNDER_ASSESSMENT,
@@ -52,34 +48,37 @@ class SubmitToManagerAssessmentAttachmentTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.principal)
 
-    def test_under_assessment_requires_file(self):
+    def test_under_assessment_requires_assessment_html(self):
         resp = self.client.post(f"/api/submissions/{self.submission.id}/submit-to-manager/")
         self.assertEqual(resp.status_code, 400)
         self.submission.refresh_from_db()
         self.assertIsNone(self.submission.ready_for_manager_at)
 
-    def test_under_assessment_rejects_non_pdf(self):
+    def test_under_assessment_rejects_whitespace_only_html(self):
         resp = self.client.post(
             f"/api/submissions/{self.submission.id}/submit-to-manager/",
-            {"file": SimpleUploadedFile("notes.docx", b"not a pdf", content_type="application/msword")},
-            format="multipart",
+            {"assessment_html": "<p>   </p>"},
+            format="json",
         )
         self.assertEqual(resp.status_code, 400)
+        self.submission.refresh_from_db()
+        self.assertIsNone(self.submission.ready_for_manager_at)
 
-    def test_under_assessment_accepts_pdf(self):
+    def test_under_assessment_accepts_typed_assessment(self):
         resp = self.client.post(
             f"/api/submissions/{self.submission.id}/submit-to-manager/",
-            {"file": _pdf()},
-            format="multipart",
+            {"assessment_html": "<p>Looks compliant, recommend approval.</p><script>evil()</script>"},
+            format="json",
         )
         self.assertEqual(resp.status_code, 200)
         self.submission.refresh_from_db()
         self.assertIsNotNone(self.submission.ready_for_manager_at)
-        doc = SubmissionDocument.objects.get(submission=self.submission)
-        self.assertIn("Assessment", doc.description)
-        self.assertEqual(doc.uploaded_by, self.principal)
+        self.assertIn("Looks compliant, recommend approval.", self.submission.assessment_html)
+        self.assertNotIn("<script>", self.submission.assessment_html)
+        self.assertEqual(self.submission.assessment_text, "Looks compliant, recommend approval.")
+        self.assertFalse(SubmissionDocument.objects.filter(submission=self.submission).exists())
 
-    def test_manager_checklist_review_does_not_require_file(self):
+    def test_manager_checklist_review_does_not_require_assessment_html(self):
         self.submission.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
         self.submission.save(update_fields=["current_stage"])
         resp = self.client.post(f"/api/submissions/{self.submission.id}/submit-to-manager/")
