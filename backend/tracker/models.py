@@ -1684,6 +1684,16 @@ class Submission(models.Model):
             "Cleared when reassigned or once the manager advances the stage."
         ),
     )
+    assessment_html = models.TextField(
+        blank=True, default="",
+        help_text="Sanitized rich-text assessment typed by the assigned principal/senior "
+                   "officer at Under Assessment, submitted via submit-to-manager. Display "
+                   "only — mirrors WorkflowEvent.remarks_html. Overwritten on resubmission.",
+    )
+    assessment_text = models.TextField(
+        blank=True, default="",
+        help_text="Plain-text derivative of assessment_html, for search/export.",
+    )
     # Secondary analysts — M2M for concurrent multi-analyst work (e.g. ORG-3.1 restructures)
     co_assigned_principals = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
