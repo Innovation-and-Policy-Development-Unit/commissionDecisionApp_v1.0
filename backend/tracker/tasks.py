@@ -5,6 +5,7 @@ import os
 from celery import shared_task
 from django.conf import settings
 from django.core.management import call_command
+from django.utils import timezone
 
 log = logging.getLogger("scdms.security")
 app_log = logging.getLogger("scdms.app")
@@ -196,6 +197,79 @@ def run_backup():
         log.info("BACKUP_SCHEDULED | completed successfully")
     except Exception as exc:
         log.error("BACKUP_SCHEDULED | failed: %s", exc)
+
+
+@shared_task
+def push_backup_to_cloud(filename):
+    """Upload one backup file to whichever cloud provider is connected
+    (currently: Microsoft 365 / OneDrive only). Called from the end of
+    backup_db.py's Command.handle() — the single choke point both the
+    manual "Run Backup Now" button and the scheduled Celery Beat path
+    already funnel through — and from BackupViewSet.cloud_push for an
+    on-demand push of an already-stored file.
+
+    Refreshes the access token via MSAL if expired. On a persistent auth
+    failure (refresh token revoked/expired at the Microsoft end), flips the
+    connection to needs_reconnect instead of failing silently — the admin
+    UI surfaces that state."""
+    from . import ms365_backup
+    from .audit import log_action as _log
+    from .crypto_utils import decrypt, encrypt
+    from .models import AuditLog as _AL, CloudBackupConnection
+
+    conn = CloudBackupConnection.objects.filter(
+        provider=CloudBackupConnection.Provider.MICROSOFT365,
+        status=CloudBackupConnection.Status.CONNECTED,
+    ).first()
+    if not conn:
+        return  # nothing connected — normal, no-op
+
+    filepath = os.path.join(os.getenv("BACKUP_DIR", "/var/backups/scdms"), filename)
+    if not os.path.isfile(filepath):
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | reason=missing on disk", filename)
+        return
+
+    try:
+        access_token = decrypt(conn.access_token_encrypted)
+        if conn.token_expires_at and conn.token_expires_at <= timezone.now():
+            refresh_token = decrypt(conn.refresh_token_encrypted)
+            refreshed = ms365_backup.refresh_access_token(refresh_token)
+            access_token = refreshed["access_token"]
+            conn.access_token_encrypted = encrypt(access_token)
+            conn.refresh_token_encrypted = encrypt(refreshed["refresh_token"])
+            conn.token_expires_at = timezone.now() + timezone.timedelta(seconds=refreshed["expires_in"])
+
+        with open(filepath, "rb") as f:
+            content = f.read()
+        ms365_backup.upload_backup_file(access_token, filename, content)
+
+        conn.last_pushed_at = timezone.now()
+        conn.last_push_error = ""
+        conn.save(update_fields=["access_token_encrypted", "refresh_token_encrypted",
+                                  "token_expires_at", "last_pushed_at", "last_push_error"])
+        log.info("BACKUP_CLOUD_PUSH | file=%s | provider=%s | account=%s",
+                  filename, conn.provider, conn.connected_email)
+        _log(None, _AL.Action.BACKUP, resource_type="CloudBackupPush", resource_label=filename,
+             description=f"Backup pushed to {conn.get_provider_display()} ({conn.connected_email}): {filename}")
+    except ms365_backup.MS365AuthError as exc:
+        conn.status = CloudBackupConnection.Status.NEEDS_RECONNECT
+        conn.last_push_error = str(exc)
+        conn.save(update_fields=["status", "last_push_error"])
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | reason=auth: %s", filename, exc)
+        _log(None, _AL.Action.BACKUP, resource_type="CloudBackupPush", resource_label=filename,
+             description=f"Backup push to {conn.get_provider_display()} failed — connection needs to be redone: {exc}")
+    except Exception as exc:
+        conn.last_push_error = str(exc)
+        conn.save(update_fields=["last_push_error"])
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | %s", filename, exc)
+
+
+def queue_push_backup_to_cloud(filename):
+    try:
+        push_backup_to_cloud.delay(filename)
+    except Exception as exc:
+        app_log.warning("BACKUP_CLOUD_PUSH_QUEUE_FALLBACK | file=%s | %s", filename, exc)
+        push_backup_to_cloud(filename)
 
 
 SYSTEM_INSTRUCTION = """You are a highly efficient "Executive Secretary" and "Triage Officer" for a high-level Commission Board in Vanuatu. You are an expert in both Bislama and English.

@@ -1,7 +1,11 @@
 """
 Management command: backup_db
 
-Creates a JSON fixture backup of all application data using Django's dumpdata.
+Creates a .zip backup containing a JSON fixture (data.json, via Django's
+dumpdata) plus every file under MEDIA_ROOT (media/), so a restore brings
+back attachments — submission documents, profile pictures/signatures,
+generated PDFs, etc. — not just database rows.
+
 Stores backups in BACKUP_DIR (env var, defaults to /var/backups/scdms).
 Prunes files older than BACKUP_RETENTION_DAYS (SystemSetting, default 30).
 
@@ -11,9 +15,11 @@ Usage:
 """
 
 import os
+import zipfile
 from datetime import datetime
 from io import StringIO
 
+from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
@@ -31,7 +37,7 @@ _EXCLUDE = [
 
 
 class Command(BaseCommand):
-    help = "Create a JSON database backup via dumpdata and prune old files."
+    help = "Create a .zip database + media backup and prune old files."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -45,7 +51,7 @@ class Command(BaseCommand):
         os.makedirs(backup_dir, exist_ok=True)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"scdms_backup_{ts}.json"
+        filename = f"scdms_backup_{ts}.zip"
         filepath = os.path.join(backup_dir, filename)
 
         self.stdout.write(f"Creating backup: {filepath}")
@@ -63,17 +69,39 @@ class Command(BaseCommand):
         )
         data = buf.getvalue()
 
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(data)
+        media_root = getattr(settings, "MEDIA_ROOT", "") or ""
+        media_files = []
+        if media_root and os.path.isdir(media_root):
+            for root, _dirs, files in os.walk(media_root):
+                for fn in files:
+                    abs_path = os.path.join(root, fn)
+                    rel_path = os.path.relpath(abs_path, media_root)
+                    media_files.append((abs_path, rel_path))
 
-        size_kb = len(data.encode()) / 1024
+        with zipfile.ZipFile(filepath, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("data.json", data)
+            for abs_path, rel_path in media_files:
+                zf.write(abs_path, arcname=os.path.join("media", rel_path))
+
+        size_kb = os.path.getsize(filepath) / 1024
         self.stdout.write(
             self.style.SUCCESS(
-                f"[OK] Backup saved: {filename}  ({size_kb:.1f} KB)"
+                f"[OK] Backup saved: {filename}  ({size_kb:.1f} KB, "
+                f"{len(media_files)} media file(s))"
             )
         )
 
         self._cleanup_old(backup_dir)
+
+        # Push to a connected cloud destination, if any — single choke point
+        # for both the manual "Run Backup Now" button and the scheduled
+        # Celery Beat path, since both already funnel through this command.
+        try:
+            from tracker.tasks import queue_push_backup_to_cloud
+            queue_push_backup_to_cloud(filename)
+        except Exception:  # noqa: BLE001 — never let this block the backup itself
+            pass
+
         # Return filename so the view can read it back
         return filename
 
@@ -92,7 +120,8 @@ class Command(BaseCommand):
         cutoff = datetime.now().timestamp() - (days * 86_400)
         removed = 0
         for fn in os.listdir(backup_dir):
-            if fn.startswith("scdms_backup_") and fn.endswith(".json"):
+            # Prune both the current .zip format and legacy .json backups.
+            if fn.startswith("scdms_backup_") and (fn.endswith(".zip") or fn.endswith(".json")):
                 fp = os.path.join(backup_dir, fn)
                 if os.path.getmtime(fp) < cutoff:
                     os.remove(fp)

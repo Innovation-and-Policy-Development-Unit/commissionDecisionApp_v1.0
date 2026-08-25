@@ -9383,7 +9383,10 @@ class BackupViewSet(viewsets.ViewSet):
         _os.makedirs(_BACKUP_DIR, exist_ok=True)
         files = []
         for fn in sorted(_os.listdir(_BACKUP_DIR), reverse=True):
-            if fn.startswith("scdms_backup_") and fn.endswith(".json"):
+            # .zip is the current format (data.json + media/); .json is the
+            # legacy format from before attachments were included — both
+            # still list, download, delete, and restore.
+            if fn.startswith("scdms_backup_") and (fn.endswith(".zip") or fn.endswith(".json")):
                 fp = _os.path.join(_BACKUP_DIR, fn)
                 stat = _os.stat(fp)
                 files.append({
@@ -9425,7 +9428,12 @@ class BackupViewSet(viewsets.ViewSet):
         from django.http import FileResponse
 
         filename = request.query_params.get("filename", "")
-        if not filename or not filename.startswith("scdms_backup_") or ".." in filename:
+        if (
+            not filename
+            or not filename.startswith("scdms_backup_")
+            or not (filename.endswith(".zip") or filename.endswith(".json"))
+            or ".." in filename
+        ):
             return Response({"detail": "Invalid filename."}, status=status.HTTP_400_BAD_REQUEST)
         filepath = _os.path.join(_BACKUP_DIR, filename)
         if not _os.path.isfile(filepath):
@@ -9439,8 +9447,9 @@ class BackupViewSet(viewsets.ViewSet):
         _log(request, _AL.Action.DOWNLOAD,
              resource_type="BackupFile", resource_label=filename,
              description=f"Backup file downloaded: {filename}")
+        content_type = "application/zip" if filename.endswith(".zip") else "application/json"
         f = open(filepath, "rb")  # FileResponse closes it
-        resp = FileResponse(f, content_type="application/json")
+        resp = FileResponse(f, content_type=content_type)
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp
 
@@ -9449,7 +9458,12 @@ class BackupViewSet(viewsets.ViewSet):
     def delete_backup(self, request):
         """POST /backup/delete-file/  body: {filename} — remove a backup file."""
         filename = (request.data.get("filename") or "").strip()
-        if not filename or not filename.startswith("scdms_backup_") or ".." in filename:
+        if (
+            not filename
+            or not filename.startswith("scdms_backup_")
+            or not (filename.endswith(".zip") or filename.endswith(".json"))
+            or ".." in filename
+        ):
             return Response({"detail": "Invalid filename."}, status=status.HTTP_400_BAD_REQUEST)
         filepath = _os.path.join(_BACKUP_DIR, filename)
         if not _os.path.isfile(filepath):
@@ -9467,20 +9481,30 @@ class BackupViewSet(viewsets.ViewSet):
         POST /backup/restore/
         Accepts either:
           - multipart file upload (field: 'file')
-          - JSON body {"filename": "scdms_backup_....json"} to restore from stored file
+          - JSON body {"filename": "scdms_backup_....zip"} to restore from stored file
         Requires body field "confirm": "RESTORE" (exact match).
-        WARNING: This overwrites existing data.
+        WARNING: This overwrites existing data (and, for a .zip backup, media files).
 
-        Content is structurally validated as a Django fixture (list of
-        {model, pk, fields} rows, each model resolvable) before it ever
-        reaches `loaddata` — this is untrusted input (an admin-uploaded
-        file), not a file we generated ourselves, so it gets the same
-        scrutiny as any other user-supplied payload. See P0-02, SCDMS
+        Content is structurally validated before it ever reaches `loaddata` (and,
+        for a .zip, before any file is extracted) — this is untrusted input (an
+        admin-uploaded file), not a file we generated ourselves, so it gets the
+        same scrutiny as any other user-supplied payload. See P0-02, SCDMS
         Pre-Production Readiness Audit — Findings Register.
+
+        The fixture (data.json, whether standalone or inside a .zip) is a list
+        of {model, pk, fields} rows, each model resolvable. A .zip is further
+        checked for zip-slip (every media/ member must resolve inside
+        MEDIA_ROOT) and zip-bomb (total uncompressed size / member count caps)
+        before extraction — see backup_restore.validate_backup_zip.
         """
+        import io
         import json
+        import zipfile
         from django.apps import apps as _apps
+        from django.conf import settings as _dj_settings
         from django.core.management import call_command
+
+        from .backup_restore import BackupZipError, is_zip_content, validate_backup_zip
 
         if request.data.get("confirm") != "RESTORE":
             return Response(
@@ -9495,7 +9519,11 @@ class BackupViewSet(viewsets.ViewSet):
             raw = uploaded.read()
             restore_name = uploaded.name
         elif stored_fn:
-            if ".." in stored_fn or not stored_fn.startswith("scdms_backup_"):
+            if (
+                ".." in stored_fn
+                or not stored_fn.startswith("scdms_backup_")
+                or not (stored_fn.endswith(".zip") or stored_fn.endswith(".json"))
+            ):
                 return Response({"detail": "Invalid filename."}, status=status.HTTP_400_BAD_REQUEST)
             candidate_path = _os.path.join(_BACKUP_DIR, stored_fn)
             if not _os.path.isfile(candidate_path):
@@ -9509,8 +9537,20 @@ class BackupViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        media_members: list[tuple[str, str]] = []
+        zip_ref = None
+
+        if is_zip_content(raw):
+            try:
+                zip_ref = zipfile.ZipFile(io.BytesIO(raw))
+                fixture_raw, media_members = validate_backup_zip(zip_ref)
+            except (zipfile.BadZipFile, BackupZipError) as exc:
+                return Response({"detail": f"Invalid backup zip: {exc}"}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            fixture_raw = raw
+
         try:
-            rows = json.loads(raw.decode("utf-8"))
+            rows = json.loads(fixture_raw.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
             return Response({"detail": "Backup content is not valid JSON."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -9534,22 +9574,34 @@ class BackupViewSet(viewsets.ViewSet):
                 )
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
-            tmp.write(raw)
+            tmp.write(fixture_raw)
             restore_path = tmp.name
 
         try:
             call_command("loaddata", restore_path)
+
+            media_root = getattr(_dj_settings, "MEDIA_ROOT", "") or ""
+            if media_members and media_root:
+                for member_name, rel_path in media_members:
+                    dest = _os.path.join(media_root, *rel_path.split("/"))
+                    _os.makedirs(_os.path.dirname(dest), exist_ok=True)
+                    with zip_ref.open(member_name) as src, open(dest, "wb") as out:
+                        out.write(src.read())
+
             _security_log.info(
-                "BACKUP_RESTORE | file=%s | user=%s",
-                restore_name,
-                request.user.username,
+                "BACKUP_RESTORE | file=%s | media_files=%d | user=%s",
+                restore_name, len(media_members), request.user.username,
             )
             from .audit import log_action as _log
             from .models import AuditLog as _AL
             _log(request, _AL.Action.RESTORE,
                  resource_type="Database", resource_label=restore_name,
-                 description=f"Database restored from backup: {restore_name}")
-            return Response({"detail": "Database restored successfully."})
+                 description=f"Database restored from backup: {restore_name} "
+                             f"({len(media_members)} media file(s))")
+            detail = "Database restored successfully."
+            if media_members:
+                detail = f"Database and {len(media_members)} media file(s) restored successfully."
+            return Response({"detail": detail})
         except Exception:
             _security_log.exception(
                 "BACKUP_RESTORE_FAILED | file=%s | user=%s", restore_name, request.user.username,
@@ -9559,6 +9611,8 @@ class BackupViewSet(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         finally:
+            if zip_ref is not None:
+                zip_ref.close()
             if _os.path.exists(restore_path):
                 _os.unlink(restore_path)
 
@@ -9625,6 +9679,155 @@ class BackupViewSet(viewsets.ViewSet):
             "retention_days": retention_days,
             "next_run": get_next_run(),
         })
+
+    # ── cloud backup (Microsoft 365 / OneDrive) ──────────────────────────────
+    # Delegated OAuth, tied to whichever admin connects — a departing admin's
+    # replacement reconnects with their own account from this same UI, no
+    # code change needed. See CloudBackupConnection's docstring.
+
+    @action(detail=False, methods=["get"], url_path="cloud/status")
+    def cloud_status(self, request):
+        """GET /backup/cloud/status/ — current connection state for the admin UI."""
+        from .models import CloudBackupConnection
+
+        conn = CloudBackupConnection.objects.filter(
+            provider=CloudBackupConnection.Provider.MICROSOFT365
+        ).first()
+        if not conn or conn.status == CloudBackupConnection.Status.DISCONNECTED:
+            return Response({"connected": False})
+        return Response({
+            "connected": True,
+            "status": conn.status,
+            "connected_email": conn.connected_email,
+            "connected_at": conn.connected_at.isoformat(),
+            "last_pushed_at": conn.last_pushed_at.isoformat() if conn.last_pushed_at else None,
+            "last_push_error": conn.last_push_error,
+        })
+
+    @action(detail=False, methods=["get"], url_path="cloud/connect")
+    def cloud_connect(self, request):
+        """GET /backup/cloud/connect/ — returns the Microsoft auth URL for the
+        frontend to navigate to. Called via the normal JWT-authenticated api
+        client (unlike the callback below, which Microsoft redirects the
+        bare browser to and can't carry a JWT header)."""
+        import secrets as _secrets
+
+        from . import ms365_backup
+
+        try:
+            state = _secrets.token_urlsafe(32)
+            request.session["ms365_oauth_state"] = state
+            request.session["ms365_oauth_user_id"] = request.user.id
+            auth_url = ms365_backup.build_auth_url(state)
+            return Response({"auth_url": auth_url})
+        except ms365_backup.MS365ConfigError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    @action(detail=False, methods=["get"], url_path="cloud/callback",
+            permission_classes=[permissions.AllowAny], authentication_classes=[])
+    def cloud_callback(self, request):
+        """GET /backup/cloud/callback/ — Microsoft redirects the admin's
+        browser here directly after consent; there's no way to attach a JWT
+        to a browser-level redirect, so this endpoint can't be gated by the
+        normal auth. Security instead comes from the `state` value, matched
+        against the one stashed in this browser's session when cloud_connect
+        was called — same session cookie, sent automatically on this redirect
+        since it's the same browser."""
+        from django.shortcuts import redirect
+
+        from . import ms365_backup
+        from .audit import log_action as _log
+        from .crypto_utils import encrypt
+        from .models import AuditLog as _AL, CloudBackupConnection
+
+        frontend_url = "/admin/backup-restore"
+        expected_state = request.session.pop("ms365_oauth_state", None)
+        user_id = request.session.pop("ms365_oauth_user_id", None)
+        state = request.GET.get("state")
+        code = request.GET.get("code")
+
+        if not code or not expected_state or state != expected_state or not user_id:
+            return redirect(f"{frontend_url}?ms365=error")
+
+        try:
+            tokens = ms365_backup.exchange_code_for_tokens(code)
+        except ms365_backup.MS365AuthError:
+            return redirect(f"{frontend_url}?ms365=error")
+
+        conn, _created = CloudBackupConnection.objects.update_or_create(
+            provider=CloudBackupConnection.Provider.MICROSOFT365,
+            defaults={
+                "status": CloudBackupConnection.Status.CONNECTED,
+                "connected_email": tokens["email"],
+                "access_token_encrypted": encrypt(tokens["access_token"]),
+                "refresh_token_encrypted": encrypt(tokens["refresh_token"]),
+                "token_expires_at": timezone.now() + timezone.timedelta(seconds=tokens["expires_in"]),
+                "connected_by_id": user_id,
+                "last_push_error": "",
+            },
+        )
+        _security_log.info(
+            "BACKUP_CLOUD_CONNECTED | provider=microsoft365 | account=%s | user_id=%s",
+            conn.connected_email, user_id,
+        )
+        _log(request, _AL.Action.SETTINGS, resource_type="CloudBackupConnection",
+             resource_label=conn.connected_email,
+             description=f"Connected cloud backup destination: Microsoft 365 ({conn.connected_email})")
+        return redirect(f"{frontend_url}?ms365=connected")
+
+    @action(detail=False, methods=["post"], url_path="cloud/disconnect")
+    def cloud_disconnect(self, request):
+        """POST /backup/cloud/disconnect/ — clears the stored connection.
+        Graph doesn't expose token revocation for this scope, so this just
+        removes our stored (encrypted) tokens; the next admin connects fresh
+        with their own account."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL, CloudBackupConnection
+
+        conn = CloudBackupConnection.objects.filter(
+            provider=CloudBackupConnection.Provider.MICROSOFT365
+        ).first()
+        if not conn:
+            return Response({"detail": "Nothing connected."}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = conn.connected_email
+        conn.status = CloudBackupConnection.Status.DISCONNECTED
+        conn.access_token_encrypted = ""
+        conn.refresh_token_encrypted = ""
+        conn.save(update_fields=["status", "access_token_encrypted", "refresh_token_encrypted"])
+
+        _security_log.info(
+            "BACKUP_CLOUD_DISCONNECTED | provider=microsoft365 | account=%s | user=%s",
+            email, request.user.username,
+        )
+        _log(request, _AL.Action.SETTINGS, resource_type="CloudBackupConnection",
+             resource_label=email,
+             description=f"Disconnected cloud backup destination: Microsoft 365 ({email})")
+        return Response({"detail": "Disconnected."})
+
+    @action(detail=False, methods=["post"], url_path="cloud/push")
+    def cloud_push(self, request):
+        """POST /backup/cloud/push/  body: {filename} — push an
+        already-stored backup on demand."""
+        from .models import CloudBackupConnection
+        from .tasks import queue_push_backup_to_cloud
+
+        filename = (request.data.get("filename") or "").strip()
+        if not filename or not filename.startswith("scdms_backup_") or ".." in filename:
+            return Response({"detail": "Invalid filename."}, status=status.HTTP_400_BAD_REQUEST)
+        filepath = _os.path.join(_BACKUP_DIR, filename)
+        if not _os.path.isfile(filepath):
+            return Response({"detail": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        conn = CloudBackupConnection.objects.filter(
+            provider=CloudBackupConnection.Provider.MICROSOFT365,
+            status=CloudBackupConnection.Status.CONNECTED,
+        ).first()
+        if not conn:
+            return Response({"detail": "No cloud backup destination connected."}, status=status.HTTP_400_BAD_REQUEST)
+
+        queue_push_backup_to_cloud(filename)
+        return Response({"detail": f"Push to {conn.get_provider_display()} queued."})
 
 
 # ── Security Feature ViewSets (NCSS 2030 / ISO 27001) ────────────────────────

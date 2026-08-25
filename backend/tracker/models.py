@@ -1198,6 +1198,61 @@ class SystemSetting(models.Model):
             return default
 
 
+class CloudBackupConnection(models.Model):
+    """A connected cloud-storage destination that database backups get
+    pushed to (see tasks.push_backup_to_cloud). Delegated OAuth, tied to
+    whichever admin connected it — deliberately so, per the requirement
+    that a departing admin's replacement can reconnect with their own
+    account from the UI with no code change, rather than this being a
+    shared service-account credential.
+
+    provider is a choice field (not hardcoded to one) so a second provider
+    (e.g. Google Drive) can be added later without a schema change — only
+    Microsoft 365 is actually wired up today.
+
+    access_token/refresh_token are encrypted at rest (crypto_utils.py) —
+    these are standing credentials to the connected admin's real M365
+    account, not a static API key.
+    """
+
+    class Provider(models.TextChoices):
+        MICROSOFT365 = "microsoft365", "Microsoft 365 (OneDrive)"
+
+    class Status(models.TextChoices):
+        CONNECTED = "connected", "Connected"
+        NEEDS_RECONNECT = "needs_reconnect", "Needs reconnect"
+        DISCONNECTED = "disconnected", "Disconnected"
+
+    provider = models.CharField(
+        max_length=20, choices=Provider.choices, unique=True,
+        help_text="One connection per provider — connecting again replaces "
+                   "the previous admin's connection for that provider.",
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.CONNECTED,
+    )
+    connected_email = models.EmailField(
+        help_text="The M365 account's email, shown in the admin UI so it's "
+                   "obvious whose account backups are currently pushed to.",
+    )
+    access_token_encrypted = models.TextField(blank=True)
+    refresh_token_encrypted = models.TextField(blank=True)
+    token_expires_at = models.DateTimeField(null=True, blank=True)
+    connected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="cloud_backup_connections",
+    )
+    connected_at = models.DateTimeField(auto_now_add=True)
+    last_pushed_at = models.DateTimeField(null=True, blank=True)
+    last_push_error = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Cloud backup connection"
+
+    def __str__(self):
+        return f"{self.get_provider_display()} — {self.connected_email} ({self.status})"
+
+
 class EmailTemplate(models.Model):
     """Configurable subject/body for transactional emails."""
 
