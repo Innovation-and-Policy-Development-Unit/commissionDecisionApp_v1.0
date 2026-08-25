@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Download, RefreshCw, WifiOff, X } from 'lucide-react'
 import clsx from 'clsx'
+import { useAuth } from '../../context/AuthContext'
 
 function isStandaloneDisplay() {
   if (typeof window === 'undefined') return false
@@ -20,6 +21,7 @@ const INSTALL_DISMISSED_KEY = 'pwa_install_dismissed'
  */
 export default function PwaManager() {
   const { t } = useTranslation()
+  const { accessToken } = useAuth()
   const [offline, setOffline] = useState(
     () => typeof navigator !== 'undefined' && !navigator.onLine,
   )
@@ -78,6 +80,19 @@ export default function PwaManager() {
     updateSWRef.current?.(true)
     setNeedRefresh(false)
   }, [])
+
+  // A signed-out user (login/PIN/2FA screens) has nothing in-progress to lose,
+  // and is exactly who gets stuck running a stale precached app shell against
+  // the current backend after a deploy (the service worker intercepts
+  // navigations and serves its own cached index.html, bypassing nginx's
+  // no-store header on it) — so skip the prompt and update immediately rather
+  // than leaving them stranded on old JS with no way back except manually
+  // clearing browser cache. Signed-in users still get the banner, unchanged.
+  useEffect(() => {
+    if (needRefresh && !accessToken) {
+      applyUpdate()
+    }
+  }, [needRefresh, accessToken, applyUpdate])
 
   const runInstall = useCallback(async () => {
     if (!installPrompt) return
