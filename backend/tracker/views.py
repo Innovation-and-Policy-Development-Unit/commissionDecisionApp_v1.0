@@ -3735,6 +3735,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if not files:
             return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
 
+        from .file_validation import FileValidationError, validate_upload
+
         created_docs = []
         for idx, uploaded in enumerate(files):
             if uploaded.size > self.MAX_UPLOAD_FILE_SIZE:
@@ -3742,6 +3744,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     {"detail": f"File '{uploaded.name}' exceeds the {self.MAX_UPLOAD_FILE_SIZE // (1024*1024)} MB limit."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            try:
+                validate_upload(uploaded, kind="document")
+            except FileValidationError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             # For internal submissions, the user may supply a human-readable name per file.
             # Accept document_name (single upload) or document_names[idx] (multi-upload).
             document_names = request.data.getlist("document_names")
@@ -3829,10 +3835,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if not file:
             return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-        allowed_types = {"image/png", "image/jpeg", "image/gif", "image/webp"}
-        if file.content_type not in allowed_types:
+        from .file_validation import FileValidationError, sniff_mime_type, validate_upload
+        try:
+            validate_upload(file, kind="image")
+        except FileValidationError:
             return Response(
-                {"detail": f"Unsupported image type '{file.content_type}'. Allowed: PNG, JPEG, GIF, WEBP."},
+                {"detail": f"Unsupported image type '{sniff_mime_type(file)}'. Allowed: PNG, JPEG, GIF, WEBP."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if file.size > 8 * 1024 * 1024:
@@ -4021,6 +4029,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 {"detail": f"File '{uploaded.name}' exceeds the {self.MAX_UPLOAD_FILE_SIZE // (1024*1024)} MB limit."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        from .file_validation import FileValidationError, validate_upload
+        try:
+            validate_upload(uploaded, kind="document")
+        except FileValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         notes = (request.data.get("notes") or "").strip()
         superseded_version = doc.version_num
@@ -6245,6 +6258,11 @@ class DecisionLetterViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only the Secretary can sign decision letters.")
         scan = request.FILES.get("signed_scan") or request.FILES.get("file")
         if scan:
+            from .file_validation import FileValidationError, validate_upload
+            try:
+                validate_upload(scan, kind="document")
+            except FileValidationError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             letter.signed_scan.save(
                 f"letter_{letter.id}_signed.{scan.name.rsplit('.', 1)[-1].lower()}", scan, save=False
             )
@@ -7850,6 +7868,13 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 {"detail": f"File type '{ext}' is not supported. Allowed: {', '.join(allowed)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Extension check above is just a friendly first filter — client-set
+        # and trivially spoofed. This is the actual gate: real content bytes.
+        from .file_validation import FileValidationError, validate_upload
+        try:
+            validate_upload(file, kind="audio_video")
+        except FileValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         meeting_id = request.data.get("meeting_id")
         audio_source = (request.data.get("audio_source") or "").strip()
@@ -10263,6 +10288,11 @@ class FeedbackChecklistViewSet(viewsets.ViewSet):
             )
             screenshot_file = request.FILES.get(f"screenshot_{item_id}")
             if screenshot_file:
+                from .file_validation import FileValidationError, validate_upload
+                try:
+                    validate_upload(screenshot_file, kind="image")
+                except FileValidationError as exc:
+                    return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
                 obj.screenshot = screenshot_file
                 obj.save(update_fields=["screenshot"])
             elif entry.get("remove_screenshot"):
@@ -10812,6 +10842,11 @@ class MinutesViewSet(viewsets.ModelViewSet):
                 {"detail": "Attach the scanned signed minutes (field 'signed_document')."},
                 status=400,
             )
+        from .file_validation import FileValidationError, validate_upload
+        try:
+            validate_upload(signed_file, kind="document")
+        except FileValidationError as exc:
+            return Response({"detail": str(exc)}, status=400)
 
         minutes.signed_document.save(
             f"minutes_{minutes.meeting.reference_number}_signed_scan.{signed_file.name.rsplit('.', 1)[-1].lower()}",
@@ -10923,6 +10958,11 @@ class DocumentAnnotationViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             snapshot = request.FILES.get('snapshot')
             if snapshot:
+                from .file_validation import FileValidationError, validate_upload
+                try:
+                    validate_upload(snapshot, kind="image")
+                except FileValidationError as exc:
+                    return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
                 existing.snapshot = snapshot
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -10964,6 +11004,11 @@ class DocumentSignatureViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             snapshot = request.FILES.get('snapshot')
             if snapshot:
+                from .file_validation import FileValidationError, validate_upload
+                try:
+                    validate_upload(snapshot, kind="image")
+                except FileValidationError as exc:
+                    return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
                 existing.snapshot = snapshot
             serializer.save(**signing_provenance(request))
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -10989,6 +11034,11 @@ class MySignatureView(APIView):
         image = request.FILES.get('image')
         if not image:
             return Response({'detail': 'No image provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        from .file_validation import FileValidationError, validate_upload
+        try:
+            validate_upload(image, kind="image")
+        except FileValidationError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         sig, _ = UserSignature.objects.get_or_create(user=request.user)
         if sig.image:
             sig.image.delete(save=False)
