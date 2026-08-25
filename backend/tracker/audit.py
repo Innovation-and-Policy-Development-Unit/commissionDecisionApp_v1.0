@@ -10,6 +10,9 @@ ISO 27001: A.12.4 (Logging and Monitoring), A.16.1 (Incident Management)
 """
 import logging
 
+from django.db import transaction
+from django.utils import timezone
+
 _security = logging.getLogger("scdms.security")
 
 
@@ -78,9 +81,21 @@ def log_action(
             description    = description,
             ip_address     = _get_ip(request),
             user_agent     = _get_ua(request),
+            timestamp      = timezone.now(),
             extra_data     = extra_data or {},
         )
-        entry.save()
+        # Hash-chain (P1-08, SCDMS Pre-Production Readiness Audit — Findings
+        # Register): each row hashes in the previous row's hash, so altering
+        # or deleting any row breaks the chain from that point on
+        # (verify_audit_log_integrity). select_for_update() on the current
+        # last row serializes concurrent writers onto the same chain — two
+        # AuditLog rows created at once could otherwise both read the same
+        # prev_hash and silently fork it.
+        with transaction.atomic():
+            prev = AuditLog.objects.select_for_update().order_by("-id").first()
+            entry.prev_hash = prev.content_hash if prev else ""
+            entry.content_hash = entry.compute_content_hash()
+            entry.save()
 
         _security.info(
             "%s | actor=%s | %s:%s | %s | ip=%s",

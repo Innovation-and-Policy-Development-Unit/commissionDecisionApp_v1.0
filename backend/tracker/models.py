@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 import secrets
 from datetime import datetime, time, timedelta
@@ -1296,7 +1298,24 @@ class PasswordHistory(models.Model):
 # ── NCSS 2030 / ISO 27001 A.12.4 ─────────────────────────────────────────────
 
 class AuditLog(models.Model):
-    """Tamper-evident record of every significant system action."""
+    """Tamper-evident record of every significant system action.
+
+    Tamper-evidence comes from `content_hash`/`prev_hash` — see those
+    fields' help_text. `timestamp` deliberately uses `default=timezone.now`
+    rather than `auto_now_add` so `log_action()` (audit.py) can set it in
+    Python before the row is first saved, since it's part of what gets
+    hashed."""
+
+    # Sentinel `prev_hash` value written to whatever becomes the new oldest
+    # surviving row after purge_expired_data.py legitimately deletes old
+    # AuditLog rows (its own DELETE is itself now logged via log_action,
+    # which appends normally — this only concerns the *oldest* end, whose
+    # real prev_hash pointed at a row that no longer exists). Deliberately
+    # not a valid hex hash, so it can never collide with a real content_hash.
+    # verify_audit_log_integrity treats this as an expected, audited chain
+    # restart rather than a break — but only when it's the very first row;
+    # anywhere else it's still flagged, since content_hash still won't match.
+    CHAIN_TRUNCATION_MARKER = "chain-truncated-by-retention-purge"
 
     class Action(models.TextChoices):
         LOGIN          = "LOGIN",          "Login"
@@ -1331,8 +1350,28 @@ class AuditLog(models.Model):
     description    = models.TextField(blank=True)
     ip_address     = models.GenericIPAddressField(null=True, blank=True)
     user_agent     = models.CharField(max_length=512, blank=True)
-    timestamp      = models.DateTimeField(auto_now_add=True, db_index=True)
+    timestamp      = models.DateTimeField(default=timezone.now, db_index=True)
     extra_data     = models.JSONField(default=dict, blank=True)
+    prev_hash      = models.CharField(
+        max_length=64, blank=True,
+        help_text="content_hash of the immediately-preceding AuditLog row (by id) "
+                   "at the time this row was written, forming a hash chain — see "
+                   "content_hash. Empty for the very first row in the chain.",
+    )
+    content_hash   = models.CharField(
+        max_length=64, blank=True, db_index=True,
+        help_text="SHA-256 of prev_hash + this row's canonical content (see "
+                   "canonical_content()), computed once at write time by "
+                   "log_action() and never modified after. Re-walking the chain "
+                   "in id order and recomputing each hash (the "
+                   "verify_audit_log_integrity management command) detects any "
+                   "row whose content was altered after the fact, or any row "
+                   "deleted outright — the next surviving row's prev_hash won't "
+                   "match. Rows predating this field were backfilled retroactively "
+                   "by migration 0249, establishing a genesis point: that proves "
+                   "no tampering *since* the backfill, not that those older rows "
+                   "were untouched *before* it.",
+    )
 
     class Meta:
         ordering = ["-timestamp"]
@@ -1345,6 +1384,31 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.timestamp:%Y-%m-%d %H:%M} | {self.actor_username} | {self.action}"
+
+    def canonical_content(self) -> str:
+        """Deterministic string representation of this row's immutable content —
+        the chain-hash input, alongside prev_hash. Field selection/format must
+        stay stable: changing either breaks verification of every row hashed
+        before the change."""
+        payload = {
+            "actor_id": self.actor_id,
+            "actor_username": self.actor_username,
+            "action": self.action,
+            "resource_type": self.resource_type,
+            "resource_id": self.resource_id,
+            "resource_label": self.resource_label,
+            "description": self.description,
+            "ip_address": self.ip_address,
+            "user_agent": self.user_agent,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "extra_data": self.extra_data,
+        }
+        return json.dumps(payload, sort_keys=True, default=str)
+
+    def compute_content_hash(self) -> str:
+        return hashlib.sha256(
+            (self.prev_hash + self.canonical_content()).encode("utf-8")
+        ).hexdigest()
 
 
 class AIGenerationLog(models.Model):
