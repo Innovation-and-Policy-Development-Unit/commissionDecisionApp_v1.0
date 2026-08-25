@@ -92,7 +92,7 @@ export default function DataTable({
           <tbody>
             {paged.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="text-center py-10 text-slate-400 dark:text-slate-500">
+                <td colSpan={columns.length} className="text-center py-10 text-slate-500 dark:text-slate-400">
                   {emptyMessage}
                 </td>
               </tr>

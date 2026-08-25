@@ -259,7 +259,7 @@ function RequiredDocModal({ doc, onClose, onSave }) {
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
-            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
               When set, an uploaded file is checked against this type from its OCR'd
               content; a confident mismatch un-ticks the item and flags it for review.
             </p>
@@ -1042,7 +1042,7 @@ export default function FormBuilder() {
 
         {requiredDocs.length === 0 ? (
           <div className="card px-5 py-6 text-center">
-            <p className="text-sm text-slate-400 dark:text-slate-500 mb-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
               No required documents defined for this form type.
             </p>
             <button

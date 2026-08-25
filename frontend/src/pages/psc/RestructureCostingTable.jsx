@@ -40,7 +40,7 @@ export default function RestructureCostingTable({ rows, onChange, readOnly = fal
   const netDiff = proposedTotal - currentTotal
 
   if (readOnly && data.length === 0) {
-    return <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2">No positions listed.</p>
+    return <p className="text-sm text-slate-500 dark:text-slate-400 italic py-2">No positions listed.</p>
   }
 
   return (
@@ -76,7 +76,7 @@ export default function RestructureCostingTable({ rows, onChange, readOnly = fal
           <tbody>
             {data.length === 0 && !readOnly && (
               <tr>
-                <td colSpan={10} className="px-3 py-4 text-center text-slate-400 dark:text-slate-500 italic">
+                <td colSpan={10} className="px-3 py-4 text-center text-slate-500 dark:text-slate-400 italic">
                   No positions added yet.
                 </td>
               </tr>

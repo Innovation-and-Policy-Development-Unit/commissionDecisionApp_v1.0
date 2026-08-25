@@ -46,7 +46,7 @@ function CommentItem({ comment, target, onEdit, onDelete, onReply, isReply = fal
     return (
       <div className={`flex gap-3 ${isReply ? 'ml-11' : ''}`}>
         <div className="w-8 h-8 shrink-0 rounded-full bg-slate-100 dark:bg-slate-800" />
-        <p className="text-xs italic text-slate-400 dark:text-slate-500 py-2">This comment was deleted.</p>
+        <p className="text-xs italic text-slate-500 dark:text-slate-400 py-2">This comment was deleted.</p>
       </div>
     )
   }

@@ -192,7 +192,7 @@ function ScreenshotZone({ preview, onChange, onRemove }) {
             </button>
           </>
         ) : (
-          <span className="text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+          <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
             <Camera size={14} /> Paste, drop, or click to add a screenshot
           </span>
         )}
@@ -277,7 +277,7 @@ function FillSection({ section, forceOpen, responses, onChange }) {
       >
         <div>
           <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{section.title}</p>
-          {section.note && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{section.note}</p>}
+          {section.note && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{section.note}</p>}
         </div>
         {isOpenState ? <ChevronDown size={16} className="text-slate-400 shrink-0" /> : <ChevronRight size={16} className="text-slate-400 shrink-0" />}
       </button>
@@ -343,7 +343,7 @@ function TeamCard({ entry }) {
       <button type="button" onClick={() => setOpen(o => !o)} className="w-full flex items-start justify-between gap-3 text-left">
         <div>
           <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-            {entry.username}{entry.unit && <span className="font-normal text-slate-400 dark:text-slate-500"> · {entry.unit}</span>}
+            {entry.username}{entry.unit && <span className="font-normal text-slate-500 dark:text-slate-400"> · {entry.unit}</span>}
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2">
             <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{counts.good} works well</span>

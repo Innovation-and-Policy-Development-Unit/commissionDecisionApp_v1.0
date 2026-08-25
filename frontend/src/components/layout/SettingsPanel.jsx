@@ -119,7 +119,7 @@ export default function SettingsPanel() {
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {/* Color Mode */}
           <div className="px-5 py-5 border-b border-slate-100 dark:border-slate-700">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">Color Mode</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Color Mode</h4>
             <div className="flex gap-2">
               <ModeCard variant="light" label="Light" active={theme === 'light'} onClick={() => setTheme('light')} />
               <ModeCard variant="dim"   label="Dim"   active={theme === 'dim'}   onClick={() => setTheme('dim')}   />
@@ -129,7 +129,7 @@ export default function SettingsPanel() {
 
           {/* Color Presets */}
           <div className="px-5 py-5 border-b border-slate-100 dark:border-slate-700">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">Color Preset</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Color Preset</h4>
             <div className="flex flex-wrap gap-2">
               {colorPresets.map(preset => (
                 <button
@@ -156,7 +156,7 @@ export default function SettingsPanel() {
 
           {/* Layout Options */}
           <div className="px-5 py-5 border-b border-slate-100 dark:border-slate-700 space-y-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Layout</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Layout</h4>
             <Toggle
               checked={sidebarCollapsed}
               onChange={toggleSidebar}
@@ -171,7 +171,7 @@ export default function SettingsPanel() {
 
           {/* Locale Options */}
           <div className="px-5 py-5 space-y-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Regional</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Regional</h4>
             <Toggle
               checked={isRTL}
               onChange={toggleRTL}

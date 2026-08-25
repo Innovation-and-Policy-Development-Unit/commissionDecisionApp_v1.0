@@ -1367,7 +1367,7 @@ const stageDescriptions = {
                     isDedicatedForm ? (
                       <div className="card card-compact">
                         {submission.form_type_code === 'PSC 2-1' && submissionUsesOduRestructureChecklist(submission) && (
-                          <p className="text-xs text-slate-400 dark:text-slate-500 italic mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 italic mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
                             Ministry's original request — reference only. See the ODU Commission Submission Paper below for the version prepared for the Commission.
                           </p>
                         )}
@@ -1524,7 +1524,7 @@ const stageDescriptions = {
 
                 {/* ── Document list ── */}
                 {documents.length === 0 ? (
-                  <p className="text-sm text-slate-400 dark:text-slate-500 py-2 mb-4">No documents attached yet.</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 py-2 mb-4">No documents attached yet.</p>
                 ) : (
                   <ul className="space-y-2 mb-4">
                     {documents.map(doc => (
@@ -1550,7 +1550,7 @@ const stageDescriptions = {
                           {doc.description && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{doc.description}</p>
                           )}
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                             {formatBytes(doc.file_size)}{doc.file_size ? ' · ' : ''}{doc.uploaded_by_username} · {new Date(doc.uploaded_at).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </p>
                           {doc.version_count > 0 && (
@@ -1629,7 +1629,7 @@ const stageDescriptions = {
                         accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                       />
                     </label>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">PDF, Word, Excel, or images — max 20 MB</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">PDF, Word, Excel, or images — max 20 MB</p>
                   </div>
                 )}
               </div>
@@ -1806,7 +1806,7 @@ const stageDescriptions = {
                 ]}
               />
               {officers.length > 0 && officers[0].weighted_load != null && (
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 -mt-1">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-1">
                   Officers are listed lightest plate first; "load" weights older work more heavily.
                 </p>
               )}

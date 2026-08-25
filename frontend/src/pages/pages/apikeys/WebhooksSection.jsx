@@ -60,7 +60,7 @@ export default function WebhooksSection() {
                   <span key={ev} className="badge badge-secondary text-[10px]">{ev}</span>
                 ))}
               </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Last triggered: {wh.lastTriggered}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Last triggered: {wh.lastTriggered}</p>
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <WebhookToggle

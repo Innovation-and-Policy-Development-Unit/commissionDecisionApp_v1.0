@@ -112,13 +112,13 @@ function CollapsedGroupItem({ group }) {
           onMouseEnter={() => setDropdownOpen(true)}
           onMouseLeave={() => setDropdownOpen(false)}
         >
-          <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+          <div className="px-3 py-1.5 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
             {groupLabel}
           </div>
           {flatItems.map((entry, i) => {
             if (entry.type === 'header') {
               return (
-                <div key={`h-${i}`} className="px-3 pt-2.5 pb-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-t border-slate-100 dark:border-slate-700 mt-1">
+                <div key={`h-${i}`} className="px-3 pt-2.5 pb-1 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-t border-slate-100 dark:border-slate-700 mt-1">
                   {translateLabel(entry, t)}
                 </div>
               )
@@ -307,7 +307,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
           {!collapsed && (
             <div>
               <span className="font-bold text-base text-slate-800 dark:text-slate-100 leading-tight">{t('app.title')}</span>
-              <span className="block text-[10px] font-semibold tracking-widest uppercase text-slate-400 dark:text-slate-500 -mt-0.5">{t('app.brand_tag')}</span>
+              <span className="block text-[10px] font-semibold tracking-widest uppercase text-slate-500 dark:text-slate-400 -mt-0.5">{t('app.brand_tag')}</span>
             </div>
           )}
         </div>
@@ -325,7 +325,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
             /* Expanded: full menu with groups */
             visibleMenu.map(group => (
               <div key={group.group} className="mb-2">
-                <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <div className="px-3 py-1.5 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                   {translateLabel(group, t)}
                 </div>
                 <div className="space-y-0.5">

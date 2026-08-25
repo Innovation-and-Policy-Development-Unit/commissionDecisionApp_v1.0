@@ -181,7 +181,7 @@ export default function PasswordResetConfirm() {
                             />
                           ))}
                         </div>
-                        <p className="text-xs text-slate-400 dark:text-slate-500">{strength.label}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{strength.label}</p>
                       </div>
                     )}
                   </div>

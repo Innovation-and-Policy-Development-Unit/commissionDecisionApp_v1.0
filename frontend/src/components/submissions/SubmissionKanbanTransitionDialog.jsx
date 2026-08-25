@@ -78,7 +78,7 @@ export default function SubmissionKanbanTransitionDialog({
             placeholder={t('submission.kanban.remarks_placeholder')}
             resetKey={open}
           />
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {t('submission.kanban.remarks_hint')}
           </p>
         </div>

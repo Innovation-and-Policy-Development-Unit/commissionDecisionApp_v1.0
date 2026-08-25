@@ -13,7 +13,7 @@ function Section({ title, desc, children, span }) {
     <div className={`card p-6 ${span === 2 ? 'col-span-1 xl:col-span-2' : ''}`}>
       <div className="mb-5">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{title}</h3>
-        {desc && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{desc}</p>}
+        {desc && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{desc}</p>}
       </div>
       {children}
     </div>
@@ -226,7 +226,7 @@ export default function FormElements() {
             <div>
               <div className="flex justify-between mb-1.5">
                 <Label>With Character Counter</Label>
-                <span className={`text-xs font-medium ${charInput.length > MAX_CHARS ? 'text-red-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                <span className={`text-xs font-medium ${charInput.length > MAX_CHARS ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
                   {charInput.length}/{MAX_CHARS}
                 </span>
               </div>
@@ -263,7 +263,7 @@ export default function FormElements() {
             <div>
               <div className="flex justify-between mb-1.5">
                 <Label>With Live Counter</Label>
-                <span className={`text-xs font-medium ${textareaVal.length > TEXTAREA_MAX ? 'text-red-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                <span className={`text-xs font-medium ${textareaVal.length > TEXTAREA_MAX ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
                   {textareaVal.length}/{TEXTAREA_MAX}
                 </span>
               </div>
@@ -545,7 +545,7 @@ export default function FormElements() {
                   Choose File
                   <input type="file" className="sr-only" />
                 </label>
-                <span className="text-sm text-slate-400 dark:text-slate-500 truncate">No file chosen</span>
+                <span className="text-sm text-slate-500 dark:text-slate-400 truncate">No file chosen</span>
               </div>
               <Helper>Supported formats: JPG, PNG, PDF. Max 10 MB.</Helper>
             </div>
@@ -591,7 +591,7 @@ export default function FormElements() {
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
                       {dragging ? 'Drop your file here' : 'Drop files here or click to browse'}
                     </p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">PNG, JPG, GIF, PDF up to 10 MB</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">PNG, JPG, GIF, PDF up to 10 MB</p>
                   </>
                 )}
               </div>
@@ -760,7 +760,7 @@ export default function FormElements() {
                 />
                 <label
                   htmlFor={id}
-                  className="absolute left-3 top-3.5 text-sm text-slate-400 dark:text-slate-500 transition-all duration-200 pointer-events-none
+                  className="absolute left-3 top-3.5 text-sm text-slate-500 dark:text-slate-400 transition-all duration-200 pointer-events-none
                     peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm
                     peer-focus:top-1.5 peer-focus:text-[10px] peer-focus:text-primary-500 peer-focus:font-semibold
                     peer-not-placeholder-shown:top-1.5 peer-not-placeholder-shown:text-[10px] peer-not-placeholder-shown:text-primary-500 peer-not-placeholder-shown:font-semibold"

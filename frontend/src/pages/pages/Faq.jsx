@@ -286,7 +286,7 @@ export default function Faq() {
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight">{cat.label}</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{cat.count} articles</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{cat.count} articles</p>
               </div>
             </button>
           )
@@ -324,7 +324,7 @@ export default function Faq() {
               <HelpCircle size={32} className="text-slate-300 dark:text-slate-600" />
             </div>
             <p className="text-slate-700 dark:text-slate-300 font-bold mb-1">No results found</p>
-            <p className="text-slate-400 dark:text-slate-500 text-sm">
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
               Try a different search term or{' '}
               <button onClick={() => { setActiveCategory('All'); setSearch('') }} className="text-primary-500 hover:underline font-medium">
                 browse all categories
@@ -383,7 +383,7 @@ export default function Faq() {
                 <span className={clsx('text-xs font-bold px-2.5 py-1 rounded-full', article.categoryColor)}>
                   {article.category}
                 </span>
-                <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">{article.readTime}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">{article.readTime}</span>
               </div>
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug mb-4 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                 {article.title}
@@ -414,7 +414,7 @@ export default function Faq() {
                 <div className="flex-1">
                   <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1">{opt.title}</h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2">{opt.description}</p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{opt.available}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{opt.available}</p>
                 </div>
                 <button className={clsx(
                   'w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 shadow-sm hover:shadow-md',

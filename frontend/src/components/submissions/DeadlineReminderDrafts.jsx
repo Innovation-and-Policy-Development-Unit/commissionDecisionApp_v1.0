@@ -41,7 +41,7 @@ export default function DeadlineReminderDrafts({ submissionId }) {
 
   if (!drafts.length) {
     return (
-      <p className="text-sm text-slate-400 dark:text-slate-500 py-2">
+      <p className="text-sm text-slate-500 dark:text-slate-400 py-2">
         No AI-drafted deadline reminders for this case yet. The system drafts them automatically when the assessment deadline is within 5 days.
       </p>
     )

@@ -163,7 +163,7 @@ export default function MultiPageFormRenderer({
 
       {/* ── Step counter + section title ── */}
       <div className="px-6 pt-5 pb-2">
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
           Step {step + 1} of {total}
         </p>
         <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">{page.title}</h3>

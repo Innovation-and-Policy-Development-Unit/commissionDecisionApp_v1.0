@@ -69,7 +69,7 @@ export default function ApiKeysTable({ keys, activeCount, onCreate, onRevoke, on
                     </div>
                     <div>
                       <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{apiKey.name}</p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500">Created {apiKey.created}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Created {apiKey.created}</p>
                     </div>
                   </div>
                 </td>

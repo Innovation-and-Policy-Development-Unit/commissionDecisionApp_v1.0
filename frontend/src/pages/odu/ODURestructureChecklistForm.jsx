@@ -218,7 +218,7 @@ function SectionGroup({ group, form, onChange, readOnly, collapsed, onToggle, fo
             const hasDocument = onNavigateToDocument && ITEM_DOCUMENT_MAP[item.field]
             return (
               <li key={item.field} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                <span className="text-xs text-slate-400 dark:text-slate-500 w-5 shrink-0 text-right font-mono">
+                <span className="text-xs text-slate-500 dark:text-slate-400 w-5 shrink-0 text-right font-mono">
                   {idx + 1}.
                 </span>
                 {hasDocument ? (
@@ -523,7 +523,7 @@ export default function ODURestructureChecklistForm({
               </h3>
               <StatusBadge status={checklist.status} />
             </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Office of the Public Service Commission — Organisational Development Unit
               {(isOduPrincipal || isOduManager) && submission?.assigned_to_name && (
                 <> · Assigned to <span className="font-medium text-slate-600 dark:text-slate-300">{submission.assigned_to_name}</span></>

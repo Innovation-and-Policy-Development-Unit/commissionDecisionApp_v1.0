@@ -18,9 +18,9 @@ function SectionHeader({ title }) {
 function Field({ label, value, span }) {
   return (
     <div className={span ? 'col-span-2' : ''}>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words">
-        {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">—</span>}
+        {value || <span className="text-slate-500 dark:text-slate-400 font-normal italic">—</span>}
       </p>
     </div>
   )
@@ -40,7 +40,7 @@ const PROPOSAL_TYPE_COLORS = {
 }
 
 function ProposalTypeBadge({ value }) {
-  if (!value) return <span className="text-slate-400 dark:text-slate-500 italic">—</span>
+  if (!value) return <span className="text-slate-500 dark:text-slate-400 italic">—</span>
   const cls = PROPOSAL_TYPE_COLORS[value] || 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
@@ -51,7 +51,7 @@ function ProposalTypeBadge({ value }) {
 
 function CheckVal({ value }) {
   return (
-    <span className={value ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400 dark:text-slate-500 italic'}>
+    <span className={value ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-500 dark:text-slate-400 italic'}>
       {value ? '✓ Included' : '—'}
     </span>
   )
@@ -65,7 +65,7 @@ const RESTRUCTURE_SCOPE_LABELS = {
 export default function PSCForm21View({ data, submission }) {
   if (!data || !Object.keys(data).length) {
     return (
-      <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2">
+      <p className="text-sm text-slate-500 dark:text-slate-400 italic py-2">
         No form data submitted yet.
       </p>
     )
@@ -86,7 +86,7 @@ export default function PSCForm21View({ data, submission }) {
         <Field label="Proposal Title" value={data.proposal_title} span />
         <Field label="Submission Date" value={fmt(data.submission_date)} />
         <div>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">Proposal Type</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">Proposal Type</p>
           <ProposalTypeBadge value={data.proposal_type} />
         </div>
         <Field label="Restructure Scope" value={RESTRUCTURE_SCOPE_LABELS[data.restructure_scope] || data.restructure_scope} />
@@ -170,7 +170,7 @@ export default function PSCForm21View({ data, submission }) {
             ))}
             {data.attachment_self_check && (
               <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">Self-check</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">Self-check</p>
                 <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{data.attachment_self_check}</p>
               </div>
             )}
@@ -190,8 +190,8 @@ export default function PSCForm21View({ data, submission }) {
       <SectionHeader title="Director-General Endorsement" />
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">Endorsement Confirmed</p>
-          <p className={`text-sm font-semibold ${data.dg_endorsement_confirmed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500 italic font-normal'}`}>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">Endorsement Confirmed</p>
+          <p className={`text-sm font-semibold ${data.dg_endorsement_confirmed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400 italic font-normal'}`}>
             {data.dg_endorsement_confirmed ? '✓ Confirmed' : '—'}
           </p>
         </div>

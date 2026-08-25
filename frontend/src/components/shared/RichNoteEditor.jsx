@@ -193,7 +193,7 @@ const RichNoteEditor = forwardRef(function RichNoteEditor(
         >
           <ListOrdered size={15} />
         </BaseButton>
-        <span className="ml-auto flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
+        <span className="ml-auto flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
           <ImageIcon size={13} /> Paste or drop a screenshot to attach it inline
         </span>
       </div>

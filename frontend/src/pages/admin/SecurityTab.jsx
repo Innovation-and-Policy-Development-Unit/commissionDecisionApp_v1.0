@@ -220,7 +220,7 @@ function AuditTrailPanel() {
                     <td className="text-xs text-slate-500 dark:text-slate-400 max-w-xs truncate">
                       {log.description || log.resource_label || '—'}
                     </td>
-                    <td className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap font-mono">
+                    <td className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap font-mono">
                       {log.ip_address || '—'}
                     </td>
                   </tr>
@@ -313,7 +313,7 @@ function ActiveSessionsPanel() {
             <span className="w-2 h-2 rounded-full bg-green-500" />
             {data ? `${data.online_count} online now` : '—'}
           </span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">Auto-refreshes every 30s</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">Auto-refreshes every 30s</span>
         </div>
         <button onClick={load} disabled={loading}
           className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors">
@@ -359,7 +359,7 @@ function ActiveSessionsPanel() {
                           Logged out {timeAgo(u.last_seen_at)}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 italic">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 italic">
                           <span className="w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
                           Never logged in
                         </span>
@@ -367,7 +367,7 @@ function ActiveSessionsPanel() {
                     </td>
                     <td className="whitespace-nowrap">
                       <div className="font-medium text-slate-700 dark:text-slate-200">{u.full_name}</div>
-                      <div className="text-xs text-slate-400 dark:text-slate-500">{u.username} · {u.email || '—'}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{u.username} · {u.email || '—'}</div>
                     </td>
                     <td className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{roleLabel(u.role)}</td>
                     <td className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{fmt(u.last_login_at)}</td>
@@ -836,7 +836,7 @@ function IncidentResponsePanel() {
                     <Chip label={inc.status.replace('_', ' ')} colorClass={STATUS_COLORS[inc.status] ?? 'bg-slate-100 text-slate-600'} />
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 line-clamp-2">{inc.description}</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 dark:text-slate-500">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                     <span className="flex items-center gap-1">
                       <Flag size={11} />
                       {CATEGORIES.find(c => c.value === inc.category)?.label ?? inc.category}

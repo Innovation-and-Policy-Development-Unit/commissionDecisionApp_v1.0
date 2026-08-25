@@ -247,7 +247,7 @@ export default function AgendaSittingPack() {
                   if (row.type === 'subheading') {
                     return (
                       <div key={row.id} className="px-4 pt-2 pb-1">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{row.label}</span>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{row.label}</span>
                       </div>
                     )
                   }

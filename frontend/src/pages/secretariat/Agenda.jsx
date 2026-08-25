@@ -908,7 +908,7 @@ function AgendaWorkflowBar({ status, isCompleted, isSecretary, isChairperson, bu
                 <span className={`mt-1 text-[10px] font-medium text-center leading-tight max-w-[70px]
                   ${active ? 'text-primary-600 dark:text-primary-400' :
                     done   ? 'text-emerald-600 dark:text-emerald-400' :
-                             'text-slate-400 dark:text-slate-500'}`}
+                             'text-slate-500 dark:text-slate-400'}`}
                 >
                   {step.label}
                 </span>
@@ -1001,7 +1001,7 @@ function MattersArisingRow({ item, isCompleted, canDefer, onRemove, onMoveUp, on
             {item.submission_title}
           </Link>
           {item.submission_ministry && (
-            <span className="text-slate-400 dark:text-slate-500"> — {item.submission_ministry}</span>
+            <span className="text-slate-500 dark:text-slate-400"> — {item.submission_ministry}</span>
           )}
         </p>
       </div>
@@ -1041,7 +1041,7 @@ function StandardRow({ item, isCompleted, canDefer, categories, editingItem, set
             {item.submission_title}
           </Link>
           {item.submission_ministry && (
-            <span className="text-slate-400 dark:text-slate-500"> — {item.submission_ministry}</span>
+            <span className="text-slate-500 dark:text-slate-400"> — {item.submission_ministry}</span>
           )}
         </p>
         {item.agenda_blurb && (

@@ -517,7 +517,7 @@ export default function SubmissionLog() {
         {viewMode === 'kanban' && (
           <div className="p-4">
             {loading ? (
-              <div className="py-16 text-center text-slate-400 dark:text-slate-500">
+              <div className="py-16 text-center text-slate-500 dark:text-slate-400">
                 <RefreshCw size={24} className="mx-auto mb-2 animate-spin opacity-40" />
                 <p className="text-sm">{t('common.loading')}</p>
               </div>
@@ -583,7 +583,7 @@ export default function SubmissionLog() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={cols} className="py-16 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={cols} className="py-16 text-center text-slate-500 dark:text-slate-400">
                     <RefreshCw size={24} className="mx-auto mb-2 animate-spin opacity-40" />
                     <p className="text-sm">{t('common.loading')}</p>
                   </td>
@@ -591,7 +591,7 @@ export default function SubmissionLog() {
               )}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={cols} className="py-16 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={cols} className="py-16 text-center text-slate-500 dark:text-slate-400">
                     <FileText size={32} className="mx-auto mb-2 opacity-40" />
                     <p className="text-sm">{(q || stageFilter || ministryFilter || unitFilter || dashboardFilter || nlIdSet) ? t('submission.no_matches') : t('submission.empty_state_title')}</p>
                   </td>
@@ -647,7 +647,7 @@ export default function SubmissionLog() {
                     </td>
                     {showAssignedColumn && (
                       <td className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                        {r.allocated_to_label || <span className="text-slate-400 dark:text-slate-500">Unassigned</span>}
+                        {r.allocated_to_label || <span className="text-slate-500 dark:text-slate-400">Unassigned</span>}
                       </td>
                     )}
                     {showQualityColumn && (
@@ -666,7 +666,7 @@ export default function SubmissionLog() {
                               : '—'}
                           </span>
                           {r.received_at && (
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                               {t('submission.received_short')}{' '}
                               {new Date(r.received_at).toLocaleDateString(localeForDates)}
                             </p>

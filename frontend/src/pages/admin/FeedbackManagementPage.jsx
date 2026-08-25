@@ -302,7 +302,7 @@ export default function FeedbackManagementPage() {
 
             <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
               <div>
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">Submission Details</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Submission Details</h4>
                 <ul className="space-y-2.5">
                   <li className="flex items-center justify-between text-xs">
                     <span className="text-slate-500">Submitted By</span>
@@ -321,7 +321,7 @@ export default function FeedbackManagementPage() {
                 </ul>
               </div>
               <div>
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">System Context</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">System Context</h4>
                 <ul className="space-y-2.5">
                   <li className="flex items-center justify-between text-xs">
                     <span className="text-slate-500">Viewport</span>

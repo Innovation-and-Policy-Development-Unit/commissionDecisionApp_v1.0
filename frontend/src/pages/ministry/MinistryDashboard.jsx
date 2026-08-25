@@ -132,7 +132,7 @@ function SparkStat({ title, value, sub, sparkData, sparkType, color, gradId }) {
       <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-snug">{title}</p>
       <p className="text-3xl font-bold text-slate-900 dark:text-slate-50 leading-none">{value}</p>
       <div className="-mx-1"><Sparkline data={sparkData} color={color} type={sparkType} gradId={gradId} /></div>
-      {sub && <p className="text-xs text-slate-400 dark:text-slate-500 -mt-1">{sub}</p>}
+      {sub && <p className="text-xs text-slate-500 dark:text-slate-400 -mt-1">{sub}</p>}
     </div>
   )
 }
@@ -252,7 +252,7 @@ export default function MinistryDashboard() {
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('ministry_dashboard.activity_title', { defaultValue: 'Submission Activity' })}</h2>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{t('ministry_dashboard.activity_sub', { defaultValue: 'Received and decided over time' })}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('ministry_dashboard.activity_sub', { defaultValue: 'Received and decided over time' })}</p>
             </div>
             <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1" role="group">
               {TREND_WINDOWS.map(w => (
@@ -276,7 +276,7 @@ export default function MinistryDashboard() {
               { label: t('dashboard.overdue_21', { defaultValue: 'Overdue (21-day)' }), value: m.overdue, color: 'text-amber-600 dark:text-amber-400' },
             ].map(s => (
               <div key={s.label}>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">{s.label}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{s.label}</p>
                 <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
               </div>
             ))}
@@ -312,7 +312,7 @@ export default function MinistryDashboard() {
         <div className="flex flex-col gap-4">
           <SparkStat
             title={t('dashboard.completion_rate', { defaultValue: 'Completion Rate' })}
-            value={<>{completionStr}<span className="text-lg text-slate-400 dark:text-slate-500">%</span></>}
+            value={<>{completionStr}<span className="text-lg text-slate-500 dark:text-slate-400">%</span></>}
             sub={t('dashboard.completion_rate_sub', { defaultValue: 'Cases decided vs. total received' })}
             sparkData={spkDecided} sparkType="area" color={colors.emerald} gradId="mdSpkCr"
           />
@@ -388,7 +388,7 @@ export default function MinistryDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-1 card card-compact">
           <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">{t('ministry_dashboard.stage_breakdown')}</h3>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">{t('ministry_dashboard.stage_breakdown_sub')}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('ministry_dashboard.stage_breakdown_sub')}</p>
           {stageData.length === 0 ? (
             <p className="text-xs text-slate-500 dark:text-slate-400 py-6 text-center">{t('ministry_dashboard.no_data')}</p>
           ) : (
@@ -412,7 +412,7 @@ export default function MinistryDashboard() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-700">
             <div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('ministry_dashboard.recent_submissions')}</h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{t('ministry_dashboard.recent_submissions_sub')}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('ministry_dashboard.recent_submissions_sub')}</p>
             </div>
             <Link to="/submissions" className="text-xs text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-0.5">
               {t('dashboard.view_all')} <ArrowRight size={11} aria-hidden="true" />

@@ -59,7 +59,7 @@ export default function AgendaMyNotes() {
       />
 
       {data === undefined && (
-        <p className="text-sm text-slate-400 dark:text-slate-500 italic py-10 text-center">Loading…</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 italic py-10 text-center">Loading…</p>
       )}
       {data === null && (
         <div className="flex flex-col items-center justify-center py-16 text-slate-400 print:hidden">
@@ -68,7 +68,7 @@ export default function AgendaMyNotes() {
         </div>
       )}
       {data && data.items.length === 0 && (
-        <p className="text-sm text-slate-400 dark:text-slate-500 italic py-10 text-center">
+        <p className="text-sm text-slate-500 dark:text-slate-400 italic py-10 text-center">
           No agenda items yet for this sitting.
         </p>
       )}
@@ -79,7 +79,7 @@ export default function AgendaMyNotes() {
               key={item.agenda_item_id}
               className="card card-compact print:border print:border-slate-300 print:break-inside-avoid"
             >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1 print:text-black">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1 print:text-black">
                 {item.category_display || 'Other'}
               </p>
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 print:text-black leading-snug">

@@ -41,9 +41,9 @@ function Field({ label, children, span }) {
 function ReadField({ label, value, span, placeholder = '—' }) {
   return (
     <div className={span ? 'sm:col-span-2' : ''}>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words">
-        {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">{placeholder}</span>}
+        {value || <span className="text-slate-500 dark:text-slate-400 font-normal italic">{placeholder}</span>}
       </p>
     </div>
   )
@@ -78,7 +78,7 @@ function DeliverableTable({ rows, onChange, readOnly }) {
 
   if (readOnly) {
     if (!rows.length) {
-      return <p className="text-sm text-slate-400 dark:text-slate-500 italic">No deliverable rows entered.</p>
+      return <p className="text-sm text-slate-500 dark:text-slate-400 italic">No deliverable rows entered.</p>
     }
     return (
       <div className="overflow-x-auto">
@@ -242,7 +242,7 @@ export default function IPDUBoardPaperForm({ submissionId, submission, onDirtyCh
   if (paper === undefined) {
     return (
       <div className="card card-compact">
-        <p className="text-sm text-slate-400 dark:text-slate-500 italic py-4 text-center">Loading Commission paper…</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 italic py-4 text-center">Loading Commission paper…</p>
       </div>
     )
   }
@@ -254,7 +254,7 @@ export default function IPDUBoardPaperForm({ submissionId, submission, onDirtyCh
           <FileSignature size={14} className="text-slate-400" />
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">IPDU Commission Submission Paper</h3>
         </div>
-        <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2">{loadMessage}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 italic py-2">{loadMessage}</p>
       </div>
     )
   }
@@ -274,7 +274,7 @@ export default function IPDUBoardPaperForm({ submissionId, submission, onDirtyCh
               {readOnly ? 'Submitted' : 'Draft'}
             </span>
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             {readOnly
               ? 'This is the paper that was — or will be — presented to the Commission.'
               : "Fill this in, then use the Submit button in the Actions panel to hand the whole submission to the Secretary."}

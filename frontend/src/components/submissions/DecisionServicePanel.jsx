@@ -200,7 +200,7 @@ export default function DecisionServicePanel({ submission }) {
       </div>
 
       {!active && history.length === 0 ? (
-        <p className="text-sm text-slate-400 dark:text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           The decision has not yet been formally served on the ministry.
           {canServe && ' Serving creates an immutable letter the ministry must acknowledge.'}
         </p>
@@ -230,7 +230,7 @@ export default function DecisionServicePanel({ submission }) {
           >
             Acknowledge receipt
           </BaseButton>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
             Your name and the time of acknowledgement are permanently recorded.
           </p>
         </div>
@@ -267,7 +267,7 @@ export default function DecisionServicePanel({ submission }) {
                 onChange={e => setBody(e.target.value)}
                 disabled={busy}
               />
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 Serving snapshots this text into a hash-protected PDF, notifies the ministry's
                 HR and Head of Agency, and starts the acknowledgement clock. A re-serve
                 supersedes any unacknowledged earlier letter.

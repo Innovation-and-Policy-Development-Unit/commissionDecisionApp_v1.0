@@ -108,9 +108,9 @@ function Field({ label, children, hint, required, hasError }) {
 function ReadField({ label, value, span }) {
   return (
     <div className={span ? 'col-span-2' : ''}>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words">
-        {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">—</span>}
+        {value || <span className="text-slate-500 dark:text-slate-400 font-normal italic">—</span>}
       </p>
     </div>
   )
@@ -372,7 +372,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
 
       {/* ── Step counter + section title ── */}
       <div className="px-6 pt-5 pb-2">
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Step {activeTab} of {TOTAL_TABS}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Step {activeTab} of {TOTAL_TABS}</p>
         <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
           {TABS.find(t => t.id === activeTab)?.label}
         </h3>
@@ -551,7 +551,7 @@ export default function PSCForm21Fields({ form, setForm, submission, readOnly = 
                 onChange={rows => set('costing_rows', rows)}
               />
             </Field>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
               If a position is vacant, note in the funding statement below whether sufficient funds
               have been allocated from the current financial year to fill it.
             </p>

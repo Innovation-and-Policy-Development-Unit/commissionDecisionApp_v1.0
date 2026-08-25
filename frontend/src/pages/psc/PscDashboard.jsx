@@ -124,12 +124,12 @@ function StatCard({ title, value, unit = '', trend, trendInversed = false, sub, 
         <TrendBadge value={trend} inversed={trendInversed} />
       </div>
       <p className="text-3xl font-bold text-slate-900 dark:text-slate-50 leading-none">
-        {value}<span className="text-base font-medium text-slate-400 dark:text-slate-500 ml-1">{unit}</span>
+        {value}<span className="text-base font-medium text-slate-500 dark:text-slate-400 ml-1">{unit}</span>
       </p>
       <div className="-mx-1">
         <Sparkline data={sparkData} color={color} type={sparkType} gradId={gradId} />
       </div>
-      <p className="text-xs text-slate-400 dark:text-slate-500 -mt-1">{sub}</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400 -mt-1">{sub}</p>
     </div>
   )
 }
@@ -227,6 +227,11 @@ export default function PscDashboard() {
 
   return (
     <div className="space-y-4">
+      {/* Visually hidden — the page otherwise jumps straight to h2 widget
+          titles with no h1 identifying the page itself (WCAG 1.3.1/2.4.6).
+          The breadcrumb already shows "Dashboard" visibly, so no visible
+          duplicate heading is needed. */}
+      <h1 className="sr-only">{t('breadcrumb.dashboard')}</h1>
       {useLiveTotals && total === 0 && (
         <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
           <p className="font-medium">{t('dashboard.seed_banner_title')}</p>
@@ -248,7 +253,7 @@ export default function PscDashboard() {
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('dashboard.activity_overview')}</h2>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{t('dashboard.activity_overview_sub')}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('dashboard.activity_overview_sub')}</p>
             </div>
             <div
               className="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1"
@@ -286,7 +291,7 @@ export default function PscDashboard() {
               { label: t('dashboard.overdue_21'),         value: overdue,              color: 'text-amber-600 dark:text-amber-400' },
             ].map(({ label, value, color }) => (
               <div key={label}>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">{label}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{label}</p>
                 <p className={`text-2xl font-bold ${color}`}>{value}</p>
               </div>
             ))}
@@ -335,8 +340,8 @@ export default function PscDashboard() {
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('dashboard.completion_rate')}</p>
             </div>
-            <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 mt-1">{completionRate}<span className="text-lg text-slate-400 dark:text-slate-500">%</span></p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-3">{t('dashboard.completion_rate_sub')}</p>
+            <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 mt-1">{completionRate}<span className="text-lg text-slate-500 dark:text-slate-400">%</span></p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3">{t('dashboard.completion_rate_sub')}</p>
             <div className="h-16">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={spkDecided} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -358,7 +363,7 @@ export default function PscDashboard() {
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('dashboard.all_submissions')}</p>
             </div>
             <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 mt-1">{total}</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-3">{t('dashboard.all_submissions_sub')}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3">{t('dashboard.all_submissions_sub')}</p>
             <div className="h-16">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={spkSubmissions} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -568,7 +573,7 @@ export default function PscDashboard() {
                       style={{ width: `${pct}%`, backgroundColor: colors.primary }}
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{t('dashboard.ministry_count', { count })}</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{t('dashboard.ministry_count', { count })}</p>
                 </div>
               )
             })}
@@ -594,11 +599,11 @@ export default function PscDashboard() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>{t('submission.reference_short')}</th>
-                  <th>{t('dashboard.subject')}</th>
-                  <th>{t('submission.ministry')}</th>
-                  <th>{t('submission.stage')}</th>
-                  <th>{t('submission.status')}</th>
+                  <th scope="col">{t('submission.reference_short')}</th>
+                  <th scope="col">{t('dashboard.subject')}</th>
+                  <th scope="col">{t('submission.ministry')}</th>
+                  <th scope="col">{t('submission.stage')}</th>
+                  <th scope="col">{t('submission.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -645,7 +650,7 @@ export default function PscDashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-slate-700 dark:text-slate-300 leading-snug">{text}</p>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
                     <Zap size={10} aria-hidden="true" />
                     {sub}
                   </p>

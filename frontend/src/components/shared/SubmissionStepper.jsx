@@ -81,7 +81,7 @@ function StepNode({ phase, index, isComplete, isActive, isFuture, isSentBack }) 
   }
   // future
   return (
-    <div className={clsx(base, 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 ring-slate-200 dark:ring-slate-600')}>
+    <div className={clsx(base, 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-600')}>
       {index + 1}
     </div>
   )
@@ -161,7 +161,7 @@ export default function SubmissionStepper({ currentStage, className }) {
               {isActive && currentStage && (
                 <span className={clsx(
                   'mt-0.5 text-[9px] leading-tight text-center italic truncate max-w-full px-0.5',
-                  isSentBack ? 'text-orange-500 dark:text-orange-400' : 'text-slate-400 dark:text-slate-500',
+                  isSentBack ? 'text-orange-500 dark:text-orange-400' : 'text-slate-500 dark:text-slate-400',
                 )}>
                   {stageLabel(currentStage, t)}
                 </span>

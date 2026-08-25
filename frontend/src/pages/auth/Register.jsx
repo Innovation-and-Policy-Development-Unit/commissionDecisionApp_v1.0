@@ -238,7 +238,7 @@ export default function Register() {
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-slate-200 dark:border-slate-700" />
               </div>
-              <div className="relative flex justify-center text-xs text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 px-3">
+              <div className="relative flex justify-center text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 px-3">
                 Or sign up with
               </div>
             </div>
