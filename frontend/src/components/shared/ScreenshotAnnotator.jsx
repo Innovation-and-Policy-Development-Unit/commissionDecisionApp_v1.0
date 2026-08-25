@@ -210,7 +210,7 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
         {/* Done */}
         <button
           onClick={handleDone}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-brand-emerald hover:brightness-110 text-white transition-all"
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:brightness-110 text-white transition-all"
         >
           <Check size={14} />
           Use Screenshot

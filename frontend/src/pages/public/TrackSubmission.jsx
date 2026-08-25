@@ -134,7 +134,7 @@ export default function TrackSubmission() {
             }}
           >
             <div className="flex justify-center mb-5">
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg, #0c2451, #1a4080)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="bg-gradient-dark" style={{ width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <FileSearch size={26} color="white" />
               </div>
             </div>
