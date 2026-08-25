@@ -20,12 +20,6 @@ export default {
           800: 'rgb(var(--p-800) / <alpha-value>)',
           900: 'rgb(var(--p-900) / <alpha-value>)',
         },
-        brand: {
-          cyan: '#06b6d4',
-          emerald: '#10b981',
-          amber: '#f59e0b',
-          red: '#ef4444',
-        }
       },
       fontFamily: {
         sans: ['var(--fontFamilyBase)'],
@@ -56,7 +50,6 @@ export default {
         'card-md': '0 4px 8px -1px rgba(0,0,0,0.10), 0 2px 4px -2px rgba(0,0,0,0.07)',
         'card-lg': '0 10px 18px -3px rgba(0,0,0,0.10), 0 4px 8px -4px rgba(0,0,0,0.07)',
         'glow': '0 0 20px rgb(var(--p-500) / 0.3)',
-        'glow-cyan': '0 0 20px rgba(6,182,212,0.3)',
       },
       backgroundImage: {
         'gradient-primary': 'none',
@@ -64,7 +57,13 @@ export default {
         'gradient-emerald': 'none',
         'gradient-amber': 'none',
         'gradient-red': 'none',
-        'gradient-dark': 'none',
+        // P3-02, SCDMS Pre-Production Readiness Audit — Findings Register:
+        // the fixed "brand navy" identity used on the public-facing
+        // login/lock/PIN/track pages — deliberately not tied to the
+        // swappable `primary` theme color, since branding on those pages
+        // should stay constant regardless of the logged-in dashboard's
+        // theme. Was copy-pasted as an inline style 7 times across 4 files.
+        'gradient-dark': 'linear-gradient(135deg, #0c2451 0%, #1a4080 100%)',
       },
       animation: {
         'shimmer': 'shimmer 1.4s infinite',

@@ -61,11 +61,11 @@ export default function LockScreen() {
         >
           <div className="flex justify-center mb-5">
             <div
+              className="bg-gradient-dark"
               style={{
                 width: 64,
                 height: 64,
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #0c2451, #1a4080)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -108,9 +108,8 @@ export default function LockScreen() {
             </div>
             <button
               type="submit"
-              className="w-full py-3 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full py-3 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed bg-gradient-dark"
               style={{
-                background: 'linear-gradient(135deg, #0c2451 0%, #1a4080 100%)',
                 borderRadius: 10,
                 boxShadow: '0 4px 14px rgba(12,36,81,0.3)',
               }}
