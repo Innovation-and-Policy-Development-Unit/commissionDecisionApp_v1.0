@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Cloud,
+  UploadCloud,
   Download,
   Edit2,
   Fingerprint,
@@ -2481,8 +2483,13 @@ function formatBytes(kb) {
 export function BackupTab() {
   const toast = useToast()
   const confirm = useConfirm()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [backups, setBackups] = useState([])
   const [schedule, setSchedule] = useState({ cron_expr: '', retention_days: '30', next_run: null })
+  const [cloudStatus, setCloudStatus] = useState({ connected: false })
+  const [connecting, setConnecting] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [pushingFile, setPushingFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [backingUp, setBackingUp] = useState(false)
   const [scheduleLoading, setScheduleLoading] = useState(false)
@@ -2500,9 +2507,10 @@ export function BackupTab() {
     setLoading(true)
     setError('')
     try {
-      const [bRes, sRes] = await Promise.allSettled([
+      const [bRes, sRes, cRes] = await Promise.allSettled([
         api.get('/backup/'),
         api.get('/backup/schedule/'),
+        api.get('/backup/cloud/status/'),
       ])
       if (bRes.status === 'fulfilled') setBackups(bRes.value.data)
       if (sRes.status === 'fulfilled') {
@@ -2513,6 +2521,7 @@ export function BackupTab() {
         setSchedulePreset(preset ? preset.value : (s.cron_expr ? '__custom__' : ''))
         setCustomCron(s.cron_expr || '')
       }
+      if (cRes.status === 'fulfilled') setCloudStatus(cRes.value.data)
     } catch {
       setError('Failed to load backup data.')
     } finally {
@@ -2521,6 +2530,66 @@ export function BackupTab() {
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  // Landed back here after the Microsoft consent redirect — see
+  // BackupViewSet.cloud_callback, which appends ?ms365=connected|error.
+  useEffect(() => {
+    const ms365 = searchParams.get('ms365')
+    if (!ms365) return
+    if (ms365 === 'connected') {
+      toast.success('Connected to Microsoft 365.')
+      fetchAll()
+    } else {
+      toast.error('Could not connect to Microsoft 365 — please try again.')
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('ms365')
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  const connectMs365 = async () => {
+    setConnecting(true)
+    try {
+      const { data } = await api.get('/backup/cloud/connect/')
+      window.location.href = data.auth_url
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'Could not start Microsoft 365 connection.')
+      setConnecting(false)
+    }
+  }
+
+  const disconnectMs365 = async () => {
+    const ok = await confirm({
+      title: 'Disconnect Microsoft 365?',
+      message: `Backups will stop pushing to "${cloudStatus.connected_email}". A new admin can reconnect their own account any time from here.`,
+      confirmLabel: 'Disconnect',
+      variant: 'danger',
+    })
+    if (!ok) return
+    setDisconnecting(true)
+    try {
+      await api.post('/backup/cloud/disconnect/')
+      toast.success('Disconnected from Microsoft 365.')
+      await fetchAll()
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'Disconnect failed.')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  const pushToCloud = async filename => {
+    setPushingFile(filename)
+    try {
+      await api.post('/backup/cloud/push/', { filename })
+      toast.success(`Push to Microsoft 365 queued for ${filename}.`)
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'Push failed.')
+    } finally {
+      setPushingFile(null)
+    }
+  }
 
   const runBackup = async () => {
     setBackingUp(true)
@@ -2745,6 +2814,76 @@ export function BackupTab() {
         </div>
       </div>
 
+      {/* ── Cloud backup destination (Microsoft 365 / OneDrive) ── */}
+      <div className="card p-5 space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Cloud size={18} className="text-sky-500" />
+          <h3 className="font-semibold text-slate-800 dark:text-slate-200">Cloud Backup</h3>
+        </div>
+        {!cloudStatus.connected ? (
+          <>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Connect a Microsoft 365 account so every backup — manual or scheduled — pushes to its
+              OneDrive automatically. Tied to whichever admin connects it; if they leave, the next
+              admin can reconnect their own account here with no setup needed.
+            </p>
+            <button
+              type="button"
+              onClick={connectMs365}
+              disabled={connecting}
+              className="btn-gradient py-2 px-4 text-sm inline-flex items-center gap-2 disabled:opacity-60"
+            >
+              {connecting ? <RefreshCw size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+              Connect Microsoft 365
+            </button>
+          </>
+        ) : (
+          <>
+            {cloudStatus.status === 'needs_reconnect' && (
+              <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-700/40 dark:bg-amber-900/10">
+                <AlertTriangle size={15} className="text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  The connection to Microsoft 365 needs to be redone — {cloudStatus.last_push_error || 'the last push failed to authenticate.'} Reconnect below.
+                </p>
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm text-slate-700 dark:text-slate-300">
+                  Connected as <span className="font-medium">{cloudStatus.connected_email}</span>
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {cloudStatus.last_pushed_at
+                    ? `Last pushed ${new Date(cloudStatus.last_pushed_at).toLocaleString()}`
+                    : 'No backup pushed yet.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {cloudStatus.status === 'needs_reconnect' && (
+                  <button
+                    type="button"
+                    onClick={connectMs365}
+                    disabled={connecting}
+                    className="btn-gradient py-1.5 px-4 text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
+                  >
+                    {connecting ? <RefreshCw size={13} className="animate-spin" /> : <UploadCloud size={13} />}
+                    Reconnect
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={disconnectMs365}
+                  disabled={disconnecting}
+                  className="btn-outline py-1.5 px-4 text-xs disabled:opacity-60"
+                >
+                  {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* ── Restore from upload ── */}
       <div className="card p-5 space-y-3">
         <div className="flex items-center gap-2 mb-1">
@@ -2762,7 +2901,7 @@ export function BackupTab() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".json"
+            accept=".zip,.json"
             className="block text-sm text-slate-600 dark:text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 dark:file:bg-primary-900/20 dark:file:text-primary-300"
             onChange={e => setRestoreFile(e.target.files[0] || null)}
           />
@@ -2814,6 +2953,18 @@ export function BackupTab() {
                   >
                     <Download size={13} /> Download
                   </button>
+                  {cloudStatus.connected && cloudStatus.status === 'connected' && (
+                    <button
+                      type="button"
+                      onClick={() => pushToCloud(b.filename)}
+                      disabled={pushingFile === b.filename}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-200 dark:border-sky-700/40 text-xs font-medium text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors disabled:opacity-50"
+                      title="Push to OneDrive"
+                    >
+                      {pushingFile === b.filename ? <RefreshCw size={13} className="animate-spin" /> : <UploadCloud size={13} />}
+                      OneDrive
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setConfirmRestore(b.filename)}
