@@ -540,7 +540,7 @@ export default function WorkflowActionsPanel({
             >
               {action.label}
             </BaseButton>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 ml-1">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 ml-1">
               {action.disabledReason || action.description}
             </p>
           </div>

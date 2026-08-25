@@ -104,7 +104,7 @@ export default function CreateKeyModal({ open, onClose, onCreate }) {
               value={expiry}
               onChange={e => setExpiry(e.target.value)}
             />
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Leave empty for no expiry.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Leave empty for no expiry.</p>
           </div>
         </div>
 

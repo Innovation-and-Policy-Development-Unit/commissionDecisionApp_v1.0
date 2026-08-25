@@ -350,7 +350,7 @@ export default function Header({ onMenuClick }) {
           <BrandLogo size={34} />
           <div>
             <span className="font-bold text-base text-slate-800 dark:text-slate-100 leading-tight">{t('app.title')}</span>
-            <span className="block text-[10px] font-semibold tracking-widest uppercase text-slate-400 dark:text-slate-500 -mt-0.5">{t('app.brand_tag')}</span>
+            <span className="block text-[10px] font-semibold tracking-widest uppercase text-slate-500 dark:text-slate-400 -mt-0.5">{t('app.brand_tag')}</span>
           </div>
         </div>
       ) : (
@@ -369,7 +369,7 @@ export default function Header({ onMenuClick }) {
         aria-label={t('accessibility.breadcrumb_navigation')}
         className="hidden md:flex items-center gap-1.5 text-sm"
       >
-        <span className="text-slate-400 dark:text-slate-500">{t('app.home')}</span>
+        <span className="text-slate-500 dark:text-slate-400">{t('app.home')}</span>
         {breadcrumbs.map((crumb, i) => {
           const isLast = i === breadcrumbs.length - 1
           return (
@@ -380,7 +380,7 @@ export default function Header({ onMenuClick }) {
                 className={clsx(
                   isLast
                     ? 'text-slate-700 dark:text-slate-300 font-medium'
-                    : 'text-slate-400 dark:text-slate-500'
+                    : 'text-slate-500 dark:text-slate-400'
                 )}
               >
                 {crumb}
@@ -440,7 +440,7 @@ export default function Header({ onMenuClick }) {
                       <div>
                         <div className="px-3 pt-2.5 pb-1 flex items-center gap-1.5">
                           <Zap size={10} className="text-amber-400" />
-                          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                          <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                             Quick Actions
                           </span>
                         </div>
@@ -459,10 +459,10 @@ export default function Header({ onMenuClick }) {
                                   </span>
                                   <span className="flex-1 min-w-0 text-left">
                                     <span className="block text-xs font-semibold text-slate-800 dark:text-slate-200">{action.label}</span>
-                                    <span className="block text-[10px] text-slate-400 dark:text-slate-500 truncate">{action.sublabel}</span>
+                                    <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">{action.sublabel}</span>
                                   </span>
                                   {action.kbd && (
-                                    <kbd className="shrink-0 hidden sm:inline-flex items-center gap-0.5 text-[9px] font-mono text-slate-400 dark:text-slate-500">
+                                    <kbd className="shrink-0 hidden sm:inline-flex items-center gap-0.5 text-[9px] font-mono text-slate-500 dark:text-slate-400">
                                       {action.kbd.split(' ').map((k, ki) => (
                                         <span key={ki} className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-600">
                                           {k}
@@ -482,7 +482,7 @@ export default function Header({ onMenuClick }) {
                     {searchResults.length > 0 && (
                       <div className={filteredQuickActions.length > 0 ? 'border-t border-slate-100 dark:border-slate-700' : ''}>
                         <div className="px-3 pt-2.5 pb-1">
-                          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                          <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                             Records
                           </span>
                         </div>
@@ -567,7 +567,7 @@ export default function Header({ onMenuClick }) {
         onClick={() => document.dispatchEvent(new CustomEvent('psc:shortcuts:open'))}
         aria-label="Keyboard shortcuts (?)"
         title="Keyboard shortcuts (?)"
-        className="hidden sm:flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        className="hidden sm:flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
         <Keyboard size={18} aria-hidden="true" />
       </button>
@@ -661,7 +661,7 @@ export default function Header({ onMenuClick }) {
                       {notif.title}
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{notif.message}</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{notif.time}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{notif.time}</p>
                   </div>
                   {!notif.read && (
                     <span className="w-2 h-2 bg-primary-500 rounded-full mt-1 shrink-0" aria-hidden="true" />

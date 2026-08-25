@@ -204,7 +204,7 @@ export default function Pricing() {
 
         {/* Toggle */}
         <div className="inline-flex items-center gap-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-6 py-3 shadow-card">
-          <span className={clsx('text-sm font-semibold transition-colors', !isYearly ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500')}>
+          <span className={clsx('text-sm font-semibold transition-colors', !isYearly ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400')}>
             Monthly
           </span>
           <button
@@ -220,7 +220,7 @@ export default function Pricing() {
               isYearly ? 'translate-x-7' : 'translate-x-0'
             )} />
           </button>
-          <span className={clsx('text-sm font-semibold transition-colors flex items-center gap-2', isYearly ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500')}>
+          <span className={clsx('text-sm font-semibold transition-colors flex items-center gap-2', isYearly ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400')}>
             Yearly
             <span className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">
               Save 20%
@@ -317,7 +317,7 @@ export default function Pricing() {
                       key={i}
                       className={clsx(
                         'flex items-center gap-3 text-sm',
-                        feature.included ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'
+                        feature.included ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400'
                       )}
                     >
                       {feature.included ? (
@@ -326,7 +326,7 @@ export default function Pricing() {
                         </span>
                       ) : (
                         <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                          <X size={12} className="text-slate-400 dark:text-slate-500" />
+                          <X size={12} className="text-slate-500 dark:text-slate-400" />
                         </span>
                       )}
                       {feature.text}
@@ -365,7 +365,7 @@ export default function Pricing() {
                 {comparisonCategories.map((cat) => (
                   <Fragment key={cat.label}>
                     <tr className="bg-slate-50 dark:bg-slate-800/60">
-                      <td colSpan={4} className="px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                      <td colSpan={4} className="px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
                         {cat.label}
                       </td>
                     </tr>

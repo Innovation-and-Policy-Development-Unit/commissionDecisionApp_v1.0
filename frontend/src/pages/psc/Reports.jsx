@@ -28,7 +28,7 @@ const KpiCard = ({ title, value, subtitle, icon: Icon, colorClass }) => (
     <div>
       <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
       <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">{value}</h3>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1">
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
         {subtitle}
       </p>
     </div>

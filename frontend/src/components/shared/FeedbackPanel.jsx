@@ -337,7 +337,7 @@ export default function FeedbackPanel({ open, onClose }) {
                         <p className="text-sm text-slate-500 dark:text-slate-400 group-hover:text-primary-600 dark:group-hover:text-primary-400 font-medium transition-colors">
                           Take a screenshot
                         </p>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                           Panel hides → capture → annotate → attach
                         </p>
                       </>
@@ -375,7 +375,7 @@ export default function FeedbackPanel({ open, onClose }) {
 
         {/* Footer */}
         <div className="p-4 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-100 dark:border-slate-700">
-          <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 uppercase tracking-widest font-bold">
+          <p className="text-[10px] text-center text-slate-500 dark:text-slate-400 uppercase tracking-widest font-bold">
             Commission Decision App v1.0
           </p>
         </div>

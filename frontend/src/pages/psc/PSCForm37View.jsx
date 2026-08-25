@@ -21,9 +21,9 @@ function SectionHeader({ number, title }) {
 function Field({ label, value, span }) {
   return (
     <div className={span ? 'col-span-2' : ''}>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words">
-        {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">—</span>}
+        {value || <span className="text-slate-500 dark:text-slate-400 font-normal italic">—</span>}
       </p>
     </div>
   )
@@ -37,7 +37,7 @@ function fmt(dateStr) {
 export default function PSCForm37View({ data }) {
   if (!data || !Object.keys(data).length) {
     return (
-      <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2">
+      <p className="text-sm text-slate-500 dark:text-slate-400 italic py-2">
         No form data submitted yet.
       </p>
     )
@@ -116,7 +116,7 @@ export default function PSCForm37View({ data }) {
           <SectionHeader title="OPSC — Secretary Decision" />
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
             <div className="col-span-2">
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">Approved?</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">Approved?</p>
               <p className="text-sm font-semibold">
                 {data.approved === true
                   ? <span className="text-emerald-600 dark:text-emerald-400">Yes</span>

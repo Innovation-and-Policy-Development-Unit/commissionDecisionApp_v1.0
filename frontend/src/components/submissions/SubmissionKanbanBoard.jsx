@@ -276,7 +276,7 @@ export default function SubmissionKanbanBoard({
               </header>
               <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-320px)] min-h-[120px]">
                 {cards.length === 0 && (
-                  <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-6 px-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-6 px-2">
                     {t('submission.kanban.empty_column')}
                   </p>
                 )}

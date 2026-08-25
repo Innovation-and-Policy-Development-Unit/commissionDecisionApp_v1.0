@@ -532,7 +532,7 @@ function MultiStepWizard() {
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm transition-all duration-300 ${
                   i < step ? 'bg-emerald-500 text-white'
                   : i === step ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/40'
-                  : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
                 }`}>
                   {i < step ? <CheckCircle size={16} /> : <s.icon size={16} />}
                 </div>

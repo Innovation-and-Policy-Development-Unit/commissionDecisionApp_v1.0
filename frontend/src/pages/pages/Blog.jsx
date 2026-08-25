@@ -132,7 +132,7 @@ export default function Blog() {
             <div className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <Badge variant={categoryColors[post.category] || 'secondary'}>{post.category}</Badge>
-                <span className="text-xs text-slate-400 dark:text-slate-500">{post.readTime}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">{post.readTime}</span>
               </div>
 
               <h3 className="font-bold text-slate-800 dark:text-slate-200 mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors leading-tight">
@@ -155,10 +155,10 @@ export default function Blog() {
                   <Avatar name={post.author} size="xs" />
                   <div>
                     <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{post.author}</p>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">{post.date}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">{post.date}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
+                <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                   <span className="flex items-center gap-1"><Eye size={11} />{post.views.toLocaleString()}</span>
                   <span className="flex items-center gap-1"><Heart size={11} />{post.likes}</span>
                 </div>

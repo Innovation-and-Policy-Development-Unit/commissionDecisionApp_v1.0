@@ -58,7 +58,7 @@ export function QualityScoreBadge({ submission, compact = false }) {
 
   if (loading && stalled) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+      <span className="inline-flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
         <AlertCircle size={10} aria-hidden />
         {compact ? '—' : t('submission.quality_unavailable', { defaultValue: 'Not scored yet' })}
       </span>

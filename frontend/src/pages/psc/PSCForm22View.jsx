@@ -19,9 +19,9 @@ function SectionHeader({ title }) {
 function Field({ label, value, span }) {
   return (
     <div className={span ? 'col-span-2' : ''}>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words">
-        {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">—</span>}
+        {value || <span className="text-slate-500 dark:text-slate-400 font-normal italic">—</span>}
       </p>
     </div>
   )
@@ -41,7 +41,7 @@ const PSC_DECISION_COLORS = {
 export default function PSCForm22View({ data }) {
   if (!data || !Object.keys(data).length) {
     return (
-      <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2">
+      <p className="text-sm text-slate-500 dark:text-slate-400 italic py-2">
         No form data submitted yet.
       </p>
     )
@@ -66,7 +66,7 @@ export default function PSCForm22View({ data }) {
       {/* Duties */}
       <SectionHeader title="Duties & Responsibilities" />
       {duties.length === 0 ? (
-        <p className="text-sm text-slate-400 dark:text-slate-500 italic">No duties recorded.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 italic">No duties recorded.</p>
       ) : (
         <ol className="list-none space-y-1.5 pl-0">
           {duties.map((key, idx) => (
@@ -116,8 +116,8 @@ export default function PSCForm22View({ data }) {
         <Field label="Education" value={data.qualification_education} span />
         <Field label="Language" value={data.qualification_language} />
         <div>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">Good Character</p>
-          <p className={`text-sm font-semibold ${data.qualification_good_character ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500 italic font-normal'}`}>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">Good Character</p>
+          <p className={`text-sm font-semibold ${data.qualification_good_character ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400 italic font-normal'}`}>
             {data.qualification_good_character ? '✓ Required' : '—'}
           </p>
         </div>
@@ -148,7 +148,7 @@ export default function PSCForm22View({ data }) {
               <Field label="Checked by" value={data.psc_checked_by_name} />
               <Field label="Date" value={fmt(data.psc_checked_date)} />
               <div>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">Decision</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">Decision</p>
                 {data.psc_decision ? (
                   <p className={`text-sm font-semibold ${PSC_DECISION_COLORS[data.psc_decision] || 'text-slate-800 dark:text-slate-100'}`}>
                     {data.psc_decision}

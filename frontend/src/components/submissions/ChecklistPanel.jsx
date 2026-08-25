@@ -217,7 +217,7 @@ export default function ChecklistPanel({
             {t('submission.checklist_panel_title')}
           </h3>
         </div>
-        <p className="text-sm text-slate-400 dark:text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           {t('submission.checklist_no_items')}
         </p>
       </div>
@@ -469,7 +469,7 @@ export default function ChecklistPanel({
                   </div>
 
                   {item.document_description && (
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-snug">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                       {item.document_description}
                     </p>
                   )}

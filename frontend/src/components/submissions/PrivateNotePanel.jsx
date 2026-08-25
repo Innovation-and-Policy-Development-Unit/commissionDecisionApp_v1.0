@@ -86,7 +86,7 @@ export default function PrivateNotePanel({ submissionId, initialBody, compact = 
     return (
       <div>
         <div className="flex items-center justify-between mb-1 print:hidden">
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
             Private to you — not visible to other Commission members or staff.
           </span>
           <span className="text-[11px] text-slate-400">
@@ -108,7 +108,7 @@ export default function PrivateNotePanel({ submissionId, initialBody, compact = 
           {saving ? 'Saving…' : saved ? 'Saved' : ''}
         </span>
       </div>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
         Private to you — not visible to other Commission members or staff.
       </p>
       {textarea}

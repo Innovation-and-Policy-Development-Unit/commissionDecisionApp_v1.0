@@ -62,9 +62,9 @@ function Field({ label, children, span }) {
 function ReadField({ label, value, span, placeholder = '—' }) {
   return (
     <div className={span ? 'sm:col-span-2' : ''}>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words">
-        {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">{placeholder}</span>}
+        {value || <span className="text-slate-500 dark:text-slate-400 font-normal italic">{placeholder}</span>}
       </p>
     </div>
   )
@@ -106,7 +106,7 @@ function CostingTable({ rows, onChange, readOnly }) {
 
   if (readOnly) {
     if (!rows.length) {
-      return <p className="text-sm text-slate-400 dark:text-slate-500 italic">No costing rows entered.</p>
+      return <p className="text-sm text-slate-500 dark:text-slate-400 italic">No costing rows entered.</p>
     }
     return (
       <div className="overflow-x-auto">
@@ -332,7 +332,7 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
   if (paper === undefined) {
     return (
       <div className="card card-compact">
-        <p className="text-sm text-slate-400 dark:text-slate-500 italic py-4 text-center">Loading Commission paper…</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 italic py-4 text-center">Loading Commission paper…</p>
       </div>
     )
   }
@@ -344,7 +344,7 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
           <FileSignature size={14} className="text-slate-400" />
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">ODU Commission Submission Paper</h3>
         </div>
-        <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2">{loadMessage}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 italic py-2">{loadMessage}</p>
       </div>
     )
   }
@@ -358,12 +358,12 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
             <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">ODU Commission Submission Paper</h3>
             <StatusBadge status={status} />
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             {readOnly ? 'This is the paper that was — or will be — presented to the Commission.' : 'This paper, not the ministry’s original request, is what the Commission will receive.'}
           </p>
         </div>
         {(isOduPrincipal || isOduManager) && submission?.assigned_to_name && (
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
             Assigned to <span className="font-medium text-slate-600 dark:text-slate-300">{submission.assigned_to_name}</span>
           </p>
         )}

@@ -183,7 +183,7 @@ export default function PSCForm37Fields({ form37, setForm37, showOpscSection = f
 
       {/* ── Step counter + section title ── */}
       <div className="px-6 pt-5 pb-2">
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Step {step} of {TOTAL_STEPS}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Step {step} of {TOTAL_STEPS}</p>
         <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
           {STEPS.find(s => s.id === step)?.label}
         </h3>

@@ -198,7 +198,7 @@ useEffect(() => {
               ].map(title => (
                 <button key={title} className="w-full text-left p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors leading-snug">{title}</p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">5 min read</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">5 min read</p>
                 </button>
               ))}
             </div>

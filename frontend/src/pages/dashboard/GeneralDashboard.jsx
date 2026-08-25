@@ -272,7 +272,7 @@ export default function GeneralDashboard() {
             <div>
               <p className="text-lg font-bold text-slate-800 dark:text-slate-200">{stat.value}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">{stat.label}</p>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500">{stat.sublabel}</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">{stat.sublabel}</p>
             </div>
           </div>
         ))}
@@ -428,7 +428,7 @@ export default function GeneralDashboard() {
               { label: 'At Risk', value: projects.filter(p => p.status === 'At Risk' || p.status === 'Delayed').length },
             ].map(s => (
               <div key={s.label} className="px-4 py-3 border-e border-slate-100 dark:border-slate-700 last:border-0">
-                <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">{s.label}</p>
+                <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{s.label}</p>
                 <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mt-0.5">{s.value}</p>
               </div>
             ))}

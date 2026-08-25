@@ -78,9 +78,9 @@ function Field({ label, children, hint, required, hasError }) {
 function ReadField({ label, value, span }) {
   return (
     <div className={span ? 'col-span-2' : ''}>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">{label}</p>
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words">
-        {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">—</span>}
+        {value || <span className="text-slate-500 dark:text-slate-400 font-normal italic">—</span>}
       </p>
     </div>
   )
@@ -205,7 +205,7 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
             <ReadField label="Education" value={form.qualification_education} span />
             <ReadField label="Language" value={form.qualification_language} />
             <div>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-0.5">Good Character</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">Good Character</p>
               <p className={`text-sm font-medium ${form.qualification_good_character ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 italic'}`}>
                 {form.qualification_good_character ? '✓ Required' : '—'}
               </p>
@@ -348,7 +348,7 @@ export default function PSCForm22Fields({ form, setForm, submission, readOnly = 
 
       {/* ── Step counter + section title ── */}
       <div className="px-6 pt-5 pb-2">
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Step {step} of {TOTAL_STEPS}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Step {step} of {TOTAL_STEPS}</p>
         <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
           {STEPS.find(s => s.id === step)?.label}
         </h3>
