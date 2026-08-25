@@ -3259,6 +3259,17 @@ class SystemPermission(models.Model):
         default=PermissionCategory.ADMINISTRATION,
     )
     is_builtin  = models.BooleanField(default=False)
+    is_enforced = models.BooleanField(
+        default=True,
+        help_text="P1-09, SCDMS Pre-Production Readiness Audit — Findings Register: "
+                   "whether any code path actually consults this permission. Several "
+                   "built-in codes (mainly core submission CRUD/workflow-transition "
+                   "verbs) exist here and are toggleable in the Role Definitions admin "
+                   "UI, but the submission lifecycle is actually governed entirely by "
+                   "hardcoded role checks in transitions.py — toggling those specific "
+                   "codes has no effect on system behavior. Kept in sync by hand — "
+                   "update this if a permission gains or loses its enforcement call site.",
+    )
 
     class Meta:
         ordering = ["category", "code"]

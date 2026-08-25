@@ -691,6 +691,20 @@ class Command(BaseCommand):
 
     # ── Permissions ───────────────────────────────────────────────────────────
 
+    # P1-09, SCDMS Pre-Production Readiness Audit — Findings Register: these
+    # codes exist and are toggleable per-role in the admin UI, but nothing in
+    # the codebase actually consults them — the submission lifecycle is
+    # governed entirely by hardcoded role checks in transitions.py. Confirmed
+    # via `grep -rn '"<code>"'` across the backend outside seed/test/migration
+    # files, zero hits. Kept in sync by hand — if one of these gains a real
+    # enforcement call site, remove it from this set.
+    _UNENFORCED_PERMISSION_CODES = frozenset({
+        "create_submission", "edit_submission", "export_submissions",
+        "transition_workflow", "assess_submission", "forward_commission",
+        "record_decision", "manage_agenda", "manage_notifications",
+        "feedback_respond", "feedback_configure", "view_dashboard",
+    })
+
     # (code, label, category, description)
     _PERMISSIONS = [
         # Submissions
@@ -954,6 +968,56 @@ class Command(BaseCommand):
         ("dept_admin", "Views submissions relevant to their department only.", [
             "view_submissions",
         ]),
+        # P1-10, SCDMS Pre-Production Readiness Audit — Findings Register:
+        # these 5 roles are defined in Role.choices and selectable in the
+        # admin "create user" UI, but were never seeded a RoleDefinition —
+        # untracked, undocumented permission surface. Permission sets below
+        # are grounded in what real code actually does for each role today
+        # (see transitions.py, opsc_access.py, views.py), not invented.
+        ("traveller", (
+            "Public servant submitting and tracking their own travel-related "
+            "forms (Form 44/45). Ministry-side — scoped to their own "
+            "submissions plus any secretary_only submissions for their "
+            "ministry; never sees OPSC-internal submissions."
+        ), [
+            "view_dashboard", "view_submissions", "create_submission",
+        ]),
+        ("dg_director", (
+            "DG / Director (Ministry) — ministry-side, grouped with Head of "
+            "Agency for submission-visibility scoping (opsc_access.py's "
+            "MINISTRY_SIDE_ROLES). No endorsement-specific logic is keyed to "
+            "this role directly today; endorsement is tracked via "
+            "Submission.dg_endorsed_by, a direct user reference, not role."
+        ), [
+            "view_dashboard", "view_submissions",
+        ]),
+        ("commission_member", (
+            "Commission Member — grouped with the Chairperson and "
+            "Commissioners as one of the roles that may add meeting 'Other "
+            "Matters'; otherwise mirrors the Commissioner's read-only access."
+        ), [
+            "view_dashboard", "view_submissions", "view_reports", "view_audit_trail",
+        ]),
+        ("secretary_opsc", (
+            "Secretary, OPSC — defined in Role.choices and selectable when "
+            "creating a user, but zero code paths reference this role "
+            "specifically (confirmed via repo-wide grep). Seeded with a "
+            "conservative read-only baseline pending an actual specification "
+            "of what this role is meant to do."
+        ), [
+            "view_dashboard",
+        ]),
+        ("panel_member", (
+            "Investigation Panel Member — previously tied to "
+            "ComplianceCase.panel_members (an M2M field) before that entire "
+            "compliance-case-management feature was removed (migration "
+            "0233_remove_compliance_case_management). No code references "
+            "this role today. Seeded with a conservative read-only baseline "
+            "pending a decision on whether to revive panel-based case review "
+            "or formally retire the role."
+        ), [
+            "view_dashboard",
+        ]),
     ]
 
     def _seed_permissions(self):
@@ -966,6 +1030,7 @@ class Command(BaseCommand):
                     "category": category,
                     "description": description,
                     "is_builtin": True,
+                    "is_enforced": code not in self._UNENFORCED_PERMISSION_CODES,
                 },
             )
             if c:

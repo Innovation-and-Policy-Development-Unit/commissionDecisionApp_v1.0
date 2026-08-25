@@ -2012,7 +2012,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 class SystemPermissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemPermission
-        fields = ("id", "code", "label", "description", "category", "is_builtin")
+        fields = ("id", "code", "label", "description", "category", "is_builtin", "is_enforced")
 
     def validate_code(self, value):
         qs = SystemPermission.objects.filter(code=value)

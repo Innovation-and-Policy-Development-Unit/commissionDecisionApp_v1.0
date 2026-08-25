@@ -987,6 +987,17 @@ function RolesTab({ roleDefs, permissions, onRefresh }) {
                     </button>
                   </div>
                 </div>
+                {permissions.some(p => p.is_enforced === false) && (
+                  <div className="flex items-start gap-2 mb-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+                    <AlertTriangle size={13} className="text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                      Permissions marked <strong>Not enforced</strong> aren't checked anywhere in the
+                      code yet — toggling them here has no effect on what this role can actually do.
+                      The submission workflow (create, edit, transition stages, forward to Commission,
+                      record decisions) is governed by fixed role logic, not this screen.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
                   {grouped.map(({ value, label, perms }) => (
                     <div key={value}>
@@ -1007,7 +1018,17 @@ function RolesTab({ roleDefs, permissions, onRefresh }) {
                               {checked.has(p.id) && <Check size={10} className="text-white" />}
                             </div>
                             <div>
-                              <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{p.label}</p>
+                              <p className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                {p.label}
+                                {p.is_enforced === false && (
+                                  <span
+                                    title="Not checked anywhere in the code — toggling this has no effect on system behavior."
+                                    className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                                  >
+                                    Not enforced
+                                  </span>
+                                )}
+                              </p>
                               {p.description && <p className="text-[11px] text-slate-400 leading-snug">{p.description}</p>}
                             </div>
                           </label>
@@ -1224,6 +1245,7 @@ function PermissionsTab({ permissions, onRefresh }) {
                     <th>Label</th>
                     <th className="hidden md:table-cell">Description</th>
                     <th className="text-center">Built-in</th>
+                    <th className="text-center">Enforced</th>
                     <th className="sr-only">Actions</th>
                   </tr>
                 </thead>
@@ -1244,6 +1266,18 @@ function PermissionsTab({ permissions, onRefresh }) {
                           <Lock size={13} className="text-slate-400 mx-auto" />
                         ) : (
                           <span className="text-slate-300 dark:text-slate-600">—</span>
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {p.is_enforced === false ? (
+                          <span
+                            title="No code path checks this permission — assigning it to a role has no effect on system behavior."
+                            className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                          >
+                            Not yet
+                          </span>
+                        ) : (
+                          <CheckCircle2 size={13} className="text-emerald-500 mx-auto" />
                         )}
                       </td>
                       <td>
