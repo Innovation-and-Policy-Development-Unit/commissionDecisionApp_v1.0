@@ -19,7 +19,6 @@ import SubmissionKanbanBoard from '../../components/submissions/SubmissionKanban
 import SubmissionForm, { SUBMISSION_CREATE_ALLOWED_ROLES } from './SubmissionForm'
 import { useAuth } from '../../context/AuthContext'
 import { useConfirm } from '../../context/ConfirmContext'
-import { isComplianceRole } from '../../constants/compliance'
 import { userIsOpscInternal, userHasCrossUnitView } from '../../utils/opscAccess'
 import BulkOperationsBar from '../../components/shared/BulkOperationsBar'
 import { useToast } from '../../context/ToastContext'
@@ -89,13 +88,13 @@ export default function SubmissionLog() {
   // trash their own Draft submissions (views.py SubmissionViewSet.destroy) —
   // the list here only needed a matching frontend affordance.
   const canDeleteDrafts = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
-  const isComplianceUser = user && isComplianceRole(user.role)
-  // Also require the role to be one SubmissionForm.jsx actually accepts —
-  // otherwise roles outside that list (e.g. senior_admin_officer, psc_commissioner)
-  // would see a button that just opens the modal to a permission-denied message.
-  const canCreateSubmission = user
-    && (!isComplianceUser || user.role === 'compliance_manager')
-    && SUBMISSION_CREATE_ALLOWED_ROLES.includes(user.role)
+  // Require the role to be one SubmissionForm.jsx actually accepts —
+  // otherwise roles outside that list (e.g. senior_admin_officer, psc_commissioner,
+  // or the read-only compliance-adjacent roles) would see a button that just opens
+  // the modal to a permission-denied message. This list already excludes those
+  // read-only roles, so compliance_senior/compliance_principal/compliance_manager
+  // (all compliance staff, not just the manager) correctly see the button.
+  const canCreateSubmission = user && SUBMISSION_CREATE_ALLOWED_ROLES.includes(user.role)
   const isTraveller = user?.role === 'traveller'
   const isInternalCreate = user && user.role === 'csu_manager'
   const showCommissionCreate = canCreateSubmission && !isTraveller && !isInternalCreate
