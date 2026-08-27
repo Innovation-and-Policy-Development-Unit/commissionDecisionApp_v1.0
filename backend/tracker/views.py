@@ -9492,6 +9492,18 @@ class BackupViewSet(viewsets.ViewSet):
         _security_log.info(
             "BACKUP_DELETE | file=%s | user=%s", filename, request.user.username
         )
+
+        try:
+            from .models import CloudBackupConnection
+            from .tasks import queue_delete_backup_from_cloud
+            if CloudBackupConnection.objects.filter(
+                provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
+                status=CloudBackupConnection.Status.CONNECTED,
+            ).exists():
+                queue_delete_backup_from_cloud(filename)
+        except Exception:  # noqa: BLE001 — never let cloud cleanup block the delete response
+            pass
+
         return Response({"detail": "Backup deleted."})
 
     # ── restore ───────────────────────────────────────────────────────────────
