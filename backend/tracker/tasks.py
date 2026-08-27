@@ -202,23 +202,23 @@ def run_backup():
 @shared_task
 def push_backup_to_cloud(filename):
     """Upload one backup file to whichever cloud provider is connected
-    (currently: Microsoft 365 / OneDrive only). Called from the end of
+    (currently: Google Drive only). Called from the end of
     backup_db.py's Command.handle() — the single choke point both the
     manual "Run Backup Now" button and the scheduled Celery Beat path
     already funnel through — and from BackupViewSet.cloud_push for an
     on-demand push of an already-stored file.
 
-    Refreshes the access token via MSAL if expired. On a persistent auth
-    failure (refresh token revoked/expired at the Microsoft end), flips the
+    Refreshes the access token if expired. On a persistent auth
+    failure (refresh token revoked/expired at the Google end), flips the
     connection to needs_reconnect instead of failing silently — the admin
     UI surfaces that state."""
-    from . import ms365_backup
+    from . import google_drive_backup
     from .audit import log_action as _log
     from .crypto_utils import decrypt, encrypt
     from .models import AuditLog as _AL, CloudBackupConnection
 
     conn = CloudBackupConnection.objects.filter(
-        provider=CloudBackupConnection.Provider.MICROSOFT365,
+        provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
         status=CloudBackupConnection.Status.CONNECTED,
     ).first()
     if not conn:
@@ -233,7 +233,7 @@ def push_backup_to_cloud(filename):
         access_token = decrypt(conn.access_token_encrypted)
         if conn.token_expires_at and conn.token_expires_at <= timezone.now():
             refresh_token = decrypt(conn.refresh_token_encrypted)
-            refreshed = ms365_backup.refresh_access_token(refresh_token)
+            refreshed = google_drive_backup.refresh_access_token(refresh_token)
             access_token = refreshed["access_token"]
             conn.access_token_encrypted = encrypt(access_token)
             conn.refresh_token_encrypted = encrypt(refreshed["refresh_token"])
@@ -241,7 +241,7 @@ def push_backup_to_cloud(filename):
 
         with open(filepath, "rb") as f:
             content = f.read()
-        ms365_backup.upload_backup_file(access_token, filename, content)
+        google_drive_backup.upload_backup_file(access_token, filename, content)
 
         conn.last_pushed_at = timezone.now()
         conn.last_push_error = ""
@@ -251,7 +251,7 @@ def push_backup_to_cloud(filename):
                   filename, conn.provider, conn.connected_email)
         _log(None, _AL.Action.BACKUP, resource_type="CloudBackupPush", resource_label=filename,
              description=f"Backup pushed to {conn.get_provider_display()} ({conn.connected_email}): {filename}")
-    except ms365_backup.MS365AuthError as exc:
+    except google_drive_backup.GoogleDriveAuthError as exc:
         conn.status = CloudBackupConnection.Status.NEEDS_RECONNECT
         conn.last_push_error = str(exc)
         conn.save(update_fields=["status", "last_push_error"])

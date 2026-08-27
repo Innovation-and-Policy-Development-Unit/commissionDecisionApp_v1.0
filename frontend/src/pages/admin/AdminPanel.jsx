@@ -2531,37 +2531,37 @@ export function BackupTab() {
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
-  // Landed back here after the Microsoft consent redirect — see
-  // BackupViewSet.cloud_callback, which appends ?ms365=connected|error.
+  // Landed back here after the Google consent redirect — see
+  // BackupViewSet.cloud_callback, which appends ?gdrive=connected|error.
   useEffect(() => {
-    const ms365 = searchParams.get('ms365')
-    if (!ms365) return
-    if (ms365 === 'connected') {
-      toast.success('Connected to Microsoft 365.')
+    const gdrive = searchParams.get('gdrive')
+    if (!gdrive) return
+    if (gdrive === 'connected') {
+      toast.success('Connected to Google Drive.')
       fetchAll()
     } else {
-      toast.error('Could not connect to Microsoft 365 — please try again.')
+      toast.error('Could not connect to Google Drive — please try again.')
     }
     const next = new URLSearchParams(searchParams)
-    next.delete('ms365')
+    next.delete('gdrive')
     setSearchParams(next, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  const connectMs365 = async () => {
+  const connectGoogleDrive = async () => {
     setConnecting(true)
     try {
       const { data } = await api.get('/backup/cloud/connect/')
       window.location.href = data.auth_url
     } catch (err) {
-      toast.error(err.response?.data?.detail ?? 'Could not start Microsoft 365 connection.')
+      toast.error(err.response?.data?.detail ?? 'Could not start Google Drive connection.')
       setConnecting(false)
     }
   }
 
-  const disconnectMs365 = async () => {
+  const disconnectGoogleDrive = async () => {
     const ok = await confirm({
-      title: 'Disconnect Microsoft 365?',
+      title: 'Disconnect Google Drive?',
       message: `Backups will stop pushing to "${cloudStatus.connected_email}". A new admin can reconnect their own account any time from here.`,
       confirmLabel: 'Disconnect',
       variant: 'danger',
@@ -2570,7 +2570,7 @@ export function BackupTab() {
     setDisconnecting(true)
     try {
       await api.post('/backup/cloud/disconnect/')
-      toast.success('Disconnected from Microsoft 365.')
+      toast.success('Disconnected from Google Drive.')
       await fetchAll()
     } catch (err) {
       toast.error(err.response?.data?.detail ?? 'Disconnect failed.')
@@ -2583,7 +2583,7 @@ export function BackupTab() {
     setPushingFile(filename)
     try {
       await api.post('/backup/cloud/push/', { filename })
-      toast.success(`Push to Microsoft 365 queued for ${filename}.`)
+      toast.success(`Push to Google Drive queued for ${filename}.`)
     } catch (err) {
       toast.error(err.response?.data?.detail ?? 'Push failed.')
     } finally {
@@ -2814,7 +2814,7 @@ export function BackupTab() {
         </div>
       </div>
 
-      {/* ── Cloud backup destination (Microsoft 365 / OneDrive) ── */}
+      {/* ── Cloud backup destination (Google Drive) ── */}
       <div className="card p-5 space-y-3">
         <div className="flex items-center gap-2 mb-1">
           <Cloud size={18} className="text-sky-500" />
@@ -2823,18 +2823,18 @@ export function BackupTab() {
         {!cloudStatus.connected ? (
           <>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Connect a Microsoft 365 account so every backup — manual or scheduled — pushes to its
-              OneDrive automatically. Tied to whichever admin connects it; if they leave, the next
+              Connect a Google account so every backup — manual or scheduled — pushes to its
+              Google Drive automatically. Tied to whichever admin connects it; if they leave, the next
               admin can reconnect their own account here with no setup needed.
             </p>
             <button
               type="button"
-              onClick={connectMs365}
+              onClick={connectGoogleDrive}
               disabled={connecting}
               className="btn-gradient py-2 px-4 text-sm inline-flex items-center gap-2 disabled:opacity-60"
             >
               {connecting ? <RefreshCw size={14} className="animate-spin" /> : <UploadCloud size={14} />}
-              Connect Microsoft 365
+              Connect Google Drive
             </button>
           </>
         ) : (
@@ -2843,7 +2843,7 @@ export function BackupTab() {
               <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-700/40 dark:bg-amber-900/10">
                 <AlertTriangle size={15} className="text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-amber-700 dark:text-amber-300">
-                  The connection to Microsoft 365 needs to be redone — {cloudStatus.last_push_error || 'the last push failed to authenticate.'} Reconnect below.
+                  The connection to Google Drive needs to be redone — {cloudStatus.last_push_error || 'the last push failed to authenticate.'} Reconnect below.
                 </p>
               </div>
             )}
@@ -2862,7 +2862,7 @@ export function BackupTab() {
                 {cloudStatus.status === 'needs_reconnect' && (
                   <button
                     type="button"
-                    onClick={connectMs365}
+                    onClick={connectGoogleDrive}
                     disabled={connecting}
                     className="btn-gradient py-1.5 px-4 text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
                   >
@@ -2872,7 +2872,7 @@ export function BackupTab() {
                 )}
                 <button
                   type="button"
-                  onClick={disconnectMs365}
+                  onClick={disconnectGoogleDrive}
                   disabled={disconnecting}
                   className="btn-outline py-1.5 px-4 text-xs disabled:opacity-60"
                 >
@@ -2959,10 +2959,10 @@ export function BackupTab() {
                       onClick={() => pushToCloud(b.filename)}
                       disabled={pushingFile === b.filename}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-200 dark:border-sky-700/40 text-xs font-medium text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors disabled:opacity-50"
-                      title="Push to OneDrive"
+                      title="Push to Google Drive"
                     >
                       {pushingFile === b.filename ? <RefreshCw size={13} className="animate-spin" /> : <UploadCloud size={13} />}
-                      OneDrive
+                      Drive
                     </button>
                   )}
                   <button

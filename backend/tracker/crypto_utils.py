@@ -1,6 +1,6 @@
-"""Encryption-at-rest for standing third-party credentials (e.g. the M365
-OAuth refresh token in CloudBackupConnection) — the first use of this in the
-codebase. Other DB-stored secrets (GEMINI_API_KEY, SMTP_PASSWORD in
+"""Encryption-at-rest for standing third-party credentials (e.g. the Google
+Drive OAuth refresh token in CloudBackupConnection) — the first use of this
+in the codebase. Other DB-stored secrets (GEMINI_API_KEY, SMTP_PASSWORD in
 SystemSetting) are plaintext, only masked at the API-response layer; an
 OAuth refresh token is a standing credential to someone's real account, so
 it gets real encryption instead of that pattern.

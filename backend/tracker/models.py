@@ -1206,17 +1206,17 @@ class CloudBackupConnection(models.Model):
     account from the UI with no code change, rather than this being a
     shared service-account credential.
 
-    provider is a choice field (not hardcoded to one) so a second provider
-    (e.g. Google Drive) can be added later without a schema change — only
-    Microsoft 365 is actually wired up today.
+    provider is a choice field (not hardcoded to one) so another provider
+    can be added later without a schema change — only Google Drive is
+    actually wired up today.
 
     access_token/refresh_token are encrypted at rest (crypto_utils.py) —
-    these are standing credentials to the connected admin's real M365
+    these are standing credentials to the connected admin's real Google
     account, not a static API key.
     """
 
     class Provider(models.TextChoices):
-        MICROSOFT365 = "microsoft365", "Microsoft 365 (OneDrive)"
+        GOOGLE_DRIVE = "google_drive", "Google Drive"
 
     class Status(models.TextChoices):
         CONNECTED = "connected", "Connected"
@@ -1232,8 +1232,8 @@ class CloudBackupConnection(models.Model):
         max_length=20, choices=Status.choices, default=Status.CONNECTED,
     )
     connected_email = models.EmailField(
-        help_text="The M365 account's email, shown in the admin UI so it's "
-                   "obvious whose account backups are currently pushed to.",
+        help_text="The Google account's email, shown in the admin UI so "
+                   "it's obvious whose account backups are currently pushed to.",
     )
     access_token_encrypted = models.TextField(blank=True)
     refresh_token_encrypted = models.TextField(blank=True)

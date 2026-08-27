@@ -9680,7 +9680,7 @@ class BackupViewSet(viewsets.ViewSet):
             "next_run": get_next_run(),
         })
 
-    # ── cloud backup (Microsoft 365 / OneDrive) ──────────────────────────────
+    # ── cloud backup (Google Drive) ───────────────────────────────────────
     # Delegated OAuth, tied to whichever admin connects — a departing admin's
     # replacement reconnects with their own account from this same UI, no
     # code change needed. See CloudBackupConnection's docstring.
@@ -9691,7 +9691,7 @@ class BackupViewSet(viewsets.ViewSet):
         from .models import CloudBackupConnection
 
         conn = CloudBackupConnection.objects.filter(
-            provider=CloudBackupConnection.Provider.MICROSOFT365
+            provider=CloudBackupConnection.Provider.GOOGLE_DRIVE
         ).first()
         if not conn or conn.status == CloudBackupConnection.Status.DISCONNECTED:
             return Response({"connected": False})
@@ -9706,27 +9706,27 @@ class BackupViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"], url_path="cloud/connect")
     def cloud_connect(self, request):
-        """GET /backup/cloud/connect/ — returns the Microsoft auth URL for the
+        """GET /backup/cloud/connect/ — returns the Google auth URL for the
         frontend to navigate to. Called via the normal JWT-authenticated api
-        client (unlike the callback below, which Microsoft redirects the
+        client (unlike the callback below, which Google redirects the
         bare browser to and can't carry a JWT header)."""
         import secrets as _secrets
 
-        from . import ms365_backup
+        from . import google_drive_backup
 
         try:
             state = _secrets.token_urlsafe(32)
-            request.session["ms365_oauth_state"] = state
-            request.session["ms365_oauth_user_id"] = request.user.id
-            auth_url = ms365_backup.build_auth_url(state)
+            request.session["gdrive_oauth_state"] = state
+            request.session["gdrive_oauth_user_id"] = request.user.id
+            auth_url = google_drive_backup.build_auth_url(state)
             return Response({"auth_url": auth_url})
-        except ms365_backup.MS365ConfigError as exc:
+        except google_drive_backup.GoogleDriveConfigError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     @action(detail=False, methods=["get"], url_path="cloud/callback",
             permission_classes=[permissions.AllowAny], authentication_classes=[])
     def cloud_callback(self, request):
-        """GET /backup/cloud/callback/ — Microsoft redirects the admin's
+        """GET /backup/cloud/callback/ — Google redirects the admin's
         browser here directly after consent; there's no way to attach a JWT
         to a browser-level redirect, so this endpoint can't be gated by the
         normal auth. Security instead comes from the `state` value, matched
@@ -9735,27 +9735,27 @@ class BackupViewSet(viewsets.ViewSet):
         since it's the same browser."""
         from django.shortcuts import redirect
 
-        from . import ms365_backup
+        from . import google_drive_backup
         from .audit import log_action as _log
         from .crypto_utils import encrypt
         from .models import AuditLog as _AL, CloudBackupConnection
 
         frontend_url = "/admin/backup-restore"
-        expected_state = request.session.pop("ms365_oauth_state", None)
-        user_id = request.session.pop("ms365_oauth_user_id", None)
+        expected_state = request.session.pop("gdrive_oauth_state", None)
+        user_id = request.session.pop("gdrive_oauth_user_id", None)
         state = request.GET.get("state")
         code = request.GET.get("code")
 
         if not code or not expected_state or state != expected_state or not user_id:
-            return redirect(f"{frontend_url}?ms365=error")
+            return redirect(f"{frontend_url}?gdrive=error")
 
         try:
-            tokens = ms365_backup.exchange_code_for_tokens(code)
-        except ms365_backup.MS365AuthError:
-            return redirect(f"{frontend_url}?ms365=error")
+            tokens = google_drive_backup.exchange_code_for_tokens(code)
+        except google_drive_backup.GoogleDriveAuthError:
+            return redirect(f"{frontend_url}?gdrive=error")
 
         conn, _created = CloudBackupConnection.objects.update_or_create(
-            provider=CloudBackupConnection.Provider.MICROSOFT365,
+            provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
             defaults={
                 "status": CloudBackupConnection.Status.CONNECTED,
                 "connected_email": tokens["email"],
@@ -9767,25 +9767,25 @@ class BackupViewSet(viewsets.ViewSet):
             },
         )
         _security_log.info(
-            "BACKUP_CLOUD_CONNECTED | provider=microsoft365 | account=%s | user_id=%s",
+            "BACKUP_CLOUD_CONNECTED | provider=google_drive | account=%s | user_id=%s",
             conn.connected_email, user_id,
         )
         _log(request, _AL.Action.SETTINGS, resource_type="CloudBackupConnection",
              resource_label=conn.connected_email,
-             description=f"Connected cloud backup destination: Microsoft 365 ({conn.connected_email})")
-        return redirect(f"{frontend_url}?ms365=connected")
+             description=f"Connected cloud backup destination: Google Drive ({conn.connected_email})")
+        return redirect(f"{frontend_url}?gdrive=connected")
 
     @action(detail=False, methods=["post"], url_path="cloud/disconnect")
     def cloud_disconnect(self, request):
         """POST /backup/cloud/disconnect/ — clears the stored connection.
-        Graph doesn't expose token revocation for this scope, so this just
-        removes our stored (encrypted) tokens; the next admin connects fresh
-        with their own account."""
+        The Drive API doesn't expose token revocation for this scope from
+        the server side, so this just removes our stored (encrypted)
+        tokens; the next admin connects fresh with their own account."""
         from .audit import log_action as _log
         from .models import AuditLog as _AL, CloudBackupConnection
 
         conn = CloudBackupConnection.objects.filter(
-            provider=CloudBackupConnection.Provider.MICROSOFT365
+            provider=CloudBackupConnection.Provider.GOOGLE_DRIVE
         ).first()
         if not conn:
             return Response({"detail": "Nothing connected."}, status=status.HTTP_400_BAD_REQUEST)
@@ -9797,12 +9797,12 @@ class BackupViewSet(viewsets.ViewSet):
         conn.save(update_fields=["status", "access_token_encrypted", "refresh_token_encrypted"])
 
         _security_log.info(
-            "BACKUP_CLOUD_DISCONNECTED | provider=microsoft365 | account=%s | user=%s",
+            "BACKUP_CLOUD_DISCONNECTED | provider=google_drive | account=%s | user=%s",
             email, request.user.username,
         )
         _log(request, _AL.Action.SETTINGS, resource_type="CloudBackupConnection",
              resource_label=email,
-             description=f"Disconnected cloud backup destination: Microsoft 365 ({email})")
+             description=f"Disconnected cloud backup destination: Google Drive ({email})")
         return Response({"detail": "Disconnected."})
 
     @action(detail=False, methods=["post"], url_path="cloud/push")
@@ -9820,7 +9820,7 @@ class BackupViewSet(viewsets.ViewSet):
             return Response({"detail": "File not found."}, status=status.HTTP_404_NOT_FOUND)
 
         conn = CloudBackupConnection.objects.filter(
-            provider=CloudBackupConnection.Provider.MICROSOFT365,
+            provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
             status=CloudBackupConnection.Status.CONNECTED,
         ).first()
         if not conn:

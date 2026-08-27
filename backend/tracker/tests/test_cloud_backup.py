@@ -1,9 +1,9 @@
-"""Microsoft 365 cloud-backup push: encryption-at-rest for the OAuth refresh
+"""Google Drive cloud-backup push: encryption-at-rest for the OAuth refresh
 token (first use of encryption in this codebase — crypto_utils.py), the
 connect/callback/disconnect/push admin endpoints, and the connect-a-new-
 admin-when-the-old-one-leaves flow this feature exists for.
 
-Graph/MSAL calls are mocked throughout — no real Microsoft account needed.
+Drive/OAuth calls are mocked throughout — no real Google account needed.
 """
 
 import os
@@ -14,7 +14,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from tracker import crypto_utils, ms365_backup
+from tracker import crypto_utils, google_drive_backup
 from tracker.models import CloudBackupConnection, Profile, Role
 
 _TEST_KEY = Fernet.generate_key().decode()
@@ -52,9 +52,9 @@ class CloudBackupEndpointTests(TestCase):
         self.client.force_authenticate(user=self.admin)
         self.env_patch = mock.patch.dict(os.environ, {
             "BACKUP_CLOUD_ENCRYPTION_KEY": _TEST_KEY,
-            "MS365_CLIENT_ID": "test-client-id",
-            "MS365_CLIENT_SECRET": "test-client-secret",
-            "MS365_REDIRECT_URI": "https://scdms.example/api/backup/cloud/callback/",
+            "GOOGLE_CLIENT_ID": "test-client-id",
+            "GOOGLE_CLIENT_SECRET": "test-client-secret",
+            "GOOGLE_REDIRECT_URI": "https://scdms.example/api/backup/cloud/callback/",
         })
         self.env_patch.start()
         self.addCleanup(self.env_patch.stop)
@@ -66,7 +66,7 @@ class CloudBackupEndpointTests(TestCase):
 
     def test_status_when_connected(self):
         CloudBackupConnection.objects.create(
-            provider=CloudBackupConnection.Provider.MICROSOFT365,
+            provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
             status=CloudBackupConnection.Status.CONNECTED,
             connected_email="admin@psc.gov.vu",
         )
@@ -75,12 +75,12 @@ class CloudBackupEndpointTests(TestCase):
         self.assertEqual(res.data["connected_email"], "admin@psc.gov.vu")
 
     def test_connect_returns_auth_url_and_stashes_state_in_session(self):
-        with mock.patch.object(ms365_backup, "build_auth_url", return_value="https://login.microsoftonline.com/fake") as m:
+        with mock.patch.object(google_drive_backup, "build_auth_url", return_value="https://accounts.google.com/fake") as m:
             res = self.client.get("/api/backup/cloud/connect/")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data["auth_url"], "https://login.microsoftonline.com/fake")
+        self.assertEqual(res.data["auth_url"], "https://accounts.google.com/fake")
         m.assert_called_once()
-        self.assertIsNotNone(self.client.session.get("ms365_oauth_state"))
+        self.assertIsNotNone(self.client.session.get("gdrive_oauth_state"))
 
     def test_non_admin_cannot_connect(self):
         officer = User.objects.create_user(username="cloud_officer", password="pass")
@@ -91,35 +91,35 @@ class CloudBackupEndpointTests(TestCase):
 
     def test_callback_rejects_mismatched_state(self):
         session = self.client.session
-        session["ms365_oauth_state"] = "the-real-state"
-        session["ms365_oauth_user_id"] = self.admin.id
+        session["gdrive_oauth_state"] = "the-real-state"
+        session["gdrive_oauth_user_id"] = self.admin.id
         session.save()
         res = self.client.get(
             "/api/backup/cloud/callback/", {"state": "an-attacker-supplied-state", "code": "abc"},
         )
         self.assertEqual(res.status_code, 302)
-        self.assertIn("ms365=error", res.url)
+        self.assertIn("gdrive=error", res.url)
         self.assertFalse(CloudBackupConnection.objects.exists())
 
     def test_callback_rejects_missing_state(self):
         res = self.client.get("/api/backup/cloud/callback/", {"code": "abc"})
         self.assertEqual(res.status_code, 302)
-        self.assertIn("ms365=error", res.url)
+        self.assertIn("gdrive=error", res.url)
 
     def test_callback_success_creates_connection(self):
         session = self.client.session
-        session["ms365_oauth_state"] = "matching-state"
-        session["ms365_oauth_user_id"] = self.admin.id
+        session["gdrive_oauth_state"] = "matching-state"
+        session["gdrive_oauth_user_id"] = self.admin.id
         session.save()
-        with mock.patch.object(ms365_backup, "exchange_code_for_tokens", return_value={
+        with mock.patch.object(google_drive_backup, "exchange_code_for_tokens", return_value={
             "access_token": "at", "refresh_token": "rt", "expires_in": 3600, "email": "new.admin@psc.gov.vu",
         }):
             res = self.client.get(
                 "/api/backup/cloud/callback/", {"state": "matching-state", "code": "abc"},
             )
         self.assertEqual(res.status_code, 302)
-        self.assertIn("ms365=connected", res.url)
-        conn = CloudBackupConnection.objects.get(provider=CloudBackupConnection.Provider.MICROSOFT365)
+        self.assertIn("gdrive=connected", res.url)
+        conn = CloudBackupConnection.objects.get(provider=CloudBackupConnection.Provider.GOOGLE_DRIVE)
         self.assertEqual(conn.connected_email, "new.admin@psc.gov.vu")
         self.assertEqual(conn.status, CloudBackupConnection.Status.CONNECTED)
         # Tokens are encrypted at rest, not stored plaintext.
@@ -131,16 +131,16 @@ class CloudBackupEndpointTests(TestCase):
         reconnects with their own account and it just works — no manual
         cleanup of the old connection needed."""
         CloudBackupConnection.objects.create(
-            provider=CloudBackupConnection.Provider.MICROSOFT365,
+            provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
             status=CloudBackupConnection.Status.CONNECTED,
             connected_email="departed.admin@psc.gov.vu",
             access_token_encrypted=crypto_utils.encrypt("old-token"),
         )
         session = self.client.session
-        session["ms365_oauth_state"] = "s"
-        session["ms365_oauth_user_id"] = self.admin.id
+        session["gdrive_oauth_state"] = "s"
+        session["gdrive_oauth_user_id"] = self.admin.id
         session.save()
-        with mock.patch.object(ms365_backup, "exchange_code_for_tokens", return_value={
+        with mock.patch.object(google_drive_backup, "exchange_code_for_tokens", return_value={
             "access_token": "new-at", "refresh_token": "new-rt", "expires_in": 3600,
             "email": "new.admin@psc.gov.vu",
         }):
@@ -152,7 +152,7 @@ class CloudBackupEndpointTests(TestCase):
 
     def test_disconnect_clears_tokens(self):
         CloudBackupConnection.objects.create(
-            provider=CloudBackupConnection.Provider.MICROSOFT365,
+            provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
             status=CloudBackupConnection.Status.CONNECTED,
             connected_email="admin@psc.gov.vu",
             access_token_encrypted="something",
