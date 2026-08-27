@@ -309,6 +309,51 @@ def queue_push_backup_to_cloud(filename):
         push_backup_to_cloud(filename)
 
 
+@shared_task
+def delete_backup_from_cloud(filename):
+    """Deletes one backup file from the connected cloud provider's Drive
+    folder, if present. Called from BackupViewSet.delete_backup so a manual
+    delete in SCDMS doesn't leave an orphaned copy sitting in Drive forever
+    — mirrors the retention-window pruning in push_backup_to_cloud, but for
+    an explicit admin delete rather than age."""
+    from . import google_drive_backup
+    from .crypto_utils import decrypt, encrypt
+    from .models import CloudBackupConnection
+
+    conn = CloudBackupConnection.objects.filter(
+        provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
+        status=CloudBackupConnection.Status.CONNECTED,
+    ).first()
+    if not conn:
+        return  # nothing connected — normal, no-op
+
+    try:
+        access_token = decrypt(conn.access_token_encrypted)
+        if conn.token_expires_at and conn.token_expires_at <= timezone.now():
+            refresh_token = decrypt(conn.refresh_token_encrypted)
+            refreshed = google_drive_backup.refresh_access_token(refresh_token)
+            access_token = refreshed["access_token"]
+            conn.access_token_encrypted = encrypt(access_token)
+            conn.refresh_token_encrypted = encrypt(refreshed["refresh_token"])
+            conn.token_expires_at = timezone.now() + timezone.timedelta(seconds=refreshed["expires_in"])
+            conn.save(update_fields=["access_token_encrypted", "refresh_token_encrypted", "token_expires_at"])
+
+        removed = google_drive_backup.delete_backup_file(access_token, filename)
+        log.info("BACKUP_CLOUD_DELETE | file=%s | removed=%s", filename, removed)
+    except Exception as exc:
+        # Best-effort — a failed cloud-side cleanup shouldn't be treated as
+        # a bigger deal than the local delete it's following up on.
+        log.warning("BACKUP_CLOUD_DELETE_FAILED | file=%s | %s", filename, exc)
+
+
+def queue_delete_backup_from_cloud(filename):
+    try:
+        delete_backup_from_cloud.delay(filename)
+    except Exception as exc:
+        app_log.warning("BACKUP_CLOUD_DELETE_QUEUE_FALLBACK | file=%s | %s", filename, exc)
+        delete_backup_from_cloud(filename)
+
+
 SYSTEM_INSTRUCTION = """You are a highly efficient "Executive Secretary" and "Triage Officer" for a high-level Commission Board in Vanuatu. You are an expert in both Bislama and English.
 
 Analyze the provided User Feedback. The feedback may be in Bislama, English, French, or a mix.

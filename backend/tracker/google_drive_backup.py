@@ -201,6 +201,24 @@ def upload_backup_file(access_token: str, filename: str, content: bytes) -> None
             chunk_resp.raise_for_status()
 
 
+def delete_backup_file(access_token: str, filename: str) -> bool:
+    """Deletes filename from the "SCDMS Backups" Drive folder if present —
+    keeps Drive in sync when an admin manually deletes a local backup, not
+    just the passive retention-window pruning. Returns True if a file was
+    found and deleted, False if it was never there (already pruned, or
+    never successfully pushed in the first place)."""
+    folder_id = _get_or_create_backup_folder(access_token)
+    file_id = _find_existing_file(access_token, folder_id, filename)
+    if not file_id:
+        return False
+    resp = requests.delete(
+        f"{DRIVE_FILES_URL}/{file_id}",
+        headers={"Authorization": f"Bearer {access_token}"}, timeout=15,
+    )
+    resp.raise_for_status()
+    return True
+
+
 def delete_old_backups(access_token: str, retention_days: int) -> int:
     """Deletes files in the "SCDMS Backups" folder older than retention_days,
     mirroring backup_db.py's local-disk pruning so a single retention window
