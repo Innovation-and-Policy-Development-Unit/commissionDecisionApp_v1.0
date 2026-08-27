@@ -16,6 +16,7 @@ services:
     volumes:
       - scdms_media:/var/scdms/media:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /opt/scdms/.certbot-tmp/config:/etc/letsencrypt-psc:ro
       - ./frontend/nginx-docker-ssl.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend/app-locations.conf:/etc/nginx/app-locations.conf:ro
 
