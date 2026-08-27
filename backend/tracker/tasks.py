@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+import requests
 from celery import shared_task
 from django.conf import settings
 from django.core.management import call_command
@@ -258,6 +259,26 @@ def push_backup_to_cloud(filename):
         log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | reason=auth: %s", filename, exc)
         _log(None, _AL.Action.BACKUP, resource_type="CloudBackupPush", resource_label=filename,
              description=f"Backup push to {conn.get_provider_display()} failed — connection needs to be redone: {exc}")
+    except requests.exceptions.HTTPError as exc:
+        # A 401/403 straight from the Drive API (as opposed to our own
+        # token exchange/refresh) still means the connection is unusable —
+        # most commonly the admin didn't grant the Drive permission on
+        # Google's consent screen (it's an individually togglable checkbox
+        # there), leaving a valid-but-underscoped token. Surface it the
+        # same way as GoogleDriveAuthError rather than leaving status
+        # "connected" with a buried error message.
+        status_code = exc.response.status_code if exc.response is not None else None
+        if status_code in (401, 403):
+            conn.status = CloudBackupConnection.Status.NEEDS_RECONNECT
+            conn.last_push_error = str(exc)
+            conn.save(update_fields=["status", "last_push_error"])
+            log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | reason=auth: %s", filename, exc)
+            _log(None, _AL.Action.BACKUP, resource_type="CloudBackupPush", resource_label=filename,
+                 description=f"Backup push to {conn.get_provider_display()} failed — connection needs to be redone: {exc}")
+        else:
+            conn.last_push_error = str(exc)
+            conn.save(update_fields=["last_push_error"])
+            log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | %s", filename, exc)
     except Exception as exc:
         conn.last_push_error = str(exc)
         conn.save(update_fields=["last_push_error"])
