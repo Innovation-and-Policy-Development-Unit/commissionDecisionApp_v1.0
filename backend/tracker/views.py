@@ -9379,7 +9379,11 @@ class BackupViewSet(viewsets.ViewSet):
 
     # ── list backups ──────────────────────────────────────────────────────────
     def list(self, request):
-        """GET /backup/ — list all backup files with size and timestamp."""
+        """GET /backup/ — list all backup files with size, timestamp, and
+        whether/when each was successfully pushed to the connected cloud
+        destination (sourced from the audit trail — pushes aren't tracked
+        anywhere else — so the admin UI can show which backups are already
+        safely off-VM without needing to click "Drive" again to check)."""
         _os.makedirs(_BACKUP_DIR, exist_ok=True)
         files = []
         for fn in sorted(_os.listdir(_BACKUP_DIR), reverse=True):
@@ -9396,6 +9400,22 @@ class BackupViewSet(viewsets.ViewSet):
                         stat.st_mtime, tz=timezone.get_current_timezone()
                     ).isoformat(),
                 })
+
+        from .models import AuditLog
+        filenames = [f["filename"] for f in files]
+        cloud_pushed_at = {}
+        for entry in (
+            AuditLog.objects
+            .filter(resource_type="CloudBackupPush", resource_label__in=filenames,
+                    description__startswith="Backup pushed to")
+            .order_by("resource_label", "-timestamp")
+        ):
+            # First hit per filename is the most recent, since this is
+            # ordered newest-first within each resource_label group.
+            cloud_pushed_at.setdefault(entry.resource_label, entry.timestamp.isoformat())
+        for f in files:
+            f["cloud_pushed_at"] = cloud_pushed_at.get(f["filename"])
+
         return Response(files)
 
     # ── create (manual trigger) ───────────────────────────────────────────────

@@ -2944,6 +2944,11 @@ export function BackupTab() {
                   <p className="text-xs text-slate-400 mt-0.5">
                     {new Date(b.created_at).toLocaleString()} · {formatBytes(b.size_kb)}
                   </p>
+                  {b.cloud_pushed_at && (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1">
+                      <Check size={12} /> Synced to Google Drive · {new Date(b.cloud_pushed_at).toLocaleString()}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button

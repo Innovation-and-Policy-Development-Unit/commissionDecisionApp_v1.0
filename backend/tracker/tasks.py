@@ -252,6 +252,22 @@ def push_backup_to_cloud(filename):
                   filename, conn.provider, conn.connected_email)
         _log(None, _AL.Action.BACKUP, resource_type="CloudBackupPush", resource_label=filename,
              description=f"Backup pushed to {conn.get_provider_display()} ({conn.connected_email}): {filename}")
+
+        # Mirror the same retention window on the Drive side — otherwise
+        # every day's uniquely-named backup would accumulate there forever
+        # even though local disk prunes on schedule. Best-effort: a cleanup
+        # failure should never be treated as the push itself failing.
+        try:
+            from .models import SystemSetting
+            retention_days = 30
+            setting = SystemSetting.objects.filter(key="BACKUP_RETENTION_DAYS").first()
+            if setting:
+                retention_days = int(setting.value)
+            removed = google_drive_backup.delete_old_backups(access_token, retention_days)
+            if removed:
+                log.info("BACKUP_CLOUD_PRUNE | removed=%d | older_than_days=%d", removed, retention_days)
+        except Exception as exc:
+            log.warning("BACKUP_CLOUD_PRUNE_FAILED | %s", exc)
     except google_drive_backup.GoogleDriveAuthError as exc:
         conn.status = CloudBackupConnection.Status.NEEDS_RECONNECT
         conn.last_push_error = str(exc)

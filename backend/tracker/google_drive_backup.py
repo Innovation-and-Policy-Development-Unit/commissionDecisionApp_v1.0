@@ -14,6 +14,7 @@ first upload.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -198,3 +199,31 @@ def upload_backup_file(access_token: str, filename: str, content: bytes) -> None
         )
         if chunk_resp.status_code not in (200, 201, 308):
             chunk_resp.raise_for_status()
+
+
+def delete_old_backups(access_token: str, retention_days: int) -> int:
+    """Deletes files in the "SCDMS Backups" folder older than retention_days,
+    mirroring backup_db.py's local-disk pruning so a single retention window
+    governs both copies rather than two independently-drifting settings.
+    Returns the number of files removed."""
+    folder_id = _get_or_create_backup_folder(access_token)
+    headers = {"Authorization": f"Bearer {access_token}"}
+    resp = requests.get(
+        DRIVE_FILES_URL, headers=headers,
+        params={
+            "q": f"'{folder_id}' in parents and trashed=false",
+            "fields": "files(id,createdTime)", "spaces": "drive",
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+    removed = 0
+    for f in resp.json().get("files", []):
+        created = datetime.fromisoformat(f["createdTime"].replace("Z", "+00:00"))
+        if created < cutoff:
+            del_resp = requests.delete(f"{DRIVE_FILES_URL}/{f['id']}", headers=headers, timeout=15)
+            del_resp.raise_for_status()
+            removed += 1
+    return removed
