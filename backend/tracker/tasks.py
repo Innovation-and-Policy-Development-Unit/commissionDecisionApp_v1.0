@@ -200,19 +200,24 @@ def run_backup():
         log.error("BACKUP_SCHEDULED | failed: %s", exc)
 
 
-@shared_task
-def push_backup_to_cloud(filename):
+@shared_task(bind=True, max_retries=4)
+def push_backup_to_cloud(self, filename):
     """Upload one backup file to whichever cloud provider is connected
     (currently: Google Drive only). Called from the end of
     backup_db.py's Command.handle() — the single choke point both the
     manual "Run Backup Now" button and the scheduled Celery Beat path
     already funnel through — and from BackupViewSet.cloud_push for an
-    on-demand push of an already-stored file.
+    on-demand push of an already-stored file. Also re-queued by
+    retry_pending_cloud_backups (below) for anything still unsynced by
+    noon the next day.
 
     Refreshes the access token if expired. On a persistent auth
     failure (refresh token revoked/expired at the Google end), flips the
     connection to needs_reconnect instead of failing silently — the admin
-    UI surfaces that state."""
+    UI surfaces that state. A transient network failure (the govt network's
+    outbound path is unreliable overnight — see scdms-cloudflare-tunnel-
+    flakiness) is retried with backoff instead, since it's neither an auth
+    problem nor permanent."""
     from . import google_drive_backup
     from .audit import log_action as _log
     from .crypto_utils import decrypt, encrypt
@@ -291,10 +296,32 @@ def push_backup_to_cloud(filename):
             log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | reason=auth: %s", filename, exc)
             _log(None, _AL.Action.BACKUP, resource_type="CloudBackupPush", resource_label=filename,
                  description=f"Backup push to {conn.get_provider_display()} failed — connection needs to be redone: {exc}")
+        elif status_code and status_code >= 500 and self.request.retries < self.max_retries:
+            conn.last_push_error = str(exc)
+            conn.save(update_fields=["last_push_error"])
+            log.warning("BACKUP_CLOUD_PUSH_RETRY | file=%s | attempt=%d/%d | reason=drive_5xx: %s",
+                        filename, self.request.retries + 1, self.max_retries, exc)
+            self.retry(exc=exc, countdown=min(60 * (2 ** self.request.retries), 900))
         else:
             conn.last_push_error = str(exc)
             conn.save(update_fields=["last_push_error"])
             log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | %s", filename, exc)
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        # Outbound network unreachable — the govt network's egress path is
+        # unreliable outside business hours (see scdms-cloudflare-tunnel-
+        # flakiness memory), most often exactly when the scheduled evening
+        # backup runs. Not an auth problem, so don't touch conn.status —
+        # just retry with backoff. Anything still unsynced after retries
+        # are exhausted gets picked up by retry_pending_cloud_backups at
+        # noon the next day, once connectivity has historically recovered.
+        conn.last_push_error = str(exc)
+        conn.save(update_fields=["last_push_error"])
+        if self.request.retries < self.max_retries:
+            log.warning("BACKUP_CLOUD_PUSH_RETRY | file=%s | attempt=%d/%d | reason=network: %s",
+                        filename, self.request.retries + 1, self.max_retries, exc)
+            self.retry(exc=exc, countdown=min(60 * (2 ** self.request.retries), 900))
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | reason=network (retries exhausted, will "
+                  "retry again at next scheduled sync): %s", filename, exc)
     except Exception as exc:
         conn.last_push_error = str(exc)
         conn.save(update_fields=["last_push_error"])
@@ -307,6 +334,54 @@ def queue_push_backup_to_cloud(filename):
     except Exception as exc:
         app_log.warning("BACKUP_CLOUD_PUSH_QUEUE_FALLBACK | file=%s | %s", filename, exc)
         push_backup_to_cloud(filename)
+
+
+@shared_task
+def retry_pending_cloud_backups():
+    """Daily catch-all for backups that never made it to Google Drive.
+
+    The scheduled backup runs in the evening, right in the window where
+    this network's outbound connectivity is known to be unreliable
+    overnight (see scdms-cloudflare-tunnel-flakiness memory) — push_backup_
+    to_cloud's own retries (a few minutes of backoff) can't outlast a
+    multi-hour outage. This task runs once at noon local time, after
+    connectivity has historically recovered, and re-queues a push for any
+    backup file on disk that has no successful "Backup pushed to ..."
+    AuditLog entry yet."""
+    from .models import AuditLog as _AL, CloudBackupConnection
+
+    conn = CloudBackupConnection.objects.filter(
+        provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
+        status=CloudBackupConnection.Status.CONNECTED,
+    ).first()
+    if not conn:
+        return
+
+    backup_dir = os.getenv("BACKUP_DIR", "/var/backups/scdms")
+    try:
+        filenames = sorted(
+            f for f in os.listdir(backup_dir)
+            if f.startswith("scdms_backup_") and (f.endswith(".zip") or f.endswith(".json"))
+        )
+    except FileNotFoundError:
+        return
+    if not filenames:
+        return
+
+    pushed = set(
+        _AL.objects.filter(
+            resource_type="CloudBackupPush",
+            resource_label__in=filenames,
+            description__startswith="Backup pushed to",
+        ).values_list("resource_label", flat=True)
+    )
+    pending = [f for f in filenames if f not in pushed]
+    if not pending:
+        return
+
+    log.info("BACKUP_CLOUD_RETRY_PENDING | count=%d | files=%s", len(pending), pending)
+    for filename in pending:
+        queue_push_backup_to_cloud(filename)
 
 
 @shared_task

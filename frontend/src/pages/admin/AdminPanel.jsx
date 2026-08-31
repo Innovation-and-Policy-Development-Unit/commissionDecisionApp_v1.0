@@ -2847,6 +2847,15 @@ export function BackupTab() {
                 </p>
               </div>
             )}
+            {cloudStatus.status === 'connected' && cloudStatus.last_push_error && (
+              <div className="flex items-start gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700/40 dark:bg-slate-800/40">
+                <AlertTriangle size={15} className="text-slate-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Most recent push attempt failed — {cloudStatus.last_push_error} It will retry automatically
+                  (a scheduled catch-up runs daily at noon for anything still unsynced).
+                </p>
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm text-slate-700 dark:text-slate-300">
