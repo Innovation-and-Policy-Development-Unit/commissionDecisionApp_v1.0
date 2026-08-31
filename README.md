@@ -87,7 +87,7 @@ A full-stack web application for the **Public Service Commission (PSC) of Vanuat
 
 **Network segmentation** (`docker-compose.yml`): two isolated bridge networks. `internal` carries `db` and `redis` and is marked `internal: true` — **no outbound internet access at all**, even if a container on it were compromised. `app` carries `web` ↔ `backend` and gives `celery_worker` its only outbound path (needed for Gemini API calls). Only `web` is published to the host.
 
-**Production overlay** (`docker-compose.prod.yml`, `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`): adds TLS termination on `web` (certificates renewed on the host via `certbot` + DNS-01, mounted read-only) and a `cloudflared` sidecar — an outbound-only Cloudflare Tunnel connector, so the server needs no inbound firewall rule or public port-forward to be reachable at its public hostname.
+**Production overlay** (`docker-compose.prod.yml`, `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`): adds TLS termination on `web` (certificates renewed on the host via `certbot` + DNS-01, mounted read-only). `web` is reachable directly on the LAN/government network at `scdms.psc.gov.vu` — no Cloudflare Tunnel or public port-forward involved.
 
 ---
 
@@ -670,7 +670,7 @@ The application is available at **http://localhost:8080** (or the port set by `W
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-Adds TLS on `web` (host-managed `certbot` certificates, DNS-01) and a `cloudflared` Cloudflare Tunnel sidecar for outbound-only public exposure — no inbound firewall rule needed. See **[docs/deployment-tls.md](docs/deployment-tls.md)**.
+Adds TLS on `web` (host-managed `certbot` certificates, DNS-01). Served directly on the government network at `scdms.psc.gov.vu`. See **[docs/deployment-tls.md](docs/deployment-tls.md)**.
 
 For **Render.com** (managed Postgres, Redis, Gunicorn API, static frontend), see **[docs/deployment-render.md](docs/deployment-render.md)** and the root **`render.yaml`** blueprint.
 
