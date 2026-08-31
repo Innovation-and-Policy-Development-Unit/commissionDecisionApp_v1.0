@@ -204,6 +204,9 @@ export default function SubmissionDetail() {
   const [officers, setOfficers] = useState([])
   const [selectedOfficer, setSelectedOfficer] = useState('')
   const [allocateBusy, setAllocateBusy] = useState(false)
+  const [collaboratorCandidates, setCollaboratorCandidates] = useState([])
+  const [selectedCollaborator, setSelectedCollaborator] = useState('')
+  const [collabBusy, setCollabBusy] = useState(false)
   const [hasAssessmentText, setHasAssessmentText] = useState(false)
   const assessmentEditorRef = useRef(null)
   const isAdmin = user?.role === 'psc_admin'
@@ -234,6 +237,15 @@ export default function SubmissionDetail() {
     isAdmin
     || (MANAGER_ROLE_TO_UNIT[user.role] && MANAGER_ROLE_TO_UNIT[user.role] === submission?.routed_unit)
   )
+  // A Compliance self-submission's own creator (not the routing/allocation
+  // flow above — see SubmissionViewSet._assert_can_manage_collaborators) may
+  // invite named colleagues to comment on their own draft while composing it.
+  const COMPLIANCE_SELF_SUBMIT_ROLES = ['compliance_senior', 'compliance_principal', 'compliance_manager']
+  const isComplianceSelfSubmitter = user && COMPLIANCE_SELF_SUBMIT_ROLES.includes(user.role)
+  const isDraftLikeStage = ['draft', 'returned_for_clarification'].includes(submission?.current_stage)
+  const canManageCollaborators = isComplianceSelfSubmitter
+    && submission?.logged_by === user?.username
+    && isDraftLikeStage
   // The assigned principal/senior officer hands their completed checklist
   // review or assessment back to their unit manager — only the manager
   // advances the stage from here (see transitions.py _UNIT_PRINCIPAL_ROLES).
@@ -437,6 +449,43 @@ export default function SubmissionDetail() {
       toast.error(formatApiError(err, 'Could not submit back to your manager.'))
     } finally {
       setAllocateBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    if (!id || !canManageCollaborators) { setCollaboratorCandidates([]); return undefined }
+    api.get(`/submissions/${id}/collaborator-candidates/`)
+      .then(r => { if (!cancelled) setCollaboratorCandidates(r.data || []) })
+      .catch(() => { if (!cancelled) setCollaboratorCandidates([]) })
+    return () => { cancelled = true }
+  }, [id, canManageCollaborators])
+
+  const addCollaborator = async () => {
+    if (!selectedCollaborator) { toast.error('Select a colleague to add.'); return }
+    setCollabBusy(true)
+    try {
+      await api.post(`/submissions/${id}/collaborators/`, { user_id: Number(selectedCollaborator) })
+      setSelectedCollaborator('')
+      await reload()
+      toast.success('Collaborator added.')
+    } catch (err) {
+      toast.error(formatApiError(err, 'Could not add collaborator.'))
+    } finally {
+      setCollabBusy(false)
+    }
+  }
+
+  const removeCollaborator = async (userId) => {
+    setCollabBusy(true)
+    try {
+      await api.delete(`/submissions/${id}/collaborators/`, { data: { user_id: userId } })
+      await reload()
+      toast.success('Collaborator removed.')
+    } catch (err) {
+      toast.error(formatApiError(err, 'Could not remove collaborator.'))
+    } finally {
+      setCollabBusy(false)
     }
   }
 
@@ -1729,6 +1778,47 @@ const stageDescriptions = {
             error={error}
             setError={setError}
           />
+
+          {canManageCollaborators && (
+            <div className="card card-compact space-y-3">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Collaborators</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Invite colleagues from your Compliance team to comment on this draft.
+                They can't edit it or submit it — only you can.
+              </p>
+
+              {submission.collaborators?.length > 0 && (
+                <div className="space-y-1">
+                  {submission.collaborators.map(c => (
+                    <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-slate-700 dark:text-slate-300">{c.full_name}</span>
+                      <BaseButton variant="ghost" size="sm" onClick={() => removeCollaborator(c.id)} disabled={collabBusy}>
+                        Remove
+                      </BaseButton>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <BaseSelect
+                label="Add collaborator"
+                value={selectedCollaborator}
+                onChange={(_e, v) => setSelectedCollaborator(v)}
+                options={[
+                  { value: '', label: 'Select a colleague…' },
+                  ...collaboratorCandidates.map(c => ({
+                    value: String(c.id),
+                    label: `${c.full_name} — ${(c.role || '').replace(/_/g, ' ')}`,
+                  })),
+                ]}
+              />
+              <BaseButton type="button" variant="secondary" className="w-full"
+                loading={collabBusy} loadingLabel="Adding"
+                onClick={addCollaborator} disabled={!selectedCollaborator}>
+                Add as collaborator
+              </BaseButton>
+            </div>
+          )}
 
           {canAllocate && (
             <div className="card card-compact space-y-3">
