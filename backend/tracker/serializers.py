@@ -686,6 +686,18 @@ class CoAssignmentSerializer(serializers.Serializer):
         return obj.principal.get_full_name() or obj.principal.username
 
 
+class CollaboratorSerializer(serializers.Serializer):
+    """Read-only representation of a comment-only draft collaborator (see
+    SubmissionCollaborator)."""
+    id        = serializers.IntegerField(source='user.id')
+    full_name = serializers.SerializerMethodField()
+    username  = serializers.CharField(source='user.username')
+    added_at  = serializers.DateTimeField()
+
+    def get_full_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+
 def _strip_ai_brief_if_ministry(data: dict, request) -> dict:
     """Never let the AI executive brief text reach a ministry-side viewer, even
     though the frontend also hides the card — the API response must not leak it."""
@@ -830,6 +842,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     )
     attached_submissions = AttachedSubmissionSerializer(many=True, read_only=True)
     co_assignments = CoAssignmentSerializer(many=True, read_only=True)
+    collaborators = CollaboratorSerializer(many=True, read_only=True)
     preliminary_quality_score = serializers.SerializerMethodField()
     subway_map = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
@@ -1015,6 +1028,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "parent_title",
             "attached_submissions",
             "co_assignments",
+            "collaborators",
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",

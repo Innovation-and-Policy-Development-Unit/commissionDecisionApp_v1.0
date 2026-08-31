@@ -2281,6 +2281,43 @@ class SubmissionCoAssignment(models.Model):
         return f"{self.principal.get_full_name() or self.principal.username} → {self.submission.reference_number} ({self.role})"
 
 
+class SubmissionCollaborator(models.Model):
+    """
+    A colleague the submission's own creator has invited to comment / suggest
+    changes on their own-authored draft (Compliance self-submissions only,
+    for now). Comment-only — collaborators never get edit or submit rights;
+    see CommentViewSet.create() and SubmissionViewSet.transition() for the
+    permission checks that key off this table.
+
+    Deliberately separate from SubmissionCoAssignment, which grants read/write
+    checklist/assessment access and is assigned by the unit *manager* during
+    the manager_checklist_review/under_assessment stages of the other,
+    ministry-routed workflow — a different mechanism for a different flow.
+    """
+
+    submission  = models.ForeignKey(
+        'Submission', on_delete=models.CASCADE, related_name='collaborators',
+    )
+    user        = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='collaboration_records',
+    )
+    added_by    = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
+    added_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('submission', 'user')]
+        ordering = ['added_at']
+        verbose_name        = 'Submission Collaborator'
+        verbose_name_plural = 'Submission Collaborators'
+
+    def __str__(self):
+        return f"{self.user.get_full_name() or self.user.username} → {self.submission.reference_number} (collaborator)"
+
+
 class ActiveDocumentManager(models.Manager):
     """Default manager: hides archived (soft-removed) documents everywhere —
     document lists, AI context, checklists, decision-proof fingerprints."""

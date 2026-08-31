@@ -45,6 +45,7 @@ from .models import (
     SecurityNotice,
     Submission,
     SubmissionCoAssignment,
+    SubmissionCollaborator,
     SystemPermission,
     SystemSetting,
     EmailTemplate,
@@ -286,6 +287,10 @@ def _submission_queryset_for(user):
         Prefetch(
             "co_assignments",
             queryset=SubmissionCoAssignment.objects.select_related("principal"),
+        ),
+        Prefetch(
+            "collaborators",
+            queryset=SubmissionCollaborator.objects.select_related("user"),
         ),
     )
     if user.is_superuser or user.is_staff:
@@ -1646,6 +1651,23 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
         # if _chain_result is True: chain explicitly allows — skip assert_transition_allowed
 
+        # ── Compliance self-submission: only the creator may submit their own
+        # draft for approval — collaborators (SubmissionCollaborator) may
+        # comment but never advance the workflow on someone else's behalf.
+        # assert_transition_allowed above is role-only, so this ownership
+        # check has to live here.
+        _COMPLIANCE_SELF_SUBMIT_ROLES = {
+            Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_MANAGER,
+        }
+        if (
+            profile.role in _COMPLIANCE_SELF_SUBMIT_ROLES
+            and prev in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
+            and target in (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.SUBMITTED)
+            and submission.created_by_id != request.user.id
+            and not (request.user.is_superuser or request.user.is_staff)
+        ):
+            raise PermissionDenied("Only the submission's original creator may submit it for approval.")
+
         # ── Intake route toggles: block submit/route via a disabled route ──────
         from .intake_routing import hr_intake_enabled, receptionist_intake_enabled
 
@@ -2747,6 +2769,130 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         invalidate_submission(submission.id)
         return Response(SubmissionDetailSerializer(submission).data)
+
+    # ── Compliance self-submission collaborators (comment-only) ───────────────
+    # A submission's own creator (Compliance self-submission flow only) may
+    # invite named colleagues to comment/suggest changes on their draft — see
+    # SubmissionCollaborator's docstring. Comment-posting permission itself is
+    # enforced in CommentViewSet.create(); these actions just manage the list.
+    _COMPLIANCE_SELF_SUBMIT_ROLES = frozenset({
+        Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_MANAGER,
+    })
+
+    def _assert_can_manage_collaborators(self, request, submission):
+        profile = _profile(request.user)
+        if request.user.is_superuser or request.user.is_staff:
+            return
+        if profile.role not in self._COMPLIANCE_SELF_SUBMIT_ROLES:
+            raise PermissionDenied("Only Compliance staff may manage collaborators on this submission.")
+        if submission.created_by_id != request.user.id:
+            raise PermissionDenied("Only the submission's own creator may manage its collaborators.")
+        if submission.current_stage not in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION):
+            raise PermissionDenied("Collaborators can only be managed while the submission is still a draft.")
+
+    @action(detail=True, methods=["get"], url_path="collaborator-candidates")
+    def collaborator_candidates(self, request, pk=None):
+        """List Compliance colleagues eligible to be added as a collaborator."""
+        from django.contrib.auth.models import User
+
+        submission = self.get_object()
+        self._assert_can_manage_collaborators(request, submission)
+
+        already_added = set(submission.collaborators.values_list("user_id", flat=True))
+        candidates = (
+            User.objects.filter(
+                is_active=True,
+                psc_profile__role__in=self._COMPLIANCE_SELF_SUBMIT_ROLES,
+                psc_profile__unit_id=_profile(request.user).unit_id,
+            )
+            .exclude(pk=request.user.id)
+            .exclude(pk__in=already_added)
+            .select_related("psc_profile")
+            .order_by("first_name", "username")
+        )
+        data = [
+            {
+                "id": u.id,
+                "full_name": u.get_full_name() or u.username,
+                "username": u.username,
+                "role": getattr(u.psc_profile, "role", ""),
+            }
+            for u in candidates
+        ]
+        return Response(data)
+
+    @action(detail=True, methods=["post"], url_path="collaborators")
+    def add_collaborator(self, request, pk=None):
+        """POST { "user_id": <id> } — invite a Compliance colleague to comment on this draft."""
+        from django.contrib.auth.models import User
+        from .models import SubmissionCollaborator, Notification, AuditLog as _AL
+        from .audit import log_action as _log
+
+        submission = self.get_object()
+        self._assert_can_manage_collaborators(request, submission)
+
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            collaborator = User.objects.select_related("psc_profile").get(pk=user_id, is_active=True)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found or inactive."}, status=status.HTTP_400_BAD_REQUEST)
+
+        c_profile = getattr(collaborator, "psc_profile", None)
+        requester_unit = _profile(request.user).unit_id
+        if (
+            c_profile is None
+            or c_profile.role not in self._COMPLIANCE_SELF_SUBMIT_ROLES
+            or c_profile.unit_id != requester_unit
+        ):
+            return Response(
+                {"detail": "Collaborators must be a member of your own Compliance team."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if collaborator.id == submission.created_by_id:
+            return Response({"detail": "The submission's creator doesn't need to be added."}, status=400)
+
+        _, created = SubmissionCollaborator.objects.get_or_create(
+            submission=submission, user=collaborator, defaults={"added_by": request.user},
+        )
+        if created:
+            Notification.objects.create(
+                recipient=collaborator,
+                submission=submission,
+                channel=Notification.Channel.BOTH,
+                title=f"Added as a collaborator: {submission.reference_number}",
+                body=(
+                    f"{request.user.get_full_name() or request.user.username} invited you to "
+                    f"comment on '{submission.title}' while it's in draft."
+                ),
+            )
+            _log(request, _AL.Action.UPDATE, resource_type="Submission",
+                 resource_id=submission.id, resource_label=submission.reference_number,
+                 description=f"Collaborator added: {collaborator.username}")
+        invalidate_submission(submission.id)
+        return Response(SubmissionDetailSerializer(submission, context=self.get_serializer_context()).data)
+
+    @add_collaborator.mapping.delete
+    def remove_collaborator(self, request, pk=None):
+        """DELETE /submissions/{id}/collaborators/?user_id=<id>"""
+        from .models import SubmissionCollaborator, AuditLog as _AL
+        from .audit import log_action as _log
+
+        submission = self.get_object()
+        self._assert_can_manage_collaborators(request, submission)
+
+        user_id = request.query_params.get("user_id") or request.data.get("user_id")
+        if not user_id:
+            return Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        deleted, _ = SubmissionCollaborator.objects.filter(submission=submission, user_id=user_id).delete()
+        if deleted:
+            _log(request, _AL.Action.UPDATE, resource_type="Submission",
+                 resource_id=submission.id, resource_label=submission.reference_number,
+                 description=f"Collaborator removed: user_id={user_id}")
+        invalidate_submission(submission.id)
+        return Response(SubmissionDetailSerializer(submission, context=self.get_serializer_context()).data)
 
     @action(detail=True, methods=["post"], url_path="submit-to-manager")
     def submit_to_manager(self, request, pk=None):

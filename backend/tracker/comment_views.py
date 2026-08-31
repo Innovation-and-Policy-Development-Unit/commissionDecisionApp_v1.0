@@ -45,6 +45,40 @@ def _is_ministry_side(user):
     return bool(profile and profile.role in _MINISTRY_SIDE_ROLES)
 
 
+# Compliance self-submissions still being drafted are visible to the whole
+# Compliance team (see _submission_queryset_for), but only the creator and
+# their explicitly-invited SubmissionCollaborators may actually post a
+# comment — everyone else can still read the thread once posted.
+_COMPLIANCE_FORM_CATEGORY_CODES = ("COMPLIANCE", "discipline_compliance")
+
+
+def _assert_can_comment(user, target):
+    """Raise PermissionDenied if `user` may not post a comment on `target`."""
+    from .models import WorkflowStage
+
+    if not isinstance(target, Submission):
+        return
+    if user.is_superuser or user.is_staff:
+        return
+    is_compliance_submission = (
+        target.is_internal
+        and getattr(target.form_category, "code", None) in _COMPLIANCE_FORM_CATEGORY_CODES
+    )
+    still_drafting = target.current_stage in (
+        WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION,
+    )
+    if not (is_compliance_submission and still_drafting):
+        return
+    if user.id == target.created_by_id:
+        return
+    if target.collaborators.filter(user_id=user.id).exists():
+        return
+    raise PermissionDenied(
+        "Only the submission's creator and invited collaborators can comment "
+        "while it's still a draft."
+    )
+
+
 def _resolve_submission_target(user, object_id):
     """Return the Submission if the user may access it, else None (RBAC + firewall)."""
     from .views import _submission_queryset_for
@@ -135,6 +169,7 @@ class CommentViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         raw = request.data.get("target")
         ct, obj, key = self._authorize_target(raw)
+        _assert_can_comment(request.user, obj)
 
         body = (request.data.get("body") or "").strip()
         if not body:
