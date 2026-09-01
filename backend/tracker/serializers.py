@@ -978,6 +978,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "reference_number",
+            "applicant_email",
+            "applicant_tracking_code",
             "title",
             "form_type_code",
             "agenda_category",
@@ -1058,6 +1060,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "subway_map",
+            "applicant_tracking_code",
             "commission_approved_at",
             "implementation_completed_at",
             "ai_policy_observations",

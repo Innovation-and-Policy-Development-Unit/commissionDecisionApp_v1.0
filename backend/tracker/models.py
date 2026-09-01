@@ -1769,14 +1769,15 @@ class Submission(models.Model):
     applicant_email = models.EmailField(
         blank=True, default="",
         help_text="Email of the employee/public servant this submission concerns. When set, "
-                   "an auto-generated tracking code is emailed to them so they can check status "
+                   "the tracking code is also emailed to them directly, so they can check status "
                    "via reference number + code, without needing an SCDMS account.",
     )
     applicant_tracking_code = models.CharField(
         max_length=16, unique=True, null=True, blank=True, default=None, editable=False,
-        help_text="Auto-generated, hard-to-guess code paired with applicant_email for "
-                   "anonymous tracking (reference_number + code). Distinct from the legacy "
-                   "orphaned 'tracking_code' DB column from an unmerged branch — see "
+        help_text="Auto-generated, hard-to-guess code every submission gets on creation, "
+                   "required (alongside reference_number) for public tracking. Sent to "
+                   "notify_emails on submission, and to applicant_email if set. Distinct from "
+                   "the legacy orphaned 'tracking_code' DB column from an unmerged branch — see "
                    "migration 0255 — which this deliberately does not reuse.",
     )
     applicant_tracking_code_sent_at = models.DateTimeField(null=True, blank=True)
@@ -2167,7 +2168,7 @@ class Submission(models.Model):
             )
         if not self.reference_number:
             self.reference_number = allocate_reference_number()
-        if self.applicant_email and not self.applicant_tracking_code:
+        if not self.applicant_tracking_code:
             self.applicant_tracking_code = generate_applicant_tracking_code()
         if self.assessment_started_at:
             self._set_assessment_deadline_from_start()
@@ -3510,11 +3511,11 @@ _APPLICANT_TRACKING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 def generate_applicant_tracking_code() -> str:
-    """Cryptographically random, human-typeable code (format XXXXX-XXXXX) paired
-    with Submission.applicant_email for anonymous public tracking alongside the
-    reference number. Deliberately unrelated to the sequential reference_number
-    scheme above, and to the legacy orphaned 'tracking_code' DB column (migration
-    0255) — must not be guessable from either."""
+    """Cryptographically random, human-typeable code (format XXXXX-XXXXX), generated
+    for every Submission on creation and required (alongside the reference number)
+    for anonymous public tracking. Deliberately unrelated to the sequential
+    reference_number scheme above, and to the legacy orphaned 'tracking_code' DB
+    column (migration 0255) — must not be guessable from either."""
     while True:
         raw = "".join(secrets.choice(_APPLICANT_TRACKING_CODE_ALPHABET) for _ in range(10))
         code = f"{raw[:5]}-{raw[5:]}"

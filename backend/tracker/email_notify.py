@@ -22,11 +22,14 @@ def stage_label(stage_code: str) -> str:
 
 def submission_email_context(submission: Submission) -> dict[str, str]:
     base = get_frontend_base_url()
+    ref = submission.reference_number or ""
+    code = submission.applicant_tracking_code or ""
     return {
-        "submission_reference": submission.reference_number or str(submission.pk),
+        "submission_reference": ref or str(submission.pk),
         "submission_title": submission.title or "",
         "submission_url": f"{base}/submissions/{submission.pk}",
-        "tracking_url": f"{base}/track?ref={submission.reference_number or ''}",
+        "tracking_code": code,
+        "tracking_url": f"{base}/track?ref={ref}&code={code}" if code else f"{base}/track?ref={ref}",
     }
 
 
@@ -139,19 +142,9 @@ def notify_applicant_tracking_code(submission: Submission) -> bool:
     number + code without an SCDMS account. Returns whether the send
     succeeded, so the caller can gate applicant_tracking_code_sent_at on it."""
     email = (submission.applicant_email or "").strip().lower()
-    if not email or not submission.applicant_tracking_code:
+    if not email:
         return False
-    base = get_frontend_base_url()
-    ctx = merge_recipient_context(
-        None,
-        submission_reference=submission.reference_number or "",
-        submission_title=submission.title or "",
-        tracking_code=submission.applicant_tracking_code,
-        tracking_url=(
-            f"{base}/track?ref={submission.reference_number or ''}"
-            f"&code={submission.applicant_tracking_code}"
-        ),
-    )
+    ctx = merge_recipient_context(None, **submission_email_context(submission))
     return send_templated_email(slug="submission_tracking_code", to=[email], context=ctx)
 
 
