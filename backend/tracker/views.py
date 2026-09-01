@@ -3739,8 +3739,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         from .audit import log_action as _log
         from .models import AuditLog as _AL, PSCFormType, WorkflowStage
+        from .opsc_access import MINISTRY_SIDE_ROLES
+        from .transitions import _DRAFT_ONLY_EDIT_ROLES
 
         submission = self.get_object()
+        profile = _profile(request.user)
 
         form_type_name = ""
         if submission.form_type_code:
@@ -3758,6 +3761,31 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         stage_labels = dict(WorkflowStage.choices)
         board_paper = self._board_paper_context(submission)
 
+        # Submitter-side roles (ministry roles, plus the two OPSC units that
+        # author and submit their own papers rather than reviewing others')
+        # get the lean, safe-to-share-externally export unchanged. Everyone
+        # else — OPSC review staff, Secretary, Commissioners, Admin — gets
+        # what they already see in-app added on top: the AI brief and
+        # assessment fields (empty/irrelevant pre-submission anyway, so
+        # nothing to gate on stage explicitly) and a condensed stage
+        # timeline. Deliberately excludes actor/IP-level detail — that's
+        # the separate audit-trail-pdf export, not duplicated here.
+        reviewer_content = None
+        if profile.role not in (MINISTRY_SIDE_ROLES | _DRAFT_ONLY_EDIT_ROLES):
+            reviewer_content = {
+                "ai_brief_summary": submission.ai_brief_summary,
+                "ai_quality_score": submission.ai_quality_score,
+                "ai_quality_explanation": submission.ai_quality_explanation,
+                "ai_risk_level": submission.ai_risk_level,
+                "ai_risk_score": submission.ai_risk_score,
+                "ai_outcome_recommendation": submission.ai_outcome_recommendation,
+                "ai_outcome_rationale": submission.ai_outcome_rationale,
+                "stage_history": [
+                    {"stage_label": stage_labels.get(e.stage, e.stage), "occurred_at": e.occurred_at}
+                    for e in submission.stage_events.order_by("occurred_at")
+                ],
+            }
+
         html = render_to_string("tracker/submission_detail_pdf.html", {
             "submission": submission,
             "form_type_name": form_type_name,
@@ -3766,6 +3794,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             "checklist": checklist,
             "documents": documents,
             "board_paper": board_paper,
+            "reviewer_content": reviewer_content,
             "generated_at": timezone.now(),
             "generated_by": request.user.get_full_name() or request.user.username,
         })

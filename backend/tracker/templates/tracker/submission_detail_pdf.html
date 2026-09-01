@@ -209,6 +209,54 @@
 {% endif %}
 {% endif %}
 
+{% if reviewer_content %}
+<h3 class="section">AI Assessment &amp; Status History</h3>
+<p style="font-size:8.5pt; color:#666; margin:-4px 0 10px 0;">
+  AI-generated content is a drafting aid, not a Commission decision — for internal
+  OPSC/Commission review use, not a substitute for the record itself.
+</p>
+
+{% if reviewer_content.ai_brief_summary %}
+<p><strong>AI Executive Brief</strong></p>
+<div class="notes-block">{{ reviewer_content.ai_brief_summary }}</div>
+{% endif %}
+
+{% if reviewer_content.ai_quality_score %}
+<p><strong>AI Quality Score</strong></p>
+<div class="notes-block">{{ reviewer_content.ai_quality_score }}/100{% if reviewer_content.ai_quality_explanation %} — {{ reviewer_content.ai_quality_explanation }}{% endif %}</div>
+{% endif %}
+
+{% if reviewer_content.ai_risk_level %}
+<p><strong>AI Risk Assessment</strong></p>
+<div class="notes-block">{{ reviewer_content.ai_risk_level|title }}{% if reviewer_content.ai_risk_score %} ({{ reviewer_content.ai_risk_score }}/100){% endif %}</div>
+{% endif %}
+
+{% if reviewer_content.ai_outcome_recommendation %}
+<p><strong>AI Outcome Recommendation</strong></p>
+<div class="notes-block">{{ reviewer_content.ai_outcome_recommendation|title }}{% if reviewer_content.ai_outcome_rationale %} — {{ reviewer_content.ai_outcome_rationale }}{% endif %}</div>
+{% endif %}
+
+{% if reviewer_content.stage_history %}
+<p><strong>Status Timeline</strong></p>
+<table class="rows">
+  <thead>
+    <tr>
+      <th style="width:30%;">When</th>
+      <th style="width:70%;">Stage</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in reviewer_content.stage_history %}
+    <tr>
+      <td>{{ row.occurred_at|date:"d M Y H:i" }}</td>
+      <td>{{ row.stage_label }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+
 {% if checklist %}
 <h3 class="section">Required Documents Checklist</h3>
 <table class="rows">
