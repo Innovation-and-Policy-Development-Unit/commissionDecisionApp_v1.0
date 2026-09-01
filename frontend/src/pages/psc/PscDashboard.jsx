@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import api from '../../api/client'
 import useChartColors from '../../hooks/useChartColors'
 import { stageLabel } from '../../constants/stages'
+import InboxBriefCard from '../../components/dashboard/InboxBriefCard'
 import {
   TrendingUp, TrendingDown, FileText, CheckCircle2,
   AlertTriangle, Activity, Zap, ArrowRight,
@@ -232,6 +233,7 @@ export default function PscDashboard() {
           The breadcrumb already shows "Dashboard" visibly, so no visible
           duplicate heading is needed. */}
       <h1 className="sr-only">{t('breadcrumb.dashboard')}</h1>
+      <InboxBriefCard />
       {useLiveTotals && total === 0 && (
         <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
           <p className="font-medium">{t('dashboard.seed_banner_title')}</p>
