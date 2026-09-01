@@ -729,6 +729,22 @@ export default function SubmissionDetail() {
       .catch(() => toast.error('Could not download this version.'))
   }
 
+  const [detailPdfBusy, setDetailPdfBusy] = useState(false)
+  const downloadSubmissionPdf = () => {
+    setDetailPdfBusy(true)
+    api.get(`/submissions/${id}/detail-pdf/`, { responseType: 'blob' })
+      .then(r => {
+        const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }))
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `submission_${submission?.reference_number || id}.pdf`
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(url), 5000)
+      })
+      .catch(() => toast.error('Could not export this submission.'))
+      .finally(() => setDetailPdfBusy(false))
+  }
+
   const [auditPdfBusy, setAuditPdfBusy] = useState(false)
   const downloadAuditTrailPdf = () => {
     setAuditPdfBusy(true)
@@ -962,6 +978,15 @@ const stageDescriptions = {
         action={
           <div className="flex items-center gap-2">
             <BaseButton variant="outline" as={Link} to="/submissions">Back to log</BaseButton>
+            <BaseButton
+              variant="outline"
+              icon={<Download size={14} />}
+              onClick={downloadSubmissionPdf}
+              disabled={detailPdfBusy}
+              title="Download a printable PDF summary of this submission — see how it reads, or share with someone who doesn't have an SCDMS account"
+            >
+              {detailPdfBusy ? 'Exporting…' : 'Print / Export PDF'}
+            </BaseButton>
             {isAdmin && (
               <BaseButton
                 variant="outline"

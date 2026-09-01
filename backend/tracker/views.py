@@ -3669,6 +3669,64 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         filename = f"audit_trail_{submission.reference_number}.pdf".replace("/", "-")
         return FileResponse(buf, as_attachment=True, filename=filename, content_type="application/pdf")
 
+    @action(detail=True, methods=["get"], url_path="detail-pdf")
+    def detail_pdf(self, request, pk=None):
+        """Printable/downloadable PDF summary of the submission itself — what
+        it is, its checklist status, and its attached documents — so a
+        submitter can see how it will read once received by OPSC, and share
+        a copy with colleagues who don't have an SCDMS account. Same access
+        rules as viewing the submission (get_object()); generated fresh on
+        every request, not stored. Summary only: field metadata, checklist,
+        and a document filename list — the attached files themselves aren't
+        merged in (they're already individually downloadable)."""
+        from io import BytesIO
+
+        from django.template.loader import render_to_string
+        from weasyprint import HTML
+
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL, PSCFormType, WorkflowStage
+
+        submission = self.get_object()
+
+        form_type_name = ""
+        if submission.form_type_code:
+            form_type_name = (
+                PSCFormType.objects.filter(code=submission.form_type_code)
+                .values_list("name", flat=True).first() or ""
+            )
+
+        checklist = self._checklist_payload(submission)
+        documents = list(
+            SubmissionDocument.objects
+            .filter(submission=submission, archived_at__isnull=True)
+            .order_by("uploaded_at")
+        )
+        stage_labels = dict(WorkflowStage.choices)
+
+        html = render_to_string("tracker/submission_detail_pdf.html", {
+            "submission": submission,
+            "form_type_name": form_type_name,
+            "stage_label": stage_labels.get(submission.current_stage, submission.current_stage),
+            "classification_label": submission.get_classification_display(),
+            "checklist": checklist,
+            "documents": documents,
+            "generated_at": timezone.now(),
+            "generated_by": request.user.get_full_name() or request.user.username,
+        })
+
+        buf = BytesIO()
+        HTML(string=html).write_pdf(buf)
+        buf.seek(0)
+
+        _log(request, _AL.Action.EXPORT,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Submission summary exported as PDF for {submission.reference_number}")
+
+        filename = f"submission_{submission.reference_number}.pdf".replace("/", "-")
+        return FileResponse(buf, as_attachment=True, filename=filename, content_type="application/pdf")
+
     @action(detail=True, methods=["get"], url_path="decision-proof")
     def decision_proof(self, request, pk=None):
         """Verify cryptographic decision proof for a workflow event."""
