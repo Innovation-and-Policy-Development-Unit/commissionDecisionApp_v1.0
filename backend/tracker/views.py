@@ -7867,7 +7867,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting's agenda, in agenda order — the "read through all my notes
         before the sitting" view. Items with no note yet are still listed
         (empty body) so a Commissioner can see the whole agenda and jump
-        straight into writing one."""
+        straight into writing one. Each item also carries its submission's
+        (non-archived) documents, so this doubles as a pre-meeting reading
+        list without needing to open each submission separately."""
         from .agenda_sections import agenda_section_label
         from .models import SubmissionPrivateNote
 
@@ -7888,6 +7890,17 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 submission_id__in=submission_ids, author=request.user,
             )
         }
+        docs_by_submission = {}
+        for doc in (
+            SubmissionDocument.objects
+            .filter(submission_id__in=submission_ids, archived_at__isnull=True)
+            .order_by("submission_id", "uploaded_at")
+        ):
+            docs_by_submission.setdefault(doc.submission_id, []).append({
+                "id": doc.id,
+                "original_name": doc.original_name,
+                "description": doc.description,
+            })
         rows = []
         for it in items:
             note = notes_by_submission.get(it.submission_id)
@@ -7901,6 +7914,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 "sequence": it.sequence,
                 "note_body": note.body if note else "",
                 "note_updated_at": note.updated_at if note else None,
+                "documents": docs_by_submission.get(it.submission_id, []),
             })
         return Response({
             "meeting": {
