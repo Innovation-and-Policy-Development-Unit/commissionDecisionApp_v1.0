@@ -11,6 +11,7 @@ import { useAgendaSections } from '../../hooks/useAgendaSections'
 import DigitalSealOverlay from '../../components/sitting-pack/DigitalSealOverlay'
 import ExecutiveBriefPanel from '../../components/sitting-pack/ExecutiveBriefPanel'
 import SittingPackPapersPanel from '../../components/sitting-pack/SittingPackPapersPanel'
+import MeetingHistoryPanel from '../../components/sitting-pack/MeetingHistoryPanel'
 import PrivateNotePanel from '../../components/submissions/PrivateNotePanel'
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
 import BaseButton from '../../components/shared/BaseButton'
@@ -290,6 +291,7 @@ export default function AgendaSittingPack() {
               { key: 'papers', label: t('sitting_pack.papers_tab') },
               ...(canViewBrief ? [{ key: 'brief', label: t('sitting_pack.brief_tab') }] : []),
               ...(canUseNotes ? [{ key: 'notes', label: t('sitting_pack.notes_tab') }] : []),
+              { key: 'history', label: t('sitting_pack.history_tab') },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -311,8 +313,10 @@ export default function AgendaSittingPack() {
               <SittingPackPapersPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} />
             ) : rightTab === 'notes' && canUseNotes ? (
               selectedSubmissionId && <PrivateNotePanel submissionId={selectedSubmissionId} />
-            ) : canViewBrief ? (
+            ) : rightTab === 'brief' && canViewBrief ? (
               <ExecutiveBriefPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} canRegenerate={canRegenerateBrief} />
+            ) : rightTab === 'history' ? (
+              <MeetingHistoryPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} excludeMeetingId={meetingId} />
             ) : null}
           </div>
         </div>

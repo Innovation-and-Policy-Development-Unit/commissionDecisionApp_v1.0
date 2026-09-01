@@ -9,6 +9,17 @@
 # See docs/deployment-tls.md.
 
 services:
+  backend:
+    environment:
+      # Reseeding ~64 dummy submissions into the live database on every
+      # restart is a dev/staging convenience, not something production
+      # should ever do silently (e.g. if the Submission table were ever
+      # emptied by a bad migration/restore, this would repopulate it with
+      # fake data instead of failing loudly). The Render deployment path
+      # already hardcodes this off (see docs/deployment-render.md); this
+      # overlay does the same for the docker-compose production path.
+      AUTO_SEED: "0"
+
   web:
     ports:
       - "80:80"

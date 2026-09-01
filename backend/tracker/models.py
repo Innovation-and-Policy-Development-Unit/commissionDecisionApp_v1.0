@@ -2002,6 +2002,16 @@ class Submission(models.Model):
         default=False,
         help_text="True when submitted by OPSC staff (CSU/VIPAM/Compliance) — PSC-staff-only visible.",
     )
+    is_test = models.BooleanField(
+        default=False,
+        help_text=(
+            "Marks a demo/walkthrough submission created to exercise the real workflow "
+            "(e.g. by a training/demo account) rather than a genuine matter. Excluded from "
+            "automatic agenda placement and AI brief generation, and blocks agenda "
+            "submission/endorsement if still on a meeting's agenda — a test submission "
+            "must never silently reach an endorsed, Commissioner-facing agenda."
+        ),
+    )
     follows_normal_route = models.BooleanField(
         default=False,
         help_text=(

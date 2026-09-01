@@ -1588,6 +1588,56 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         return Response(SubmissionPrivateNoteSerializer(note).data)
 
+    @action(detail=True, methods=["get"], url_path="meeting-history")
+    def meeting_history(self, request, pk=None):
+        """Every prior meeting this submission has been placed on — with the
+        deferral reason (if it was deferred away from there) and the recorded
+        decision (if minuted) — so a Commissioner reviewing a recurring item
+        in the Sitting Pack has full context, not just this sitting's papers.
+        Pass ?exclude_meeting=<id> to leave the currently-viewed meeting out.
+        """
+        from .models import AgendaDeferral, MinuteAgendaIntake
+
+        submission = self.get_object()
+
+        items = list(
+            submission.agenda_placements
+            .select_related("meeting")
+            .order_by("-meeting__date")
+        )
+        exclude_meeting = request.query_params.get("exclude_meeting")
+        if exclude_meeting:
+            items = [it for it in items if str(it.meeting_id) != str(exclude_meeting)]
+
+        meeting_ids = [it.meeting_id for it in items]
+        item_ids = [it.id for it in items]
+        deferrals_by_meeting = {
+            d.from_meeting_id: d
+            for d in AgendaDeferral.objects.filter(
+                submission=submission, from_meeting_id__in=meeting_ids,
+            )
+        }
+        intakes_by_item = {
+            mi.agenda_item_id: mi
+            for mi in MinuteAgendaIntake.objects.filter(agenda_item_id__in=item_ids)
+        }
+
+        rows = []
+        for it in items:
+            deferral = deferrals_by_meeting.get(it.meeting_id)
+            intake = intakes_by_item.get(it.id)
+            rows.append({
+                "meeting_id": it.meeting_id,
+                "meeting_reference": it.meeting.reference_number,
+                "meeting_date": it.meeting.date,
+                "deferral_type_display": deferral.get_deferral_type_display() if deferral else "",
+                "deferral_reason": deferral.reason if deferral else "",
+                "decision_text": (
+                    (intake.formatted_decision or intake.decision_text) if intake else ""
+                ),
+            })
+        return Response({"items": rows})
+
     @action(detail=True, methods=["post"])
     def transition(self, request, pk=None):
         from .audit import log_action as _log
@@ -3116,8 +3166,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         afterward via the Sitting Workspace for exceptions.
 
         No-ops (leaves it for manual placement) when there's no eligible
-        upcoming meeting yet, or a placement already exists.
+        upcoming meeting yet, or a placement already exists. Also no-ops for
+        a test submission (is_test=True) — a demo/walkthrough submission must
+        never silently land on a real, Commissioner-facing agenda; anyone
+        deliberately testing the full agenda flow can still add it by hand.
         """
+        if submission.is_test:
+            return
         if AgendaItem.objects.filter(submission=submission).exists():
             return
 
@@ -8449,6 +8504,14 @@ class MeetingViewSet(viewsets.ModelViewSet):
         profile = _profile(request.user)
         if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN}:
             raise PermissionDenied("Only the PSC Secretary can submit the agenda to the Chairperson.")
+        test_refs = self._test_items_on_agenda(meeting)
+        if test_refs:
+            return Response({
+                "detail": (
+                    "This agenda still has test/demo submission(s) on it — remove them "
+                    "before submitting to the Chairperson: " + ", ".join(test_refs)
+                ),
+            }, status=400)
         meeting.agenda_status = AgendaStatus.WITH_CHAIRMAN
         meeting.save(update_fields=["agenda_status"])
         return Response({"detail": "Agenda submitted to the Chairperson for endorsement."})
@@ -8469,6 +8532,15 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 {"detail": "Agenda must first be submitted by the Secretary for endorsement."},
                 status=400,
             )
+        test_refs = self._test_items_on_agenda(meeting)
+        if test_refs:
+            return Response({
+                "detail": (
+                    "This agenda still has test/demo submission(s) on it — a test "
+                    "submission must never be endorsed and circulated to Commission "
+                    "members. Remove before endorsing: " + ", ".join(test_refs)
+                ),
+            }, status=400)
         meeting.agenda_status = AgendaStatus.CIRCULATED
         meeting.agenda_approved_by = request.user
         meeting.agenda_approved_at = timezone.now()
@@ -8486,14 +8558,27 @@ class MeetingViewSet(viewsets.ModelViewSet):
         return Response({"detail": "Agenda endorsed and circulated to Commission members."})
 
     @staticmethod
+    def _test_items_on_agenda(meeting):
+        """Reference numbers of any test/demo submissions (is_test=True) still
+        on this meeting's agenda — used to block agenda submission/endorsement
+        until the Secretariat removes them."""
+        return [
+            item.submission.reference_number
+            for item in meeting.agenda_items.select_related("submission")
+            if item.submission_id and item.submission.is_test
+        ]
+
+    @staticmethod
     def _queue_agenda_briefs(meeting):
         """Pre-generate executive briefs for all agenda submissions so the
         minute-intake split view is instant during the sitting. The task skips
-        submissions whose brief is still fresh (context-key cache)."""
+        submissions whose brief is still fresh (context-key cache). Test/demo
+        submissions are skipped entirely — no point generating a Commission-
+        facing AI brief for data that will never legitimately reach one."""
         from .tasks import queue_submission_brief
 
         for item in meeting.agenda_items.select_related("submission"):
-            if item.submission_id:
+            if item.submission_id and not item.submission.is_test:
                 queue_submission_brief(item.submission_id)
 
     def _require_sitting_pack_access(self, request):
