@@ -3669,15 +3669,67 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         filename = f"audit_trail_{submission.reference_number}.pdf".replace("/", "-")
         return FileResponse(buf, as_attachment=True, filename=filename, content_type="application/pdf")
 
+    @staticmethod
+    def _board_paper_context(submission):
+        """IPDU/ODU Board Paper content for detail_pdf — same computed
+        header fields (meeting/item/submitted-to-PSCB date) as
+        IPDUBoardPaperSerializer/ODUBoardPaperSerializer, so the PDF matches
+        the Commission Paper tab exactly rather than just the underlying
+        Submission's own metadata. Returns None if this submission has
+        neither kind of board paper."""
+        from .agenda_sections import agenda_section_label
+        from .models import WorkflowStage
+
+        paper = getattr(submission, "ipdu_board_paper", None)
+        kind = "ipdu"
+        if paper is None:
+            paper = getattr(submission, "odu_board_paper", None)
+            kind = "odu"
+        if paper is None:
+            return None
+
+        meeting = submission.scheduled_meeting
+        agenda_item_number = None
+        if meeting:
+            item = submission.agenda_placements.filter(meeting=meeting).first()
+            if item:
+                agenda_item_number = f"{agenda_section_label(item.category)} — Item {item.sequence}"
+
+        event = (
+            submission.stage_events
+            .exclude(stage=WorkflowStage.DRAFT)
+            .order_by("occurred_at")
+            .first()
+        )
+
+        return {
+            "kind": kind,
+            "meeting_reference": meeting.reference_number if meeting else None,
+            "agenda_item_number": agenda_item_number,
+            "date_submitted_to_pscb": event.occurred_at if event else None,
+            "action_officer": paper.action_officer,
+            "psc_file": paper.psc_file,
+            "prepared_by": paper.prepared_by,
+            "subject": paper.subject,
+            "background": paper.background,
+            "issues": paper.issues,
+            "discussions": paper.discussions,
+            "recommendation": paper.recommendation if kind == "ipdu" else paper.odu_assessment,
+            "recommendation_label": "Recommendation" if kind == "ipdu" else "ODU Assessment",
+            "deliverable_rows": paper.deliverable_rows if kind == "ipdu" else [],
+            "costing_rows": paper.costing_rows if kind == "odu" else [],
+            "costing_notes": paper.costing_notes if kind == "odu" else "",
+        }
+
     @action(detail=True, methods=["get"], url_path="detail-pdf")
     def detail_pdf(self, request, pk=None):
         """Printable/downloadable PDF summary of the submission itself — what
-        it is, its checklist status, and its attached documents — so a
+        it is, its checklist status, its attached documents, and (for IPDU/
+        ODU submissions) the Commission Paper content itself — so a
         submitter can see how it will read once received by OPSC, and share
         a copy with colleagues who don't have an SCDMS account. Same access
         rules as viewing the submission (get_object()); generated fresh on
-        every request, not stored. Summary only: field metadata, checklist,
-        and a document filename list — the attached files themselves aren't
+        every request, not stored. The attached files themselves aren't
         merged in (they're already individually downloadable)."""
         from io import BytesIO
 
@@ -3704,6 +3756,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             .order_by("uploaded_at")
         )
         stage_labels = dict(WorkflowStage.choices)
+        board_paper = self._board_paper_context(submission)
 
         html = render_to_string("tracker/submission_detail_pdf.html", {
             "submission": submission,
@@ -3712,6 +3765,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             "classification_label": submission.get_classification_display(),
             "checklist": checklist,
             "documents": documents,
+            "board_paper": board_paper,
             "generated_at": timezone.now(),
             "generated_by": request.user.get_full_name() or request.user.username,
         })

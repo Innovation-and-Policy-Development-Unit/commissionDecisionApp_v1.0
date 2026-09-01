@@ -112,6 +112,103 @@
 <div class="notes-block">{{ submission.notes }}</div>
 {% endif %}
 
+{% if board_paper %}
+<h3 class="section">Commission Paper</h3>
+<div class="meta">
+  <table>
+    <tr><td>Meeting Number:</td><td>{{ board_paper.meeting_reference|default:"— pending agenda placement —" }}</td></tr>
+    <tr><td>Item Number:</td><td>{{ board_paper.agenda_item_number|default:"— pending agenda placement —" }}</td></tr>
+    <tr><td>Submitted By:</td><td>Secretary</td></tr>
+    <tr><td>Date Submitted to PSCB:</td><td>{{ board_paper.date_submitted_to_pscb|date:"d F Y"|default:"— not yet submitted —" }}</td></tr>
+    <tr><td>Action Officer:</td><td>{{ board_paper.action_officer|default:"—" }}</td></tr>
+    <tr><td>PSC File:</td><td>{{ board_paper.psc_file|default:"—" }}</td></tr>
+    <tr><td>Prepared By:</td><td>{{ board_paper.prepared_by|default:"—" }}</td></tr>
+  </table>
+</div>
+
+{% if board_paper.subject %}
+<p><strong>Subject</strong></p>
+<div class="notes-block">{{ board_paper.subject }}</div>
+{% endif %}
+
+{% if board_paper.background %}
+<p><strong>Background</strong></p>
+<div class="notes-block">{{ board_paper.background }}</div>
+{% endif %}
+
+{% if board_paper.issues %}
+<p><strong>Issue</strong></p>
+<div class="notes-block">{{ board_paper.issues }}</div>
+{% endif %}
+
+{% if board_paper.discussions %}
+<p><strong>Discussion</strong></p>
+<div class="notes-block">{{ board_paper.discussions }}</div>
+{% endif %}
+
+{% if board_paper.recommendation %}
+<p><strong>{{ board_paper.recommendation_label }}</strong></p>
+<div class="notes-block">{{ board_paper.recommendation }}</div>
+{% endif %}
+
+{% if board_paper.deliverable_rows %}
+<p><strong>Deliverables</strong></p>
+<table class="rows">
+  <thead>
+    <tr>
+      <th style="width:8%;">No.</th>
+      <th style="width:37%;">Description</th>
+      <th style="width:35%;">Activities</th>
+      <th style="width:20%;">Proposed Allowance</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in board_paper.deliverable_rows %}
+    <tr>
+      <td>{{ row.deliverable_no }}</td>
+      <td>{{ row.description }}</td>
+      <td>{{ row.activities }}</td>
+      <td>{{ row.proposed_allowance|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if board_paper.costing_rows %}
+<p><strong>Costing</strong></p>
+<table class="rows">
+  <thead>
+    <tr>
+      <th>Current Post</th>
+      <th>Current Level</th>
+      <th>Current Salary</th>
+      <th>Proposed Post</th>
+      <th>Proposed Level</th>
+      <th>Proposed Salary</th>
+      <th>Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in board_paper.costing_rows %}
+    <tr>
+      <td>{{ row.current_post_no }} {{ row.current_title }}</td>
+      <td>{{ row.current_level }}</td>
+      <td>{{ row.current_salary }}</td>
+      <td>{{ row.proposed_post_no }} {{ row.proposed_title }}</td>
+      <td>{{ row.proposed_level }}</td>
+      <td>{{ row.proposed_salary }}</td>
+      <td>{{ row.salary_difference }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if board_paper.costing_notes %}
+<div class="notes-block">{{ board_paper.costing_notes }}</div>
+{% endif %}
+{% endif %}
+{% endif %}
+
 {% if checklist %}
 <h3 class="section">Required Documents Checklist</h3>
 <table class="rows">
