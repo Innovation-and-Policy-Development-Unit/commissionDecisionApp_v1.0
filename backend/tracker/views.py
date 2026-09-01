@@ -3681,6 +3681,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         merged in (they're already individually downloadable)."""
         from io import BytesIO
 
+        from django.http import FileResponse
         from django.template.loader import render_to_string
         from weasyprint import HTML
 
