@@ -634,14 +634,17 @@ def notify_agenda_circulated(meeting) -> None:
 def notify_meeting_scheduled(meeting) -> None:
     """Tell every HR manager (OPSC HR Unit Manager + ministry HR officers) that a
     new Commission sitting has been scheduled, with the meeting date and the
-    submission deadline (due date). In-app + push + templated email. Best-effort."""
+    submission deadline (due date) — and separately tell Commission members +
+    Chairperson, with save-the-date copy (no submission-deadline framing, since
+    that's not their concern). In-app + push + templated email. Best-effort."""
     import logging
     from django.utils import timezone
 
     from .models import Notification
 
     recipients = hr_managers()
-    if not recipients:
+    members = commission_members()
+    if not recipients and not members:
         return
 
     base = get_frontend_base_url()
@@ -679,23 +682,48 @@ def notify_meeting_scheduled(meeting) -> None:
             )
             send_templated_email(slug="meeting_scheduled", to=[email], context=ctx)
 
+    for user in members:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,  # email sent separately (templated)
+            push=True,
+            title=f"Sitting scheduled — {meeting.reference_number or ''}".strip(),
+            body=f"A Commission sitting is set for {meeting_date} at {meeting_time}.",
+            link="/secretariat/agenda",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user,
+                meeting_reference=meeting.reference_number or "",
+                meeting_title=meeting.title or "",
+                meeting_date=meeting_date,
+                meeting_time=meeting_time,
+                meeting_venue=meeting.venue or "—",
+                meeting_url=meeting_url,
+            )
+            send_templated_email(slug="meeting_scheduled_commissioner", to=[email], context=ctx)
+
     logging.getLogger("scdms.app").info(
-        "MEETING_SCHEDULED_NOTIFIED | meeting=%s | hr_managers=%d",
-        meeting.reference_number, len(recipients),
+        "MEETING_SCHEDULED_NOTIFIED | meeting=%s | hr_managers=%d | commission_members=%d",
+        meeting.reference_number, len(recipients), len(members),
     )
 
 
 def notify_meeting_postponed(meeting, old_date, old_time, old_cutoff) -> None:
     """Tell every HR manager that a Commission sitting's date/time changed —
-    this also moves the submission deadline, earlier or later. In-app + push +
-    templated email. Best-effort."""
+    this also moves the submission deadline, earlier or later — and separately
+    tell Commission members + Chairperson, with old/new date-time only (no
+    submission-deadline framing, since that's not their concern). In-app +
+    push + templated email. Best-effort."""
     import logging
     from django.utils import timezone
 
     from .models import Notification
 
     recipients = hr_managers()
-    if not recipients:
+    members = commission_members()
+    if not recipients and not members:
         return
 
     base = get_frontend_base_url()
@@ -760,9 +788,36 @@ def notify_meeting_postponed(meeting, old_date, old_time, old_cutoff) -> None:
             )
             send_templated_email(slug="meeting_postponed", to=[email], context=ctx)
 
+    for user in members:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,  # email sent separately (templated)
+            push=True,
+            title=f"Sitting rescheduled — {meeting.reference_number or ''}".strip(),
+            body=(
+                f"{meeting.reference_number or 'A Commission sitting'} moved from "
+                f"{old_meeting_date} to {new_meeting_date}."
+            ),
+            link="/secretariat/agenda",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user,
+                meeting_reference=meeting.reference_number or "",
+                meeting_title=meeting.title or "",
+                old_meeting_date=old_meeting_date,
+                old_meeting_time=old_meeting_time,
+                new_meeting_date=new_meeting_date,
+                new_meeting_time=new_meeting_time,
+                meeting_venue=meeting.venue or "—",
+                meeting_url=meeting_url,
+            )
+            send_templated_email(slug="meeting_postponed_commissioner", to=[email], context=ctx)
+
     logging.getLogger("scdms.app").info(
-        "MEETING_POSTPONED_NOTIFIED | meeting=%s | hr_managers=%d",
-        meeting.reference_number, len(recipients),
+        "MEETING_POSTPONED_NOTIFIED | meeting=%s | hr_managers=%d | commission_members=%d",
+        meeting.reference_number, len(recipients), len(members),
     )
 
 

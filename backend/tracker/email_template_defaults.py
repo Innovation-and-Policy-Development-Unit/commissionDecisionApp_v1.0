@@ -302,6 +302,79 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "meeting_scheduled_commissioner",
+        "name": "Meeting scheduled — Commission member notification",
+        "category": "submission_workflow",
+        "description": "Sent to Commission members + Chairperson when a new Commission meeting/sitting is created.",
+        "placeholders": _ph(
+            "meeting_reference, meeting_title, meeting_date, meeting_time, meeting_venue, meeting_url"
+        ),
+        "subject_template": "Commission sitting scheduled — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "A Commission sitting has been scheduled.\n\n"
+            "Reference: {{meeting_reference}}\n"
+            "Title: {{meeting_title}}\n"
+            "Date: {{meeting_date}}\n"
+            "Time: {{meeting_time}}\n"
+            "Venue: {{meeting_venue}}\n\n"
+            "The agenda will be circulated separately once the Chairman has endorsed it. "
+            "You can view the sitting here:\n"
+            "{{meeting_url}}\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">A Commission sitting has been scheduled.</p>"
+            "<table style=\"border-collapse:collapse;font-size:14px;margin:0 0 16px 0;\">"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Reference</td><td style=\"padding:3px 0;\"><strong>{{meeting_reference}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Title</td><td style=\"padding:3px 0;\">{{meeting_title}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Date</td><td style=\"padding:3px 0;\"><strong>{{meeting_date}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Time</td><td style=\"padding:3px 0;\">{{meeting_time}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Venue</td><td style=\"padding:3px 0;\">{{meeting_venue}}</td></tr>"
+            "</table>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">View the sitting</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">The agenda will be circulated separately once the Chairman has endorsed it.</p>"
+        ),
+    },
+    {
+        "slug": "meeting_postponed_commissioner",
+        "name": "Meeting postponed — Commission member notification",
+        "category": "submission_workflow",
+        "description": "Sent to Commission members + Chairperson when a Commission meeting/sitting's date or time is changed.",
+        "placeholders": _ph(
+            "meeting_reference, meeting_title, old_meeting_date, old_meeting_time, "
+            "new_meeting_date, new_meeting_time, meeting_venue, meeting_url"
+        ),
+        "subject_template": "Commission sitting rescheduled — {{meeting_reference}} (now {{new_meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "A Commission sitting has been rescheduled.\n\n"
+            "Reference: {{meeting_reference}}\n"
+            "Title: {{meeting_title}}\n"
+            "Previous date: {{old_meeting_date}} at {{old_meeting_time}}\n"
+            "New date: {{new_meeting_date}} at {{new_meeting_time}}\n"
+            "Venue: {{meeting_venue}}\n\n"
+            "You can view the sitting here:\n"
+            "{{meeting_url}}\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">A Commission sitting has been rescheduled.</p>"
+            "<table style=\"border-collapse:collapse;font-size:14px;margin:0 0 16px 0;\">"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Reference</td><td style=\"padding:3px 0;\"><strong>{{meeting_reference}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Title</td><td style=\"padding:3px 0;\">{{meeting_title}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Previous date</td><td style=\"padding:3px 0;text-decoration:line-through;color:#94a3b8;\">{{old_meeting_date}} at {{old_meeting_time}}</td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">New date</td><td style=\"padding:3px 0;\"><strong>{{new_meeting_date}} at {{new_meeting_time}}</strong></td></tr>"
+            "<tr><td style=\"padding:3px 12px 3px 0;color:#64748b;\">Venue</td><td style=\"padding:3px 0;\">{{meeting_venue}}</td></tr>"
+            "</table>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{meeting_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">View the sitting</a>"
+            "</p>"
+        ),
+    },
+    {
         "slug": "minutes_signed",
         "name": "Signed minutes on record",
         "category": "submission_workflow",
