@@ -2447,6 +2447,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.PSC_SECRETARY,
             Role.SENIOR_ADMIN_OFFICER,
             Role.CSU_MANAGER,
+            Role.IPDU_MANAGER,
             Role.VIPAM_PRINCIPAL,
             Role.VIPAM_SENIOR,
             Role.COMPLIANCE_MANAGER,
