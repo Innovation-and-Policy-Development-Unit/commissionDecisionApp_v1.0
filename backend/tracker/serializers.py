@@ -1298,24 +1298,26 @@ def ministry_email_domains(ministry_id):
     return {e.rsplit("@", 1)[-1].lower() for e in emails if "@" in e}
 
 
-def assert_notify_emails_match_ministry(ministry_id, emails):
-    """Raise a ValidationError if any notify_email's domain isn't one used by
+def assert_notify_emails_match_ministry(ministry_id, emails, field_name="notify_emails"):
+    """Raise a ValidationError if any email's domain isn't one used by
     this ministry's existing accounts. Fails closed if no domain can be
-    inferred (no verified accounts yet for this ministry)."""
+    inferred (no verified accounts yet for this ministry). Used for both
+    notify_emails and applicant_email — field_name controls which key the
+    error is attached to."""
     if not emails:
         return
     domains = ministry_email_domains(ministry_id)
     if not domains:
         raise serializers.ValidationError({
-            "notify_emails": "Can't verify additional recipients for this ministry yet — "
-                              "contact PSC IT to add them, or leave this list empty.",
+            field_name: "Can't verify additional recipients for this ministry yet — "
+                        "contact PSC IT to add them, or leave this list empty.",
         })
     bad = [e for e in emails if e.rsplit("@", 1)[-1].lower() not in domains]
     if bad:
         allowed = ", ".join(sorted(f"@{d}" for d in domains))
         raise serializers.ValidationError({
-            "notify_emails": f"These addresses aren't in your ministry's domain ({allowed}): "
-                              f"{', '.join(bad)}.",
+            field_name: f"These addresses aren't in your ministry's domain ({allowed}): "
+                        f"{', '.join(bad)}.",
         })
 
 
@@ -1365,6 +1367,7 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             "follows_normal_route",
             "travel_endorsers",
             "notify_emails",
+            "applicant_email",
         )
         read_only_fields = ("id", "is_internal", "follows_normal_route", "secretary_only", "requires_travel_letter")
 
@@ -1391,6 +1394,19 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("You can add up to 8 additional email addresses.")
         return cleaned
 
+    def validate_applicant_email(self, value):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from django.core.validators import validate_email
+
+        email = (value or "").strip().lower()
+        if not email:
+            return ""
+        try:
+            validate_email(email)
+        except DjangoValidationError:
+            raise serializers.ValidationError(f"'{value}' is not a valid email address.")
+        return email
+
     def validate(self, attrs):
         unit = attrs.get("unit")
         if unit:
@@ -1406,6 +1422,15 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
             # this instead — skip here rather than block on an incomplete picture.
             if ministry:
                 assert_notify_emails_match_ministry(ministry.id, attrs["notify_emails"])
+
+        if attrs.get("applicant_email"):
+            ministry = attrs.get("ministry") or (self.instance.ministry if self.instance else None)
+            # Same "resolved later" caveat as notify_emails above — perform_create
+            # asserts this instead when ministry isn't known yet at validate()-time.
+            if ministry:
+                assert_notify_emails_match_ministry(
+                    ministry.id, [attrs["applicant_email"]], field_name="applicant_email",
+                )
 
         request = self.context.get("request")
         if not request or not getattr(request, "user", None):

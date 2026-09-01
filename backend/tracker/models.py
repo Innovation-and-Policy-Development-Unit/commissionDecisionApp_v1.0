@@ -1766,6 +1766,20 @@ class Submission(models.Model):
         help_text="Extra email addresses (no SCDMS account required) to notify when this "
                    "submission reaches PSC, so they can track its progress via reference number.",
     )
+    applicant_email = models.EmailField(
+        blank=True, default="",
+        help_text="Email of the employee/public servant this submission concerns. When set, "
+                   "an auto-generated tracking code is emailed to them so they can check status "
+                   "via reference number + code, without needing an SCDMS account.",
+    )
+    applicant_tracking_code = models.CharField(
+        max_length=16, unique=True, null=True, blank=True, default=None, editable=False,
+        help_text="Auto-generated, hard-to-guess code paired with applicant_email for "
+                   "anonymous tracking (reference_number + code). Distinct from the legacy "
+                   "orphaned 'tracking_code' DB column from an unmerged branch — see "
+                   "migration 0255 — which this deliberately does not reuse.",
+    )
+    applicant_tracking_code_sent_at = models.DateTimeField(null=True, blank=True)
     checklist_review_started_at  = models.DateTimeField(null=True, blank=True,
         help_text="When this submission entered Manager Checklist Review.")
     checklist_review_deadline_at = models.DateTimeField(null=True, blank=True,
@@ -2153,6 +2167,8 @@ class Submission(models.Model):
             )
         if not self.reference_number:
             self.reference_number = allocate_reference_number()
+        if self.applicant_email and not self.applicant_tracking_code:
+            self.applicant_tracking_code = generate_applicant_tracking_code()
         if self.assessment_started_at:
             self._set_assessment_deadline_from_start()
         else:
@@ -3487,6 +3503,23 @@ def allocate_reference_number():
         counter.last_seq += 1
         counter.save(update_fields=["last_seq"])
         return f"PSC-{year}-{counter.last_seq:05d}"
+
+
+# Excludes 0/O/1/I to avoid transcription errors when a person types this in by hand.
+_APPLICANT_TRACKING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_applicant_tracking_code() -> str:
+    """Cryptographically random, human-typeable code (format XXXXX-XXXXX) paired
+    with Submission.applicant_email for anonymous public tracking alongside the
+    reference number. Deliberately unrelated to the sequential reference_number
+    scheme above, and to the legacy orphaned 'tracking_code' DB column (migration
+    0255) — must not be guessable from either."""
+    while True:
+        raw = "".join(secrets.choice(_APPLICANT_TRACKING_CODE_ALPHABET) for _ in range(10))
+        code = f"{raw[:5]}-{raw[5:]}"
+        if not Submission.objects.filter(applicant_tracking_code=code).exists():
+            return code
 
 
 def allocate_meeting_reference():

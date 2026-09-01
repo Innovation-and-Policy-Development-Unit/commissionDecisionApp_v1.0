@@ -65,17 +65,19 @@ function Stepper({ milestones, milestoneIndex, isPaused }) {
 export default function TrackSubmission() {
   const [searchParams] = useSearchParams()
   const [referenceNumber, setReferenceNumber] = useState(searchParams.get('ref') || '')
+  const [trackingCode, setTrackingCode] = useState(searchParams.get('code') || '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
 
-  const lookup = async ref => {
+  const lookup = async (ref, code) => {
     if (!ref) return
     setError('')
     setResult(null)
     setLoading(true)
     try {
-      const { data } = await api.get(`/track/${encodeURIComponent(ref)}/`)
+      const params = code ? `?code=${encodeURIComponent(code)}` : ''
+      const { data } = await api.get(`/track/${encodeURIComponent(ref)}/${params}`)
       setResult(data)
     } catch (err) {
       setError(formatApiError(err, 'Unable to look up that reference number.'))
@@ -86,13 +88,13 @@ export default function TrackSubmission() {
 
   useEffect(() => {
     const ref = searchParams.get('ref')
-    if (ref) lookup(ref.trim())
+    if (ref) lookup(ref.trim(), (searchParams.get('code') || '').trim())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleSubmit = e => {
     e.preventDefault()
-    lookup(referenceNumber.trim())
+    lookup(referenceNumber.trim(), trackingCode.trim())
   }
 
   return (
@@ -158,6 +160,14 @@ export default function TrackSubmission() {
                 placeholder="e.g. PSC-2026-00042"
                 required
                 autoFocus
+              />
+              <BaseInput
+                label="Tracking Code (if you received one)"
+                type="text"
+                value={trackingCode}
+                onChange={e => setTrackingCode(e.target.value)}
+                placeholder="e.g. AB3D6-7GHKQ"
+                hint="Only needed if you were emailed a private tracking code alongside your reference number."
               />
               <BaseButton
                 type="submit"

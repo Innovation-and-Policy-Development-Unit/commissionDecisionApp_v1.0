@@ -946,6 +946,10 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         queue_external_submission_confirmation_emails(
             submission.id, [u.id for u in confirm_recipients],
         )
+        if submission.applicant_email and not submission.applicant_tracking_code_sent_at:
+            from .tasks import queue_applicant_tracking_code_email
+
+            queue_applicant_tracking_code_email(submission.id)
 
 
 # Stages counted as "active" by the dashboard quick-filter. Kept in sync with the
@@ -1225,6 +1229,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             if validated.get("notify_emails"):
                 from .serializers import assert_notify_emails_match_ministry
                 assert_notify_emails_match_ministry(ministry_id, validated["notify_emails"])
+            if validated.get("applicant_email"):
+                from .serializers import assert_notify_emails_match_ministry
+                assert_notify_emails_match_ministry(
+                    ministry_id, [validated["applicant_email"]], field_name="applicant_email",
+                )
             kwargs = {
                 "current_stage": WorkflowStage.DRAFT,
                 "is_internal": False,

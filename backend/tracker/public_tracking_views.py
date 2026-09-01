@@ -6,6 +6,12 @@ reference number in, a coarse progress view out. Deliberately minimal:
 no applicant name, documents, comments, assessment content, or staff
 names are ever returned here (unit + role title only for "who's handling
 it"; no actor identity in the transition history).
+
+When a submission has an applicant_tracking_code (see Submission model —
+set automatically when applicant_email is provided at lodging), the
+reference number alone is no longer enough: an optional `?code=` query
+param must match it too, giving the affected employee/public servant a
+private second factor the ministry HR/DG who lodged it doesn't need.
 """
 from __future__ import annotations
 
@@ -135,6 +141,16 @@ def track_submission_view(request, reference_number):
     info = STAGE_INFO.get(submission.current_stage) if submission else None
     if submission is None or info is None:
         return _not_found(request, ref)
+
+    # Submissions with an applicant_tracking_code require it as a second
+    # factor — reference number alone can leak (printed documents, forwarded
+    # emails), so this quietly upgrades protection where a code was issued.
+    # Same generic 404 as "not found" either way, so a requester can't tell
+    # a wrong code apart from a wrong reference number.
+    if submission.applicant_tracking_code:
+        supplied_code = (request.query_params.get("code") or "").strip().upper()
+        if supplied_code != submission.applicant_tracking_code:
+            return _not_found(request, ref)
 
     assigned_role = None
     assigned_to = submission.assigned_to
