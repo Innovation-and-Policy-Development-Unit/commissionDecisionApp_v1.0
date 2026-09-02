@@ -64,37 +64,35 @@ function Stepper({ milestones, milestoneIndex, isPaused }) {
 
 export default function TrackSubmission() {
   const [searchParams] = useSearchParams()
-  const [referenceNumber, setReferenceNumber] = useState(searchParams.get('ref') || '')
   const [trackingCode, setTrackingCode] = useState(searchParams.get('code') || '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
 
-  const lookup = async (ref, code) => {
-    if (!ref) return
+  const lookup = async code => {
+    if (!code) return
     setError('')
     setResult(null)
     setLoading(true)
     try {
-      const params = code ? `?code=${encodeURIComponent(code)}` : ''
-      const { data } = await api.get(`/track/${encodeURIComponent(ref)}/${params}`)
+      const { data } = await api.get(`/track/${encodeURIComponent(code)}/`)
       setResult(data)
     } catch (err) {
-      setError(formatApiError(err, 'Unable to look up that reference number.'))
+      setError(formatApiError(err, 'Unable to look up that tracking code.'))
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    const ref = searchParams.get('ref')
-    if (ref) lookup(ref.trim(), (searchParams.get('code') || '').trim())
+    const code = searchParams.get('code')
+    if (code) lookup(code.trim())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleSubmit = e => {
     e.preventDefault()
-    lookup(referenceNumber.trim(), trackingCode.trim())
+    lookup(trackingCode.trim())
   }
 
   return (
@@ -142,7 +140,7 @@ export default function TrackSubmission() {
             </div>
             <h1 className="text-xl font-bold text-center text-slate-900 mb-1">Track Your Submission</h1>
             <p className="text-sm text-center text-slate-500 mb-6">
-              Enter the reference number you received to check its current status.
+              Enter the tracking code you received to check its current status.
             </p>
 
             {error && (
@@ -153,21 +151,13 @@ export default function TrackSubmission() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <BaseInput
-                label="Reference Number"
-                type="text"
-                value={referenceNumber}
-                onChange={e => setReferenceNumber(e.target.value)}
-                placeholder="e.g. PSC-2026-00042"
-                required
-                autoFocus
-              />
-              <BaseInput
-                label="Tracking Code (if you received one)"
+                label="Tracking Code"
                 type="text"
                 value={trackingCode}
                 onChange={e => setTrackingCode(e.target.value)}
                 placeholder="e.g. AB3D6-7GHKQ"
-                hint="Only needed if you were emailed a private tracking code alongside your reference number."
+                required
+                autoFocus
               />
               <BaseButton
                 type="submit"

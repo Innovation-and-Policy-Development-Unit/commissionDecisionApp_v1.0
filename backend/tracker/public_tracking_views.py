@@ -1,17 +1,19 @@
 """
 Public, unauthenticated submission tracking.
 
-Lets a ministry that lodged a form check its status without logging in —
-reference number in, a coarse progress view out. Deliberately minimal:
-no applicant name, documents, comments, assessment content, or staff
-names are ever returned here (unit + role title only for "who's handling
-it"; no actor identity in the transition history).
+Lets a ministry that lodged a form (or the employee/public servant it
+concerns) check its status without logging in — tracking code in, a
+coarse progress view out. Deliberately minimal: no applicant name,
+documents, comments, assessment content, or staff names are ever
+returned here (unit + role title only for "who's handling it"; no actor
+identity in the transition history).
 
-When a submission has an applicant_tracking_code (see Submission model —
-set automatically when applicant_email is provided at lodging), the
-reference number alone is no longer enough: an optional `?code=` query
-param must match it too, giving the affected employee/public servant a
-private second factor the ministry HR/DG who lodged it doesn't need.
+Looked up by Submission.applicant_tracking_code (see models.py —
+generated automatically for every submission on creation), not
+reference_number: the tracking code is hard to guess and privately
+emailed, whereas a reference number can appear on printed documents or
+forwarded emails and isn't a safe sole credential for a public,
+unauthenticated lookup.
 """
 from __future__ import annotations
 
@@ -93,10 +95,10 @@ STAGE_INFO = {
 }
 
 
-def _not_found(request, ref):
+def _not_found(request, code):
     log_action(
         request, AuditLog.Action.READ,
-        resource_type="submission_track", resource_id=ref, resource_label=ref,
+        resource_type="submission_track", resource_id=code, resource_label=code,
         description="Public tracking lookup — not found",
     )
     return Response({"detail": "Submission not found."}, status=404)
@@ -120,37 +122,27 @@ def _stage_history(submission):
 @api_view(["GET"])
 @permission_classes([permissions.AllowAny])
 @throttle_classes([SubmissionTrackThrottle])
-def track_submission_view(request, reference_number):
-    """GET /track/<reference_number>/ — public, unauthenticated lookup.
+def track_submission_view(request, tracking_code):
+    """GET /track/<tracking_code>/ — public, unauthenticated lookup.
 
     Returns reference number, ministry name, current unit/role (never a
     person's name), a progress-milestone position, and a dated stage
-    history. Nonexistent references, drafts, and any stage not yet mapped
-    all return the same generic 404 so a requester can't distinguish
-    "wrong reference" from "not trackable yet".
+    history. A nonexistent code, a draft, and any stage not yet mapped all
+    return the same generic 404 so a requester can't distinguish "wrong
+    code" from "not trackable yet".
     """
-    ref = (reference_number or "").strip().upper()
-    if not ref:
-        return _not_found(request, ref)
+    code = (tracking_code or "").strip().upper()
+    if not code:
+        return _not_found(request, code)
 
     submission = (
-        Submission.objects.filter(reference_number__iexact=ref)
+        Submission.objects.filter(applicant_tracking_code__iexact=code)
         .select_related("ministry", "unit", "assigned_to__psc_profile")
         .first()
     )
     info = STAGE_INFO.get(submission.current_stage) if submission else None
     if submission is None or info is None:
-        return _not_found(request, ref)
-
-    # Submissions with an applicant_tracking_code require it as a second
-    # factor — reference number alone can leak (printed documents, forwarded
-    # emails), so this quietly upgrades protection where a code was issued.
-    # Same generic 404 as "not found" either way, so a requester can't tell
-    # a wrong code apart from a wrong reference number.
-    if submission.applicant_tracking_code:
-        supplied_code = (request.query_params.get("code") or "").strip().upper()
-        if supplied_code != submission.applicant_tracking_code:
-            return _not_found(request, ref)
+        return _not_found(request, code)
 
     assigned_role = None
     assigned_to = submission.assigned_to
@@ -159,7 +151,7 @@ def track_submission_view(request, reference_number):
 
     log_action(
         request, AuditLog.Action.READ,
-        resource_type="submission_track", resource_id=submission.reference_number,
+        resource_type="submission_track", resource_id=submission.applicant_tracking_code,
         resource_label=submission.reference_number,
         description="Public tracking lookup",
     )

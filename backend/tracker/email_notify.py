@@ -22,14 +22,13 @@ def stage_label(stage_code: str) -> str:
 
 def submission_email_context(submission: Submission) -> dict[str, str]:
     base = get_frontend_base_url()
-    ref = submission.reference_number or ""
     code = submission.applicant_tracking_code or ""
     return {
-        "submission_reference": ref or str(submission.pk),
+        "submission_reference": submission.reference_number or str(submission.pk),
         "submission_title": submission.title or "",
         "submission_url": f"{base}/submissions/{submission.pk}",
         "tracking_code": code,
-        "tracking_url": f"{base}/track?ref={ref}&code={code}" if code else f"{base}/track?ref={ref}",
+        "tracking_url": f"{base}/track?code={code}",
     }
 
 

@@ -1777,15 +1777,16 @@ class Submission(models.Model):
         blank=True, default="",
         help_text="Email of the employee/public servant this submission concerns. When set, "
                    "the tracking code is also emailed to them directly, so they can check status "
-                   "via reference number + code, without needing an SCDMS account.",
+                   "via the tracking code, without needing an SCDMS account.",
     )
     applicant_tracking_code = models.CharField(
         max_length=16, unique=True, null=True, blank=True, default=None, editable=False,
-        help_text="Auto-generated, hard-to-guess code every submission gets on creation, "
-                   "required (alongside reference_number) for public tracking. Sent to "
-                   "notify_emails on submission, and to applicant_email if set. Distinct from "
-                   "the legacy orphaned 'tracking_code' DB column from an unmerged branch — see "
-                   "migration 0255 — which this deliberately does not reuse.",
+        help_text="Auto-generated, hard-to-guess code every submission gets on creation — the "
+                   "sole credential for public tracking (see public_tracking_views.py), not the "
+                   "reference number, which can appear on printed documents or forwarded emails. "
+                   "Sent to notify_emails on submission, and to applicant_email if set. Distinct "
+                   "from the legacy orphaned 'tracking_code' DB column from an unmerged branch — "
+                   "see migration 0255 — which this deliberately does not reuse.",
     )
     applicant_tracking_code_sent_at = models.DateTimeField(null=True, blank=True)
     checklist_review_started_at  = models.DateTimeField(null=True, blank=True,
