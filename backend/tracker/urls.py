@@ -216,7 +216,7 @@ urlpatterns = [
     path("me/", me_view),
     path("me/change-password/", change_password_view),
     path("auth/password-policy/", password_policy_view),
-    path("track/<str:reference_number>/", track_submission_view, name="track-submission"),
+    path("track/<str:tracking_code>/", track_submission_view, name="track-submission"),
     path("upcoming-sittings/", upcoming_sittings_view),
     path("push/vapid-public-key/", vapid_public_key_view),
     path("dashboard/", dashboard_view),

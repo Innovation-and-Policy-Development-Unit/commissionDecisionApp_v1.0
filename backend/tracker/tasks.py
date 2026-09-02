@@ -131,6 +131,35 @@ def queue_external_submission_confirmation_emails(submission_id, user_ids):
 
 
 @shared_task
+def send_applicant_tracking_code_email(submission_id):
+    from django.utils import timezone
+
+    from .email_notify import notify_applicant_tracking_code
+    from .models import Submission
+
+    try:
+        submission = Submission.objects.get(pk=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("TRACKING_CODE_EMAIL_SKIP | Submission %s not found", submission_id)
+        return
+    if not submission.applicant_email or not submission.applicant_tracking_code:
+        return
+    if submission.applicant_tracking_code_sent_at:
+        return
+    if notify_applicant_tracking_code(submission):
+        submission.applicant_tracking_code_sent_at = timezone.now()
+        submission.save(update_fields=["applicant_tracking_code_sent_at"])
+
+
+def queue_applicant_tracking_code_email(submission_id):
+    try:
+        send_applicant_tracking_code_email.delay(submission_id)
+    except Exception as exc:
+        app_log.warning("TRACKING_CODE_EMAIL_QUEUE_FALLBACK | Submission %s | %s", submission_id, exc)
+        send_applicant_tracking_code_email(submission_id)
+
+
+@shared_task
 def send_submission_ready_for_manager_email(submission_id, assignee_id, manager_ids):
     """Email the unit manager(s) after a principal/senior hands a submission
     back — same rationale as send_transition_notification_emails above."""

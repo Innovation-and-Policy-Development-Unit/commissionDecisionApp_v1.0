@@ -9,7 +9,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .collectors import active_staff_users
-from .permissions import HasAdminPanelAccess, HasManageRoles
+from .inbox_brief import build_inbox_brief
+from .permissions import HasAdminPanelAccess, HasInboxBriefAccess, HasManageRoles
 from .models import DailyBriefDeliveryLog, DailyBriefSettings, DailyBriefStaffPreference
 from .runner import run_daily_briefs
 from .scheduler import get_next_beat_run, sync_daily_brief_scheduler
@@ -47,6 +48,8 @@ class DailyBriefViewSet(viewsets.ViewSet):
     """
 
     def get_permissions(self):
+        if self.action == "mine":
+            return [permissions.IsAuthenticated(), HasInboxBriefAccess()]
         if self.action in {
             "brief_settings",
             "preferences",
@@ -57,6 +60,18 @@ class DailyBriefViewSet(viewsets.ViewSet):
         }:
             return [permissions.IsAuthenticated(), HasManageRoles()]
         return [permissions.IsAuthenticated(), HasAdminPanelAccess()]
+
+    @action(detail=False, methods=["get"], url_path="mine")
+    def mine(self, request):
+        """Personal inbox-brief card payload for the logged-in user."""
+        try:
+            return Response(build_inbox_brief(request.user))
+        except (ProgrammingError, OperationalError) as exc:
+            logger.exception("Inbox brief unavailable (database): %s", exc)
+            return _daily_brief_db_unavailable()
+        except Exception as exc:
+            logger.exception("Inbox brief error: %s", exc)
+            return _daily_brief_server_error()
 
     @action(detail=False, methods=["get"], url_path="dashboard")
     def dashboard(self, request):

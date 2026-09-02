@@ -1282,6 +1282,13 @@ class EmailTemplate(models.Model):
         default=False,
         help_text="System templates can be reset to defaults but not deleted.",
     )
+    is_content_customized = models.BooleanField(
+        default=False,
+        help_text="Set when an admin edits subject/body directly (not via reset-to-default "
+                   "or a forced defaults sync). Protects that wording from being silently "
+                   "overwritten the next time a migration or the routine 'sync defaults' "
+                   "action seeds this template's built-in content.",
+    )
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1766,6 +1773,22 @@ class Submission(models.Model):
         help_text="Extra email addresses (no SCDMS account required) to notify when this "
                    "submission reaches PSC, so they can track its progress via reference number.",
     )
+    applicant_email = models.EmailField(
+        blank=True, default="",
+        help_text="Email of the employee/public servant this submission concerns. When set, "
+                   "the tracking code is also emailed to them directly, so they can check status "
+                   "via the tracking code, without needing an SCDMS account.",
+    )
+    applicant_tracking_code = models.CharField(
+        max_length=16, unique=True, null=True, blank=True, default=None, editable=False,
+        help_text="Auto-generated, hard-to-guess code every submission gets on creation — the "
+                   "sole credential for public tracking (see public_tracking_views.py), not the "
+                   "reference number, which can appear on printed documents or forwarded emails. "
+                   "Sent to notify_emails on submission, and to applicant_email if set. Distinct "
+                   "from the legacy orphaned 'tracking_code' DB column from an unmerged branch — "
+                   "see migration 0255 — which this deliberately does not reuse.",
+    )
+    applicant_tracking_code_sent_at = models.DateTimeField(null=True, blank=True)
     checklist_review_started_at  = models.DateTimeField(null=True, blank=True,
         help_text="When this submission entered Manager Checklist Review.")
     checklist_review_deadline_at = models.DateTimeField(null=True, blank=True,
@@ -2153,6 +2176,8 @@ class Submission(models.Model):
             )
         if not self.reference_number:
             self.reference_number = allocate_reference_number()
+        if not self.applicant_tracking_code:
+            self.applicant_tracking_code = generate_applicant_tracking_code()
         if self.assessment_started_at:
             self._set_assessment_deadline_from_start()
         else:
@@ -3487,6 +3512,23 @@ def allocate_reference_number():
         counter.last_seq += 1
         counter.save(update_fields=["last_seq"])
         return f"PSC-{year}-{counter.last_seq:05d}"
+
+
+# Excludes 0/O/1/I to avoid transcription errors when a person types this in by hand.
+_APPLICANT_TRACKING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_applicant_tracking_code() -> str:
+    """Cryptographically random, human-typeable code (format XXXXX-XXXXX), generated
+    for every Submission on creation and required (alongside the reference number)
+    for anonymous public tracking. Deliberately unrelated to the sequential
+    reference_number scheme above, and to the legacy orphaned 'tracking_code' DB
+    column (migration 0255) — must not be guessable from either."""
+    while True:
+        raw = "".join(secrets.choice(_APPLICANT_TRACKING_CODE_ALPHABET) for _ in range(10))
+        code = f"{raw[:5]}-{raw[5:]}"
+        if not Submission.objects.filter(applicant_tracking_code=code).exists():
+            return code
 
 
 def allocate_meeting_reference():

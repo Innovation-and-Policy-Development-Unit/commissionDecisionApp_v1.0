@@ -417,16 +417,40 @@ DEFAULT_EMAIL_TEMPLATES = [
         "name": "Submission received — external confirmation",
         "category": "submission_workflow",
         "description": "Confirms PSC receipt to the ministry DG/HR contacts and any additional "
-                        "addresses HR added — includes the public tracking link, no login required.",
-        "placeholders": _ph("submission_reference, submission_title, tracking_url"),
+                        "addresses HR added — includes the tracking code and public tracking "
+                        "link, no login required.",
+        "placeholders": _ph("submission_reference, submission_title, tracking_code, tracking_url"),
         "subject_template": "Your submission {{submission_reference}} has been received by OPSC",
         "body_text_template": (
             "Dear {{firstname}},\n\n"
             "{{submission_title}} (reference {{submission_reference}}) has been received by the "
             "Office of the Public Service Commission and is now being processed.\n\n"
-            "You can track its progress at any time, without needing to log in:\n"
-            "{{tracking_url}}\n\n"
-            "Keep this reference number for future enquiries: {{submission_reference}}"
+            "You can track its progress at any time, without needing to log in, using this "
+            "tracking code:\n\n"
+            "Tracking code: {{tracking_code}}\n\n"
+            "Track it here: {{tracking_url}}\n\n"
+            "Keep this tracking code for future enquiries: {{tracking_code}}"
+        ),
+        "body_html_template": "",
+    },
+    {
+        "slug": "submission_tracking_code",
+        "name": "Submission tracking code — applicant",
+        "category": "submission_workflow",
+        "description": "Sent to the employee/public servant a submission concerns (not the "
+                        "ministry HR/DG who lodged it) with a private code that lets them check "
+                        "status without an SCDMS account.",
+        "placeholders": _ph("submission_reference, submission_title, tracking_code, tracking_url"),
+        "subject_template": "Your tracking code for submission {{submission_reference}}",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "A submission concerning you — {{submission_title}} — has been received by the "
+            "Office of the Public Service Commission.\n\n"
+            "You can check its progress at any time, without needing to log in, using this "
+            "tracking code:\n\n"
+            "Tracking code: {{tracking_code}}\n\n"
+            "Track it here: {{tracking_url}}\n\n"
+            "Keep this code private — anyone with it can view your submission's status."
         ),
         "body_html_template": "",
     },
@@ -798,7 +822,14 @@ SAMPLE_EMAIL_CONTEXTS = {
     "submission_received_confirmation": {
         "submission_reference": "PSC-2026-0042",
         "submission_title": "Senior appointment — Ministry of Finance",
-        "tracking_url": "http://localhost:8080/track?ref=PSC-2026-0042",
+        "tracking_code": "AB3D6-7GHKQ",
+        "tracking_url": "http://localhost:8080/track?code=AB3D6-7GHKQ",
+    },
+    "submission_tracking_code": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Senior appointment — Ministry of Finance",
+        "tracking_code": "AB3D6-7GHKQ",
+        "tracking_url": "http://localhost:8080/track?code=AB3D6-7GHKQ",
     },
     "meeting_scheduled": {
         "meeting_reference": "PSC-MTG-2026-014",

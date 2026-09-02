@@ -588,6 +588,23 @@
     "seed_banner_title": "No submissions in the database yet.",
     "seed_banner_hint": "From the backend directory run {{seed}}, or restart the Docker {{backend}} service with {{flag}} (default) so dummy cases are created automatically."
   },
+  "inbox_brief": {
+    "morning_title": "Your morning briefing",
+    "morning_sub": "Here's what needs your attention today.",
+    "wrapup_title": "Wrap up your day",
+    "wrapup_sub": "Review today and prep for tomorrow.",
+    "empty_sub": "You're all caught up — nothing needs your attention right now.",
+    "rollup_one": "{{count}} item needs your attention today.",
+    "rollup_other": "{{count}} items need your attention today.",
+    "group_needs_action": "Needs your action",
+    "group_due_today": "Due today",
+    "group_meetings_today": "Today's meetings",
+    "group_fyi": "FYI",
+    "suggested_actions": "Suggested next steps",
+    "dismiss": "Dismiss",
+    "show_more": "+{{count}} more",
+    "collapse": "Show less"
+  },
   "submission": {
     "create": "Create Submission",
     "edit": "Edit Submission",

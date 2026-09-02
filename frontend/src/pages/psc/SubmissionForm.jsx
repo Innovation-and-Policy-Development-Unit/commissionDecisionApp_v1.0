@@ -277,6 +277,7 @@ function CommissionSubmissionForm({
     unit: '',
     notes: '',
     notify_emails: [],
+    applicant_email: '',
   })
   const availUnits = units.filter(
     u => !form.department || u.department === parseInt(form.department, 10),
@@ -415,6 +416,7 @@ function CommissionSubmissionForm({
         received_at: new Date().toISOString(),
         notes: form.notes,
         notify_emails: form.notify_emails,
+        applicant_email: form.applicant_email.trim(),
       }
       if (form.form_type_code) payload.form_type_code = form.form_type_code
       if (attachMode && parentSubmission) {
@@ -664,6 +666,14 @@ function CommissionSubmissionForm({
           value={form.notify_emails}
           onChange={emails => setForm(f => ({ ...f, notify_emails: emails }))}
           max={8}
+        />
+
+        <BaseInput
+          label="Applicant email (optional)"
+          type="email"
+          hint="The employee/public servant this submission concerns. They'll be emailed a private tracking code, so they can check status without needing an account."
+          value={form.applicant_email}
+          onChange={e => setForm(f => ({ ...f, applicant_email: e.target.value }))}
         />
 
         <div className="flex items-center gap-3 pt-2">

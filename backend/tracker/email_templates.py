@@ -300,7 +300,9 @@ def render_email_template(slug: str, context: dict[str, Any]):
 
 
 def reset_email_template_to_default(slug: str) -> bool:
-    """Restore a system template's content from built-in defaults."""
+    """Restore a system template's content from built-in defaults. Explicit,
+    admin-requested action — clears is_content_customized since the content
+    is once again exactly the built-in default."""
     from .email_template_defaults import DEFAULT_EMAIL_TEMPLATES
     from .models import EmailTemplate
 
@@ -316,6 +318,7 @@ def reset_email_template_to_default(slug: str) -> bool:
         body_text_template=data["body_text_template"],
         body_html_template=data.get("body_html_template", ""),
         is_active=True,
+        is_content_customized=False,
     )
     return updated > 0
 
@@ -373,27 +376,121 @@ def send_templated_email(
         return False
 
 
-def seed_default_email_templates() -> int:
-    """Upsert built-in templates; returns count created/updated."""
+_EMAIL_TEMPLATE_BASE_FIELDS = [
+    "id", "slug", "name", "category", "description", "placeholders",
+    "subject_template", "body_text_template", "body_html_template",
+    "is_active", "is_system",
+]
+
+
+def _emailtemplate_table_has_column(column: str) -> bool:
+    """True if the tracker_emailtemplate DB table already has `column`.
+
+    seed_default_email_templates() is called from a dozen migrations spanning
+    many schema versions (0057 through the present) — on a fresh database
+    replaying them in order, the earliest ones run before a later migration
+    has added a newer EmailTemplate column. Django's ORM includes every field
+    declared on the *current* model in a plain query regardless of what
+    migration is "currently" running, so any new column this function reads
+    or writes must be gated by an actual DB introspection check like this one,
+    not just guarded in Python."""
+    from django.db import connection
+
+    from .models import EmailTemplate
+
+    table = EmailTemplate._meta.db_table
+    with connection.cursor() as cursor:
+        existing = {col.name for col in connection.introspection.get_table_description(cursor, table)}
+    return column in existing
+
+
+def seed_default_email_templates(force: bool = False) -> int:
+    """Create any missing built-in templates, and keep their non-content
+    metadata (name/category/description/placeholders/is_active/is_system) in
+    sync with code. Content fields (subject/body) are only ever overwritten
+    for a template an admin hasn't hand-edited (is_content_customized=False),
+    UNLESS `force=True` — otherwise a customized template keeps its own
+    wording across future migrations that reseed this same list for an
+    unrelated template.
+
+    Call sites: every migration that seeds/updates templates calls this with
+    no args (force=False) — safe by default, never silently overwrites an
+    admin's edits. The admin's own "Sync Defaults" bulk action passes
+    force=True to deliberately force every template back to its built-in
+    content (same as reset_email_template_to_default, but for all of them
+    at once) — that stays an explicit, admin-requested action, never an
+    implicit side effect of a deploy.
+
+    Returns the count of newly created rows (matches historical behavior of
+    this function's return value)."""
     from .email_template_defaults import DEFAULT_EMAIL_TEMPLATES
     from .models import EmailTemplate
 
+    supports_customized_flag = _emailtemplate_table_has_column("is_content_customized")
+    only_fields = _EMAIL_TEMPLATE_BASE_FIELDS + (["is_content_customized"] if supports_customized_flag else [])
+
     count = 0
     for data in DEFAULT_EMAIL_TEMPLATES:
-        _, created = EmailTemplate.objects.update_or_create(
-            slug=data["slug"],
-            defaults={
-                "name": data["name"],
-                "category": data["category"],
-                "description": data["description"],
-                "placeholders": data["placeholders"],
-                "subject_template": data["subject_template"],
-                "body_text_template": data["body_text_template"],
-                "body_html_template": data.get("body_html_template", ""),
-                "is_active": True,
-                "is_system": True,
-            },
-        )
-        if created:
+        obj = EmailTemplate.objects.filter(slug=data["slug"]).only(*only_fields).first()
+        if obj is None:
+            if supports_customized_flag:
+                EmailTemplate.objects.create(
+                    slug=data["slug"],
+                    name=data["name"],
+                    category=data["category"],
+                    description=data["description"],
+                    placeholders=data["placeholders"],
+                    subject_template=data["subject_template"],
+                    body_text_template=data["body_text_template"],
+                    body_html_template=data.get("body_html_template", ""),
+                    is_active=True,
+                    is_system=True,
+                    is_content_customized=False,
+                )
+            else:
+                # Can't use EmailTemplate.objects.create() here: Django's ORM
+                # would include is_content_customized (with its Python-level
+                # default) in the INSERT regardless of these kwargs, since
+                # the *current* model declares that field even though this
+                # DB doesn't have the column yet at this point in a from-
+                # scratch migration replay. Raw INSERT naming only the
+                # columns that actually exist avoids that.
+                from django.db import connection
+                from django.utils import timezone
+
+                now = timezone.now()
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        f"INSERT INTO {EmailTemplate._meta.db_table} "
+                        "(slug, name, category, description, placeholders, subject_template, "
+                        "body_text_template, body_html_template, is_active, is_system, "
+                        "created_at, updated_at) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                        [
+                            data["slug"], data["name"], data["category"], data["description"],
+                            data["placeholders"], data["subject_template"], data["body_text_template"],
+                            data.get("body_html_template", ""), True, True, now, now,
+                        ],
+                    )
             count += 1
+            continue
+
+        obj.name = data["name"]
+        obj.category = data["category"]
+        obj.description = data["description"]
+        obj.placeholders = data["placeholders"]
+        obj.is_active = True
+        obj.is_system = True
+        update_fields = ["name", "category", "description", "placeholders", "is_active", "is_system"]
+
+        already_customized = supports_customized_flag and obj.is_content_customized
+        if force or not already_customized:
+            obj.subject_template = data["subject_template"]
+            obj.body_text_template = data["body_text_template"]
+            obj.body_html_template = data.get("body_html_template", "")
+            update_fields += ["subject_template", "body_text_template", "body_html_template"]
+            if supports_customized_flag:
+                obj.is_content_customized = False
+                update_fields.append("is_content_customized")
+        obj.save(update_fields=update_fields)
     return count

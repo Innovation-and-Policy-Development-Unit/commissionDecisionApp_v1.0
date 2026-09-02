@@ -22,11 +22,13 @@ def stage_label(stage_code: str) -> str:
 
 def submission_email_context(submission: Submission) -> dict[str, str]:
     base = get_frontend_base_url()
+    code = submission.applicant_tracking_code or ""
     return {
         "submission_reference": submission.reference_number or str(submission.pk),
         "submission_title": submission.title or "",
         "submission_url": f"{base}/submissions/{submission.pk}",
-        "tracking_url": f"{base}/track?ref={submission.reference_number or ''}",
+        "tracking_code": code,
+        "tracking_url": f"{base}/track?code={code}",
     }
 
 
@@ -130,6 +132,19 @@ def notify_external_submission_confirmation(
         seen.add(email)
         ctx = merge_recipient_context(None, **base_ctx)
         send_templated_email(slug="submission_received_confirmation", to=[email], context=ctx)
+
+
+def notify_applicant_tracking_code(submission: Submission) -> bool:
+    """Email the employee/public servant the submission is about (not the
+    ministry HR/DG who lodged it — they already have a logged-in account)
+    their private tracking code, so they can check status via reference
+    number + code without an SCDMS account. Returns whether the send
+    succeeded, so the caller can gate applicant_tracking_code_sent_at on it."""
+    email = (submission.applicant_email or "").strip().lower()
+    if not email:
+        return False
+    ctx = merge_recipient_context(None, **submission_email_context(submission))
+    return send_templated_email(slug="submission_tracking_code", to=[email], context=ctx)
 
 
 def get_transition_email_slug(prev: str, target: str) -> str | None:

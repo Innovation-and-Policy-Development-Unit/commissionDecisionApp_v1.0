@@ -1029,6 +1029,15 @@ const stageDescriptions = {
         }
       />
 
+      {submission.applicant_tracking_code && (
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-1 mb-4 text-xs">
+          <span className="text-slate-500 dark:text-slate-400">Tracking Code</span>
+          <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
+            {submission.applicant_tracking_code}
+          </span>
+        </div>
+      )}
+
       <SubmissionPresenceBar submissionId={id} />
 
       <SubmissionSubwayMap
@@ -1238,6 +1247,20 @@ const stageDescriptions = {
                     : '—'}
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Tracking Code</p>
+                <p className="font-semibold font-mono text-slate-900 dark:text-slate-100 mt-0.5">
+                  {submission.applicant_tracking_code || '—'}
+                </p>
+              </div>
+              {submission.applicant_email && (
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Applicant Email</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5 break-all">
+                    {submission.applicant_email}
+                  </p>
+                </div>
+              )}
             </div>
 
             {submission.notes && (
