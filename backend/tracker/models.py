@@ -1282,6 +1282,13 @@ class EmailTemplate(models.Model):
         default=False,
         help_text="System templates can be reset to defaults but not deleted.",
     )
+    is_content_customized = models.BooleanField(
+        default=False,
+        help_text="Set when an admin edits subject/body directly (not via reset-to-default "
+                   "or a forced defaults sync). Protects that wording from being silently "
+                   "overwritten the next time a migration or the routine 'sync defaults' "
+                   "action seeds this template's built-in content.",
+    )
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

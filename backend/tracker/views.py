@@ -9618,11 +9618,23 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_active=active.lower() in ("true", "1", "yes"))
         return qs
 
+    def perform_update(self, serializer):
+        content_fields = {"subject_template", "body_text_template", "body_html_template"}
+        if content_fields & set(serializer.validated_data):
+            serializer.save(is_content_customized=True)
+        else:
+            serializer.save()
+
     @action(detail=False, methods=["post"], url_path="seed-defaults")
     def seed_defaults(self, request):
         from .email_templates import seed_default_email_templates
 
-        created = seed_default_email_templates()
+        # Explicit, admin-requested bulk action — force=True intentionally
+        # overwrites every template's content back to the built-in default,
+        # same as a per-template reset but for all of them at once. Every
+        # OTHER caller (migrations) omits force, which respects
+        # is_content_customized instead of silently wiping admin edits.
+        created = seed_default_email_templates(force=True)
         return Response(
             {"detail": "Default templates synced.", "created": created},
             status=status.HTTP_200_OK,

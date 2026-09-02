@@ -1,7 +1,7 @@
 from django.db import migrations
 
 
-def reseed_templates(apps, schema_editor):
+def seed_submission_tracking_code_template(apps, schema_editor):
     from tracker.email_templates import seed_default_email_templates
 
     seed_default_email_templates()
@@ -9,9 +9,9 @@ def reseed_templates(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("tracker", "0259_seed_submission_tracking_code_email_template"),
+        ("tracker", "0259_emailtemplate_content_customized_flag"),
     ]
 
     operations = [
-        migrations.RunPython(reseed_templates, migrations.RunPython.noop),
+        migrations.RunPython(seed_submission_tracking_code_template, migrations.RunPython.noop),
     ]

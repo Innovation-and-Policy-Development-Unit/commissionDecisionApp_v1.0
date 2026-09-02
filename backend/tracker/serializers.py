@@ -2242,10 +2242,11 @@ class EmailTemplateSerializer(serializers.ModelSerializer):
             "body_html_template",
             "is_active",
             "is_system",
+            "is_content_customized",
             "updated_at",
             "created_at",
         )
-        read_only_fields = ("slug", "is_system", "created_at", "updated_at")
+        read_only_fields = ("slug", "is_system", "is_content_customized", "created_at", "updated_at")
 
     def get_placeholder_list(self, obj):
         if not obj.placeholders:
