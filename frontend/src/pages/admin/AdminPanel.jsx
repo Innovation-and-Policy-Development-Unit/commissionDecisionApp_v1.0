@@ -91,6 +91,7 @@ const ROLE_CHOICES = [
   { value: 'dept_admin', label: 'Department Admin Officer' },
   { value: 'head_of_agency', label: 'Head of Agency' },
   { value: 'traveller', label: 'Public Servant (Travel)' },
+  { value: 'hrmis_reviewer', label: 'Manager HRMIS (Read-Only Reviewer)' },
 ]
 
 const PERM_CATEGORIES = [
@@ -119,6 +120,7 @@ const ROLE_COLORS = {
   dg_director:         'bg-slate-100 text-slate-700 dark:bg-slate-700/40 dark:text-slate-300',
   commission_member:   'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
   panel_member:        'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+  hrmis_reviewer:      'bg-slate-100 text-slate-700 dark:bg-slate-700/40 dark:text-slate-300',
 }
 
 const CAT_COLORS = {
