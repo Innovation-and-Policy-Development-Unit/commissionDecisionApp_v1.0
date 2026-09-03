@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import WorkflowStage
+from .models import RoutedUnit, WorkflowStage
 
 # ── Human-readable role titles (no personal names — role/title only) ──────────
 _ROLE_TITLE: dict[str, str] = {
@@ -172,6 +172,12 @@ def _build_status_detail(submission) -> str:
 
     # ── Return / clarification ────────────────────────────────────────────────
     if stage == WorkflowStage.RETURNED_FOR_CLARIFICATION:
+        # For a Compliance self-submission this is the Senior<->Principal
+        # review loop (see transitions.py), not a ministry clarification
+        # request — the Principal reviewed the Senior's draft and sent it
+        # back with comments.
+        if unit == RoutedUnit.COMPLIANCE:
+            return "Returned by Principal — review comments and resubmit"
         return "Returned — ministry clarification required"
     if stage == WorkflowStage.DEFERRED_BACK_TO_HR:
         return "Deferred by Commission — ministry action required"
