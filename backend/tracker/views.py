@@ -2873,7 +2873,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def _is_active_draft_delegate(submission, user):
         return submission.draft_delegations.filter(delegate_id=user.id, revoked_at__isnull=True).exists()
 
-    def _assert_can_manage_delegation(self, request, submission):
+    def _assert_can_manage_delegation(self, request, submission, *, require_draft_stage=True):
         profile = _profile(request.user)
         if request.user.is_superuser or request.user.is_staff:
             return
@@ -2882,7 +2882,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         creator_profile = _profile(submission.created_by)
         if creator_profile.unit_id != profile.unit_id:
             raise PermissionDenied("You may only manage draft-edit access within your own Compliance team.")
-        if submission.current_stage not in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION):
+        # Revoking is always allowed regardless of stage — it only removes
+        # authorization, never expands it, and the submission may well have
+        # already moved on to Principal/Manager review by the time a Manager
+        # decides to pull it back (e.g. it turns out the delegate shouldn't
+        # have had access, or the original drafter is back sooner than
+        # expected). Only granting new access is stage-restricted.
+        if require_draft_stage and submission.current_stage not in (
+            WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION,
+        ):
             raise PermissionDenied("Draft-edit access can only be granted while the submission is still a draft.")
 
     @action(detail=True, methods=["get"], url_path="draft-delegate-candidates")
@@ -2989,7 +2997,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .audit import log_action as _log
 
         submission = self.get_object()
-        self._assert_can_manage_delegation(request, submission)
+        self._assert_can_manage_delegation(request, submission, require_draft_stage=False)
 
         active = submission.draft_delegations.filter(revoked_at__isnull=True).first()
         if active:
