@@ -134,10 +134,10 @@ const DYNAMIC_CHECKLIST_VIEW_STAGES  = [
 
 // ─── Stage badge ──────────────────────────────────────────────────────────────
 
-function StageBadge({ stage, overdue }) {
+function StageBadge({ stage, overdue, label }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${stageBadgeClass(stage)}`}>
-      {stageLabel(stage)}
+      {label || stageLabel(stage)}
       {overdue && (
         <span className="text-red-600 dark:text-red-400 font-normal">(overdue)</span>
       )}
@@ -1215,7 +1215,11 @@ const stageDescriptions = {
               <div className="flex flex-wrap items-start gap-3 pb-3 border-b border-slate-100 dark:border-slate-700">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Current Stage</p>
-                  <StageBadge stage={submission.current_stage} overdue={submission.is_assessment_overdue} />
+                  <StageBadge
+                    stage={submission.current_stage}
+                    overdue={submission.is_assessment_overdue}
+                    label={submission.stage_display_label}
+                  />
                   <p className="text-[11px] text-slate-400 mt-1">{meta.category}</p>
                   {stageDescriptions[submission.current_stage] && (
                     <div className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg px-2.5 py-1.5 border border-slate-100 dark:border-slate-700">

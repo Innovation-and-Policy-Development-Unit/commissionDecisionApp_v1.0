@@ -136,6 +136,26 @@ def allocated_to_label(submission) -> str | None:
     return None
 
 
+def stage_display_label(submission) -> str | None:
+    """Submission-context-aware override for the stage badge shown in the
+    Submissions list and on the detail page (see frontend `StageBadge` /
+    `stageLabel()` in constants/stages.js, which only has the stage code to
+    go on). Returns None everywhere the generic global label is fine —
+    callers fall back to that.
+
+    For a Compliance self-submission, `returned_for_clarification` means the
+    Principal reviewed the Senior's draft and sent it back with comments
+    (see transitions.py) — not a ministry clarification request, which is
+    what that global label describes.
+    """
+    if (
+        submission.current_stage == WorkflowStage.RETURNED_FOR_CLARIFICATION
+        and submission.routed_unit == RoutedUnit.COMPLIANCE
+    ):
+        return "With Senior for Revision"
+    return None
+
+
 def _build_status_detail(submission) -> str:
     """
     Return a short, human-readable status line for the current station.
