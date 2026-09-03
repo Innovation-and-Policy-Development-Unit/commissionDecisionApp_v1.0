@@ -108,29 +108,22 @@ const STAGE_ACTIONS = {
     },
   ],
 
-  // Principal-review gate for a Compliance Senior's draft — the Senior must
-  // clear this before the submission can reach Manager approval. The
-  // back-and-forth with the Senior (return_to_senior / resubmit_to_principal
-  // in returned_for_clarification below) is unbounded.
+  // Principal-review gate for a Compliance Senior's draft. The Principal's
+  // only action here is to send it back with comments — they never forward
+  // it to the Manager themselves; the Senior decides whether to revise and
+  // resubmit (unbounded loop) or submit it on to the Manager (see
+  // returned_for_clarification below).
   pending_principal_review: [
-    {
-      id: 'forward_to_manager',
-      label: 'Forward to Manager',
-      description: 'Approve and forward to your unit Manager for approval',
-      icon: CheckCircle2,
-      variant: 'primary',
-      transitionTo: 'pending_manager_approval',
-      requiresNote: false,
-    },
     {
       id: 'return_to_senior',
       label: 'Return to Senior',
-      description: 'Send back to the drafter with comments for changes',
+      description: 'Send back to the drafter with your comments — note whether it needs '
+        + 'changes or is ready for the Manager',
       icon: RotateCcw,
-      variant: 'outline',
+      variant: 'primary',
       transitionTo: 'returned_for_clarification',
       requiresNote: true,
-      notePlaceholder: 'Describe what changes are needed…',
+      notePlaceholder: 'Your comments — e.g. changes needed, or "ready to submit to Manager"…',
       noteLabel: 'Feedback',
     },
   ],
@@ -181,8 +174,10 @@ const STAGE_ACTIONS = {
       transitionTo: 'submitted',
       requiresNote: false,
     },
-    // Compliance Senior, sent back by their Principal — resubmit for another
-    // round of review (the loop is unbounded).
+    // Compliance Senior, sent back by their Principal. Either resubmit for
+    // another round of review (the loop is unbounded), or — once the
+    // Principal's comments say it's ready — submit it on to the Manager
+    // directly; the Principal never forwards it themselves.
     {
       id: 'resubmit_to_principal',
       label: 'Resubmit to Principal',
@@ -190,6 +185,15 @@ const STAGE_ACTIONS = {
       icon: Send,
       variant: 'primary',
       transitionTo: 'pending_principal_review',
+      requiresNote: false,
+    },
+    {
+      id: 'submit_to_manager_after_review',
+      label: 'Submit to Manager',
+      description: 'Your Principal has reviewed this — send it on to your unit Manager for approval',
+      icon: Send,
+      variant: 'outline',
+      transitionTo: 'pending_manager_approval',
       requiresNote: false,
     },
   ],
