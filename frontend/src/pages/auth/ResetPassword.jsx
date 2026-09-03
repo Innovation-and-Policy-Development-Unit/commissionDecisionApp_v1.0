@@ -1,10 +1,23 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Mail, ArrowLeft, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react'
-import Logo from '../../components/shared/Logo'
+import { Mail, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react'
 import api from '../../api/client'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseInput from '../../components/shared/BaseInput'
+import BaseMessageBar from '../../components/shared/BaseMessageBar'
+
+const ANIM_STYLES = `
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .anim-slide-up { animation: slide-up 0.5s cubic-bezier(.22,1,.36,1) both; }
+  .anim-fade-in  { animation: fade-in 0.6s ease both; }
+`
 
 export default function ResetPassword() {
   const [email,   setEmail]   = useState('')
@@ -31,44 +44,59 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <>
+      <style>{ANIM_STYLES}</style>
 
-      {/* ════════════════════════════════
-          LEFT — Form
-      ════════════════════════════════ */}
-      <div className="flex-1 flex flex-col bg-white dark:bg-slate-900">
-
-        {/* Top bar */}
-        <div className="flex items-center gap-3 px-10 py-5 border-b border-slate-100 dark:border-slate-800">
-          <Logo size={28} />
-          <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-            Submission &amp; Commission Decision Management System
-          </span>
+      <div
+        className="min-h-screen flex flex-col items-center justify-center px-4 py-10"
+        style={{ background: 'linear-gradient(145deg, #f0f4f9 0%, #e5eaf3 100%)' }}
+      >
+        <div className="pointer-events-none fixed inset-0 overflow-hidden">
+          <div style={{ position: 'absolute', top: '-100px', right: '-100px', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,66,118,0.07) 0%, transparent 70%)' }} />
+          <div style={{ position: 'absolute', bottom: '-80px', left: '-80px',   width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.07) 0%, transparent 70%)' }} />
         </div>
 
-        {/* Form area */}
-        <div className="flex-1 flex flex-col justify-center px-10 py-12">
-          <div className="max-w-sm w-full mx-auto">
+        <div className="relative z-10 w-full" style={{ maxWidth: 420 }}>
 
+          <div className="flex items-center gap-3 mb-6 anim-fade-in" style={{ animationDelay: '0s' }}>
+            <img
+              src="/opsc-logo-white-transparent.png"
+              alt="OPSC"
+              style={{ width: 48, height: 'auto', filter: 'invert(1) brightness(0) saturate(100%) invert(18%) sepia(49%) saturate(700%) hue-rotate(190deg) brightness(80%)' }}
+            />
+            <div>
+              <p className="text-sm font-semibold text-slate-800 leading-tight">Office of the Public Service Commission</p>
+              <p className="text-xs text-slate-500 mt-0.5">Government of the Republic of Vanuatu</p>
+            </div>
+          </div>
+
+          <div
+            className="anim-slide-up"
+            style={{
+              background: 'white',
+              borderRadius: 20,
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 20px 60px -10px rgba(0,66,118,0.13)',
+              border: '1px solid rgba(0,66,118,0.08)',
+              padding: '36px 32px',
+              animationDelay: '0.08s',
+            }}
+          >
             {!sent ? (
               <>
-                {/* Icon */}
-                <div className="w-12 h-12 rounded-xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center mb-6">
-                  <Mail size={22} className="text-primary-600 dark:text-primary-400" />
+                <div className="flex justify-center mb-5">
+                  <div className="bg-gradient-dark" style={{ width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Mail size={26} color="white" />
+                  </div>
                 </div>
-
-                <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1">
-                  Forgot your password?
-                </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-8">
+                <h1 className="text-xl font-bold text-center text-slate-900 mb-1">Forgot your password?</h1>
+                <p className="text-sm text-center text-slate-500 mb-6">
                   Enter the email address linked to your account and we'll send you a reset link.
                 </p>
 
                 {error && (
-                  <div className="mb-5 flex items-start gap-3 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
-                    <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+                  <BaseMessageBar intent="error" className="mb-4">
                     {error}
-                  </div>
+                  </BaseMessageBar>
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-5">
@@ -80,12 +108,13 @@ export default function ResetPassword() {
                     autoComplete="email"
                     onChange={e => setEmail(e.target.value)}
                     required
+                    autoFocus
                     contentBefore={<Mail size={15} className="text-slate-400" />}
                   />
                   <BaseButton
                     type="submit"
                     variant="primary"
-                    className="w-full !py-2.5"
+                    className="w-full !py-3"
                     loading={loading}
                     loadingLabel="Sending"
                     disabled={!email}
@@ -97,26 +126,24 @@ export default function ResetPassword() {
               </>
             ) : (
               <>
-                {/* Success state */}
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-6">
-                  <CheckCircle2 size={22} className="text-emerald-500" />
+                <div className="flex justify-center mb-5">
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ecfdf5' }}>
+                    <CheckCircle2 size={26} className="text-emerald-500" />
+                  </div>
                 </div>
-
-                <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1">
-                  Check your email
-                </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                  If <span className="font-medium text-slate-700 dark:text-slate-300">{email}</span> is
+                <h1 className="text-xl font-bold text-center text-slate-900 mb-1">Check your email</h1>
+                <p className="text-sm text-center text-slate-500 mb-6">
+                  If <span className="font-medium text-slate-700">{email}</span> is
                   registered, we've sent a password reset link. The link expires in 1 hour.
                 </p>
 
-                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200 mb-6">
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 mb-6">
                   <strong>Tip:</strong> Check your spam or junk folder if the email doesn't arrive within a few minutes.
                 </div>
 
                 <BaseButton
                   variant="outline"
-                  className="w-full !py-2.5 mb-3"
+                  className="w-full !py-3 mb-3"
                   onClick={() => { setSent(false); setEmail(''); setError('') }}
                 >
                   Try a different email
@@ -124,104 +151,33 @@ export default function ResetPassword() {
 
                 <Link
                   to="/auth/login"
-                  className="btn-gradient w-full py-2.5 text-sm justify-center"
+                  className="btn-gradient w-full !py-3 text-sm justify-center"
                 >
                   Back to Sign In <ArrowRight size={16} />
                 </Link>
               </>
             )}
+          </div>
 
-            <div className="mt-8 text-center">
+          {!sent && (
+            <div className="mt-4 flex items-center justify-center text-xs anim-fade-in" style={{ animationDelay: '0.15s' }}>
               <Link
                 to="/auth/login"
-                className="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                className="inline-flex items-center gap-1.5 text-primary-600 hover:text-primary-700 hover:underline font-medium"
               >
-                <ArrowLeft size={14} /> Back to Sign In
+                <ArrowLeft size={13} /> Back to Sign In
               </Link>
             </div>
+          )}
+
+          <div className="mt-3 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
+            <span>For access issues, contact your system administrator.</span>
           </div>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="px-10 py-4 border-t border-slate-100 dark:border-slate-800">
-          <p className="text-xs text-slate-400 dark:text-slate-600">
-            For access issues, contact your system administrator.
-          </p>
-        </div>
-      </div>
-
-      {/* ════════════════════════════════
-          RIGHT — Institutional panel
-      ════════════════════════════════ */}
-      <div
-        className="hidden xl:flex flex-col flex-1 min-h-screen"
-        style={{ backgroundColor: '#0c2451' }}
-      >
-        {/* Identity */}
-        <div className="px-12 pt-12 pb-9 flex items-center gap-5">
-          <img
-            src="/opsc-logo-white-transparent.png"
-            alt="Office of the Public Service Commission"
-            className="w-14 h-auto flex-shrink-0"
-          />
-          <div>
-            <h2 className="text-white text-base font-semibold leading-snug mb-1">
-              Office of the Public Service Commission
-            </h2>
-            <p className="text-white/40 text-sm">
-              Government of the Republic of Vanuatu
-            </p>
-          </div>
-        </div>
-
-        <div className="mx-12 border-t border-white/[0.10]" />
-
-        {/* Body copy */}
-        <div className="px-12 pt-10 flex-1">
-          <p className="text-white/30 text-xs font-semibold uppercase tracking-[0.15em] mb-6">
-            Account Security
-          </p>
-
-          <ul className="space-y-5">
-            {[
-              {
-                title: 'Secure reset links',
-                desc: 'Each password reset link is unique, time-limited to 1 hour, and can only be used once.',
-              },
-              {
-                title: 'Email verification',
-                desc: 'We only send reset emails to verified addresses already registered in the system.',
-              },
-              {
-                title: 'No account enumeration',
-                desc: 'For security reasons, we always show a success message regardless of whether the email exists.',
-              },
-              {
-                title: 'Need immediate help?',
-                desc: 'Contact your system administrator to have your password reset directly.',
-              },
-            ].map(({ title, desc }) => (
-              <li key={title} className="flex items-start gap-4">
-                <span className="mt-1.5 w-3 h-px bg-white/20 flex-shrink-0" />
-                <div>
-                  <p className="text-white/60 text-sm font-medium mb-0.5">{title}</p>
-                  <p className="text-white/30 text-sm leading-relaxed">{desc}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Footer */}
-        <div className="px-12 pb-8">
-          <div className="border-t border-white/[0.10] pt-5 flex items-center justify-center">
-            <p className="text-white/20 text-[11px]">
-              © {new Date().getFullYear()} Office of the Public Service Commission, Vanuatu
-            </p>
+          <div className="mt-1 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.25s' }}>
+            <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
           </div>
         </div>
       </div>
-
-    </div>
+    </>
   )
 }
