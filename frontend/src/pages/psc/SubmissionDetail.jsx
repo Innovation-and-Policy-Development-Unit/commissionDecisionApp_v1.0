@@ -831,6 +831,17 @@ export default function SubmissionDetail() {
 const hrAction = needsHrAction(submission?.current_stage)
 const terminal = isTerminal(submission?.current_stage)
 
+// The remarks from the transition that put this submission into its current
+// "sent back" stage — e.g. a Compliance Principal's comments, or a ministry
+// clarification reason — otherwise only visible by digging into the
+// Activity tab, even though the banner below tells you to act without
+// saying what was actually said.
+const latestReturnRemark = hrAction
+  ? [...(submission?.events || [])].reverse().find(
+      ev => ev.new_stage === submission?.current_stage && ev.remarks,
+    )
+  : null
+
 const stageDescriptions = {
   commission_sitting: 'Matters at this stage may be deferred to a later meeting (tabled) or referred for legal advice as needed.',
   matters_arising: 'This matter has been previously deliberated by the Commission and is returning for further consideration, bypassing the standard assessment pipeline.',
@@ -1189,10 +1200,20 @@ const stageDescriptions = {
           {submission.current_stage !== 'draft' && (hrAction || terminal || submission.current_stage === 'matters_arising') && (
             <div className={`card card-compact space-y-2 ${hrAction ? 'border-l-4 border-l-orange-400' : terminal ? 'border-l-4 border-l-emerald-400' : ''}`}>
               {hrAction && (
-                <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
-                  <RefreshCw size={12} className="animate-spin shrink-0" />
-                  Action needed — see the journey map above for where to respond.
-                </p>
+                <>
+                  <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
+                    <RefreshCw size={12} className="animate-spin shrink-0" />
+                    Action needed — see the journey map above for where to respond.
+                  </p>
+                  {latestReturnRemark && (
+                    <div className="text-xs text-slate-700 dark:text-slate-300 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-900/40 rounded-lg px-3 py-2">
+                      <p className="font-semibold text-orange-700 dark:text-orange-300 mb-0.5">
+                        {submission?.routed_unit === 'compliance' ? "Principal's comments" : 'Reason for return'}
+                      </p>
+                      <p className="whitespace-pre-wrap">{latestReturnRemark.remarks}</p>
+                    </div>
+                  )}
+                </>
               )}
               {terminal && (
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
