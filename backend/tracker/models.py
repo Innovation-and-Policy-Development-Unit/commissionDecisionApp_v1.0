@@ -61,6 +61,7 @@ class WorkflowStage(models.TextChoices):
     PENDING_DG_ENDORSEMENT     = "pending_dg_endorsement",     "Submitted to DG (Pending Endorsement)"
     DG_APPROVED                = "dg_approved",                "Endorsed by DG"
     PENDING_MANAGER_APPROVAL   = "pending_manager_approval",   "Pending Manager Approval"
+    PENDING_PRINCIPAL_REVIEW   = "pending_principal_review",   "Pending Principal Review"
     PENDING_SECOND_APPROVAL    = "pending_second_approval",    "Pending Second Approval"
     SUBMITTED                  = "submitted",                  "Submitted to PSC"
     # ── PSC intake ─────────────────────────────────────────────────────────
@@ -2316,41 +2317,61 @@ class SubmissionCoAssignment(models.Model):
         return f"{self.principal.get_full_name() or self.principal.username} → {self.submission.reference_number} ({self.role})"
 
 
-class SubmissionCollaborator(models.Model):
+class SubmissionDraftDelegate(models.Model):
     """
-    A colleague the submission's own creator has invited to comment / suggest
-    changes on their own-authored draft (Compliance self-submissions only,
-    for now). Comment-only — collaborators never get edit or submit rights;
-    see CommentViewSet.create() and SubmissionViewSet.transition() for the
-    permission checks that key off this table.
+    Manager/Principal-granted permission for a named Compliance colleague to
+    edit and submit-for-approval a draft authored by someone else in their
+    unit — the intended use is covering a drafting senior's absence.
+
+    Replaces the old comment-only SubmissionCollaborator (compliance feedback:
+    remove open peer-invited collaboration; only a Compliance Manager or
+    Principal may hand editing rights to a named stand-in). Unlike the old
+    collaborator table, the delegate gets the *same* rights as the draft's own
+    creator — see SubmissionViewSet.perform_update's is_own_draft branch and
+    the creator-only submit check in SubmissionViewSet.transition() — not
+    just comment rights.
+
+    Only one delegation is active per submission at a time (revoked_at is
+    null): granting a new one auto-revokes the previous, so it's always
+    unambiguous who is currently authorized to act on someone else's draft.
+    Revoked rows are kept for the audit trail rather than deleted.
 
     Deliberately separate from SubmissionCoAssignment, which grants read/write
-    checklist/assessment access and is assigned by the unit *manager* during
+    checklist/assessment access and is assigned by the unit manager during
     the manager_checklist_review/under_assessment stages of the other,
     ministry-routed workflow — a different mechanism for a different flow.
     """
 
     submission  = models.ForeignKey(
-        'Submission', on_delete=models.CASCADE, related_name='collaborators',
+        'Submission', on_delete=models.CASCADE, related_name='draft_delegations',
     )
-    user        = models.ForeignKey(
+    delegate    = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
-        related_name='collaboration_records',
+        related_name='draft_delegate_records',
     )
-    added_by    = models.ForeignKey(
+    granted_by  = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name='+',
     )
-    added_at    = models.DateTimeField(auto_now_add=True)
+    granted_at  = models.DateTimeField(auto_now_add=True)
+    reason      = models.CharField(
+        max_length=255, blank=True,
+        help_text="Why access was delegated, e.g. 'original drafter on leave'.",
+    )
+    revoked_at  = models.DateTimeField(null=True, blank=True)
+    revoked_by  = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
 
     class Meta:
-        unique_together = [('submission', 'user')]
-        ordering = ['added_at']
-        verbose_name        = 'Submission Collaborator'
-        verbose_name_plural = 'Submission Collaborators'
+        ordering = ['-granted_at']
+        verbose_name        = 'Submission Draft Delegate'
+        verbose_name_plural = 'Submission Draft Delegates'
 
     def __str__(self):
-        return f"{self.user.get_full_name() or self.user.username} → {self.submission.reference_number} (collaborator)"
+        state = 'active' if self.revoked_at is None else 'revoked'
+        return f"{self.delegate.get_full_name() or self.delegate.username} → {self.submission.reference_number} ({state})"
 
 
 class ActiveDocumentManager(models.Manager):

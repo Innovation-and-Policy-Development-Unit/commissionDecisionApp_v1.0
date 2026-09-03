@@ -63,6 +63,7 @@ _PRE_INTAKE_STAGES = frozenset({
     WorkflowStage.PENDING_DG_ENDORSEMENT,
     WorkflowStage.DG_APPROVED,
     WorkflowStage.PENDING_MANAGER_APPROVAL,
+    WorkflowStage.PENDING_PRINCIPAL_REVIEW,
     WorkflowStage.PENDING_SECOND_APPROVAL,
     WorkflowStage.SUBMITTED,
     WorkflowStage.RECEIVED_BY_PSC,

@@ -34,7 +34,7 @@ const STAGE_ACTIONS = {
       requiresNote: false,
     },
     // Internal (OPSC-unit) drafts that route through a manager-approval step
-    // before the Secretary — e.g. Compliance Principal/Senior, VIPAM Principal.
+    // before the Secretary — e.g. Compliance Principal, VIPAM Principal.
     {
       id: 'submit_for_manager_approval',
       label: 'Submit for Manager Approval',
@@ -42,6 +42,17 @@ const STAGE_ACTIONS = {
       icon: Send,
       variant: 'primary',
       transitionTo: 'pending_manager_approval',
+      requiresNote: false,
+    },
+    // A Compliance Senior's draft must clear Principal review before it can
+    // reach the Manager — see pending_principal_review below.
+    {
+      id: 'submit_to_principal',
+      label: 'Submit to Principal',
+      description: 'Send to your Principal for review before it goes to your Manager',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'pending_principal_review',
       requiresNote: false,
     },
     // Internal (OPSC-unit) drafts that route straight to the Secretary —
@@ -97,6 +108,33 @@ const STAGE_ACTIONS = {
     },
   ],
 
+  // Principal-review gate for a Compliance Senior's draft — the Senior must
+  // clear this before the submission can reach Manager approval. The
+  // back-and-forth with the Senior (return_to_senior / resubmit_to_principal
+  // in returned_for_clarification below) is unbounded.
+  pending_principal_review: [
+    {
+      id: 'forward_to_manager',
+      label: 'Forward to Manager',
+      description: 'Approve and forward to your unit Manager for approval',
+      icon: CheckCircle2,
+      variant: 'primary',
+      transitionTo: 'pending_manager_approval',
+      requiresNote: false,
+    },
+    {
+      id: 'return_to_senior',
+      label: 'Return to Senior',
+      description: 'Send back to the drafter with comments for changes',
+      icon: RotateCcw,
+      variant: 'outline',
+      transitionTo: 'returned_for_clarification',
+      requiresNote: true,
+      notePlaceholder: 'Describe what changes are needed…',
+      noteLabel: 'Feedback',
+    },
+  ],
+
   pending_dg_endorsement: [
     {
       id: 'endorse',
@@ -141,6 +179,17 @@ const STAGE_ACTIONS = {
       icon: Send,
       variant: 'primary',
       transitionTo: 'submitted',
+      requiresNote: false,
+    },
+    // Compliance Senior, sent back by their Principal — resubmit for another
+    // round of review (the loop is unbounded).
+    {
+      id: 'resubmit_to_principal',
+      label: 'Resubmit to Principal',
+      description: 'Re-send to your Principal for review after addressing their comments',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'pending_principal_review',
       requiresNote: false,
     },
   ],

@@ -45,7 +45,7 @@ from .models import (
     SecurityNotice,
     Submission,
     SubmissionCoAssignment,
-    SubmissionCollaborator,
+    SubmissionDraftDelegate,
     SystemPermission,
     SystemSetting,
     EmailTemplate,
@@ -289,8 +289,8 @@ def _submission_queryset_for(user):
             queryset=SubmissionCoAssignment.objects.select_related("principal"),
         ),
         Prefetch(
-            "collaborators",
-            queryset=SubmissionCollaborator.objects.select_related("user"),
+            "draft_delegations",
+            queryset=SubmissionDraftDelegate.objects.filter(revoked_at__isnull=True).select_related("delegate", "granted_by"),
         ),
     )
     if user.is_superuser or user.is_staff:
@@ -708,6 +708,18 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         title = f"New internal submission: {submission.reference_number}"
         body = f"'{submission.title}' has completed all approvals and is ready for your review."
 
+    # ── Compliance Principal review gate (Senior-created submissions) ──────
+    elif target == WorkflowStage.PENDING_PRINCIPAL_REVIEW and submission.routed_unit == RoutedUnit.COMPLIANCE:
+        recipients = User.objects.filter(
+            psc_profile__role=Role.COMPLIANCE_PRINCIPAL, is_active=True,
+        )
+        actor_name = (actor.get_full_name() or actor.username) if actor else "Compliance staff"
+        title = f"Review required: {submission.reference_number}"
+        body = (
+            f"'{submission.title}' submitted by {actor_name} is awaiting your review "
+            f"before it can go to the Manager."
+        )
+
     # ── Compliance Manager approval gate (Principal/Senior-created submissions) ──
     elif target == WorkflowStage.PENDING_MANAGER_APPROVAL and submission.routed_unit == RoutedUnit.COMPLIANCE:
         recipients = User.objects.filter(
@@ -956,7 +968,7 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
 # ACTIVE_STAGES set in frontend/src/pages/psc/SubmissionLog.jsx and dashboard_stats_view.
 _ACTIVE_DASHBOARD_STAGES = [
     "draft", "pending_dg_endorsement", "dg_approved",
-    "pending_manager_approval", "pending_second_approval",
+    "pending_manager_approval", "pending_principal_review", "pending_second_approval",
     "submitted", "received_by_psc", "registered_routed",
     "returned_for_clarification", "manager_checklist_review",
     "under_assessment", "pending_secretary_approval", "forwarded_to_commission",
@@ -1467,15 +1479,20 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.IPDU_MANAGER,
         }
         is_own_draft = (
-            submission.created_by_id == self.request.user.id
+            (
+                submission.created_by_id == self.request.user.id
+                or self._is_active_draft_delegate(submission, self.request.user)
+            )
             and submission.current_stage == WorkflowStage.DRAFT
         )
         if profile.role in _EDITOR_ROLES:
             from .transitions import assert_can_edit_submission
             assert_can_edit_submission(profile.role, submission)
         elif is_own_draft:
-            # A draft's own creator may fix its title/type before submitting,
-            # even without one of the roles above — but only those two
+            # A draft's own creator — or a colleague a Manager/Principal has
+            # granted draft-edit access to (SubmissionDraftDelegate), e.g.
+            # covering the creator's absence — may fix its title/type before
+            # submitting, even without one of the roles above. Only those two
             # fields, not the full content-editing rights those roles get.
             allowed_fields = {"title", "form_type_code", "form_category"}
             extra = set(self.request.data.keys()) - allowed_fields
@@ -1710,22 +1727,30 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
         # if _chain_result is True: chain explicitly allows — skip assert_transition_allowed
 
-        # ── Compliance self-submission: only the creator may submit their own
-        # draft for approval — collaborators (SubmissionCollaborator) may
-        # comment but never advance the workflow on someone else's behalf.
-        # assert_transition_allowed above is role-only, so this ownership
-        # check has to live here.
+        # ── Compliance self-submission: only the creator, or a colleague a
+        # Manager/Principal has granted draft-edit access to (see
+        # SubmissionDraftDelegate — e.g. covering the creator's absence), may
+        # submit their draft for approval. assert_transition_allowed above is
+        # role-only, so this ownership check has to live here.
         _COMPLIANCE_SELF_SUBMIT_ROLES = {
             Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_MANAGER,
         }
         if (
             profile.role in _COMPLIANCE_SELF_SUBMIT_ROLES
             and prev in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
-            and target in (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.SUBMITTED)
+            and target in (
+                WorkflowStage.PENDING_PRINCIPAL_REVIEW,
+                WorkflowStage.PENDING_MANAGER_APPROVAL,
+                WorkflowStage.SUBMITTED,
+            )
             and submission.created_by_id != request.user.id
+            and not self._is_active_draft_delegate(submission, request.user)
             and not (request.user.is_superuser or request.user.is_staff)
         ):
-            raise PermissionDenied("Only the submission's original creator may submit it for approval.")
+            raise PermissionDenied(
+                "Only the submission's original creator, or a colleague granted "
+                "draft-edit access, may submit it for approval."
+            )
 
         # ── Intake route toggles: block submit/route via a disabled route ──────
         from .intake_routing import hr_intake_enabled, receptionist_intake_enabled
@@ -2830,43 +2855,55 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         invalidate_submission(submission.id)
         return Response(SubmissionDetailSerializer(submission).data)
 
-    # ── Compliance self-submission collaborators (comment-only) ───────────────
-    # A submission's own creator (Compliance self-submission flow only) may
-    # invite named colleagues to comment/suggest changes on their draft — see
-    # SubmissionCollaborator's docstring. Comment-posting permission itself is
-    # enforced in CommentViewSet.create(); these actions just manage the list.
+    # ── Compliance self-submission draft-edit delegation ───────────────────────
+    # A Compliance Manager or Principal (never the drafting senior themself,
+    # since the whole point is covering their absence) may hand full edit and
+    # submit-for-approval rights on a colleague's draft to a named stand-in —
+    # see SubmissionDraftDelegate's docstring. perform_update() and
+    # transition() key off _is_active_draft_delegate() for the actual rights;
+    # these actions just manage who currently holds the delegation.
     _COMPLIANCE_SELF_SUBMIT_ROLES = frozenset({
         Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_MANAGER,
     })
+    _DRAFT_DELEGATE_GRANTOR_ROLES = frozenset({
+        Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL,
+    })
 
-    def _assert_can_manage_collaborators(self, request, submission):
+    @staticmethod
+    def _is_active_draft_delegate(submission, user):
+        return submission.draft_delegations.filter(delegate_id=user.id, revoked_at__isnull=True).exists()
+
+    def _assert_can_manage_delegation(self, request, submission):
         profile = _profile(request.user)
         if request.user.is_superuser or request.user.is_staff:
             return
-        if profile.role not in self._COMPLIANCE_SELF_SUBMIT_ROLES:
-            raise PermissionDenied("Only Compliance staff may manage collaborators on this submission.")
-        if submission.created_by_id != request.user.id:
-            raise PermissionDenied("Only the submission's own creator may manage its collaborators.")
+        if profile.role not in self._DRAFT_DELEGATE_GRANTOR_ROLES:
+            raise PermissionDenied("Only a Compliance Manager or Principal may grant draft-edit access.")
+        creator_profile = _profile(submission.created_by)
+        if creator_profile.unit_id != profile.unit_id:
+            raise PermissionDenied("You may only manage draft-edit access within your own Compliance team.")
         if submission.current_stage not in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION):
-            raise PermissionDenied("Collaborators can only be managed while the submission is still a draft.")
+            raise PermissionDenied("Draft-edit access can only be granted while the submission is still a draft.")
 
-    @action(detail=True, methods=["get"], url_path="collaborator-candidates")
-    def collaborator_candidates(self, request, pk=None):
-        """List Compliance colleagues eligible to be added as a collaborator."""
+    @action(detail=True, methods=["get"], url_path="draft-delegate-candidates")
+    def draft_delegate_candidates(self, request, pk=None):
+        """List Compliance colleagues eligible to receive draft-edit access."""
         from django.contrib.auth.models import User
 
         submission = self.get_object()
-        self._assert_can_manage_collaborators(request, submission)
+        self._assert_can_manage_delegation(request, submission)
 
-        already_added = set(submission.collaborators.values_list("user_id", flat=True))
+        active = submission.draft_delegations.filter(revoked_at__isnull=True).first()
+        excluded_ids = {submission.created_by_id}
+        if active:
+            excluded_ids.add(active.delegate_id)
         candidates = (
             User.objects.filter(
                 is_active=True,
                 psc_profile__role__in=self._COMPLIANCE_SELF_SUBMIT_ROLES,
                 psc_profile__unit_id=_profile(request.user).unit_id,
             )
-            .exclude(pk=request.user.id)
-            .exclude(pk__in=already_added)
+            .exclude(pk__in=excluded_ids)
             .select_related("psc_profile")
             .order_by("first_name", "username")
         )
@@ -2881,76 +2918,87 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ]
         return Response(data)
 
-    @action(detail=True, methods=["post"], url_path="collaborators")
-    def add_collaborator(self, request, pk=None):
-        """POST { "user_id": <id> } — invite a Compliance colleague to comment on this draft."""
+    @action(detail=True, methods=["post"], url_path="draft-delegate")
+    def grant_draft_delegate(self, request, pk=None):
+        """POST { "user_id": <id>, "reason": <str> } — grant a Compliance
+        colleague full edit and submit rights on this draft (e.g. while its
+        creator is absent). Replaces any currently active delegation."""
         from django.contrib.auth.models import User
-        from .models import SubmissionCollaborator, Notification, AuditLog as _AL
+        from .models import SubmissionDraftDelegate, Notification, AuditLog as _AL
         from .audit import log_action as _log
 
         submission = self.get_object()
-        self._assert_can_manage_collaborators(request, submission)
+        self._assert_can_manage_delegation(request, submission)
 
         user_id = request.data.get("user_id")
         if not user_id:
             return Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            collaborator = User.objects.select_related("psc_profile").get(pk=user_id, is_active=True)
+            delegate = User.objects.select_related("psc_profile").get(pk=user_id, is_active=True)
         except User.DoesNotExist:
             return Response({"detail": "User not found or inactive."}, status=status.HTTP_400_BAD_REQUEST)
 
-        c_profile = getattr(collaborator, "psc_profile", None)
+        d_profile = getattr(delegate, "psc_profile", None)
         requester_unit = _profile(request.user).unit_id
         if (
-            c_profile is None
-            or c_profile.role not in self._COMPLIANCE_SELF_SUBMIT_ROLES
-            or c_profile.unit_id != requester_unit
+            d_profile is None
+            or d_profile.role not in self._COMPLIANCE_SELF_SUBMIT_ROLES
+            or d_profile.unit_id != requester_unit
         ):
             return Response(
-                {"detail": "Collaborators must be a member of your own Compliance team."},
+                {"detail": "Draft-edit access can only be granted to a member of your own Compliance team."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if collaborator.id == submission.created_by_id:
-            return Response({"detail": "The submission's creator doesn't need to be added."}, status=400)
+        if delegate.id == submission.created_by_id:
+            return Response({"detail": "The submission's creator doesn't need delegated access."}, status=400)
 
-        _, created = SubmissionCollaborator.objects.get_or_create(
-            submission=submission, user=collaborator, defaults={"added_by": request.user},
-        )
-        if created:
-            Notification.objects.create(
-                recipient=collaborator,
-                submission=submission,
-                channel=Notification.Channel.BOTH,
-                title=f"Added as a collaborator: {submission.reference_number}",
-                body=(
-                    f"{request.user.get_full_name() or request.user.username} invited you to "
-                    f"comment on '{submission.title}' while it's in draft."
-                ),
+        reason = (request.data.get("reason") or "").strip()
+
+        with transaction.atomic():
+            submission.draft_delegations.filter(revoked_at__isnull=True).update(
+                revoked_at=timezone.now(), revoked_by=request.user,
             )
-            _log(request, _AL.Action.UPDATE, resource_type="Submission",
-                 resource_id=submission.id, resource_label=submission.reference_number,
-                 description=f"Collaborator added: {collaborator.username}")
+            SubmissionDraftDelegate.objects.create(
+                submission=submission, delegate=delegate, granted_by=request.user, reason=reason,
+            )
+
+        Notification.objects.create(
+            recipient=delegate,
+            submission=submission,
+            channel=Notification.Channel.BOTH,
+            title=f"Draft-edit access granted: {submission.reference_number}",
+            body=(
+                f"{request.user.get_full_name() or request.user.username} gave you edit and "
+                f"submit access to '{submission.title}' while it's in draft"
+                + (f" — {reason}" if reason else "") + "."
+            ),
+        )
+        _log(request, _AL.Action.UPDATE, resource_type="Submission",
+             resource_id=submission.id, resource_label=submission.reference_number,
+             description=(
+                 f"Draft-edit access granted to {delegate.username}"
+                 + (f" ({reason})" if reason else "")
+             ))
         invalidate_submission(submission.id)
         return Response(SubmissionDetailSerializer(submission, context=self.get_serializer_context()).data)
 
-    @add_collaborator.mapping.delete
-    def remove_collaborator(self, request, pk=None):
-        """DELETE /submissions/{id}/collaborators/?user_id=<id>"""
-        from .models import SubmissionCollaborator, AuditLog as _AL
+    @grant_draft_delegate.mapping.delete
+    def revoke_draft_delegate(self, request, pk=None):
+        """DELETE /submissions/{id}/draft-delegate/ — revoke the active delegation."""
+        from .models import AuditLog as _AL
         from .audit import log_action as _log
 
         submission = self.get_object()
-        self._assert_can_manage_collaborators(request, submission)
+        self._assert_can_manage_delegation(request, submission)
 
-        user_id = request.query_params.get("user_id") or request.data.get("user_id")
-        if not user_id:
-            return Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        deleted, _ = SubmissionCollaborator.objects.filter(submission=submission, user_id=user_id).delete()
-        if deleted:
+        active = submission.draft_delegations.filter(revoked_at__isnull=True).first()
+        if active:
+            active.revoked_at = timezone.now()
+            active.revoked_by = request.user
+            active.save(update_fields=["revoked_at", "revoked_by"])
             _log(request, _AL.Action.UPDATE, resource_type="Submission",
                  resource_id=submission.id, resource_label=submission.reference_number,
-                 description=f"Collaborator removed: user_id={user_id}")
+                 description=f"Draft-edit access revoked: {active.delegate.username}")
         invalidate_submission(submission.id)
         return Response(SubmissionDetailSerializer(submission, context=self.get_serializer_context()).data)
 
@@ -4076,10 +4124,24 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             # OPSC unit managers upload supporting documents for their internal submissions
             Role.CSU_MANAGER, Role.ODU_MANAGER,
         }
-        if profile.role not in _upload_allowed_roles:
+        # A Compliance self-submission's own creator (or their draft-edit
+        # delegate — see SubmissionDraftDelegate) isn't in any of the roles
+        # above, but ComplianceSubmissionForm.jsx explicitly tells them to
+        # "attach supporting documents on the detail page" after creating —
+        # so they need to be able to, while it's still theirs to draft.
+        is_own_compliance_draft = (
+            profile.role in self._COMPLIANCE_SELF_SUBMIT_ROLES
+            and (
+                submission.created_by_id == request.user.id
+                or self._is_active_draft_delegate(submission, request.user)
+            )
+            and submission.current_stage in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
+        )
+        if profile.role in _upload_allowed_roles:
+            from .transitions import assert_can_edit_submission
+            assert_can_edit_submission(profile.role, submission)
+        elif not is_own_compliance_draft:
             raise PermissionDenied("Only ministry HR, PSC staff, or OPSC unit staff may upload documents.")
-        from .transitions import assert_can_edit_submission
-        assert_can_edit_submission(profile.role, submission)
 
         # Support multiple files in one request (for internal submissions free-form upload)
         files = request.FILES.getlist("files") or (
@@ -4732,10 +4794,27 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.CSU_MANAGER,
         }
         profile = _profile(request.user)
-        if profile.role not in allowed_write_roles:
+        # A Compliance self-submission's own creator (or their draft-edit
+        # delegate — see SubmissionDraftDelegate) isn't in any of the roles
+        # above, but ComplianceSubmissionForm.jsx explicitly tells them to
+        # "complete the digitized form on the detail page" right after
+        # creating — so they need to be able to, while it's still theirs
+        # to draft. This is the same PSCFormResponse.data this endpoint
+        # writes for every other form type; Compliance forms aren't an
+        # exception, they were just never added to allowed_write_roles.
+        is_own_compliance_draft = (
+            profile.role in self._COMPLIANCE_SELF_SUBMIT_ROLES
+            and (
+                submission.created_by_id == request.user.id
+                or self._is_active_draft_delegate(submission, request.user)
+            )
+            and submission.current_stage in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
+        )
+        if profile.role in allowed_write_roles:
+            from .transitions import assert_can_edit_submission
+            assert_can_edit_submission(profile.role, submission)
+        elif not is_own_compliance_draft:
             raise PermissionDenied("You do not have permission to submit form data.")
-        from .transitions import assert_can_edit_submission
-        assert_can_edit_submission(profile.role, submission)
 
         try:
             instance = submission.dynamic_form_response
@@ -12544,6 +12623,7 @@ def dashboard_stats_view(request):
         WorkflowStage.PENDING_DG_ENDORSEMENT,
         WorkflowStage.DG_APPROVED,
         WorkflowStage.PENDING_MANAGER_APPROVAL,
+        WorkflowStage.PENDING_PRINCIPAL_REVIEW,
         WorkflowStage.PENDING_SECOND_APPROVAL,
         WorkflowStage.SUBMITTED,
         WorkflowStage.RECEIVED_BY_PSC,
@@ -12641,7 +12721,8 @@ def system_stats_view(request):
     # Same SLA definition as dashboard_stats_view, system-wide (no ministry filter).
     active_stages = [
         WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED,
-        WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECOND_APPROVAL,
+        WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_PRINCIPAL_REVIEW,
+        WorkflowStage.PENDING_SECOND_APPROVAL,
         WorkflowStage.SUBMITTED, WorkflowStage.RECEIVED_BY_PSC, WorkflowStage.REGISTERED_ROUTED,
         WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.MANAGER_CHECKLIST_REVIEW,
         WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.PENDING_SECRETARY_APPROVAL,

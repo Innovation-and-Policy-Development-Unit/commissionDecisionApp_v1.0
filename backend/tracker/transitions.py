@@ -49,14 +49,32 @@ _COMPLIANCE_CREATOR_ALLOWED = {
 
 # Compliance Manager submits their own draft straight to the Secretary — they
 # ARE the approver, so there's no one to sign off above them. Compliance
-# Principal/Senior route through Manager Compliance approval first (below).
+# Principal submits straight to Manager approval (no peer review above them).
+# Compliance Senior must route through Principal review first — see
+# _COMPLIANCE_SENIOR_TO_PRINCIPAL_ALLOWED / _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED.
 _COMPLIANCE_MANAGER_DIRECT_SUBMIT_ALLOWED = {
     (WorkflowStage.DRAFT, WorkflowStage.SUBMITTED),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
 }
-_COMPLIANCE_STAFF_SUBMIT_FOR_APPROVAL_ALLOWED = {
+_COMPLIANCE_PRINCIPAL_SUBMIT_FOR_APPROVAL_ALLOWED = {
     (WorkflowStage.DRAFT, WorkflowStage.PENDING_MANAGER_APPROVAL),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_MANAGER_APPROVAL),
+}
+# A Compliance Senior must submit to their Principal first — never straight to
+# Manager. The Senior↔Principal back-and-forth is unbounded (Principal can
+# send it back for changes as many times as needed via
+# _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED below); the Senior must clear it at
+# least once before the submission can ever reach Manager approval.
+_COMPLIANCE_SENIOR_TO_PRINCIPAL_ALLOWED = {
+    (WorkflowStage.DRAFT, WorkflowStage.PENDING_PRINCIPAL_REVIEW),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_PRINCIPAL_REVIEW),
+}
+# The Principal's two actions on a Senior's submission: send it back with
+# comments (reusing RETURNED_FOR_CLARIFICATION — the Senior then resubmits via
+# _COMPLIANCE_SENIOR_TO_PRINCIPAL_ALLOWED), or forward it to Manager approval.
+_COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED = {
+    (WorkflowStage.PENDING_PRINCIPAL_REVIEW, WorkflowStage.RETURNED_FOR_CLARIFICATION),
+    (WorkflowStage.PENDING_PRINCIPAL_REVIEW, WorkflowStage.PENDING_MANAGER_APPROVAL),
 }
 _COMPLIANCE_MANAGER_APPROVAL_ALLOWED = {
     (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.SUBMITTED),
@@ -138,6 +156,19 @@ _INTERNAL_STAGE_GRAPH = {
     WorkflowStage.DRAFT: [
         WorkflowStage.SUBMITTED,
         WorkflowStage.PENDING_MANAGER_APPROVAL,   # chain step 1
+        WorkflowStage.PENDING_PRINCIPAL_REVIEW,   # Compliance Senior: submit to Principal first
+    ],
+    # A Compliance Senior's draft must clear Principal review before it can
+    # reach Manager approval — see _COMPLIANCE_SENIOR_TO_PRINCIPAL_ALLOWED /
+    # _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED below. The Senior↔Principal loop
+    # (RETURNED_FOR_CLARIFICATION ↔ PENDING_PRINCIPAL_REVIEW) is unbounded.
+    WorkflowStage.PENDING_PRINCIPAL_REVIEW: [
+        WorkflowStage.RETURNED_FOR_CLARIFICATION,   # Principal sends back with comments
+        WorkflowStage.PENDING_MANAGER_APPROVAL,     # Principal forwards to Manager
+    ],
+    WorkflowStage.RETURNED_FOR_CLARIFICATION: [
+        WorkflowStage.DRAFT,
+        WorkflowStage.PENDING_PRINCIPAL_REVIEW,     # Senior resubmits to Principal
     ],
     # Generic chain approval stages — actual role enforcement is done via approval_chain config in views.py
     WorkflowStage.PENDING_MANAGER_APPROVAL: [
@@ -587,8 +618,9 @@ def assert_transition_allowed(
             raise PermissionDenied("That transition is not allowed in the internal submission workflow.")
 
         # Compliance unit creators (internal OPSC submissions). Manager submits
-        # straight to Secretary; Principal/Senior route through Manager approval
-        # first, then only the Manager can send it on to the Secretary.
+        # straight to Secretary; Principal submits straight to Manager approval;
+        # Senior must route through Principal review first, then only the
+        # Manager can send it on to the Secretary.
         if role in _COMPLIANCE_SUBMITTER_ROLES:
             if (current_stage, target_stage) in _COMPLIANCE_CREATOR_ALLOWED:
                 return
@@ -597,13 +629,19 @@ def assert_transition_allowed(
                     return
                 if (current_stage, target_stage) in _COMPLIANCE_MANAGER_APPROVAL_ALLOWED:
                     return
+            elif role == Role.COMPLIANCE_PRINCIPAL:
+                if (current_stage, target_stage) in _COMPLIANCE_PRINCIPAL_SUBMIT_FOR_APPROVAL_ALLOWED:
+                    return
+                if (current_stage, target_stage) in _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED:
+                    return
             else:
-                if (current_stage, target_stage) in _COMPLIANCE_STAFF_SUBMIT_FOR_APPROVAL_ALLOWED:
+                if (current_stage, target_stage) in _COMPLIANCE_SENIOR_TO_PRINCIPAL_ALLOWED:
                     return
             raise PermissionDenied(
-                "Compliance Principal/Senior submit a draft for Manager approval; the "
-                "Compliance Manager submits their own draft (or an approved one) straight "
-                "to the Secretary, or returns it for changes."
+                "Compliance Senior submits a draft to their Principal for review; the "
+                "Principal forwards it to the Manager (or returns it to the Senior with "
+                "comments); the Compliance Manager submits their own draft (or an "
+                "approved one) straight to the Secretary, or returns it for changes."
             )
 
         # Internal submitters (CSU/ODU managers) can only submit their own draft
@@ -833,8 +871,11 @@ def iter_allowed_targets(
             if role == Role.COMPLIANCE_MANAGER:
                 pairs |= _COMPLIANCE_MANAGER_DIRECT_SUBMIT_ALLOWED
                 pairs |= _COMPLIANCE_MANAGER_APPROVAL_ALLOWED
+            elif role == Role.COMPLIANCE_PRINCIPAL:
+                pairs |= _COMPLIANCE_PRINCIPAL_SUBMIT_FOR_APPROVAL_ALLOWED
+                pairs |= _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED
             else:
-                pairs |= _COMPLIANCE_STAFF_SUBMIT_FOR_APPROVAL_ALLOWED
+                pairs |= _COMPLIANCE_SENIOR_TO_PRINCIPAL_ALLOWED
             return [t.value for (s, t) in pairs if s == current_stage]
         if role in INTERNAL_SUBMITTER_ROLES:
             if current_stage == WorkflowStage.DRAFT:
