@@ -6,6 +6,7 @@ export const STAGE_LABELS = {
   pending_dg_endorsement:     'Submitted to DG',
   dg_approved:                'Endorsed by DG',
   pending_manager_approval:   'Pending Manager Approval',
+  pending_principal_review:  'Pending Principal Review',
   pending_second_approval:    'Pending Second Approval',
   submitted:                  'Submitted to PSC',
   // PSC intake
@@ -100,6 +101,7 @@ export const STAGE_META = {
   pending_dg_endorsement:     { color: 'cyan',   category: 'Pre-submission',  terminal: false },
   dg_approved:                { color: 'teal',   category: 'Pre-submission',  terminal: false },
   pending_manager_approval:   { color: 'cyan',   category: 'Pre-submission',  terminal: false },
+  pending_principal_review:  { color: 'cyan',   category: 'Pre-submission',  terminal: false },
   pending_second_approval:    { color: 'teal',   category: 'Pre-submission',  terminal: false },
   submitted:                  { color: 'blue',   category: 'Pre-submission',  terminal: false },
   received_by_psc:            { color: 'blue',   category: 'PSC Intake',      terminal: false },

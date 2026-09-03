@@ -708,6 +708,18 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         title = f"New internal submission: {submission.reference_number}"
         body = f"'{submission.title}' has completed all approvals and is ready for your review."
 
+    # ── Compliance Principal review gate (Senior-created submissions) ──────
+    elif target == WorkflowStage.PENDING_PRINCIPAL_REVIEW and submission.routed_unit == RoutedUnit.COMPLIANCE:
+        recipients = User.objects.filter(
+            psc_profile__role=Role.COMPLIANCE_PRINCIPAL, is_active=True,
+        )
+        actor_name = (actor.get_full_name() or actor.username) if actor else "Compliance staff"
+        title = f"Review required: {submission.reference_number}"
+        body = (
+            f"'{submission.title}' submitted by {actor_name} is awaiting your review "
+            f"before it can go to the Manager."
+        )
+
     # ── Compliance Manager approval gate (Principal/Senior-created submissions) ──
     elif target == WorkflowStage.PENDING_MANAGER_APPROVAL and submission.routed_unit == RoutedUnit.COMPLIANCE:
         recipients = User.objects.filter(
@@ -956,7 +968,7 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
 # ACTIVE_STAGES set in frontend/src/pages/psc/SubmissionLog.jsx and dashboard_stats_view.
 _ACTIVE_DASHBOARD_STAGES = [
     "draft", "pending_dg_endorsement", "dg_approved",
-    "pending_manager_approval", "pending_second_approval",
+    "pending_manager_approval", "pending_principal_review", "pending_second_approval",
     "submitted", "received_by_psc", "registered_routed",
     "returned_for_clarification", "manager_checklist_review",
     "under_assessment", "pending_secretary_approval", "forwarded_to_commission",
@@ -1726,7 +1738,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if (
             profile.role in _COMPLIANCE_SELF_SUBMIT_ROLES
             and prev in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
-            and target in (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.SUBMITTED)
+            and target in (
+                WorkflowStage.PENDING_PRINCIPAL_REVIEW,
+                WorkflowStage.PENDING_MANAGER_APPROVAL,
+                WorkflowStage.SUBMITTED,
+            )
             and submission.created_by_id != request.user.id
             and not self._is_active_draft_delegate(submission, request.user)
             and not (request.user.is_superuser or request.user.is_staff)
@@ -12607,6 +12623,7 @@ def dashboard_stats_view(request):
         WorkflowStage.PENDING_DG_ENDORSEMENT,
         WorkflowStage.DG_APPROVED,
         WorkflowStage.PENDING_MANAGER_APPROVAL,
+        WorkflowStage.PENDING_PRINCIPAL_REVIEW,
         WorkflowStage.PENDING_SECOND_APPROVAL,
         WorkflowStage.SUBMITTED,
         WorkflowStage.RECEIVED_BY_PSC,
@@ -12704,7 +12721,8 @@ def system_stats_view(request):
     # Same SLA definition as dashboard_stats_view, system-wide (no ministry filter).
     active_stages = [
         WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED,
-        WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECOND_APPROVAL,
+        WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_PRINCIPAL_REVIEW,
+        WorkflowStage.PENDING_SECOND_APPROVAL,
         WorkflowStage.SUBMITTED, WorkflowStage.RECEIVED_BY_PSC, WorkflowStage.REGISTERED_ROUTED,
         WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.MANAGER_CHECKLIST_REVIEW,
         WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.PENDING_SECRETARY_APPROVAL,
