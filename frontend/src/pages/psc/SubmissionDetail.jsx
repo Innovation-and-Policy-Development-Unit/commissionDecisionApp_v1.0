@@ -204,9 +204,10 @@ export default function SubmissionDetail() {
   const [officers, setOfficers] = useState([])
   const [selectedOfficer, setSelectedOfficer] = useState('')
   const [allocateBusy, setAllocateBusy] = useState(false)
-  const [collaboratorCandidates, setCollaboratorCandidates] = useState([])
-  const [selectedCollaborator, setSelectedCollaborator] = useState('')
-  const [collabBusy, setCollabBusy] = useState(false)
+  const [delegateCandidates, setDelegateCandidates] = useState([])
+  const [selectedDelegate, setSelectedDelegate] = useState('')
+  const [delegateReason, setDelegateReason] = useState('')
+  const [delegateBusy, setDelegateBusy] = useState(false)
   const [hasAssessmentText, setHasAssessmentText] = useState(false)
   const assessmentEditorRef = useRef(null)
   const isAdmin = user?.role === 'psc_admin'
@@ -237,15 +238,7 @@ export default function SubmissionDetail() {
     isAdmin
     || (MANAGER_ROLE_TO_UNIT[user.role] && MANAGER_ROLE_TO_UNIT[user.role] === submission?.routed_unit)
   )
-  // A Compliance self-submission's own creator (not the routing/allocation
-  // flow above — see SubmissionViewSet._assert_can_manage_collaborators) may
-  // invite named colleagues to comment on their own draft while composing it.
-  const COMPLIANCE_SELF_SUBMIT_ROLES = ['compliance_senior', 'compliance_principal', 'compliance_manager']
-  const isComplianceSelfSubmitter = user && COMPLIANCE_SELF_SUBMIT_ROLES.includes(user.role)
   const isDraftLikeStage = ['draft', 'returned_for_clarification'].includes(submission?.current_stage)
-  const canManageCollaborators = isComplianceSelfSubmitter
-    && submission?.logged_by === user?.username
-    && isDraftLikeStage
   // The assigned principal/senior officer hands their completed checklist
   // review or assessment back to their unit manager — only the manager
   // advances the stage from here (see transitions.py _UNIT_PRINCIPAL_ROLES).
@@ -266,8 +259,17 @@ export default function SubmissionDetail() {
   // means the submission is locked for this user; undefined (older payloads)
   // stays permissive and the server still enforces.
   const contentEditable = submission?.can_edit !== false
-  const canUploadDocs  = contentEditable && user && ['ministry_hr', 'dept_admin', 'head_of_agency',
-                                   'psc_admin', 'psc_officer', 'psc_secretary', 'csu_manager'].includes(user.role)
+  // A Compliance self-submission's own creator (or draft-edit delegate) may
+  // also attach documents while drafting — mirrors the backend's
+  // is_own_compliance_draft carve-out on SubmissionViewSet.documents().
+  const canUploadDocsAsComplianceOwner = Boolean(user) && isDraftLikeStage
+    && isComplianceFormCode(submission?.form_type_code)
+    && (submission?.logged_by === user?.username || submission?.active_draft_delegate?.username === user?.username)
+  const canUploadDocs  = contentEditable && user && (
+    ['ministry_hr', 'dept_admin', 'head_of_agency',
+      'psc_admin', 'psc_officer', 'psc_secretary', 'csu_manager'].includes(user.role)
+    || canUploadDocsAsComplianceOwner
+  )
   // Digitized form (submission paper) is edit mode only for the one drafting
   // it — ministry HR / dept admin, or CSU Manager for OPSC-internal
   // submissions — plus psc_admin for oversight/override. Everyone else
@@ -275,8 +277,14 @@ export default function SubmissionDetail() {
   // single-page view. Mirrors canEditRestructureForm below — keep in sync.
   const canEditForm37  = contentEditable && user && ['ministry_hr', 'dept_admin', 'psc_admin',
                                    'csu_manager'].includes(user.role)
-  // Compliance forms are completed in CMS; portal record is read-only for compliance roles
-  const canEditComplianceForm = false
+  // A Compliance self-submission's own creator (or their draft-edit delegate
+  // — see backend SubmissionDraftDelegate) may complete the digitized form
+  // while it's still a draft, per ComplianceSubmissionForm.jsx's "complete
+  // the digitized form on the detail page" prompt right after creating —
+  // same ownership rule the backend enforces on the dynamic-form endpoint.
+  const canEditComplianceForm = contentEditable && Boolean(user) && isDraftLikeStage
+    && isComplianceFormCode(submission?.form_type_code)
+    && (submission?.logged_by === user?.username || submission?.active_draft_delegate?.username === user?.username)
   const canEditDigitizedForm = canEditForm37 || canEditComplianceForm
   // PSC 2-1 / PSC 2-2 / ORG-3.1 are ministry-authored — once it reaches ODU
   // or general OPSC staff, they review it read-only (single-page PSCForm21View/
@@ -285,6 +293,13 @@ export default function SubmissionDetail() {
   const canEditRestructureForm = contentEditable && user
     && ['ministry_hr', 'dept_admin', 'csu_manager', 'psc_admin'].includes(user.role)
   const isComplianceSubmission = isComplianceFormCode(submission?.form_type_code)
+  // Only a Compliance Manager or Principal may grant draft-edit access to a
+  // stand-in (e.g. covering the drafting senior's absence) — never the
+  // creator themself. See SubmissionViewSet._assert_can_manage_delegation.
+  const DRAFT_DELEGATE_GRANTOR_ROLES = ['compliance_manager', 'compliance_principal']
+  const canManageDraftDelegate = user && DRAFT_DELEGATE_GRANTOR_ROLES.includes(user.role)
+    && isComplianceSubmission
+    && isDraftLikeStage
 
   // Dynamic checklist — shown when the form type has a linked checklist and the user has a matching role/stage
   const hasDynamicChecklist = Boolean(submission?.form_type_detail?.checklist_form_type)
@@ -454,38 +469,42 @@ export default function SubmissionDetail() {
 
   useEffect(() => {
     let cancelled = false
-    if (!id || !canManageCollaborators) { setCollaboratorCandidates([]); return undefined }
-    api.get(`/submissions/${id}/collaborator-candidates/`)
-      .then(r => { if (!cancelled) setCollaboratorCandidates(r.data || []) })
-      .catch(() => { if (!cancelled) setCollaboratorCandidates([]) })
+    if (!id || !canManageDraftDelegate) { setDelegateCandidates([]); return undefined }
+    api.get(`/submissions/${id}/draft-delegate-candidates/`)
+      .then(r => { if (!cancelled) setDelegateCandidates(r.data || []) })
+      .catch(() => { if (!cancelled) setDelegateCandidates([]) })
     return () => { cancelled = true }
-  }, [id, canManageCollaborators])
+  }, [id, canManageDraftDelegate])
 
-  const addCollaborator = async () => {
-    if (!selectedCollaborator) { toast.error('Select a colleague to add.'); return }
-    setCollabBusy(true)
+  const grantDraftDelegate = async () => {
+    if (!selectedDelegate) { toast.error('Select a colleague to grant access to.'); return }
+    setDelegateBusy(true)
     try {
-      await api.post(`/submissions/${id}/collaborators/`, { user_id: Number(selectedCollaborator) })
-      setSelectedCollaborator('')
+      await api.post(`/submissions/${id}/draft-delegate/`, {
+        user_id: Number(selectedDelegate),
+        reason: delegateReason,
+      })
+      setSelectedDelegate('')
+      setDelegateReason('')
       await reload()
-      toast.success('Collaborator added.')
+      toast.success('Draft-edit access granted.')
     } catch (err) {
-      toast.error(formatApiError(err, 'Could not add collaborator.'))
+      toast.error(formatApiError(err, 'Could not grant draft-edit access.'))
     } finally {
-      setCollabBusy(false)
+      setDelegateBusy(false)
     }
   }
 
-  const removeCollaborator = async (userId) => {
-    setCollabBusy(true)
+  const revokeDraftDelegate = async () => {
+    setDelegateBusy(true)
     try {
-      await api.delete(`/submissions/${id}/collaborators/`, { data: { user_id: userId } })
+      await api.delete(`/submissions/${id}/draft-delegate/`)
       await reload()
-      toast.success('Collaborator removed.')
+      toast.success('Draft-edit access revoked.')
     } catch (err) {
-      toast.error(formatApiError(err, 'Could not remove collaborator.'))
+      toast.error(formatApiError(err, 'Could not revoke draft-edit access.'))
     } finally {
-      setCollabBusy(false)
+      setDelegateBusy(false)
     }
   }
 
@@ -1827,44 +1846,57 @@ const stageDescriptions = {
             setError={setError}
           />
 
-          {canManageCollaborators && (
+          {canManageDraftDelegate && (
             <div className="card card-compact space-y-3">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Collaborators</h3>
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Draft-edit access</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Invite colleagues from your Compliance team to comment on this draft.
-                They can't edit it or submit it — only you can.
+                Grant a colleague full edit and submit rights on this draft — e.g. while
+                its creator is absent. Granting a new colleague replaces any current access.
               </p>
 
-              {submission.collaborators?.length > 0 && (
-                <div className="space-y-1">
-                  {submission.collaborators.map(c => (
-                    <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-slate-700 dark:text-slate-300">{c.full_name}</span>
-                      <BaseButton variant="ghost" size="sm" onClick={() => removeCollaborator(c.id)} disabled={collabBusy}>
-                        Remove
-                      </BaseButton>
-                    </div>
-                  ))}
+              {submission.active_draft_delegate ? (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-700 dark:text-slate-300">
+                      {submission.active_draft_delegate.full_name}
+                    </span>
+                    <BaseButton variant="ghost" size="sm" onClick={revokeDraftDelegate} disabled={delegateBusy}>
+                      Revoke
+                    </BaseButton>
+                  </div>
+                  {submission.active_draft_delegate.reason && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {submission.active_draft_delegate.reason}
+                    </p>
+                  )}
                 </div>
+              ) : (
+                <>
+                  <BaseSelect
+                    label="Grant access to"
+                    value={selectedDelegate}
+                    onChange={(_e, v) => setSelectedDelegate(v)}
+                    options={[
+                      { value: '', label: 'Select a colleague…' },
+                      ...delegateCandidates.map(c => ({
+                        value: String(c.id),
+                        label: `${c.full_name} — ${(c.role || '').replace(/_/g, ' ')}`,
+                      })),
+                    ]}
+                  />
+                  <BaseInput
+                    label="Reason (optional)"
+                    value={delegateReason}
+                    onChange={e => setDelegateReason(e.target.value)}
+                    placeholder="e.g. original drafter on leave"
+                  />
+                  <BaseButton type="button" variant="secondary" className="w-full"
+                    loading={delegateBusy} loadingLabel="Granting"
+                    onClick={grantDraftDelegate} disabled={!selectedDelegate}>
+                    Grant draft-edit access
+                  </BaseButton>
+                </>
               )}
-
-              <BaseSelect
-                label="Add collaborator"
-                value={selectedCollaborator}
-                onChange={(_e, v) => setSelectedCollaborator(v)}
-                options={[
-                  { value: '', label: 'Select a colleague…' },
-                  ...collaboratorCandidates.map(c => ({
-                    value: String(c.id),
-                    label: `${c.full_name} — ${(c.role || '').replace(/_/g, ' ')}`,
-                  })),
-                ]}
-              />
-              <BaseButton type="button" variant="secondary" className="w-full"
-                loading={collabBusy} loadingLabel="Adding"
-                onClick={addCollaborator} disabled={!selectedCollaborator}>
-                Add as collaborator
-              </BaseButton>
             </div>
           )}
 

@@ -686,16 +686,24 @@ class CoAssignmentSerializer(serializers.Serializer):
         return obj.principal.get_full_name() or obj.principal.username
 
 
-class CollaboratorSerializer(serializers.Serializer):
-    """Read-only representation of a comment-only draft collaborator (see
-    SubmissionCollaborator)."""
-    id        = serializers.IntegerField(source='user.id')
-    full_name = serializers.SerializerMethodField()
-    username  = serializers.CharField(source='user.username')
-    added_at  = serializers.DateTimeField()
+class DraftDelegateSerializer(serializers.Serializer):
+    """Read-only representation of the active draft-edit delegation (see
+    SubmissionDraftDelegate) — a Manager/Principal-granted stand-in who holds
+    the same edit and submit rights as the draft's own creator."""
+    id              = serializers.IntegerField(source='delegate.id')
+    full_name       = serializers.SerializerMethodField()
+    username        = serializers.CharField(source='delegate.username')
+    granted_by_name = serializers.SerializerMethodField()
+    granted_at      = serializers.DateTimeField()
+    reason          = serializers.CharField()
 
     def get_full_name(self, obj):
-        return obj.user.get_full_name() or obj.user.username
+        return obj.delegate.get_full_name() or obj.delegate.username
+
+    def get_granted_by_name(self, obj):
+        if not obj.granted_by:
+            return ""
+        return obj.granted_by.get_full_name() or obj.granted_by.username
 
 
 def _strip_ai_brief_if_ministry(data: dict, request) -> dict:
@@ -843,12 +851,19 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     )
     attached_submissions = AttachedSubmissionSerializer(many=True, read_only=True)
     co_assignments = CoAssignmentSerializer(many=True, read_only=True)
-    collaborators = CollaboratorSerializer(many=True, read_only=True)
+    active_draft_delegate = serializers.SerializerMethodField()
     preliminary_quality_score = serializers.SerializerMethodField()
     subway_map = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
     carryover_status = serializers.SerializerMethodField()
     on_commission_agenda = serializers.SerializerMethodField()
+
+    def get_active_draft_delegate(self, obj):
+        # `.all()` (not `.filter(...)`) so this reuses the prefetched,
+        # already-active-only queryset from `_submission_queryset_for`
+        # instead of issuing a fresh query per submission.
+        active_delegations = list(obj.draft_delegations.all())
+        return DraftDelegateSerializer(active_delegations[0]).data if active_delegations else None
 
     def get_on_commission_agenda(self, obj):
         """Whether this submission is actually placed on a meeting's agenda
@@ -1032,7 +1047,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "parent_title",
             "attached_submissions",
             "co_assignments",
-            "collaborators",
+            "active_draft_delegate",
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",

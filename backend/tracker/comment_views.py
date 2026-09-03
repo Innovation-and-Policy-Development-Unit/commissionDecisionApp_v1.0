@@ -47,8 +47,9 @@ def _is_ministry_side(user):
 
 # Compliance self-submissions still being drafted are visible to the whole
 # Compliance team (see _submission_queryset_for), but only the creator and
-# their explicitly-invited SubmissionCollaborators may actually post a
-# comment — everyone else can still read the thread once posted.
+# anyone a Manager/Principal has granted draft-edit access to (see
+# SubmissionDraftDelegate) may actually post a comment — everyone else can
+# still read the thread once posted.
 _COMPLIANCE_FORM_CATEGORY_CODES = ("COMPLIANCE", "discipline_compliance")
 
 
@@ -71,11 +72,11 @@ def _assert_can_comment(user, target):
         return
     if user.id == target.created_by_id:
         return
-    if target.collaborators.filter(user_id=user.id).exists():
+    if target.draft_delegations.filter(delegate_id=user.id, revoked_at__isnull=True).exists():
         return
     raise PermissionDenied(
-        "Only the submission's creator and invited collaborators can comment "
-        "while it's still a draft."
+        "Only the submission's creator, or a colleague granted draft-edit "
+        "access, can comment while it's still a draft."
     )
 
 
