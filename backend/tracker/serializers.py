@@ -741,6 +741,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
     logged_by = serializers.CharField(source="created_by.username", read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
     allocated_to_label = serializers.SerializerMethodField()
+    stage_display_label = serializers.SerializerMethodField()
     co_assignments = CoAssignmentSerializer(many=True, read_only=True)
     is_assessment_overdue = serializers.SerializerMethodField()
     estimated_meeting_date = serializers.SerializerMethodField()
@@ -770,6 +771,11 @@ class SubmissionListSerializer(serializers.ModelSerializer):
         if label:
             return label
         return self.get_assigned_to_name(obj)
+
+    def get_stage_display_label(self, obj):
+        from .subway_map import stage_display_label
+
+        return stage_display_label(obj)
 
     def get_form_agenda_category(self, obj):
         """Agenda section for this submission: lodge-time choice, else form type, else other."""
@@ -809,6 +815,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "assigned_to",
             "assigned_to_name",
             "allocated_to_label",
+            "stage_display_label",
             "assigned_at",
             "ready_for_manager_at",
             "co_assignments",
@@ -839,6 +846,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     logged_by = serializers.CharField(source="created_by.username", read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
     allocated_to_label = serializers.SerializerMethodField()
+    stage_display_label = serializers.SerializerMethodField()
     is_assessment_overdue = serializers.SerializerMethodField()
     estimated_meeting_date = serializers.SerializerMethodField()
     dg_endorsed_by_name = serializers.SerializerMethodField()
@@ -931,6 +939,11 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         if label:
             return label
         return self.get_assigned_to_name(obj)
+
+    def get_stage_display_label(self, obj):
+        from .subway_map import stage_display_label
+
+        return stage_display_label(obj)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -1026,6 +1039,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "assigned_to",
             "assigned_to_name",
             "allocated_to_label",
+            "stage_display_label",
             "assigned_at",
             "created_at",
             "updated_at",

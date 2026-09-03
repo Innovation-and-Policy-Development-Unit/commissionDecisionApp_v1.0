@@ -635,7 +635,7 @@ export default function SubmissionLog() {
                     </td>
                     <td className="min-w-[140px]">
                       <Badge variant={STAGE_VARIANT[r.current_stage] ?? 'secondary'} dot className="whitespace-nowrap">
-                        {stageLabel(r.current_stage, t)}
+                        {r.stage_display_label || stageLabel(r.current_stage, t)}
                         {r.is_assessment_overdue && <span className="ml-1 text-red-500 font-bold">!</span>}
                       </Badge>
                       {r.current_stage !== 'draft' && (
