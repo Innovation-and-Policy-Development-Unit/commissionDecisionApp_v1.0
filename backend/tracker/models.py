@@ -53,6 +53,8 @@ class Role(models.TextChoices):
     DG_DIRECTOR       = "dg_director",       "DG / Director (Ministry)"
     COMMISSION_MEMBER = "commission_member", "Commission Member"
     PANEL_MEMBER      = "panel_member",      "Investigation Panel Member"
+    # ── Read-only observer roles ────────────────────────────────────────────
+    HRMIS_REVIEWER = "hrmis_reviewer", "Manager HRMIS (Read-Only Reviewer)"
 
 
 class WorkflowStage(models.TextChoices):

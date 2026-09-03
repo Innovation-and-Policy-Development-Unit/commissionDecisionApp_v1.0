@@ -1018,6 +1018,17 @@ class Command(BaseCommand):
         ), [
             "view_dashboard",
         ]),
+        ("hrmis_reviewer", (
+            "Manager HRMIS (Read-Only Reviewer) — HRMIS does not handle "
+            "submissions or workflow; this role exists purely so its manager "
+            "can review SCDMS features. Read-only across submissions, "
+            "reports, and the audit trail; deliberately carries no "
+            "create/edit/transition rights and no administration "
+            "permissions (manage_users, manage_roles, etc.), and is not "
+            "referenced anywhere in transitions.py or opsc_access.py."
+        ), [
+            "view_dashboard", "view_submissions", "view_reports", "view_audit_trail",
+        ]),
     ]
 
     def _seed_permissions(self):
