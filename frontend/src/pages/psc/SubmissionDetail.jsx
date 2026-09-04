@@ -14,6 +14,7 @@ import { useAgendaSections } from '../../hooks/useAgendaSections'
 import api, { isRateLimited } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { userIsOpscInternal, userCanRegenerateAiBrief } from '../../utils/opscAccess'
+import { userIsAdmin } from '../../utils/adminAccess'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import {
@@ -297,7 +298,8 @@ export default function SubmissionDetail() {
   // stand-in (e.g. covering the drafting senior's absence) — never the
   // creator themself. See SubmissionViewSet._assert_can_manage_delegation.
   const DRAFT_DELEGATE_GRANTOR_ROLES = ['compliance_manager', 'compliance_principal']
-  const canManageDraftDelegate = user && DRAFT_DELEGATE_GRANTOR_ROLES.includes(user.role)
+  const canManageDraftDelegate = user
+    && (DRAFT_DELEGATE_GRANTOR_ROLES.includes(user.role) || userIsAdmin(user))
     && isComplianceSubmission
     && isDraftLikeStage
 
