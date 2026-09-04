@@ -2875,7 +2875,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
     def _assert_can_manage_delegation(self, request, submission, *, require_draft_stage=True):
         profile = _profile(request.user)
-        if request.user.is_superuser or request.user.is_staff:
+        if profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff:
             return
         if profile.role not in self._DRAFT_DELEGATE_GRANTOR_ROLES:
             raise PermissionDenied("Only a Compliance Manager or Principal may grant draft-edit access.")
@@ -2905,11 +2905,16 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         excluded_ids = {submission.created_by_id}
         if active:
             excluded_ids.add(active.delegate_id)
+        # Scope to the *creator's* Compliance team, not the requester's own
+        # unit — for a Manager/Principal these are the same (enforced by
+        # _assert_can_manage_delegation above), but an admin granting on
+        # behalf of an absent Manager/Principal has no unit of their own to
+        # match, so the creator's unit is the only correct reference.
         candidates = (
             User.objects.filter(
                 is_active=True,
                 psc_profile__role__in=self._COMPLIANCE_SELF_SUBMIT_ROLES,
-                psc_profile__unit_id=_profile(request.user).unit_id,
+                psc_profile__unit_id=_profile(submission.created_by).unit_id,
             )
             .exclude(pk__in=excluded_ids)
             .select_related("psc_profile")
@@ -2947,11 +2952,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             return Response({"detail": "User not found or inactive."}, status=status.HTTP_400_BAD_REQUEST)
 
         d_profile = getattr(delegate, "psc_profile", None)
-        requester_unit = _profile(request.user).unit_id
+        # Same reasoning as draft_delegate_candidates() above: validate
+        # against the creator's team, not the requester's own unit, so this
+        # also works when an admin is granting on the absent Manager's/
+        # Principal's behalf.
+        team_unit = _profile(submission.created_by).unit_id
         if (
             d_profile is None
             or d_profile.role not in self._COMPLIANCE_SELF_SUBMIT_ROLES
-            or d_profile.unit_id != requester_unit
+            or d_profile.unit_id != team_unit
         ):
             return Response(
                 {"detail": "Draft-edit access can only be granted to a member of your own Compliance team."},
