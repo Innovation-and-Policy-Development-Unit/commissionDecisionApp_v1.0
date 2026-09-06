@@ -396,11 +396,22 @@ export default function Agenda() {
                   <Printer size={15} /> Print / Export
                 </button>
                 )}
-                {/* Manual placement tools — approved submissions place themselves
-                    automatically; these are only needed for exceptions (no meeting
-                    scheduled yet, carry-overs, or reordering), so they're tucked
-                    behind Advanced rather than sitting alongside everyday actions. */}
-                {(canManageAgenda || !readOnly) && (
+                {/* Add Item lives at the top level (not behind Advanced) since it's
+                    the only path for Matters Arising carry-overs, which come up
+                    at every meeting, not just as an exception. */}
+                {!readOnly && (
+                  <button
+                    onClick={() => { fetchSubmissions(); setModalOpen(true) }}
+                    className="btn-outline flex items-center gap-2 px-4 py-2"
+                    title="Add a Matters Arising reference or other one-off item — normal approvals place themselves automatically"
+                  >
+                    <Plus size={15} /> Add Item
+                  </button>
+                )}
+                {/* Sitting Workspace — drag-and-drop tool for genuine exceptions
+                    (no meeting scheduled yet, or reordering), tucked behind
+                    Advanced rather than sitting alongside everyday actions. */}
+                {canManageAgenda && (
                   <div className="relative" ref={advancedMenuRef}>
                     <button
                       onClick={() => setAdvancedMenuOpen(o => !o)}
@@ -411,35 +422,19 @@ export default function Agenda() {
                     </button>
                     {advancedMenuOpen && (
                       <div className="absolute right-0 mt-2 w-72 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-20 py-1">
-                        {canManageAgenda && (
-                          <Link
-                            to={`/secretariat/meetings/${selectedId}/workspace`}
-                            onClick={() => setAdvancedMenuOpen(false)}
-                            className="flex items-start gap-2 px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                          >
-                            <LayoutGrid size={15} className="mt-0.5 shrink-0" />
-                            <span>
-                              <span className="block font-medium text-slate-800 dark:text-slate-100">Sitting Workspace</span>
-                              <span className="block text-xs text-slate-500 dark:text-slate-400">
-                                Drag-and-drop for exceptions: no meeting scheduled yet, carry-overs, or reordering.
-                              </span>
+                        <Link
+                          to={`/secretariat/meetings/${selectedId}/workspace`}
+                          onClick={() => setAdvancedMenuOpen(false)}
+                          className="flex items-start gap-2 px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                        >
+                          <LayoutGrid size={15} className="mt-0.5 shrink-0" />
+                          <span>
+                            <span className="block font-medium text-slate-800 dark:text-slate-100">Sitting Workspace</span>
+                            <span className="block text-xs text-slate-500 dark:text-slate-400">
+                              Drag-and-drop for exceptions: no meeting scheduled yet, carry-overs, or reordering.
                             </span>
-                          </Link>
-                        )}
-                        {!readOnly && (
-                          <button
-                            onClick={() => { fetchSubmissions(); setModalOpen(true); setAdvancedMenuOpen(false) }}
-                            className="w-full flex items-start gap-2 px-4 py-2.5 text-sm text-left hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                          >
-                            <Plus size={16} className="mt-0.5 shrink-0" />
-                            <span>
-                              <span className="block font-medium text-slate-800 dark:text-slate-100">Add Item</span>
-                              <span className="block text-xs text-slate-500 dark:text-slate-400">
-                                One-off adds, e.g. a Matters Arising reference. Normal approvals place themselves.
-                              </span>
-                            </span>
-                          </button>
-                        )}
+                          </span>
+                        </Link>
                       </div>
                     )}
                   </div>

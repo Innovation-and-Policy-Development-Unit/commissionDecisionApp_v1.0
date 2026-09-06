@@ -5645,6 +5645,8 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                 status=400,
             )
 
+        old_m2m_ids = set(task.assigned_staff_m2m.values_list("id", flat=True))
+
         task.assigned_staff_m2m.set(valid_staff)
         task.assigned_staff = valid_staff.first()  # keep FK in sync
         task.save(update_fields=["assigned_staff"])
@@ -5654,6 +5656,11 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         _log(request, _AL.Action.UPDATE, resource_type="CommissionTask",
              resource_id=str(task.id), resource_label=task.title,
              description=f"Task reassigned to {valid_staff.count()} staff")
+
+        new_staff = [s for s in valid_staff if s.id not in old_m2m_ids]
+        if new_staff:
+            from .email_notify import notify_task_assigned
+            notify_task_assigned(task, new_staff)
 
         return Response(CommissionTaskSerializer(task).data)
 
@@ -11242,78 +11249,6 @@ class MinutesViewSet(viewsets.ModelViewSet):
         )
         return Response({"detail": "Action item extraction started. Refresh shortly."})
 
-    @action(detail=True, methods=["post"], url_path="sign")
-    def sign(self, request, pk=None):
-        """Mark minutes as signed by the current user and generate a signed PDF.
-        Requires the user's session PIN for confirmation."""
-        minutes = self.get_object()
-        signer_profile = _profile(self.request.user)
-        if signer_profile.role not in {Role.CHAIRPERSON, Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.PSC_COMMISSIONER}:
-            raise PermissionDenied("Only PSC Secretary, Admin, Commissioners, or the Chairperson can sign minutes.")
-        if minutes.status == MinutesStatus.SIGNED:
-            return Response({"detail": "Minutes are already signed."}, status=400)
-
-        # Require session PIN for signature confirmation
-        pin = request.data.get("pin", "")
-        if not signer_profile.session_pin:
-            return Response(
-                {"detail": "You must set up a session PIN in Account Settings before you can sign documents."},
-                status=400,
-            )
-        from django.contrib.auth.hashers import check_password
-        if not pin or not check_password(pin, signer_profile.session_pin):
-            return Response({"detail": "Invalid PIN. Signing cancelled."}, status=400)
-
-        minutes.status = MinutesStatus.SIGNED
-        minutes.signed_by = request.user
-        minutes.signed_at = timezone.now()
-        minutes.save()
-
-        # Generate signed PDF with signature image
-        from io import BytesIO
-        from django.template.loader import render_to_string
-        from weasyprint import HTML
-        import base64
-
-        content = minutes.content or {}
-        agenda_items = content.get("agenda_items", [])
-
-        # Embed signature as base64 data URI if available
-        signature_data_uri = None
-        if signer_profile.signature and signer_profile.signature.storage.exists(signer_profile.signature.name):
-            try:
-                with signer_profile.signature.open("rb") as f:
-                    sig_bytes = f.read()
-                ext = signer_profile.signature.name.rsplit(".", 1)[-1].lower()
-                mime = "image/png" if ext == "png" else "image/jpeg"
-                b64 = base64.b64encode(sig_bytes).decode("ascii")
-                signature_data_uri = f"data:{mime};base64,{b64}"
-            except Exception:
-                pass
-
-        html = render_to_string("tracker/minutes_pdf.html", {
-            "meeting": minutes.meeting,
-            "minutes": minutes,
-            "content": content,
-            "agenda_items": agenda_items,
-            "status_label": minutes.get_status_display(),
-            "signature_data_uri": signature_data_uri,
-        })
-
-        buf = BytesIO()
-        HTML(string=html).write_pdf(buf)
-        buf.seek(0)
-
-        # Persist the signed PDF
-        from django.core.files.base import ContentFile
-        filename = f"minutes_{minutes.meeting.reference_number}_signed.pdf"
-        minutes.pdf_version.save(filename, ContentFile(buf.read()), save=True)
-
-        # Signing itself is complete; task allocation to managers is now a
-        # separate, explicit Secretary action (see allocate_tasks below) so a
-        # bad signature/upload can be caught before managers are notified.
-        return Response(MinutesSerializer(minutes, context={"request": request}).data)
-
     @action(detail=True, methods=["post"], url_path="mark-reviewed")
     def mark_reviewed(self, request, pk=None):
         """Manual override: force minutes straight to Reviewed, bypassing the
@@ -12990,7 +12925,7 @@ def generate_submission_letter(request, pk):
 @permission_classes([permissions.IsAuthenticated])
 def calendar_events_view(request):
     """Commission calendar: meetings + deadlines + SLA warnings."""
-    from .models import Meeting, CommissionTask
+    from .models import Meeting, CommissionTask, Minutes, MinutesStatus
     profile = _profile(request.user)
     events = []
 
@@ -13012,7 +12947,33 @@ def calendar_events_view(request):
             "title": t.title or "Commission Task",
             "date": t.due_date.isoformat() if t.due_date else None,
             "status": t.status,
-            "url": f"/submissions/{t.submission_id}" if t.submission_id else None,
+            "url": f"/submissions/{t.submission_id}" if t.submission_id else "/secretariat/tasks",
+        })
+
+    minutes_review_qs = Minutes.objects.filter(
+        status=MinutesStatus.PENDING_SECRETARIAT_REVIEW,
+        review_due_at__isnull=False,
+    ).select_related("meeting")
+    for mn in minutes_review_qs[:20]:
+        events.append({
+            "id": f"minutes-review-{mn.id}",
+            "type": "minutes_review",
+            "title": f"Minutes review due: {mn.meeting.reference_number or mn.meeting.title or mn.meeting_id}",
+            "date": mn.review_due_at.date().isoformat(),
+            "url": "/secretariat/minutes",
+        })
+
+    minutes_circulation_qs = Minutes.objects.filter(
+        status=MinutesStatus.CIRCULATED_TO_COMMISSIONERS,
+        commissioner_review_due_at__isnull=False,
+    ).select_related("meeting")
+    for mn in minutes_circulation_qs[:20]:
+        events.append({
+            "id": f"minutes-circulation-{mn.id}",
+            "type": "minutes_review",
+            "title": f"Commissioner feedback due: {mn.meeting.reference_number or mn.meeting.title or mn.meeting_id}",
+            "date": mn.commissioner_review_due_at.date().isoformat(),
+            "url": "/secretariat/minutes",
         })
 
     for sub in Submission.objects.filter(

@@ -126,6 +126,11 @@ function AgendaItemEditor({ item, index, onChange }) {
                   items[aiIdx] = { ...items[aiIdx], responsible: e.target.value }
                   onChange(index, 'action_items', items)
                 }} placeholder="Responsible" />
+                <input className="input text-sm w-36" type="date" value={ai.deadline || ''} onChange={e => {
+                  const items = [...(item.action_items || [])]
+                  items[aiIdx] = { ...items[aiIdx], deadline: e.target.value }
+                  onChange(index, 'action_items', items)
+                }} placeholder="Deadline" />
                 <button type="button" onClick={() => {
                   const items = (item.action_items || []).filter((_, i) => i !== aiIdx)
                   onChange(index, 'action_items', items)
@@ -317,18 +322,14 @@ export default function MinutesEditor() {
     }
   }
 
-  const [showPinModal, setShowPinModal] = useState(false)
-  const [pinInput, setPinInput] = useState('')
-  const [pinError, setPinError] = useState('')
   const signedFileRef = useRef(null)
 
-  const changeStatus = async (action, pin) => {
+  const changeStatus = async (action) => {
     setSaving(true)
     setError('')
     setSuccess('')
     try {
       const methodMap = {
-        sign: 'sign',
         submit_review: 'submit-for-review',
         approve: 'secretariat-approve',
         circulate: 'circulate-to-commissioners',
@@ -337,11 +338,9 @@ export default function MinutesEditor() {
         allocate_tasks: 'allocate-tasks',
       }
       const method = methodMap[action] || 'submit-for-review'
-      const payload = action === 'sign' ? { pin } : {}
-      const res = await api.post(`/minutes/${minutes.id}/${method}/`, payload)
+      const res = await api.post(`/minutes/${minutes.id}/${method}/`, {})
       setMinutes(res.data)
       const messages = {
-        sign: 'Minutes signed.',
         submit_review: 'Minutes submitted to the Secretary and Chairman for review.',
         approve: 'Your approval has been recorded.',
         circulate: 'Minutes circulated to Commissioners for comment.',
@@ -395,22 +394,6 @@ export default function MinutesEditor() {
     } finally {
       setSaving(false)
     }
-  }
-
-  const handleSignClick = () => {
-    setPinInput('')
-    setPinError('')
-    setShowPinModal(true)
-  }
-
-  const handlePinSubmit = async (e) => {
-    e.preventDefault()
-    if (pinInput.length < 4) {
-      setPinError('PIN must be at least 4 digits.')
-      return
-    }
-    setShowPinModal(false)
-    await changeStatus('sign', pinInput)
   }
 
   const downloadPdf = async () => {
@@ -723,60 +706,6 @@ export default function MinutesEditor() {
       </>
       )}
 
-      {showPinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowPinModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
-                <PenSquare size={18} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900">Confirm Signature</h3>
-                <p className="text-xs text-slate-500">Enter your session PIN to sign the minutes.</p>
-              </div>
-            </div>
-
-            {pinError && (
-              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{pinError}</div>
-            )}
-
-            <form onSubmit={handlePinSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
-                  Session PIN
-                </label>
-                <input
-                  type="password"
-                  className="input text-center text-xl font-mono"
-                  style={{ borderRadius: 10, letterSpacing: '0.4em' }}
-                  maxLength={6}
-                  placeholder="••••••"
-                  value={pinInput}
-                  onChange={e => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required
-                  autoFocus
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={saving || pinInput.length < 4}
-                  className="btn-gradient flex-1 py-2.5 text-sm"
-                >
-                  {saving ? 'Signing…' : 'Confirm & Sign'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPinModal(false)}
-                  className="btn-outline py-2.5 px-5 text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
