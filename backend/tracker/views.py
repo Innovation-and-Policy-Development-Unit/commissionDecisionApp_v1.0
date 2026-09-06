@@ -14092,8 +14092,8 @@ def active_sessions_view(request):
     A user counts as online when all of the following hold: they haven't
     logged out manually (a LOGOUT audit entry after their last login), their
     session hasn't passed its cap (5pm Vanuatu time same day, or 12h after
-    login, whichever is sooner — doesn't apply to PSC Administrators, who
-    are exempt, see logout_scheduler.py / tasks.force_logout_non_admin_users),
+    login, whichever is sooner — applies uniformly, including to PSC
+    Administrators, see logout_scheduler.py / tasks.force_logout_expired_sessions),
     and — this is what makes it "who's active right now" rather than "whose
     session is still theoretically valid" — last_login is recent enough that
     their browser must still be open and talking to the API. last_login only
@@ -14101,10 +14101,9 @@ def active_sessions_view(request):
     fires when an access token expires), so anyone genuinely still using the
     system will have refreshed within one access-token lifetime; anyone who
     closed the tab simply stops generating that signal even though nothing
-    "ended" their session. Applies uniformly, including to admins: cap
-    exemption is about forced-logout policy, not about what counts as active
-    for display. "Last seen" is whichever of the three actually ended the
-    session (logout, cap expiry, or last_login itself once it's gone stale).
+    "ended" their session. "Last seen" is whichever of the three actually
+    ended the session (logout, cap expiry, or last_login itself once it's
+    gone stale).
     """
     from datetime import timedelta
 
@@ -14149,7 +14148,6 @@ def active_sessions_view(request):
     for u in users:
         u_profile = getattr(u, "psc_profile", None)
         role = u_profile.role if u_profile else ""
-        is_exempt_from_cap = role == Role.PSC_ADMIN or u.is_superuser
 
         login_at = u.last_login
         logout_at = last_logout.get(u.id)
@@ -14161,7 +14159,7 @@ def active_sessions_view(request):
         if login_at is not None:
             if logout_at and logout_at > login_at:
                 last_seen_at = logout_at
-            elif not is_exempt_from_cap and session and session.expires_at <= now:
+            elif session and session.expires_at <= now:
                 last_seen_at = session.expires_at
             elif login_at < recent_activity_cutoff:
                 last_seen_at = login_at
@@ -14177,7 +14175,7 @@ def active_sessions_view(request):
             "last_login_at": login_at,
             "is_online": is_online,
             "last_seen_at": last_seen_at,
-            "session_expires_at": session.expires_at if (session and is_online and not is_exempt_from_cap) else None,
+            "session_expires_at": session.expires_at if (session and is_online) else None,
         })
 
     def _sort_key(r):
