@@ -803,6 +803,7 @@ export default function TaskManagement() {
                       <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap w-24">Dec. No.</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[180px]">Agenda Item</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap w-32">Meeting No.</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap w-24">Due Date</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider min-w-[200px]">Decision Detail</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-36">Decision</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-28">Action Unit</th>
@@ -844,6 +845,19 @@ export default function TaskManagement() {
                               {new Date(t.meeting_date).toLocaleDateString()}
                             </p>
                           )}
+                        </td>
+
+                        {/* Due Date */}
+                        <td className="px-3 py-3">
+                          {t.due_date ? (
+                            <span className={`text-xs whitespace-nowrap ${
+                              new Date(t.due_date) < new Date() && t.status !== 'completed'
+                                ? 'text-red-600 dark:text-red-400 font-semibold'
+                                : 'text-slate-600 dark:text-slate-400'
+                            }`}>
+                              {new Date(t.due_date).toLocaleDateString()}
+                            </span>
+                          ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
                         </td>
 
                         {/* Decision Detail */}

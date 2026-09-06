@@ -3746,10 +3746,10 @@ def notify_meeting_postponed_task(meeting_id, old_date_iso, old_time_iso, old_cu
 
 
 @shared_task
-def force_logout_non_admin_users():
+def force_logout_expired_sessions():
     """Enforce each user's session cap — 5pm same day, or 12h after login if
-    they logged in after 5pm (see TrustedSession.compute_expiry) — for
-    everyone except PSC Administrators. Once a user's TrustedSession has
+    they logged in after 5pm (see TrustedSession.compute_expiry) — for every
+    user, including PSC Administrators. Once a user's TrustedSession has
     actually expired, blacklist their refresh tokens and deactivate the
     session, so logging back in requires full TOTP re-auth rather than a
     PIN-only trusted-session bypass (TrustedSession/session_pin skips TOTP
@@ -3763,14 +3763,13 @@ def force_logout_non_admin_users():
     from django.utils import timezone
     from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
-    from .models import Profile, Role, TrustedSession
+    from .models import TrustedSession
 
     User = get_user_model()
-    admin_user_ids = Profile.objects.filter(role=Role.PSC_ADMIN).values_list("user_id", flat=True)
 
     expired_sessions = TrustedSession.objects.filter(
         is_active=True, expires_at__lte=timezone.now(),
-    ).exclude(user_id__in=admin_user_ids)
+    )
     target_user_ids = set(expired_sessions.values_list("user_id", flat=True))
 
     if not target_user_ids:

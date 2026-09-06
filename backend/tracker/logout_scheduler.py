@@ -1,8 +1,8 @@
-"""Register the periodic session-cap enforcement Celery beat task (all users except PSC Administrators).
+"""Register the periodic session-cap enforcement Celery beat task (applies to all users).
 
 Each user's cutoff (5pm same day, or 12h after login if they logged in after
 5pm) is individual — see TrustedSession.compute_expiry() — so this runs
-frequently and force_logout_non_admin_users() only acts on sessions that have
+frequently and force_logout_expired_sessions() only acts on sessions that have
 actually expired, rather than firing a single blanket sweep at a fixed clock
 time.
 """
@@ -13,7 +13,7 @@ import logging
 
 log = logging.getLogger("scdms.security")
 
-TASK_NAME = "tracker.tasks.force_logout_non_admin_users"
+TASK_NAME = "tracker.tasks.force_logout_expired_sessions"
 PERIODIC_NAME = "session-cap-force-logout"
 
 # Every 15 minutes.
