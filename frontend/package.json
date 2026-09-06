@@ -30,7 +30,7 @@
     "html2canvas": "^1.4.1",
     "i18next": "^26.0.10",
     "lucide-react": "^0.344.0",
-    "pdfjs-dist": "^5.7.284",
+    "pdfjs-dist": "^6.2.108",
     "react": "^18.2.0",
     "react-cropper": "^2.3.3",
     "react-dom": "^18.2.0",
