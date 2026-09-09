@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../context/ThemeContext'
 import { ChatProvider } from '../../context/ChatContext'
+import FloatingChatWindows from '../chat/FloatingChatWindows'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import HorizontalMenu from './HorizontalMenu'
@@ -115,6 +116,7 @@ export default function Layout() {
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
       />
+      <FloatingChatWindows />
     </div>
     </ChatProvider>
   )
