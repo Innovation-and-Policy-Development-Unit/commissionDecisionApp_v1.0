@@ -19,6 +19,10 @@ backend/venv/
 *.log
 local_settings.py
 db.sqlite3
+# Local MEDIA_ROOT default — production serves from the scdms_media Docker
+# volume (/var/scdms/media), outside the repo; this only catches ad-hoc
+# local/test runs that fall back to backend/media.
+backend/media/
 
 # ── Node / Frontend ──────────────────────────────────────────────────────────
 node_modules/

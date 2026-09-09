@@ -3,6 +3,8 @@ import {
 } from 'react'
 import api from '../api/client'
 import { useAuth } from './AuthContext'
+import { getDesktopNotificationsEnabled, showDesktopNotification } from '../utils/browserNotifications'
+import { isTabVisible } from '../hooks/useVisibilityAwareInterval'
 
 const ChatContext = createContext(null)
 
@@ -44,6 +46,10 @@ export function ChatProvider({ children }) {
   const pendingSendsRef = useRef({}) // conversationId -> [{tempId, body}]
   const activeIdRef = useRef(null)
   activeIdRef.current = activeId
+  const conversationsRef = useRef([])
+  conversationsRef.current = conversations
+  const openWindowsRef = useRef([])
+  const openChatWindowRef = useRef(() => {})
 
   const fetchConversations = useCallback(async () => {
     if (!enabled) return
@@ -76,6 +82,7 @@ export function ChatProvider({ children }) {
   // /chat page's single `activeId` selection above) ──────────────────────
   const MAX_OPEN_WINDOWS = 3
   const [openWindows, setOpenWindows] = useState([]) // [{ id, minimized }], oldest first
+  openWindowsRef.current = openWindows
 
   const openChatWindow = useCallback((conversationId) => {
     if (!messagesByConversation[conversationId]) fetchMessages(conversationId)
@@ -89,6 +96,7 @@ export function ChatProvider({ children }) {
       return next.length > MAX_OPEN_WINDOWS ? next.slice(next.length - MAX_OPEN_WINDOWS) : next
     })
   }, [fetchMessages, messagesByConversation])
+  openChatWindowRef.current = openChatWindow
 
   const closeChatWindow = useCallback((conversationId) => {
     setOpenWindows((prev) => prev.filter((w) => w.id !== conversationId))
@@ -106,7 +114,7 @@ export function ChatProvider({ children }) {
     return false
   }, [])
 
-  const sendMessage = useCallback((conversationId, body) => {
+  const sendMessage = useCallback((conversationId, body, replyToId = null) => {
     const trimmed = (body || '').trim()
     if (!trimmed) return
     const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -129,13 +137,13 @@ export function ChatProvider({ children }) {
         },
       ],
     }))
-    const ok = send({ type: 'message.send', conversation_id: conversationId, body: trimmed })
+    const ok = send({ type: 'message.send', conversation_id: conversationId, body: trimmed, reply_to: replyToId })
     if (!ok) {
       // No live socket — fall back to REST so the message isn't silently lost.
       // No WS echo will arrive for this one (the socket wasn't connected when
       // it was broadcast), so reconcile directly from the REST response
       // instead of leaving the optimistic placeholder pending forever.
-      api.post(`/chat/conversations/${conversationId}/messages/`, { body: trimmed })
+      api.post(`/chat/conversations/${conversationId}/messages/`, { body: trimmed, reply_to: replyToId })
         .then(({ data }) => {
           pendingSendsRef.current[conversationId] = (pendingSendsRef.current[conversationId] || [])
             .filter((p) => p.tempId !== tempId)
@@ -157,6 +165,53 @@ export function ChatProvider({ children }) {
         })
     }
   }, [send, user])
+
+  // Attachments always go via REST (WebSockets don't carry binary uploads).
+  const sendAttachments = useCallback(async (conversationId, { body = '', files = [], replyToId } = {}) => {
+    const form = new FormData()
+    if (body.trim()) form.append('body', body.trim())
+    if (replyToId) form.append('reply_to', replyToId)
+    files.forEach((f) => form.append('files', f))
+    const { data } = await api.post(`/chat/conversations/${conversationId}/messages/`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    setMessagesByConversation((prev) => {
+      const existing = prev[conversationId] || []
+      return existing.some((m) => m.id === data.id)
+        ? prev
+        : { ...prev, [conversationId]: [...existing, data] }
+    })
+    setConversations((prev) => sortConversations(prev.map((c) => (c.id === conversationId
+      ? { ...c, last_message: { id: data.id, sender: data.sender, body: data.body, created_at: data.created_at }, updated_at: data.created_at }
+      : c))))
+    return data
+  }, [])
+
+  const editMessage = useCallback(async (conversationId, messageId, body) => {
+    const { data } = await api.patch(`/chat/conversations/${conversationId}/messages/${messageId}/`, { body })
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).map((m) => (m.id === messageId ? data : m)),
+    }))
+  }, [])
+
+  const deleteMessage = useCallback(async (conversationId, messageId) => {
+    const { data } = await api.delete(`/chat/conversations/${conversationId}/messages/${messageId}/`)
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).map((m) => (m.id === messageId ? data : m)),
+    }))
+  }, [])
+
+  const reactToMessage = useCallback(async (conversationId, messageId, emoji) => {
+    const { data } = await api.post(`/chat/conversations/${conversationId}/messages/${messageId}/react/`, { emoji })
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).map((m) => (
+        m.id === messageId ? { ...m, reactions: data.reactions } : m
+      )),
+    }))
+  }, [])
 
   const setTyping = useCallback((conversationId, isTyping) => {
     send({ type: 'typing', conversation_id: conversationId, is_typing: isTyping })
@@ -190,9 +245,12 @@ export function ChatProvider({ children }) {
       case 'message': {
         const msg = evt.message
         const convId = msg.conversation
+        const isOwn = msg.sender === user?.id
+        const isViewed = activeIdRef.current === convId
+          || openWindowsRef.current.some((w) => w.id === convId && !w.minimized)
+
         setMessagesByConversation((prev) => {
           const existing = prev[convId] || []
-          const isOwn = msg.sender === user?.id
           const pendingQueue = pendingSendsRef.current[convId] || []
           if (isOwn && pendingQueue.length) {
             const [match, ...rest] = pendingQueue
@@ -203,16 +261,54 @@ export function ChatProvider({ children }) {
           return { ...prev, [convId]: [...existing, msg] }
         })
         setConversations((prev) => {
-          const isActive = activeIdRef.current === convId
           const next = prev.map((c) => (c.id === convId
             ? {
               ...c,
               last_message: { id: msg.id, sender: msg.sender, body: msg.body, created_at: msg.created_at },
               updated_at: msg.created_at,
-              unread_count: (!isActive && msg.sender !== user?.id) ? (c.unread_count || 0) + 1 : c.unread_count,
+              unread_count: (!isViewed && !isOwn) ? (c.unread_count || 0) + 1 : c.unread_count,
             }
             : c))
           return sortConversations(next)
+        })
+
+        if (!isOwn && !isViewed && getDesktopNotificationsEnabled() && !isTabVisible()) {
+          const conv = conversationsRef.current.find((c) => c.id === convId)
+          showDesktopNotification({
+            title: conv?.display_name || msg.sender_name,
+            body: msg.body || 'Sent an attachment',
+            tag: `scdms-chat-${convId}`,
+            onClick: () => openChatWindowRef.current(convId),
+          })
+        }
+        break
+      }
+      case 'message_edited': {
+        const msg = evt.message
+        setMessagesByConversation((prev) => ({
+          ...prev,
+          [msg.conversation]: (prev[msg.conversation] || []).map((m) => (m.id === msg.id ? msg : m)),
+        }))
+        break
+      }
+      case 'message_deleted': {
+        const msg = evt.message
+        setMessagesByConversation((prev) => ({
+          ...prev,
+          [msg.conversation]: (prev[msg.conversation] || []).map((m) => (m.id === msg.id ? msg : m)),
+        }))
+        break
+      }
+      case 'reaction': {
+        const { message_id: msgId, reactions } = evt
+        setMessagesByConversation((prev) => {
+          const next = { ...prev }
+          for (const convId of Object.keys(next)) {
+            if (next[convId].some((m) => m.id === msgId)) {
+              next[convId] = next[convId].map((m) => (m.id === msgId ? { ...m, reactions } : m))
+            }
+          }
+          return next
         })
         break
       }
@@ -340,6 +436,10 @@ export function ChatProvider({ children }) {
     unreadTotal,
     selectConversation,
     sendMessage,
+    sendAttachments,
+    editMessage,
+    deleteMessage,
+    reactToMessage,
     setTyping,
     markRead,
     startConversation,
@@ -352,7 +452,8 @@ export function ChatProvider({ children }) {
     minimizeChatWindow,
   }), [
     conversationsWithPresence, connected, activeId, messagesByConversation, typingByConversation,
-    onlineByUser, unreadTotal, selectConversation, sendMessage, setTyping, markRead,
+    onlineByUser, unreadTotal, selectConversation, sendMessage, sendAttachments, editMessage,
+    deleteMessage, reactToMessage, setTyping, markRead,
     startConversation, searchUsers, fetchMessages, fetchConversations,
     openWindows, openChatWindow, closeChatWindow, minimizeChatWindow,
   ])

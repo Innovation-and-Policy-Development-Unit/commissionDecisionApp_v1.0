@@ -176,7 +176,17 @@
     "no_messages": "I no gat mesej yet — talem halo!",
     "load_earlier": "Lodem ol mesej bifo",
     "reconnecting": "I stap konektem bakegen…",
-    "select_people": "Jusum wan o moa man/woman"
+    "select_people": "Jusum wan o moa man/woman",
+    "deleted_message": "Mesej ia i bin rabis finis",
+    "edited": "jenisim finis",
+    "edit": "Jenisim",
+    "delete": "Rabisim",
+    "confirm_delete": "Yu wantem rabisim mesej ia?",
+    "save": "Sevem",
+    "react": "Riakt",
+    "reply": "Ansa",
+    "replying_to": "Ansarem",
+    "attach_file": "Atajem wan fael"
   },
   "notifications": {
     "loading": "Ol notifikesen i kam…",

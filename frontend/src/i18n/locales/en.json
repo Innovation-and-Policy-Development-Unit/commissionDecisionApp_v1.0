@@ -200,7 +200,17 @@
     "no_messages": "No messages yet — say hello!",
     "load_earlier": "Load earlier messages",
     "reconnecting": "Reconnecting…",
-    "select_people": "Select one or more people to message"
+    "select_people": "Select one or more people to message",
+    "deleted_message": "This message was deleted",
+    "edited": "edited",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirm_delete": "Delete this message?",
+    "save": "Save",
+    "react": "React",
+    "reply": "Reply",
+    "replying_to": "Replying to",
+    "attach_file": "Attach a file"
   },
   "notifications": {
     "loading": "Loading notifications…",

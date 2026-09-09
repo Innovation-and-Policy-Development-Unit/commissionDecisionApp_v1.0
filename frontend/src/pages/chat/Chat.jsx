@@ -1,22 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Send, Users } from 'lucide-react'
+import { Plus, Users } from 'lucide-react'
 import { useChat } from '../../context/ChatContext'
 import { useAuth } from '../../context/AuthContext'
 import Avatar from '../../components/shared/Avatar'
 import NewConversationModal from '../../components/chat/NewConversationModal'
+import MessageBubble from '../../components/chat/MessageBubble'
+import MessageComposer from '../../components/chat/MessageComposer'
 import { formatNotificationTime } from '../../utils/browserNotifications'
 
-const TYPING_IDLE_MS = 2000
-
-function messageTime(iso) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
 function ConversationRow({ conversation, active, onSelect, t }) {
-  const lastPreview = conversation.last_message?.body || ''
+  const lastPreview = conversation.last_message?.is_deleted
+    ? t('chat.deleted_message')
+    : (conversation.last_message?.body || '')
   const displayName = conversation.display_name || (conversation.is_group ? t('chat.group_chat') : '')
   return (
     <button
@@ -67,12 +63,11 @@ export default function Chat() {
   const { user } = useAuth()
   const {
     conversations, activeId, messages, typingUserIds,
-    selectConversation, sendMessage, setTyping, markRead, fetchMessages,
+    selectConversation, sendMessage, sendAttachments, editMessage, deleteMessage,
+    reactToMessage, setTyping, markRead, fetchMessages,
   } = useChat()
-  const [draft, setDraft] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
-  const typingTimeoutRef = useRef(null)
-  const wasTypingRef = useRef(false)
+  const [replyTo, setReplyTo] = useState(null)
   const scrollRef = useRef(null)
 
   const activeConversation = useMemo(
@@ -91,36 +86,21 @@ export default function Chat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages.length, activeId])
 
-  const handleDraftChange = useCallback((e) => {
-    const value = e.target.value
-    setDraft(value)
-    if (!activeId) return
-    if (!wasTypingRef.current) {
-      wasTypingRef.current = true
-      setTyping(activeId, true)
-    }
-    clearTimeout(typingTimeoutRef.current)
-    typingTimeoutRef.current = setTimeout(() => {
-      wasTypingRef.current = false
-      setTyping(activeId, false)
-    }, TYPING_IDLE_MS)
-  }, [activeId, setTyping])
-
-  const handleSend = useCallback((e) => {
-    e.preventDefault()
-    if (!activeId || !draft.trim()) return
-    sendMessage(activeId, draft)
-    setDraft('')
-    clearTimeout(typingTimeoutRef.current)
-    if (wasTypingRef.current) {
-      wasTypingRef.current = false
-      setTyping(activeId, false)
-    }
-  }, [activeId, draft, sendMessage, setTyping])
+  useEffect(() => { setReplyTo(null) }, [activeId])
 
   const isOtherTyping = activeConversation
     ? typingUserIds.some((id) => id !== user?.id)
     : false
+
+  const handleSend = ({ body, files, replyToId }) => {
+    if (!activeId) return
+    if (files.length > 0) {
+      sendAttachments(activeId, { body, files, replyToId })
+    } else {
+      sendMessage(activeId, body, replyToId)
+    }
+    setReplyTo(null)
+  }
 
   return (
     <div className="flex h-[calc(100vh-8rem)] card overflow-hidden">
@@ -186,28 +166,10 @@ export default function Chat() {
               </div>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
               {messages.length === 0 && (
                 <p className="text-center text-xs text-slate-400 mt-8">{t('chat.no_messages')}</p>
               )}
-              {messages.map((m) => {
-                const isOwn = m.sender === user?.id
-                return (
-                  <div key={m.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[70%] rounded-2xl px-3.5 py-2 text-sm ${
-                      isOwn
-                        ? 'bg-primary-600 text-white rounded-br-sm'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-sm'
-                    } ${m.pending ? 'opacity-60' : ''}`}
-                    >
-                      <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                      <p className={`mt-0.5 text-[10px] ${isOwn ? 'text-primary-100' : 'text-slate-400'}`}>
-                        {messageTime(m.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                )
-              })}
               {activeId && messages.length > 0 && (
                 <button
                   type="button"
@@ -217,20 +179,26 @@ export default function Chat() {
                   {t('chat.load_earlier')}
                 </button>
               )}
+              {messages.map((m) => (
+                <MessageBubble
+                  key={m.id}
+                  message={m}
+                  isOwn={m.sender === user?.id}
+                  onReply={(msg) => setReplyTo({ id: msg.id, sender_name: msg.sender_name, body: msg.body, is_deleted: msg.is_deleted })}
+                  onEdit={(id, body) => editMessage(activeId, id, body)}
+                  onDelete={(id) => deleteMessage(activeId, id)}
+                  onReact={(id, emoji) => reactToMessage(activeId, id, emoji)}
+                />
+              ))}
             </div>
 
-            <form onSubmit={handleSend} className="flex items-center gap-2 p-3 border-t border-slate-100 dark:border-slate-700 shrink-0">
-              <input
-                type="text"
-                value={draft}
-                onChange={handleDraftChange}
-                placeholder={t('chat.message_placeholder')}
-                className="flex-1 input text-sm"
-              />
-              <button type="submit" disabled={!draft.trim()} className="btn btn-primary btn-sm disabled:opacity-50" aria-label={t('chat.send')}>
-                <Send size={16} />
-              </button>
-            </form>
+            <MessageComposer
+              participants={(activeConversation.participants || []).filter((p) => p.id !== user?.id)}
+              replyTo={replyTo}
+              onClearReply={() => setReplyTo(null)}
+              onSend={handleSend}
+              onTypingChange={(isTyping) => setTyping(activeId, isTyping)}
+            />
           </>
         )}
       </div>

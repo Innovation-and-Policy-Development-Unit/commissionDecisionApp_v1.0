@@ -100,7 +100,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         body = (content.get("body") or "").strip()
         if not conversation_id or not body:
             return
-        message = await self._create_message(conversation_id, body)
+        message = await self._create_message(conversation_id, body, content.get("reply_to"))
         if message is None:
             return  # not a participant in that conversation
         data = await database_sync_to_async(lambda: MessageSerializer(message).data)()
@@ -150,6 +150,19 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def chat_message(self, event):
         await self.send_json({"type": "message", "message": event["message"]})
 
+    async def chat_message_edited(self, event):
+        await self.send_json({"type": "message_edited", "message": event["message"]})
+
+    async def chat_message_deleted(self, event):
+        await self.send_json({"type": "message_deleted", "message": event["message"]})
+
+    async def chat_reaction(self, event):
+        await self.send_json({
+            "type": "reaction",
+            "message_id": event["message_id"],
+            "reactions": event["reactions"],
+        })
+
     async def chat_typing(self, event):
         if event["user_id"] == self.user.id:
             return
@@ -197,15 +210,21 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
 
     @database_sync_to_async
-    def _create_message(self, conversation_id, body):
-        if not ConversationParticipant.objects.filter(
-            conversation_id=conversation_id, user=self.user
-        ).exists():
+    def _create_message(self, conversation_id, body, reply_to_id=None):
+        conversation = Conversation.objects.filter(
+            pk=conversation_id, participants__user=self.user
+        ).first()
+        if not conversation:
             return None
+        reply_to = None
+        if reply_to_id:
+            reply_to = conversation.messages.filter(pk=reply_to_id, is_deleted=False).first()
         message = Message.objects.create(
-            conversation_id=conversation_id, sender=self.user, body=body
+            conversation_id=conversation_id, sender=self.user, body=body, reply_to=reply_to,
         )
         Conversation.objects.filter(pk=conversation_id).update(updated_at=timezone.now())
+        from .chat_views import notify_chat_mentions
+        notify_chat_mentions(message, conversation)
         return message
 
     @database_sync_to_async
