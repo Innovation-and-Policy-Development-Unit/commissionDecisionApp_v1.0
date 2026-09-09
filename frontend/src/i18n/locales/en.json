@@ -161,6 +161,7 @@
     "notifications_open": "Open notifications",
     "notifications_new": "{{count}} new",
     "notifications_open_tasks": "Open task management",
+    "refresh": "Refresh page",
     "theme_dark": "Switch to Dark Mode",
     "theme_light": "Switch to Light Mode",
     "settings": "Settings",

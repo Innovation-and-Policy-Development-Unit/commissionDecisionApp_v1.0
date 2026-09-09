@@ -137,6 +137,7 @@
     "notifications_open": "Ouvrir les notifications",
     "notifications_new": "{{count}} nouveaux",
     "notifications_open_tasks": "Ouvrir la gestion des tâches",
+    "refresh": "Actualiser la page",
     "theme_dark": "Passer en mode sombre",
     "theme_light": "Passer en mode clair",
     "settings": "Paramètres",

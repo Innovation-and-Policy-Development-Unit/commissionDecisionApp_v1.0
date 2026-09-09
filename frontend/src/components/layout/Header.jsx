@@ -11,7 +11,7 @@ import {
   User, LogOut, Lock, CreditCard, HelpCircle, Shield, X,
   CheckCircle2, AlertCircle, Info, ChevronRight, MessageSquare,
   Plus, LayoutDashboard, FileText, Gavel, Headphones, BarChart3,
-  CalendarDays, ListTodo, Zap, Keyboard,
+  CalendarDays, ListTodo, Zap, Keyboard, RefreshCw,
 } from 'lucide-react'
 import BrandLogo from '../shared/BrandLogo'
 import LanguageSwitcher from '../shared/LanguageSwitcher'
@@ -560,6 +560,17 @@ export default function Header({ onMenuClick }) {
           </button>
         )}
       </div>
+
+      {/* Refresh: reload the whole page */}
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        aria-label={t('header.refresh')}
+        title={t('header.refresh')}
+        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+      >
+        <RefreshCw size={20} aria-hidden="true" />
+      </button>
 
       {/* Keyboard shortcuts hint button */}
       <button
