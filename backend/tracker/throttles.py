@@ -20,6 +20,11 @@ class PasswordResetThrottle(AnonRateThrottle):
     scope = 'password_reset'
 
 
+class PinResetThrottle(AnonRateThrottle):
+    """Limit PIN-reset requests per IP — prevents email flooding."""
+    scope = 'pin_reset'
+
+
 class PasswordChangeThrottle(UserRateThrottle):
     """Limit self-service password changes per authenticated user."""
     scope = 'password_change'

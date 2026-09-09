@@ -100,6 +100,41 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "pin_reset",
+        "name": "Session PIN reset",
+        "category": "authentication",
+        "description": "Sent when a user requests a session-PIN reset link.",
+        "placeholders": _ph("reset_url, expiry_hours, login_url"),
+        "subject_template": "Reset your session PIN — SCDMS",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "You requested a session PIN reset for your SCDMS account.\n"
+            "Username: {{username}}\n\n"
+            "Your session PIN unlocks a locked session or signs you back in quickly on this "
+            "device — it does not replace your account password.\n\n"
+            "Open this link to set a new PIN:\n\n"
+            "{{reset_url}}\n\n"
+            "This link expires in {{expiry_hours}} hour(s).\n\n"
+            "After resetting, sign in at: {{login_url}}\n\n"
+            "If you did not request this, you can ignore this email."
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 10px 0;\">You requested a session PIN reset for your account.</p>"
+            "<p style=\"margin:0 0 16px 0;\"><strong>Username:</strong> {{username}}</p>"
+            "<p style=\"margin:0 0 16px 0;color:#64748b;font-size:13px;\">Your session PIN unlocks a "
+            "locked session or signs you back in quickly on this device — it does not replace your "
+            "account password.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{reset_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">Reset PIN</a>"
+            "</p>"
+            "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">This link expires in {{expiry_hours}} hour(s).</p>"
+            "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">If the button does not open, copy this link:</p>"
+            "<p style=\"margin:0 0 16px 0;word-break:break-all;font-size:13px;\"><a href=\"{{reset_url}}\" style=\"color:#4f46e5;\">{{reset_url}}</a></p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">If you did not request this, you can ignore this email.</p>"
+        ),
+    },
+    {
         "slug": "account_locked_user",
         "name": "Account locked (user notice)",
         "category": "authentication",
@@ -726,6 +761,11 @@ SAMPLE_EMAIL_CONTEXTS = {
     },
     "password_reset": {
         "reset_url": "http://localhost:8080/auth/reset-password/confirm?token=sample",
+        "expiry_hours": "1",
+        "login_url": "http://localhost:8080/auth/login",
+    },
+    "pin_reset": {
+        "reset_url": "http://localhost:8080/auth/forgot-pin/confirm?token=sample",
         "expiry_hours": "1",
         "login_url": "http://localhost:8080/auth/login",
     },

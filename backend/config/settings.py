@@ -217,6 +217,7 @@ REST_FRAMEWORK = {
         'otp_request':     '5/min',
         'otp_verify':      '10/min',
         'password_reset':  '5/min',
+        'pin_reset':       '5/min',
         'password_change': '10/min',
         'submission_create': '10/hour',
         'feedback_create':   '5/hour',

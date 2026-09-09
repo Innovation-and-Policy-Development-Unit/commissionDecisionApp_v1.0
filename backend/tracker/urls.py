@@ -74,6 +74,8 @@ from .views import (
     NotificationViewSet,
     PasswordResetConfirmView,
     PasswordResetRequestView,
+    PinResetConfirmView,
+    PinResetRequestView,
     RegisterView,
     TOTPSetupView,
     TOTPVerifySetupView,
@@ -265,6 +267,9 @@ urlpatterns = [
     # Password reset
     path("auth/password-reset/request/", PasswordResetRequestView.as_view()),
     path("auth/password-reset/confirm/", PasswordResetConfirmView.as_view()),
+    # Session PIN reset (forgot PIN — separate token type, see PinResetToken)
+    path("auth/pin-reset/request/", PinResetRequestView.as_view()),
+    path("auth/pin-reset/confirm/", PinResetConfirmView.as_view()),
     path("auth/security-audit/", security_audit_view),
     path("auth/api-inventory/", api_inventory_view),
     path("auth/feedback-status/", FeedbackStatusView.as_view(), name="feedback-status"),
