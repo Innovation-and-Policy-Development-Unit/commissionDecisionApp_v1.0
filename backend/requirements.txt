@@ -17,6 +17,9 @@ qrcode>=7.4.2
 celery>=5.3,<6
 django-celery-beat>=2.5,<3
 redis==4.6.0
+channels>=4.1,<5
+channels-redis>=4.2,<5
+uvicorn[standard]>=0.30,<1
 bandit>=1.7
 pip-audit>=2.6
 google-genai>=2.16.0

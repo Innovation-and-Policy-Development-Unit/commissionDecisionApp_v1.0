@@ -78,6 +78,7 @@ const PendingDecisions = lazy(() => import('../pages/psc/PendingDecisions'))
 const MinistryPerformance = lazy(() => import('../pages/psc/MinistryPerformance'))
 const ImplementationDashboard = lazy(() => import('../pages/psc/ImplementationDashboard'))
 const AnnualReport = lazy(() => import('../pages/psc/AnnualReport'))
+const Chat = lazy(() => import('../pages/chat/Chat'))
 
 function RouteFallback({ detail = false }) {
   return <PageSkeleton detailMode={detail} />
@@ -119,6 +120,7 @@ export default function AppRouter() {
           <Route path="/intelligence/flags" element={<S><FlagMonitor /></S>} />
           <Route path="/intelligence/rules" element={<S><AlertRules /></S>} />
           <Route path="/intelligence/automations" element={<S><Automations /></S>} />
+          <Route path="/chat" element={<S><Chat /></S>} />
           <Route path="/wiki" element={<S><KnowledgeBaseBrowse /></S>} />
           <Route path="/wiki/:slug" element={<S detail><ArticleViewer /></S>} />
           <Route path="/meetings/capture" element={<S><RedirectToMinuteIntake /></S>} />

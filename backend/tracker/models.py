@@ -4987,3 +4987,69 @@ class AutomationRun(models.Model):
 
     def __str__(self):
         return f"{self.automation_id} {self.status} @ {self.created_at:%Y-%m-%d}"
+
+
+# ── Instant chat (Phase 1) ───────────────────────────────────────────────────
+
+class Conversation(models.Model):
+    """A direct (1:1) or named group chat between SCDMS users."""
+
+    is_group = models.BooleanField(default=False)
+    name = models.CharField(max_length=255, blank=True, help_text="Group chats only.")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="conversations_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    # Bumped whenever a message is posted — drives conversation-list ordering
+    # without a join/aggregate on every request.
+    updated_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.name or f"Conversation #{self.pk}"
+
+
+class ConversationParticipant(models.Model):
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="participants"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_memberships"
+    )
+    joined_at = models.DateTimeField(auto_now_add=True)
+    # Null = nothing read yet. Compared against Message.created_at to derive
+    # unread counts and "seen" markers without a separate per-message table.
+    last_read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conversation", "user"], name="unique_conversation_participant"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} in conversation {self.conversation_id}"
+
+
+class Message(models.Model):
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="messages"
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_messages_sent"
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [models.Index(fields=["conversation", "created_at"], name="chatmsg_conv_created_idx")]
+
+    def __str__(self):
+        return f"Message #{self.pk} in conversation {self.conversation_id}"

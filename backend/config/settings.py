@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -100,6 +101,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
 
 
 # Database
@@ -487,6 +489,25 @@ else:
             'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
         },
     }
+
+# ── Chat WebSocket channel layer (Redis DB 2 — Celery keeps DB 0, cache DB 1) ─
+# Independent of CACHE_ENABLED: multiple gunicorn worker processes each hold
+# their own WebSocket connections, so a real cross-process channel layer is
+# required for chat to fan out at all, regardless of whether the app cache
+# is enabled.
+from config.cache_urls import redis_channel_url_from_broker  # noqa: E402
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [
+                os.getenv('REDIS_CHANNEL_URL', '').strip()
+                or redis_channel_url_from_broker(os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0'))
+            ],
+        },
+    },
+}
 
 # ── Celery distributed task queue ─────────────────────────────────────────────
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
