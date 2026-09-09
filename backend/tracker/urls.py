@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .comment_views import CommentViewSet, activity_timeline, mention_suggest
-from .chat_views import ConversationViewSet, chat_users
+from .chat_views import ConversationViewSet, attachment_download, chat_users
 from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
 from .intelligence_views import (
@@ -228,6 +228,7 @@ urlpatterns = [
     path("reports/ai-smart-query/", ai_smart_report_view),
     path("mentions/suggest/", mention_suggest),
     path("chat/users/", chat_users),
+    path("chat/attachments/<int:attachment_id>/", attachment_download),
     path("activity/", activity_timeline),
     path("intelligence/datasets/", intelligence_datasets),
     path("intelligence/query/", intelligence_query),

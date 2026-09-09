@@ -176,7 +176,17 @@
     "no_messages": "Aucun message pour le moment — dites bonjour !",
     "load_earlier": "Charger les messages précédents",
     "reconnecting": "Reconnexion…",
-    "select_people": "Sélectionnez une ou plusieurs personnes"
+    "select_people": "Sélectionnez une ou plusieurs personnes",
+    "deleted_message": "Ce message a été supprimé",
+    "edited": "modifié",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "confirm_delete": "Supprimer ce message ?",
+    "save": "Enregistrer",
+    "react": "Réagir",
+    "reply": "Répondre",
+    "replying_to": "Réponse à",
+    "attach_file": "Joindre un fichier"
   },
   "notifications": {
     "loading": "Chargement des notifications…",

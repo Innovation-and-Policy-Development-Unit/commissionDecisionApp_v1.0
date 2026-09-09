@@ -5044,7 +5044,13 @@ class Message(models.Model):
     sender = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_messages_sent"
     )
-    body = models.TextField()
+    body = models.TextField(blank=True, help_text="May be blank for an attachment-only message.")
+    reply_to = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="replies",
+    )
+    edited_at = models.DateTimeField(null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
@@ -5053,3 +5059,37 @@ class Message(models.Model):
 
     def __str__(self):
         return f"Message #{self.pk} in conversation {self.conversation_id}"
+
+
+def _chat_attachment_path(instance, filename):
+    return f"chat_attachments/{instance.message.conversation_id}/{filename}"
+
+
+class MessageAttachment(models.Model):
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="attachments")
+    file = models.FileField(upload_to=_chat_attachment_path)
+    original_name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.original_name
+
+
+class MessageReaction(models.Model):
+    """One emoji reaction per (message, user) — picking a different emoji
+    replaces the previous one, matching Messenger's own behaviour."""
+
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="reactions")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_reactions")
+    emoji = models.CharField(max_length=8)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["message", "user"], name="unique_message_user_reaction")
+        ]
+
+    def __str__(self):
+        return f"{self.emoji} by {self.user_id} on message {self.message_id}"

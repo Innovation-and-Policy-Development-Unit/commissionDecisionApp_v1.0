@@ -73,7 +73,7 @@ export default function ChatDropdown({ onClose }) {
                   )}
                 </span>
                 <span className="block text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {c.last_message?.body || ''}
+                  {c.last_message?.is_deleted ? t('chat.deleted_message') : (c.last_message?.body || '')}
                 </span>
               </span>
               {c.unread_count > 0 && (

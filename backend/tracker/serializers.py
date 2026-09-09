@@ -11,6 +11,8 @@ from .models import (
     Conversation,
     ConversationParticipant,
     Message,
+    MessageAttachment,
+    MessageReaction,
     Department,
     Unit,
     EmploymentType,
@@ -3456,16 +3458,61 @@ class ChatUserSerializer(serializers.Serializer):
     picture = serializers.CharField(allow_null=True)
 
 
+class MessageAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MessageAttachment
+        fields = ("id", "url", "original_name", "content_type", "size")
+
+    def get_url(self, obj):
+        # Deliberately not served from /media/ directly — attachments are
+        # private conversation content. See chat_views.attachment_download,
+        # which checks the requester is actually a participant first.
+        request = self.context.get("request")
+        path = f"/api/chat/attachments/{obj.id}/"
+        return request.build_absolute_uri(path) if request else path
+
+
+class MessageReactionSerializer(serializers.ModelSerializer):
+    user = serializers.IntegerField(source="user_id")
+
+    class Meta:
+        model = MessageReaction
+        fields = ("user", "emoji")
+
+
 class MessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.SerializerMethodField()
+    reply_to_preview = serializers.SerializerMethodField()
+    attachments = MessageAttachmentSerializer(many=True, read_only=True)
+    reactions = MessageReactionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Message
-        fields = ("id", "conversation", "sender", "sender_name", "body", "created_at")
-        read_only_fields = ("id", "sender", "sender_name", "created_at")
+        fields = (
+            "id", "conversation", "sender", "sender_name", "body", "created_at",
+            "reply_to", "reply_to_preview", "edited_at", "is_deleted",
+            "attachments", "reactions",
+        )
+        read_only_fields = (
+            "id", "sender", "sender_name", "created_at", "edited_at", "is_deleted",
+            "reply_to_preview", "attachments", "reactions",
+        )
 
     def get_sender_name(self, obj):
         return (obj.sender.get_full_name() or "").strip() or obj.sender.username
+
+    def get_reply_to_preview(self, obj):
+        if not obj.reply_to_id:
+            return None
+        parent = obj.reply_to
+        return {
+            "id": parent.id,
+            "sender_name": self.get_sender_name(parent),
+            "body": "" if parent.is_deleted else parent.body,
+            "is_deleted": parent.is_deleted,
+        }
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -3475,6 +3522,7 @@ class ConversationSerializer(serializers.ModelSerializer):
     display_name = serializers.SerializerMethodField()
     picture = serializers.SerializerMethodField()
     participant_ids = serializers.SerializerMethodField()
+    participants = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
     online = serializers.SerializerMethodField()
@@ -3483,7 +3531,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = (
             "id", "is_group", "name", "display_name", "picture",
-            "participant_ids", "last_message", "unread_count", "updated_at", "online",
+            "participant_ids", "participants", "last_message", "unread_count", "updated_at", "online",
         )
 
     def _other_participant(self, obj):
@@ -3521,6 +3569,27 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_participant_ids(self, obj):
         return [p.user_id for p in obj.participants.all()]
 
+    def get_participants(self, obj):
+        """Minimal per-participant info (id/name/picture) for the @mention
+        picker in group chats — deliberately scoped to just this
+        conversation's own members, not a general user search."""
+        from .media_urls import public_media_url
+        request = self.context.get("request")
+        out = []
+        for p in obj.participants.all():
+            u = p.user
+            profile = getattr(u, "psc_profile", None)
+            picture = (
+                public_media_url(profile.profile_picture, request)
+                if profile and profile.profile_picture else None
+            )
+            out.append({
+                "id": u.id,
+                "name": (u.get_full_name() or "").strip() or u.username,
+                "picture": picture,
+            })
+        return out
+
     def get_online(self, obj):
         if obj.is_group:
             return None
@@ -3536,7 +3605,8 @@ class ConversationSerializer(serializers.ModelSerializer):
         return {
             "id": last.id,
             "sender": last.sender_id,
-            "body": last.body,
+            "body": "" if last.is_deleted else last.body,
+            "is_deleted": last.is_deleted,
             "created_at": last.created_at,
         }
 

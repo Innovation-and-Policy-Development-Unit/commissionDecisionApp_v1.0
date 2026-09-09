@@ -1,17 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Minus, Send, Users, X } from 'lucide-react'
+import { Minus, Users, X } from 'lucide-react'
 import { useChat } from '../../context/ChatContext'
 import { useAuth } from '../../context/AuthContext'
 import Avatar from '../shared/Avatar'
-
-const TYPING_IDLE_MS = 2000
-
-function messageTime(iso) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
+import MessageBubble from './MessageBubble'
+import MessageComposer from './MessageComposer'
 
 /** One Messenger-style popup window, positioned by its parent container. */
 export default function FloatingChatWindow({ conversationId, minimized }) {
@@ -19,7 +13,8 @@ export default function FloatingChatWindow({ conversationId, minimized }) {
   const { user } = useAuth()
   const {
     conversations, messagesByConversation, typingByConversation,
-    sendMessage, setTyping, markRead, closeChatWindow, minimizeChatWindow,
+    sendMessage, sendAttachments, editMessage, deleteMessage, reactToMessage,
+    setTyping, markRead, closeChatWindow, minimizeChatWindow,
   } = useChat()
 
   const conversation = useMemo(
@@ -30,9 +25,7 @@ export default function FloatingChatWindow({ conversationId, minimized }) {
   const typingUserIds = typingByConversation[conversationId] || []
   const isOtherTyping = typingUserIds.some((id) => id !== user?.id)
 
-  const [draft, setDraft] = useState('')
-  const typingTimeoutRef = useRef(null)
-  const wasTypingRef = useRef(false)
+  const [replyTo, setReplyTo] = useState(null)
   const scrollRef = useRef(null)
 
   useEffect(() => {
@@ -43,34 +36,17 @@ export default function FloatingChatWindow({ conversationId, minimized }) {
     if (!minimized) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages.length, minimized])
 
-  const handleDraftChange = useCallback((e) => {
-    const value = e.target.value
-    setDraft(value)
-    if (!wasTypingRef.current) {
-      wasTypingRef.current = true
-      setTyping(conversationId, true)
-    }
-    clearTimeout(typingTimeoutRef.current)
-    typingTimeoutRef.current = setTimeout(() => {
-      wasTypingRef.current = false
-      setTyping(conversationId, false)
-    }, TYPING_IDLE_MS)
-  }, [conversationId, setTyping])
-
-  const handleSend = useCallback((e) => {
-    e.preventDefault()
-    if (!draft.trim()) return
-    sendMessage(conversationId, draft)
-    setDraft('')
-    clearTimeout(typingTimeoutRef.current)
-    if (wasTypingRef.current) {
-      wasTypingRef.current = false
-      setTyping(conversationId, false)
-    }
-  }, [conversationId, draft, sendMessage, setTyping])
-
   if (!conversation) return null
   const displayName = conversation.display_name || (conversation.is_group ? t('chat.group_chat') : '')
+
+  const handleSend = ({ body, files, replyToId }) => {
+    if (files.length > 0) {
+      sendAttachments(conversationId, { body, files, replyToId })
+    } else {
+      sendMessage(conversationId, body, replyToId)
+    }
+    setReplyTo(null)
+  }
 
   return (
     <div className="w-72 sm:w-80 bg-white dark:bg-slate-800 rounded-t-xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
@@ -123,41 +99,31 @@ export default function FloatingChatWindow({ conversationId, minimized }) {
 
       {!minimized && (
         <>
-          <div ref={scrollRef} className="flex-1 h-80 overflow-y-auto custom-scrollbar p-3 space-y-2">
+          <div ref={scrollRef} className="flex-1 h-80 overflow-y-auto custom-scrollbar p-3 space-y-2.5">
             {messages.length === 0 && (
               <p className="text-center text-xs text-slate-400 mt-6">{t('chat.no_messages')}</p>
             )}
-            {messages.map((m) => {
-              const isOwn = m.sender === user?.id
-              return (
-                <div key={m.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[75%] rounded-2xl px-3 py-1.5 text-sm ${
-                    isOwn
-                      ? 'bg-primary-600 text-white rounded-br-sm'
-                      : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-sm'
-                  } ${m.pending ? 'opacity-60' : ''}`}
-                  >
-                    <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                    <p className={`mt-0.5 text-[9px] ${isOwn ? 'text-primary-100' : 'text-slate-400'}`}>
-                      {messageTime(m.created_at)}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
+            {messages.map((m) => (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                isOwn={m.sender === user?.id}
+                compact
+                onReply={(msg) => setReplyTo({ id: msg.id, sender_name: msg.sender_name, body: msg.body, is_deleted: msg.is_deleted })}
+                onEdit={(id, body) => editMessage(conversationId, id, body)}
+                onDelete={(id) => deleteMessage(conversationId, id)}
+                onReact={(id, emoji) => reactToMessage(conversationId, id, emoji)}
+              />
+            ))}
           </div>
-          <form onSubmit={handleSend} className="flex items-center gap-1.5 p-2 border-t border-slate-100 dark:border-slate-700 shrink-0">
-            <input
-              type="text"
-              value={draft}
-              onChange={handleDraftChange}
-              placeholder={t('chat.message_placeholder')}
-              className="flex-1 input text-sm py-1.5"
-            />
-            <button type="submit" disabled={!draft.trim()} className="btn btn-primary btn-sm disabled:opacity-50 px-2.5" aria-label={t('chat.send')}>
-              <Send size={14} />
-            </button>
-          </form>
+          <MessageComposer
+            compact
+            participants={(conversation.participants || []).filter((p) => p.id !== user?.id)}
+            replyTo={replyTo}
+            onClearReply={() => setReplyTo(null)}
+            onSend={handleSend}
+            onTypingChange={(isTyping) => setTyping(conversationId, isTyping)}
+          />
         </>
       )}
     </div>
