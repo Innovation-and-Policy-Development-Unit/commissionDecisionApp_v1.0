@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .comment_views import CommentViewSet, activity_timeline, mention_suggest
+from .chat_views import ConversationViewSet, chat_users
 from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
 from .intelligence_views import (
@@ -188,6 +189,7 @@ router.register(r"feedback",         FeedbackViewSet,         basename="feedback
 router.register(r"feedback-comments", FeedbackCommentViewSet, basename="feedback-comments")
 router.register(r"feedback-checklist", FeedbackChecklistViewSet, basename="feedback-checklist")
 router.register(r"notifications",    NotificationViewSet,    basename="notification")
+router.register(r"chat/conversations", ConversationViewSet,   basename="chat-conversation")
 router.register(r"comments",         CommentViewSet,         basename="comment")
 router.register(r"minutes",          MinutesViewSet,          basename="minutes")
 router.register(r"transcripts",      TranscriptViewSet,       basename="transcript")
@@ -225,6 +227,7 @@ urlpatterns = [
     path("reports/stats/", reports_view),
     path("reports/ai-smart-query/", ai_smart_report_view),
     path("mentions/suggest/", mention_suggest),
+    path("chat/users/", chat_users),
     path("activity/", activity_timeline),
     path("intelligence/datasets/", intelligence_datasets),
     path("intelligence/query/", intelligence_query),

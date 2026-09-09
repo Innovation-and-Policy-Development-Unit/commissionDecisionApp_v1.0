@@ -20,10 +20,10 @@ if [ "${AUTO_SEED:-1}" != "0" ]; then
   # Idempotent: reference data every start; dummy submissions only when none exist.
   python manage.py seed_tracker || echo "seed_tracker finished with warnings (non-fatal)"
 fi
-exec gunicorn config.wsgi:application \
+exec gunicorn config.asgi:application \
   --bind "0.0.0.0:8000" \
+  --worker-class uvicorn.workers.UvicornWorker \
   --workers "${GUNICORN_WORKERS:-5}" \
-  --threads "${GUNICORN_THREADS:-4}" \
   --timeout "${GUNICORN_TIMEOUT:-120}" \
   --access-logfile - \
   --error-logfile -

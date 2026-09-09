@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../../context/ThemeContext'
+import { ChatProvider } from '../../context/ChatContext'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import HorizontalMenu from './HorizontalMenu'
@@ -56,6 +57,7 @@ export default function Layout() {
   const mainTopOffset = isHorizontal ? 'mt-28 lg:mt-28' : 'mt-16'
 
   return (
+    <ChatProvider>
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
       <a
         href="#main-content"
@@ -114,5 +116,6 @@ export default function Layout() {
         onClose={() => setShortcutsOpen(false)}
       />
     </div>
+    </ChatProvider>
   )
 }

@@ -8,6 +8,9 @@ from .models import (
     CommissionTask,
     CommissionSubTask,
     CommissionTaskUpdate,
+    Conversation,
+    ConversationParticipant,
+    Message,
     Department,
     Unit,
     EmploymentType,
@@ -3439,3 +3442,114 @@ class SubmissionChecklistResponseSerializer(serializers.ModelSerializer):
             "id", "created_by", "created_by_username",
             "submitted_at", "approved_at", "created_at", "updated_at",
         )
+
+
+# ── Instant chat (Phase 1) ───────────────────────────────────────────────────
+
+class ChatUserSerializer(serializers.Serializer):
+    """Minimal public profile used wherever a chat participant is shown."""
+
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    name = serializers.CharField()
+    role_label = serializers.CharField()
+    picture = serializers.CharField(allow_null=True)
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = ("id", "conversation", "sender", "sender_name", "body", "created_at")
+        read_only_fields = ("id", "sender", "sender_name", "created_at")
+
+    def get_sender_name(self, obj):
+        return (obj.sender.get_full_name() or "").strip() or obj.sender.username
+
+
+class ConversationSerializer(serializers.ModelSerializer):
+    """Conversation-list row: display identity + last message + unread count,
+    all resolved relative to the requesting user (passed in via context)."""
+
+    display_name = serializers.SerializerMethodField()
+    picture = serializers.SerializerMethodField()
+    participant_ids = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    online = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Conversation
+        fields = (
+            "id", "is_group", "name", "display_name", "picture",
+            "participant_ids", "last_message", "unread_count", "updated_at", "online",
+        )
+
+    def _other_participant(self, obj):
+        request = self.context.get("request")
+        if not request or obj.is_group:
+            return None
+        for p in obj.participants.all():
+            if p.user_id != request.user.id:
+                return p
+        return None
+
+    def get_display_name(self, obj):
+        if obj.is_group:
+            # Empty string when unnamed — the frontend applies its own
+            # translated "Group chat" fallback rather than baking English
+            # text into the API response.
+            return obj.name
+        other = self._other_participant(obj)
+        if not other:
+            return obj.name or "Conversation"
+        return (other.user.get_full_name() or "").strip() or other.user.username
+
+    def get_picture(self, obj):
+        if obj.is_group:
+            return None
+        from .media_urls import public_media_url
+        other = self._other_participant(obj)
+        if not other:
+            return None
+        profile = getattr(other.user, "psc_profile", None)
+        if not profile or not profile.profile_picture:
+            return None
+        return public_media_url(profile.profile_picture, self.context.get("request"))
+
+    def get_participant_ids(self, obj):
+        return [p.user_id for p in obj.participants.all()]
+
+    def get_online(self, obj):
+        if obj.is_group:
+            return None
+        from .chat_consumers import is_user_online
+        other = self._other_participant(obj)
+        return is_user_online(other.user_id) if other else None
+
+    def get_last_message(self, obj):
+        messages = sorted(obj.messages.all(), key=lambda m: m.created_at)
+        last = messages[-1] if messages else None
+        if not last:
+            return None
+        return {
+            "id": last.id,
+            "sender": last.sender_id,
+            "body": last.body,
+            "created_at": last.created_at,
+        }
+
+    def get_unread_count(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return 0
+        membership = next(
+            (p for p in obj.participants.all() if p.user_id == request.user.id), None
+        )
+        if not membership:
+            return 0
+        others = [m for m in obj.messages.all() if m.sender_id != request.user.id]
+        if membership.last_read_at:
+            others = [m for m in others if m.created_at > membership.last_read_at]
+        return len(others)

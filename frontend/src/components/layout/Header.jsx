@@ -11,13 +11,14 @@ import {
   User, LogOut, Lock, CreditCard, HelpCircle, Shield, X,
   CheckCircle2, AlertCircle, Info, ChevronRight, MessageSquare,
   Plus, LayoutDashboard, FileText, Gavel, Headphones, BarChart3,
-  CalendarDays, ListTodo, Zap, Keyboard, RefreshCw,
+  CalendarDays, ListTodo, Zap, Keyboard, RefreshCw, MessageCircle,
 } from 'lucide-react'
 import BrandLogo from '../shared/BrandLogo'
 import LanguageSwitcher from '../shared/LanguageSwitcher'
 import LiveRegion from '../shared/LiveRegion'
 import DesktopNotificationSettings from '../notifications/DesktopNotificationSettings'
 import { useNotifications } from '../../hooks/useNotifications'
+import { useChat } from '../../context/ChatContext'
 
 // ── Quick actions shown before / alongside search results ──────────────────
 const ALL_QUICK_ACTIONS = [
@@ -156,6 +157,7 @@ export default function Header({ onMenuClick }) {
   const { t } = useTranslation()
   const { user, logout, lock } = useAuth()
   const { theme, isDark, toggleDark, cycleTheme, openSettingsPanel, sidebarCollapsed, isHorizontal } = useTheme()
+  const { unreadTotal: chatUnreadTotal } = useChat()
   const {
     notifications,
     unreadCount,
@@ -595,6 +597,25 @@ export default function Header({ onMenuClick }) {
         className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
         {isDark ? <Sun size={20} aria-hidden="true" /> : <Moon size={20} aria-hidden="true" />}
+      </button>
+
+      {/* Chat */}
+      <button
+        type="button"
+        onClick={() => navigate('/chat')}
+        aria-label={t('header.chat_open')}
+        title={t('header.chat')}
+        className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+      >
+        <MessageCircle size={20} aria-hidden="true" />
+        {chatUnreadTotal > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute top-1 end-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center"
+          >
+            {chatUnreadTotal > 9 ? '9+' : chatUnreadTotal}
+          </span>
+        )}
       </button>
 
       {/* Notifications */}
