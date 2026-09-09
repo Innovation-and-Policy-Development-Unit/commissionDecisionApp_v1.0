@@ -19,6 +19,7 @@ import LiveRegion from '../shared/LiveRegion'
 import DesktopNotificationSettings from '../notifications/DesktopNotificationSettings'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useChat } from '../../context/ChatContext'
+import ChatDropdown from '../chat/ChatDropdown'
 
 // ── Quick actions shown before / alongside search results ──────────────────
 const ALL_QUICK_ACTIONS = [
@@ -168,6 +169,7 @@ export default function Header({ onMenuClick }) {
     refresh: refreshNotifications,
   } = useNotifications({ enabled: !!user })
   const [notifOpen, setNotifOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -178,6 +180,8 @@ export default function Header({ onMenuClick }) {
   const searchDebounce = useRef(null)
   const notifRef = useRef(null)
   const notifButtonRef = useRef(null)
+  const chatRef = useRef(null)
+  const chatButtonRef = useRef(null)
   const userRef = useRef(null)
   const userButtonRef = useRef(null)
   const location = useLocation()
@@ -217,6 +221,7 @@ export default function Header({ onMenuClick }) {
   useEffect(() => {
     function handleClickOutside(e) {
       if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false)
+      if (chatRef.current && !chatRef.current.contains(e.target)) setChatOpen(false)
       if (userRef.current && !userRef.current.contains(e.target)) setUserOpen(false)
       if (searchRef.current && !searchRef.current.contains(e.target)) setSearchResults([])
     }
@@ -225,6 +230,10 @@ export default function Header({ onMenuClick }) {
       if (notifOpen) {
         setNotifOpen(false)
         notifButtonRef.current?.focus()
+      }
+      if (chatOpen) {
+        setChatOpen(false)
+        chatButtonRef.current?.focus()
       }
       if (userOpen) {
         setUserOpen(false)
@@ -242,7 +251,7 @@ export default function Header({ onMenuClick }) {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleKey)
     }
-  }, [notifOpen, userOpen, searchOpen])
+  }, [notifOpen, chatOpen, userOpen, searchOpen])
 
   const startOffset = isHorizontal ? 'start-0' : (sidebarCollapsed ? 'lg:start-[5.5rem]' : 'lg:start-64')
 
@@ -600,23 +609,29 @@ export default function Header({ onMenuClick }) {
       </button>
 
       {/* Chat */}
-      <button
-        type="button"
-        onClick={() => navigate('/chat')}
-        aria-label={t('header.chat_open')}
-        title={t('header.chat')}
-        className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-      >
-        <MessageCircle size={20} aria-hidden="true" />
-        {chatUnreadTotal > 0 && (
-          <span
-            aria-hidden="true"
-            className="absolute top-1 end-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center"
-          >
-            {chatUnreadTotal > 9 ? '9+' : chatUnreadTotal}
-          </span>
-        )}
-      </button>
+      <div className="relative" ref={chatRef}>
+        <button
+          ref={chatButtonRef}
+          type="button"
+          onClick={() => setChatOpen((o) => !o)}
+          aria-haspopup="dialog"
+          aria-expanded={chatOpen}
+          aria-label={t('header.chat_open')}
+          title={t('header.chat')}
+          className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        >
+          <MessageCircle size={20} aria-hidden="true" />
+          {chatUnreadTotal > 0 && (
+            <span
+              aria-hidden="true"
+              className="absolute top-1 end-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center"
+            >
+              {chatUnreadTotal > 9 ? '9+' : chatUnreadTotal}
+            </span>
+          )}
+        </button>
+        {chatOpen && <ChatDropdown onClose={() => setChatOpen(false)} />}
+      </div>
 
       {/* Notifications */}
       <div className="relative" ref={notifRef}>

@@ -72,6 +72,32 @@ export function ChatProvider({ children }) {
     }
   }, [fetchMessages, messagesByConversation])
 
+  // ── Messenger-style floating popup windows (independent of the full
+  // /chat page's single `activeId` selection above) ──────────────────────
+  const MAX_OPEN_WINDOWS = 3
+  const [openWindows, setOpenWindows] = useState([]) // [{ id, minimized }], oldest first
+
+  const openChatWindow = useCallback((conversationId) => {
+    if (!messagesByConversation[conversationId]) fetchMessages(conversationId)
+    setOpenWindows((prev) => {
+      const existing = prev.find((w) => w.id === conversationId)
+      if (existing) {
+        if (!existing.minimized) return prev
+        return prev.map((w) => (w.id === conversationId ? { ...w, minimized: false } : w))
+      }
+      const next = [...prev, { id: conversationId, minimized: false }]
+      return next.length > MAX_OPEN_WINDOWS ? next.slice(next.length - MAX_OPEN_WINDOWS) : next
+    })
+  }, [fetchMessages, messagesByConversation])
+
+  const closeChatWindow = useCallback((conversationId) => {
+    setOpenWindows((prev) => prev.filter((w) => w.id !== conversationId))
+  }, [])
+
+  const minimizeChatWindow = useCallback((conversationId, minimized) => {
+    setOpenWindows((prev) => prev.map((w) => (w.id === conversationId ? { ...w, minimized } : w)))
+  }, [])
+
   const send = useCallback((payload) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(payload))
@@ -308,6 +334,8 @@ export function ChatProvider({ children }) {
     activeId,
     messages: messagesByConversation[activeId] || [],
     typingUserIds: typingByConversation[activeId] || [],
+    messagesByConversation,
+    typingByConversation,
     onlineByUser,
     unreadTotal,
     selectConversation,
@@ -318,10 +346,15 @@ export function ChatProvider({ children }) {
     searchUsers,
     fetchMessages,
     refresh: fetchConversations,
+    openWindows,
+    openChatWindow,
+    closeChatWindow,
+    minimizeChatWindow,
   }), [
     conversationsWithPresence, connected, activeId, messagesByConversation, typingByConversation,
     onlineByUser, unreadTotal, selectConversation, sendMessage, setTyping, markRead,
     startConversation, searchUsers, fetchMessages, fetchConversations,
+    openWindows, openChatWindow, closeChatWindow, minimizeChatWindow,
   ])
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
