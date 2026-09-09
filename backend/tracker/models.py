@@ -1138,6 +1138,35 @@ class PasswordResetToken(models.Model):
         )
 
 
+class PinResetToken(models.Model):
+    """Single-use token for session-PIN reset via email link — kept separate
+    from PasswordResetToken so a PIN-reset link can never be used to reset
+    the account password, or vice versa."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pin_reset_tokens"
+    )
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def is_valid(self):
+        return not self.used and timezone.now() < self.expires_at
+
+    @classmethod
+    def generate_for(cls, user):
+        cls.objects.filter(user=user, used=False).update(used=True)
+        token = secrets.token_urlsafe(48)
+        return cls.objects.create(
+            user=user,
+            token=token,
+            expires_at=timezone.now() + timedelta(hours=1),
+        )
+
+
 class APIKey(models.Model):
     """Permanent or long-lived keys for external system integration."""
     name = models.CharField(max_length=255)

@@ -2083,6 +2083,60 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         return user
 
 
+class PinResetRequestSerializer(serializers.Serializer):
+    """Request a session-PIN reset link by email."""
+
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return (value or "").strip().lower()
+
+
+class PinResetConfirmSerializer(serializers.Serializer):
+    """Confirm PIN reset with token + new PIN."""
+    token = serializers.CharField()
+    pin = serializers.CharField(write_only=True)
+
+    def validate_token(self, value):
+        from .models import PinResetToken
+        try:
+            rt = PinResetToken.objects.get(token=value)
+        except PinResetToken.DoesNotExist:
+            raise serializers.ValidationError("Invalid or expired reset link.")
+        if not rt.is_valid():
+            raise serializers.ValidationError("This reset link has expired.")
+        return rt
+
+    def validate_pin(self, value):
+        if not value.isdigit() or not (4 <= len(value) <= 6):
+            raise serializers.ValidationError("PIN must be 4-6 digits.")
+        return value
+
+    def save(self):
+        from django.contrib.auth.hashers import make_password
+        from django.utils import timezone as _tz
+
+        from .models import TrustedSession
+
+        rt = self.validated_data["token"]
+        user = rt.user
+        pin = self.validated_data["pin"]
+
+        profile = user.psc_profile
+        profile.session_pin = make_password(pin)
+        profile.session_pin_set_at = _tz.now()
+        profile.save(update_fields=["session_pin", "session_pin_set_at"])
+
+        # The device trust tied to the old (forgotten) PIN is no longer
+        # meaningful — require a full password/TOTP login next time rather
+        # than silently re-trusting whichever device requested this reset.
+        TrustedSession.objects.filter(user=user, is_active=True).update(is_active=False)
+
+        rt.used = True
+        rt.save(update_fields=["used"])
+        return user
+
+
 class SystemPermissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemPermission

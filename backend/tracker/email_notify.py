@@ -406,6 +406,58 @@ def send_password_reset_email(*, user: User, reset_url: str, to_email: str) -> b
         return False
 
 
+def send_pin_reset_email(*, user: User, reset_url: str, to_email: str) -> bool:
+    """
+    Send session-PIN reset link to a registered user. Never sends the PIN
+    itself — it's stored hashed and can't be recovered, only replaced.
+    Returns True when delivery succeeded, False otherwise.
+    """
+    import logging
+
+    from django.core.mail import send_mail
+
+    from .email_templates import get_from_email, send_templated_email
+
+    log = logging.getLogger("scdms.security")
+    ctx = merge_recipient_context(
+        user,
+        reset_url=reset_url,
+        expiry_hours="1",
+        login_url=f"{get_frontend_base_url()}/auth/login",
+    )
+    if send_templated_email(
+        slug="pin_reset",
+        to=[to_email],
+        context=ctx,
+        fail_silently=False,
+    ):
+        log.info("PIN_RESET_EMAIL_SENT | username=%s | to=%s", user.username, to_email)
+        return True
+
+    subject = "Reset your session PIN — SCDMS"
+    message = (
+        f"Hello {user.username},\n\n"
+        "You requested a session PIN reset for your SCDMS account.\n"
+        "Open this link to set a new PIN:\n\n"
+        f"{reset_url}\n\n"
+        "This link expires in 1 hour.\n\n"
+        "If you did not request this, you can ignore this email."
+    )
+    try:
+        send_mail(
+            subject,
+            message,
+            get_from_email(),
+            [to_email],
+            fail_silently=False,
+        )
+        log.info("PIN_RESET_EMAIL_SENT | username=%s | to=%s | fallback=plain", user.username, to_email)
+        return True
+    except Exception:
+        log.exception("PIN_RESET_EMAIL_FAILED | username=%s | to=%s", user.username, to_email)
+        return False
+
+
 def _superuser_emails() -> list[str]:
     """Active super administrators' email addresses (for security alerts)."""
     return list(

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation, Navigate } from 'react-router-dom'
+import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom'
 import { Lock, ArrowRight } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -127,7 +127,14 @@ export default function LockScreen() {
                 <>Unlock <ArrowRight size={16} /></>
               )}
             </button>
-            <div className="text-center">
+            <div className="flex items-center justify-center gap-4 text-center">
+              <Link
+                to="/auth/forgot-pin"
+                className="text-xs text-slate-400 hover:text-primary-600 underline"
+              >
+                Forgot PIN?
+              </Link>
+              <span className="text-slate-300">·</span>
               <button
                 type="button"
                 onClick={async () => {

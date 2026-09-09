@@ -63,7 +63,7 @@ from .models import (
     KnowledgeArticle,
     Unit,
 )
-from .models import PasswordResetToken
+from .models import PasswordResetToken, PinResetToken
 from .opsc_access import (
     COMMISSION_TASK_MANAGER_ROLES,
     COMMISSION_TASK_STAFF_ROLES,
@@ -101,6 +101,8 @@ from .serializers import (
     TOTPVerifySerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    PinResetConfirmSerializer,
+    PinResetRequestSerializer,
     ProfileSerializer,
     RegisterSerializer,
     RoleDefinitionSerializer,
@@ -165,7 +167,7 @@ from .api_cache import (
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
-from .throttles import AiAnalysisTriggerThrottle, PasswordResetThrottle, SessionPinVerifyThrottle
+from .throttles import AiAnalysisTriggerThrottle, PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle
 from .auth import LenientJWTAuthentication
 from .models import (
     AuditLog,
@@ -7894,6 +7896,93 @@ class PasswordResetConfirmView(APIView):
             description=f"Password reset via email link for {user.username}",
         )
         return Response({"detail": "Password updated successfully. You may now sign in."})
+
+
+# ── Session PIN Reset ─────────────────────────────────────────────────────────
+# Separate from Password Reset above: the PIN is stored hashed (like a
+# password) and cannot be recovered or emailed — only replaced. Reachable
+# from the lock screen / trusted-device PIN prompt, where the user has no
+# valid session yet and doesn't remember the PIN, so a step-up "current
+# password" check (as used by SessionPinSetupView when changing a known PIN)
+# doesn't apply here — email is the identity proof, same mechanism as
+# Password Reset, just a dedicated token type so a PIN-reset link can never
+# be replayed to reset the account password.
+
+
+class PinResetRequestView(APIView):
+    """Request a session-PIN reset token (logged to console in dev, emailed in prod)."""
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
+    throttle_classes = [PinResetThrottle]
+
+    def post(self, request):
+        ser = PinResetRequestSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        email = ser.validated_data["email"]
+
+        from .email_notify import find_active_user_by_email, send_pin_reset_email
+
+        user = find_active_user_by_email(email)
+        if user:
+            token = PinResetToken.generate_for(user)
+            base = _password_reset_frontend_base(request)
+            reset_url = f"{base}/auth/forgot-pin/confirm?token={token.token}"
+            sent = send_pin_reset_email(
+                user=user,
+                reset_url=reset_url,
+                to_email=(user.email or email).strip(),
+            )
+            from .audit import log_action as _log
+            from .models import AuditLog as _AL
+
+            if sent:
+                _log(
+                    request,
+                    _AL.Action.SETTINGS,
+                    resource_type="PinResetEmail",
+                    resource_id=user.id,
+                    resource_label=user.username,
+                    description=f"Session PIN reset email sent to {user.email}",
+                    extra_data={"email": user.email, "status": "sent"},
+                )
+            else:
+                _log(
+                    request,
+                    _AL.Action.SETTINGS,
+                    resource_type="PinResetEmail",
+                    resource_id=user.id,
+                    resource_label=user.username,
+                    description=f"Session PIN reset email failed for {user.email}",
+                    extra_data={"email": user.email, "status": "failed"},
+                )
+        # Do not reveal whether the email is registered (anti-enumeration).
+        return Response({"detail": "If that email is registered, a PIN reset link has been sent."})
+
+
+class PinResetConfirmView(APIView):
+    """Validate reset token and set a new session PIN."""
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
+    throttle_classes = [PinResetThrottle]
+
+    def post(self, request):
+        ser = PinResetConfirmSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user = ser.save()
+
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        _security_log.info("PIN_RESET_COMPLETE | username=%s", user.username)
+        _log(
+            request,
+            _AL.Action.SETTINGS,
+            resource_type="User",
+            resource_id=user.id,
+            resource_label=user.username,
+            description=f"Session PIN reset via email link for {user.username}",
+        )
+        return Response({"detail": "PIN updated successfully. You may now sign in."})
 
 
 def _build_claude_minutes_prompt(meeting):

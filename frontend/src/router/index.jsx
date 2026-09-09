@@ -8,6 +8,8 @@ import RequireAuth from '../components/auth/RequireAuth'
 import Login from '../pages/auth/Login'
 import ResetPassword from '../pages/auth/ResetPassword'
 import PasswordResetConfirm from '../pages/auth/PasswordResetConfirm'
+import ForgotPin from '../pages/auth/ForgotPin'
+import PinResetConfirm from '../pages/auth/PinResetConfirm'
 import TwoSteps from '../pages/auth/TwoSteps'
 import TOTPSetup from '../pages/auth/TOTPSetup'
 import SetPinPage from '../pages/auth/SetPinPage'
@@ -92,6 +94,8 @@ export default function AppRouter() {
       <Route path="/auth/login"                    element={<Login />} />
       <Route path="/auth/reset-password"           element={<ResetPassword />} />
       <Route path="/auth/reset-password/confirm"   element={<PasswordResetConfirm />} />
+      <Route path="/auth/forgot-pin"               element={<ForgotPin />} />
+      <Route path="/auth/forgot-pin/confirm"       element={<PinResetConfirm />} />
       <Route path="/auth/2fa"                      element={<TwoSteps />} />
       <Route path="/auth/totp-setup"               element={<TOTPSetup />} />
       <Route path="/auth/set-pin"                  element={<SetPinPage />} />
