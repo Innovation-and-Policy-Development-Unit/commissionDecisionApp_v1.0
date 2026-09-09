@@ -268,7 +268,7 @@ function timeAgo(iso) {
 
 const ROLE_LABELS = {
   psc_admin: 'PSC Admin', psc_secretary: 'PSC Secretary', psc_manager: 'PSC Manager',
-  psc_officer: 'PSC Officer', psc_commissioner: 'Commissioner', chairperson: 'Chairperson',
+  psc_officer: 'PSC Officer', psc_commissioner: 'Commissioner', chairperson: 'Chairman',
   senior_admin_officer: 'Senior Admin Officer', head_of_agency: 'Head of Agency',
   ministry_hr: 'Ministry HR',
 }

@@ -19,7 +19,7 @@ class Role(models.TextChoices):
     PSC_SECRETARY          = "psc_secretary",          "PSC Secretary"
     SENIOR_ADMIN_OFFICER   = "senior_admin_officer",   "Senior Administration Officer"
     PSC_COMMISSIONER       = "psc_commissioner",       "PSC Commissioner"
-    CHAIRPERSON            = "chairperson",            "Chairperson, PSC"
+    CHAIRPERSON            = "chairperson",            "Chairman"
     # ── Post-decision execution roles ───────────────────────────────────────
     PSC_MANAGER       = "psc_manager",       "OPSC Manager"
     PRINCIPAL_OFFICER = "principal_officer", "Principal Officer"
