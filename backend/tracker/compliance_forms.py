@@ -3,7 +3,10 @@ Compliance unit submission types, role rules, and digitized form field definitio
 
 All COMP-* submissions are OPSC-internal: initiated by the Compliance unit (not
 ministry HR), routed_unit=compliance, is_internal=True, and use the internal
-Secretary workflow (no ministry checklist).
+Senior→Principal→Manager review chain (no ministry checklist). The Manager's
+approval hands off to the Secretary Approval Gate (Pending Secretary Approval),
+same as any other submission — from there the Secretary forwards to Commission
+for a decision.
 """
 
 from __future__ import annotations

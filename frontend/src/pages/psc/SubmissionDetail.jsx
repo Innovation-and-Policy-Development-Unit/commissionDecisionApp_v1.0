@@ -1095,6 +1095,10 @@ const stageDescriptions = {
           <span>
             {user?.role === 'head_of_agency'
               ? t('submission.readonly_dg', { defaultValue: 'View-only: as Director-General you can endorse or return this submission, but not edit its content. Use “Return to HR” to request changes.' })
+              : (user?.role === 'psc_secretary' || user?.role === 'psc_officer')
+              ? (isComplianceSubmission
+                  ? t('submission.readonly_secretary_compliance', { defaultValue: 'Read-only: you review this submission but do not edit the source form. Only Compliance staff can amend its content.' })
+                  : t('submission.readonly_secretary', { defaultValue: 'Read-only: you review this submission but do not edit the source form. Only the submitting Ministry can amend its content.' }))
               : t('submission.readonly_hr', { defaultValue: 'Read-only: this submission is with the DG for endorsement. You can edit it again only if the DG returns it to draft.' })}
           </span>
         </div>

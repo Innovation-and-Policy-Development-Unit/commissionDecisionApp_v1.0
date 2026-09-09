@@ -653,6 +653,8 @@
     "kanban_cap_notice": "Showing the first {{shown}} of {{total}} matching submissions. Use filters to narrow the board.",
     "readonly_dg": "View-only: as Director-General you can endorse or return this submission, but not edit its content. Use “Return to HR” to request changes.",
     "readonly_hr": "Read-only: this submission is with the DG for endorsement. You can edit it again only if the DG returns it to draft.",
+    "readonly_secretary": "Read-only: you review this submission but do not edit the source form. Only the submitting Ministry can amend its content.",
+    "readonly_secretary_compliance": "Read-only: you review this submission but do not edit the source form. Only Compliance staff can amend its content.",
     "kanban": {
       "aria_board": "Submission workflow board",
       "read_only": "Drag-and-drop stage changes are available for PSC officers, secretariat, commissioners, and ministry HR roles.",
