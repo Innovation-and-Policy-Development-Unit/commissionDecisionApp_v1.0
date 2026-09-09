@@ -186,7 +186,17 @@
     "react": "Réagir",
     "reply": "Répondre",
     "replying_to": "Réponse à",
-    "attach_file": "Joindre un fichier"
+    "attach_file": "Joindre un fichier",
+    "search_conversations": "Rechercher dans les messages…",
+    "filter_all": "Tous",
+    "filter_unread": "Non lus",
+    "filter_groups": "Groupes",
+    "more_options": "Plus d'options",
+    "mark_all_read": "Tout marquer comme lu",
+    "you": "Vous",
+    "mute": "Désactiver les notifications",
+    "unmute": "Réactiver les notifications",
+    "muted": "En sourdine"
   },
   "notifications": {
     "loading": "Chargement des notifications…",

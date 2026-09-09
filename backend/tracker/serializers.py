@@ -3526,13 +3526,21 @@ class ConversationSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
     online = serializers.SerializerMethodField()
+    muted = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
         fields = (
             "id", "is_group", "name", "display_name", "picture",
-            "participant_ids", "participants", "last_message", "unread_count", "updated_at", "online",
+            "participant_ids", "participants", "last_message", "unread_count", "updated_at",
+            "online", "muted",
         )
+
+    def _own_membership(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return None
+        return next((p for p in obj.participants.all() if p.user_id == request.user.id), None)
 
     def _other_participant(self, obj):
         request = self.context.get("request")
@@ -3605,6 +3613,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         return {
             "id": last.id,
             "sender": last.sender_id,
+            "sender_name": (last.sender.get_full_name() or "").strip() or last.sender.username,
             "body": "" if last.is_deleted else last.body,
             "is_deleted": last.is_deleted,
             "created_at": last.created_at,
@@ -3614,12 +3623,14 @@ class ConversationSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not request:
             return 0
-        membership = next(
-            (p for p in obj.participants.all() if p.user_id == request.user.id), None
-        )
+        membership = self._own_membership(obj)
         if not membership:
             return 0
         others = [m for m in obj.messages.all() if m.sender_id != request.user.id]
         if membership.last_read_at:
             others = [m for m in others if m.created_at > membership.last_read_at]
         return len(others)
+
+    def get_muted(self, obj):
+        membership = self._own_membership(obj)
+        return bool(membership and membership.muted)

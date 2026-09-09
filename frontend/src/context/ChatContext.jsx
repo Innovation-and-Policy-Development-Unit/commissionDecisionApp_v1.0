@@ -225,6 +225,19 @@ export function ChatProvider({ children }) {
     }
   }, [send])
 
+  const markAllRead = useCallback(() => {
+    conversationsRef.current.filter((c) => c.unread_count > 0).forEach((c) => markRead(c.id))
+  }, [markRead])
+
+  const muteConversation = useCallback(async (conversationId, muted) => {
+    setConversations((prev) => prev.map((c) => (c.id === conversationId ? { ...c, muted } : c)))
+    try {
+      await api.post(`/chat/conversations/${conversationId}/mute/`, { muted })
+    } catch {
+      setConversations((prev) => prev.map((c) => (c.id === conversationId ? { ...c, muted: !muted } : c)))
+    }
+  }, [])
+
   const startConversation = useCallback(async (participantIds, name = '') => {
     const { data } = await api.post('/chat/conversations/', { participant_ids: participantIds, name })
     setConversations((prev) => {
@@ -272,8 +285,8 @@ export function ChatProvider({ children }) {
           return sortConversations(next)
         })
 
-        if (!isOwn && !isViewed && getDesktopNotificationsEnabled() && !isTabVisible()) {
-          const conv = conversationsRef.current.find((c) => c.id === convId)
+        const conv = conversationsRef.current.find((c) => c.id === convId)
+        if (!isOwn && !isViewed && !conv?.muted && getDesktopNotificationsEnabled() && !isTabVisible()) {
           showDesktopNotification({
             title: conv?.display_name || msg.sender_name,
             body: msg.body || 'Sent an attachment',
@@ -442,6 +455,8 @@ export function ChatProvider({ children }) {
     reactToMessage,
     setTyping,
     markRead,
+    markAllRead,
+    muteConversation,
     startConversation,
     searchUsers,
     fetchMessages,
@@ -453,7 +468,7 @@ export function ChatProvider({ children }) {
   }), [
     conversationsWithPresence, connected, activeId, messagesByConversation, typingByConversation,
     onlineByUser, unreadTotal, selectConversation, sendMessage, sendAttachments, editMessage,
-    deleteMessage, reactToMessage, setTyping, markRead,
+    deleteMessage, reactToMessage, setTyping, markRead, markAllRead, muteConversation,
     startConversation, searchUsers, fetchMessages, fetchConversations,
     openWindows, openChatWindow, closeChatWindow, minimizeChatWindow,
   ])

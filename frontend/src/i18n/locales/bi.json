@@ -186,7 +186,17 @@
     "react": "Riakt",
     "reply": "Ansa",
     "replying_to": "Ansarem",
-    "attach_file": "Atajem wan fael"
+    "attach_file": "Atajem wan fael",
+    "search_conversations": "Faenem long Jat…",
+    "filter_all": "Evriwan",
+    "filter_unread": "Ol we i no ridim yet",
+    "filter_groups": "Ol Grup",
+    "more_options": "Moa setting",
+    "mark_all_read": "Makem evriwan olsem i ridim finis",
+    "you": "Yu",
+    "mute": "Silensim ol notifikesen",
+    "unmute": "Anmutum ol notifikesen",
+    "muted": "I sailen"
   },
   "notifications": {
     "loading": "Ol notifikesen i kam…",

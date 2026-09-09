@@ -210,7 +210,17 @@
     "react": "React",
     "reply": "Reply",
     "replying_to": "Replying to",
-    "attach_file": "Attach a file"
+    "attach_file": "Attach a file",
+    "search_conversations": "Search Chat…",
+    "filter_all": "All",
+    "filter_unread": "Unread",
+    "filter_groups": "Groups",
+    "more_options": "More options",
+    "mark_all_read": "Mark all as read",
+    "you": "You",
+    "mute": "Mute notifications",
+    "unmute": "Unmute notifications",
+    "muted": "Muted"
   },
   "notifications": {
     "loading": "Loading notifications…",
