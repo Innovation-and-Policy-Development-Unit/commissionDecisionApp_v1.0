@@ -122,13 +122,13 @@ class TransitionTests(TestCase):
             self._call_internal(role, current, target)
 
     def test_compliance_manager_submits_own_draft_direct_to_secretary(self):
-        self._call_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
+        self._call_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.DRAFT, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     def test_compliance_principal_cannot_submit_draft_direct_to_secretary(self):
-        self._denied_internal(Role.COMPLIANCE_PRINCIPAL, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
+        self._denied_internal(Role.COMPLIANCE_PRINCIPAL, WorkflowStage.DRAFT, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     def test_compliance_senior_cannot_submit_draft_direct_to_secretary(self):
-        self._denied_internal(Role.COMPLIANCE_SENIOR, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
+        self._denied_internal(Role.COMPLIANCE_SENIOR, WorkflowStage.DRAFT, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     def test_compliance_principal_submits_draft_for_manager_approval(self):
         self._call_internal(Role.COMPLIANCE_PRINCIPAL, WorkflowStage.DRAFT, WorkflowStage.PENDING_MANAGER_APPROVAL)
@@ -141,16 +141,16 @@ class TransitionTests(TestCase):
         self._denied_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.DRAFT, WorkflowStage.PENDING_MANAGER_APPROVAL)
 
     def test_compliance_manager_approves_to_secretary(self):
-        self._call_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.SUBMITTED)
+        self._call_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     def test_compliance_manager_returns_for_changes(self):
         self._call_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.DRAFT)
 
     def test_compliance_principal_cannot_approve_pending_manager_approval(self):
-        self._denied_internal(Role.COMPLIANCE_PRINCIPAL, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.SUBMITTED)
+        self._denied_internal(Role.COMPLIANCE_PRINCIPAL, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     def test_compliance_senior_cannot_approve_pending_manager_approval(self):
-        self._denied_internal(Role.COMPLIANCE_SENIOR, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.SUBMITTED)
+        self._denied_internal(Role.COMPLIANCE_SENIOR, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     def test_compliance_principal_targets_from_draft(self):
         targets = iter_allowed_targets(Role.COMPLIANCE_PRINCIPAL, WorkflowStage.DRAFT, is_internal=True)
@@ -158,11 +158,21 @@ class TransitionTests(TestCase):
 
     def test_compliance_manager_targets_from_draft(self):
         targets = iter_allowed_targets(Role.COMPLIANCE_MANAGER, WorkflowStage.DRAFT, is_internal=True)
-        self.assertEqual(targets, [WorkflowStage.SUBMITTED.value])
+        self.assertEqual(targets, [WorkflowStage.PENDING_SECRETARY_APPROVAL.value])
 
     def test_compliance_manager_targets_from_pending_manager_approval(self):
         targets = iter_allowed_targets(Role.COMPLIANCE_MANAGER, WorkflowStage.PENDING_MANAGER_APPROVAL, is_internal=True)
-        self.assertEqual(set(targets), {WorkflowStage.SUBMITTED.value, WorkflowStage.DRAFT.value})
+        self.assertEqual(set(targets), {WorkflowStage.PENDING_SECRETARY_APPROVAL.value, WorkflowStage.DRAFT.value})
+
+    def test_compliance_manager_approval_reaches_secretary_approval_gate(self):
+        """After the Manager approves, the Secretary can forward the compliance
+        submission to Commission — same Secretary Approval Gate every other
+        submission type uses (see decision to route compliance here, not the
+        short internal Submitted→Secretary Review→Approved/Rejected chain)."""
+        self._call_internal(Role.PSC_SECRETARY, WorkflowStage.PENDING_SECRETARY_APPROVAL, WorkflowStage.FORWARDED_TO_COMMISSION)
+
+    def test_compliance_manager_approval_can_be_placed_on_agenda(self):
+        self._call_internal(Role.PSC_SECRETARY, WorkflowStage.FORWARDED_TO_COMMISSION, WorkflowStage.COMMISSION_SITTING)
 
     # ── PSC Officer ───────────────────────────────────────────────────────
     def test_officer_cannot_review_checklist(self):

@@ -65,7 +65,7 @@ const ROLE_CHOICES = [
   { value: 'psc_secretary', label: 'PSC Secretary' },
   { value: 'senior_admin_officer', label: 'Senior Administration Officer' },
   { value: 'psc_commissioner', label: 'PSC Commissioner' },
-  { value: 'chairperson', label: 'Chairperson, PSC' },
+  { value: 'chairperson', label: 'Chairman' },
   { value: 'psc_manager', label: 'OPSC Manager (post-decision)' },
   { value: 'principal_officer', label: 'Principal Officer (post-decision)' },
   { value: 'senior_officer', label: 'Senior Officer' },

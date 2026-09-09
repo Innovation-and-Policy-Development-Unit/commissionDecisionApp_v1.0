@@ -15,6 +15,7 @@ export const STAGE_LABELS = {
   registered_routed:          'Registered and Routed',
   manager_checklist_review:   'Manager Checklist Review',
   under_assessment:           'Under Assessment',
+  pending_secretary_approval: 'Pending Secretary Approval',
   compliance_under_review:    'Compliance Under Review',
   // Hold / deferral
   deferred:                   'Deferred',
@@ -109,6 +110,7 @@ export const STAGE_META = {
   registered_routed:          { color: 'indigo', category: 'PSC Intake',      terminal: false },
   manager_checklist_review:   { color: 'indigo', category: 'Assessment',      terminal: false },
   under_assessment:           { color: 'violet', category: 'Assessment',      terminal: false },
+  pending_secretary_approval: { color: 'sky',    category: 'Assessment',      terminal: false },
   deferred:                   { color: 'amber',  category: 'On Hold',         terminal: false },
   tabled:                     { color: 'amber',  category: 'On Hold',         terminal: false },
   awaiting_legal_advice:      { color: 'amber',  category: 'On Hold',         terminal: false },

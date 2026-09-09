@@ -52,9 +52,12 @@ _COMPLIANCE_CREATOR_ALLOWED = {
 # Principal submits straight to Manager approval (no peer review above them).
 # Compliance Senior must route through Principal review first — see
 # _COMPLIANCE_SENIOR_TO_PRINCIPAL_ALLOWED / _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED.
+# Target is Pending Secretary Approval (not Submitted) — the Manager's
+# approval IS the hand-off to the Secretary, who then reviews and forwards
+# to Commission, same Secretary Approval Gate every other submission uses.
 _COMPLIANCE_MANAGER_DIRECT_SUBMIT_ALLOWED = {
-    (WorkflowStage.DRAFT, WorkflowStage.SUBMITTED),
-    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
+    (WorkflowStage.DRAFT, WorkflowStage.PENDING_SECRETARY_APPROVAL),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_SECRETARY_APPROVAL),
 }
 _COMPLIANCE_PRINCIPAL_SUBMIT_FOR_APPROVAL_ALLOWED = {
     (WorkflowStage.DRAFT, WorkflowStage.PENDING_MANAGER_APPROVAL),
@@ -81,8 +84,11 @@ _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED = {
 _COMPLIANCE_SENIOR_SUBMIT_TO_MANAGER_ALLOWED = {
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_MANAGER_APPROVAL),
 }
+# Same destination as _COMPLIANCE_MANAGER_DIRECT_SUBMIT_ALLOWED above — once
+# the Manager approves a Senior/Principal-reviewed submission, it goes
+# straight to the Secretary Approval Gate.
 _COMPLIANCE_MANAGER_APPROVAL_ALLOWED = {
-    (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.SUBMITTED),
+    (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL),
     (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.DRAFT),   # return for changes
 }
 
@@ -162,6 +168,7 @@ _INTERNAL_STAGE_GRAPH = {
         WorkflowStage.SUBMITTED,
         WorkflowStage.PENDING_MANAGER_APPROVAL,   # chain step 1
         WorkflowStage.PENDING_PRINCIPAL_REVIEW,   # Compliance Senior: submit to Principal first
+        WorkflowStage.PENDING_SECRETARY_APPROVAL, # Compliance Manager: submit own draft straight to Secretary
     ],
     # A Compliance Senior's draft must clear Principal review before it can
     # reach Manager approval — see _COMPLIANCE_SENIOR_TO_PRINCIPAL_ALLOWED /
@@ -176,11 +183,13 @@ _INTERNAL_STAGE_GRAPH = {
         WorkflowStage.DRAFT,
         WorkflowStage.PENDING_PRINCIPAL_REVIEW,     # Senior resubmits to Principal
         WorkflowStage.PENDING_MANAGER_APPROVAL,     # Senior submits to Manager after Principal's review
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,   # Compliance Manager: resubmit straight to Secretary
     ],
     # Generic chain approval stages — actual role enforcement is done via approval_chain config in views.py
     WorkflowStage.PENDING_MANAGER_APPROVAL: [
         WorkflowStage.PENDING_SECOND_APPROVAL,
         WorkflowStage.SUBMITTED,
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,   # Compliance Manager approves → Secretary Approval Gate
         WorkflowStage.DRAFT,    # return for changes
     ],
     WorkflowStage.PENDING_SECOND_APPROVAL: [
@@ -197,6 +206,18 @@ _INTERNAL_STAGE_GRAPH = {
     # Allow Secretary to push back for correction
     WorkflowStage.REJECTED: [
         WorkflowStage.DRAFT,
+    ],
+    # Compliance Manager's approval lands here — same Secretary Approval Gate
+    # used by every other submission type (see _STAGE_GRAPH's equivalent
+    # entry). From here the Secretary forwards to Commission for a decision,
+    # just like a standard disciplinary/compliance matter.
+    WorkflowStage.PENDING_SECRETARY_APPROVAL: [
+        WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.UNDER_ASSESSMENT,   # return for further work
+        WorkflowStage.DEFERRED,
+    ],
+    WorkflowStage.FORWARDED_TO_COMMISSION: [
+        WorkflowStage.COMMISSION_SITTING,
     ],
 }
 
@@ -670,7 +691,21 @@ def assert_transition_allowed(
                 WorkflowStage.APPROVED, WorkflowStage.REJECTED
             }:
                 return
-            raise PermissionDenied("Secretary can move internal submissions: Submitted→Secretary Review, or Secretary Review→Approved/Rejected.")
+            # Compliance Manager's approval lands at the Secretary Approval Gate —
+            # same as any other submission from here: forward to Commission for a
+            # decision, send back for further work, or defer.
+            if current_stage == WorkflowStage.PENDING_SECRETARY_APPROVAL and target_stage in {
+                WorkflowStage.FORWARDED_TO_COMMISSION, WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.DEFERRED,
+            }:
+                return
+            if current_stage == WorkflowStage.FORWARDED_TO_COMMISSION and target_stage == WorkflowStage.COMMISSION_SITTING:
+                return
+            raise PermissionDenied(
+                "Secretary can move internal submissions: Submitted→Secretary Review, "
+                "Secretary Review→Approved/Rejected, or — for compliance submissions routed "
+                "through the Secretary Approval Gate — Pending Secretary Approval→Forwarded "
+                "to Commission (or return for further work/defer)."
+            )
 
         if role == Role.PSC_ADMIN:
             return
