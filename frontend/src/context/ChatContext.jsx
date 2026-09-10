@@ -238,6 +238,26 @@ export function ChatProvider({ children }) {
     }
   }, [])
 
+  // "Delete" hides the conversation from just this user's list — nothing is
+  // removed server-side, and it reappears automatically once updated_at
+  // moves past deleted_at (i.e. the other participant sends something new).
+  // Reflect that same comparison optimistically here rather than just
+  // setting a `hidden: true` flag, so a message arriving a moment later
+  // still un-hides it correctly without waiting on a server round-trip.
+  const deleteConversation = useCallback(async (conversationId) => {
+    const now = new Date().toISOString()
+    setConversations((prev) => prev.map((c) => (c.id === conversationId
+      ? { ...c, hidden: true, unread_count: 0, _deletedAt: now }
+      : c)))
+    setOpenWindows((prev) => prev.filter((w) => w.id !== conversationId))
+    if (activeIdRef.current === conversationId) setActiveId(null)
+    try {
+      await api.delete(`/chat/conversations/${conversationId}/`)
+    } catch {
+      setConversations((prev) => prev.map((c) => (c.id === conversationId ? { ...c, hidden: false } : c)))
+    }
+  }, [])
+
   const startConversation = useCallback(async (participantIds, name = '') => {
     const { data } = await api.post('/chat/conversations/', { participant_ids: participantIds, name })
     setConversations((prev) => {
@@ -277,9 +297,16 @@ export function ChatProvider({ children }) {
           const next = prev.map((c) => (c.id === convId
             ? {
               ...c,
-              last_message: { id: msg.id, sender: msg.sender, body: msg.body, created_at: msg.created_at },
+              last_message: {
+                id: msg.id, sender: msg.sender, sender_name: msg.sender_name,
+                body: msg.body, created_at: msg.created_at,
+              },
               updated_at: msg.created_at,
               unread_count: (!isViewed && !isOwn) ? (c.unread_count || 0) + 1 : c.unread_count,
+              // A message arriving after a local "delete" un-hides the
+              // thread — matches the server's own hidden = deleted_at &&
+              // updated_at <= deleted_at comparison (see get_hidden).
+              hidden: c._deletedAt ? new Date(msg.created_at) <= new Date(c._deletedAt) : c.hidden,
             }
             : c))
           return sortConversations(next)
@@ -425,16 +452,18 @@ export function ChatProvider({ children }) {
   // merge them over each conversation's initial `online` (set once, at fetch
   // time) rather than trusting that snapshot for the conversation's whole
   // lifetime in memory.
-  const conversationsWithPresence = useMemo(() => conversations.map((c) => {
-    if (c.is_group) return c
-    const otherId = (c.participant_ids || []).find((id) => id !== user?.id)
-    const live = otherId != null ? onlineByUser[otherId] : undefined
-    return live === undefined ? c : { ...c, online: live }
-  }), [conversations, onlineByUser, user])
+  const conversationsWithPresence = useMemo(() => conversations
+    .filter((c) => !c.hidden)
+    .map((c) => {
+      if (c.is_group) return c
+      const otherId = (c.participant_ids || []).find((id) => id !== user?.id)
+      const live = otherId != null ? onlineByUser[otherId] : undefined
+      return live === undefined ? c : { ...c, online: live }
+    }), [conversations, onlineByUser, user])
 
   const unreadTotal = useMemo(
-    () => conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0),
-    [conversations],
+    () => conversationsWithPresence.reduce((sum, c) => sum + (c.unread_count || 0), 0),
+    [conversationsWithPresence],
   )
 
   const value = useMemo(() => ({
@@ -457,6 +486,7 @@ export function ChatProvider({ children }) {
     markRead,
     markAllRead,
     muteConversation,
+    deleteConversation,
     startConversation,
     searchUsers,
     fetchMessages,
@@ -469,7 +499,7 @@ export function ChatProvider({ children }) {
     conversationsWithPresence, connected, activeId, messagesByConversation, typingByConversation,
     onlineByUser, unreadTotal, selectConversation, sendMessage, sendAttachments, editMessage,
     deleteMessage, reactToMessage, setTyping, markRead, markAllRead, muteConversation,
-    startConversation, searchUsers, fetchMessages, fetchConversations,
+    deleteConversation, startConversation, searchUsers, fetchMessages, fetchConversations,
     openWindows, openChatWindow, closeChatWindow, minimizeChatWindow,
   ])
 

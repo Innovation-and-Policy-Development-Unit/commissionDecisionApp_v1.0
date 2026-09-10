@@ -7,56 +7,7 @@ import Avatar from '../../components/shared/Avatar'
 import NewConversationModal from '../../components/chat/NewConversationModal'
 import MessageBubble from '../../components/chat/MessageBubble'
 import MessageComposer from '../../components/chat/MessageComposer'
-import { formatNotificationTime } from '../../utils/browserNotifications'
-
-function ConversationRow({ conversation, active, onSelect, t }) {
-  const lastPreview = conversation.last_message?.is_deleted
-    ? t('chat.deleted_message')
-    : (conversation.last_message?.body || '')
-  const displayName = conversation.display_name || (conversation.is_group ? t('chat.group_chat') : '')
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(conversation.id)}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-        active ? 'bg-primary-50 dark:bg-primary-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'
-      }`}
-    >
-      {conversation.is_group ? (
-        <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
-          <Users size={18} className="text-slate-500 dark:text-slate-400" />
-        </div>
-      ) : (
-        <Avatar
-          name={displayName}
-          src={conversation.picture}
-          size="md"
-          status={conversation.online ? 'online' : undefined}
-        />
-      )}
-      <span className="flex-1 min-w-0">
-        <span className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
-            {displayName}
-          </span>
-          {conversation.updated_at && (
-            <span className="text-[10px] text-slate-400 shrink-0">
-              {formatNotificationTime(conversation.updated_at)}
-            </span>
-          )}
-        </span>
-        <span className="flex items-center justify-between gap-2">
-          <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{lastPreview}</span>
-          {conversation.unread_count > 0 && (
-            <span className="shrink-0 min-w-[1.25rem] h-5 px-1 rounded-full bg-primary-600 text-white text-[10px] font-bold flex items-center justify-center">
-              {conversation.unread_count}
-            </span>
-          )}
-        </span>
-      </span>
-    </button>
-  )
-}
+import ConversationRow from '../../components/chat/ConversationRow'
 
 export default function Chat() {
   const { t } = useTranslation()

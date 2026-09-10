@@ -295,6 +295,23 @@ class ConversationViewSet(
         membership.save(update_fields=["muted"])
         return Response({"muted": membership.muted})
 
+    def destroy(self, request, *args, **kwargs):
+        """DELETE /api/chat/conversations/<id>/ — "delete conversation" is
+        per-participant (Messenger's own behaviour, not a real delete):
+        hides it from this user's list only. Also marks it read, since
+        there's no point leaving an unread badge on a thread you just
+        hid. Nothing is broadcast — other participants see no change at
+        all, and the thread reappears for this user automatically the
+        next time one of them sends a new message (see
+        ConversationSerializer.get_hidden)."""
+        conversation = self.get_object()
+        membership = self._get_membership(conversation)
+        now = timezone.now()
+        membership.deleted_at = now
+        membership.last_read_at = now
+        membership.save(update_fields=["deleted_at", "last_read_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])

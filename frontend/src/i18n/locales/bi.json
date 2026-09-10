@@ -196,7 +196,9 @@
     "you": "Yu",
     "mute": "Silensim ol notifikesen",
     "unmute": "Anmutum ol notifikesen",
-    "muted": "I sailen"
+    "muted": "I sailen",
+    "delete_conversation": "Rabisim jat",
+    "confirm_delete_conversation": "Yu wantem rabisim jat ia? Bae i gowe long lis blong yu, be narafala man i save luk yet. Sipos hem i sendem mesej long yu bakegen, jat ia bae i kambak long lis blong yu."
   },
   "notifications": {
     "loading": "Ol notifikesen i kam…",
