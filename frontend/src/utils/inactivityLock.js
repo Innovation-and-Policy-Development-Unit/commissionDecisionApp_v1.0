@@ -58,3 +58,49 @@ export function getInactivityLockMs(username) {
   if (!minutes) return 0
   return minutes * 60 * 1000
 }
+
+/** ── Locked-session state ────────────────────────────────────────────────
+ * Deliberately in localStorage, not sessionStorage: a lock must survive a
+ * full browser close/reopen, not just a page refresh — otherwise closing
+ * the browser while locked (rather than leaving the tab open) skips the
+ * PIN prompt entirely and silently resumes from the JWT still sitting in
+ * localStorage. Carries a `lockedAt` timestamp so a stale lock (well past
+ * how long a PIN alone should be able to resume a session) forces a full
+ * login instead of prompting for a PIN that the backend's own trusted-
+ * session window (see SESSION_TRUST_HOURS) would reject anyway. Kept in
+ * loose agreement with that backend window, not a substitute for it — the
+ * server remains the actual authority. */
+const LOCK_STATE_KEY = 'psc-lock-state'
+
+export const PIN_RESUME_CEILING_MINUTES = 120
+
+export function setLockState(username) {
+  try {
+    localStorage.setItem(LOCK_STATE_KEY, JSON.stringify({ username, lockedAt: Date.now() }))
+  } catch { /* private mode */ }
+}
+
+/** Returns { username, lockedAt } or null if absent/malformed. */
+export function getLockState() {
+  try {
+    const raw = localStorage.getItem(LOCK_STATE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed.username !== 'string' || typeof parsed.lockedAt !== 'number') {
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+export function clearLockState() {
+  try {
+    localStorage.removeItem(LOCK_STATE_KEY)
+  } catch { /* private mode */ }
+}
+
+export function isLockStateExpired(lockedAt) {
+  return Date.now() - lockedAt > PIN_RESUME_CEILING_MINUTES * 60 * 1000
+}

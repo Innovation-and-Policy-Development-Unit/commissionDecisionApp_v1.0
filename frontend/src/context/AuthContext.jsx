@@ -1,7 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api/client'
 import { normalizeUserMedia } from '../utils/mediaUrl'
-import { getInactivityLockMs, INACTIVITY_LOCK_SETTINGS_EVENT } from '../utils/inactivityLock'
+import {
+  getInactivityLockMs, INACTIVITY_LOCK_SETTINGS_EVENT,
+  setLockState, getLockState, clearLockState, isLockStateExpired,
+} from '../utils/inactivityLock'
 
 const AuthContext = createContext(null)
 
@@ -17,13 +20,24 @@ export function AuthProvider({ children }) {
 
   const inactivityTimer = useRef(null)
 
-  // Detect lock state on mount (e.g. after page refresh while locked)
+  // Detect lock state on mount — e.g. after a page refresh while locked, or
+  // a full browser close/reopen (the lock state lives in localStorage
+  // specifically so it survives that; see utils/inactivityLock.js). A lock
+  // well past how long a PIN alone should resume a session forces a full
+  // login instead — clearing the stale tokens here, before the hydrate-on-
+  // mount effect below runs, so it sees no token and doesn't just silently
+  // resume the stale session.
   useEffect(() => {
-    const lockUser = sessionStorage.getItem('psc-lock-username')
-    if (lockUser) {
-      setIsLocked(true)
-      setPin('')
+    const state = getLockState()
+    if (!state) return
+    if (isLockStateExpired(state.lockedAt)) {
+      clearLockState()
+      localStorage.removeItem('psc_access')
+      localStorage.removeItem('psc_refresh')
+      return
     }
+    setIsLocked(true)
+    setPin('')
   }, [])
 
   // ── Logout ────────────────────────────────────────────────────────────────
@@ -40,13 +54,13 @@ export function AuthProvider({ children }) {
 
     setIsLocked(false)
     setPin('')
-    sessionStorage.removeItem('psc-lock-username')
+    clearLockState()
   }, [])
 
   const lock = useCallback(() => {
     const uname = user?.username
     if (uname) {
-      sessionStorage.setItem('psc-lock-username', uname)
+      setLockState(uname)
     }
     setIsLocked(true)
     setPin('')
@@ -54,11 +68,13 @@ export function AuthProvider({ children }) {
   }, [user])
 
   const unlock = useCallback(async (pinCode) => {
-    const stored = sessionStorage.getItem('psc-lock-username')
-    if (!stored) {
+    const state = getLockState()
+    if (!state || isLockStateExpired(state.lockedAt)) {
+      clearLockState()
       setIsLocked(false)
       return { ok: false, detail: 'Session expired. Please sign in again.' }
     }
+    const stored = state.username
     try {
       const { data } = await api.post('/auth/session-pin/verify/', { username: stored, pin: pinCode })
       setAccessToken(data.access)
@@ -73,7 +89,7 @@ export function AuthProvider({ children }) {
         setUser(null)
       }
       setAuthReady(true)
-      sessionStorage.removeItem('psc-lock-username')
+      clearLockState()
       return { ok: true }
     } catch (err) {
       return { ok: false, detail: err.response?.data?.detail || 'Invalid PIN.' }

@@ -7,6 +7,7 @@ import BaseButton from '../../components/shared/BaseButton'
 import BaseInput from '../../components/shared/BaseInput'
 import BasePasswordInput from '../../components/shared/BasePasswordInput'
 import BaseMessageBar from '../../components/shared/BaseMessageBar'
+import { setLockState } from '../../utils/inactivityLock'
 
 const ANIM_STYLES = `
   @keyframes slide-up {
@@ -99,7 +100,7 @@ export default function Login() {
     } else if (data?.pin_required) {
       // Trusted device/session on this account — the backend skips issuing
       // tokens and asks for just the PIN instead of the full password again.
-      sessionStorage.setItem('psc-lock-username', data.username || username)
+      setLockState(data.username || username)
       navigate('/auth/lock', { state: { from: location.state?.from } })
     } else if (data?.must_change_password) {
       setShowPasswordChange(true)
