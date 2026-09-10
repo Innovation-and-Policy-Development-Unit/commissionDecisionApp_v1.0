@@ -5025,6 +5025,9 @@ class ConversationParticipant(models.Model):
     # Null = nothing read yet. Compared against Message.created_at to derive
     # unread counts and "seen" markers without a separate per-message table.
     last_read_at = models.DateTimeField(null=True, blank=True)
+    # Muting suppresses desktop notifications only — unread counts still
+    # accrue normally, matching Messenger's own mute behaviour.
+    muted = models.BooleanField(default=False)
 
     class Meta:
         constraints = [

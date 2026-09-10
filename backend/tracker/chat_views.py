@@ -284,6 +284,17 @@ class ConversationViewSet(
         )
         return Response({"status": "ok"})
 
+    @action(detail=True, methods=["post"])
+    def mute(self, request, pk=None):
+        """Mute is purely local to this participant's membership row — it
+        suppresses desktop notifications only; unread counts still accrue,
+        and nothing is broadcast to other participants."""
+        conversation = self.get_object()
+        membership = self._get_membership(conversation)
+        membership.muted = bool(request.data.get("muted"))
+        membership.save(update_fields=["muted"])
+        return Response({"muted": membership.muted})
+
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
