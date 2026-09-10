@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom'
 import { Lock, ArrowRight } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { getLockState, isLockStateExpired, clearLockState } from '../../utils/inactivityLock'
 
 export default function LockScreen() {
   const navigate = useNavigate()
@@ -13,12 +14,13 @@ export default function LockScreen() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('psc-lock-username')
-    if (!stored) {
+    const state = getLockState()
+    if (!state || isLockStateExpired(state.lockedAt)) {
+      clearLockState()
       navigate('/auth/login', { replace: true })
       return
     }
-    setUsername(stored)
+    setUsername(state.username)
   }, [navigate])
 
   if (accessToken && user && authReady && !isLocked) {

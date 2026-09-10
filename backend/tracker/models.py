@@ -1045,12 +1045,20 @@ class TrustedSession(models.Model):
 
     @classmethod
     def compute_expiry(cls, from_dt=None):
-        """Return the earlier of (from_dt + 8h) or today at 5pm Pacific/Efate."""
+        """Return the earlier of (from_dt + SESSION_TRUST_HOURS) or today at
+        5pm Pacific/Efate.
+
+        Was 8h by default — users reported being asked for just a PIN (not a
+        full re-login) after being away "a few hours", which traced back to
+        this window being wider than the "quick resume" purpose it's meant
+        for. 2h still covers a single meeting/lunch break without repeated
+        TOTP friction, while making "away a few hours" correctly require a
+        full login again."""
         from_dt = from_dt or timezone.now()
         tz = timezone.get_current_timezone()
         local_dt = timezone.localtime(from_dt, timezone=tz)
 
-        option_a = from_dt + timedelta(hours=int(os.getenv('SESSION_TRUST_HOURS', '8')))
+        option_a = from_dt + timedelta(hours=int(os.getenv('SESSION_TRUST_HOURS', '2')))
 
         today_5pm = local_dt.replace(hour=17, minute=0, second=0, microsecond=0)
         option_b = today_5pm if timezone.is_aware(today_5pm) else timezone.make_aware(today_5pm, timezone=tz)
