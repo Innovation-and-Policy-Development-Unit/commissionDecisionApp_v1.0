@@ -50,6 +50,7 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
       time: (sitting.time || '09:00').slice(0, 5),
       venue: sitting.venue || VENUES[0],
       type: sitting.type || 'ordinary',
+      submissionDueDate: sitting.submission_cutoff ? sitting.submission_cutoff.slice(0, 10) : '',
     })
     setIsEditOpen(true)
   }
@@ -58,7 +59,9 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
     e.preventDefault()
     setEditSaving(true)
     try {
-      await api.patch(`/meetings/${sitting.id}/`, editForm)
+      const { submissionDueDate, ...rest } = editForm
+      const payload = { ...rest, submission_cutoff: submissionDueDate ? `${submissionDueDate}T23:59:59` : null }
+      await api.patch(`/meetings/${sitting.id}/`, payload)
       toast.success('Sitting details updated.')
       setIsEditOpen(false)
       onUpdated?.()
@@ -396,6 +399,21 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                 onChange={e => setEditForm(f => ({ ...f, time: e.target.value }))}
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Submission due date <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              type="date"
+              className="input"
+              value={editForm.submissionDueDate}
+              max={editForm.date || undefined}
+              onChange={e => setEditForm(f => ({ ...f, submissionDueDate: e.target.value }))}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              Submissions forwarded after this date are placed on the next eligible sitting instead. Leave blank to default to 3 days before the sitting date.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Venue</label>

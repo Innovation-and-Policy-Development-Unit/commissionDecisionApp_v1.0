@@ -30,7 +30,7 @@ export default function CommissionSittings() {
   
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    title: '', date: new Date().toISOString().split('T')[0], time: '09:00', venue: VENUES[0], type: 'ordinary', notes: ''
+    title: '', date: new Date().toISOString().split('T')[0], time: '09:00', venue: VENUES[0], type: 'ordinary', notes: '', submissionDueDate: ''
   })
 
   const filteredMeetings = useMemo(() => {
@@ -53,10 +53,14 @@ export default function CommissionSittings() {
     e.preventDefault()
     setSaving(true)
     try {
-      await api.post('/meetings/', form)
+      const { submissionDueDate, ...rest } = form
+      const payload = submissionDueDate
+        ? { ...rest, submission_cutoff: `${submissionDueDate}T23:59:59` }
+        : rest
+      await api.post('/meetings/', payload)
       refresh()
       setIsModalOpen(false)
-      setForm({ title: '', date: new Date().toISOString().split('T')[0], time: '09:00', venue: VENUES[0], type: 'ordinary', notes: '' })
+      setForm({ title: '', date: new Date().toISOString().split('T')[0], time: '09:00', venue: VENUES[0], type: 'ordinary', notes: '', submissionDueDate: '' })
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to schedule sitting.')
     } finally {
@@ -183,6 +187,21 @@ export default function CommissionSittings() {
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Time</label>
               <input type="time" className="input" required value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              Submission due date <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              type="date"
+              className="input"
+              value={form.submissionDueDate}
+              max={form.date || undefined}
+              onChange={e => setForm({ ...form, submissionDueDate: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              Submissions forwarded after this date are placed on the next eligible sitting instead. Leave blank to default to 3 days before the sitting date.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Venue</label>
