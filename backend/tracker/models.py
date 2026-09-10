@@ -5028,6 +5028,12 @@ class ConversationParticipant(models.Model):
     # Muting suppresses desktop notifications only — unread counts still
     # accrue normally, matching Messenger's own mute behaviour.
     muted = models.BooleanField(default=False)
+    # "Delete conversation" is per-participant, not a real delete: it hides
+    # the thread from this user's list only (see Conversation.updated_at
+    # comparison in the serializer's `hidden` field). Nothing is removed —
+    # other participants are completely unaffected, and if they message
+    # again afterward the thread reappears for this user automatically.
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [

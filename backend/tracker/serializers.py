@@ -3527,13 +3527,14 @@ class ConversationSerializer(serializers.ModelSerializer):
     unread_count = serializers.SerializerMethodField()
     online = serializers.SerializerMethodField()
     muted = serializers.SerializerMethodField()
+    hidden = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
         fields = (
             "id", "is_group", "name", "display_name", "picture",
             "participant_ids", "participants", "last_message", "unread_count", "updated_at",
-            "online", "muted",
+            "online", "muted", "hidden",
         )
 
     def _own_membership(self, obj):
@@ -3634,3 +3635,14 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_muted(self, obj):
         membership = self._own_membership(obj)
         return bool(membership and membership.muted)
+
+    def get_hidden(self, obj):
+        """True once this user has "deleted" the conversation and nothing
+        new has happened since — the frontend filters these out of the
+        list. Comparing timestamps live (rather than clearing the flag on
+        delete) means a message that arrives afterward makes the thread
+        reappear on its own, with no separate "undelete" path needed."""
+        membership = self._own_membership(obj)
+        if not membership or not membership.deleted_at:
+            return False
+        return obj.updated_at <= membership.deleted_at

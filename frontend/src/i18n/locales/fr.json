@@ -196,7 +196,9 @@
     "you": "Vous",
     "mute": "Désactiver les notifications",
     "unmute": "Réactiver les notifications",
-    "muted": "En sourdine"
+    "muted": "En sourdine",
+    "delete_conversation": "Supprimer la conversation",
+    "confirm_delete_conversation": "Supprimer cette conversation ? Elle disparaîtra de votre liste de discussions, mais l'autre personne pourra toujours la voir. Si elle vous écrit à nouveau, la conversation réapparaîtra ici."
   },
   "notifications": {
     "loading": "Chargement des notifications…",
