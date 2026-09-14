@@ -16,8 +16,26 @@ This only drops the NOT NULL constraint — existing tracking_code values
 (and the unique index) are left untouched in case anything external still
 relies on a previously-issued code; new rows simply get NULL, which the
 unique index/constraint permits without conflict.
+
+Guarded with an existence check: only production carries this column (it
+was applied there directly, outside the normal migration history), so a
+fresh database — a new environment, CI, or a local/test database — never
+had it in the first place and the bare ALTER COLUMN would fail with
+UndefinedColumn on `manage.py migrate` there.
 """
 from django.db import migrations
+
+_SQL = """
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tracker_submission' AND column_name = 'tracking_code'
+    ) THEN
+        ALTER TABLE tracker_submission ALTER COLUMN tracking_code DROP NOT NULL;
+    END IF;
+END $$;
+"""
 
 
 class Migration(migrations.Migration):
@@ -28,7 +46,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunSQL(
-            sql="ALTER TABLE tracker_submission ALTER COLUMN tracking_code DROP NOT NULL;",
+            sql=_SQL,
             reverse_sql=migrations.RunSQL.noop,
         ),
     ]

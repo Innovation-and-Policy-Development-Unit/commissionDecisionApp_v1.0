@@ -5,24 +5,13 @@ import api from '../api/client'
 import { useAuth } from './AuthContext'
 import { getDesktopNotificationsEnabled, showDesktopNotification } from '../utils/browserNotifications'
 import { isTabVisible } from '../hooks/useVisibilityAwareInterval'
+import { buildWsUrl } from '../utils/websocket'
 
 const ChatContext = createContext(null)
 
 const PING_MS = 30_000
 const RECONNECT_BASE_MS = 1_000
 const RECONNECT_MAX_MS = 30_000
-
-function buildWsUrl(token) {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
-  let wsBase
-  if (/^https?:\/\//.test(apiBase)) {
-    wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api\/?$/, '')
-  } else {
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    wsBase = `${proto}//${window.location.host}`
-  }
-  return `${wsBase}/ws/chat/?token=${encodeURIComponent(token)}`
-}
 
 function sortConversations(list) {
   return [...list].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
@@ -402,7 +391,7 @@ export function ChatProvider({ children }) {
       if (cancelled) return
       const token = localStorage.getItem('psc_access')
       if (!token) return
-      const ws = new WebSocket(buildWsUrl(token))
+      const ws = new WebSocket(buildWsUrl('/ws/chat/', token))
       wsRef.current = ws
 
       ws.onopen = () => {

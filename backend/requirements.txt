@@ -19,6 +19,7 @@ django-celery-beat>=2.5,<3
 redis==4.6.0
 channels>=4.1,<5
 channels-redis>=4.2,<5
+daphne>=4.1,<5  # test-only: channels.testing.WebsocketCommunicator imports it unconditionally
 uvicorn[standard]>=0.30,<1
 bandit>=1.7
 pip-audit>=2.6
