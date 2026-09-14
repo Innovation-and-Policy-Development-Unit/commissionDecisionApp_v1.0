@@ -89,6 +89,8 @@ A full-stack web application for the **Public Service Commission (PSC) of Vanuat
 
 **Production overlay** (`docker-compose.prod.yml`, `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`): adds TLS termination on `web` (certificates renewed on the host via `certbot` + DNS-01, mounted read-only). `web` is reachable directly on the LAN/government network at `scdms.psc.gov.vu` — no Cloudflare Tunnel or public port-forward involved.
 
+**Before rebuilding the `backend` image for a deploy**, run `sh scripts/sync-locale-bundles.sh` from the repo root. The backend's Docker build context is `./backend` only, so it can't see `frontend/src/i18n/locales/` at build time — `backend/tracker/i18n_utils.py` falls back to the `backend/locale_bundles/` copy instead, and nothing regenerates that copy automatically. Skip this step and any UI text added or changed since the last sync silently won't reach production (this drifted for over five weeks before being caught).
+
 ---
 
 ## Project Structure
