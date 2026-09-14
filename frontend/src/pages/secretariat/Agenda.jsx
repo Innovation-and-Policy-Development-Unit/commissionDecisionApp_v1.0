@@ -1048,11 +1048,11 @@ function StandardRow({ item, isCompleted, canDefer, categories, editingItem, set
           <AiTextSkeleton
             className="mt-1.5 print:hidden"
             lines={3}
-            statusLabel="Generating AI blurb…"
+            statusLabel="Generating summary…"
           />
         )}
         {item.agenda_blurb && (
-          <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1 print:hidden">AI draft — verify</p>
+          <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1 print:hidden">Draft — verify</p>
         )}
         <p className="text-[11px] text-slate-400 font-mono mt-0.5 print:hidden">{item.submission_reference}</p>
 
