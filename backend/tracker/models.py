@@ -912,7 +912,8 @@ class SittingPackSession(models.Model):
 
 
 class SubmissionPresence(models.Model):
-    """Who is actively viewing a submission (heartbeat-based, no WebSockets)."""
+    """Who is actively viewing a submission — kept in sync by
+    SubmissionPresenceConsumer's WebSocket connect/ping/disconnect events."""
 
     PRESENCE_TIMEOUT_SECONDS = 90
 

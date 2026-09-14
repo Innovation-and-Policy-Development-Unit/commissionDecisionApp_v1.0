@@ -3917,50 +3917,6 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             "verification": verification,
         })
 
-    @action(detail=True, methods=["post"], url_path="presence/heartbeat")
-    def presence_heartbeat(self, request, pk=None):
-        """Register active viewing; returns other users on this submission."""
-        from .submission_presence import serialize_viewers, touch_presence
-
-        submission = self.get_object()
-        touch_presence(submission_id=submission.id, user=request.user)
-        viewers = serialize_viewers(
-            submission_id=submission.id,
-            current_user_id=request.user.id,
-        )
-        others = [v for v in viewers if not v["is_self"]]
-        return Response({
-            "viewers": viewers,
-            "others": others,
-            "other_count": len(others),
-        })
-
-    @action(detail=True, methods=["get"], url_path="presence")
-    def presence_list(self, request, pk=None):
-        """List users currently viewing this submission (no heartbeat)."""
-        from .submission_presence import serialize_viewers
-
-        submission = self.get_object()
-        viewers = serialize_viewers(
-            submission_id=submission.id,
-            current_user_id=request.user.id,
-        )
-        others = [v for v in viewers if not v["is_self"]]
-        return Response({
-            "viewers": viewers,
-            "others": others,
-            "other_count": len(others),
-        })
-
-    @action(detail=True, methods=["post"], url_path="presence/leave")
-    def presence_leave(self, request, pk=None):
-        """Remove presence when leaving the submission detail page."""
-        from .submission_presence import clear_presence
-
-        submission = self.get_object()
-        clear_presence(submission_id=submission.id, user_id=request.user.id)
-        return Response({"detail": "Presence cleared."})
-
     @action(detail=False, methods=["post"], url_path="nl-search")
     def nl_search(self, request):
         """Smart search — natural language → filter JSON + matching submission ids."""
@@ -14145,21 +14101,25 @@ def active_sessions_view(request):
     login, whichever is sooner — applies uniformly, including to PSC
     Administrators, see logout_scheduler.py / tasks.force_logout_expired_sessions),
     and — this is what makes it "who's active right now" rather than "whose
-    session is still theoretically valid" — last_login is recent enough that
-    their browser must still be open and talking to the API. last_login only
-    moves on real activity (sign-in, or the reactive refresh the frontend
-    fires when an access token expires), so anyone genuinely still using the
-    system will have refreshed within one access-token lifetime; anyone who
-    closed the tab simply stops generating that signal even though nothing
-    "ended" their session. "Last seen" is whichever of the three actually
-    ended the session (logout, cap expiry, or last_login itself once it's
-    gone stale).
+    session is still theoretically valid" — they have a live WebSocket
+    connection open (see chat_consumers.is_user_online). The app shell keeps
+    one such connection open on every authenticated page via ChatProvider, so
+    it drops within ~90s of someone actually closing every SCDMS tab, rather
+    than the up-to-one-access-token-lifetime lag of inferring liveness from
+    last_login alone (that used to let a user who closed the tab keep showing
+    "online now" for up to ~40 minutes). When the cache backend is disabled
+    (CACHE_ENABLED=False — dev only; production always has it on) there is no
+    presence signal to read, so this falls back to the old last_login-recency
+    heuristic. "Last seen" is whichever of these actually ended the session
+    (logout, cap expiry, or last_login once presence/staleness says they're
+    gone).
     """
     from datetime import timedelta
 
     from django.conf import settings
     from django.contrib.auth.models import User as _User
 
+    from .chat_consumers import is_user_online
     from .models import AuditLog, TrustedSession
 
     profile = _profile(request.user)
@@ -14211,6 +14171,11 @@ def active_sessions_view(request):
                 last_seen_at = logout_at
             elif session and session.expires_at <= now:
                 last_seen_at = session.expires_at
+            elif settings.CACHE_ENABLED:
+                if is_user_online(u.id):
+                    is_online = True
+                else:
+                    last_seen_at = login_at
             elif login_at < recent_activity_cutoff:
                 last_seen_at = login_at
             else:

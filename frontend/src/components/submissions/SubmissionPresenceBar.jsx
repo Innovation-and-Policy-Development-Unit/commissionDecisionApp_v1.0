@@ -1,10 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Users } from 'lucide-react'
-import api from '../../api/client'
-import { useVisibilityAwareInterval } from '../../hooks/useVisibilityAwareInterval'
-
-const HEARTBEAT_MS = 30_000
+import { useSubmissionPresence } from '../../hooks/useSubmissionPresence'
 
 function initials(name) {
   return (name || '?').split(' ').filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase()
@@ -30,26 +26,10 @@ function ViewerAvatar({ viewer, presence = false }) {
   )
 }
 
-/** Real-time awareness bar — 30s heartbeat polling (no WebSockets). */
+/** Real-time awareness bar, pushed over WebSocket by SubmissionPresenceConsumer. */
 export default function SubmissionPresenceBar({ submissionId }) {
   const { t } = useTranslation()
-  const [viewers, setViewers] = useState([])
-
-  const sendHeartbeat = useCallback(async () => {
-    if (!submissionId) return
-    try {
-      const res = await api.post(`/submissions/${submissionId}/presence/heartbeat/`)
-      setViewers(res.data.viewers || [])
-    } catch { /* non-critical */ }
-  }, [submissionId])
-
-  useEffect(() => {
-    if (!submissionId) return undefined
-    sendHeartbeat()
-    return () => { api.post(`/submissions/${submissionId}/presence/leave/`).catch(() => {}) }
-  }, [submissionId, sendHeartbeat])
-
-  useVisibilityAwareInterval(sendHeartbeat, HEARTBEAT_MS, { enabled: Boolean(submissionId), fireOnVisible: false })
+  const viewers = useSubmissionPresence(submissionId)
 
   const others = viewers.filter((v) => !v.is_self)
   const statusText = presenceStatusLabel(t, viewers)
