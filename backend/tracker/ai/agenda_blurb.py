@@ -26,7 +26,8 @@ def generate_agenda_blurb(*, submission, meeting) -> tuple[str, str | None]:
             "Write a 2–3 sentence agenda blurb for a PSC Commission sitting pack. "
             "Professional English, suitable for Commissioners. No bullet points. "
             "Mention ministry, form type if known, and readiness. "
-            "Prefix with [AI draft — verify]."
+            "Do not add any preamble, label, or disclaimer — the caller already "
+            "shows a 'Draft — verify' label alongside this text."
         ),
         user=(
             f"Meeting: {meeting.reference_number} — {meeting.title} on {meeting.date}\n"
@@ -36,11 +37,8 @@ def generate_agenda_blurb(*, submission, meeting) -> tuple[str, str | None]:
         max_tokens=400,
     )
     if text and text.strip():
-        body = text.strip()
-        if "[AI draft" not in body[:30].lower():
-            body = "[AI draft — verify] " + body
-        return body, None
+        return text.strip(), None
     return (
-        f"[AI draft — verify] {submission.reference_number}: {submission.title}.",
+        f"{submission.reference_number}: {submission.title}.",
         err,
     )
