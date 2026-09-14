@@ -472,6 +472,16 @@
     "decision": "Desisen",
     "implement": "Implimentesen"
   },
+  "agenda_pdf": {
+    "heading": "Adjenda — {{reference}}",
+    "sitting_date": "Dei blong miting",
+    "no_items": "I no gat wan aitem long adjenda.",
+    "col_number": "#",
+    "col_section": "Sekson",
+    "col_type": "Kaen",
+    "col_reference": "Refrens",
+    "col_title": "Taetel"
+  },
   "subway": {
     "aria_label": "Map blong jeni blong submisen",
     "title": "Jeni blong submisen blong yu",

@@ -8959,6 +8959,101 @@ class MeetingViewSet(viewsets.ModelViewSet):
             "agenda_adopted_at": meeting.agenda_adopted_at,
         })
 
+    @action(detail=True, methods=["get"], url_path="circulation-preview")
+    def circulation_preview(self, request, pk=None):
+        """Who will be notified + emailed, and how many items are on the
+        agenda, before the Chairperson commits to Endorse & Circulate — this
+        is a one-way action (see approve_agenda), so the frontend shows this
+        as a confirmation step rather than firing blind."""
+        from .email_notify import commission_members
+
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.CHAIRPERSON, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Chairperson can endorse the agenda.")
+
+        members = commission_members()
+        recipients = [
+            {
+                "id": user.id,
+                "name": user.get_full_name() or user.username,
+                "email": user.email or "",
+                "role": getattr(getattr(user, "psc_profile", None), "role", ""),
+                "has_email": bool((user.email or "").strip()),
+            }
+            for user in members
+        ]
+        return Response({
+            "meeting_reference": meeting.reference_number,
+            "item_count": meeting.agenda_items.count(),
+            "recipients": recipients,
+            "recipient_count": len(recipients),
+        })
+
+    @action(detail=True, methods=["get"], url_path="circulation-status")
+    def circulation_status(self, request, pk=None):
+        """Per-recipient notified/viewed timestamps for a circulated agenda —
+        lets the Secretary/Chairperson see who has actually opened it ahead
+        of the sitting, not just that an email went out."""
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {
+            Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.CHAIRPERSON, Role.PSC_ADMIN,
+        }:
+            raise PermissionDenied("You do not have access to agenda circulation status.")
+
+        receipts = meeting.circulation_receipts.select_related("recipient").order_by("recipient__first_name")
+        rows = [
+            {
+                "id": r.recipient_id,
+                "name": r.recipient.get_full_name() or r.recipient.username,
+                "notified_at": r.notified_at,
+                "viewed_at": r.viewed_at,
+            }
+            for r in receipts
+        ]
+        return Response({
+            "recipients": rows,
+            "notified_count": len(rows),
+            "viewed_count": sum(1 for r in rows if r["viewed_at"]),
+        })
+
+    @action(detail=True, methods=["post"], url_path="mark-agenda-viewed")
+    def mark_agenda_viewed(self, request, pk=None):
+        """Called by the frontend when a Commission member/Chairperson opens
+        a circulated agenda — records the first view for circulation-status.
+        A no-op (not an error) for anyone who isn't a circulation recipient,
+        e.g. Secretariat staff just viewing the page."""
+        from .models import AgendaCirculationReceipt
+
+        meeting = self.get_object()
+        receipt = AgendaCirculationReceipt.objects.filter(
+            meeting=meeting, recipient=request.user, viewed_at__isnull=True,
+        ).first()
+        if receipt:
+            receipt.viewed_at = timezone.now()
+            receipt.save(update_fields=["viewed_at"])
+        return Response({"detail": "ok"})
+
+    @action(detail=True, methods=["get"], url_path="agenda-pdf")
+    def agenda_pdf(self, request, pk=None):
+        """Download the same server-rendered agenda PDF that Commission
+        members receive by email — in the requester's own preferred
+        language — instead of relying on the browser's Print dialog."""
+        from io import BytesIO
+
+        from django.http import FileResponse
+
+        from .email_notify import _render_agenda_pdf
+
+        meeting = self.get_object()
+        lang = getattr(getattr(request.user, "psc_profile", None), "preferred_language", "en") or "en"
+        pdf = _render_agenda_pdf(meeting, lang=lang)
+        if not pdf:
+            return Response({"detail": "Could not generate the agenda PDF."}, status=500)
+        filename = f"agenda_{(meeting.reference_number or 'meeting')}.pdf".replace("/", "-")
+        return FileResponse(BytesIO(pdf), as_attachment=True, filename=filename, content_type="application/pdf")
+
     @action(detail=True, methods=["get", "post"], url_path="other-matters")
     def other_matters(self, request, pk=None):
         """List, or add (live), ad-hoc 'Other Matters' items for a sitting.

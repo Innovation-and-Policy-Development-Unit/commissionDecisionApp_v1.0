@@ -459,6 +459,16 @@
     "decision": "Décision",
     "implement": "Mise en œuvre"
   },
+  "agenda_pdf": {
+    "heading": "Ordre du jour — {{reference}}",
+    "sitting_date": "Date de la séance",
+    "no_items": "Aucun point à l'ordre du jour.",
+    "col_number": "#",
+    "col_section": "Section",
+    "col_type": "Type",
+    "col_reference": "Référence",
+    "col_title": "Titre"
+  },
   "subway": {
     "aria_label": "Parcours de la soumission",
     "title": "Parcours de votre soumission",

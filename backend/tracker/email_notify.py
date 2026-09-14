@@ -585,8 +585,41 @@ def hr_managers() -> list[User]:
     )
 
 
-def _render_agenda_pdf(meeting) -> bytes | None:
-    """Best-effort one-page agenda PDF (sequence / section / reference / title)."""
+# English fallback for the agenda PDF's own labels — used if the bundled
+# locale JSON is missing/unreadable, or for a language with no override.
+_AGENDA_PDF_DEFAULT_STRINGS = {
+    "heading": "Agenda — {{reference}}",
+    "sitting_date": "Sitting date",
+    "no_items": "No agenda items.",
+    "col_number": "#",
+    "col_section": "Section",
+    "col_type": "Type",
+    "col_reference": "Reference",
+    "col_title": "Title",
+}
+
+
+def _agenda_pdf_strings(lang: str) -> dict:
+    """Labels for _render_agenda_pdf in the given language (en/fr/bi), sourced
+    from the same bundled locale JSON (`agenda_pdf.*`) the frontend uses —
+    kept to a small, fixed set of table/heading labels rather than the full
+    i18n catalogue, since that's all a machine-rendered PDF needs."""
+    from .i18n_utils import load_bundled_locale_files
+
+    try:
+        bundles = load_bundled_locale_files()
+        strings = dict(_AGENDA_PDF_DEFAULT_STRINGS)
+        strings.update(bundles.get(lang, {}).get("agenda_pdf") or {})
+        return strings
+    except Exception:
+        return dict(_AGENDA_PDF_DEFAULT_STRINGS)
+
+
+def _render_agenda_pdf(meeting, lang: str = "en") -> bytes | None:
+    """Best-effort one-page agenda PDF (sequence / section / reference / title),
+    labelled in the recipient's preferred language (`lang`: en/fr/bi) — the
+    agenda content itself (submission titles, ministry names) stays as
+    entered, only the PDF's own labels are translated."""
     import html as _html
     import logging
 
@@ -598,6 +631,7 @@ def _render_agenda_pdf(meeting) -> bytes | None:
         from .agenda_sections import agenda_section_label
         from .models import PSCFormType
 
+        strings = _agenda_pdf_strings(lang)
         items = list(meeting.agenda_items.select_related("submission").order_by("category", "sequence"))
         type_labels = dict(
             PSCFormType.objects.filter(
@@ -616,18 +650,21 @@ def _render_agenda_pdf(meeting) -> bytes | None:
                 f"<tr><td>{item.sequence}</td><td>{section}</td><td>{type_label}</td>"
                 f"<td>{ref}</td><td>{title}</td></tr>"
             )
-        body_rows = "".join(rows) or "<tr><td colspan='5'>No agenda items.</td></tr>"
+        body_rows = "".join(rows) or f"<tr><td colspan='5'>{_html.escape(strings['no_items'])}</td></tr>"
+        heading = _html.escape(strings["heading"]).replace(
+            "{{reference}}", _html.escape(meeting.reference_number or "")
+        )
         doc = (
             "<html><body style=\"font-family:Arial,sans-serif;font-size:12px;color:#1e293b;\">"
-            f"<h2 style=\"margin:0 0 4px 0;\">Agenda — {_html.escape(meeting.reference_number or '')}</h2>"
-            f"<p style=\"margin:0 0 12px 0;color:#475569;\">Sitting date: {meeting.date or ''}</p>"
+            f"<h2 style=\"margin:0 0 4px 0;\">{heading}</h2>"
+            f"<p style=\"margin:0 0 12px 0;color:#475569;\">{_html.escape(strings['sitting_date'])}: {meeting.date or ''}</p>"
             "<table cellspacing=\"0\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%;border:1px solid #cbd5e1;\">"
             "<thead><tr style=\"background:#f1f5f9;\">"
-            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">#</th>"
-            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Section</th>"
-            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Type</th>"
-            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Reference</th>"
-            "<th style=\"border:1px solid #cbd5e1;text-align:left;\">Title</th>"
+            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_number'])}</th>"
+            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_section'])}</th>"
+            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_type'])}</th>"
+            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_reference'])}</th>"
+            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_title'])}</th>"
             "</tr></thead>"
             f"<tbody>{body_rows}</tbody></table>"
             "</body></html>"
@@ -645,11 +682,14 @@ def _render_agenda_pdf(meeting) -> bytes | None:
 def notify_agenda_circulated(meeting) -> None:
     """Tell every Commission member + the Chairperson that an approved agenda has
     been circulated. In-app + push notification, plus a templated email carrying
-    the agenda PDF (the digital equivalent of the hand-delivered copy). Best-effort."""
+    the agenda PDF (the digital equivalent of the hand-delivered copy) rendered
+    in that member's own preferred language. Also opens an AgendaCirculationReceipt
+    per member so the Secretary/Chairperson can see who has actually opened the
+    agenda before the sitting. Best-effort."""
     import logging
     from django.utils import timezone
 
-    from .models import Notification
+    from .models import AgendaCirculationReceipt, Notification
 
     members = commission_members()
     if not members:
@@ -661,14 +701,18 @@ def notify_agenda_circulated(meeting) -> None:
         if meeting.date is None
         else meeting.date.strftime("%d %B %Y")
     )
-    pdf = _render_agenda_pdf(meeting)
-    attachments = (
-        [(f"agenda_{(meeting.reference_number or 'meeting')}.pdf", pdf, "application/pdf")]
-        if pdf
-        else None
-    )
+
+    # One PDF render per distinct language actually needed, not per member.
+    pdf_by_lang: dict[str, bytes | None] = {}
+
+    def _pdf_for(lang: str) -> bytes | None:
+        if lang not in pdf_by_lang:
+            pdf_by_lang[lang] = _render_agenda_pdf(meeting, lang=lang)
+        return pdf_by_lang[lang]
 
     for user in members:
+        AgendaCirculationReceipt.objects.get_or_create(meeting=meeting, recipient=user)
+
         Notification.objects.create(
             recipient=user,
             channel=Notification.Channel.IN_APP,  # email sent separately (templated)
@@ -682,6 +726,13 @@ def notify_agenda_circulated(meeting) -> None:
         )
         email = (user.email or "").strip()
         if email:
+            lang = getattr(getattr(user, "psc_profile", None), "preferred_language", "en") or "en"
+            pdf = _pdf_for(lang)
+            attachments = (
+                [(f"agenda_{(meeting.reference_number or 'meeting')}.pdf", pdf, "application/pdf")]
+                if pdf
+                else None
+            )
             ctx = merge_recipient_context(
                 user,
                 meeting_reference=meeting.reference_number or "",

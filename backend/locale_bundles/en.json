@@ -647,6 +647,16 @@
     "choose_meeting_hint": "Tap a sitting to open its pack. Recent and upcoming sittings are listed.",
     "no_upcoming": "No recent or upcoming sittings."
   },
+  "agenda_pdf": {
+    "heading": "Agenda — {{reference}}",
+    "sitting_date": "Sitting date",
+    "no_items": "No agenda items.",
+    "col_number": "#",
+    "col_section": "Section",
+    "col_type": "Type",
+    "col_reference": "Reference",
+    "col_title": "Title"
+  },
   "subway": {
     "aria_label": "Submission journey map",
     "title": "Your submission journey",
