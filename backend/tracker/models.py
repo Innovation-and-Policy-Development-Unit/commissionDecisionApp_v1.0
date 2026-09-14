@@ -813,6 +813,33 @@ class MeetingOtherMatter(models.Model):
         return f"Other Matter — {self.meeting.reference_number}: {self.title[:48]}"
 
 
+class AgendaCirculationReceipt(models.Model):
+    """One row per Commission member notified when an agenda is circulated.
+
+    Created alongside the Notification/email sent by notify_agenda_circulated()
+    so the Secretary/Chairperson can see who has actually opened the agenda
+    ahead of the sitting, not just that an email was sent. `viewed_at` is set
+    the first time that member opens the Agenda page for this meeting once it
+    is circulated (see MeetingViewSet.mark_agenda_viewed)."""
+
+    meeting = models.ForeignKey(
+        Meeting, on_delete=models.CASCADE, related_name="circulation_receipts",
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="agenda_circulation_receipts",
+    )
+    notified_at = models.DateTimeField(auto_now_add=True)
+    viewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("meeting", "recipient")
+        ordering = ["meeting_id", "recipient_id"]
+
+    def __str__(self):
+        state = "viewed" if self.viewed_at else "notified"
+        return f"{self.meeting.reference_number} — {self.recipient.username} ({state})"
+
+
 class DeferralType(models.TextChoices):
     TO_NEXT_MEETING = "to_next_meeting", "Deferred to Next Meeting"
     PUSH_TO_NEXT    = "push_to_next",    "Moved to Next Meeting (pre-sitting)"
@@ -984,6 +1011,16 @@ class Profile(models.Model):
     profile_picture = models.ImageField(upload_to="profile_pics/", null=True, blank=True)
     signature = models.ImageField(upload_to="signatures/", null=True, blank=True,
         help_text="Upload an image of your signature (PNG with transparent background recommended).")
+    preferred_language = models.CharField(
+        max_length=2,
+        choices=[("en", "English"), ("fr", "Français"), ("bi", "Bislama")],
+        default="en",
+        help_text=(
+            "Language for documents generated on this user's behalf (e.g. the "
+            "circulated agenda PDF/email) — kept in sync with the UI language "
+            "switcher, not just a per-device setting."
+        ),
+    )
     # Two-factor authentication (TOTP - e.g. Microsoft Authenticator)
     two_factor_enabled = models.BooleanField(default=False)
     totp_secret = models.CharField(max_length=32, blank=True, null=True)

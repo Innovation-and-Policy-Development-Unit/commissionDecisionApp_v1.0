@@ -28,6 +28,7 @@ import {
   Plus, X, RefreshCw, Printer, Check, Tag,
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
   Send, ThumbsUp, ChevronsRight, Tablet, LayoutGrid, StickyNote,
+  FileDown, Users, Eye, Mail,
 } from 'lucide-react'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import AgendaReadinessChip, { computeReadiness } from '../../components/shared/AgendaReadinessChip'
@@ -97,6 +98,11 @@ export default function Agenda() {
   const [loadingSubs, setLoadingSubs]   = useState(false)
   const [saving, setSaving]             = useState(false)
   const [workflowBusy, setWorkflowBusy] = useState(false)
+  const [circulateModalOpen, setCirculateModalOpen]       = useState(false)
+  const [circulatePreview, setCirculatePreview]           = useState(null)
+  const [circulatePreviewLoading, setCirculatePreviewLoading] = useState(false)
+  const [circulationStatus, setCirculationStatus]         = useState(null)
+  const [circulationStatusOpen, setCirculationStatusOpen] = useState(false)
 
   const [form, setForm] = useState({
     submission_id: '',
@@ -297,10 +303,27 @@ export default function Agenda() {
     }
   }
 
-  // ── Print ────────────────────────────────────────────────────────────────
+  // ── Print / export ──────────────────────────────────────────────────────
 
   const handlePrint = () => {
     window.print()
+  }
+
+  const handleDownloadPdf = async () => {
+    if (!selectedId) return
+    try {
+      const r = await api.get(`/meetings/${selectedId}/agenda-pdf/`, { responseType: 'blob' })
+      const blobUrl = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }))
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = `agenda_${(selectedMeeting?.reference_number || 'meeting').replace(/\//g, '-')}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      toast.error('Failed to generate the agenda PDF.')
+    }
   }
 
   // ── Workflow actions ─────────────────────────────────────────────────────
@@ -317,6 +340,40 @@ export default function Agenda() {
     } catch (err) {
       toast.error(err.response?.data?.detail || `Failed: ${label}.`)
     } finally { setWorkflowBusy(false) }
+  }
+
+  // Endorse & Circulate is one-way (immediately emails every Commission
+  // member) — show who/how-much before committing, instead of a plain
+  // yes/no confirm.
+  const openCirculateModal = async () => {
+    if (!selectedId) return
+    setCirculateModalOpen(true)
+    setCirculatePreviewLoading(true)
+    setCirculatePreview(null)
+    try {
+      const r = await api.get(`/meetings/${selectedId}/circulation-preview/`)
+      setCirculatePreview(r.data)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to load circulation preview.')
+      setCirculateModalOpen(false)
+    } finally {
+      setCirculatePreviewLoading(false)
+    }
+  }
+
+  const confirmCirculate = async () => {
+    if (!selectedId) return
+    setWorkflowBusy(true)
+    try {
+      await api.post(`/meetings/${selectedId}/approve-agenda/`)
+      toast.success('Agenda endorsed and circulated to Commission members.')
+      setCirculateModalOpen(false)
+      await fetchMeetings()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to endorse and circulate agenda.')
+    } finally {
+      setWorkflowBusy(false)
+    }
   }
 
   // ── Role helpers ─────────────────────────────────────────────────────────
@@ -356,6 +413,27 @@ export default function Agenda() {
   const readiness    = computeReadiness(totalItems, minItems, maxItems)
   const belowReadiness = !isCompleted && (readiness.level === 'empty' || readiness.level === 'building')
 
+  // Secretary/Chairperson: who has actually opened a circulated agenda ahead
+  // of the sitting, not just that an email went out.
+  useEffect(() => {
+    if (!selectedId || agendaStatus !== 'circulated' || !(isSecretaryOrAdmin || isChairperson)) {
+      setCirculationStatus(null)
+      return undefined
+    }
+    let cancelled = false
+    api.get(`/meetings/${selectedId}/circulation-status/`)
+      .then(r => { if (!cancelled) setCirculationStatus(r.data) })
+      .catch(() => { if (!cancelled) setCirculationStatus(null) })
+    return () => { cancelled = true }
+  }, [selectedId, agendaStatus, isSecretaryOrAdmin, isChairperson])
+
+  // Commission member/Chairperson: record that this circulated agenda was
+  // opened (best-effort, no UI feedback needed).
+  useEffect(() => {
+    if (!selectedId || agendaStatus !== 'circulated' || !isCommissionMember) return
+    api.post(`/meetings/${selectedId}/mark-agenda-viewed/`).catch(() => { /* best-effort */ })
+  }, [selectedId, agendaStatus, isCommissionMember])
+
   // Categories that actually have items
   const activeCategories = CATEGORY_ORDER.filter(cat => (grouped[cat] || []).length > 0)
 
@@ -392,8 +470,18 @@ export default function Agenda() {
                 <button
                   onClick={handlePrint}
                   className="btn-outline flex items-center gap-2 px-4 py-2"
+                  title="Print using the browser (matches what's on screen)"
                 >
-                  <Printer size={15} /> Print / Export
+                  <Printer size={15} /> Print
+                </button>
+                )}
+                {!isCompleted && (
+                <button
+                  onClick={handleDownloadPdf}
+                  className="btn-outline flex items-center gap-2 px-4 py-2"
+                  title="Download the same formatted PDF that Commission members receive by email"
+                >
+                  <FileDown size={15} /> Download PDF
                 </button>
                 )}
                 {/* Add Item lives at the top level (not behind Advanced) since it's
@@ -516,10 +604,44 @@ export default function Agenda() {
             isChairperson={isChairperson}
             busy={workflowBusy}
             onSubmit={() => doWorkflowAction('submit-to-chairman', 'Submit to Chairman')}
-            onApprove={() => doWorkflowAction('approve-agenda', 'Endorse & circulate agenda')}
+            onApprove={openCirculateModal}
             onAdopt={() => doWorkflowAction('adopt-agenda', 'Adopt Agenda')}
             agendaAdopted={Boolean(selectedMeeting?.agenda_adopted_at)}
+            canSeeCirculationStatus={isSecretaryOrAdmin || isChairperson}
+            circulationStatus={circulationStatus}
+            circulationStatusOpen={circulationStatusOpen}
+            onToggleCirculationStatus={() => setCirculationStatusOpen(o => !o)}
           />
+        )}
+
+        {/* Section jump nav — helps scanning a long agenda before endorsing */}
+        {selectedMeeting && totalItems > 0 && (
+          <div className="card card-compact mb-4 p-3">
+            <div className="flex items-center gap-1.5 flex-wrap text-xs">
+              <span className="font-semibold text-slate-400 uppercase tracking-wide mr-1 shrink-0">Jump to:</span>
+              {groupedMattersArising.length > 0 && (
+                <a
+                  href="#agenda-section-matters_arising"
+                  className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 text-slate-600 dark:text-slate-300 whitespace-nowrap"
+                >
+                  Matters Arising <span className="text-slate-400">({grouped['matters_arising']?.length || 0})</span>
+                </a>
+              )}
+              {CATEGORY_ORDER.slice(2).map(cat => {
+                const count = (grouped[cat] || []).length
+                if (count === 0) return null
+                return (
+                  <a
+                    key={cat}
+                    href={`#agenda-section-${cat}`}
+                    className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 text-slate-600 dark:text-slate-300 whitespace-nowrap"
+                  >
+                    {categoryLabel(cat)} <span className="text-slate-400">({count})</span>
+                  </a>
+                )
+              })}
+            </div>
+          </div>
         )}
       </div>
 
@@ -636,7 +758,7 @@ export default function Agenda() {
             </div>
 
             {/* ── 2. Matters Arising ── */}
-            <AgendaSection label="2. MATTERS ARISING" isNumbered />
+            <AgendaSection label="2. MATTERS ARISING" isNumbered id="agenda-section-matters_arising" />
             {groupedMattersArising.length === 0 ? (
               <div className="px-8 py-3 print:hidden">
                 <p className="text-xs text-slate-400 italic">No Matters Arising items added yet.</p>
@@ -680,7 +802,7 @@ export default function Agenda() {
               const showTypeHeaders = distinctTypes.size > 1
               return (
                 <div key={cat}>
-                  <AgendaSection label={categoryLabel(cat)} />
+                  <AgendaSection label={categoryLabel(cat)} id={`agenda-section-${cat}`} />
                   {catItems.map((item, idx) => {
                     const isNewTypeGroup = showTypeHeaders &&
                       (idx === 0 || item.form_type_code !== catItems[idx - 1].form_type_code)
@@ -857,6 +979,68 @@ export default function Agenda() {
           </form>
       </Modal>
 
+      {/* ── Endorse & Circulate confirm modal ─────────────────────────────── */}
+      <Modal
+        open={circulateModalOpen}
+        title="Endorse & circulate this agenda?"
+        subtitle="This immediately emails every Commission member and the Chairperson — it can't be undone."
+        onClose={() => setCirculateModalOpen(false)}
+        size="md"
+        footer={
+          <>
+            <button className="btn-outline px-4 py-2" onClick={() => setCirculateModalOpen(false)}>
+              Cancel
+            </button>
+            <button
+              className="btn-primary flex items-center gap-2 px-4 py-2 disabled:opacity-50"
+              disabled={circulatePreviewLoading || workflowBusy || !circulatePreview?.recipient_count}
+              onClick={confirmCirculate}
+            >
+              <ThumbsUp size={14} /> {workflowBusy ? 'Circulating…' : 'Endorse & Circulate'}
+            </button>
+          </>
+        }
+      >
+        {circulatePreviewLoading ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading recipients…</p>
+        ) : circulatePreview ? (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400 flex items-start gap-2">
+              <Users size={15} className="mt-0.5 shrink-0" />
+              <span>
+                <strong>{circulatePreview.item_count}</strong> item{circulatePreview.item_count !== 1 ? 's' : ''} on
+                PSC Meeting {circulatePreview.meeting_reference} will be sent to
+                the following {circulatePreview.recipient_count} recipient{circulatePreview.recipient_count !== 1 ? 's' : ''}:
+              </span>
+            </p>
+            <ul className="space-y-1.5 max-h-60 overflow-y-auto">
+              {circulatePreview.recipients.map(r => (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between gap-3 text-sm px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/60"
+                >
+                  <span className="text-slate-800 dark:text-slate-200 truncate">{r.name}</span>
+                  {r.has_email ? (
+                    <span className="text-xs text-slate-400 shrink-0 truncate max-w-[45%]">{r.email}</span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs text-red-500 shrink-0">
+                      <AlertCircle size={12} /> No email on file
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {circulatePreview.recipient_count === 0 && (
+              <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
+                <AlertCircle size={14} /> No active Commissioners or Chairperson found — circulating now would notify no one.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-red-500">Could not load the recipient list.</p>
+        )}
+      </Modal>
+
       {/* Print styles */}
       <style>{`
         @media print {
@@ -880,7 +1064,10 @@ const WORKFLOW_STEPS = [
   { key: 'circulated',    label: 'Circulated' },
 ]
 
-function AgendaWorkflowBar({ status, isCompleted, isSecretary, isChairperson, busy, onSubmit, onApprove, onAdopt, agendaAdopted }) {
+function AgendaWorkflowBar({
+  status, isCompleted, isSecretary, isChairperson, busy, onSubmit, onApprove, onAdopt, agendaAdopted,
+  canSeeCirculationStatus, circulationStatus, circulationStatusOpen, onToggleCirculationStatus,
+}) {
   const currentIdx = WORKFLOW_STEPS.findIndex(s => s.key === status)
 
   return (
@@ -964,13 +1151,66 @@ function AgendaWorkflowBar({ status, isCompleted, isSecretary, isChairperson, bu
           )}
         </div>
       )}
+
+      {status === 'circulated' && canSeeCirculationStatus && (
+        <CirculationStatusPanel
+          status={circulationStatus}
+          open={circulationStatusOpen}
+          onToggle={onToggleCirculationStatus}
+        />
+      )}
     </div>
   )
 }
 
-function AgendaSection({ label, isNumbered }) {
+function CirculationStatusPanel({ status, open, onToggle }) {
+  if (!status) {
+    return (
+      <p className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-400">
+        Loading circulation status…
+      </p>
+    )
+  }
+  const { recipients, notified_count: notifiedCount, viewed_count: viewedCount } = status
   return (
-    <div className={`px-8 py-2 ${isNumbered ? 'pt-3' : 'pt-4'} border-t border-slate-200 dark:border-slate-700 print:border-slate-400 bg-slate-50 dark:bg-slate-800/40 print:bg-transparent`}>
+    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+      <button
+        onClick={onToggle}
+        className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400"
+      >
+        <Eye size={13} />
+        {viewedCount} of {notifiedCount} member{notifiedCount !== 1 ? 's' : ''} have opened the agenda
+        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      </button>
+      {open && (
+        <ul className="mt-2 space-y-1">
+          {recipients.map(r => (
+            <li key={r.id} className="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-md bg-slate-50 dark:bg-slate-800/60">
+              <span className="text-slate-700 dark:text-slate-300">{r.name}</span>
+              {r.viewed_at ? (
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                  <Eye size={12} /> Viewed
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-slate-400">
+                  <Mail size={12} /> Notified, not yet opened
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function AgendaSection({ label, isNumbered, id }) {
+  return (
+    <div
+      id={id}
+      style={id ? { scrollMarginTop: '5rem' } : undefined}
+      className={`px-8 py-2 ${isNumbered ? 'pt-3' : 'pt-4'} border-t border-slate-200 dark:border-slate-700 print:border-slate-400 bg-slate-50 dark:bg-slate-800/40 print:bg-transparent`}
+    >
       <p className="text-sm font-bold text-slate-700 dark:text-slate-300 print:text-black">
         {label}
       </p>

@@ -212,7 +212,10 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ("username", "email", "role", "ministry", "department", "unit", "profile_picture", "signature")
+        fields = (
+            "username", "email", "role", "ministry", "department", "unit",
+            "profile_picture", "signature", "preferred_language",
+        )
 
 
 class MeSerializer(serializers.ModelSerializer):
@@ -276,6 +279,7 @@ class MeSerializer(serializers.ModelSerializer):
             "session_pin_set",
             "must_change_password",
             "signature",
+            "preferred_language",
         )
 
     def get_full_name(self, obj):
