@@ -713,12 +713,22 @@ export default function Agenda() {
             onToggleCirculationStatus={() => setCirculationStatusOpen(o => !o)}
           />
         )}
+      </div>
 
-        {/* Search + section jump nav — helps scanning a long agenda. Sticky so
-            it stays reachable while scrolling through a long document instead
-            of scrolling away with the header above it. */}
-        {selectedMeeting && totalItems > 0 && (
-          <div ref={searchBarRef} className="card card-compact mb-4 p-3 space-y-3 sticky top-16 z-10 shadow-md">
+      {/* Search + section jump nav — helps scanning a long agenda. Sticky so
+          it stays reachable while scrolling through a long document instead
+          of scrolling away with the header above it. A print:hidden div of
+          its own, deliberately NOT nested inside the toolbar's print:hidden
+          wrapper above — that wrapper is short (just the header/selector/
+          workflow bar), and position:sticky can only stay stuck within its
+          own parent's box. Nested there, this bar ran out of room and
+          scrolled away the moment its short parent's bottom edge passed the
+          viewport, long before the actual (much taller) agenda document
+          below it did. As a direct child of the outer wrapper instead, its
+          containing block spans the full page, so it stays stuck for the
+          whole scroll. */}
+      {selectedMeeting && totalItems > 0 && (
+        <div ref={searchBarRef} className="card card-compact mb-4 p-3 space-y-3 sticky top-16 z-10 shadow-md print:hidden">
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -759,7 +769,6 @@ export default function Agenda() {
             </div>
           </div>
         )}
-      </div>
 
       {/* ── Agenda readiness (Chairman: enough to convene?) ─────────────── */}
       {selectedMeeting && belowReadiness && (
