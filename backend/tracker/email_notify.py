@@ -587,39 +587,90 @@ def hr_managers() -> list[User]:
 
 # English fallback for the agenda PDF's own labels — used if the bundled
 # locale JSON is missing/unreadable, or for a language with no override.
+# Sourced from the same `agenda.doc_*` keys the on-screen Agenda page uses
+# (frontend/src/i18n/locales/*.json), so the emailed/downloaded PDF and the
+# screen the Secretariat curated it on stay in sync — one set of strings for
+# both, not a parallel copy that can drift.
 _AGENDA_PDF_DEFAULT_STRINGS = {
-    "heading": "Agenda — {{reference}}",
-    "sitting_date": "Sitting date",
-    "no_items": "No agenda items.",
-    "col_number": "#",
-    "col_section": "Section",
-    "col_type": "Type",
-    "col_reference": "Reference",
-    "col_title": "Title",
+    "doc_heading": "AGENDA OF PSC MEETING NO. {{number}}",
+    "doc_date_label": "Date:",
+    "doc_location_label": "Location:",
+    "doc_time_label": "Time:",
+    "doc_section_preliminaries": "1. Preliminaries & Endorsements",
+    "doc_adoption_of_agenda": "Adoption of Agenda:",
+    "doc_adoption_of_agenda_detail": "PSC Meeting No. {{number}} of {{date}}.",
+    "doc_confirmation_of_endorsement": "Confirmation of Endorsement:",
+    "doc_secretary_report": "Secretary presentation report on previous commission decision actions progress",
+    "doc_section_matters_arising": "2. MATTERS ARISING",
+    "doc_no_matters_arising": "No Matters Arising items added yet.",
+    "doc_previous_meetings": "Previous Meetings",
+    "doc_other_type": "Other",
+    "doc_no_items": "No agenda items.",
 }
 
 
 def _agenda_pdf_strings(lang: str) -> dict:
     """Labels for _render_agenda_pdf in the given language (en/fr/bi), sourced
-    from the same bundled locale JSON (`agenda_pdf.*`) the frontend uses —
-    kept to a small, fixed set of table/heading labels rather than the full
-    i18n catalogue, since that's all a machine-rendered PDF needs."""
+    from the bundled locale JSON's `agenda.doc_*` keys — the same ones the
+    on-screen Agenda page uses for its document header/section chrome."""
     from .i18n_utils import load_bundled_locale_files
 
     try:
         bundles = load_bundled_locale_files()
         strings = dict(_AGENDA_PDF_DEFAULT_STRINGS)
-        strings.update(bundles.get(lang, {}).get("agenda_pdf") or {})
+        agenda_ns = bundles.get(lang, {}).get("agenda") or {}
+        strings.update({k: v for k, v in agenda_ns.items() if k in _AGENDA_PDF_DEFAULT_STRINGS and v})
         return strings
     except Exception:
         return dict(_AGENDA_PDF_DEFAULT_STRINGS)
 
 
+def _meeting_no(meeting) -> str:
+    """'MTG-2026-099' → '99', mirroring the on-screen meetingNo() helper."""
+    import re
+
+    ref = meeting.reference_number or ""
+    m = re.search(r"(\d+)$", ref)
+    return str(int(m.group(1))) if m else ref
+
+
+def _sub_letter(idx: int) -> str:
+    """0,1,2… → 'a','b','c'…, mirroring the on-screen subLetter() helper."""
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    if idx < 26:
+        return letters[idx]
+    return letters[idx // 26 - 1] + letters[idx % 26]
+
+
+def _format_meeting_date(meeting) -> str:
+    """'WEDNESDAY 30 SEPTEMBER 2026', mirroring the on-screen formatMeetingDate()
+    helper — which formats in English regardless of UI language, so this does
+    too (not a new gap introduced here; matching existing behavior)."""
+    if not meeting.date:
+        return ""
+    d = meeting.date
+    return f"{d.strftime('%A').upper()} {d.day} {d.strftime('%B').upper()} {d.year}"
+
+
+def _format_time(meeting) -> str:
+    """'9.00 AM', mirroring the on-screen formatTime() helper."""
+    if not meeting.time:
+        return ""
+    hour, minute = meeting.time.hour, meeting.time.minute
+    ampm = "PM" if hour >= 12 else "AM"
+    h12 = hour % 12 or 12
+    return f"{h12}.{minute:02d} {ampm}"
+
+
 def _render_agenda_pdf(meeting, lang: str = "en") -> bytes | None:
-    """Best-effort one-page agenda PDF (sequence / section / reference / title),
-    labelled in the recipient's preferred language (`lang`: en/fr/bi) — the
-    agenda content itself (submission titles, ministry names) stays as
-    entered, only the PDF's own labels are translated."""
+    """Agenda PDF structured the same way the Secretariat curated it on
+    screen — Preliminaries, Matters Arising (grouped/lettered by prior
+    meeting), then each active section in order with sequentially numbered
+    items — rather than a flat table, so what Commission members receive by
+    email/download matches what was actually endorsed. Labelled in the
+    recipient's preferred language (`lang`: en/fr/bi); submission titles,
+    ministry names and admin-configured section labels are entered content
+    and are not translated."""
     import html as _html
     import logging
 
@@ -628,45 +679,93 @@ def _render_agenda_pdf(meeting, lang: str = "en") -> bytes | None:
 
         from weasyprint import HTML
 
-        from .agenda_sections import agenda_section_label
-        from .models import PSCFormType
+        from .agenda_sections import active_agenda_sections
 
-        strings = _agenda_pdf_strings(lang)
-        items = list(meeting.agenda_items.select_related("submission").order_by("category", "sequence"))
-        type_labels = dict(
-            PSCFormType.objects.filter(
-                code__in={i.form_type_code for i in items if i.form_type_code}
-            ).values_list("code", "name")
+        s = _agenda_pdf_strings(lang)
+        _e = _html.escape
+
+        items = list(
+            meeting.agenda_items.select_related("submission", "submission__ministry")
+            .order_by("sequence", "id")
+        )
+        by_category: dict[str, list] = {}
+        for item in items:
+            by_category.setdefault(item.category or "other", []).append(item)
+
+        def item_line(item, number=None) -> str:
+            sub = item.submission
+            title = _e((getattr(sub, "title", "") or "") if sub else "")
+            ministry = _e(sub.ministry.name) if sub and sub.ministry_id else ""
+            prefix = f"<strong>{number}.</strong> " if number is not None else ""
+            ministry_suffix = f" — {ministry}" if ministry else ""
+            return f"<p style=\"margin:0 0 6px 0;\">{prefix}{title}{ministry_suffix}</p>"
+
+        section_html = []
+
+        # 1. Preliminaries & Endorsements
+        prelim_items = by_category.get("preliminaries", [])
+        prelim_rows = "".join(
+            f"<p style=\"margin:0 0 4px 18px;\">{_sub_letter(i)}. {_e(getattr(it.submission, 'title', '') or '')}</p>"
+            for i, it in enumerate(prelim_items)
+        )
+        section_html.append(
+            f"<h3 style=\"margin:16px 0 8px 0;font-size:13px;\">{_e(s['doc_section_preliminaries'])}</h3>"
+            f"<p style=\"margin:0 0 4px 0;\"><strong>{_e(s['doc_adoption_of_agenda'])}</strong> "
+            f"{_e(s['doc_adoption_of_agenda_detail']).replace('{{number}}', _e(_meeting_no(meeting))).replace('{{date}}', _e(_format_meeting_date(meeting)))}</p>"
+            f"<p style=\"margin:0 0 4px 0;\"><strong>{_e(s['doc_confirmation_of_endorsement'])}</strong></p>"
+            f"{prelim_rows}"
+            f"<p style=\"margin:8px 0 0 0;\">{_e(s['doc_secretary_report'])}</p>"
         )
 
-        rows = []
-        for item in items:
+        # 2. Matters Arising — grouped by previous-meeting reference, lettered
+        # globally across the whole list (matches the on-screen grouping).
+        ma_items = by_category.get("matters_arising", [])
+        ma_html = []
+        current_ref = object()  # sentinel never equal to a real ref/None
+        for idx, item in enumerate(ma_items):
+            ref = item.matters_arising_meeting_ref or None
+            if ref != current_ref:
+                label = _e(ref) if ref else _e(s["doc_previous_meetings"])
+                ma_html.append(f"<p style=\"margin:10px 0 2px 0;font-weight:600;\">{label}</p>")
+                current_ref = ref
             sub = item.submission
-            ref = _html.escape((getattr(sub, "reference_number", "") or "") if sub else "")
-            title = _html.escape((getattr(sub, "title", "") or "") if sub else "")
-            section = _html.escape(agenda_section_label(item.category or "") or "Other")
-            type_label = _html.escape(type_labels.get(item.form_type_code, item.form_type_code) or "")
-            rows.append(
-                f"<tr><td>{item.sequence}</td><td>{section}</td><td>{type_label}</td>"
-                f"<td>{ref}</td><td>{title}</td></tr>"
+            no_prefix = f"<strong>{_e(item.matters_arising_agenda_no)}:</strong> " if item.matters_arising_agenda_no else ""
+            ma_html.append(
+                f"<p style=\"margin:0 0 4px 18px;\">{_sub_letter(idx)}. {no_prefix}{_e(getattr(sub, 'title', '') or '')}</p>"
             )
-        body_rows = "".join(rows) or f"<tr><td colspan='5'>{_html.escape(strings['no_items'])}</td></tr>"
-        heading = _html.escape(strings["heading"]).replace(
-            "{{reference}}", _html.escape(meeting.reference_number or "")
+        section_html.append(
+            f"<h3 style=\"margin:16px 0 8px 0;font-size:13px;\">{_e(s['doc_section_matters_arising'])}</h3>"
+            + ("".join(ma_html) if ma_html else f"<p style=\"margin:0;color:#64748b;\">{_e(s['doc_no_matters_arising'])}</p>")
+        )
+
+        # 3+ variable sections, in admin-configured display order.
+        counter = 3
+        for section in active_agenda_sections():
+            if section.code in ("preliminaries", "matters_arising"):
+                continue
+            cat_items = by_category.get(section.code, [])
+            if not cat_items:
+                continue
+            rows = []
+            for item in cat_items:
+                rows.append(item_line(item, counter))
+                counter += 1
+            section_html.append(
+                f"<h3 style=\"margin:16px 0 8px 0;font-size:13px;\">{_e(section.label)}</h3>" + "".join(rows)
+            )
+
+        body = "".join(section_html) or f"<p>{_e(s['doc_no_items'])}</p>"
+        heading = _e(s["doc_heading"]).replace("{{number}}", _e(_meeting_no(meeting)))
+        meta = (
+            f"<p style=\"margin:2px 0;\">{_e(s['doc_date_label'])} {_e(_format_meeting_date(meeting))}</p>"
+            f"<p style=\"margin:2px 0;\">{_e(s['doc_location_label'])} {_e(meeting.venue or '')}</p>"
+            f"<p style=\"margin:2px 0;\">{_e(s['doc_time_label'])} {_e(_format_time(meeting))}</p>"
         )
         doc = (
             "<html><body style=\"font-family:Arial,sans-serif;font-size:12px;color:#1e293b;\">"
-            f"<h2 style=\"margin:0 0 4px 0;\">{heading}</h2>"
-            f"<p style=\"margin:0 0 12px 0;color:#475569;\">{_html.escape(strings['sitting_date'])}: {meeting.date or ''}</p>"
-            "<table cellspacing=\"0\" cellpadding=\"6\" style=\"border-collapse:collapse;width:100%;border:1px solid #cbd5e1;\">"
-            "<thead><tr style=\"background:#f1f5f9;\">"
-            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_number'])}</th>"
-            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_section'])}</th>"
-            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_type'])}</th>"
-            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_reference'])}</th>"
-            f"<th style=\"border:1px solid #cbd5e1;text-align:left;\">{_html.escape(strings['col_title'])}</th>"
-            "</tr></thead>"
-            f"<tbody>{body_rows}</tbody></table>"
+            f"<h2 style=\"margin:0 0 8px 0;text-transform:uppercase;\">{heading}</h2>"
+            f"{meta}"
+            f"{body}"
             "</body></html>"
         )
         buf = BytesIO()
@@ -677,6 +776,20 @@ def _render_agenda_pdf(meeting, lang: str = "en") -> bytes | None:
             "Agenda PDF render failed for meeting %s", getattr(meeting, "id", None)
         )
         return None
+
+
+def _localized_slug(base_slug: str, lang: str) -> str:
+    """`base_slug` for English, `{base_slug}_{lang}` for fr/bi — but only if
+    that variant actually exists and is active, so a language whose template
+    hasn't been created/re-enabled yet falls back to English rather than the
+    email silently failing to send."""
+    from .models import EmailTemplate
+
+    if lang and lang != "en":
+        candidate = f"{base_slug}_{lang}"
+        if EmailTemplate.objects.filter(slug=candidate, is_active=True).exists():
+            return candidate
+    return base_slug
 
 
 def notify_agenda_circulated(meeting) -> None:
@@ -740,11 +853,66 @@ def notify_agenda_circulated(meeting) -> None:
                 agenda_url=f"{base}/secretariat/agenda",
             )
             send_templated_email(
-                slug="agenda_circulated", to=[email], context=ctx, attachments=attachments
+                slug=_localized_slug("agenda_circulated", lang),
+                to=[email], context=ctx, attachments=attachments,
             )
 
     logging.getLogger("scdms.app").info(
         "AGENDA_CIRCULATED_NOTIFIED | meeting=%s | members=%d",
+        meeting.reference_number, len(members),
+    )
+
+
+def notify_agenda_amended(meeting, other_matter) -> None:
+    """Tell already-circulated Commission members that a new item was added
+    under Other Matters after circulation but before the sitting is adopted
+    — so nobody walks in with a stale copy of the agenda they were emailed.
+    In-app + templated email; no PDF re-attachment, since the on-screen/
+    downloadable agenda already reflects the change and this is just a
+    heads-up that it did. Best-effort."""
+    import logging
+    from django.utils import timezone
+
+    from .models import Notification
+
+    members = commission_members()
+    if not members:
+        return
+
+    base = get_frontend_base_url()
+    when = (
+        timezone.localtime(timezone.now()).strftime("%d %B %Y")
+        if meeting.date is None
+        else meeting.date.strftime("%d %B %Y")
+    )
+
+    for user in members:
+        Notification.objects.create(
+            recipient=user,
+            channel=Notification.Channel.IN_APP,
+            push=True,
+            title=f"Agenda amended — {meeting.reference_number or ''}".strip(),
+            body=(
+                f"A new item, \"{other_matter.title}\", was added under Other Matters "
+                f"for the sitting on {when} after the agenda was circulated."
+            ),
+            link="/secretariat/agenda",
+        )
+        email = (user.email or "").strip()
+        if not email:
+            continue
+        lang = getattr(getattr(user, "psc_profile", None), "preferred_language", "en") or "en"
+        ctx = merge_recipient_context(
+            user,
+            meeting_reference=meeting.reference_number or "",
+            meeting_date=when,
+            item_title=other_matter.title,
+            agenda_url=f"{base}/secretariat/agenda",
+        )
+        send_templated_email(slug=_localized_slug("agenda_amended", lang), to=[email], context=ctx)
+
+    logging.getLogger("scdms.app").info(
+        "AGENDA_AMENDED_NOTIFIED | meeting=%s | members=%d",
         meeting.reference_number, len(members),
     )
 

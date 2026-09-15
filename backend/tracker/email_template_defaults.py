@@ -254,6 +254,130 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "agenda_circulated_fr",
+        "name": "Ordre du jour diffusé aux membres (français)",
+        "category": "submission_workflow",
+        "description": "Version française de « Agenda circulated » — envoyée aux membres dont la langue préférée est le français.",
+        "placeholders": _ph("meeting_reference, meeting_date, agenda_url"),
+        "subject_template": "Ordre du jour diffusé — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "Le Président a approuvé l'ordre du jour de la séance de la Commission du {{meeting_date}} "
+            "({{meeting_reference}}).\n\n"
+            "L'ordre du jour approuvé est joint, et également disponible dans le menu Ordre du jour :\n"
+            "{{agenda_url}}\n\n"
+            "Pendant la séance, ouvrez l'Espace de travail de séance pour suivre chaque point.\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">Le Président a approuvé l'ordre du jour de la séance de la Commission du "
+            "<strong>{{meeting_date}}</strong> ({{meeting_reference}}).</p>"
+            "<p style=\"margin:0 0 16px 0;\">L'ordre du jour approuvé est joint, et également disponible dans le menu Ordre du jour.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">Voir l'ordre du jour</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">Pendant la séance, ouvrez l'Espace de travail de séance pour suivre chaque point.</p>"
+        ),
+    },
+    {
+        "slug": "agenda_circulated_bi",
+        "name": "Adjenda i sekulet i go long ol memba (Bislama)",
+        "category": "submission_workflow",
+        "description": "Bislama version blong 'Agenda circulated' — i go long ol memba we oli jusum Bislama olsem lanwis blong olgeta.",
+        "placeholders": _ph("meeting_reference, meeting_date, agenda_url"),
+        "subject_template": "Adjenda i sekulet finis — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "Jeaman i endosem finis adjenda blong Komisin miting long {{meeting_date}} "
+            "({{meeting_reference}}).\n\n"
+            "Adjenda we i endos i stap atajem, mo yu save luk tu long Adjenda menu:\n"
+            "{{agenda_url}}\n\n"
+            "Long taem blong miting, openem Sitting Pack blong folem evri aitem.\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">Jeaman i endosem finis adjenda blong Komisin miting long "
+            "<strong>{{meeting_date}}</strong> ({{meeting_reference}}).</p>"
+            "<p style=\"margin:0 0 16px 0;\">Adjenda we i endos i stap atajem, mo yu save luk tu long Adjenda menu.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">Luk adjenda</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">Long taem blong miting, openem Sitting Pack blong folem evri aitem.</p>"
+        ),
+    },
+    {
+        "slug": "agenda_amended",
+        "name": "Agenda amended after circulation",
+        "category": "submission_workflow",
+        "description": "Sent to Commission members + Chairperson when an Other Matters item is added after the agenda was already circulated.",
+        "placeholders": _ph("meeting_reference, meeting_date, item_title, agenda_url"),
+        "subject_template": "Agenda amended — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "A new item, \"{{item_title}}\", was added under Other Matters for the Commission sitting on "
+            "{{meeting_date}} ({{meeting_reference}}) — after the agenda was circulated to you.\n\n"
+            "View the updated agenda:\n"
+            "{{agenda_url}}\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">A new item, <strong>{{item_title}}</strong>, was added under Other Matters "
+            "for the Commission sitting on <strong>{{meeting_date}}</strong> ({{meeting_reference}}) — after the "
+            "agenda was circulated to you.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">View the updated agenda</a>"
+            "</p>"
+        ),
+    },
+    {
+        "slug": "agenda_amended_fr",
+        "name": "Ordre du jour modifié après diffusion (français)",
+        "category": "submission_workflow",
+        "description": "Version française de « Agenda amended after circulation ».",
+        "placeholders": _ph("meeting_reference, meeting_date, item_title, agenda_url"),
+        "subject_template": "Ordre du jour modifié — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "Un nouveau point, « {{item_title}} », a été ajouté sous Questions diverses pour la séance de la "
+            "Commission du {{meeting_date}} ({{meeting_reference}}) — après que l'ordre du jour vous a été diffusé.\n\n"
+            "Consultez l'ordre du jour mis à jour :\n"
+            "{{agenda_url}}\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">Un nouveau point, <strong>{{item_title}}</strong>, a été ajouté sous "
+            "Questions diverses pour la séance de la Commission du <strong>{{meeting_date}}</strong> ({{meeting_reference}}) "
+            "— après que l'ordre du jour vous a été diffusé.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">Voir l'ordre du jour mis à jour</a>"
+            "</p>"
+        ),
+    },
+    {
+        "slug": "agenda_amended_bi",
+        "name": "Adjenda i jenis afta i sekulet (Bislama)",
+        "category": "submission_workflow",
+        "description": "Bislama version blong 'Agenda amended after circulation'.",
+        "placeholders": _ph("meeting_reference, meeting_date, item_title, agenda_url"),
+        "subject_template": "Adjenda i jenis — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "Wan niufala aitem, \"{{item_title}}\", oli ademsave i go long Adarfala Matas blong Komisin miting long "
+            "{{meeting_date}} ({{meeting_reference}}) — afta we adjenda i sekulet finis i go long yu.\n\n"
+            "Luk niu adjenda:\n"
+            "{{agenda_url}}\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">Wan niufala aitem, <strong>{{item_title}}</strong>, oli ademsave i go long "
+            "Adarfala Matas blong Komisin miting long <strong>{{meeting_date}}</strong> ({{meeting_reference}}) — afta we "
+            "adjenda i sekulet finis i go long yu.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">Luk niu adjenda</a>"
+            "</p>"
+        ),
+    },
+    {
         "slug": "meeting_scheduled",
         "name": "Meeting scheduled — HR notification",
         "category": "system",
@@ -792,6 +916,34 @@ SAMPLE_EMAIL_CONTEXTS = {
     "agenda_circulated": {
         "meeting_reference": "PSC-MTG-2026-014",
         "meeting_date": "30 June 2026",
+        "agenda_url": "http://localhost:8080/secretariat/agenda",
+    },
+    "agenda_circulated_fr": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_date": "30 juin 2026",
+        "agenda_url": "http://localhost:8080/secretariat/agenda",
+    },
+    "agenda_circulated_bi": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_date": "30 Jun 2026",
+        "agenda_url": "http://localhost:8080/secretariat/agenda",
+    },
+    "agenda_amended": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_date": "30 June 2026",
+        "item_title": "Update on the Corporate Services restructure",
+        "agenda_url": "http://localhost:8080/secretariat/agenda",
+    },
+    "agenda_amended_fr": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_date": "30 juin 2026",
+        "item_title": "Point sur la restructuration des Services corporatifs",
+        "agenda_url": "http://localhost:8080/secretariat/agenda",
+    },
+    "agenda_amended_bi": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_date": "30 Jun 2026",
+        "item_title": "Apdet blong Corporate Services restructure",
         "agenda_url": "http://localhost:8080/secretariat/agenda",
     },
     "minutes_signed": {
