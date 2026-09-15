@@ -690,9 +690,11 @@ export default function Agenda() {
           />
         )}
 
-        {/* Search + section jump nav — helps scanning a long agenda */}
+        {/* Search + section jump nav — helps scanning a long agenda. Sticky so
+            it stays reachable while scrolling through a long document instead
+            of scrolling away with the header above it. */}
         {selectedMeeting && totalItems > 0 && (
-          <div className="card card-compact mb-4 p-3 space-y-3">
+          <div className="card card-compact mb-4 p-3 space-y-3 sticky top-16 z-10 shadow-md">
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
