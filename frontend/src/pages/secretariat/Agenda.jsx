@@ -25,7 +25,7 @@ import { useConfirm } from '../../context/ConfirmContext'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  Plus, X, RefreshCw, Printer, Check, Tag,
+  Plus, X, RefreshCw, Printer, Check, Tag, Search,
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
   Send, ThumbsUp, ChevronsRight, Tablet, LayoutGrid, StickyNote,
   FileDown, Users, Eye, Mail,
@@ -103,6 +103,7 @@ export default function Agenda() {
   const [circulatePreviewLoading, setCirculatePreviewLoading] = useState(false)
   const [circulationStatus, setCirculationStatus]         = useState(null)
   const [circulationStatusOpen, setCirculationStatusOpen] = useState(false)
+  const [searchQuery, setSearchQuery]   = useState('')
 
   const [form, setForm] = useState({
     submission_id: '',
@@ -135,17 +136,17 @@ export default function Agenda() {
     try {
       const r = await api.get(`/agenda-items/?meeting=${id}`)
       setItems(normalizeListPayload(r.data))
-    } catch { toast.error('Failed to load agenda items.') }
+    } catch { toast.error(t('agenda.toast_load_items_failed')) }
   }
 
   const hasPendingBlurbs = items.some(i => !i.agenda_blurb_processed)
 
   useEffect(() => {
     if (!selectedId || !hasPendingBlurbs) return undefined
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       if (isTabVisible()) fetchItems(selectedId)
     }, 5000)
-    return () => clearInterval(t)
+    return () => clearInterval(timer)
   }, [selectedId, hasPendingBlurbs])
 
   const fetchSubmissions = async () => {
@@ -159,7 +160,7 @@ export default function Agenda() {
         'matters_arising', 'tabled', 'awaiting_legal_advice',
       ].includes(s.current_stage))
       setSubmissions(eligible)
-    } catch { toast.error('Failed to load submissions.') }
+    } catch { toast.error(t('agenda.toast_load_submissions_failed')) }
     finally { setLoadingSubs(false) }
   }
 
@@ -177,6 +178,24 @@ export default function Agenda() {
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [advancedMenuOpen])
+
+  // A live on-screen search filter must never carry over into an actual
+  // print — clear it around the browser's print dialog and restore
+  // afterwards, so window.print() always renders the full agenda regardless
+  // of what was being scanned for a moment ago.
+  const searchQueryRef = useRef('')
+  useEffect(() => { searchQueryRef.current = searchQuery }, [searchQuery])
+  const printSearchBackupRef = useRef('')
+  useEffect(() => {
+    const clearForPrint = () => { printSearchBackupRef.current = searchQueryRef.current; setSearchQuery('') }
+    const restoreAfterPrint = () => setSearchQuery(printSearchBackupRef.current)
+    window.addEventListener('beforeprint', clearForPrint)
+    window.addEventListener('afterprint', restoreAfterPrint)
+    return () => {
+      window.removeEventListener('beforeprint', clearForPrint)
+      window.removeEventListener('afterprint', restoreAfterPrint)
+    }
+  }, [])
 
   const selectedMeeting = useMemo(
     () => meetings.find(m => String(m.id) === String(selectedId)),
@@ -198,6 +217,13 @@ export default function Agenda() {
     }
     return map
   }, [items])
+
+  // Preliminaries items, lettered once up front — a live search filter only
+  // ever hides rows below, it never renumbers the official document lettering.
+  const preliminariesItems = useMemo(
+    () => (grouped['preliminaries'] || []).map((item, idx) => ({ ...item, subLetter: subLetter(idx) })),
+    [grouped],
+  )
 
   // Group matters arising by meeting reference
   const groupedMattersArising = useMemo(() => {
@@ -228,6 +254,18 @@ export default function Agenda() {
     return result
   }, [grouped, CATEGORY_ORDER])
 
+  // ── Search / filter ──────────────────────────────────────────────────────
+  // A scanning aid only — numbering above is always computed off the full
+  // list first, filtering only affects which already-numbered rows render.
+
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const matchesSearch = (item) => {
+    if (!normalizedQuery) return true
+    const haystack = `${item.submission_title || ''} ${item.submission_ministry || ''} ${item.submission_reference || ''}`.toLowerCase()
+    return haystack.includes(normalizedQuery)
+  }
+  const hasSearchResults = !normalizedQuery || items.some(matchesSearch)
+
   // ── CRUD ────────────────────────────────────────────────────────────────
 
   const handleAdd = async (e) => {
@@ -246,20 +284,24 @@ export default function Agenda() {
       await fetchItems(selectedId)
       setModalOpen(false)
       setForm({ submission_id: '', category: 'other', matters_arising_meeting_ref: '', matters_arising_agenda_no: '' })
-      toast.success('Item added to agenda.')
+      toast.success(t('agenda.toast_item_added'))
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to add item.')
+      toast.error(err.response?.data?.detail || t('agenda.toast_add_failed'))
     } finally { setSaving(false) }
   }
 
   const handleRemove = async (id) => {
-    const ok = await confirm({ title: 'Remove item?', message: 'Remove this item from the agenda?', confirmLabel: 'Remove' })
+    const ok = await confirm({
+      title: t('agenda.toast_remove_confirm_title'),
+      message: t('agenda.toast_remove_confirm_message'),
+      confirmLabel: t('agenda.toast_remove_confirm_label'),
+    })
     if (!ok) return
     try {
       await api.delete(`/agenda-items/${id}/`)
       await fetchItems(selectedId)
-      toast.success('Item removed.')
-    } catch { toast.error('Failed to remove item.') }
+      toast.success(t('agenda.toast_item_removed'))
+    } catch { toast.error(t('agenda.toast_remove_failed')) }
   }
 
   const handleCategoryUpdate = async (item, newCat) => {
@@ -267,9 +309,9 @@ export default function Agenda() {
       await api.patch(`/agenda-items/${item.id}/`, { category: newCat })
       await fetchItems(selectedId)
       setEditingItem(null)
-      toast.success('Category updated.')
+      toast.success(t('agenda.toast_category_updated'))
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to update category.')
+      toast.error(err.response?.data?.detail || t('agenda.toast_category_update_failed'))
     }
   }
 
@@ -284,14 +326,14 @@ export default function Agenda() {
         api.patch(`/agenda-items/${swapWith.id}/`, { sequence: item.sequence }),
       ])
       await fetchItems(selectedId)
-    } catch { toast.error('Failed to reorder.') }
+    } catch { toast.error(t('agenda.toast_reorder_failed')) }
   }
 
   const handlePushToNext = async (item) => {
     const ok = await confirm({
-      title: 'Defer to next meeting?',
-      message: `Move "${item.submission_title}" to the next scheduled meeting?`,
-      confirmLabel: 'Defer',
+      title: t('agenda.toast_defer_confirm_title'),
+      message: t('agenda.toast_defer_confirm_message', { title: item.submission_title }),
+      confirmLabel: t('agenda.toast_defer_confirm_label'),
     })
     if (!ok) return
     try {
@@ -299,7 +341,7 @@ export default function Agenda() {
       await fetchItems(selectedId)
       toast.success(r.data.detail)
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to defer item.')
+      toast.error(err.response?.data?.detail || t('agenda.toast_defer_failed'))
     }
   }
 
@@ -322,23 +364,23 @@ export default function Agenda() {
       a.remove()
       URL.revokeObjectURL(blobUrl)
     } catch {
-      toast.error('Failed to generate the agenda PDF.')
+      toast.error(t('agenda.toast_download_pdf_failed'))
     }
   }
 
   // ── Workflow actions ─────────────────────────────────────────────────────
 
-  const doWorkflowAction = async (action, label) => {
+  const doWorkflowAction = async (action, { confirmTitle, confirmMessage, confirmLabel, successMsg, failMsg }) => {
     if (!selectedId) return
-    const ok = await confirm({ title: `${label}?`, message: `Confirm: ${label.toLowerCase()} for this meeting?`, confirmLabel: label })
+    const ok = await confirm({ title: confirmTitle, message: confirmMessage, confirmLabel })
     if (!ok) return
     setWorkflowBusy(true)
     try {
       await api.post(`/meetings/${selectedId}/${action}/`)
-      toast.success(`${label} completed.`)
+      toast.success(successMsg)
       await fetchMeetings()   // refresh meeting list (agenda_status updated)
     } catch (err) {
-      toast.error(err.response?.data?.detail || `Failed: ${label}.`)
+      toast.error(err.response?.data?.detail || failMsg)
     } finally { setWorkflowBusy(false) }
   }
 
@@ -354,7 +396,7 @@ export default function Agenda() {
       const r = await api.get(`/meetings/${selectedId}/circulation-preview/`)
       setCirculatePreview(r.data)
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to load circulation preview.')
+      toast.error(err.response?.data?.detail || t('agenda.toast_circulation_preview_failed'))
       setCirculateModalOpen(false)
     } finally {
       setCirculatePreviewLoading(false)
@@ -366,11 +408,11 @@ export default function Agenda() {
     setWorkflowBusy(true)
     try {
       await api.post(`/meetings/${selectedId}/approve-agenda/`)
-      toast.success('Agenda endorsed and circulated to Commission members.')
+      toast.success(t('agenda.toast_circulated_success'))
       setCirculateModalOpen(false)
       await fetchMeetings()
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to endorse and circulate agenda.')
+      toast.error(err.response?.data?.detail || t('agenda.toast_circulate_failed'))
     } finally {
       setWorkflowBusy(false)
     }
@@ -444,8 +486,8 @@ export default function Agenda() {
       {/* Screen-only header */}
       <div className="print:hidden">
         <PageHeader
-          title="Meeting Agenda"
-          subtitle="Build and generate the formal PSC Commission meeting agenda"
+          title={t('agenda.title')}
+          subtitle={t('agenda.subtitle')}
           action={
             selectedMeeting && (
               <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -463,25 +505,25 @@ export default function Agenda() {
                     to={`/secretariat/agenda/my-notes?meeting=${selectedId}`}
                     className="btn-outline flex items-center gap-2 px-4 py-2"
                   >
-                    <StickyNote size={15} /> My Notes
+                    <StickyNote size={15} /> {t('agenda.my_notes')}
                   </Link>
                 )}
                 {!isCompleted && (
                 <button
                   onClick={handlePrint}
                   className="btn-outline flex items-center gap-2 px-4 py-2"
-                  title="Print using the browser (matches what's on screen)"
+                  title={t('agenda.print_hint')}
                 >
-                  <Printer size={15} /> Print
+                  <Printer size={15} /> {t('agenda.print')}
                 </button>
                 )}
                 {!isCompleted && (
                 <button
                   onClick={handleDownloadPdf}
                   className="btn-outline flex items-center gap-2 px-4 py-2"
-                  title="Download the same formatted PDF that Commission members receive by email"
+                  title={t('agenda.download_pdf_hint')}
                 >
-                  <FileDown size={15} /> Download PDF
+                  <FileDown size={15} /> {t('agenda.download_pdf')}
                 </button>
                 )}
                 {/* Add Item lives at the top level (not behind Advanced) since it's
@@ -491,9 +533,9 @@ export default function Agenda() {
                   <button
                     onClick={() => { fetchSubmissions(); setModalOpen(true) }}
                     className="btn-outline flex items-center gap-2 px-4 py-2"
-                    title="Add a Matters Arising reference or other one-off item — normal approvals place themselves automatically"
+                    title={t('agenda.add_item_hint')}
                   >
-                    <Plus size={15} /> Add Item
+                    <Plus size={15} /> {t('agenda.add_item')}
                   </button>
                 )}
                 {/* Sitting Workspace — drag-and-drop tool for genuine exceptions
@@ -504,9 +546,9 @@ export default function Agenda() {
                     <button
                       onClick={() => setAdvancedMenuOpen(o => !o)}
                       className="btn-outline flex items-center gap-2 px-4 py-2"
-                      title="Manual placement tools for exceptions — approved submissions place themselves automatically"
+                      title={t('agenda.advanced_hint')}
                     >
-                      Advanced <ChevronDown size={15} />
+                      {t('agenda.advanced')} <ChevronDown size={15} />
                     </button>
                     {advancedMenuOpen && (
                       <div className="absolute right-0 mt-2 w-72 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-20 py-1">
@@ -517,9 +559,9 @@ export default function Agenda() {
                         >
                           <LayoutGrid size={15} className="mt-0.5 shrink-0" />
                           <span>
-                            <span className="block font-medium text-slate-800 dark:text-slate-100">Sitting Workspace</span>
+                            <span className="block font-medium text-slate-800 dark:text-slate-100">{t('agenda.sitting_workspace')}</span>
                             <span className="block text-xs text-slate-500 dark:text-slate-400">
-                              Drag-and-drop for exceptions: no meeting scheduled yet, carry-overs, or reordering.
+                              {t('agenda.sitting_workspace_hint')}
                             </span>
                           </span>
                         </Link>
@@ -535,7 +577,7 @@ export default function Agenda() {
         {/* Meeting selector */}
         <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-center">
           <div>
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Select Meeting</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">{t('agenda.select_meeting')}</label>
             <select
               className="input sm:w-96"
               value={selectedId}
@@ -543,7 +585,7 @@ export default function Agenda() {
             >
               {meetings.length === 0 && (
                 <option value="">
-                  {endorsedOnlyViewer ? 'No endorsed agendas yet' : 'No meetings scheduled'}
+                  {endorsedOnlyViewer ? t('agenda.no_endorsed_agendas') : t('agenda.no_meetings_scheduled')}
                 </option>
               )}
               {meetings.map(m => (
@@ -566,7 +608,9 @@ export default function Agenda() {
                 selectedMeeting.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
                 'bg-slate-100 text-slate-600'
               }`}>
-                {selectedMeeting.status?.replace('_', ' ')}
+                {selectedMeeting.status === 'completed' ? t('agenda.status_completed') :
+                 selectedMeeting.status === 'in_progress' ? t('agenda.status_in_progress') :
+                 t('agenda.status_scheduled')}
               </span>
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-medium ${
@@ -574,7 +618,7 @@ export default function Agenda() {
                   isNearCapacity ? 'text-orange-600 dark:text-orange-400' :
                   'text-slate-500 dark:text-slate-400'
                 }`}>
-                  {totalItems} / {maxItems} items
+                  {t('agenda.items_count', { count: totalItems, max: maxItems })}
                 </span>
                 <div className="w-20 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                   <div
@@ -603,9 +647,21 @@ export default function Agenda() {
             isSecretary={isSecretary}
             isChairperson={isChairperson}
             busy={workflowBusy}
-            onSubmit={() => doWorkflowAction('submit-to-chairman', 'Submit to Chairman')}
+            onSubmit={() => doWorkflowAction('submit-to-chairman', {
+              confirmTitle: t('agenda.confirm_submit_title'),
+              confirmMessage: t('agenda.confirm_submit_message'),
+              confirmLabel: t('agenda.workflow_submit_to_chairman'),
+              successMsg: t('agenda.toast_submit_success'),
+              failMsg: t('agenda.toast_submit_failed'),
+            })}
             onApprove={openCirculateModal}
-            onAdopt={() => doWorkflowAction('adopt-agenda', 'Adopt Agenda')}
+            onAdopt={() => doWorkflowAction('adopt-agenda', {
+              confirmTitle: t('agenda.confirm_adopt_title'),
+              confirmMessage: t('agenda.confirm_adopt_message'),
+              confirmLabel: t('agenda.workflow_adopt'),
+              successMsg: t('agenda.toast_adopt_success'),
+              failMsg: t('agenda.toast_adopt_failed'),
+            })}
             agendaAdopted={Boolean(selectedMeeting?.agenda_adopted_at)}
             canSeeCirculationStatus={isSecretaryOrAdmin || isChairperson}
             circulationStatus={circulationStatus}
@@ -614,17 +670,27 @@ export default function Agenda() {
           />
         )}
 
-        {/* Section jump nav — helps scanning a long agenda before endorsing */}
+        {/* Search + section jump nav — helps scanning a long agenda */}
         {selectedMeeting && totalItems > 0 && (
-          <div className="card card-compact mb-4 p-3">
+          <div className="card card-compact mb-4 p-3 space-y-3">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder={t('agenda.search_placeholder')}
+                className="input pl-8 text-sm py-1.5"
+              />
+            </div>
             <div className="flex items-center gap-1.5 flex-wrap text-xs">
-              <span className="font-semibold text-slate-400 uppercase tracking-wide mr-1 shrink-0">Jump to:</span>
+              <span className="font-semibold text-slate-400 uppercase tracking-wide mr-1 shrink-0">{t('agenda.jump_to')}</span>
               {groupedMattersArising.length > 0 && (
                 <a
                   href="#agenda-section-matters_arising"
                   className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 text-slate-600 dark:text-slate-300 whitespace-nowrap"
                 >
-                  Matters Arising <span className="text-slate-400">({grouped['matters_arising']?.length || 0})</span>
+                  {t('agenda.matters_arising_nav')} <span className="text-slate-400">({grouped['matters_arising']?.length || 0})</span>
                 </a>
               )}
               {CATEGORY_ORDER.slice(2).map(cat => {
@@ -651,12 +717,10 @@ export default function Agenda() {
           <ClipboardList size={16} className="text-amber-500 shrink-0 mt-0.5" />
           <div className="text-sm text-amber-700 dark:text-amber-300">
             <span className="font-semibold">
-              {readiness.level === 'empty' ? 'No agenda items yet' : 'Not yet ready to convene'}
+              {readiness.level === 'empty' ? t('agenda.readiness_empty_title') : t('agenda.readiness_building_title')}
             </span>{' '}
-            — {totalItems} of a minimum {minItems} item{minItems !== 1 ? 's' : ''} placed.{' '}
-            {readiness.shortfall > 0 && (
-              <>Add <strong>{readiness.shortfall}</strong> more before calling this sitting.</>
-            )}
+            {t('agenda.readiness_placed', { count: totalItems, min: minItems })}{' '}
+            {readiness.shortfall > 0 && t('agenda.readiness_add_more', { count: readiness.shortfall })}
           </div>
         </div>
       )}
@@ -664,8 +728,8 @@ export default function Agenda() {
         <div className="mb-4 print:hidden rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-900/20 px-4 py-3 flex items-start gap-3">
           <Check size={16} className="text-emerald-500 shrink-0 mt-0.5" />
           <div className="text-sm text-emerald-700 dark:text-emerald-300">
-            <span className="font-semibold">Ready to convene</span> —{' '}
-            {totalItems} item{totalItems !== 1 ? 's' : ''} on the agenda (minimum {minItems}).
+            <span className="font-semibold">{t('agenda.readiness_ready_title')}</span> —{' '}
+            {t('agenda.readiness_ready_detail', { count: totalItems, min: minItems })}
           </div>
         </div>
       )}
@@ -675,9 +739,9 @@ export default function Agenda() {
         <div className="mb-4 print:hidden rounded-lg border border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20 px-4 py-3 flex items-start gap-3">
           <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
           <div className="text-sm text-red-700 dark:text-red-300">
-            <span className="font-semibold">Agenda is over capacity</span> —{' '}
-            {totalItems - maxItems} item{totalItems - maxItems !== 1 ? 's' : ''} over the {maxItems}-item limit.{' '}
-            Use the <strong>→</strong> button on individual items to defer them to the next meeting.
+            <span className="font-semibold">{t('agenda.capacity_over_title')}</span> —{' '}
+            {t('agenda.capacity_over_detail', { count: totalItems - maxItems, max: maxItems })}{' '}
+            {t('agenda.capacity_over_hint')}
           </div>
         </div>
       )}
@@ -685,9 +749,16 @@ export default function Agenda() {
         <div className="mb-4 print:hidden rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-700 dark:bg-orange-900/20 px-4 py-3 flex items-start gap-3">
           <AlertCircle size={16} className="text-orange-500 shrink-0 mt-0.5" />
           <div className="text-sm text-orange-700 dark:text-orange-300">
-            <span className="font-semibold">Approaching capacity</span> —{' '}
-            {totalItems} of {maxItems} slots used. Consider deferring lower-priority items to the next meeting.
+            <span className="font-semibold">{t('agenda.capacity_near_title')}</span> —{' '}
+            {t('agenda.capacity_near_detail', { count: totalItems, max: maxItems })}
           </div>
+        </div>
+      )}
+
+      {/* ── No search results ────────────────────────────────────────── */}
+      {selectedMeeting && normalizedQuery && !hasSearchResults && (
+        <div className="mb-4 print:hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40 px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+          {t('agenda.search_no_results', { query: searchQuery })}
         </div>
       )}
 
@@ -702,38 +773,39 @@ export default function Agenda() {
             <div className="border-b-2 border-slate-300 dark:border-slate-600 print:border-slate-800">
               <div className="px-8 py-6 text-left">
                 <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 print:text-black uppercase tracking-wide leading-snug">
-                  AGENDA OF PSC MEETING NO. {meetingNo(selectedMeeting)}
+                  {t('agenda.doc_heading', { number: meetingNo(selectedMeeting) })}
                 </h1>
                 <div className="mt-2 space-y-0.5 text-sm font-semibold text-slate-700 dark:text-slate-300 print:text-black">
-                  <p><span className="inline-block w-20">Date:</span> {formatMeetingDate(selectedMeeting)}</p>
-                  <p><span className="inline-block w-20">Location:</span> {selectedMeeting.venue}</p>
-                  <p><span className="inline-block w-20">Time:</span> {formatTime(selectedMeeting.time)}</p>
+                  <p><span className="inline-block w-20">{t('agenda.doc_date_label')}</span> {formatMeetingDate(selectedMeeting)}</p>
+                  <p><span className="inline-block w-20">{t('agenda.doc_location_label')}</span> {selectedMeeting.venue}</p>
+                  <p><span className="inline-block w-20">{t('agenda.doc_time_label')}</span> {formatTime(selectedMeeting.time)}</p>
                 </div>
               </div>
             </div>
 
             {/* ── 1. Preliminaries & Endorsements ── */}
-            <AgendaSection label="1. Preliminaries & Endorsements" isNumbered />
+            <AgendaSection label={t('agenda.doc_section_preliminaries')} isNumbered />
             <div className="px-8 py-3 space-y-3">
               <div className="flex items-start gap-3">
                 <span className="text-sm text-slate-400 print:text-black mt-1">•</span>
                 <p className="text-sm text-slate-800 dark:text-slate-200 print:text-black">
-                  <strong>Adoption of Agenda:</strong> PSC Meeting No. {meetingNo(selectedMeeting)} of {formatMeetingDate(selectedMeeting)}.
+                  <strong>{t('agenda.doc_adoption_of_agenda')}</strong>{' '}
+                  {t('agenda.doc_adoption_of_agenda_detail', { number: meetingNo(selectedMeeting), date: formatMeetingDate(selectedMeeting) })}
                 </p>
               </div>
               <div className="flex items-start gap-3">
                 <span className="text-sm text-slate-400 print:text-black mt-1">•</span>
                 <div className="flex-1">
                   <p className="text-sm text-slate-800 dark:text-slate-200 print:text-black">
-                    <strong>Confirmation of Endorsement:</strong>
+                    <strong>{t('agenda.doc_confirmation_of_endorsement')}</strong>
                   </p>
                   <ul className="mt-1 ml-4 space-y-1">
-                    {(grouped['preliminaries'] || []).length > 0 ? (
-                      grouped['preliminaries'].map((item, idx) => (
+                    {preliminariesItems.filter(matchesSearch).length > 0 ? (
+                      preliminariesItems.filter(matchesSearch).map((item) => (
                         <li key={item.id} className="flex items-start gap-3 group">
                           <span className="text-sm text-slate-400 print:text-black leading-tight">o</span>
                           <p className="text-sm text-slate-700 dark:text-slate-400 print:text-black">
-                            <span className="mr-2">{subLetter(idx)}.</span>
+                            <span className="mr-2">{item.subLetter}.</span>
                             {item.submission_title}
                           </p>
                           {!readOnly && (
@@ -744,7 +816,7 @@ export default function Agenda() {
                         </li>
                       ))
                     ) : (
-                      <li className="text-xs text-slate-400 italic print:hidden ml-6">(Add items like previous minutes to this section)</li>
+                      <li className="text-xs text-slate-400 italic print:hidden ml-6">{t('agenda.doc_add_previous_minutes_hint')}</li>
                     )}
                   </ul>
                 </div>
@@ -752,48 +824,53 @@ export default function Agenda() {
               <div className="flex items-start gap-3">
                 <span className="text-sm text-slate-400 print:text-black mt-1">•</span>
                 <p className="text-sm text-slate-800 dark:text-slate-200 print:text-black">
-                  Secretary presentation report on previous commission decision actions progress
+                  {t('agenda.doc_secretary_report')}
                 </p>
               </div>
             </div>
 
             {/* ── 2. Matters Arising ── */}
-            <AgendaSection label="2. MATTERS ARISING" isNumbered id="agenda-section-matters_arising" />
+            <AgendaSection label={t('agenda.doc_section_matters_arising')} isNumbered id="agenda-section-matters_arising" />
             {groupedMattersArising.length === 0 ? (
               <div className="px-8 py-3 print:hidden">
-                <p className="text-xs text-slate-400 italic">No Matters Arising items added yet.</p>
+                <p className="text-xs text-slate-400 italic">{t('agenda.doc_no_matters_arising')}</p>
               </div>
             ) : (
               <div className="space-y-4 py-2">
-                {groupedMattersArising.map((group) => (
-                  <div key={group.ref}>
-                    <div className="px-8 py-1">
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 print:text-black">
-                        {group.ref}
-                      </p>
+                {groupedMattersArising.map((group) => {
+                  const visibleItems = group.items.filter(matchesSearch)
+                  if (visibleItems.length === 0) return null
+                  return (
+                    <div key={group.ref}>
+                      <div className="px-8 py-1">
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 print:text-black">
+                          {group.ref}
+                        </p>
+                      </div>
+                      {visibleItems.map((item, idx) => (
+                        <MattersArisingRow
+                          key={item.id}
+                          item={item}
+                          isCompleted={readOnly}
+                          canDefer={isSecretaryOrAdmin}
+                          onRemove={handleRemove}
+                          onMoveUp={() => handleMove(item, 'up')}
+                          onMoveDown={() => handleMove(item, 'down')}
+                          onPushToNext={() => handlePushToNext(item)}
+                          isFirst={idx === 0}
+                          isLastInCat={idx === visibleItems.length - 1}
+                        />
+                      ))}
                     </div>
-                    {group.items.map((item, idx) => (
-                      <MattersArisingRow
-                        key={item.id}
-                        item={item}
-                        isCompleted={readOnly}
-                        canDefer={isSecretaryOrAdmin}
-                        onRemove={handleRemove}
-                        onMoveUp={() => handleMove(item, 'up')}
-                        onMoveDown={() => handleMove(item, 'down')}
-                        onPushToNext={() => handlePushToNext(item)}
-                        isFirst={idx === 0}
-                        isLastInCat={idx === group.items.length - 1}
-                      />
-                    ))}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
 
             {/* ── 3-15 Variable sections ── */}
             {CATEGORY_ORDER.slice(2).map(cat => {
-              const catItems = numberedItems[cat] || []
+              const allCatItems = numberedItems[cat] || []
+              const catItems = allCatItems.filter(matchesSearch)
               if (catItems.length === 0) return null
               // Sub-group by submission type (e.g. all Voluntary Resignations
               // together) — only show the sub-headers when the category
@@ -811,7 +888,7 @@ export default function Agenda() {
                         {isNewTypeGroup && (
                           <div className="px-8 pt-2 pb-1">
                             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 print:text-black">
-                              {item.form_type_display || 'Other'}
+                              {item.form_type_display || t('agenda.doc_other_type')}
                             </p>
                           </div>
                         )}
@@ -841,7 +918,7 @@ export default function Agenda() {
             {totalItems === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400 print:hidden">
                 <ClipboardList size={40} className="mb-3 opacity-40" />
-                <p className="text-sm">No agenda items yet. Approved submissions place themselves automatically — or use <strong>Advanced → Add Item</strong> for a one-off.</p>
+                <p className="text-sm">{t('agenda.doc_empty_state')}</p>
               </div>
             )}
 
@@ -850,27 +927,25 @@ export default function Agenda() {
       ) : (
         <div className="card flex flex-col items-center justify-center py-16 text-slate-400 print:hidden">
           <AlertCircle size={32} className="mb-3 opacity-40" />
-          <p className="text-sm">No meeting selected.</p>
+          <p className="text-sm">{t('agenda.no_meeting_selected')}</p>
         </div>
       )}
 
       {/* ── Add Item Modal ─────────────────────────────────────────────── */}
       <Modal
         open={modalOpen}
-        title="Add Agenda Item"
+        title={t('agenda.add_modal_title')}
         onClose={() => setModalOpen(false)}
         size="md"
       >
           <p className="text-xs text-slate-500 dark:text-slate-400 -mt-1 mb-3">
-            For general scheduling, <strong>Sitting Workspace</strong> is faster — drag backlog
-            submissions onto sections, or use its Fill from queue button. Use this form for one-off
-            adds, e.g. recording a Matters Arising reference.
+            {t('agenda.add_modal_workspace_hint')}
           </p>
           <form onSubmit={handleAdd} className="space-y-4">
             {/* Submission — pick first so we can auto-fill category */}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Submission <span className="text-red-500">*</span>
+                {t('agenda.add_modal_submission_label')} <span className="text-red-500">*</span>
               </label>
               <select
                 className="input"
@@ -893,7 +968,7 @@ export default function Agenda() {
                 disabled={loadingSubs}
               >
                 <option value="">
-                  {loadingSubs ? 'Loading…' : '— Select submission —'}
+                  {loadingSubs ? t('agenda.add_modal_loading') : t('agenda.add_modal_submission_select')}
                 </option>
                 {submissions.map(s => (
                   <option key={s.id} value={s.id}>
@@ -902,18 +977,18 @@ export default function Agenda() {
                   </option>
                 ))}
                 {!loadingSubs && submissions.length === 0 && (
-                  <option disabled>No eligible submissions found</option>
+                  <option disabled>{t('agenda.add_modal_no_eligible')}</option>
                 )}
               </select>
               <p className="mt-1 text-xs text-slate-400">
-                Shows submissions forwarded to, or currently with, the Commission.
+                {t('agenda.add_modal_submission_hint')}
               </p>
             </div>
 
             {/* Category — auto-populated from form type, still editable for override */}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Agenda Section <span className="text-red-500">*</span>
+                {t('agenda.add_modal_section_label')} <span className="text-red-500">*</span>
               </label>
               <select
                 className="input"
@@ -927,7 +1002,7 @@ export default function Agenda() {
               </select>
               {form.submission_id && (
                 <p className="mt-1 text-xs text-slate-400">
-                  Auto-detected from submission type. Change only if incorrect.
+                  {t('agenda.add_modal_section_hint')}
                 </p>
               )}
             </div>
@@ -937,22 +1012,22 @@ export default function Agenda() {
               <>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Previous Meeting Reference
+                    {t('agenda.add_modal_prev_ref_label')}
                   </label>
                   <input
                     className="input"
-                    placeholder='e.g. "From PSC Meeting No. 10 (Monday 30th June 2025)"'
+                    placeholder={t('agenda.add_modal_prev_ref_placeholder')}
                     value={form.matters_arising_meeting_ref}
                     onChange={e => setForm(f => ({ ...f, matters_arising_meeting_ref: e.target.value }))}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Previous Agenda Number
+                    {t('agenda.add_modal_prev_no_label')}
                   </label>
                   <input
                     className="input"
-                    placeholder="e.g. Agenda 20"
+                    placeholder={t('agenda.add_modal_prev_no_placeholder')}
                     value={form.matters_arising_agenda_no}
                     onChange={e => setForm(f => ({ ...f, matters_arising_agenda_no: e.target.value }))}
                   />
@@ -966,14 +1041,14 @@ export default function Agenda() {
                 disabled={saving || !form.submission_id}
                 className="btn-primary px-6 py-2.5 disabled:opacity-50"
               >
-                {saving ? 'Adding…' : 'Add to Agenda'}
+                {saving ? t('agenda.add_modal_submitting') : t('agenda.add_modal_submit')}
               </button>
               <button
                 type="button"
                 className="btn-outline px-6 py-2.5"
                 onClick={() => setModalOpen(false)}
               >
-                Cancel
+                {t('agenda.cancel')}
               </button>
             </div>
           </form>
@@ -982,37 +1057,50 @@ export default function Agenda() {
       {/* ── Endorse & Circulate confirm modal ─────────────────────────────── */}
       <Modal
         open={circulateModalOpen}
-        title="Endorse & circulate this agenda?"
-        subtitle="This immediately emails every Commission member and the Chairperson — it can't be undone."
+        title={t('agenda.circulate_modal_title')}
+        subtitle={t('agenda.circulate_modal_subtitle')}
         onClose={() => setCirculateModalOpen(false)}
         size="md"
         footer={
           <>
             <button className="btn-outline px-4 py-2" onClick={() => setCirculateModalOpen(false)}>
-              Cancel
+              {t('agenda.cancel')}
             </button>
             <button
               className="btn-primary flex items-center gap-2 px-4 py-2 disabled:opacity-50"
               disabled={circulatePreviewLoading || workflowBusy || !circulatePreview?.recipient_count}
               onClick={confirmCirculate}
             >
-              <ThumbsUp size={14} /> {workflowBusy ? 'Circulating…' : 'Endorse & Circulate'}
+              <ThumbsUp size={14} /> {workflowBusy ? t('agenda.circulate_modal_confirming') : t('agenda.circulate_modal_confirm')}
             </button>
           </>
         }
       >
         {circulatePreviewLoading ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">Loading recipients…</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('agenda.circulate_modal_loading')}</p>
         ) : circulatePreview ? (
           <div className="space-y-4">
             <p className="text-sm text-slate-600 dark:text-slate-400 flex items-start gap-2">
               <Users size={15} className="mt-0.5 shrink-0" />
               <span>
-                <strong>{circulatePreview.item_count}</strong> item{circulatePreview.item_count !== 1 ? 's' : ''} on
-                PSC Meeting {circulatePreview.meeting_reference} will be sent to
-                the following {circulatePreview.recipient_count} recipient{circulatePreview.recipient_count !== 1 ? 's' : ''}:
+                {t('agenda.circulate_modal_summary', {
+                  reference: circulatePreview.meeting_reference,
+                  count: circulatePreview.item_count,
+                  recipients: circulatePreview.recipient_count,
+                })}
               </span>
             </p>
+            {circulatePreview.short_notice && (
+              <p className="text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  {t('agenda.notice_short', {
+                    days: circulatePreview.notice_days,
+                    min: circulatePreview.recommended_minimum_notice_days,
+                  })}
+                </span>
+              </p>
+            )}
             <ul className="space-y-1.5 max-h-60 overflow-y-auto">
               {circulatePreview.recipients.map(r => (
                 <li
@@ -1024,7 +1112,7 @@ export default function Agenda() {
                     <span className="text-xs text-slate-400 shrink-0 truncate max-w-[45%]">{r.email}</span>
                   ) : (
                     <span className="flex items-center gap-1 text-xs text-red-500 shrink-0">
-                      <AlertCircle size={12} /> No email on file
+                      <AlertCircle size={12} /> {t('agenda.circulate_modal_no_email')}
                     </span>
                   )}
                 </li>
@@ -1032,12 +1120,12 @@ export default function Agenda() {
             </ul>
             {circulatePreview.recipient_count === 0 && (
               <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
-                <AlertCircle size={14} /> No active Commissioners or Chairperson found — circulating now would notify no one.
+                <AlertCircle size={14} /> {t('agenda.circulate_modal_no_recipients')}
               </p>
             )}
           </div>
         ) : (
-          <p className="text-sm text-red-500">Could not load the recipient list.</p>
+          <p className="text-sm text-red-500">{t('agenda.circulate_modal_load_failed')}</p>
         )}
       </Modal>
 
@@ -1059,15 +1147,16 @@ export default function Agenda() {
 
 // Agenda workflow status + action bar
 const WORKFLOW_STEPS = [
-  { key: 'draft',         label: 'Draft' },
-  { key: 'with_chairman', label: 'With Chairman' },
-  { key: 'circulated',    label: 'Circulated' },
+  { key: 'draft',         labelKey: 'agenda.workflow_draft' },
+  { key: 'with_chairman', labelKey: 'agenda.workflow_with_chairman' },
+  { key: 'circulated',    labelKey: 'agenda.workflow_circulated' },
 ]
 
 function AgendaWorkflowBar({
   status, isCompleted, isSecretary, isChairperson, busy, onSubmit, onApprove, onAdopt, agendaAdopted,
   canSeeCirculationStatus, circulationStatus, circulationStatusOpen, onToggleCirculationStatus,
 }) {
+  const { t } = useTranslation()
   const currentIdx = WORKFLOW_STEPS.findIndex(s => s.key === status)
 
   return (
@@ -1092,7 +1181,7 @@ function AgendaWorkflowBar({
                     done   ? 'text-emerald-600 dark:text-emerald-400' :
                              'text-slate-500 dark:text-slate-400'}`}
                 >
-                  {step.label}
+                  {t(step.labelKey)}
                 </span>
               </div>
               {idx < WORKFLOW_STEPS.length - 1 && (
@@ -1114,39 +1203,39 @@ function AgendaWorkflowBar({
               disabled={busy}
               className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
             >
-              <Send size={14} /> Submit to Chairman
+              <Send size={14} /> {t('agenda.workflow_submit_to_chairman')}
             </button>
           )}
           {status === 'with_chairman' && isChairperson && (
             <button
               onClick={onApprove}
               disabled={busy}
-              title="Endorsing immediately circulates the agenda to Commission members — no separate step."
+              title={t('agenda.workflow_endorse_circulate_hint')}
               className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
             >
-              <ThumbsUp size={14} /> Endorse &amp; Circulate to Members
+              <ThumbsUp size={14} /> {t('agenda.workflow_endorse_circulate')}
             </button>
           )}
           {status === 'circulated' && !agendaAdopted && (
             <>
               <span className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-                <Check size={14} /> Agenda circulated to Commission members.
+                <Check size={14} /> {t('agenda.workflow_circulated_message')}
               </span>
               {isChairperson && (
                 <button
                   onClick={onAdopt}
                   disabled={busy}
                   className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
-                  title="Adopt the agenda (including any Other Matters added) so the sitting can begin"
+                  title={t('agenda.workflow_adopt_hint')}
                 >
-                  <ThumbsUp size={14} /> Adopt Agenda &amp; Begin Sitting
+                  <ThumbsUp size={14} /> {t('agenda.workflow_adopt')}
                 </button>
               )}
             </>
           )}
           {status === 'circulated' && agendaAdopted && (
             <span className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-              <Check size={14} /> Agenda adopted — the sitting may proceed.
+              <Check size={14} /> {t('agenda.workflow_adopted_message')}
             </span>
           )}
         </div>
@@ -1164,10 +1253,11 @@ function AgendaWorkflowBar({
 }
 
 function CirculationStatusPanel({ status, open, onToggle }) {
+  const { t } = useTranslation()
   if (!status) {
     return (
       <p className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-400">
-        Loading circulation status…
+        {t('agenda.workflow_loading_status')}
       </p>
     )
   }
@@ -1179,7 +1269,7 @@ function CirculationStatusPanel({ status, open, onToggle }) {
         className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400"
       >
         <Eye size={13} />
-        {viewedCount} of {notifiedCount} member{notifiedCount !== 1 ? 's' : ''} have opened the agenda
+        {t('agenda.workflow_opened_count', { viewed: viewedCount, notified: notifiedCount })}
         {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
       </button>
       {open && (
@@ -1189,11 +1279,11 @@ function CirculationStatusPanel({ status, open, onToggle }) {
               <span className="text-slate-700 dark:text-slate-300">{r.name}</span>
               {r.viewed_at ? (
                 <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                  <Eye size={12} /> Viewed
+                  <Eye size={12} /> {t('agenda.workflow_viewed')}
                 </span>
               ) : (
                 <span className="flex items-center gap-1 text-slate-400">
-                  <Mail size={12} /> Notified, not yet opened
+                  <Mail size={12} /> {t('agenda.workflow_notified_not_viewed')}
                 </span>
               )}
             </li>
@@ -1219,6 +1309,7 @@ function AgendaSection({ label, isNumbered, id }) {
 }
 
 function MattersArisingRow({ item, isCompleted, canDefer, onRemove, onMoveUp, onMoveDown, onPushToNext, isFirst, isLastInCat }) {
+  const { t } = useTranslation()
   return (
     <div className="px-8 py-1.5 flex items-start gap-4 group">
       <span className="text-sm font-medium text-slate-400 print:text-black shrink-0 w-8 text-right">•</span>
@@ -1231,7 +1322,7 @@ function MattersArisingRow({ item, isCompleted, canDefer, onRemove, onMoveUp, on
           <Link
             to={`/submissions/${item.submission}`}
             className="hover:underline hover:text-primary-600 dark:hover:text-primary-400 print:no-underline print:text-black"
-            title="Open submission"
+            title={t('agenda.doc_open_submission')}
           >
             {item.submission_title}
           </Link>
@@ -1246,7 +1337,7 @@ function MattersArisingRow({ item, isCompleted, canDefer, onRemove, onMoveUp, on
           <button onClick={onMoveUp}   disabled={isFirst}     className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-20"><ChevronUp   size={13} /></button>
           <button onClick={onMoveDown} disabled={isLastInCat} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-20"><ChevronDown size={13} /></button>
           {canDefer && (
-            <button onClick={onPushToNext} title="Defer to next meeting" className="p-1 rounded text-slate-400 hover:text-amber-500">
+            <button onClick={onPushToNext} title={t('agenda.doc_defer_to_next')} className="p-1 rounded text-slate-400 hover:text-amber-500">
               <ChevronsRight size={13} />
             </button>
           )}
@@ -1258,6 +1349,7 @@ function MattersArisingRow({ item, isCompleted, canDefer, onRemove, onMoveUp, on
 }
 
 function StandardRow({ item, isCompleted, canDefer, categories, editingItem, setEditingItem, onRemove, onCategoryUpdate, onMoveUp, onMoveDown, onPushToNext, isFirst, isLastInCat }) {
+  const { t } = useTranslation()
   const isEditing = editingItem === item.id
   const [pendingCat, setPendingCat] = useState(item.category)
 
@@ -1271,7 +1363,7 @@ function StandardRow({ item, isCompleted, canDefer, categories, editingItem, set
           <Link
             to={`/submissions/${item.submission}`}
             className="hover:underline hover:text-primary-600 dark:hover:text-primary-400 print:no-underline print:text-black"
-            title="Open submission"
+            title={t('agenda.doc_open_submission')}
           >
             {item.submission_title}
           </Link>
@@ -1288,11 +1380,11 @@ function StandardRow({ item, isCompleted, canDefer, categories, editingItem, set
           <AiTextSkeleton
             className="mt-1.5 print:hidden"
             lines={3}
-            statusLabel="Generating summary…"
+            statusLabel={t('agenda.doc_generating_summary')}
           />
         )}
         {item.agenda_blurb && (
-          <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1 print:hidden">Draft — verify</p>
+          <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1 print:hidden">{t('agenda.doc_draft_verify')}</p>
         )}
         <p className="text-[11px] text-slate-400 font-mono mt-0.5 print:hidden">{item.submission_reference}</p>
 
@@ -1333,14 +1425,14 @@ function StandardRow({ item, isCompleted, canDefer, categories, editingItem, set
           <button
             onClick={() => { setEditingItem(isEditing ? null : item.id); setPendingCat(item.category) }}
             className="p-1 rounded text-slate-400 hover:text-primary-500"
-            title="Change category"
+            title={t('agenda.doc_change_category')}
           >
             <Tag size={12} />
           </button>
           {canDefer && (
             <button
               onClick={onPushToNext}
-              title="Defer to next meeting"
+              title={t('agenda.doc_defer_to_next')}
               className="p-1 rounded text-slate-400 hover:text-amber-500"
             >
               <ChevronsRight size={13} />

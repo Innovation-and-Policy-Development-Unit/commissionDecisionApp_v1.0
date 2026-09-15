@@ -8983,11 +8983,21 @@ class MeetingViewSet(viewsets.ModelViewSet):
             }
             for user in members
         ]
+        # Advisory only — there's no legislated minimum notice period coded
+        # anywhere in this app; Meeting.CUTOFF_DAYS_BEFORE (3) is reused here
+        # as a reasonable proxy (it's already the app's "how close to the
+        # sitting is too close" constant for submissions), not an asserted
+        # PSC procedural requirement. Verify against actual SOP if this
+        # number matters operationally.
+        notice_days = (meeting.date - timezone.localdate()).days if meeting.date else None
         return Response({
             "meeting_reference": meeting.reference_number,
             "item_count": meeting.agenda_items.count(),
             "recipients": recipients,
             "recipient_count": len(recipients),
+            "notice_days": notice_days,
+            "recommended_minimum_notice_days": Meeting.CUTOFF_DAYS_BEFORE,
+            "short_notice": notice_days is not None and notice_days < Meeting.CUTOFF_DAYS_BEFORE,
         })
 
     @action(detail=True, methods=["get"], url_path="circulation-status")
@@ -9092,6 +9102,20 @@ class MeetingViewSet(viewsets.ModelViewSet):
             raised_by=request.user,
             sequence=next_seq,
         )
+
+        # If this lands between circulation and adoption, the members who
+        # were already emailed the (now stale) agenda need to know it changed
+        # — once the sitting itself is under way / adopted, everyone raising
+        # Other Matters is already in the room, so there's no one left to notify.
+        if meeting.agenda_status == AgendaStatus.CIRCULATED and not meeting.agenda_adopted_at:
+            def _notify_amended():
+                try:
+                    from .email_notify import notify_agenda_amended
+                    notify_agenda_amended(meeting, item)
+                except Exception:
+                    _security_log.exception("AGENDA_AMENDED_NOTIFY_FAIL | meeting=%s", meeting.id)
+            transaction.on_commit(_notify_amended)
+
         return Response(self._other_matter_payload(item), status=status.HTTP_201_CREATED)
 
     @staticmethod
