@@ -266,6 +266,26 @@ export default function Agenda() {
   }
   const hasSearchResults = !normalizedQuery || items.some(matchesSearch)
 
+  // Make the search box actually feel like it "takes you there": scroll the
+  // first section with a match into view shortly after the user stops
+  // typing, rather than leaving a passive filter the user has to notice by
+  // scrolling past it themselves.
+  useEffect(() => {
+    if (!normalizedQuery) return undefined
+    const timer = setTimeout(() => {
+      const order = ['preliminaries', 'matters_arising', ...CATEGORY_ORDER.slice(2)]
+      for (const cat of order) {
+        const list = grouped[cat] || []
+        if (list.some(matchesSearch)) {
+          document.getElementById(`agenda-section-${cat}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          break
+        }
+      }
+    }, 350)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalizedQuery, grouped, CATEGORY_ORDER])
+
   // ── CRUD ────────────────────────────────────────────────────────────────
 
   const handleAdd = async (e) => {
@@ -685,16 +705,20 @@ export default function Agenda() {
             </div>
             <div className="flex items-center gap-1.5 flex-wrap text-xs">
               <span className="font-semibold text-slate-400 uppercase tracking-wide mr-1 shrink-0">{t('agenda.jump_to')}</span>
-              {groupedMattersArising.length > 0 && (
-                <a
-                  href="#agenda-section-matters_arising"
-                  className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 text-slate-600 dark:text-slate-300 whitespace-nowrap"
-                >
-                  {t('agenda.matters_arising_nav')} <span className="text-slate-400">({grouped['matters_arising']?.length || 0})</span>
-                </a>
-              )}
+              {(() => {
+                const count = (grouped['matters_arising'] || []).filter(matchesSearch).length
+                if (count === 0) return null
+                return (
+                  <a
+                    href="#agenda-section-matters_arising"
+                    className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 text-slate-600 dark:text-slate-300 whitespace-nowrap"
+                  >
+                    {t('agenda.matters_arising_nav')} <span className="text-slate-400">({count})</span>
+                  </a>
+                )
+              })()}
               {CATEGORY_ORDER.slice(2).map(cat => {
-                const count = (grouped[cat] || []).length
+                const count = (grouped[cat] || []).filter(matchesSearch).length
                 if (count === 0) return null
                 return (
                   <a
@@ -784,7 +808,7 @@ export default function Agenda() {
             </div>
 
             {/* ── 1. Preliminaries & Endorsements ── */}
-            <AgendaSection label={t('agenda.doc_section_preliminaries')} isNumbered />
+            <AgendaSection label={t('agenda.doc_section_preliminaries')} isNumbered id="agenda-section-preliminaries" />
             <div className="px-8 py-3 space-y-3">
               <div className="flex items-start gap-3">
                 <span className="text-sm text-slate-400 print:text-black mt-1">•</span>
