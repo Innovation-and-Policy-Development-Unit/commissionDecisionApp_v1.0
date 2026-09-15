@@ -197,6 +197,30 @@ export default function Agenda() {
     }
   }, [])
 
+  // The search/jump-nav card is sticky (top-16, clearing the fixed h-16 app
+  // header) but its own height varies — the jump-nav pills wrap onto more
+  // lines as more categories match or the viewport narrows. A jump target's
+  // scroll-margin-top has to track that real height, not a guessed constant,
+  // or a section heading ends up scrolled to sit right underneath the card
+  // instead of visible below it.
+  const searchBarRef = useRef(null)
+  useEffect(() => {
+    const el = searchBarRef.current
+    if (!el) return undefined
+    const APP_HEADER_HEIGHT = 64 // Header.jsx: fixed h-16
+    const BREATHING_ROOM = 12
+    const applyOffset = () => {
+      document.documentElement.style.setProperty(
+        '--agenda-scroll-offset',
+        `${APP_HEADER_HEIGHT + el.getBoundingClientRect().height + BREATHING_ROOM}px`
+      )
+    }
+    applyOffset()
+    const observer = new ResizeObserver(applyOffset)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [searchQuery])
+
   const selectedMeeting = useMemo(
     () => meetings.find(m => String(m.id) === String(selectedId)),
     [meetings, selectedId],
@@ -694,7 +718,7 @@ export default function Agenda() {
             it stays reachable while scrolling through a long document instead
             of scrolling away with the header above it. */}
         {selectedMeeting && totalItems > 0 && (
-          <div className="card card-compact mb-4 p-3 space-y-3 sticky top-16 z-10 shadow-md">
+          <div ref={searchBarRef} className="card card-compact mb-4 p-3 space-y-3 sticky top-16 z-10 shadow-md">
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -1324,7 +1348,7 @@ function AgendaSection({ label, isNumbered, id }) {
   return (
     <div
       id={id}
-      style={id ? { scrollMarginTop: '5rem' } : undefined}
+      style={id ? { scrollMarginTop: 'var(--agenda-scroll-offset, 9rem)' } : undefined}
       className={`px-8 py-2 ${isNumbered ? 'pt-3' : 'pt-4'} border-t border-slate-200 dark:border-slate-700 print:border-slate-400 bg-slate-50 dark:bg-slate-800/40 print:bg-transparent`}
     >
       <p className="text-sm font-bold text-slate-700 dark:text-slate-300 print:text-black">

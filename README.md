@@ -710,6 +710,15 @@ docker compose exec backend python manage.py backup_db
 
 ### Rebuilding after code changes
 
+For a full deploy (syncs locale bundles, rebuilds, restarts, and prunes the
+old images/build cache the rebuild just made obsolete — see `scripts/deploy.sh`):
+
+```bash
+sh scripts/deploy.sh
+```
+
+For a targeted rebuild of a single service, without pruning:
+
 ```bash
 docker compose build backend && docker compose up -d backend
 docker compose build web && docker compose up -d web
