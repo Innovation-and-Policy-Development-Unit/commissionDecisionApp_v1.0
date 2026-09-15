@@ -14,6 +14,14 @@ fi
 
 sh scripts/sync-locale-bundles.sh
 
+# Prune before building too, not just after: a build needs its own scratch
+# space for pulled layers, and on a nearly-full disk that can fail before
+# the post-deploy prune ever runs. Safe at this point — currently-running
+# containers still reference the current images, so those survive.
+echo "Pruning unused Docker images and build cache before build..."
+docker image prune -af
+docker builder prune -f
+
 docker compose $COMPOSE_FILES build
 docker compose $COMPOSE_FILES up -d
 
