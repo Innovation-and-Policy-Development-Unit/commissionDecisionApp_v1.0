@@ -36,6 +36,44 @@ function formatDateTime(iso) {
   return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+// The agenda's adoption is the first order of business at the sitting, so
+// it's recorded here as part of the minutes rather than as a pre-meeting gate
+// on the Agenda page.
+function AgendaAdoptionStatus({ minutes, canEdit, busy, onToggle }) {
+  const adopted = Boolean(minutes?.agenda_adopted_at)
+  return (
+    <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3">
+      <div>
+        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Adoption of Agenda</label>
+        {adopted ? (
+          <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
+            <CheckCircle2 size={14} />
+            Adopted{minutes.agenda_adopted_by_name ? ` — recorded by ${minutes.agenda_adopted_by_name}` : ''}, {formatDateTime(minutes.agenda_adopted_at)}
+          </p>
+        ) : (
+          <p className="text-sm text-slate-400">Not yet recorded as adopted.</p>
+        )}
+      </div>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => onToggle(!adopted)}
+          disabled={busy || !minutes?.id}
+          title={!minutes?.id ? 'Save the minutes first' : undefined}
+          className={clsx(
+            'shrink-0 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors disabled:opacity-50',
+            adopted
+              ? 'border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+              : 'btn-primary'
+          )}
+        >
+          {adopted ? 'Undo' : 'Mark Agenda Adopted'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function SectionEditor({ label, value, onChange, placeholder }) {
   return (
     <div className="mb-4">
@@ -322,6 +360,22 @@ export default function MinutesEditor() {
     }
   }
 
+  const toggleAgendaAdopted = async (adopted) => {
+    if (!minutes?.id) return
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      const res = await api.post(`/minutes/${minutes.id}/adopt-agenda/`, { adopted })
+      setMinutes(res.data)
+      setSuccess(adopted ? 'Agenda adoption recorded.' : 'Agenda adoption cleared.')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update agenda adoption.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const signedFileRef = useRef(null)
 
   const changeStatus = async (action) => {
@@ -536,6 +590,7 @@ export default function MinutesEditor() {
 
       {viewMode && (
         <div className="space-y-4">
+          <AgendaAdoptionStatus minutes={minutes} canEdit={canEditMinutes} busy={saving} onToggle={toggleAgendaAdopted} />
           <ReadOnlySection label="Opening" value={content.opening} />
           <ReadOnlySection label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} />
 
@@ -583,6 +638,7 @@ export default function MinutesEditor() {
       {!viewMode && (
       <>
       <div className="space-y-4">
+        <AgendaAdoptionStatus minutes={minutes} canEdit={canEditMinutes} busy={saving} onToggle={toggleAgendaAdopted} />
         <SectionEditor label="Opening" value={content.opening} placeholder="e.g. The meeting opened at 9:30 AM with a prayer led by..." onChange={v => setContent(prev => ({ ...prev, opening: v }))} />
         <SectionEditor label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} placeholder="e.g. The minutes of the previous sitting were confirmed as a true record..." onChange={v => setContent(prev => ({ ...prev, confirmation_previous_minutes: v }))} />
 

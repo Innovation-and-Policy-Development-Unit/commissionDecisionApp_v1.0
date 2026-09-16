@@ -993,17 +993,12 @@
     "workflow_endorse_circulate": "Endorse & Circulate to Members",
     "workflow_endorse_circulate_hint": "Endorsing immediately circulates the agenda to Commission members — no separate step.",
     "workflow_circulated_message": "Agenda circulated to Commission members.",
-    "workflow_adopt": "Adopt Agenda & Begin Sitting",
-    "workflow_adopt_hint": "Adopt the agenda (including any Other Matters added) so the sitting can begin",
-    "workflow_adopted_message": "Agenda adopted — the sitting may proceed.",
     "workflow_loading_status": "Loading circulation status…",
     "workflow_opened_count": "Opened: {{viewed}} of {{notified}}",
     "workflow_viewed": "Viewed",
     "workflow_notified_not_viewed": "Notified, not yet opened",
     "confirm_submit_title": "Submit to Chairman?",
     "confirm_submit_message": "Confirm: submit this agenda to the Chairman for endorsement?",
-    "confirm_adopt_title": "Adopt Agenda?",
-    "confirm_adopt_message": "Confirm: adopt this agenda for the sitting?",
     "doc_heading": "AGENDA OF PSC MEETING NO. {{number}}",
     "doc_date_label": "Date:",
     "doc_location_label": "Location:",
@@ -1046,9 +1041,7 @@
     "toast_circulated_success": "Agenda endorsed and circulated to Commission members.",
     "toast_circulate_failed": "Failed to endorse and circulate agenda.",
     "toast_submit_success": "Submitted to Chairman.",
-    "toast_submit_failed": "Failed to submit to the Chairman.",
-    "toast_adopt_success": "Agenda adopted.",
-    "toast_adopt_failed": "Failed to adopt the agenda."
+    "toast_submit_failed": "Failed to submit to the Chairman."
   },
   "subway": {
     "aria_label": "Submission journey map",

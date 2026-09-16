@@ -1919,8 +1919,6 @@ class MeetingSerializer(serializers.ModelSerializer):
     # Effective submission deadline: manual cutoff if set, else auto 3-day rule
     effective_cutoff = serializers.DateTimeField(read_only=True)
 
-    agenda_adopted_by_name = serializers.SerializerMethodField()
-
     def get_agenda_items(self, obj):
         """Draft/with_chairman agenda item content (submission titles,
         ministries, blurbs) must not reach Commissioners or read-only OPSC
@@ -1942,9 +1940,6 @@ class MeetingSerializer(serializers.ModelSerializer):
 
     def get_agenda_approved_by_name(self, obj):
         return obj.agenda_approved_by.username if obj.agenda_approved_by else None
-
-    def get_agenda_adopted_by_name(self, obj):
-        return obj.agenda_adopted_by.username if obj.agenda_adopted_by else None
 
     def _agenda_item_count(self, obj):
         # len() on the already-`prefetch_related`d manager (MeetingViewSet.queryset)
@@ -1986,9 +1981,6 @@ class MeetingSerializer(serializers.ModelSerializer):
             "agenda_approved_by",
             "agenda_approved_by_name",
             "agenda_approved_at",
-            "agenda_adopted_by",
-            "agenda_adopted_by_name",
-            "agenda_adopted_at",
             "agenda_items",
             "agenda_count",
             "agenda_readiness",
@@ -2536,6 +2528,7 @@ class MinutesSerializer(serializers.ModelSerializer):
     meeting_date = serializers.DateField(source="meeting.date", read_only=True)
     signed_by_name = serializers.SerializerMethodField()
     signed_uploaded_by_name = serializers.SerializerMethodField()
+    agenda_adopted_by_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source="created_by.username", read_only=True)
     submitted_for_review_by_name = serializers.SerializerMethodField()
     secretary_reviewed_by_name = serializers.SerializerMethodField()
@@ -2551,6 +2544,7 @@ class MinutesSerializer(serializers.ModelSerializer):
             "status", "content", "pdf_version",
             "signed_document", "signed_uploaded_by", "signed_uploaded_by_name",
             "signed_by", "signed_by_name", "signed_at",
+            "agenda_adopted_by", "agenda_adopted_by_name", "agenda_adopted_at",
             "circulated_at", "minutes_due_at",
             "submitted_for_review_by", "submitted_for_review_by_name", "submitted_for_review_at", "review_due_at",
             "secretary_reviewed_by", "secretary_reviewed_by_name", "secretary_reviewed_at",
@@ -2565,6 +2559,7 @@ class MinutesSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id", "created_at", "updated_at", "created_by",
             "signed_document", "signed_uploaded_by",
+            "agenda_adopted_by", "agenda_adopted_at",
             "submitted_for_review_by", "submitted_for_review_at", "review_due_at",
             "secretary_reviewed_by", "secretary_reviewed_at",
             "chairman_reviewed_by", "chairman_reviewed_at",
@@ -2590,6 +2585,9 @@ class MinutesSerializer(serializers.ModelSerializer):
 
     def get_signed_by_name(self, obj):
         return obj.signed_by.username if obj.signed_by else None
+
+    def get_agenda_adopted_by_name(self, obj):
+        return obj.agenda_adopted_by.username if obj.agenda_adopted_by else None
 
     def get_signed_uploaded_by_name(self, obj):
         return obj.signed_uploaded_by.username if obj.signed_uploaded_by else None

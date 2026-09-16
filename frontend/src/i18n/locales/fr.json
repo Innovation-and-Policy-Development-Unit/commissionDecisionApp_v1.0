@@ -738,17 +738,12 @@
     "workflow_endorse_circulate": "Approuver et diffuser aux membres",
     "workflow_endorse_circulate_hint": "L'approbation diffuse immédiatement l'ordre du jour aux membres de la Commission — il n'y a pas d'étape séparée.",
     "workflow_circulated_message": "Ordre du jour diffusé aux membres de la Commission.",
-    "workflow_adopt": "Adopter l'ordre du jour et commencer la séance",
-    "workflow_adopt_hint": "Adopter l'ordre du jour (avec les Questions diverses éventuellement ajoutées) pour que la séance puisse commencer",
-    "workflow_adopted_message": "Ordre du jour adopté — la séance peut se poursuivre.",
     "workflow_loading_status": "Chargement du statut de diffusion…",
     "workflow_opened_count": "Ouvert par : {{viewed}} sur {{notified}}",
     "workflow_viewed": "Ouvert",
     "workflow_notified_not_viewed": "Prévenu, pas encore ouvert",
     "confirm_submit_title": "Soumettre au Président ?",
     "confirm_submit_message": "Confirmer : soumettre cet ordre du jour au Président pour approbation ?",
-    "confirm_adopt_title": "Adopter l'ordre du jour ?",
-    "confirm_adopt_message": "Confirmer : adopter cet ordre du jour pour la séance ?",
     "doc_heading": "ORDRE DU JOUR DE LA RÉUNION PSC N° {{number}}",
     "doc_date_label": "Date :",
     "doc_location_label": "Lieu :",
@@ -791,9 +786,7 @@
     "toast_circulated_success": "Ordre du jour approuvé et diffusé aux membres de la Commission.",
     "toast_circulate_failed": "Échec de l'approbation et de la diffusion de l'ordre du jour.",
     "toast_submit_success": "Soumis au Président.",
-    "toast_submit_failed": "Échec de la soumission au Président.",
-    "toast_adopt_success": "Ordre du jour adopté.",
-    "toast_adopt_failed": "Échec de l'adoption de l'ordre du jour."
+    "toast_submit_failed": "Échec de la soumission au Président."
   },
   "subway": {
     "aria_label": "Parcours de la soumission",

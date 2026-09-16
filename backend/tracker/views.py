@@ -8065,18 +8065,6 @@ class MeetingViewSet(viewsets.ModelViewSet):
         profile = _profile(self.request.user)
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can edit meetings.")
-        # ── Adoption gate: a sitting cannot begin until the Chairperson has
-        # adopted the agenda. Admins may override.
-        target_status = serializer.validated_data.get("status")
-        if (
-            target_status == MeetingStatus.IN_PROGRESS
-            and serializer.instance.status != MeetingStatus.IN_PROGRESS
-            and not serializer.instance.agenda_adopted_at
-            and profile.role != Role.PSC_ADMIN
-        ):
-            raise PermissionDenied(
-                "The agenda must be adopted by the Chairperson before the sitting can begin."
-            )
 
         # ── Postponement: date/time change also moves the submission deadline
         # (effective_cutoff). Capture the pre-save values so HR can be told
@@ -8934,31 +8922,6 @@ class MeetingViewSet(viewsets.ModelViewSet):
             return Response({"active": False})
         return Response(session_payload(session, user=request.user))
 
-    @action(detail=True, methods=["post"], url_path="adopt-agenda")
-    def adopt_agenda(self, request, pk=None):
-        """Chairperson adopts the (possibly amended) agenda at the start of the
-        sitting. The meeting cannot begin until the agenda is adopted.
-
-        The agenda may be amended right up to adoption — e.g. commissioners
-        adding items under "Other Matters" via ``other-matters``.
-        """
-        meeting = self.get_object()
-        profile = _profile(request.user)
-        if profile.role not in {Role.CHAIRPERSON, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Chairperson can adopt the agenda.")
-        if meeting.agenda_status != AgendaStatus.CIRCULATED and profile.role != Role.PSC_ADMIN:
-            return Response(
-                {"detail": "The agenda must be circulated to members before it can be adopted."},
-                status=400,
-            )
-        meeting.agenda_adopted_by = request.user
-        meeting.agenda_adopted_at = timezone.now()
-        meeting.save(update_fields=["agenda_adopted_by", "agenda_adopted_at"])
-        return Response({
-            "detail": "Agenda adopted. The sitting can now begin.",
-            "agenda_adopted_at": meeting.agenda_adopted_at,
-        })
-
     @action(detail=True, methods=["get"], url_path="circulation-preview")
     def circulation_preview(self, request, pk=None):
         """Who will be notified + emailed, and how many items are on the
@@ -9105,9 +9068,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
 
         # If this lands between circulation and adoption, the members who
         # were already emailed the (now stale) agenda need to know it changed
-        # — once the sitting itself is under way / adopted, everyone raising
-        # Other Matters is already in the room, so there's no one left to notify.
-        if meeting.agenda_status == AgendaStatus.CIRCULATED and not meeting.agenda_adopted_at:
+        # — once the sitting itself is under way, everyone raising Other
+        # Matters is already in the room, so there's no one left to notify.
+        if meeting.agenda_status == AgendaStatus.CIRCULATED and meeting.status == MeetingStatus.SCHEDULED:
             def _notify_amended():
                 try:
                     from .email_notify import notify_agenda_amended
@@ -11296,6 +11259,26 @@ class MinutesViewSet(viewsets.ModelViewSet):
                 serializer.instance, incoming, self.request.user
             )
         serializer.save()
+
+    @action(detail=True, methods=["post"], url_path="adopt-agenda")
+    def adopt_agenda(self, request, pk=None):
+        """Record that the agenda was adopted — the first order of business
+        at the sitting — as part of drafting the minutes. Not gated on the
+        sitting having started: the minute-taker records it when writing up
+        what happened, same as every other section of the minutes.
+        """
+        minutes = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.CHAIRPERSON, Role.PSC_COMMISSIONER}:
+            raise PermissionDenied("Only PSC Secretary, Admin, Chairperson, or Commissioners can record agenda adoption.")
+        if request.data.get("adopted", True):
+            minutes.agenda_adopted_by = request.user
+            minutes.agenda_adopted_at = timezone.now()
+        else:
+            minutes.agenda_adopted_by = None
+            minutes.agenda_adopted_at = None
+        minutes.save(update_fields=["agenda_adopted_by", "agenda_adopted_at"])
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
     @action(detail=False, methods=["post"], url_path="generate-from-transcript")
     def generate_from_transcript(self, request):

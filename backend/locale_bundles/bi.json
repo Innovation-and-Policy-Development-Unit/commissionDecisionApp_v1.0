@@ -751,17 +751,12 @@
     "workflow_endorse_circulate": "Endos mo Sekulet i go long ol Memba",
     "workflow_endorse_circulate_hint": "Taem yu endosem, stret wantaem i sekulet adjenda i go long ol memba blong Komisin — i no gat wan defren step.",
     "workflow_circulated_message": "Adjenda i sekulet finis i go long ol memba blong Komisin.",
-    "workflow_adopt": "Adoptem Adjenda mo Statem Miting",
-    "workflow_adopt_hint": "Adoptem adjenda (wetem sam Adarfala Matas we oli ademsave) blong miting i save statem",
-    "workflow_adopted_message": "Adjenda i adopt finis — miting i save gohed.",
     "workflow_loading_status": "I stap lodem stetes blong sekuleting…",
     "workflow_opened_count": "Openem finis: {{viewed}} aot long {{notified}}",
     "workflow_viewed": "Openem finis",
     "workflow_notified_not_viewed": "Notifae finis, i no openem yet",
     "confirm_submit_title": "Sendem i go long Jeaman?",
     "confirm_submit_message": "Konfem: sendem adjenda ia i go long Jeaman blong endosmen?",
-    "confirm_adopt_title": "Adoptem Adjenda?",
-    "confirm_adopt_message": "Konfem: adoptem adjenda ia blong miting ia?",
     "doc_heading": "ADJENDA BLONG PSC MITING NO. {{number}}",
     "doc_date_label": "Dei:",
     "doc_location_label": "Ples:",
@@ -804,9 +799,7 @@
     "toast_circulated_success": "Adjenda i endos mo sekulet finis i go long ol memba blong Komisin.",
     "toast_circulate_failed": "I fel blong endosem mo sekuletem adjenda.",
     "toast_submit_success": "Sendem finis i go long Jeaman.",
-    "toast_submit_failed": "I fel blong sendem i go long Jeaman.",
-    "toast_adopt_success": "Adjenda i adopt finis.",
-    "toast_adopt_failed": "I fel blong adoptem adjenda."
+    "toast_submit_failed": "I fel blong sendem i go long Jeaman."
   },
   "subway": {
     "aria_label": "Map blong jeni blong submisen",

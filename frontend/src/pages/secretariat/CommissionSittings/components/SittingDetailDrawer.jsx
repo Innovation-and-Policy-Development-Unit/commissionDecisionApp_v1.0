@@ -103,10 +103,7 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
       onClose()
       navigate(`/secretariat/meetings/${sitting.id}/workspace`)
     } catch (err) {
-      toast.error(
-        err.response?.data?.detail
-        || 'Could not launch operations — the agenda must be adopted by the Chairperson first.'
-      )
+      toast.error(err.response?.data?.detail || 'Could not launch operations.')
     } finally {
       setLaunching(false)
     }

@@ -865,7 +865,7 @@ def notify_agenda_circulated(meeting) -> None:
 
 def notify_agenda_amended(meeting, other_matter) -> None:
     """Tell already-circulated Commission members that a new item was added
-    under Other Matters after circulation but before the sitting is adopted
+    under Other Matters after circulation but before the sitting begins
     — so nobody walks in with a stale copy of the agenda they were emailed.
     In-app + templated email; no PDF re-attachment, since the on-screen/
     downloadable agenda already reflects the change and this is just a
