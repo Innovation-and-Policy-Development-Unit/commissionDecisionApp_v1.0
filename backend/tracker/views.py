@@ -8066,6 +8066,22 @@ class MeetingViewSet(viewsets.ModelViewSet):
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can edit meetings.")
 
+        # ── Launch gate: a sitting cannot begin until its agenda has been
+        # endorsed by the Chairperson and circulated to Commission members —
+        # circulation is what gives them their notice window ahead of the
+        # sitting. Admins may override (e.g. correcting an edge case).
+        target_status = serializer.validated_data.get("status")
+        if (
+            target_status == MeetingStatus.IN_PROGRESS
+            and serializer.instance.status != MeetingStatus.IN_PROGRESS
+            and serializer.instance.agenda_status != AgendaStatus.CIRCULATED
+            and profile.role != Role.PSC_ADMIN
+        ):
+            raise PermissionDenied(
+                "The agenda must be endorsed by the Chairperson and circulated to Commission "
+                "members before the sitting can begin."
+            )
+
         # ── Postponement: date/time change also moves the submission deadline
         # (effective_cutoff). Capture the pre-save values so HR can be told
         # both the old and new date and deadline once saved.
