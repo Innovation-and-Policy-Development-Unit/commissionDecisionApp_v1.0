@@ -9021,6 +9021,30 @@ class MeetingViewSet(viewsets.ModelViewSet):
             "viewed_count": sum(1 for r in rows if r["viewed_at"]),
         })
 
+    @action(detail=True, methods=["get"], url_path="previous")
+    def previous_meeting(self, request, pk=None):
+        """The most recent earlier sitting (any non-cancelled meeting with an
+        earlier date) — surfaced in the Minutes editor so "Confirmation of
+        Previous Minutes" can reference the actual prior record instead of
+        being blind free text with nothing to check it against."""
+        meeting = self.get_object()
+        prev = (
+            Meeting.objects.filter(date__lt=meeting.date)
+            .exclude(status=MeetingStatus.CANCELLED)
+            .order_by("-date", "-time")
+            .first()
+        )
+        if not prev:
+            return Response(None)
+        minutes = getattr(prev, "minutes", None)
+        return Response({
+            "id": prev.id,
+            "reference_number": prev.reference_number,
+            "date": prev.date,
+            "minutes_id": minutes.id if minutes else None,
+            "minutes_status": minutes.status if minutes else None,
+        })
+
     @action(detail=True, methods=["post"], url_path="mark-agenda-viewed")
     def mark_agenda_viewed(self, request, pk=None):
         """Called by the frontend when a Commission member/Chairperson opens
