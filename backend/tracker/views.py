@@ -8082,6 +8082,20 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 "members before the sitting can begin."
             )
 
+        # ── Completion gate: a sitting can only be closed out once it has
+        # actually convened — nothing else in the app ever moves a meeting to
+        # Completed, so without this a sitting could skip straight from
+        # Scheduled/Cancelled to Completed. Admins may override.
+        if (
+            target_status == MeetingStatus.COMPLETED
+            and serializer.instance.status != MeetingStatus.COMPLETED
+            and serializer.instance.status != MeetingStatus.IN_PROGRESS
+            and profile.role != Role.PSC_ADMIN
+        ):
+            raise PermissionDenied(
+                "A sitting must be in progress before it can be marked completed."
+            )
+
         # ── Postponement: date/time change also moves the submission deadline
         # (effective_cutoff). Capture the pre-save values so HR can be told
         # both the old and new date and deadline once saved.

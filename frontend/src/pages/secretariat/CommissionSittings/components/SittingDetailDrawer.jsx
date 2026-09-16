@@ -28,6 +28,7 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
   const [editSaving, setEditSaving] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [launching, setLaunching] = useState(false)
+  const [completing, setCompleting] = useState(false)
 
   if (!sitting) return null
 
@@ -39,6 +40,7 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
   const capacity = getCapacity(sitting.agenda_count || 0)
   const isCancelled = sitting.status === 'cancelled'
   const isInProgress = sitting.status === 'in_progress'
+  const isCompletedSitting = sitting.status === 'completed'
   // Matches the backend guard in MeetingViewSet.perform_destroy — a sitting
   // that's already convened or has minutes on record can't be deleted.
   const isDeletable = sitting.status !== 'completed'
@@ -106,6 +108,27 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
       toast.error(err.response?.data?.detail || 'Could not launch operations.')
     } finally {
       setLaunching(false)
+    }
+  }
+
+  const completeSitting = async () => {
+    const ok = await confirm({
+      title: 'Mark sitting completed?',
+      message: `Close out "${sitting.title}"? Its agenda becomes read-only once completed.`,
+      confirmLabel: 'Mark completed',
+      cancelLabel: 'Not yet',
+    })
+    if (!ok) return
+    setCompleting(true)
+    try {
+      await api.patch(`/meetings/${sitting.id}/`, { status: 'completed' })
+      toast.success('Sitting marked completed.')
+      onUpdated?.()
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not mark the sitting completed.')
+    } finally {
+      setCompleting(false)
     }
   }
 
@@ -334,7 +357,7 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                           >
                             <Edit3 size={16} /> Edit Details
                           </button>
-                          {!isInProgress && (
+                          {!isInProgress && !isCompletedSitting && (
                             <button
                               type="button"
                               disabled={isCancelled || launching}
@@ -344,6 +367,16 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
                               {launching ? 'Launching…' : 'Launch Operations'}
                               {!launching && <ChevronRight size={16} />}
                               {launching && <Rocket size={16} className="animate-pulse" />}
+                            </button>
+                          )}
+                          {isInProgress && (
+                            <button
+                              type="button"
+                              disabled={completing}
+                              onClick={completeSitting}
+                              className="btn-gradient py-2.5 px-6 flex items-center gap-2 shadow-lg shadow-primary-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <CheckSquare size={16} /> {completing ? 'Marking completed…' : 'Mark Completed'}
                             </button>
                           )}
                         </div>
