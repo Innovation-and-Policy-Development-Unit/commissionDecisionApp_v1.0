@@ -653,17 +653,6 @@ class Meeting(models.Model):
         help_text="Chairperson who endorsed the agenda.",
     )
     agenda_approved_at = models.DateTimeField(null=True, blank=True)
-    # ── In-sitting adoption gate (SOP Stage 3) ────────────────────────────
-    # The circulated agenda may still be amended at the start of the sitting
-    # (e.g. commissioners adding items under "Other Matters"). The Chairperson
-    # formally adopts the agenda before deliberations begin; the meeting cannot
-    # move to "In Progress" until it has been adopted.
-    agenda_adopted_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="agendas_adopted",
-        help_text="Chairperson who adopted the agenda at the start of the sitting.",
-    )
-    agenda_adopted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -4006,6 +3995,17 @@ class Minutes(models.Model):
         on_delete=models.SET_NULL, related_name="signed_minutes",
     )
     signed_at = models.DateTimeField(null=True, blank=True)
+    # ── In-sitting adoption (SOP Stage 3) ─────────────────────────────────
+    # The circulated agenda may still be amended at the start of the sitting
+    # (e.g. commissioners adding items under "Other Matters"). Adoption is the
+    # first order of business at the sitting itself, so it's recorded here as
+    # part of the minutes rather than as a pre-meeting gate on the agenda.
+    agenda_adopted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="minutes_agenda_adopted",
+        help_text="Who recorded that the agenda was adopted at the start of the sitting.",
+    )
+    agenda_adopted_at = models.DateTimeField(null=True, blank=True)
     # ── Post-meeting SLA enforcement (SOP Stage 3, steps 7-8) ─────────────
     circulated_at = models.DateTimeField(null=True, blank=True,
         help_text="When signed minutes were circulated to managers for task allocation.")

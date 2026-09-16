@@ -705,14 +705,6 @@ export default function Agenda() {
               failMsg: t('agenda.toast_submit_failed'),
             })}
             onApprove={openCirculateModal}
-            onAdopt={() => doWorkflowAction('adopt-agenda', {
-              confirmTitle: t('agenda.confirm_adopt_title'),
-              confirmMessage: t('agenda.confirm_adopt_message'),
-              confirmLabel: t('agenda.workflow_adopt'),
-              successMsg: t('agenda.toast_adopt_success'),
-              failMsg: t('agenda.toast_adopt_failed'),
-            })}
-            agendaAdopted={Boolean(selectedMeeting?.agenda_adopted_at)}
             canSeeCirculationStatus={isSecretaryOrAdmin || isChairperson}
             circulationStatus={circulationStatus}
             circulationStatusOpen={circulationStatusOpen}
@@ -1218,7 +1210,7 @@ const WORKFLOW_STEPS = [
 ]
 
 function AgendaWorkflowBar({
-  status, isCompleted, isSecretary, isChairperson, busy, onSubmit, onApprove, onAdopt, agendaAdopted,
+  status, isCompleted, isSecretary, isChairperson, busy, onSubmit, onApprove,
   canSeeCirculationStatus, circulationStatus, circulationStatusOpen, onToggleCirculationStatus,
 }) {
   const { t } = useTranslation()
@@ -1281,26 +1273,9 @@ function AgendaWorkflowBar({
               <ThumbsUp size={14} /> {t('agenda.workflow_endorse_circulate')}
             </button>
           )}
-          {status === 'circulated' && !agendaAdopted && (
-            <>
-              <span className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-                <Check size={14} /> {t('agenda.workflow_circulated_message')}
-              </span>
-              {isChairperson && (
-                <button
-                  onClick={onAdopt}
-                  disabled={busy}
-                  className="btn-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
-                  title={t('agenda.workflow_adopt_hint')}
-                >
-                  <ThumbsUp size={14} /> {t('agenda.workflow_adopt')}
-                </button>
-              )}
-            </>
-          )}
-          {status === 'circulated' && agendaAdopted && (
+          {status === 'circulated' && (
             <span className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-              <Check size={14} /> {t('agenda.workflow_adopted_message')}
+              <Check size={14} /> {t('agenda.workflow_circulated_message')}
             </span>
           )}
         </div>
