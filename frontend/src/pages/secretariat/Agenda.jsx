@@ -119,11 +119,18 @@ export default function Agenda() {
     try {
       const r = await api.get('/meetings/')
       let data = normalizeListPayload(r.data)
-      if (endorsedOnlyViewer) {
-        // Read-only OPSC viewers only ever see circulated agendas — endorsing
-        // now auto-circulates, so there's no separate "endorsed but not yet
-        // circulated" state to include any more.
-        data = data.filter(m => m.agenda_status === 'circulated')
+      if (!canManageAgenda) {
+        // Non-managers only ever see an agenda once it's reached their own
+        // visibility stage: the Chairperson from with_chairman onward (their
+        // own endorsement stage), everyone else — plain Commissioners,
+        // read-only OPSC viewers — only once it's circulated. Endorsing now
+        // auto-circulates, so there's no separate "endorsed but not yet
+        // circulated" state to include any more. The backend enforces this
+        // for item *content* too (see agenda_content_visible_to on the
+        // API) — this just keeps the selector from listing agendas the
+        // user couldn't open anyway.
+        const visibleStatuses = isChairperson ? ['with_chairman', 'circulated'] : ['circulated']
+        data = data.filter(m => visibleStatuses.includes(m.agenda_status))
       }
       setMeetings(data)
       if (data.length > 0 && !selectedId) setSelectedId(String(data[0].id))
@@ -481,7 +488,6 @@ export default function Agenda() {
   // read-only viewer who may only see Chairman-endorsed / circulated agendas.
   const canManageAgenda = isSecretaryOrAdmin
   const isCommissionMember = ['psc_commissioner', 'chairperson'].includes(role)
-  const endorsedOnlyViewer = !canManageAgenda && !isCommissionMember
 
   // ── Render helpers ───────────────────────────────────────────────────────
 
@@ -629,7 +635,7 @@ export default function Agenda() {
             >
               {meetings.length === 0 && (
                 <option value="">
-                  {endorsedOnlyViewer ? t('agenda.no_endorsed_agendas') : t('agenda.no_meetings_scheduled')}
+                  {!canManageAgenda ? t('agenda.no_endorsed_agendas') : t('agenda.no_meetings_scheduled')}
                 </option>
               )}
               {meetings.map(m => (

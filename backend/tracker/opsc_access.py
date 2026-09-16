@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django.contrib.auth.models import User
 
-from .models import CommissionTask, Profile, Role
+from .models import AgendaStatus, CommissionTask, Profile, Role
 from .rbac import rbac_user_has_permission
 
 # ── Unit roles (each OPSC unit has its own manager + principal) ───────────────
@@ -109,6 +109,39 @@ def profile_role(user: User) -> str | None:
         return user.psc_profile.role
     except Profile.DoesNotExist:
         return None
+
+
+AGENDA_MANAGER_ROLES: frozenset[str] = frozenset({
+    Role.PSC_SECRETARY,
+    Role.SENIOR_ADMIN_OFFICER,
+    Role.PSC_ADMIN,
+})
+
+
+def agenda_content_visible_to(user: User, agenda_status: str) -> bool:
+    """Whether this user may see agenda item content (titles, ministries,
+    blurbs) at the meeting's current Stage-B workflow stage — draft ->
+    with_chairman -> circulated.
+
+    Secretariat/admins always can, since they build it. The Chairperson can
+    once it reaches them for endorsement (with_chairman) or after
+    (circulated), but not while it's still draft. Everyone else — plain
+    Commissioners, OPSC read-only viewers — only once it's circulated to
+    members. Mirrors the Agenda page's isCommissionMember/endorsedOnlyViewer
+    split on the frontend, which only ever hid this in the UI: /meetings/
+    and /agenda-items/ served full draft agenda content to any authenticated
+    user regardless of role before this existed (see AgendaItemViewSet and
+    MeetingSerializer.get_agenda_items)."""
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff:
+        return True
+    role = profile_role(user)
+    if role in AGENDA_MANAGER_ROLES:
+        return True
+    if role == Role.CHAIRPERSON:
+        return agenda_status in (AgendaStatus.WITH_CHAIRMAN, AgendaStatus.CIRCULATED)
+    return agenda_status == AgendaStatus.CIRCULATED
 
 
 def is_opsc_internal(user: User) -> bool:
