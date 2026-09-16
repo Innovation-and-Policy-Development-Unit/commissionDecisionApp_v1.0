@@ -13,9 +13,15 @@ import { VENUES, SITTING_TYPES } from './constants'
 import api from '../../../api/client'
 import clsx from 'clsx'
 import { useToast } from '../../../context/ToastContext'
+import { useAuth } from '../../../context/AuthContext'
+
+// Mirrors MeetingViewSet.perform_create/perform_update — who may schedule or edit sittings.
+const MANAGE_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'psc_admin'])
 
 export default function CommissionSittings() {
   const toast = useToast()
+  const { user } = useAuth()
+  const canManage = Boolean(user && MANAGE_ROLES.has(user.role))
   const { meetings, loading, error, conflicts, kpis, getCapacity, refresh } = useSittingOperations()
   
   const [viewMode, setViewMode] = useState('calendar') // 'calendar' | 'list'
@@ -78,12 +84,13 @@ export default function CommissionSittings() {
       <KPIBanner kpis={kpis} />
 
       <div className="flex flex-1 gap-6 overflow-hidden min-h-0">
-        <OperationalSidebar 
+        <OperationalSidebar
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
           typeFilter={typeFilter}
           setTypeFilter={setTypeFilter}
           onScheduleClick={() => setIsModalOpen(true)}
+          canSchedule={canManage}
           conflicts={conflicts}
         />
 

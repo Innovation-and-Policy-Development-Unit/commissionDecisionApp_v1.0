@@ -13,6 +13,11 @@ import useChartColors from '../../hooks/useChartColors'
 import ChartCard from '../../components/shared/ChartCard'
 import StatCard from '../../components/shared/StatCard'
 import PageHeader from '../../components/shared/PageHeader'
+import { useAuth } from '../../context/AuthContext'
+
+// Mirrors implementation_report_generate_view's ALLOWED set in views.py — only
+// the Secretariat can generate implementation reports.
+const REPORT_GENERATE_ROLES = new Set(['psc_secretary', 'psc_admin', 'senior_admin_officer'])
 
 const PERIODS = [
   { key: 'all',       label: 'All time',       params: () => ({}) },
@@ -34,6 +39,8 @@ function pctClass(pct) {
 }
 
 export default function ImplementationDashboard() {
+  const { user } = useAuth()
+  const canGenerateReport = REPORT_GENERATE_ROLES.has(user?.role)
   const C = useChartColors()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -335,15 +342,17 @@ export default function ImplementationDashboard() {
                 Generated automatically each quarter; the Secretariat can also generate on demand.
               </p>
             </div>
-            <button
-              type="button"
-              className="btn-primary btn-sm flex items-center gap-1.5 shrink-0"
-              onClick={generateReport}
-              disabled={generating}
-            >
-              {generating ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
-              Generate latest quarter
-            </button>
+            {canGenerateReport && (
+              <button
+                type="button"
+                className="btn-primary btn-sm flex items-center gap-1.5 shrink-0"
+                onClick={generateReport}
+                disabled={generating}
+              >
+                {generating ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+                Generate latest quarter
+              </button>
+            )}
           </div>
           {reportError && (
             <div className="mx-5 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">

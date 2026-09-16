@@ -284,6 +284,7 @@ def _get_scoped_flag(request, pk):
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def flag_acknowledge(request, pk):
+    _require_admin(request.user)
     flag = _get_scoped_flag(request, pk)
     flag.status = SubmissionFlag.Status.ACKNOWLEDGED
     flag.acknowledged_at = timezone.now()
@@ -295,6 +296,7 @@ def flag_acknowledge(request, pk):
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def flag_clear(request, pk):
+    _require_admin(request.user)
     flag = _get_scoped_flag(request, pk)
     flag.status = SubmissionFlag.Status.CLEARED
     flag.cleared_at = timezone.now()
