@@ -201,8 +201,14 @@ export default function FlagMonitor() {
                       <td className="px-3 py-2 text-xs text-slate-500">{f.rule_name}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center justify-end gap-1">
-                          {f.status !== 'acknowledged' && <button onClick={() => acknowledge(f)} title={t('rules.acknowledge', { defaultValue: 'Acknowledge' })} className="p-1.5 rounded text-slate-400 hover:text-primary-600"><Check size={15} /></button>}
-                          <button onClick={() => clear(f)} title={t('rules.clear', { defaultValue: 'Clear' })} className="p-1.5 rounded text-slate-400 hover:text-emerald-600"><X size={15} /></button>
+                          {isAdmin ? (
+                            <>
+                              {f.status !== 'acknowledged' && <button onClick={() => acknowledge(f)} title={t('rules.acknowledge', { defaultValue: 'Acknowledge' })} className="p-1.5 rounded text-slate-400 hover:text-primary-600"><Check size={15} /></button>}
+                              <button onClick={() => clear(f)} title={t('rules.clear', { defaultValue: 'Clear' })} className="p-1.5 rounded text-slate-400 hover:text-emerald-600"><X size={15} /></button>
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
+                          )}
                         </div>
                       </td>
                     </tr>

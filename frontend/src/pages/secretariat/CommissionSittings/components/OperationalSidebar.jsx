@@ -2,27 +2,30 @@ import { Calendar, Filter, Plus, Clock, AlertTriangle, ChevronRight } from 'luci
 import { SITTING_STATUSES, SITTING_TYPES } from '../constants'
 import clsx from 'clsx'
 
-export default function OperationalSidebar({ 
-  statusFilter, 
-  setStatusFilter, 
-  typeFilter, 
-  setTypeFilter, 
+export default function OperationalSidebar({
+  statusFilter,
+  setStatusFilter,
+  typeFilter,
+  setTypeFilter,
   onScheduleClick,
+  canSchedule = false,
   conflicts = [],
   upcomingDeadlines = []
 }) {
   return (
     <aside className="w-80 flex-shrink-0 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
       {/* Quick Actions */}
-      <div className="space-y-3">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Secretariat Actions</h3>
-        <button 
-          onClick={onScheduleClick}
-          className="w-full btn-gradient py-3 flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20"
-        >
-          <Plus size={18} /> Schedule Sitting
-        </button>
-      </div>
+      {canSchedule && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Secretariat Actions</h3>
+          <button
+            onClick={onScheduleClick}
+            className="w-full btn-gradient py-3 flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20"
+          >
+            <Plus size={18} /> Schedule Sitting
+          </button>
+        </div>
+      )}
 
       {/* Operational Conflicts */}
       {conflicts.length > 0 && (

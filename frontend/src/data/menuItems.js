@@ -93,7 +93,7 @@ const menuItems = [
       { label: 'Pending Decisions',     labelKey: 'nav.pending_decisions',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
       { label: 'Ministry Performance',  labelKey: 'nav.ministry_performance',  icon: Building2,       path: '/ministry-performance', visibility: 'ops' },
       { label: 'Implementation',        labelKey: 'nav.implementation_dashboard', icon: ListChecks,   path: '/implementation',       visibility: 'ops' },
-      { label: 'Reports',               labelKey: 'nav.annual_report',         icon: BookOpen,        path: '/annual-report',        visibility: 'ops' },
+      { label: 'Reports',               labelKey: 'nav.annual_report',         icon: BookOpen,        path: '/annual-report',        roles: ['psc_secretary', 'psc_admin', 'senior_admin_officer'] },
     ],
   },
   {
