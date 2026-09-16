@@ -1910,7 +1910,7 @@ class AgendaItemSerializer(serializers.ModelSerializer):
 
 
 class MeetingSerializer(serializers.ModelSerializer):
-    agenda_items = AgendaItemSerializer(many=True, read_only=True)
+    agenda_items = serializers.SerializerMethodField()
     agenda_count = serializers.SerializerMethodField()
     agenda_readiness = serializers.SerializerMethodField()
     decisions_count = serializers.SerializerMethodField()
@@ -1920,6 +1920,25 @@ class MeetingSerializer(serializers.ModelSerializer):
     effective_cutoff = serializers.DateTimeField(read_only=True)
 
     agenda_adopted_by_name = serializers.SerializerMethodField()
+
+    def get_agenda_items(self, obj):
+        """Draft/with_chairman agenda item content (submission titles,
+        ministries, blurbs) must not reach Commissioners or read-only OPSC
+        viewers before it's circulated — see agenda_content_visible_to().
+        This field used to bind straight to obj.agenda_items.all() with no
+        role check at all, so any authenticated user's /meetings/ response
+        carried the full draft agenda regardless of who was asking.
+        agenda_count/agenda_readiness (item count only, no content) are
+        deliberately left visible to everyone."""
+        from .opsc_access import agenda_content_visible_to
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if not agenda_content_visible_to(user, obj.agenda_status):
+            return []
+        # obj.agenda_items.all() reuses the prefetch_related manager (see
+        # _agenda_item_count below) instead of issuing a fresh query.
+        return AgendaItemSerializer(obj.agenda_items.all(), many=True, context=self.context).data
 
     def get_agenda_approved_by_name(self, obj):
         return obj.agenda_approved_by.username if obj.agenda_approved_by else None

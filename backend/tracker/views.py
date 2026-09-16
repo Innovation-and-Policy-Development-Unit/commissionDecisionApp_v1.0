@@ -9301,7 +9301,24 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         meeting_id = self.request.query_params.get("meeting")
         if meeting_id:
             qs = qs.filter(meeting_id=meeting_id)
-        return qs.order_by("sequence", "id")
+        qs = qs.order_by("sequence", "id")
+
+        # Draft/with_chairman agenda content (submission titles, ministries,
+        # blurbs) must not reach Commissioners or read-only OPSC viewers
+        # before it's circulated — see agenda_content_visible_to(). Was
+        # previously unfiltered: any authenticated user could read any
+        # meeting's agenda items regardless of workflow stage.
+        user = self.request.user
+        if not (user.is_superuser or user.is_staff):
+            profile = _profile(user)
+            if profile.role not in self._AGENDA_MANAGER_ROLES:
+                if profile.role == Role.CHAIRPERSON:
+                    qs = qs.filter(meeting__agenda_status__in=[
+                        AgendaStatus.WITH_CHAIRMAN, AgendaStatus.CIRCULATED,
+                    ])
+                else:
+                    qs = qs.filter(meeting__agenda_status=AgendaStatus.CIRCULATED)
+        return qs
 
     def perform_update(self, serializer):
         self._require_agenda_manager()
