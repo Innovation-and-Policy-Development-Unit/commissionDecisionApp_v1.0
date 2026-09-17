@@ -8066,6 +8066,36 @@ class MeetingViewSet(viewsets.ModelViewSet):
         if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
             raise PermissionDenied("Only PSC Secretary, Senior Admin Officer, or Admins can edit meetings.")
 
+        # ── Launch gate: a sitting cannot begin until its agenda has been
+        # endorsed by the Chairperson and circulated to Commission members —
+        # circulation is what gives them their notice window ahead of the
+        # sitting. Admins may override (e.g. correcting an edge case).
+        target_status = serializer.validated_data.get("status")
+        if (
+            target_status == MeetingStatus.IN_PROGRESS
+            and serializer.instance.status != MeetingStatus.IN_PROGRESS
+            and serializer.instance.agenda_status != AgendaStatus.CIRCULATED
+            and profile.role != Role.PSC_ADMIN
+        ):
+            raise PermissionDenied(
+                "The agenda must be endorsed by the Chairperson and circulated to Commission "
+                "members before the sitting can begin."
+            )
+
+        # ── Completion gate: a sitting can only be closed out once it has
+        # actually convened — nothing else in the app ever moves a meeting to
+        # Completed, so without this a sitting could skip straight from
+        # Scheduled/Cancelled to Completed. Admins may override.
+        if (
+            target_status == MeetingStatus.COMPLETED
+            and serializer.instance.status != MeetingStatus.COMPLETED
+            and serializer.instance.status != MeetingStatus.IN_PROGRESS
+            and profile.role != Role.PSC_ADMIN
+        ):
+            raise PermissionDenied(
+                "A sitting must be in progress before it can be marked completed."
+            )
+
         # ── Postponement: date/time change also moves the submission deadline
         # (effective_cutoff). Capture the pre-save values so HR can be told
         # both the old and new date and deadline once saved.
@@ -8989,6 +9019,30 @@ class MeetingViewSet(viewsets.ModelViewSet):
             "recipients": rows,
             "notified_count": len(rows),
             "viewed_count": sum(1 for r in rows if r["viewed_at"]),
+        })
+
+    @action(detail=True, methods=["get"], url_path="previous")
+    def previous_meeting(self, request, pk=None):
+        """The most recent earlier sitting (any non-cancelled meeting with an
+        earlier date) — surfaced in the Minutes editor so "Confirmation of
+        Previous Minutes" can reference the actual prior record instead of
+        being blind free text with nothing to check it against."""
+        meeting = self.get_object()
+        prev = (
+            Meeting.objects.filter(date__lt=meeting.date)
+            .exclude(status=MeetingStatus.CANCELLED)
+            .order_by("-date", "-time")
+            .first()
+        )
+        if not prev:
+            return Response(None)
+        minutes = getattr(prev, "minutes", None)
+        return Response({
+            "id": prev.id,
+            "reference_number": prev.reference_number,
+            "date": prev.date,
+            "minutes_id": minutes.id if minutes else None,
+            "minutes_status": minutes.status if minutes else None,
         })
 
     @action(detail=True, methods=["post"], url_path="mark-agenda-viewed")

@@ -74,6 +74,34 @@ function AgendaAdoptionStatus({ minutes, canEdit, busy, onToggle }) {
   )
 }
 
+// Surfaces the actual previous sitting next to "Confirmation of Previous
+// Minutes" so the minute-taker has something concrete to check against,
+// instead of writing free text with nothing behind it.
+function PreviousMinutesHint({ previousMeeting, editable, hasText, onUseSuggested }) {
+  if (!previousMeeting) return null
+  const dateLabel = new Date(previousMeeting.date + 'T00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return (
+    <div className="mb-2 flex items-center justify-between gap-3 text-xs">
+      <span className="text-slate-400">
+        Previous sitting: <span className="font-semibold text-slate-500 dark:text-slate-300">{previousMeeting.reference_number}</span> ({dateLabel})
+        {previousMeeting.minutes_id ? (
+          <>
+            {' — '}
+            <Link to={`/secretariat/meetings/${previousMeeting.id}/minutes`} className="text-primary-600 dark:text-primary-400 hover:underline">
+              view its minutes
+            </Link>
+          </>
+        ) : ' — no minutes on record yet'}
+      </span>
+      {editable && !hasText && previousMeeting.minutes_id && (
+        <button type="button" onClick={onUseSuggested} className="shrink-0 text-primary-600 dark:text-primary-400 font-semibold hover:underline">
+          Use suggested text
+        </button>
+      )}
+    </div>
+  )
+}
+
 function SectionEditor({ label, value, onChange, placeholder }) {
   return (
     <div className="mb-4">
@@ -288,6 +316,7 @@ export default function MinutesEditor() {
 
   const [meeting, setMeeting] = useState(null)
   const [minutes, setMinutes] = useState(null)
+  const [previousMeeting, setPreviousMeeting] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -305,9 +334,10 @@ export default function MinutesEditor() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [mRes, minsRes] = await Promise.allSettled([
+      const [mRes, minsRes, prevRes] = await Promise.allSettled([
         api.get(`/meetings/${meetingId}/`),
         api.get(`/minutes/?meeting=${meetingId}`),
+        api.get(`/meetings/${meetingId}/previous/`),
       ])
 
       if (mRes.status === 'fulfilled') setMeeting(mRes.value.data)
@@ -318,6 +348,7 @@ export default function MinutesEditor() {
           setContent(m.content)
         }
       }
+      if (prevRes.status === 'fulfilled') setPreviousMeeting(prevRes.value.data)
     } catch {
       setError('Failed to load meeting data.')
     } finally {
@@ -358,6 +389,15 @@ export default function MinutesEditor() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const useSuggestedPreviousMinutesText = () => {
+    if (!previousMeeting) return
+    const dateLabel = new Date(previousMeeting.date + 'T00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+    setContent(prev => ({
+      ...prev,
+      confirmation_previous_minutes: `The minutes of ${previousMeeting.reference_number} held on ${dateLabel} were confirmed as a true and accurate record.`,
+    }))
   }
 
   const toggleAgendaAdopted = async (adopted) => {
@@ -592,6 +632,7 @@ export default function MinutesEditor() {
         <div className="space-y-4">
           <AgendaAdoptionStatus minutes={minutes} canEdit={canEditMinutes} busy={saving} onToggle={toggleAgendaAdopted} />
           <ReadOnlySection label="Opening" value={content.opening} />
+          <PreviousMinutesHint previousMeeting={previousMeeting} editable={false} hasText={Boolean(content.confirmation_previous_minutes)} />
           <ReadOnlySection label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} />
 
           <div className="mb-4">
@@ -640,6 +681,7 @@ export default function MinutesEditor() {
       <div className="space-y-4">
         <AgendaAdoptionStatus minutes={minutes} canEdit={canEditMinutes} busy={saving} onToggle={toggleAgendaAdopted} />
         <SectionEditor label="Opening" value={content.opening} placeholder="e.g. The meeting opened at 9:30 AM with a prayer led by..." onChange={v => setContent(prev => ({ ...prev, opening: v }))} />
+        <PreviousMinutesHint previousMeeting={previousMeeting} editable hasText={Boolean(content.confirmation_previous_minutes)} onUseSuggested={useSuggestedPreviousMinutesText} />
         <SectionEditor label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} placeholder="e.g. The minutes of the previous sitting were confirmed as a true record..." onChange={v => setContent(prev => ({ ...prev, confirmation_previous_minutes: v }))} />
 
         <div className="mb-4">

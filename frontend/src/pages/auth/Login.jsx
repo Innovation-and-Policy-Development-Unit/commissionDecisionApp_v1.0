@@ -417,7 +417,7 @@ export default function Login() {
           </div>
 
           <div className="mt-4 flex items-center justify-center text-xs anim-fade-in" style={{ animationDelay: '0.15s' }}>
-            <Link to="/track" className="text-primary-600 hover:text-primary-700 hover:underline font-medium">
+            <Link to="/track" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-primary-600 transition-colors font-medium">
               Track your submission
             </Link>
           </div>
