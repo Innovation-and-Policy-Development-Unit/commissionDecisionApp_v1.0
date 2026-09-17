@@ -8605,8 +8605,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "detail": (
-                        "Minute intake is only available after the agenda is "
-                        "Secretary-approved or circulated."
+                        "Minute intake is only available once the agenda has been "
+                        "circulated and the sitting has begun (Launch Operations)."
                     ),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
