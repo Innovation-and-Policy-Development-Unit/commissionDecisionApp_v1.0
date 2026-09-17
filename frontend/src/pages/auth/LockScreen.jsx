@@ -12,6 +12,12 @@ export default function LockScreen() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     const state = getLockState()
@@ -47,10 +53,28 @@ export default function LockScreen() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10"
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 relative overflow-hidden"
       style={{ background: 'linear-gradient(145deg, #f0f4f9 0%, #e5eaf3 100%)' }}
     >
-      <div style={{ maxWidth: 400 }} className="w-full">
+      <div
+        className="anim-blob-drift pointer-events-none"
+        style={{ position: 'absolute', top: '-100px', right: '-100px', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,66,118,0.07) 0%, transparent 70%)' }}
+      />
+      <div
+        className="anim-blob-drift pointer-events-none"
+        style={{ position: 'absolute', bottom: '-80px', left: '-80px', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.07) 0%, transparent 70%)', animationDuration: '22s', animationDelay: '-4s' }}
+      />
+
+      <div style={{ maxWidth: 400 }} className="w-full relative">
+        <div className="anim-fade-in mb-6 text-center">
+          <div className="text-4xl font-bold text-slate-800 tabular-nums" style={{ letterSpacing: '0.02em' }}>
+            {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+          <div className="text-sm text-slate-500 mt-1">
+            {now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
+        </div>
+
         <div
           className="anim-slide-up"
           style={{
@@ -165,8 +189,15 @@ export default function LockScreen() {
           from { opacity: 0; }
           to   { opacity: 1; }
         }
-        .anim-slide-up { animation: slide-up 0.5s cubic-bezier(.22,1,.36,1) both; }
-        .anim-fade-in  { animation: fade-in 0.6s ease both; }
+        @keyframes blob-drift {
+          0%   { transform: translate(0, 0) scale(1); }
+          33%  { transform: translate(20px, -15px) scale(1.05); }
+          66%  { transform: translate(-15px, 10px) scale(0.95); }
+          100% { transform: translate(0, 0) scale(1); }
+        }
+        .anim-slide-up   { animation: slide-up 0.5s cubic-bezier(.22,1,.36,1) both; }
+        .anim-fade-in    { animation: fade-in 0.6s ease both; }
+        .anim-blob-drift { animation: blob-drift 18s ease-in-out infinite; }
       `}</style>
     </div>
   )
