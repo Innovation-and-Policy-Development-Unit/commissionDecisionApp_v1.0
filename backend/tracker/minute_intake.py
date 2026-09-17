@@ -9,6 +9,7 @@ from .models import (
     AgendaItem,
     AgendaStatus,
     Meeting,
+    MeetingStatus,
     MinuteAgendaIntake,
     Minutes,
     MinutesStatus,
@@ -19,9 +20,20 @@ APPROVED_AGENDA_STATUSES = {
     AgendaStatus.CIRCULATED,
 }
 
+# Minute-taking records what happened at the sitting, so it can't start
+# before the sitting has actually launched — a circulated-but-not-yet-
+# convened meeting has nothing to take notes on yet.
+CONVENED_MEETING_STATUSES = {
+    MeetingStatus.IN_PROGRESS,
+    MeetingStatus.COMPLETED,
+}
+
 
 def meeting_allows_minute_intake(meeting: Meeting) -> bool:
-    return meeting.agenda_status in APPROVED_AGENDA_STATUSES
+    return (
+        meeting.agenda_status in APPROVED_AGENDA_STATUSES
+        and meeting.status in CONVENED_MEETING_STATUSES
+    )
 
 
 def _agenda_title_description(item: AgendaItem) -> tuple[str, str]:

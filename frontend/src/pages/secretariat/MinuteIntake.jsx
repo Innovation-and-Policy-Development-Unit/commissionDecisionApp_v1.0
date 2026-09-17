@@ -13,6 +13,9 @@ import { formatApiError } from '../../utils/apiError'
 import { normalizeListPayload, normalizeFieldPayload } from '../../utils/listPayload'
 
 const INTAKE_AGENDA_STATUSES = new Set(['circulated'])
+// Mirrors meeting_allows_minute_intake in backend/tracker/minute_intake.py —
+// there's nothing to take notes on until the sitting has actually begun.
+const CONVENED_MEETING_STATUSES = new Set(['in_progress', 'completed'])
 const CONTEXT_PANEL_PREF = 'minute_intake.context_panel'
 
 function IntakeItemCard({
@@ -215,7 +218,7 @@ export default function MinuteIntake() {
   const activeMeetingId = meetingId || pickerId
 
   const eligibleMeetings = useMemo(
-    () => meetings.filter(m => INTAKE_AGENDA_STATUSES.has(m.agenda_status)),
+    () => meetings.filter(m => INTAKE_AGENDA_STATUSES.has(m.agenda_status) && CONVENED_MEETING_STATUSES.has(m.status)),
     [meetings],
   )
 
@@ -231,7 +234,7 @@ export default function MinuteIntake() {
       const list = normalizeListPayload(data)
       setMeetings(list)
       if (!meetingId && list.length > 0) {
-        const first = list.find(m => INTAKE_AGENDA_STATUSES.has(m.agenda_status))
+        const first = list.find(m => INTAKE_AGENDA_STATUSES.has(m.agenda_status) && CONVENED_MEETING_STATUSES.has(m.status))
         if (first) setPickerId(String(first.id))
       }
     } catch (err) {
