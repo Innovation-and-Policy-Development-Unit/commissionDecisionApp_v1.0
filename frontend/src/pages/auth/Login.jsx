@@ -18,8 +18,15 @@ const ANIM_STYLES = `
     from { opacity: 0; }
     to   { opacity: 1; }
   }
-  .anim-slide-up { animation: slide-up 0.5s cubic-bezier(.22,1,.36,1) both; }
-  .anim-fade-in  { animation: fade-in 0.6s ease both; }
+  @keyframes blob-drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    33%  { transform: translate(20px, -15px) scale(1.05); }
+    66%  { transform: translate(-15px, 10px) scale(0.95); }
+    100% { transform: translate(0, 0) scale(1); }
+  }
+  .anim-slide-up   { animation: slide-up 0.5s cubic-bezier(.22,1,.36,1) both; }
+  .anim-fade-in    { animation: fade-in 0.6s ease both; }
+  .anim-blob-drift { animation: blob-drift 18s ease-in-out infinite; }
 `
 
 function redirectTarget(location) {
@@ -207,8 +214,8 @@ export default function Login() {
         style={{ background: 'linear-gradient(145deg, #f0f4f9 0%, #e5eaf3 100%)' }}
       >
         <div className="pointer-events-none fixed inset-0 overflow-hidden">
-          <div style={{ position: 'absolute', top: '-100px', right: '-100px', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,66,118,0.07) 0%, transparent 70%)' }} />
-          <div style={{ position: 'absolute', bottom: '-80px', left: '-80px',   width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.07) 0%, transparent 70%)' }} />
+          <div className="anim-blob-drift" style={{ position: 'absolute', top: '-100px', right: '-100px', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,66,118,0.07) 0%, transparent 70%)' }} />
+          <div className="anim-blob-drift" style={{ position: 'absolute', bottom: '-80px', left: '-80px', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.07) 0%, transparent 70%)', animationDuration: '22s', animationDelay: '-4s' }} />
         </div>
 
         <div className="relative z-10 w-full" style={{ maxWidth: 420 }}>
