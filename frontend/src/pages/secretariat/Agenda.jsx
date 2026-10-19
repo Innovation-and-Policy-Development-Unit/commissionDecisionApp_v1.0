@@ -85,19 +85,8 @@ export default function Agenda() {
   const {
     sections: CATEGORIES,
     categoryOrder: CATEGORY_ORDER,
-    agendaSectionLabel: sectionLabel,
+    agendaSectionLabel: categoryLabel,
   } = useAgendaSections()
-
-  // Pilot: Commissioners see every scanned paper submission under one agenda
-  // type instead of the per-type sections. Presentation only — staff views and
-  // the stored categories are unchanged.
-  const PILOT_CAT = 'pilot_papers'
-  const singleView = !!user?.pilot_single_agenda_view &&
-    ['psc_commissioner', 'chairperson'].includes(user?.role)
-  const ORDER = singleView
-    ? [...CATEGORY_ORDER.slice(0, 2), PILOT_CAT]
-    : CATEGORY_ORDER
-  const categoryLabel = (cat) => (cat === PILOT_CAT ? t('agenda.pilot_single_section') : sectionLabel(cat))
 
   const [meetings, setMeetings]         = useState([])
   const [selectedId, setSelectedId]     = useState('')
@@ -249,8 +238,7 @@ export default function Agenda() {
   const grouped = useMemo(() => {
     const map = {}
     for (const item of items) {
-      let cat = item.category || 'other'
-      if (singleView && cat !== 'preliminaries' && cat !== 'matters_arising') cat = PILOT_CAT
+      const cat = item.category || 'other'
       if (!map[cat]) map[cat] = []
       map[cat].push(item)
     }
@@ -259,7 +247,7 @@ export default function Agenda() {
       map[cat].sort((a, b) => a.sequence - b.sequence || a.id - b.id)
     }
     return map
-  }, [items, singleView])
+  }, [items])
 
   // Preliminaries items, lettered once up front — a live search filter only
   // ever hides rows below, it never renumbers the official document lettering.
@@ -289,13 +277,13 @@ export default function Agenda() {
   const numberedItems = useMemo(() => {
     let counter = 3
     const result = {}
-    for (const cat of ORDER) {
+    for (const cat of CATEGORY_ORDER) {
       if (cat === 'preliminaries' || cat === 'matters_arising') continue
       const catItems = grouped[cat] || []
       result[cat] = catItems.map(item => ({ ...item, agendaNo: counter++ }))
     }
     return result
-  }, [grouped, ORDER])
+  }, [grouped, CATEGORY_ORDER])
 
   // ── Search / filter ──────────────────────────────────────────────────────
   // A scanning aid only — numbering above is always computed off the full
@@ -316,7 +304,7 @@ export default function Agenda() {
   useEffect(() => {
     if (!normalizedQuery) return undefined
     const timer = setTimeout(() => {
-      const order = ['preliminaries', 'matters_arising', ...ORDER.slice(2)]
+      const order = ['preliminaries', 'matters_arising', ...CATEGORY_ORDER.slice(2)]
       for (const cat of order) {
         const list = grouped[cat] || []
         if (list.some(matchesSearch)) {
@@ -327,7 +315,7 @@ export default function Agenda() {
     }, 350)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedQuery, grouped, ORDER])
+  }, [normalizedQuery, grouped, CATEGORY_ORDER])
 
   // ── CRUD ────────────────────────────────────────────────────────────────
 
@@ -539,7 +527,7 @@ export default function Agenda() {
   }, [selectedId, agendaStatus, isCommissionMember])
 
   // Categories that actually have items
-  const activeCategories = ORDER.filter(cat => (grouped[cat] || []).length > 0)
+  const activeCategories = CATEGORY_ORDER.filter(cat => (grouped[cat] || []).length > 0)
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -763,7 +751,7 @@ export default function Agenda() {
                   </a>
                 )
               })()}
-              {ORDER.slice(2).map(cat => {
+              {CATEGORY_ORDER.slice(2).map(cat => {
                 const count = (grouped[cat] || []).filter(matchesSearch).length
                 if (count === 0) return null
                 return (
@@ -937,7 +925,7 @@ export default function Agenda() {
             )}
 
             {/* ── 3-15 Variable sections ── */}
-            {ORDER.slice(2).map(cat => {
+            {CATEGORY_ORDER.slice(2).map(cat => {
               const allCatItems = numberedItems[cat] || []
               const catItems = allCatItems.filter(matchesSearch)
               if (catItems.length === 0) return null

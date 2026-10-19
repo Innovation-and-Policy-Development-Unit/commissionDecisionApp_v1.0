@@ -1659,7 +1659,7 @@ export function SettingsTab({ settings, onRefresh }) {
   useEffect(() => {
     const s = {}
     settings.forEach(item => { s[item.key] = item.value })
-    const defaults = ['ENABLE_USER_FEEDBACK', 'INTAKE_RECEPTIONIST_ENABLED', 'INTAKE_HR_ENABLED', 'PILOT_SINGLE_AGENDA_VIEW', 'AI_PACKAGE_VALIDATION_ENABLED', 'AI_CHECKLIST_AUTOFILL_ENABLED', 'GEMINI_API_KEY', 'TWO_FACTOR_REQUIRED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_TLS', 'SMTP_SSL', 'DEFAULT_FROM_EMAIL', 'AXES_FAILURE_LIMIT', 'AXES_COOLOFF_MINUTES', 'LOGIN_RATE_LIMIT', 'PASSWORD_MIN_LENGTH', 'PASSWORD_REQUIRE_UPPERCASE', 'PASSWORD_REQUIRE_LOWERCASE', 'PASSWORD_REQUIRE_DIGITS', 'PASSWORD_REQUIRE_SPECIAL', 'PASSWORD_HISTORY_COUNT', 'PASSWORD_MAX_AGE_DAYS']
+    const defaults = ['ENABLE_USER_FEEDBACK', 'INTAKE_RECEPTIONIST_ENABLED', 'INTAKE_HR_ENABLED', 'AI_PACKAGE_VALIDATION_ENABLED', 'AI_CHECKLIST_AUTOFILL_ENABLED', 'GEMINI_API_KEY', 'TWO_FACTOR_REQUIRED', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_TLS', 'SMTP_SSL', 'DEFAULT_FROM_EMAIL', 'AXES_FAILURE_LIMIT', 'AXES_COOLOFF_MINUTES', 'LOGIN_RATE_LIMIT', 'PASSWORD_MIN_LENGTH', 'PASSWORD_REQUIRE_UPPERCASE', 'PASSWORD_REQUIRE_LOWERCASE', 'PASSWORD_REQUIRE_DIGITS', 'PASSWORD_REQUIRE_SPECIAL', 'PASSWORD_HISTORY_COUNT', 'PASSWORD_MAX_AGE_DAYS']
     defaults.forEach(k => { if (s[k] === undefined) s[k] = '' })
     if (s.ENABLE_USER_FEEDBACK === '') s.ENABLE_USER_FEEDBACK = 'true'
     if (s.INTAKE_RECEPTIONIST_ENABLED === '') s.INTAKE_RECEPTIONIST_ENABLED = 'true'
@@ -1954,15 +1954,6 @@ export function SettingsTab({ settings, onRefresh }) {
             </div>
             <button type="button" onClick={() => toggle('INTAKE_HR_ENABLED')}>
               {form.INTAKE_HR_ENABLED === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}
-            </button>
-          </div>
-          <div className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-slate-800/40">
-            <div>
-              <p className="text-sm font-medium">Pilot: single agenda type for Commissioners</p>
-              <p className="text-xs text-slate-500">Commissioners and the Chairman see all scanned paper submissions together under one agenda section instead of per-type sections. Staff views are unchanged. Turn off after the pilot.</p>
-            </div>
-            <button type="button" onClick={() => toggle('PILOT_SINGLE_AGENDA_VIEW')}>
-              {form.PILOT_SINGLE_AGENDA_VIEW === 'true' ? <ToggleRight size={32} className="text-primary-500" /> : <ToggleLeft size={32} className="text-slate-300" />}
             </button>
           </div>
         </section>

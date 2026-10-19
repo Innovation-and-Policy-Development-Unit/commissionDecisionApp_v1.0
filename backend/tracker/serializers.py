@@ -244,7 +244,6 @@ class MeSerializer(serializers.ModelSerializer):
     can_regenerate_ai_brief = serializers.SerializerMethodField()
     intake_receptionist_enabled = serializers.SerializerMethodField()
     intake_hr_enabled = serializers.SerializerMethodField()
-    pilot_single_agenda_view = serializers.SerializerMethodField()
     ai_package_validation_enabled = serializers.SerializerMethodField()
     ai_checklist_autofill_enabled = serializers.SerializerMethodField()
     ai_enabled = serializers.SerializerMethodField()
@@ -273,7 +272,6 @@ class MeSerializer(serializers.ModelSerializer):
             "can_regenerate_ai_brief",
             "intake_receptionist_enabled",
             "intake_hr_enabled",
-            "pilot_single_agenda_view",
             "ai_package_validation_enabled",
             "ai_checklist_autofill_enabled",
             "ai_enabled",
@@ -322,11 +320,6 @@ class MeSerializer(serializers.ModelSerializer):
         from .intake_routing import receptionist_intake_enabled
 
         return receptionist_intake_enabled()
-
-    def get_pilot_single_agenda_view(self, obj):
-        from .intake_routing import pilot_single_agenda_view_enabled
-
-        return pilot_single_agenda_view_enabled()
 
     def get_intake_hr_enabled(self, obj):
         from .intake_routing import hr_intake_enabled

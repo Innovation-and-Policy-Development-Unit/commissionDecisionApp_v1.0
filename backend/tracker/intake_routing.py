@@ -55,7 +55,6 @@ def routed_unit_for_form_type(form_type_code: str | None) -> str | None:
 # ── Intake route toggles (admin-configurable) ───────────────────────────────
 SETTING_RECEPTIONIST_ENABLED = "INTAKE_RECEPTIONIST_ENABLED"
 SETTING_HR_ENABLED = "INTAKE_HR_ENABLED"
-SETTING_PILOT_SINGLE_AGENDA = "PILOT_SINGLE_AGENDA_VIEW"
 
 
 def receptionist_intake_enabled() -> bool:
@@ -68,14 +67,3 @@ def hr_intake_enabled() -> bool:
     """True if direct ministry HR -> DG -> PSC submission is active."""
     from .models import SystemSetting
     return SystemSetting.get_bool(SETTING_HR_ENABLED, default=True)
-
-
-def pilot_single_agenda_view_enabled() -> bool:
-    """True if Commissioners see every scanned paper submission as one agenda type.
-
-    Pilot-only: ministries still lodge on paper and the Receptionist scans
-    them in, so the per-type agenda sections add noise for Commissioners.
-    Staff views are unaffected; this is presentation only.
-    """
-    from .models import SystemSetting
-    return SystemSetting.get_bool(SETTING_PILOT_SINGLE_AGENDA, default=False)
