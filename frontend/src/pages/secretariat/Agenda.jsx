@@ -1366,6 +1366,11 @@ function MattersArisingRow({ item, isCompleted, canDefer, onRemove, onMoveUp, on
           >
             {item.submission_title}
           </Link>
+          {item.lodged_from_paper && (
+            <span className="ml-2 align-middle rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 print:hidden">
+              {t('agenda.lodged_from_paper')}
+            </span>
+          )}
           {item.submission_ministry && (
             <span className="text-slate-500 dark:text-slate-400"> — {item.submission_ministry}</span>
           )}
@@ -1407,6 +1412,11 @@ function StandardRow({ item, isCompleted, canDefer, categories, editingItem, set
           >
             {item.submission_title}
           </Link>
+          {item.lodged_from_paper && (
+            <span className="ml-2 align-middle rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 print:hidden">
+              {t('agenda.lodged_from_paper')}
+            </span>
+          )}
           {item.submission_ministry && (
             <span className="text-slate-500 dark:text-slate-400"> — {item.submission_ministry}</span>
           )}

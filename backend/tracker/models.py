@@ -1856,6 +1856,23 @@ class Submission(models.Model):
                    "see migration 0255 — which this deliberately does not reuse.",
     )
     applicant_tracking_code_sent_at = models.DateTimeField(null=True, blank=True)
+    # ── Signed-paper lodgement (pilot: non-pilot ministries stay on paper) ──
+    lodged_from_paper = models.BooleanField(
+        default=False, db_index=True,
+        help_text="True when CSU/registry staff scanned and uploaded the complete "
+                   "Acting-Secretary-signed paper package on the ministry's behalf, "
+                   "instead of the ministry submitting it online.",
+    )
+    paper_lodged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="paper_lodged_submissions",
+        help_text="Staff member who scanned and uploaded the signed paper package.",
+    )
+    paper_lodged_at = models.DateTimeField(null=True, blank=True)
+    paper_signed_on = models.DateField(
+        null=True, blank=True,
+        help_text="Date the Acting Secretary signed the paper package for the agenda.",
+    )
     checklist_review_started_at  = models.DateTimeField(null=True, blank=True,
         help_text="When this submission entered Manager Checklist Review.")
     checklist_review_deadline_at = models.DateTimeField(null=True, blank=True,

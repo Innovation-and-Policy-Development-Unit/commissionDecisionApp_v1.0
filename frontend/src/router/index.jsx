@@ -24,6 +24,7 @@ import SubmissionLog from '../pages/psc/SubmissionLog'
 // Large pages stay code-split; fallback is invisible so there's no spinner flash.
 const SubmissionDetail = lazy(() => import('../pages/psc/SubmissionDetail'))
 const SubmissionForm = lazy(() => import('../pages/psc/SubmissionForm'))
+const LodgeSignedPaper = lazy(() => import('../pages/psc/LodgeSignedPaper'))
 const ReportBrowse = lazy(() => import('../pages/reports/ReportBrowse'))
 const ReportTemplateManager = lazy(() => import('../pages/reports/ReportTemplateManager'))
 const Intelligence = lazy(() => import('../pages/psc/Intelligence'))
@@ -110,6 +111,7 @@ export default function AppRouter() {
           <Route path="/feedback/checklist" element={<S><FeedbackChecklist /></S>} />
           <Route path="/submissions" element={<SubmissionLog />} />
           <Route path="/submissions/new" element={<S><SubmissionForm /></S>} />
+          <Route path="/submissions/lodge-paper" element={<S><LodgeSignedPaper /></S>} />
           <Route path="/submissions/:id" element={<S detail><SubmissionDetail /></S>} />
           <Route path="/reports" element={<S><ReportBrowse /></S>} />
           <Route path="/reports/templates" element={<S><ReportTemplateManager /></S>} />

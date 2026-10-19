@@ -77,6 +77,7 @@ from .rbac import (
     rbac_user_can_manage_translations,
     rbac_user_can_manage_users,
     rbac_user_can_regenerate_ai_brief,
+    rbac_user_can_lodge_signed_paper,
     rbac_user_can_view_audit_log,
 )
 
@@ -242,6 +243,7 @@ class MeSerializer(serializers.ModelSerializer):
     can_access_admin_panel = serializers.SerializerMethodField()
     can_view_audit_log  = serializers.SerializerMethodField()
     can_regenerate_ai_brief = serializers.SerializerMethodField()
+    can_lodge_signed_paper = serializers.SerializerMethodField()
     intake_receptionist_enabled = serializers.SerializerMethodField()
     intake_hr_enabled = serializers.SerializerMethodField()
     ai_package_validation_enabled = serializers.SerializerMethodField()
@@ -270,6 +272,7 @@ class MeSerializer(serializers.ModelSerializer):
             "can_access_admin_panel",
             "can_view_audit_log",
             "can_regenerate_ai_brief",
+            "can_lodge_signed_paper",
             "intake_receptionist_enabled",
             "intake_hr_enabled",
             "ai_package_validation_enabled",
@@ -312,6 +315,9 @@ class MeSerializer(serializers.ModelSerializer):
 
     def get_can_view_audit_log(self, obj):
         return rbac_user_can_view_audit_log(obj.user)
+
+    def get_can_lodge_signed_paper(self, obj):
+        return rbac_user_can_lodge_signed_paper(obj.user)
 
     def get_can_regenerate_ai_brief(self, obj):
         return rbac_user_can_regenerate_ai_brief(obj.user)
@@ -806,6 +812,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "reference_number",
+            "lodged_from_paper",
             "title",
             "form_type_code",
             "agenda_category",
@@ -1017,6 +1024,9 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "reference_number",
             "applicant_email",
             "applicant_tracking_code",
+            "lodged_from_paper",
+            "paper_signed_on",
+            "paper_lodged_at",
             "title",
             "form_type_code",
             "agenda_category",
@@ -1099,6 +1109,9 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "subway_map",
             "applicant_tracking_code",
+            "lodged_from_paper",
+            "paper_signed_on",
+            "paper_lodged_at",
             "commission_approved_at",
             "implementation_completed_at",
             "ai_policy_observations",
@@ -1869,6 +1882,7 @@ class AgendaItemSerializer(serializers.ModelSerializer):
     submission_ministry  = serializers.SerializerMethodField()
     category_display     = serializers.SerializerMethodField()
     form_type_display    = serializers.SerializerMethodField()
+    lodged_from_paper    = serializers.BooleanField(source="submission.lodged_from_paper", read_only=True)
 
     def get_submission_ministry(self, obj):
         return obj.submission.ministry.name if obj.submission.ministry else ""
@@ -1904,7 +1918,7 @@ class AgendaItemSerializer(serializers.ModelSerializer):
             "submission_ministry", "sequence", "category", "category_display",
             "form_type_code", "form_type_display",
             "matters_arising_agenda_no", "matters_arising_meeting_ref",
-            "agenda_blurb", "agenda_blurb_processed",
+            "agenda_blurb", "agenda_blurb_processed", "lodged_from_paper",
         )
         read_only_fields = ("agenda_blurb", "agenda_blurb_processed", "form_type_code")
 
