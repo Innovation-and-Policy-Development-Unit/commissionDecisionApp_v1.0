@@ -45,10 +45,13 @@ class AgendaWriteGateTests(TestCase):
         res = self.client.patch(
             f"/api/agenda-items/{self.item.id}/", {"sequence": 5}, format="json",
         )
-        self.assertEqual(res.status_code, 403)
+        # Managers can't even see an uncirculated agenda's items (404), which is
+        # stricter than 403 — either way the write must not happen.
+        self.assertIn(res.status_code, (403, 404))
         res = self.client.delete(f"/api/agenda-items/{self.item.id}/")
-        self.assertEqual(res.status_code, 403)
-        self.assertTrue(AgendaItem.objects.filter(id=self.item.id).exists())
+        self.assertIn(res.status_code, (403, 404))
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.sequence, 1)
 
     def test_manager_cannot_mutate_meetings(self):
         self.client.force_authenticate(user=self.manager)

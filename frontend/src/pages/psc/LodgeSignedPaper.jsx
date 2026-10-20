@@ -24,7 +24,7 @@ export default function LodgeSignedPaper() {
   const { sections } = useAgendaSections({ lodgeOnly: true })
   const [ministries, setMinistries] = useState([])
   const [form, setForm] = useState({
-    ministry: '', agenda_category: '', title: '', paper_signed_on: today(), notes: '',
+    ministry: '', agenda_category: '', title: '', paper_signed_on: today(), notes: '', is_test: false,
   })
   const [files, setFiles] = useState([])
   const [errors, setErrors] = useState({})
@@ -44,7 +44,7 @@ export default function LodgeSignedPaper() {
     setSaving(true)
     try {
       const body = new FormData()
-      Object.entries(form).forEach(([k, v]) => body.append(k, v))
+      Object.entries(form).forEach(([k, v]) => body.append(k, typeof v === 'boolean' ? String(v) : v))
       files.forEach(f => body.append('files', f))
       const { data } = await api.post('/submissions/lodge-signed-paper/', body, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -76,7 +76,9 @@ export default function LodgeSignedPaper() {
         <PageHeader title="Signed paper lodged" />
         <BaseMessageBar intent="success">
           {result.reference_number} is lodged.{' '}
-          {result.placed_on_agenda
+          {result.is_test
+            ? 'It is marked as a test and was NOT placed on any agenda.'
+            : result.placed_on_agenda
             ? `It was placed on the agenda for ${result.meeting}.`
             : 'No upcoming sitting was available, so it is waiting in the Sitting Workspace backlog for the Secretary to place.'}
         </BaseMessageBar>
@@ -140,6 +142,18 @@ export default function LodgeSignedPaper() {
         <p className="mt-1 text-xs text-slate-500">The first file is the main package; others are stored as scanned attachments.</p>
         {errors.files && <p className="mt-1 text-xs text-red-600">{errors.files}</p>}
       </div>
+
+      <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={form.is_test}
+          onChange={e => setForm(f => ({ ...f, is_test: e.target.checked }))}
+        />
+        <span>
+          <strong>Test / training submission.</strong> It is kept off every agenda, so it can never reach the Commission.
+        </span>
+      </label>
 
       <BaseTextarea label="Notes (optional)" value={form.notes} onChange={set('notes')} rows={3} />
 
