@@ -25,8 +25,10 @@ class LodgeSignedPaperTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.ministry = Ministry.objects.create(code="ZZ_LSP", name="Paper Ministry")
-        self.section = AgendaSection.objects.create(
-            code="appointment", label="Appointment", display_order=5, is_active=True,
+        # "appointment" is already seeded by migrations; make sure it is usable.
+        self.section, _ = AgendaSection.objects.update_or_create(
+            code="appointment",
+            defaults={"label": "Appointment", "display_order": 5, "is_active": True, "is_special": False},
         )
         self.meeting = Meeting.objects.create(
             title="Sitting", date=timezone.now().date() + timedelta(days=30),
