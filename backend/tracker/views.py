@@ -1688,6 +1688,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         notes = (request.data.get("notes") or "").strip()
         form_code = (request.data.get("form_type_code") or "").strip()
+        # Training/demo lodgements: is_test keeps it off every real agenda
+        # (see _auto_place_on_agenda) and out of AI briefs.
+        is_test = str(request.data.get("is_test") or "").strip().lower() in {"1", "true", "yes", "on"}
         now = timezone.now()
 
         with transaction.atomic():
@@ -1700,6 +1703,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 received_at=now,
                 registered_at=now,
                 is_internal=False,
+                is_test=is_test,
                 created_by=request.user,
                 notes=notes,
                 lodged_from_paper=True,
@@ -1743,6 +1747,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             {
                 "id": submission.id,
                 "reference_number": submission.reference_number,
+                "is_test": submission.is_test,
                 "placed_on_agenda": bool(placement),
                 "meeting": placement.meeting.reference_number if placement else None,
             },

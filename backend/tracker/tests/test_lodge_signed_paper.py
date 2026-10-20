@@ -102,3 +102,13 @@ class LodgeSignedPaperTests(TestCase):
         self.client.force_authenticate(user=self.csu)
         res = self.client.post(URL, self._payload(agenda_category="nope"), format="multipart")
         self.assertEqual(res.status_code, 400)
+
+    def test_test_flag_keeps_submission_off_the_agenda(self):
+        self.client.force_authenticate(user=self.csu)
+        res = self.client.post(URL, self._payload(is_test="true"), format="multipart")
+        self.assertEqual(res.status_code, 201, res.content)
+        sub = Submission.objects.get(pk=res.data["id"])
+        self.assertTrue(sub.is_test)
+        self.assertTrue(sub.lodged_from_paper)
+        self.assertFalse(AgendaItem.objects.filter(submission=sub).exists())
+        self.assertFalse(res.data["placed_on_agenda"])
