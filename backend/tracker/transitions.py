@@ -785,6 +785,11 @@ def assert_transition_allowed(
                 "clarification requests to the ministry directly — the Manager ODU "
                 "approves and routes the submission forward."
             )
+        # Unit managers may only take the edges the stage graph defines. Without
+        # this they returned "allowed" for ANY target (e.g. straight to
+        # Forwarded to Commission), bypassing the Secretary approval gate.
+        if target_stage not in _STAGE_GRAPH.get(current_stage, []):
+            raise PermissionDenied("That workflow transition is not allowed from the current stage.")
         return
 
     # ── OPSC Unit Principals / Senior Officers — do the work, hand it back ──

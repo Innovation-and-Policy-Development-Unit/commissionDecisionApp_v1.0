@@ -96,6 +96,13 @@ class TransitionTests(TestCase):
     def test_vipam_manager_can_submit_to_secretary(self):
         self._call(Role.VIPAM_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
+    def test_unit_manager_cannot_bypass_secretary_gate(self):
+        # Regression: unit managers were allowed ANY target from their two stages.
+        for role in (Role.VIPAM_MANAGER, Role.HR_UNIT_MANAGER, Role.ODU_MANAGER):
+            for stage in (WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT):
+                for target in (WorkflowStage.FORWARDED_TO_COMMISSION, WorkflowStage.APPROVED):
+                    self._denied(role, stage, target)
+
     def test_vipam_manager_cannot_transition_outside_checklist(self):
         self._denied(Role.VIPAM_MANAGER, WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.FORWARDED_TO_COMMISSION)
 
@@ -134,7 +141,7 @@ class TransitionTests(TestCase):
         self._call_internal(Role.COMPLIANCE_PRINCIPAL, WorkflowStage.DRAFT, WorkflowStage.PENDING_MANAGER_APPROVAL)
 
     def test_compliance_senior_submits_draft_for_manager_approval(self):
-        self._call_internal(Role.COMPLIANCE_SENIOR, WorkflowStage.DRAFT, WorkflowStage.PENDING_MANAGER_APPROVAL)
+        self._call_internal(Role.COMPLIANCE_SENIOR, WorkflowStage.DRAFT, WorkflowStage.PENDING_PRINCIPAL_REVIEW)
 
     def test_compliance_manager_cannot_submit_draft_for_own_approval(self):
         # The Manager IS the approver — no self-approval step.
@@ -189,7 +196,10 @@ class TransitionTests(TestCase):
 
     # ── PSC Secretary ─────────────────────────────────────────────────────
     def test_secretary_can_forward_to_commission(self):
-        self._call(Role.PSC_SECRETARY, WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.FORWARDED_TO_COMMISSION)
+        self._call(Role.PSC_SECRETARY, WorkflowStage.PENDING_SECRETARY_APPROVAL, WorkflowStage.FORWARDED_TO_COMMISSION)
+
+    def test_secretary_cannot_skip_the_approval_gate(self):
+        self._denied(Role.PSC_SECRETARY, WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.FORWARDED_TO_COMMISSION)
 
     # Secretariat records the Commission's decision from the signed minutes.
     def test_secretary_can_approve(self):
@@ -250,7 +260,13 @@ class TransitionTests(TestCase):
         self._denied(Role.PSC_COMMISSIONER, WorkflowStage.COMMISSION_SITTING, WorkflowStage.MATTERS_ARISING)
 
     def test_matters_arising_can_return_to_sitting(self):
-        self._call(Role.PSC_SECRETARY, WorkflowStage.MATTERS_ARISING, WorkflowStage.COMMISSION_SITTING)
+        assert_transition_allowed(
+            role=Role.PSC_SECRETARY, current_stage=WorkflowStage.MATTERS_ARISING,
+            target_stage=WorkflowStage.COMMISSION_SITTING, remarks="Resolved at the previous sitting.",
+        )
+
+    def test_matters_arising_requires_resolution_note(self):
+        self._denied(Role.PSC_SECRETARY, WorkflowStage.MATTERS_ARISING, WorkflowStage.COMMISSION_SITTING)
 
     def test_officer_can_refer_for_legal_advice(self):
         self._call(Role.PSC_OFFICER, WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.AWAITING_LEGAL_ADVICE)
@@ -338,7 +354,7 @@ class RestructurePrincipalDirectClarificationTests(TestCase):
         assert_transition_allowed(
             role=Role.ODU_MANAGER,
             current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
-            target_stage=WorkflowStage.UNDER_ASSESSMENT,
+            target_stage=WorkflowStage.PENDING_SECRETARY_APPROVAL,
             form_type_code="PSC 2-1",
         )
 
@@ -387,7 +403,7 @@ class RestructurePrincipalDirectClarificationTests(TestCase):
         assert_transition_allowed(
             role=Role.ODU_MANAGER,
             current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
-            target_stage=WorkflowStage.UNDER_ASSESSMENT,
+            target_stage=WorkflowStage.PENDING_SECRETARY_APPROVAL,
             form_type_code="PSC 2-2",
         )
 
@@ -450,7 +466,7 @@ class RestructurePrincipalDirectClarificationTests(TestCase):
             assert_transition_allowed(
                 role=Role.ODU_MANAGER,
                 current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
-                target_stage=WorkflowStage.UNDER_ASSESSMENT,
+                target_stage=WorkflowStage.PENDING_SECRETARY_APPROVAL,
                 form_type_code=code,
             )
 

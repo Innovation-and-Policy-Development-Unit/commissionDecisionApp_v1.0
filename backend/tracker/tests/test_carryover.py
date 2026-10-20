@@ -79,8 +79,15 @@ class AdmitReserveAPITests(TestCase):
         self.late.refresh_from_db()
         self.assertEqual(self.late.scheduled_meeting_id, self.meeting.id)
 
-    def test_non_chairman_blocked(self):
+    def test_secretary_may_admit_late_item(self):
+        # The view allows Chairperson, PSC Secretary and PSC Admin.
         self.client.force_authenticate(self.sec)
+        self.assertEqual(self._admit().status_code, 200)
+
+    def test_non_chairman_blocked(self):
+        commissioner = User.objects.create_user("ar_commissioner", password="x")
+        Profile.objects.create(user=commissioner, role=Role.PSC_COMMISSIONER)
+        self.client.force_authenticate(commissioner)
         self.assertEqual(self._admit().status_code, 403)
 
     def test_only_during_endorsement(self):
