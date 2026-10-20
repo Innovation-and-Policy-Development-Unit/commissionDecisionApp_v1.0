@@ -734,6 +734,7 @@ class Command(BaseCommand):
         ("manage_agenda",       "Manage Meeting Agenda",      "secretariat", "Add, order, and manage agenda items for each sitting."),
         ("manage_notifications","Manage Decision Notifications","secretariat","Draft and issue formal decision notification letters."),
         ("regenerate_ai_brief", "Regenerate AI Brief", "secretariat", "Force-regenerate an AI executive brief or meeting briefing pack."),
+        ("lodge_signed_paper", "Lodge Signed Paper Submission", "secretariat", "Scan and upload an Acting-Secretary-signed paper package for a ministry not on SCDMS; it goes straight to the agenda."),
         # Administration
         ("manage_users",        "Manage Users",        "administration", "Create, edit, and deactivate user accounts."),
         ("manage_roles",        "Manage Roles & Permissions","administration","Configure role definitions and their permission sets."),
@@ -755,6 +756,7 @@ class Command(BaseCommand):
             "forward_commission", "record_decision", "allocate_decision", "assign_task",
             "update_implementation", "view_reports", "export_reports",
             "manage_meetings", "manage_agenda", "manage_notifications", "regenerate_ai_brief",
+            "lodge_signed_paper",
             "manage_users", "manage_roles", "manage_ui_translations", "view_audit_trail",
             "manage_report_templates",
             "feedback_view", "feedback_manage", "feedback_respond", "feedback_configure",
@@ -765,7 +767,7 @@ class Command(BaseCommand):
             "responsible unit Manager (e.g. ODU for restructure / establishment variation)."
         ), [
             "view_dashboard", "view_submissions", "create_submission", "edit_submission",
-            "transition_workflow", "view_audit_trail",
+            "transition_workflow", "lodge_signed_paper", "view_audit_trail",
         ]),
         ("psc_officer", "Receives and processes submissions through initial operational workflow stages.", [
             "view_dashboard", "view_submissions", "create_submission", "edit_submission",
@@ -856,7 +858,7 @@ class Command(BaseCommand):
             "works only on tasks allocated to CSU."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow", "create_submission",
-            "assign_task", "update_implementation",
+            "assign_task", "update_implementation", "lodge_signed_paper",
             "view_commission_minutes", "view_commission_tasks",
             "view_reports", "view_audit_trail",
         ]),
@@ -942,7 +944,7 @@ class Command(BaseCommand):
             "CSU Manager. CSU has no submission-review tier of its own (CSU submissions route "
             "through the HR Unit for checklist review), so this role is post-decision only."
         ), [
-            "view_submissions", "update_implementation",
+            "view_submissions", "update_implementation", "lodge_signed_paper",
             "view_commission_minutes", "view_commission_tasks",
             "view_audit_trail",
         ]),

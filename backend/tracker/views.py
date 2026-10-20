@@ -1616,6 +1616,139 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         return Response(SubmissionPrivateNoteSerializer(note).data)
 
+    @action(detail=False, methods=["post"], url_path="lodge-signed-paper",
+            parser_classes=[parsers.MultiPartParser, parsers.FormParser])
+    def lodge_signed_paper(self, request):
+        """
+        Pilot: lodge a scanned, Acting-Secretary-signed paper package.
+
+        Non-pilot ministries stay on the paper process (checklist review,
+        returns, etc.) up to Acting Secretary approval. Once signed, the
+        allocated CSU staff member (Receptionist as back-up) scans the complete
+        package — submission, attachments, checklist and assessment — and
+        uploads it here. The submission is created already at "Forwarded to
+        Commission" and auto-placed on the same agenda, and therefore the same
+        minutes, as online pilot submissions. No ministry account is involved.
+
+        Multipart fields: ministry, title, agenda_category, paper_signed_on
+        (YYYY-MM-DD), files (one or more, first is the main package);
+        optional form_type_code and notes.
+        """
+        from datetime import date
+
+        from rest_framework.exceptions import ValidationError
+
+        from .agenda_sections import validate_agenda_section_code
+        from .audit import log_action as _log
+        from .file_validation import FileValidationError, validate_upload
+        from .models import AgendaSection, AuditLog as _AL, Ministry
+        from .rbac import rbac_user_can_lodge_signed_paper
+        from .tasks import queue_document_classification, queue_document_extraction
+
+        if not rbac_user_can_lodge_signed_paper(request.user):
+            raise PermissionDenied(
+                "Only CSU staff or the Receptionist may lodge a signed paper submission."
+            )
+
+        title = (request.data.get("title") or "").strip()
+        if not title:
+            raise ValidationError({"title": "A title is required."})
+        ministry = Ministry.objects.filter(pk=request.data.get("ministry") or None).first()
+        if not ministry:
+            raise ValidationError({"ministry": "Please select the ministry for this submission."})
+
+        category = (request.data.get("agenda_category") or "").strip()
+        try:
+            validate_agenda_section_code(category)
+        except ValueError as exc:
+            raise ValidationError({"agenda_category": str(exc)}) from exc
+        if not category or AgendaSection.objects.filter(code=category, is_special=True).exists():
+            raise ValidationError({"agenda_category": "Please select an agenda section."})
+
+        try:
+            signed_on = date.fromisoformat((request.data.get("paper_signed_on") or "").strip())
+        except ValueError:
+            raise ValidationError({"paper_signed_on": "Enter the date the Acting Secretary signed (YYYY-MM-DD)."})
+        if signed_on > timezone.localdate():
+            raise ValidationError({"paper_signed_on": "The signing date cannot be in the future."})
+
+        files = request.FILES.getlist("files")
+        if not files:
+            raise ValidationError({"files": "Attach the scanned signed package."})
+        for uploaded in files:
+            if uploaded.size > self.MAX_UPLOAD_FILE_SIZE:
+                raise ValidationError({
+                    "files": f"File '{uploaded.name}' exceeds the "
+                             f"{self.MAX_UPLOAD_FILE_SIZE // (1024 * 1024)} MB limit.",
+                })
+            try:
+                validate_upload(uploaded, kind="document")
+            except FileValidationError as exc:
+                raise ValidationError({"files": str(exc)}) from exc
+
+        notes = (request.data.get("notes") or "").strip()
+        form_code = (request.data.get("form_type_code") or "").strip()
+        now = timezone.now()
+
+        with transaction.atomic():
+            submission = Submission.objects.create(
+                title=title,
+                ministry=ministry,
+                agenda_category=category,
+                form_type_code=form_code,
+                current_stage=WorkflowStage.FORWARDED_TO_COMMISSION,
+                received_at=now,
+                registered_at=now,
+                is_internal=False,
+                created_by=request.user,
+                notes=notes,
+                lodged_from_paper=True,
+                paper_lodged_by=request.user,
+                paper_lodged_at=now,
+                paper_signed_on=signed_on,
+            )
+            WorkflowEvent.objects.create(
+                submission=submission,
+                actor=request.user,
+                previous_stage=WorkflowStage.DRAFT,
+                new_stage=WorkflowStage.FORWARDED_TO_COMMISSION,
+                remarks=(
+                    f"Signed paper package scanned and lodged; signed by the Acting Secretary "
+                    f"on {signed_on:%d %b %Y}."
+                    + (f" {notes}" if notes else "")
+                ),
+            )
+            docs = []
+            for idx, uploaded in enumerate(files):
+                docs.append(SubmissionDocument.objects.create(
+                    submission=submission,
+                    file=uploaded,
+                    original_name=uploaded.name,
+                    description="Signed paper package" if idx == 0 else "Scanned attachment",
+                    uploaded_by=request.user,
+                ))
+            self._auto_place_on_agenda(submission)
+
+        for doc in docs:
+            queue_document_extraction(doc.id)
+            queue_document_classification(doc.id)
+        invalidate_submission(submission.id)
+
+        _log(request, _AL.Action.CREATE, resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Signed paper package lodged for {ministry.name}: {submission.reference_number}")
+
+        placement = AgendaItem.objects.filter(submission=submission).select_related("meeting").first()
+        return Response(
+            {
+                "id": submission.id,
+                "reference_number": submission.reference_number,
+                "placed_on_agenda": bool(placement),
+                "meeting": placement.meeting.reference_number if placement else None,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     @action(detail=True, methods=["get"], url_path="meeting-history")
     def meeting_history(self, request, pk=None):
         """Every prior meeting this submission has been placed on — with the
@@ -7064,8 +7197,22 @@ class UserAdminViewSet(
         from .models import AuditLog as _AL
         if not request.user.is_superuser:
             raise PermissionDenied("Only a super administrator can unlock accounts.")
+        # Work out who is genuinely locked *before* clearing, so only those users
+        # get the "account unlocked" email — not everyone with a stray failed login.
+        from django.contrib.auth import get_user_model
+        from .axes_config import current_failure_limit
+
+        locked_usernames = set(
+            Profile.objects.filter(hard_locked=True).values_list("user__username", flat=True)
+        )
         try:
             from axes.models import AccessAttempt
+            limit = current_failure_limit()
+            locked_usernames |= {
+                u for u in AccessAttempt.objects
+                .filter(failures_since_start__gte=limit)
+                .values_list("username", flat=True) if u
+            }
             deleted, _ = AccessAttempt.objects.all().delete()
         except Exception as exc:
             return Response({"detail": f"Could not clear lockouts: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -7073,6 +7220,10 @@ class UserAdminViewSet(
         Profile.objects.filter(hard_locked=True).update(
             hard_locked=False, hard_locked_at=None, temp_lock_count=0
         )
+
+        from .email_notify import notify_account_unlocked
+        for unlocked_user in get_user_model().objects.filter(username__in=locked_usernames):
+            notify_account_unlocked(unlocked_user)
 
         _security_log.warning(
             "ALL_LOCKOUTS_RESET | by=%s | cleared=%d", request.user.username, deleted
@@ -7083,6 +7234,7 @@ class UserAdminViewSet(
         return Response({
             "detail": f"All lockouts cleared. {deleted} record(s) removed.",
             "cleared_records": deleted,
+            "users_notified": len(locked_usernames),
         })
 
     # ── lockout-stats ─────────────────────────────────────────────────────────
@@ -8176,6 +8328,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 "sequence": it.sequence,
                 "agenda_blurb": it.agenda_blurb,
                 "agenda_blurb_processed": it.agenda_blurb_processed,
+                "lodged_from_paper": it.submission.lodged_from_paper,
             }
             for it in items
         ]

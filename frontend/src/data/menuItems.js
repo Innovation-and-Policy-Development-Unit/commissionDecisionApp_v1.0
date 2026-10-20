@@ -31,6 +31,7 @@ const menuItems = [
     items: [
       { label: 'Dashboard',   labelKey: 'nav.dashboard',   icon: LayoutDashboard, path: '/' },
       { label: 'Submissions', labelKey: 'nav.submissions', icon: FileText,        path: '/submissions' },
+      { label: 'Lodge Signed Paper', labelKey: 'nav.lodge_signed_paper', icon: FileText, path: '/submissions/lodge-paper', userFlag: 'can_lodge_signed_paper' },
     ],
   },
   {
