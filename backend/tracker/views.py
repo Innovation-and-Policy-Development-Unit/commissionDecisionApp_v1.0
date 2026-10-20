@@ -7197,8 +7197,22 @@ class UserAdminViewSet(
         from .models import AuditLog as _AL
         if not request.user.is_superuser:
             raise PermissionDenied("Only a super administrator can unlock accounts.")
+        # Work out who is genuinely locked *before* clearing, so only those users
+        # get the "account unlocked" email — not everyone with a stray failed login.
+        from django.contrib.auth import get_user_model
+        from .axes_config import current_failure_limit
+
+        locked_usernames = set(
+            Profile.objects.filter(hard_locked=True).values_list("user__username", flat=True)
+        )
         try:
             from axes.models import AccessAttempt
+            limit = current_failure_limit()
+            locked_usernames |= {
+                u for u in AccessAttempt.objects
+                .filter(failures_since_start__gte=limit)
+                .values_list("username", flat=True) if u
+            }
             deleted, _ = AccessAttempt.objects.all().delete()
         except Exception as exc:
             return Response({"detail": f"Could not clear lockouts: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -7206,6 +7220,10 @@ class UserAdminViewSet(
         Profile.objects.filter(hard_locked=True).update(
             hard_locked=False, hard_locked_at=None, temp_lock_count=0
         )
+
+        from .email_notify import notify_account_unlocked
+        for unlocked_user in get_user_model().objects.filter(username__in=locked_usernames):
+            notify_account_unlocked(unlocked_user)
 
         _security_log.warning(
             "ALL_LOCKOUTS_RESET | by=%s | cleared=%d", request.user.username, deleted
@@ -7216,6 +7234,7 @@ class UserAdminViewSet(
         return Response({
             "detail": f"All lockouts cleared. {deleted} record(s) removed.",
             "cleared_records": deleted,
+            "users_notified": len(locked_usernames),
         })
 
     # ── lockout-stats ─────────────────────────────────────────────────────────
