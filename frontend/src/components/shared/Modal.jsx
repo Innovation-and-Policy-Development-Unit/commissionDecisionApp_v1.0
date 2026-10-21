@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { X } from 'lucide-react'
 import clsx from 'clsx'
+import { attachDialog } from '../../utils/dialogFocus'
 
 const SIZES = {
   sm: 'max-w-sm',
@@ -21,6 +22,7 @@ export default function Modal({
   footer,
   panelClassName = '',
   closeLabel = 'Close dialog',
+  zClass = 'z-[80]',
 }) {
   useEffect(() => {
     if (!open) return undefined
@@ -33,17 +35,20 @@ export default function Modal({
     }
   }, [open, onClose])
 
+  const titleId = useId()
   if (!open) return null
   const showHeader = Boolean(title || subtitle)
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      ref={attachDialog}
+      className={clsx('fixed inset-0 flex items-center justify-center p-4', zClass)}
       role="dialog"
       aria-modal="true"
-      aria-label={typeof title === 'string' ? title : closeLabel}
+      aria-labelledby={title ? titleId : undefined}
+      aria-label={title ? undefined : closeLabel}
     >
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]" onClick={onClose} />
+      <div data-dialog-backdrop className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]" onClick={onClose} />
       <div className={clsx(
         'relative w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] animate-scale-in',
         SIZES[size] || SIZES.md,
@@ -52,7 +57,7 @@ export default function Modal({
         {showHeader ? (
           <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100 dark:border-slate-700 shrink-0">
             <div className="min-w-0 flex-1">
-              {title && <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>}
+              {title && <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>}
               {subtitle && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>}
             </div>
             <button type="button" onClick={onClose} aria-label={closeLabel}

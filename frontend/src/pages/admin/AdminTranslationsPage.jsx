@@ -18,6 +18,7 @@ import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { userCanManageTranslations } from '../../utils/adminAccess'
 import { loadRemoteTranslationBundles } from '../../i18n/remoteTranslations'
+import { attachDialog } from '../../utils/dialogFocus'
 
 const PAGE_SIZE = 50
 
@@ -369,7 +370,7 @@ export default function AdminTranslationsPage() {
       </div>
 
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+        <div ref={attachDialog} aria-label={t('admin_translations.add_key')} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <form
             onSubmit={addKey}
             className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4"

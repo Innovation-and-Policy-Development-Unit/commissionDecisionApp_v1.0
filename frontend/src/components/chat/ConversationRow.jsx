@@ -5,11 +5,13 @@ import { useAuth } from '../../context/AuthContext'
 import { useDismissible } from '../../hooks/useDismissible'
 import Avatar from '../shared/Avatar'
 import { formatNotificationTime } from '../../utils/browserNotifications'
+import { useConfirm } from '../../context/ConfirmContext'
 
 /** One conversation-list row, shared by the header dropdown and the full
  * /chat page — avatar/online dot, sender-prefixed preview, unread badge,
  * muted indicator, and a per-row "…" menu (mute/unmute, delete). */
 export default function ConversationRow({ conversation: c, active, onSelect, t }) {
+  const confirm = useConfirm()
   const { user } = useAuth()
   const { muteConversation, deleteConversation } = useChat()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -24,9 +26,9 @@ export default function ConversationRow({ conversation: c, active, onSelect, t }
     ? (c.last_message.sender === user?.id ? t('chat.you') : c.last_message.sender_name)
     : null
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     setMenuOpen(false)
-    if (window.confirm(t('chat.confirm_delete_conversation'))) deleteConversation(c.id)
+    if (await confirm({ title: t('chat.delete'), message: t('chat.confirm_delete_conversation'), confirmLabel: t('chat.delete') })) deleteConversation(c.id)
   }
 
   return (

@@ -22,6 +22,7 @@ function ConfirmDialog({ dialog, onResolve }) {
       open
       onClose={() => onResolve(false)}
       size="sm"
+      zClass="z-[300]"
       title={title}
       footer={(
         <>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Key } from 'lucide-react'
+import { attachDialog } from '../../../utils/dialogFocus'
 
 const SCOPE_OPTIONS = [
   { key: 'read',   label: 'Read',   desc: 'Read-only access to all resources' },
@@ -38,8 +39,8 @@ export default function CreateKeyModal({ open, onClose, onCreate }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
+    <div ref={attachDialog} aria-label="Create New API Key" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div data-dialog-backdrop className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
       <div className="relative bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl z-10 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">

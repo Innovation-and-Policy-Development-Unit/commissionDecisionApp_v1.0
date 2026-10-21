@@ -5,6 +5,7 @@ import {
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import StatCard from '../../components/shared/StatCard'
+import { useConfirm } from '../../context/ConfirmContext'
 
 const currentYear = () => new Date().getFullYear()
 const yearOptions = () => {
@@ -35,6 +36,7 @@ const ALL_KEYS = SECTIONS.map(s => s.key)
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export default function AnnualReport() {
+  const confirm = useConfirm()
   const [periodType, setPeriodType] = useState('annual')
   const [year, setYear] = useState(currentYear() - 1)
   const [quarter, setQuarter] = useState(1)
@@ -109,7 +111,7 @@ export default function AnnualReport() {
 
   const remove = async (report) => {
     const label = report.period_label || `Statistics ${report.year}`
-    if (!window.confirm(`Delete the generated report "${label}"? This cannot be undone.`)) return
+    if (!(await confirm({ title: 'Delete report', message: `Delete the generated report "${label}"? This cannot be undone.` }))) return
     setDeletingId(report.id)
     setError('')
     try {

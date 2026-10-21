@@ -37,6 +37,11 @@ const BaseButton = forwardRef(function BaseButton(
   ref,
 ) {
   const isIconOnly = iconOnly || (size === 'icon' && !children)
+  // An icon-only button needs a real name; "Loading" is only right while loading.
+  const accessibleName = props['aria-label'] ?? (isIconOnly ? props.title : undefined)
+  if (import.meta.env?.DEV && isIconOnly && !accessibleName && !loading) {
+    console.warn('BaseButton: icon-only button has no aria-label or title')
+  }
   return (
     <button
       ref={ref}
@@ -44,7 +49,7 @@ const BaseButton = forwardRef(function BaseButton(
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      aria-label={isIconOnly && !props['aria-label'] ? loadingLabel : props['aria-label']}
+      aria-label={accessibleName}
       className={clsx(
         'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed',
         VARIANTS[variant] ?? VARIANTS.ghost,

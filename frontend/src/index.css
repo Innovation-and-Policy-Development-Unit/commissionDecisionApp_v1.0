@@ -981,3 +981,21 @@
 .dark .rich-note-prose p.is-editor-empty:first-child::before {
   color: theme('colors.slate.500');
 }
+
+/* Light-mode contrast: slate-400 (#94a3b8) is ~2.6:1 on white, below the 4.5:1
+   WCAG AA minimum for text. Darken it to slate-500 (~4.8:1); dark mode has its
+   own override above. */
+html:not(.dark) .text-slate-400 { color: #64748b; }
+html:not(.dark) .placeholder-slate-400::placeholder { color: #64748b; }
+
+/* Respect the OS "reduce motion" setting (WCAG 2.3.3). Spinners keep turning
+   slowly so loading is still visible; everything else stops. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin { animation: spin 2.5s linear infinite !important; }
+}

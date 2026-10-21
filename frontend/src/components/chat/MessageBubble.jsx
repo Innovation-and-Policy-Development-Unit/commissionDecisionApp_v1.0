@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CornerUpLeft, FileText, Pencil, Smile, Trash2 } from 'lucide-react'
 import MentionText from '../shared/MentionText'
+import { useConfirm } from '../../context/ConfirmContext'
 
 const QUICK_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
@@ -38,6 +39,7 @@ function AttachmentPreview({ attachment }) {
 }
 
 export default function MessageBubble({ message, isOwn, onReply, onEdit, onDelete, onReact, compact = false }) {
+  const confirm = useConfirm()
   const { t } = useTranslation()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -82,7 +84,7 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, onDelet
               {!message.pending && (
                 <>
                   <button type="button" onClick={() => setEditing((v) => !v)} aria-label={t('chat.edit')} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700"><Pencil size={12} /></button>
-                  <button type="button" onClick={() => { if (window.confirm(t('chat.confirm_delete'))) onDelete(message.id) }} aria-label={t('chat.delete')} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700"><Trash2 size={12} /></button>
+                  <button type="button" onClick={async () => { if (await confirm({ title: t('chat.delete'), message: t('chat.confirm_delete'), confirmLabel: t('chat.delete') })) onDelete(message.id) }} aria-label={t('chat.delete')} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700"><Trash2 size={12} /></button>
                 </>
               )}
             </div>

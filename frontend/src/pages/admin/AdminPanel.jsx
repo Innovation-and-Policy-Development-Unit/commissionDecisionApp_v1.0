@@ -5,6 +5,7 @@
  * (API Keys, System Config, Security, and Backup & Restore use separate sidebar routes.)
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import SharedModal from '../../components/shared/Modal'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
@@ -51,6 +52,7 @@ import { useConfirm } from '../../context/ConfirmContext'
 import {
   userCanAccessAdminPanel, userCanManageRoles, userCanManageUsers,
 } from '../../utils/adminAccess'
+import { attachDialog } from '../../utils/dialogFocus'
 
 const TABS = [
   { id: 'users',       label: 'Users',            icon: Users,       needs: 'users'  },
@@ -155,33 +157,10 @@ function CatBadge({ cat }) {
 }
 
 function Modal({ title, onClose, children, wide }) {
-  const ref = useRef(null)
-  useEffect(() => {
-    const handler = e => {
-      if (ref.current && !ref.current.contains(e.target)) onClose()
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div
-        ref={ref}
-        className={`card p-0 overflow-hidden animate-scale-in w-full ${wide ? 'max-w-2xl' : 'max-w-md'}`}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
+    <SharedModal open onClose={onClose} title={title} size={wide ? 'lg' : 'md'}>
+      {children}
+    </SharedModal>
   )
 }
 
@@ -3005,13 +2984,13 @@ export function BackupTab() {
 
       {/* ── Restore confirmation modal ── */}
       {confirmRestore && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div ref={attachDialog} aria-label="Confirm Restore" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="card p-0 overflow-hidden w-full max-w-md animate-scale-in">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
               <h2 className="text-base font-semibold text-red-700 dark:text-red-400 flex items-center gap-2">
                 <AlertTriangle size={16} /> Confirm Restore
               </h2>
-              <button onClick={() => setConfirmRestore(null)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={16} /></button>
+              <button type="button" aria-label="Close" onClick={() => setConfirmRestore(null)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X size={16} /></button>
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-slate-700 dark:text-slate-300">

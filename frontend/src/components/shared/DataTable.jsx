@@ -73,18 +73,24 @@ export default function DataTable({
               {columns.map(col => (
                 <th
                   key={col.key}
-                  onClick={() => col.sortable !== false && handleSort(col.key)}
-                  className={clsx(
-                    'px-3 py-2',
-                    col.sortable !== false && 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 select-none',
-                  )}
+                  scope="col"
+                  aria-sort={col.sortable !== false ? (sortCol === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none') : undefined}
+                  className="px-3 py-2"
                 >
-                  <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                    {col.label}
-                    {col.sortable !== false && sortCol === col.key && (
-                      sortDir === 'asc' ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />
-                    )}
-                  </div>
+                  {col.sortable !== false ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(col.key)}
+                      className="flex items-center gap-1 -mx-1 px-1 rounded text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    >
+                      {col.label}
+                      {sortCol === col.key && (
+                        sortDir === 'asc' ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />
+                      )}
+                    </button>
+                  ) : (
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{col.label}</div>
+                  )}
                 </th>
               ))}
             </tr>

@@ -71,6 +71,7 @@ import {
   useOnTabVisible,
   useVisibilityAwareInterval,
 } from '../../hooks/useVisibilityAwareInterval'
+import { attachDialog } from '../../utils/dialogFocus'
 
 // All roles that may trigger a transition
 const TRANSITION_ROLES = [
@@ -2184,8 +2185,8 @@ const stageDescriptions = {
       />
     )}
     {editOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditOpen(false)} />
+      <div ref={attachDialog} aria-label="Edit Submission" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div data-dialog-backdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditOpen(false)} />
         <div className="relative z-10 w-full max-w-lg bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
             <div>

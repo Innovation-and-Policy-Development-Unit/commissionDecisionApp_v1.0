@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
 import Badge from '../../components/shared/Badge'
+import { Skeleton } from '../../components/shared/Skeleton'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseInput from '../../components/shared/BaseInput'
 import BaseSelect from '../../components/shared/BaseSelect'
@@ -68,11 +69,13 @@ export default function SubmissionLog() {
   // Dashboard quick-filter from ?filter= query param
   const [dashboardFilter, setDashboardFilter] = useState(() => searchParams.get('filter') || '')
 
-  const [q, setQ]                 = useState('')
-  const [qDebounced, setQDebounced] = useState('')
-  const [stageFilter, setStageFilter] = useState('')
-  const [ministryFilter, setMinistryFilter] = useState('')
-  const [unitFilter, setUnitFilter] = useState('')
+  // List filters live in the URL so a refresh, the back button, or a pasted
+  // link restores the same view.
+  const [q, setQ]                 = useState(() => searchParams.get('q') || '')
+  const [qDebounced, setQDebounced] = useState(() => searchParams.get('q') || '')
+  const [stageFilter, setStageFilter] = useState(() => searchParams.get('stage') || '')
+  const [ministryFilter, setMinistryFilter] = useState(() => searchParams.get('ministry') || '')
+  const [unitFilter, setUnitFilter] = useState(() => searchParams.get('unit') || '')
   const [page, setPage]           = useState(1)
   const [modalOpen, setModalOpen] = useState(false)
   /** @type {'commission'|'secretary'|null} */
@@ -82,7 +85,7 @@ export default function SubmissionLog() {
   const [nlBusy, setNlBusy]       = useState(false)
   const [nlMeta, setNlMeta]       = useState(null)
   const [nlIdSet, setNlIdSet]     = useState(null)
-  const [viewMode, setViewMode]   = useState('list')
+  const [viewMode, setViewMode]   = useState(() => (searchParams.get('view') === 'kanban' ? 'kanban' : 'list'))
   const isAdmin = user?.role === 'psc_admin'
   // Same role set the backend's DELETE /submissions/{id}/ already allows to
   // trash their own Draft submissions (views.py SubmissionViewSet.destroy) —
@@ -251,6 +254,19 @@ export default function SubmissionLog() {
   const safePage   = Math.min(page, totalPages)
   const changePage = (p) => setPage(Math.max(1, Math.min(totalPages, p)))
 
+  useEffect(() => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      const sync = (key, value) => { if (value) next.set(key, value); else next.delete(key) }
+      sync('q', qDebounced)
+      sync('stage', stageFilter)
+      sync('ministry', ministryFilter)
+      sync('unit', unitFilter)
+      sync('view', viewMode === 'kanban' ? 'kanban' : '')
+      return next.toString() === prev.toString() ? prev : next
+    }, { replace: true })
+  }, [qDebounced, stageFilter, ministryFilter, unitFilter, viewMode, setSearchParams])
+
   // Reset to page 1 (and clear selection) whenever the active filters change.
   useEffect(() => {
     setSelected(new Set())
@@ -281,8 +297,16 @@ export default function SubmissionLog() {
     })
     if (!ok) return
     const ids = [...selected]
-    await Promise.all(ids.map(id => api.delete(`/submissions/${id}/`).catch(() => {})))
-    setSelected(new Set())
+    const results = await Promise.allSettled(ids.map(id => api.delete(`/submissions/${id}/`)))
+    const failed = results.filter(r => r.status === 'rejected')
+    if (failed.length === 0) {
+      toast.success(`Moved ${ids.length} submission${ids.length !== 1 ? 's' : ''} to the trash.`)
+    } else {
+      const reason = failed[0].reason?.response?.data?.detail
+      toast.error(`${failed.length} of ${ids.length} could not be moved to the trash${reason ? `: ${reason}` : '.'}`)
+    }
+    // Keep only the failed rows selected so the user can see and retry them.
+    setSelected(new Set(ids.filter((_, i) => results[i].status === 'rejected')))
     refetchSubmissions()
   }
 
@@ -581,12 +605,14 @@ export default function SubmissionLog() {
             </thead>
             <tbody>
               {loading && (
-                <tr>
-                  <td colSpan={cols} className="py-16 text-center text-slate-500 dark:text-slate-400">
-                    <RefreshCw size={24} className="mx-auto mb-2 animate-spin opacity-40" />
-                    <p className="text-sm">{t('common.loading')}</p>
-                  </td>
-                </tr>
+                <>
+                  {Array.from({ length: 8 }, (_, i) => (
+                    <tr key={`sk-${i}`} aria-hidden="true">
+                      <td colSpan={cols} className="py-3"><Skeleton className="h-5 w-full" /></td>
+                    </tr>
+                  ))}
+                  <tr className="sr-only" role="status"><td colSpan={cols}>{t('common.loading')}</td></tr>
+                </>
               )}
               {!loading && rows.length === 0 && (
                 <tr>
@@ -597,10 +623,9 @@ export default function SubmissionLog() {
                 </tr>
               )}
               {!loading && rows.map(r => (
-                <>
+                <Fragment key={r.id}>
                   {/* ── Parent row ── */}
                   <tr
-                    key={r.id}
                     onClick={() => navigate(`/submissions/${r.id}`)}
                     className={clsx('cursor-pointer', selected.has(r.id) && 'bg-primary-50/50 dark:bg-primary-900/10')}
                   >
@@ -730,7 +755,7 @@ export default function SubmissionLog() {
                       <td colSpan={showActionsColumn ? 2 : 1} />
                     </tr>
                   ))}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
