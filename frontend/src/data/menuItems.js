@@ -160,6 +160,25 @@ const menuItems = [
   },
 ]
 
+// A menu item whose path is the parent of another item's path (e.g.
+// /submissions and /submissions/lodge-paper) must only highlight on an exact
+// match, otherwise NavLink's prefix matching lights up both entries at once.
+// Detail pages under it (/submissions/123) still highlight the parent because
+// no menu item claims those paths.
+const allMenuPaths = []
+const collectPaths = (items) => items.forEach((it) => {
+  if (it.path) allMenuPaths.push(it.path)
+  if (it.children) collectPaths(it.children)
+})
+menuItems.forEach((group) => collectPaths(group.items))
+const markExactMatchItems = (items) => items.forEach((it) => {
+  if (it.path && it.path !== '/' && allMenuPaths.some((p) => p.startsWith(`${it.path}/`))) {
+    it.end = true
+  }
+  if (it.children) markExactMatchItems(it.children)
+})
+menuItems.forEach((group) => markExactMatchItems(group.items))
+
 export function translateLabel(entry, t) {
   if (!entry) return ''
   const key = entry.labelKey || entry.groupKey
