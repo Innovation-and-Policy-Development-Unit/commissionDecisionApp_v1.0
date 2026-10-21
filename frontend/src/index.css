@@ -26,7 +26,7 @@
   --fontFamilyBase: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
   --fontFamilyMonospace: Consolas, 'Courier New', monospace;
 
-  --fontSizeBase100: 10px;
+  --fontSizeBase100: 12px;
   --fontSizeBase200: 12px;
   --fontSizeBase300: 14px;
   --fontSizeBase400: 16px;
@@ -37,7 +37,7 @@
   --fontSizeHero900: 40px;
   --fontSizeHero1000: 68px;
 
-  --lineHeightBase100: 14px;
+  --lineHeightBase100: 16px;
   --lineHeightBase200: 16px;
   --lineHeightBase300: 20px;
   --lineHeightBase400: 22px;
