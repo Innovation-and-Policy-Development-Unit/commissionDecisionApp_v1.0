@@ -12,6 +12,8 @@ const PARAM_OPTIONS = [
   { key: 'form_category_id', type: 'form_category', label: 'Category' },
   { key: 'stage', type: 'stage', label: 'Stage' },
   { key: 'overdue_only', type: 'bool', label: 'Overdue only' },
+  { key: 'routed_unit', type: 'routed_unit', label: 'Unit' },
+  { key: 'include_test', type: 'bool', label: 'Include test submissions' },
 ]
 
 export default function ReportTemplateForm({ initial, vocabulary, busy, onSave, onCancel }) {
@@ -53,7 +55,7 @@ export default function ReportTemplateForm({ initial, vocabulary, busy, onSave, 
     const payload = {
       name: name.trim(),
       description: description.trim(),
-      domain: 'submissions',
+      domain: initial?.domain || 'submissions',
       visible_to_all: visibleToAll,
       is_active: isActive,
       param_schema: PARAM_OPTIONS.filter(p => params.has(p.key)).map(p => ({ ...p, optional: true })),

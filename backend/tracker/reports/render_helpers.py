@@ -137,10 +137,13 @@ COLUMN_LABELS = {
 }
 
 
-def render_table(rows: list[dict[str, Any]], columns: list[str]) -> str:
+def render_table(
+    rows: list[dict[str, Any]], columns: list[str], labels: dict[str, str] | None = None
+) -> str:
     if not rows:
         return "<p><em>No records match this report.</em></p>"
-    head = "".join(f"<th>{_esc(COLUMN_LABELS.get(c, c))}</th>" for c in columns)
+    names = {**COLUMN_LABELS, **(labels or {})}
+    head = "".join(f"<th>{_esc(names.get(c, c))}</th>" for c in columns)
     body = []
     for r in rows:
         cells = "".join(f"<td>{_esc(r.get(c, ''))}</td>" for c in columns)
@@ -149,6 +152,15 @@ def render_table(rows: list[dict[str, Any]], columns: list[str]) -> str:
         f'<table class="table data-table"><thead><tr>{head}</tr></thead>'
         f'<tbody>{"".join(body)}</tbody></table>'
     )
+
+
+def render_notes(notes: list[str] | None) -> str:
+    """Definitions / method notes a domain resolver supplies in dataset.meta['notes']."""
+    items = [n for n in (notes or []) if n]
+    if not items:
+        return ""
+    lis = "".join(f"<li>{_esc(n)}</li>" for n in items)
+    return f'<ul class="report-notes">{lis}</ul>'
 
 
 REPORT_CSS = """
@@ -166,5 +178,6 @@ REPORT_CSS = """
 .data-table th, .data-table td { border-bottom:1px solid #e2e8f0; padding:6px 8px; text-align:left; }
 .data-table thead th { background:#f8fafc; }
 .chart-fallback { max-width:480px; }
+.report-notes { font-size:13px; color:#475569; line-height:1.5; }
 </style>
 """

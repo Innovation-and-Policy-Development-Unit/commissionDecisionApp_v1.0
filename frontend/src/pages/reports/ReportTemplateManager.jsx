@@ -14,6 +14,7 @@ export default function ReportTemplateManager() {
 
   const [templates, setTemplates] = useState([])
   const [vocabulary, setVocabulary] = useState(null)
+  const [editVocabulary, setEditVocabulary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState('list') // list | create | edit
   const [editing, setEditing] = useState(null)
@@ -36,6 +37,21 @@ export default function ReportTemplateManager() {
   }, [t, toast])
 
   useEffect(() => { load() }, [load])
+
+  const openEdit = async (tmpl) => {
+    let vocab = null
+    if (tmpl.domain && tmpl.domain !== 'submissions') {
+      try {
+        vocab = await reportTemplatesApi.vocabulary(tmpl.domain)
+      } catch (e) {
+        toast.error(e?.response?.data?.detail || t('report_hub.load_failed'))
+        return
+      }
+    }
+    setEditVocabulary(vocab)
+    setEditing(tmpl)
+    setMode('edit')
+  }
 
   const handleSave = async (payload) => {
     setBusy(true)
@@ -80,7 +96,7 @@ export default function ReportTemplateManager() {
         <div className="card p-6">
           <ReportTemplateForm
             initial={editing}
-            vocabulary={vocabulary}
+            vocabulary={mode === 'edit' && editVocabulary ? editVocabulary : vocabulary}
             busy={busy}
             onSave={handleSave}
             onCancel={() => { setMode('list'); setEditing(null) }}
@@ -98,7 +114,7 @@ export default function ReportTemplateManager() {
         <Link to="/reports" className="text-sm text-primary-600 hover:underline flex items-center gap-1">
           <ArrowLeft size={15} /> {t('report_hub.back_to_reports')}
         </Link>
-        <button type="button" className="btn-primary flex items-center gap-1" onClick={() => { setEditing(null); setMode('create') }}>
+        <button type="button" className="btn-primary flex items-center gap-1" onClick={() => { setEditing(null); setEditVocabulary(null); setMode('create') }}>
           <Plus size={16} /> {t('report_hub.new_template')}
         </button>
       </div>
@@ -135,7 +151,7 @@ export default function ReportTemplateManager() {
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-2">
-                      <button type="button" className="btn-ghost text-xs flex items-center gap-1" onClick={() => { setEditing(tmpl); setMode('edit') }}>
+                      <button type="button" className="btn-ghost text-xs flex items-center gap-1" onClick={() => openEdit(tmpl)}>
                         <Pencil size={15} /> {t('report_hub.edit')}
                       </button>
                       <button type="button" className="btn-ghost text-xs text-red-600 flex items-center gap-1" onClick={() => handleDelete(tmpl)}>

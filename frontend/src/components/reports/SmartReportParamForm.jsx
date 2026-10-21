@@ -19,6 +19,16 @@ const STAGE_OPTIONS = [
   { value: 'under_implementation', label: 'Under Implementation' },
 ]
 
+// OPSC units a report can be scoped to (value = backend RoutedUnit).
+const UNIT_OPTIONS = [
+  { value: 'odu', label: 'ODU' },
+  { value: 'hr', label: 'Manager HR' },
+  { value: 'vipam', label: 'VIPAM' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'csu', label: 'Corporate Services Unit' },
+  { value: 'ipdu', label: 'IPDU' },
+]
+
 /**
  * Renders a catalog report's parameter schema into a form.
  * @param {Array} params  schema: [{ key, type, label, optional }]
@@ -45,6 +55,7 @@ export default function SmartReportParamForm({ params = [], ministries = [], cat
     if (type === 'ministry') return ministries.map(m => ({ value: String(m.id), label: m.name }))
     if (type === 'form_category') return categories.map(c => ({ value: String(c.id), label: c.name }))
     if (type === 'stage') return STAGE_OPTIONS
+    if (type === 'routed_unit') return UNIT_OPTIONS
     return []
   }
 

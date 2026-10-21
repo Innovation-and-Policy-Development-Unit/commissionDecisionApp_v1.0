@@ -3110,6 +3110,9 @@ class SmartReport(models.Model):
 
     class Domain(models.TextChoices):
         SUBMISSIONS = "submissions", "Submissions"
+        PILOT_ADOPTION = "pilot_adoption", "Pilot adoption"
+        STAGE_FLOW = "stage_flow", "Stage flow"
+        INTEGRITY = "integrity", "Integrity & access"
         # decisions, compliance, meetings, travel → later phases
 
     requested_by = models.ForeignKey(
