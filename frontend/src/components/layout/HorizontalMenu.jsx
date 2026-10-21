@@ -55,6 +55,7 @@ function HorizGroupItem({ group }) {
     return (
       <NavLink
         to={onlyItem.path}
+        end={onlyItem.end}
         className={({ isActive }) => clsx(
           'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
           isActive
@@ -114,6 +115,7 @@ function HorizGroupItem({ group }) {
               <NavLink
                 key={entry.path}
                 to={entry.path}
+                end={entry.end}
                 role="menuitem"
                 onClick={() => setOpen(false)}
                 className={({ isActive }) => clsx(
@@ -148,6 +150,7 @@ function MobileNavItem({ item, onClose, itemKey, openKey, setOpenKey }) {
     return (
       <NavLink
         to={item.path}
+        end={item.end}
         onClick={onClose}
         className={({ isActive }) => clsx(
           'flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
@@ -201,6 +204,7 @@ function MobileNavItem({ item, onClose, itemKey, openKey, setOpenKey }) {
               <NavLink
                 key={child.path}
                 to={child.path}
+                end={child.end}
                 onClick={onClose}
                 className={({ isActive }) => clsx(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
