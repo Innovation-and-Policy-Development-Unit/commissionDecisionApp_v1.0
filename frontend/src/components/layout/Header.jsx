@@ -20,6 +20,7 @@ import DesktopNotificationSettings from '../notifications/DesktopNotificationSet
 import { useNotifications } from '../../hooks/useNotifications'
 import { useChat } from '../../context/ChatContext'
 import ChatDropdown from '../chat/ChatDropdown'
+import { getVisibleMenuForUser, flattenItems, translateLabel } from '../../data/menuItems'
 
 // ── Quick actions shown before / alongside search results ──────────────────
 const ALL_QUICK_ACTIONS = [
@@ -261,14 +262,37 @@ export default function Header({ onMenuClick }) {
     return ALL_QUICK_ACTIONS.filter(a => !a.roles || a.roles.includes(user.role) || user.is_staff)
   }, [user])
 
+  // Every page in the user's menu, so typing "minutes" or "backup" jumps straight there.
+  // Only offered once the user types, so the empty dropdown stays short.
+  const menuPages = useMemo(() => {
+    if (!user) return []
+    const pages = []
+    for (const group of getVisibleMenuForUser(user, true)) {
+      const groupLabel = translateLabel(group, t)
+      for (const entry of flattenItems(group.items)) {
+        if (entry.type !== 'link' || !entry.path) continue
+        pages.push({
+          id: `page:${entry.path}`,
+          label: translateLabel(entry, t),
+          sublabel: groupLabel,
+          icon: entry.icon || FileText,
+          path: entry.path,
+        })
+      }
+    }
+    return pages
+  }, [user, t])
+
   // Filtered quick actions based on current query
   const filteredQuickActions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return quickActions
-    return quickActions.filter(
+    const known = new Set(quickActions.map(a => a.path))
+    const pages = menuPages.filter(p => !known.has(p.path))
+    return [...quickActions, ...pages].filter(
       a => a.label.toLowerCase().includes(q) || a.sublabel.toLowerCase().includes(q),
     )
-  }, [quickActions, searchQuery])
+  }, [quickActions, menuPages, searchQuery])
 
   const handleSearchChange = useCallback(e => {
     const v = e.target.value

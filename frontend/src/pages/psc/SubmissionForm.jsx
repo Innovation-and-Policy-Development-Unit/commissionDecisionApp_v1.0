@@ -14,6 +14,7 @@ import BaseSelect from '../../components/shared/BaseSelect'
 import BaseTextarea from '../../components/shared/BaseTextarea'
 import BaseMessageBar from '../../components/shared/BaseMessageBar'
 import EmailChipInput from '../../components/shared/EmailChipInput'
+import { useDraftAutosave } from '../../hooks/useDraftAutosave'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -282,6 +283,7 @@ function CommissionSubmissionForm({
   const availUnits = units.filter(
     u => !form.department || u.department === parseInt(form.department, 10),
   )
+  const draftState = useDraftAutosave(`scdms:draft:commission-submission:${user?.id ?? 'anon'}`, form, setForm)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -430,6 +432,7 @@ function CommissionSubmissionForm({
       }
 
       const { data: submission } = await api.post('/submissions/', payload)
+      draftState.clear()
       toast.success('Submission created. Complete documents and submit when ready.')
       if (onSuccess) onSuccess(submission.id)
       else navigate(`/submissions/${submission.id}`)
@@ -464,6 +467,15 @@ function CommissionSubmissionForm({
         <BaseMessageBar intent="error" className="mb-4">{error}</BaseMessageBar>
       )}
 
+      {draftState.draft && (
+        <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+          <span className="flex-1 min-w-0">
+            You have an unsaved draft from {new Date(draftState.draft.savedAt).toLocaleString()}.
+          </span>
+          <button type="button" onClick={draftState.restore} className="font-semibold underline underline-offset-2">Restore draft</button>
+          <button type="button" onClick={draftState.discard} className="underline underline-offset-2 opacity-80">Discard</button>
+        </div>
+      )}
       <form onSubmit={submit} className={modal ? 'space-y-4' : 'card p-6 space-y-4 max-w-3xl'}>
         <div>
           <BaseSelect
