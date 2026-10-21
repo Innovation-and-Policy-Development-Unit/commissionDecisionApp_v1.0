@@ -11,7 +11,7 @@ from django.utils import timezone
 from datetime import datetime, time, timedelta
 from rest_framework import mixins, parsers, permissions, status, viewsets, exceptions
 from rest_framework.decorators import action, api_view, authentication_classes, permission_classes, throttle_classes
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -2748,11 +2748,23 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         queue_submission_brief(submission.id, force=True, sync_fallback=False)
         return Response(SubmissionDetailSerializer(submission).data)
 
+    @action(detail=False, methods=["get"], url_path="assignable-staff")
+    def assignable_staff(self, request):
+        """Officers the current unit manager may allocate submissions to (for bulk assign).
+
+        Same candidates as the per-submission list, without needing a submission
+        in an assessment stage to ask.
+        """
+        profile = _profile(request.user)
+        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff
+        is_unit_manager = profile.role in OPSC_UNIT_MANAGER_ROLES
+        if not (is_admin or is_unit_manager):
+            raise PermissionDenied("Only unit managers can allocate submissions.")
+        return self._assignable_officers_response(profile, is_unit_manager)
+
     @action(detail=True, methods=["get"], url_path="assignable-officers")
     def assignable_officers(self, request, pk=None):
         """List officers the current unit manager may allocate this submission to."""
-        from django.contrib.auth.models import User
-
         submission = self.get_object()
         profile = _profile(request.user)
         is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff
@@ -2763,6 +2775,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
         ):
             raise PermissionDenied("Allocation is only available while a submission is under assessment.")
+        return self._assignable_officers_response(profile, is_unit_manager)
+
+    def _assignable_officers_response(self, profile, is_unit_manager):
+        from django.contrib.auth.models import User
 
         allowed_roles = manager_allowed_staff_roles(
             profile.role if is_unit_manager else None
@@ -2808,95 +2824,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         Unit manager assigns a submission to one of their unit's principals.
         POST { "assigned_to": <user_id> }  — pass null to unassign.
         """
-        from .audit import log_action as _log
-        from .models import AuditLog as _AL, Notification
-        from django.contrib.auth.models import User
-
         submission = self.get_object()
-        profile = _profile(request.user)
-
-        _manager_to_unit = MANAGER_ROLE_TO_ROUTED_UNIT
-        is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff
-        is_unit_manager = profile.role in OPSC_UNIT_MANAGER_ROLES
-
-        if not (is_admin or is_unit_manager):
-            raise PermissionDenied("Only unit managers can assign submissions to principals.")
-        if submission.current_stage not in (
-            WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
-        ):
-            raise PermissionDenied("Allocation is only available while a submission is under assessment.")
-
-        if is_unit_manager:
-            expected_unit = _manager_to_unit[profile.role]
-            if submission.routed_unit != expected_unit:
-                raise PermissionDenied(
-                    f"This submission is routed to {submission.routed_unit}, not your unit ({expected_unit})."
-                )
-
-        assignee_id = request.data.get("assigned_to")
-
-        if assignee_id is None:
-            # Unassign
-            submission.assigned_to = None
-            submission.assigned_at = None
-            submission.ready_for_manager_at = None
-            submission.save(update_fields=["assigned_to", "assigned_at", "ready_for_manager_at"])
-            invalidate_submission(submission.id)
-            _log(request, _AL.Action.UPDATE, resource_type="Submission",
-                 resource_id=submission.id, resource_label=submission.reference_number,
-                 description="Submission unassigned from principal")
-            return Response(SubmissionDetailSerializer(submission).data)
-
-        try:
-            assignee = User.objects.get(pk=assignee_id, is_active=True)
-        except User.DoesNotExist:
-            return Response({"detail": "User not found or inactive."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Verify the assignee is an allowed officer in the manager's unit
-        assignee_profile = getattr(assignee, "psc_profile", None)
-        if assignee_profile is None:
-            return Response({"detail": "That user has no PSC profile."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if is_unit_manager:
-            allowed_roles = manager_allowed_staff_roles(profile.role)
-            if assignee_profile.role not in allowed_roles:
-                return Response(
-                    {"detail": "Assignee must be one of your unit's principals or senior officers."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            # Roles like Senior Officer are shared across units — role alone
-            # doesn't prove unit membership, so also require a matching unit.
-            if profile.unit_id and assignee_profile.unit_id != profile.unit_id:
-                return Response(
-                    {"detail": "Assignee must belong to your own OPSC unit."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        submission.assigned_to = assignee
-        submission.assigned_at = timezone.now()
-        submission.ready_for_manager_at = None
-        submission.save(update_fields=["assigned_to", "assigned_at", "ready_for_manager_at"])
-        invalidate_submission(submission.id)
-
-        _log(request, _AL.Action.UPDATE, resource_type="Submission",
-             resource_id=submission.id, resource_label=submission.reference_number,
-             description=f"Submission assigned to {assignee.username}")
-
-        # ── Notify the assignee (in-app + desktop alert + email) ──────────────
-        manager_name = request.user.get_full_name() or request.user.username
-        Notification.objects.create(
-            recipient=assignee,
-            submission=submission,
-            channel=Notification.Channel.BOTH,
-            title=f"Assigned to you: {submission.reference_number}",
-            body=(
-                f"{manager_name} has allocated '{submission.title}' to you for assessment."
-            ),
-        )
-        from .tasks import queue_assignment_email
-
-        queue_assignment_email(submission.id, assignee.id, manager_name=manager_name)
-
+        _assign_submission(request, submission, request.data.get("assigned_to"))
         return Response(SubmissionDetailSerializer(submission).data)
 
     @action(detail=True, methods=["post"], url_path="co-assign")
@@ -13117,58 +13046,237 @@ def submission_sla_view(request, pk):
 
 # ── Submission Bulk Action ─────────────────────────────────────────────────────
 
+class AssignmentError(APIException):
+    """A 400 for assignment rules, rendered as {"detail": "..."} like the old inline Responses."""
+    status_code = status.HTTP_400_BAD_REQUEST
+
+
+def _assign_submission(request, submission, assignee_id):
+    """Allocate (or, with assignee_id None, unallocate) one submission.
+
+    Shared by the single-item ``assign`` action and the bulk action so both
+    enforce the same rules: unit managers/admins only, assessment stages only,
+    a manager's own unit only, and assignees drawn from that unit. Raises
+    PermissionDenied or AssignmentError; on success it saves, audits and
+    notifies exactly as the single-item endpoint always did.
+    """
+    from .audit import log_action as _log
+    from .models import AuditLog as _AL, Notification
+    from django.contrib.auth.models import User
+
+    profile = _profile(request.user)
+
+    _manager_to_unit = MANAGER_ROLE_TO_ROUTED_UNIT
+    is_admin = profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff
+    is_unit_manager = profile.role in OPSC_UNIT_MANAGER_ROLES
+
+    if not (is_admin or is_unit_manager):
+        raise PermissionDenied("Only unit managers can assign submissions to principals.")
+    if submission.current_stage not in (
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT,
+    ):
+        raise PermissionDenied("Allocation is only available while a submission is under assessment.")
+
+    if is_unit_manager:
+        expected_unit = _manager_to_unit[profile.role]
+        if submission.routed_unit != expected_unit:
+            raise PermissionDenied(
+                f"This submission is routed to {submission.routed_unit}, not your unit ({expected_unit})."
+            )
+
+    if assignee_id is None:
+        # Unassign
+        submission.assigned_to = None
+        submission.assigned_at = None
+        submission.ready_for_manager_at = None
+        submission.save(update_fields=["assigned_to", "assigned_at", "ready_for_manager_at"])
+        invalidate_submission(submission.id)
+        _log(request, _AL.Action.UPDATE, resource_type="Submission",
+             resource_id=submission.id, resource_label=submission.reference_number,
+             description="Submission unassigned from principal")
+        return
+
+    try:
+        assignee = User.objects.get(pk=assignee_id, is_active=True)
+    except (User.DoesNotExist, ValueError, TypeError):
+        raise AssignmentError("User not found or inactive.")
+
+    # Verify the assignee is an allowed officer in the manager's unit
+    assignee_profile = getattr(assignee, "psc_profile", None)
+    if assignee_profile is None:
+        raise AssignmentError("That user has no PSC profile.")
+
+    if is_unit_manager:
+        allowed_roles = manager_allowed_staff_roles(profile.role)
+        if assignee_profile.role not in allowed_roles:
+            raise AssignmentError("Assignee must be one of your unit's principals or senior officers.")
+        # Roles like Senior Officer are shared across units — role alone
+        # doesn't prove unit membership, so also require a matching unit.
+        if profile.unit_id and assignee_profile.unit_id != profile.unit_id:
+            raise AssignmentError("Assignee must belong to your own OPSC unit.")
+
+    submission.assigned_to = assignee
+    submission.assigned_at = timezone.now()
+    submission.ready_for_manager_at = None
+    submission.save(update_fields=["assigned_to", "assigned_at", "ready_for_manager_at"])
+    invalidate_submission(submission.id)
+
+    _log(request, _AL.Action.UPDATE, resource_type="Submission",
+         resource_id=submission.id, resource_label=submission.reference_number,
+         description=f"Submission assigned to {assignee.username}")
+
+    # ── Notify the assignee (in-app + desktop alert + email) ──────────────
+    manager_name = request.user.get_full_name() or request.user.username
+    Notification.objects.create(
+        recipient=assignee,
+        submission=submission,
+        channel=Notification.Channel.BOTH,
+        title=f"Assigned to you: {submission.reference_number}",
+        body=(
+            f"{manager_name} has allocated '{submission.title}' to you for assessment."
+        ),
+    )
+    from .tasks import queue_assignment_email
+
+    queue_assignment_email(submission.id, assignee.id, manager_name=manager_name)
+
+
+# Who may flag a submission urgent: the Secretary and managers (OPSC manager or
+# any unit manager). Superusers keep their usual override.
+URGENT_FLAG_ROLES = frozenset({Role.PSC_SECRETARY, Role.PSC_MANAGER}) | OPSC_UNIT_MANAGER_ROLES
+BULK_ACTION_MAX_IDS = 200
+
+
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 def submission_bulk_action_view(request):
-    """Bulk operations on selected submission IDs."""
+    """Bulk operations on selected submission IDs.
+
+    Only submissions the caller can already see are touched. Per-item actions
+    (mark_urgent, clear_urgent, assign) apply the same rules as their
+    single-item equivalents and report what was skipped and why, instead of one
+    blanket count.
+    """
+    from .audit import log_action as _log
+    from .models import AuditLog as _AL
+
     profile = _profile(request.user)
     action_type = request.data.get("action")
     ids = request.data.get("ids", [])
-    if not ids:
+    if not ids or not isinstance(ids, list):
         return Response({"detail": "No submission IDs provided."}, status=status.HTTP_400_BAD_REQUEST)
     if not action_type:
         return Response({"detail": "Action is required."}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        ids = list({int(i) for i in ids})
+    except (TypeError, ValueError):
+        return Response({"detail": "IDs must be integers."}, status=status.HTTP_400_BAD_REQUEST)
+    if len(ids) > BULK_ACTION_MAX_IDS:
+        return Response(
+            {"detail": f"Select at most {BULK_ACTION_MAX_IDS} submissions at a time."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
-    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_OFFICER, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_CHAIR, Role.PSC_COMMISSIONER}
-    if profile.role not in ALLOWED and not request.user.is_staff:
+    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_OFFICER, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.CHAIRPERSON, Role.PSC_COMMISSIONER}
+    is_unit_manager = profile.role in OPSC_UNIT_MANAGER_ROLES
+    can_flag_urgent = profile.role in URGENT_FLAG_ROLES or request.user.is_superuser
+    can_assign = (
+        profile.role == Role.PSC_ADMIN or request.user.is_superuser or request.user.is_staff or is_unit_manager
+    )
+    # Managers may flag urgent / assign but aren't in the general bulk set; allow them for those actions only.
+    manager_action = action_type in {"mark_urgent", "clear_urgent", "assign"}
+    if not (profile.role in ALLOWED or request.user.is_staff
+            or (manager_action and (is_unit_manager or profile.role == Role.PSC_MANAGER))):
         raise PermissionDenied("You do not have permission to perform bulk actions.")
+    if action_type in {"mark_urgent", "clear_urgent"} and not can_flag_urgent:
+        raise PermissionDenied("Only the Secretary and managers can flag a submission as urgent.")
+    if action_type == "assign" and not can_assign:
+        raise PermissionDenied("Only unit managers can assign submissions to principals.")
 
-    qs = Submission.objects.filter(pk__in=ids)
+    # Visibility scoping: same queryset every other submission endpoint uses.
+    visible = {s.id: s for s in _submission_queryset_for(request.user).filter(pk__in=ids)}
+    skipped = [
+        {"id": i, "reference": None, "reason": "Not found or not visible to you."}
+        for i in ids if i not in visible
+    ]
+    subs = [visible[i] for i in ids if i in visible]
 
-    if action_type == "mark_urgent":
-        count = qs.count()
-        qs.update(updated_at=timezone.now())
-        _log(request, _AL.Action.UPDATE, resource_type="Submission", description=f"Bulk marked {count} submissions as urgent")
-        return Response({"detail": f"{count} submissions marked as urgent.", "updated": count})
+    def _summary(verb, done):
+        parts = [f"{len(done)} submission{'s' if len(done) != 1 else ''} {verb}."]
+        if skipped:
+            parts.append(f"{len(skipped)} skipped.")
+        return " ".join(parts)
+
+    if action_type in {"mark_urgent", "clear_urgent"}:
+        marking = action_type == "mark_urgent"
+        reason = str(request.data.get("reason", "") or "").strip()[:300]
+        manager_unit = MANAGER_ROLE_TO_ROUTED_UNIT.get(profile.role) if is_unit_manager else None
+        done = []
+        for sub in subs:
+            if manager_unit and sub.routed_unit != manager_unit:
+                skipped.append({"id": sub.id, "reference": sub.reference_number,
+                                "reason": f"Routed to {sub.routed_unit or 'no unit'}, not your unit."})
+                continue
+            if sub.is_urgent == marking:
+                skipped.append({"id": sub.id, "reference": sub.reference_number,
+                                "reason": "Already urgent." if marking else "Not flagged urgent."})
+                continue
+            sub.is_urgent = marking
+            sub.urgent_reason = reason if marking else ""
+            sub.urgent_marked_by = request.user if marking else None
+            sub.urgent_marked_at = timezone.now() if marking else None
+            sub.save(update_fields=["is_urgent", "urgent_reason", "urgent_marked_by", "urgent_marked_at", "updated_at"])
+            invalidate_submission(sub.id)
+            _log(request, _AL.Action.UPDATE, resource_type="Submission",
+                 resource_id=sub.id, resource_label=sub.reference_number,
+                 description=("Flagged urgent" + (f": {reason}" if reason else "")) if marking else "Urgent flag cleared")
+            done.append(sub.id)
+        return Response({
+            "detail": _summary("flagged urgent" if marking else "cleared of the urgent flag", done),
+            "updated": len(done), "skipped": skipped,
+        })
 
     elif action_type == "assign":
-        from django.contrib.auth.models import User as AuthUser
         assignee_id = request.data.get("assignee_id")
         if not assignee_id:
             return Response({"detail": "assignee_id required."}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            assignee = AuthUser.objects.get(pk=assignee_id)
-        except AuthUser.DoesNotExist:
-            return Response({"detail": "Assignee not found."}, status=status.HTTP_404_NOT_FOUND)
-        count = qs.count()
-        qs.update(updated_at=timezone.now())
-        _log(request, _AL.Action.UPDATE, resource_type="Submission", description=f"Bulk assigned {count} submissions to {assignee.username}")
-        return Response({"detail": f"{count} submissions assigned to {assignee.username}.", "updated": count})
+        done = []
+        for sub in subs:
+            try:
+                _assign_submission(request, sub, assignee_id)
+            except (PermissionDenied, AssignmentError) as exc:
+                skipped.append({"id": sub.id, "reference": sub.reference_number, "reason": str(exc.detail)})
+                continue
+            done.append(sub.id)
+        return Response({"detail": _summary("assigned", done), "updated": len(done), "skipped": skipped})
 
     elif action_type == "export_list":
-        data = list(qs.values("id", "reference_number", "title", "current_stage", "ministry__name", "created_at"))
+        data = [
+            {
+                "id": s.id, "reference_number": s.reference_number, "title": s.title,
+                "current_stage": s.current_stage, "ministry__name": s.ministry.name if s.ministry_id else None,
+                "created_at": s.created_at,
+            }
+            for s in subs
+        ]
+        _log(request, _AL.Action.UPDATE, resource_type="Submission",
+             description=f"Bulk exported {len(data)} submissions", extra_data={"ids": [d["id"] for d in data]})
         return Response({"submissions": data, "count": len(data)})
 
     elif action_type == "run_ai_risk":
         from .tasks import queue_risk_assessment
         count = 0
-        for sub in qs:
+        for sub in subs:
             queue_risk_assessment(sub.id, force=True)
             count += 1
-        return Response({"detail": f"Risk assessment queued for {count} submissions.", "queued": count})
+        _log(request, _AL.Action.UPDATE, resource_type="Submission",
+             description=f"Bulk queued AI risk assessment for {count} submissions",
+             extra_data={"ids": [s.id for s in subs]})
+        return Response({"detail": f"Risk assessment queued for {count} submissions.", "queued": count, "skipped": skipped})
 
     else:
         return Response({"detail": f"Unknown action: {action_type}"}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 # ── AI Trigger and Result Views ────────────────────────────────────────────────

@@ -213,6 +213,9 @@ router.register(r"push-subscriptions", WebPushSubscriptionViewSet, basename="pus
 router.register(r"document-versions",  DocumentVersionViewSet,     basename="document-version")
 
 urlpatterns = [
+    # Must precede the router: otherwise "submissions/bulk-action/" is read as
+    # submissions/<pk>/ and POST answers 405.
+    path("submissions/bulk-action/", submission_bulk_action_view, name="submission-bulk-action"),
     path("", include(router.urls)),
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
@@ -286,7 +289,6 @@ urlpatterns = [
     path("dashboard/stats/",                dashboard_stats_view,               name="dashboard-stats"),
     path("system-stats/",                   system_stats_view,                  name="system-stats"),
     path("submissions/<int:pk>/sla/",       submission_sla_view,                name="submission-sla"),
-    path("submissions/bulk-action/",        submission_bulk_action_view,        name="submission-bulk-action"),
     # AI triggers + result getters
     path("submissions/<int:pk>/trigger-ai-duplicate/", trigger_ai_duplicate,   name="trigger-ai-duplicate"),
     path("submissions/<int:pk>/ai-duplicate/",         get_ai_duplicate,       name="get-ai-duplicate"),

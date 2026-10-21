@@ -1901,6 +1901,14 @@ class Submission(models.Model):
         help_text="Primary responsible principal assigned by the unit manager.",
     )
     assigned_at = models.DateTimeField(null=True, blank=True)
+    # ── Urgent flag (set by the Secretary or a manager; see submission_bulk_action_view) ──
+    is_urgent = models.BooleanField(default=False, db_index=True)
+    urgent_reason = models.CharField(max_length=300, blank=True, default="")
+    urgent_marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="urgent_marked_submissions",
+    )
+    urgent_marked_at = models.DateTimeField(null=True, blank=True)
     ready_for_manager_at = models.DateTimeField(
         null=True, blank=True,
         help_text=(

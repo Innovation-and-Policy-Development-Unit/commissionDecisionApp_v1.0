@@ -90,7 +90,11 @@ export default function SubmissionLog() {
   const isAdmin = user?.role === 'psc_admin'
   // Mirrors ALLOWED in the backend submission_bulk_action_view; the server is
   // still the authority. Deleting stays admin-only (isAdmin).
-  const canBulkAct = isAdmin || ['psc_secretary', 'psc_officer', 'senior_admin_officer', 'psc_commissioner', 'chairperson'].includes(user?.role)
+  const generalBulkRole = isAdmin || ['psc_secretary', 'psc_officer', 'senior_admin_officer', 'psc_commissioner', 'chairperson'].includes(user?.role)
+  const UNIT_MANAGER_ROLES = ['vipam_manager', 'hr_unit_manager', 'odu_manager', 'compliance_manager', 'csu_manager', 'ipdu_manager']
+  const canFlagUrgent = ['psc_secretary', 'psc_manager', ...UNIT_MANAGER_ROLES].includes(user?.role) || user?.is_superuser
+  const canAssignBulk = isAdmin || UNIT_MANAGER_ROLES.includes(user?.role)
+  const canBulkAct = generalBulkRole || canFlagUrgent || canAssignBulk
   // Same role set the backend's DELETE /submissions/{id}/ already allows to
   // trash their own Draft submissions (views.py SubmissionViewSet.destroy) —
   // the list here only needed a matching frontend affordance.
@@ -326,7 +330,14 @@ export default function SubmissionLog() {
     const ids = [...selected]
     try {
       const res = await api.post('/submissions/bulk-action/', { action, ids, ...extra })
-      toast.success(res.data?.detail || 'Bulk action completed.')
+      const skipped = res.data?.skipped || []
+      if (skipped.length > 0) {
+        const sample = skipped.slice(0, 3).map(x => `${x.reference || `#${x.id}`}: ${x.reason}`).join(' · ')
+        const more = skipped.length > 3 ? ` (+${skipped.length - 3} more)` : ''
+        toast.warning(`${res.data?.detail || 'Done.'} ${sample}${more}`)
+      } else {
+        toast.success(res.data?.detail || 'Bulk action completed.')
+      }
       if (action === 'export_list' && res.data?.submissions) {
         const blob = new Blob([JSON.stringify(res.data.submissions, null, 2)], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
@@ -586,6 +597,9 @@ export default function SubmissionLog() {
               selectedIds={[...selected]}
               onClear={() => setSelected(new Set())}
               onBulkAction={handleBulkAction}
+              canGeneralBulk={generalBulkRole}
+              canFlagUrgent={canFlagUrgent}
+              canAssign={canAssignBulk}
             />
           </div>
         )}
@@ -674,6 +688,11 @@ export default function SubmissionLog() {
                       >
                         {r.reference_number}
                       </Link>
+                      {r.is_urgent && (
+                        <Badge variant="danger" className="ml-2 whitespace-nowrap" title={r.urgent_reason || 'Flagged urgent'}>
+                          Urgent
+                        </Badge>
+                      )}
                     </td>
                     <td className="max-w-md">
                       <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{r.title}</p>

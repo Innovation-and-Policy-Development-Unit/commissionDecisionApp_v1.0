@@ -833,6 +833,9 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "allocated_to_label",
             "stage_display_label",
             "assigned_at",
+            "is_urgent",
+            "urgent_reason",
+            "urgent_marked_at",
             "ready_for_manager_at",
             "co_assignments",
             "is_attachment",
@@ -852,6 +855,8 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "ai_quality_processed",
             "ai_quality_generated_at",
         )
+        # Urgent is set only through the bulk-action endpoint (Secretary/managers).
+        read_only_fields = ("is_urgent", "urgent_reason", "urgent_marked_at")
 
 
 class SubmissionDetailSerializer(serializers.ModelSerializer):
@@ -1060,6 +1065,9 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "allocated_to_label",
             "stage_display_label",
             "assigned_at",
+            "is_urgent",
+            "urgent_reason",
+            "urgent_marked_at",
             "created_at",
             "updated_at",
             "events",
@@ -1107,6 +1115,9 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_policy_generated_at",
         )
         read_only_fields = (
+            "is_urgent",
+            "urgent_reason",
+            "urgent_marked_at",
             "subway_map",
             "applicant_tracking_code",
             "lodged_from_paper",

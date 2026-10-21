@@ -10,9 +10,9 @@ const variants = {
   purple: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
 }
 
-export default function Badge({ children, variant = 'secondary', className = '', dot = false }) {
+export default function Badge({ children, variant = 'secondary', className = '', dot = false, title }) {
   return (
-    <span className={clsx(
+    <span title={title} className={clsx(
       'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold',
       variants[variant],
       className
