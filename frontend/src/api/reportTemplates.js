@@ -17,7 +17,8 @@ export const reportTemplatesApi = {
   remove: (slug) => api.delete(`/report-templates/${slug}/`),
 
   /** Allowed building blocks for the guided builder. */
-  vocabulary: () => api.get('/report-templates/vocabulary/').then(r => r.data),
+  vocabulary: (domain) =>
+    api.get('/report-templates/vocabulary/', { params: domain ? { domain } : {} }).then(r => r.data),
 }
 
 export default reportTemplatesApi

@@ -67,7 +67,8 @@ print(rh.render_highcharts(spec, agg, HIGHCHARTS_JS))
 
 ```{python}
 #| output: asis
-print(rh.render_table(rows, spec.get("table", {}).get("columns", [])))
+table_spec = spec.get("table", {})
+print(rh.render_table(rows, table_spec.get("columns", []), table_spec.get("labels")))
 ```
 
 ```{python}
@@ -75,6 +76,14 @@ print(rh.render_table(rows, spec.get("table", {}).get("columns", [])))
 if meta.get("truncated"):
     print(f"<p><em>Showing {meta.get('rows_shown')} of {meta.get('row_count')} "
           "records. Refine the date range or filters to narrow the report.</em></p>")
+```
+
+```{python}
+#| output: asis
+notes_html = rh.render_notes(meta.get("notes"))
+if notes_html:
+    print("<h2>Notes and definitions</h2>")
+    print(notes_html)
 ```
 
 ---

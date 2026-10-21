@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any
 
 from .domains import get_resolver
+from .render_helpers import COLUMN_LABELS
 
 # ── Allowed vocabulary (the renderer + validator enforce this) ───────────────
 CHART_TYPES = {"bar", "column", "line", "pie"}
@@ -58,14 +59,42 @@ DEFAULT_TABLE_COLUMNS = ["reference_number", "title", "ministry", "stage", "crea
 
 SECTIONS = {"kpis", "charts", "table"}
 
+# Vocabulary of the Submissions domain. Other domains declare their own `vocab` on the
+# resolver (same keys); `domain_vocab` picks the right one.
+SUBMISSIONS_VOCAB: dict[str, Any] = {
+    "kpi_labels": KPI_LABELS,
+    "list_sources": LIST_SOURCES,
+    "table_columns": TABLE_COLUMNS,
+    "column_labels": COLUMN_LABELS,
+    "default_table_columns": DEFAULT_TABLE_COLUMNS,
+    "default_kpis": ["total", "active"],
+    "default_charts": [("by_stage", "bar", "By stage")],
+}
 
-def vocabulary() -> dict[str, Any]:
-    """Allowed building blocks for the guided-builder UI."""
+DOMAIN_LABELS = {
+    "submissions": "Submissions",
+    "pilot_adoption": "Pilot adoption",
+    "stage_flow": "Stage flow",
+    "integrity": "Integrity & access",
+}
+
+
+def domain_vocab(domain: str) -> dict[str, Any]:
+    resolver = get_resolver(domain)
+    return getattr(resolver, "vocab", None) or SUBMISSIONS_VOCAB
+
+
+def vocabulary(domain: str | None = None) -> dict[str, Any]:
+    """Allowed building blocks for the guided-builder UI (default: Submissions)."""
+    domain = domain if domain in DOMAIN_LABELS else "submissions"
+    v = domain_vocab(domain)
     return {
+        "domain": domain,
+        "domains": [{"key": k, "label": lbl} for k, lbl in DOMAIN_LABELS.items()],
         "chart_types": sorted(CHART_TYPES),
-        "chart_sources": sorted(LIST_SOURCES),
-        "kpi_sources": [{"key": k, "label": KPI_LABELS.get(k, k)} for k in sorted(KPI_SOURCES)],
-        "table_columns": list(TABLE_COLUMNS),
+        "chart_sources": sorted(v["list_sources"]),
+        "kpi_sources": [{"key": k, "label": v["kpi_labels"].get(k, k)} for k in sorted(v["kpi_labels"])],
+        "table_columns": list(v["table_columns"]),
         "param_types": ["date", "ministry", "form_category", "stage", "routed_unit", "bool"],
     }
 
@@ -112,12 +141,16 @@ def validate_spec(raw: dict[str, Any], *, domain: str = "submissions") -> dict[s
     """Constrain a (template- or AI-proposed) spec to the allowed vocabulary. Never trusts
     free text for anything executable: only known sources/types/columns survive."""
     raw = raw or {}
+    vocab = domain_vocab(domain)
+    kpi_labels = vocab["kpi_labels"]
+    list_sources = vocab["list_sources"]
+    table_columns = set(vocab["table_columns"])
 
     kpis = []
     for k in raw.get("kpis") or []:
-        if isinstance(k, dict) and k.get("source") in KPI_SOURCES:
+        if isinstance(k, dict) and k.get("source") in kpi_labels:
             kpis.append({
-                "label": str(k.get("label") or KPI_LABELS.get(k["source"], k["source"]))[:60],
+                "label": str(k.get("label") or kpi_labels.get(k["source"], k["source"]))[:60],
                 "source": k["source"],
             })
 
@@ -127,7 +160,7 @@ def validate_spec(raw: dict[str, Any], *, domain: str = "submissions") -> dict[s
             continue
         ctype = c.get("type")
         source = c.get("source")
-        if ctype in CHART_TYPES and source in LIST_SOURCES:
+        if ctype in CHART_TYPES and source in list_sources:
             charts.append({
                 "id": str(c.get("id") or source)[:40],
                 "type": ctype,
@@ -136,9 +169,9 @@ def validate_spec(raw: dict[str, Any], *, domain: str = "submissions") -> dict[s
             })
 
     table_in = raw.get("table") or {}
-    cols = [c for c in (table_in.get("columns") or []) if c in TABLE_COLUMN_SET]
+    cols = [c for c in (table_in.get("columns") or []) if c in table_columns]
     if not cols:
-        cols = list(DEFAULT_TABLE_COLUMNS)
+        cols = list(vocab["default_table_columns"])
 
     narrative = str(raw.get("narrative_markdown") or "").strip()[:8000]
     for bad in ("<script", "<iframe", "javascript:"):
@@ -147,9 +180,11 @@ def validate_spec(raw: dict[str, Any], *, domain: str = "submissions") -> dict[s
 
     # Sensible defaults so a sparse spec still renders something useful.
     if not kpis and not charts:
-        kpis = [{"label": KPI_LABELS["total"], "source": "total"},
-                {"label": KPI_LABELS["active"], "source": "active"}]
-        charts = [{"id": "by_stage", "type": "bar", "title": "By stage", "source": "by_stage"}]
+        kpis = [{"label": kpi_labels[k], "source": k} for k in vocab["default_kpis"]]
+        charts = [
+            {"id": source, "type": ctype, "title": title, "source": source}
+            for source, ctype, title in vocab["default_charts"]
+        ]
 
     return {
         "domain": domain,
@@ -175,4 +210,5 @@ def build_template_spec(template, raw_params: dict[str, Any] | None = None) -> d
     cleaned["report_type"] = template.slug
     cleaned["params"] = params
     cleaned["subtitle"] = _date_range_subtitle(params)
+    cleaned["table"]["labels"] = dict(domain_vocab(domain)["column_labels"])
     return cleaned

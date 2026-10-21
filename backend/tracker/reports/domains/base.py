@@ -25,6 +25,9 @@ class ResolvedDataset:
 
 class DomainResolver(Protocol):
     key: str
+    # Optional: `vocab` (see catalog.domain_vocab) and `authorize(user) -> bool`.
+    # Resolvers without `vocab` use the submissions vocabulary; resolvers without
+    # `authorize` rely on the RBAC-scoped queryset they already build.
 
     def param_schema(self) -> dict[str, str]:
         """Map of accepted param key -> type ("date" | "int" | "str" | "bool")."""
@@ -45,5 +48,12 @@ def register_resolver(resolver: DomainResolver) -> None:
 def get_resolver(domain: str) -> DomainResolver | None:
     # Import submodules lazily so the registry is populated without circular imports.
     if not DOMAIN_RESOLVERS:
-        from . import submissions  # noqa: F401
+        from . import adoption, integrity, stage_flow, submissions  # noqa: F401
     return DOMAIN_RESOLVERS.get(domain)
+
+
+def domain_allows(domain: str, user) -> bool:
+    """False when the domain's resolver restricts who may run it and `user` is not allowed."""
+    resolver = get_resolver(domain)
+    check = getattr(resolver, "authorize", None)
+    return bool(check(user)) if check else True

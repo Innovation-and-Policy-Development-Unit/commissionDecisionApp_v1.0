@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from .models import ReportTemplate, SmartReport
 from .rbac import rbac_user_has_permission
 from .report_template_views import template_visible_to
+from .reports.domains import domain_allows
 from .tasks import queue_smart_report
 
 
@@ -53,8 +54,11 @@ class SmartReportViewSet(viewsets.ViewSet):
         report = SmartReport.objects.filter(pk=pk).first()
         if not report:
             raise NotFound("Report not found.")
-        if report.requested_by_id != request.user.id and not self._is_report_admin(request.user):
-            raise PermissionDenied("You cannot access this report.")
+        if report.requested_by_id != request.user.id:
+            # Report admins can open other people's reports, but never ones from a
+            # restricted domain (e.g. the integrity attestation) they could not run.
+            if not self._is_report_admin(request.user) or not domain_allows(report.domain, request.user):
+                raise PermissionDenied("You cannot access this report.")
         return report
 
     def _status_payload(self, request, report: SmartReport) -> dict:
@@ -75,7 +79,11 @@ class SmartReportViewSet(viewsets.ViewSet):
         mine = request.query_params.get("mine") == "1"
         if mine or not self._is_report_admin(request.user):
             qs = qs.filter(requested_by=request.user)
-        return Response(SmartReportSerializer(qs[:200], many=True).data)
+        visible = [
+            r for r in qs[:200]
+            if r.requested_by_id == request.user.id or domain_allows(r.domain, request.user)
+        ]
+        return Response(SmartReportSerializer(visible, many=True).data)
 
     def create(self, request):
         self._gate(request.user)
@@ -101,7 +109,7 @@ class SmartReportViewSet(viewsets.ViewSet):
             tmpl = ReportTemplate.objects.filter(slug=slug, is_active=True).first()
             if not tmpl:
                 raise ValidationError({"template": f"Unknown or inactive template '{slug}'."})
-            if not template_visible_to(request.user, tmpl):
+            if not template_visible_to(request.user, tmpl) or not domain_allows(tmpl.domain, request.user):
                 raise PermissionDenied("You cannot generate this report.")
             allowed = {p.get("key") for p in (tmpl.param_schema or []) if isinstance(p, dict)}
             clean_params = {k: v for k, v in params.items() if k in allowed}

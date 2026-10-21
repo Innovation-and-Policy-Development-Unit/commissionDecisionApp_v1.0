@@ -11,7 +11,8 @@ from rest_framework.response import Response
 
 from .models import ReportTemplate
 from .rbac import rbac_user_has_permission
-from .reports.catalog import validate_spec, vocabulary
+from .reports.catalog import DOMAIN_LABELS, validate_spec, vocabulary
+from .reports.domains import domain_allows
 
 SPEC_KEYS = ("sections", "kpis", "charts", "table", "narrative_markdown")
 
@@ -44,6 +45,8 @@ def template_visible_to(user, tmpl: ReportTemplate) -> bool:
         return True
     if not tmpl.is_active:
         return False
+    if not domain_allows(tmpl.domain, user):
+        return False
     if tmpl.visible_to_all:
         return True
     return _user_role(user) in (tmpl.visible_roles or [])
@@ -74,6 +77,8 @@ class ReportTemplateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         domain = attrs.get("domain") or (self.instance.domain if self.instance else "submissions")
+        if domain not in DOMAIN_LABELS:
+            raise serializers.ValidationError({"domain": f"Unknown report domain '{domain}'."})
         name = attrs.get("name") or (self.instance.name if self.instance else "")
         if "spec" in attrs:
             cleaned = validate_spec({**(attrs["spec"] or {}), "title": name}, domain=domain)
@@ -147,4 +152,4 @@ class ReportTemplateViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def vocabulary(self, request):
         self._gate_manage()
-        return Response(vocabulary())
+        return Response(vocabulary(request.query_params.get("domain")))
