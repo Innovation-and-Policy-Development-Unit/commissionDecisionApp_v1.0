@@ -4,6 +4,7 @@ import { Eye, Download, RefreshCw, Trash2, Loader2 } from 'lucide-react'
 import Badge from '../shared/Badge'
 import { smartReportsApi } from '../../api/smartReports'
 import { useToast } from '../../context/ToastContext'
+import { useConfirm } from '../../context/ConfirmContext'
 
 const STATUS_VARIANT = {
   ready: 'success',
@@ -13,6 +14,7 @@ const STATUS_VARIANT = {
 }
 
 export default function SmartReportLibrary({ refreshKey, onView, onRerun }) {
+  const confirm = useConfirm()
   const { t } = useTranslation()
   const toast = useToast()
   const [rows, setRows] = useState([])
@@ -32,7 +34,7 @@ export default function SmartReportLibrary({ refreshKey, onView, onRerun }) {
   useEffect(() => { load() }, [load, refreshKey])
 
   const handleDelete = async (r) => {
-    if (!window.confirm(t('smart_reports.confirm_delete', { title: r.title || t('smart_reports.untitled') }))) return
+    if (!(await confirm({ title: t('common.delete', { defaultValue: 'Delete' }), message: t('smart_reports.confirm_delete', { title: r.title || t('smart_reports.untitled') }), confirmLabel: t('common.delete', { defaultValue: 'Delete' }) }))) return
     try {
       await smartReportsApi.remove(r.id)
       toast.success(t('smart_reports.deleted'))

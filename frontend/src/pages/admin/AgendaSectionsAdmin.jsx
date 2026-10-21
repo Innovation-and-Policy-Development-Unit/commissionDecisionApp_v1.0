@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import SharedModal from '../../components/shared/Modal'
 import { useNavigate } from 'react-router-dom'
 import { GripVertical, Edit2, Plus, Trash2, X, ArrowDown } from 'lucide-react'
 import clsx from 'clsx'
@@ -16,15 +17,9 @@ import BaseCheckbox from '../../components/shared/BaseCheckbox'
 
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className={`card w-full p-0 overflow-hidden animate-scale-in ${wide ? 'max-w-2xl' : 'max-w-lg'}`}>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          <BaseButton variant="ghost" size="icon" iconOnly onClick={onClose} icon={<X size={18} />} />
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
+    <SharedModal open onClose={onClose} title={title} size={wide ? 'lg' : 'md'}>
+      {children}
+    </SharedModal>
   )
 }
 

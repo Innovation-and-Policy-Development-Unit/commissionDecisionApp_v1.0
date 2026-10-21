@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import api from '../../api/client'
 import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
+import { useConfirm } from '../../context/ConfirmContext'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc
 
@@ -49,6 +50,7 @@ const TOOLS = [
 ]
 
 export default function DocumentAnnotatorModal({ document: doc, submissionId, onClose }) {
+  const confirm = useConfirm()
   const fcRef        = useRef(null)
   const containerRef = useRef(null)
   const pdfRef       = useRef(null)
@@ -329,8 +331,8 @@ export default function DocumentAnnotatorModal({ document: doc, submissionId, on
     }
   }
 
-  const handleClose = () => {
-    if (dirty && !window.confirm('You have unsaved annotations on this page. Close anyway?')) return
+  const handleClose = async () => {
+    if (dirty && !(await confirm({ title: 'Unsaved annotations', message: 'You have unsaved annotations on this page. Close anyway?', confirmLabel: 'Close anyway' }))) return
     onClose()
   }
 

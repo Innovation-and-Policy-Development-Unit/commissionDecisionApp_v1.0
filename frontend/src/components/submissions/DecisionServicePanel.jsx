@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext'
 import BaseButton from '../shared/BaseButton'
 import BaseInput from '../shared/BaseInput'
 import BaseTextarea from '../shared/BaseTextarea'
+import { attachDialog } from '../../utils/dialogFocus'
 
 const POST_DECISION_STAGES = [
   'approved', 'rejected', 'minutes_drafted_signed',
@@ -238,7 +239,7 @@ export default function DecisionServicePanel({ submission }) {
 
       {/* Serve modal */}
       {serveOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div ref={attachDialog} aria-label="Serve Commission decision" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">

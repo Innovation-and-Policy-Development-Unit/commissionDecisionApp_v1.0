@@ -11,6 +11,7 @@ import {
   ChevronUp, ChevronDown, Save, X, Eye, Upload, Download, AlertCircle, CheckCircle2, Square, CheckSquare,
   ClipboardList, ToggleLeft, ToggleRight
 } from 'lucide-react'
+import { attachDialog } from '../../utils/dialogFocus'
 
 const FIELD_TYPES = [
   { value: 'section_header', label: 'Section Header' },
@@ -122,15 +123,15 @@ function ImportModal({ parsedFields, onClose, onConfirm, importing }) {
   const issues = parsedFields.filter(f => !f.label || !f.field_key)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+    <div ref={attachDialog} aria-label="Dialog" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div data-dialog-backdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 w-full max-w-xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl flex flex-col max-h-[88vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <div>
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Import Fields</h2>
             <p className="text-xs text-slate-400 mt-0.5">{parsedFields.length} field{parsedFields.length !== 1 ? 's' : ''} parsed from file</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
             <X size={16} />
           </button>
         </div>
@@ -202,14 +203,14 @@ function RequiredDocModal({ doc, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+    <div ref={attachDialog} aria-label="Dialog" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div data-dialog-backdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 w-full max-w-lg bg-white dark:bg-slate-800 rounded-xl shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {doc.id ? 'Edit Required Document' : 'Add Required Document'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
             <X size={16} />
           </button>
         </div>
@@ -329,14 +330,14 @@ function FieldModal({ field, onClose, onSave }) {
   const isHeader = form.field_type === 'section_header'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+    <div ref={attachDialog} aria-label="Dialog" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div data-dialog-backdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 w-full max-w-xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {field.id ? 'Edit Field' : 'Add Field'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
             <X size={16} />
           </button>
         </div>
@@ -483,8 +484,8 @@ function PreviewModal({ formType, fields, onClose }) {
   const [values, setValues] = useState({})
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+    <div ref={attachDialog} aria-label="Dialog" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div data-dialog-backdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 w-full max-w-2xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <div>
@@ -493,7 +494,7 @@ function PreviewModal({ formType, fields, onClose }) {
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">This is how the form will appear to users. Values are not saved.</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
+          <button type="button" aria-label="Close" onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
             <X size={16} />
           </button>
         </div>

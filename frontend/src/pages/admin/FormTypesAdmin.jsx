@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import SharedModal from '../../components/shared/Modal'
 import PageHeader from '../../components/shared/PageHeader'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
@@ -17,16 +18,9 @@ const PER_PAGE = 15
 
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative z-10 w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} bg-white dark:bg-slate-800 rounded-xl shadow-2xl`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          <BaseButton variant="ghost" size="icon" iconOnly onClick={onClose} icon={<X size={16} />} />
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
+    <SharedModal open onClose={onClose} title={title} size={wide ? 'lg' : 'md'}>
+      {children}
+    </SharedModal>
   )
 }
 

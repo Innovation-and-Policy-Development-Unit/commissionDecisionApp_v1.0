@@ -7,8 +7,10 @@ import { useToast } from '../../context/ToastContext'
 import PageHeader from '../../components/shared/PageHeader'
 import Badge from '../../components/shared/Badge'
 import ReportTemplateForm from '../../components/reports/ReportTemplateForm'
+import { useConfirm } from '../../context/ConfirmContext'
 
 export default function ReportTemplateManager() {
+  const confirm = useConfirm()
   const { t } = useTranslation()
   const toast = useToast()
 
@@ -57,7 +59,7 @@ export default function ReportTemplateManager() {
   }
 
   const handleDelete = async (tmpl) => {
-    if (!window.confirm(t('report_hub.confirm_delete', { name: tmpl.name }))) return
+    if (!(await confirm({ title: t('common.delete', { defaultValue: 'Delete' }), message: t('report_hub.confirm_delete', { name: tmpl.name }), confirmLabel: t('common.delete', { defaultValue: 'Delete' }) }))) return
     try {
       await reportTemplatesApi.remove(tmpl.slug)
       toast.success(t('report_hub.template_deleted'))
