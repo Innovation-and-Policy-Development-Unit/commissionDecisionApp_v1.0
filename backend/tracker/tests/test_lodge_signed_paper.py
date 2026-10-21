@@ -4,6 +4,7 @@ package for a non-pilot ministry. It lands at Forwarded to Commission and on the
 same agenda as online submissions, marked as lodged from paper.
 """
 from datetime import timedelta
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -112,3 +113,26 @@ class LodgeSignedPaperTests(TestCase):
         self.assertTrue(sub.lodged_from_paper)
         self.assertFalse(AgendaItem.objects.filter(submission=sub).exists())
         self.assertFalse(res.data["placed_on_agenda"])
+
+    def test_lodge_queues_ai_brief(self):
+        self.client.force_authenticate(user=self.csu)
+        with mock.patch("tracker.tasks.queue_submission_brief") as brief:
+            res = self.client.post(URL, self._payload(), format="multipart")
+        self.assertEqual(res.status_code, 201, res.content)
+        brief.assert_called_once_with(res.data["id"])
+
+    def test_test_flag_skips_ai_brief(self):
+        self.client.force_authenticate(user=self.csu)
+        with mock.patch("tracker.tasks.queue_submission_brief") as brief:
+            res = self.client.post(URL, self._payload(is_test="true"), format="multipart")
+        self.assertEqual(res.status_code, 201, res.content)
+        brief.assert_not_called()
+
+    def test_csu_manager_sees_paper_lodgement_in_submission_list(self):
+        self.client.force_authenticate(user=self.csu)
+        res = self.client.post(URL, self._payload(), format="multipart")
+        self.assertEqual(res.status_code, 201, res.content)
+        listing = self.client.get("/api/submissions/")
+        self.assertEqual(listing.status_code, 200)
+        rows = listing.data["results"] if isinstance(listing.data, dict) else listing.data
+        self.assertIn(res.data["id"], [r["id"] for r in rows])

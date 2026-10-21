@@ -1448,6 +1448,12 @@ def extract_document_facts(document_id: int):
     )
     app_log.info("DOC_EXTRACT_OK | doc=%s | chars=%d", document_id, len(doc.extracted_text))
     queue_document_classification(document_id, force=True)
+    # A scanned signed paper's content only exists as extracted text, and the
+    # brief's freshness key doesn't track extraction, so the brief queued at
+    # lodge time may have run before this text was available — redo it now.
+    sub = doc.submission
+    if sub.lodged_from_paper and not sub.is_test:
+        queue_submission_brief(sub.id, force=True)
 
 
 # ── A2: Document type classification (Haiku) ─────────────────────────────────

@@ -348,9 +348,11 @@ def _submission_queryset_for(user):
         return qs.exclude(current_stage__in=_review_stages) | qs.filter(
             current_stage__in=_review_stages, assigned_to=user,
         )
-    # CSU Manager sees only internal submissions
+    # CSU Manager sees internal submissions, plus every signed paper package
+    # CSU lodged (those are is_internal=False, so without this the lodging
+    # unit couldn't find its own uploads).
     if role == Role.CSU_MANAGER:
-        return qs.filter(is_internal=True)
+        return qs.filter(models.Q(is_internal=True) | models.Q(lodged_from_paper=True))
     # Unit managers (the checklist-review gate) must only see submissions the
     # PSC receptionist/officer has already routed to their own unit — never
     # unrouted submissions still with PSC intake, and never another unit's
@@ -1643,7 +1645,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .file_validation import FileValidationError, validate_upload
         from .models import AgendaSection, AuditLog as _AL, Ministry
         from .rbac import rbac_user_can_lodge_signed_paper
-        from .tasks import queue_document_classification, queue_document_extraction
+        from .tasks import (
+            queue_document_classification, queue_document_extraction, queue_submission_brief,
+        )
 
         if not rbac_user_can_lodge_signed_paper(request.user):
             raise PermissionDenied(
@@ -1736,6 +1740,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         for doc in docs:
             queue_document_extraction(doc.id)
             queue_document_classification(doc.id)
+        # Created directly at Forwarded to Commission, so it never goes through
+        # the transition that normally queues the executive brief.
+        if not submission.is_test:
+            queue_submission_brief(submission.id)
         invalidate_submission(submission.id)
 
         _log(request, _AL.Action.CREATE, resource_type="Submission", resource_id=submission.id,
