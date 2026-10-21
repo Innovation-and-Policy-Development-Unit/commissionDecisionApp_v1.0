@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Canvas, Circle, IText, FabricImage, PencilBrush } from 'fabric'
 import { Check, X, RotateCcw, PenLine, CircleDot, Type } from 'lucide-react'
+import { attachDialog } from '../../utils/dialogFocus'
 
 // FabricImage.fromURL internally calls fetch() which CSP blocks for data: URLs.
 function loadFabricImage(src, opts = {}) {
@@ -145,7 +146,7 @@ export default function ScreenshotAnnotator({ imageDataUrl, onDone, onCancel }) 
   const hint = { pen: 'Click and drag to draw', circle: 'Click anywhere to place a circle', text: 'Click anywhere to add text' }
 
   return (
-    <div className="fixed inset-0 z-[90] bg-black flex flex-col select-none">
+    <div ref={attachDialog} aria-label="Annotate screenshot" className="fixed inset-0 z-[90] bg-black flex flex-col select-none">
 
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-1 bg-primary-900 px-3 h-12 shrink-0 border-b border-white/10">

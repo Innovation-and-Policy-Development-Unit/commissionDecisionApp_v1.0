@@ -88,6 +88,9 @@ export default function SubmissionLog() {
   const [nlIdSet, setNlIdSet]     = useState(null)
   const [viewMode, setViewMode]   = useState(() => (searchParams.get('view') === 'kanban' ? 'kanban' : 'list'))
   const isAdmin = user?.role === 'psc_admin'
+  // Mirrors ALLOWED in the backend submission_bulk_action_view; the server is
+  // still the authority. Deleting stays admin-only (isAdmin).
+  const canBulkAct = isAdmin || ['psc_secretary', 'psc_officer', 'senior_admin_officer', 'psc_commissioner', 'chairperson'].includes(user?.role)
   // Same role set the backend's DELETE /submissions/{id}/ already allows to
   // trash their own Draft submissions (views.py SubmissionViewSet.destroy) —
   // the list here only needed a matching frontend affordance.
@@ -350,7 +353,7 @@ export default function SubmissionLog() {
     } catch { /* handled by api interceptor */ }
   }
 
-  const cols = (isAdmin ? 1 : 0) + 4 + (showActionsColumn ? 1 : 0) + (showQualityColumn ? 1 : 0) + (showAssignedColumn ? 1 : 0)
+  const cols = (canBulkAct ? 1 : 0) + 4 + (showActionsColumn ? 1 : 0) + (showQualityColumn ? 1 : 0) + (showAssignedColumn ? 1 : 0)
 
   return (
     <div>
@@ -577,7 +580,7 @@ export default function SubmissionLog() {
         {viewMode === 'list' && (
         <>
         {/* ── Bulk Operations Bar ── */}
-        {isAdmin && selected.size > 0 && (
+        {canBulkAct && selected.size > 0 && (
           <div className="p-4 pb-0">
             <BulkOperationsBar
               selectedIds={[...selected]}
@@ -591,7 +594,7 @@ export default function SubmissionLog() {
           <table className="table">
             <thead>
               <tr>
-                {isAdmin && (
+                {canBulkAct && (
                   <th className="w-10">
                     <BaseCheckbox
                       checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
@@ -654,7 +657,7 @@ export default function SubmissionLog() {
                     onClick={() => navigate(`/submissions/${r.id}`)}
                     className={clsx('cursor-pointer', selected.has(r.id) && 'bg-primary-50/50 dark:bg-primary-900/10')}
                   >
-                    {isAdmin && (
+                    {canBulkAct && (
                       <td onClick={e => e.stopPropagation()}>
                         <BaseCheckbox
                           checked={selected.has(r.id)}
@@ -750,7 +753,7 @@ export default function SubmissionLog() {
                       onClick={() => navigate(`/submissions/${child.id}`)}
                       className="bg-slate-50/60 dark:bg-slate-800/40 cursor-pointer"
                     >
-                      {isAdmin && <td />}
+                      {canBulkAct && <td />}
                       <td>
                         <div className="flex items-center gap-1.5 pl-4">
                           <span className="text-slate-300 dark:text-slate-600 select-none">└</span>

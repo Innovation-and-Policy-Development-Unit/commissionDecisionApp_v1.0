@@ -99,7 +99,7 @@ export function useGlobalShortcuts({ onToggleShortcuts, navigate }) {
 /** Shortcut definitions used by the help modal. */
 export const SHORTCUT_DEFS = [
   { keys: ['/'],       description: 'Open search' },
-  { keys: ['Ctrl', 'K'], description: 'Open search / jump to any page' },
+  { keys: ['Ctrl', 'K'], together: true, description: 'Open search / jump to any page' },
   { keys: ['n'],       description: 'New submission' },
   { keys: ['g', 'd'],  description: 'Go to Dashboard' },
   { keys: ['g', 's'],  description: 'Go to Submissions' },

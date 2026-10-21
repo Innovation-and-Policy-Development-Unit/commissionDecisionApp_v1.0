@@ -20,7 +20,7 @@ function focusables(node) {
 function onKeyDown(e) {
   const node = e.currentTarget
   if (e.key === 'Escape') {
-    const closer = node.querySelector('[data-dialog-backdrop]') || node.querySelector('[aria-label="Close"],[aria-label="Close dialog"]')
+    const closer = (node.matches('[data-dialog-backdrop]') ? node : node.querySelector('[data-dialog-backdrop]')) || node.querySelector('[aria-label="Close"],[aria-label="Close dialog"]')
     if (closer) {
       e.stopPropagation()
       closer.click()
@@ -45,6 +45,7 @@ export function attachDialog(node) {
     node.setAttribute('role', node.getAttribute('role') || 'dialog')
     node.setAttribute('aria-modal', 'true')
     if (!node.hasAttribute('tabindex')) node.tabIndex = -1
+    node.style.outline = 'none'
     node.addEventListener('keydown', onKeyDown)
     if (!node.contains(document.activeElement)) {
       const target = node.querySelector('[autofocus],[data-autofocus]') || focusables(node).find(el => !el.matches('[aria-label="Close"],[aria-label="Close dialog"]')) || node

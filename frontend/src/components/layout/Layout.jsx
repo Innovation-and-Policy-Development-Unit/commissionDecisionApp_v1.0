@@ -12,6 +12,7 @@ import SecurityNoticesBanner from '../shared/SecurityNoticesBanner'
 import SystemStatsStrip from '../shared/SystemStatsStrip'
 import FeedbackPanel from '../shared/FeedbackPanel'
 import KeyboardShortcutsModal from '../shared/KeyboardShortcutsModal'
+import WelcomeTour from '../shared/WelcomeTour'
 import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts'
 import clsx from 'clsx'
 
@@ -117,6 +118,7 @@ export default function Layout() {
         onClose={() => setShortcutsOpen(false)}
       />
       <FloatingChatWindows />
+      <WelcomeTour />
     </div>
     </ChatProvider>
   )

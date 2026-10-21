@@ -12,6 +12,7 @@ import LockPopover from './LockPopover'
 import Badge from './Badge'
 import { useAuth } from '../../context/AuthContext'
 import { authMethodInfo } from '../../constants/signatureAuth'
+import { attachDialog } from '../../utils/dialogFocus'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc
 
@@ -375,7 +376,7 @@ export default function DocumentSignatureModal({ document: doc, submissionId, on
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black flex flex-col select-none">
+    <div ref={attachDialog} aria-label="Sign document" className="fixed inset-0 z-[100] bg-black flex flex-col select-none">
 
       {/* Toolbar */}
       <div className="flex items-center gap-2 bg-slate-900 px-3 h-12 shrink-0 border-b border-slate-700">

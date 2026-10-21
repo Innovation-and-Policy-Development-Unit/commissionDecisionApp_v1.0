@@ -9,6 +9,7 @@ import {
 import api from '../../api/client'
 import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
 import { useConfirm } from '../../context/ConfirmContext'
+import { attachDialog } from '../../utils/dialogFocus'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc
 
@@ -339,7 +340,7 @@ export default function DocumentAnnotatorModal({ document: doc, submissionId, on
   const hint = { pen: 'Drag to draw', circle: 'Click to place a circle', text: 'Click to add text' }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black flex flex-col select-none">
+    <div ref={attachDialog} aria-label="Annotate document" className="fixed inset-0 z-[100] bg-black flex flex-col select-none">
 
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-1 bg-slate-900 px-3 h-12 shrink-0 border-b border-slate-700">
