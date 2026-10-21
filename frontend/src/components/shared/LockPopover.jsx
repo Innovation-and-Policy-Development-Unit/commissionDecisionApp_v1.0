@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Lock, ArrowRight, Loader2, X, ShieldAlert } from 'lucide-react'
 import api from '../../api/client'
+import { attachDialog } from '../../utils/dialogFocus'
 
 /**
  * Inline password confirmation overlay.
@@ -43,6 +44,9 @@ export default function LockPopover({ title = 'Confirm Identity', message, onVer
   return (
     // Backdrop
     <div
+      ref={attachDialog}
+      data-dialog-backdrop
+      aria-label="Unlock"
       className="fixed inset-0 z-[200] flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
       onClick={e => { if (e.target === e.currentTarget) onCancel() }}

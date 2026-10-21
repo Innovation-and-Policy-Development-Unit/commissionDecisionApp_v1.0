@@ -6,6 +6,7 @@ import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
 import Badge from '../../components/shared/Badge'
 import { Skeleton } from '../../components/shared/Skeleton'
+import EmptyState from '../../components/shared/EmptyState'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseInput from '../../components/shared/BaseInput'
 import BaseSelect from '../../components/shared/BaseSelect'
@@ -87,6 +88,9 @@ export default function SubmissionLog() {
   const [nlIdSet, setNlIdSet]     = useState(null)
   const [viewMode, setViewMode]   = useState(() => (searchParams.get('view') === 'kanban' ? 'kanban' : 'list'))
   const isAdmin = user?.role === 'psc_admin'
+  // Mirrors ALLOWED in the backend submission_bulk_action_view; the server is
+  // still the authority. Deleting stays admin-only (isAdmin).
+  const canBulkAct = isAdmin || ['psc_secretary', 'psc_officer', 'senior_admin_officer', 'psc_commissioner', 'chairperson'].includes(user?.role)
   // Same role set the backend's DELETE /submissions/{id}/ already allows to
   // trash their own Draft submissions (views.py SubmissionViewSet.destroy) —
   // the list here only needed a matching frontend affordance.
@@ -299,7 +303,15 @@ export default function SubmissionLog() {
     const ids = [...selected]
     const results = await Promise.allSettled(ids.map(id => api.delete(`/submissions/${id}/`)))
     const failed = results.filter(r => r.status === 'rejected')
-    if (failed.length === 0) {
+    const trashedIds = ids.filter((_, i) => results[i].status === 'fulfilled')
+    if (failed.length === 0 && isAdmin) {
+      toast.undoable(`Moved ${ids.length} submission${ids.length !== 1 ? 's' : ''} to the trash.`, async () => {
+        const restored = await Promise.allSettled(trashedIds.map(id => api.post('/admin/trash/restore/', { type: 'submission', id })))
+        if (restored.some(r => r.status === 'rejected')) toast.error('Some submissions could not be restored. Check Admin → Trash Bin.')
+        else toast.success('Restored.')
+        refetchSubmissions()
+      })
+    } else if (failed.length === 0) {
       toast.success(`Moved ${ids.length} submission${ids.length !== 1 ? 's' : ''} to the trash.`)
     } else {
       const reason = failed[0].reason?.response?.data?.detail
@@ -341,7 +353,7 @@ export default function SubmissionLog() {
     } catch { /* handled by api interceptor */ }
   }
 
-  const cols = (isAdmin ? 1 : 0) + 4 + (showActionsColumn ? 1 : 0) + (showQualityColumn ? 1 : 0) + (showAssignedColumn ? 1 : 0)
+  const cols = (canBulkAct ? 1 : 0) + 4 + (showActionsColumn ? 1 : 0) + (showQualityColumn ? 1 : 0) + (showAssignedColumn ? 1 : 0)
 
   return (
     <div>
@@ -568,7 +580,7 @@ export default function SubmissionLog() {
         {viewMode === 'list' && (
         <>
         {/* ── Bulk Operations Bar ── */}
-        {isAdmin && selected.size > 0 && (
+        {canBulkAct && selected.size > 0 && (
           <div className="p-4 pb-0">
             <BulkOperationsBar
               selectedIds={[...selected]}
@@ -582,7 +594,7 @@ export default function SubmissionLog() {
           <table className="table">
             <thead>
               <tr>
-                {isAdmin && (
+                {canBulkAct && (
                   <th className="w-10">
                     <BaseCheckbox
                       checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
@@ -617,8 +629,24 @@ export default function SubmissionLog() {
               {!loading && rows.length === 0 && (
                 <tr>
                   <td colSpan={cols} className="py-16 text-center text-slate-500 dark:text-slate-400">
-                    <FileText size={32} className="mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">{(q || stageFilter || ministryFilter || unitFilter || dashboardFilter || nlIdSet) ? t('submission.no_matches') : t('submission.empty_state_title')}</p>
+                    {(q || stageFilter || ministryFilter || unitFilter || dashboardFilter || nlIdSet) ? (
+                      <EmptyState
+                        icon={Search}
+                        title={t('submission.no_matches')}
+                        description={t('submission.no_matches_hint', { defaultValue: 'Try a different search, or clear the filters to see everything.' })}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={FileText}
+                        title={t('submission.empty_state_title')}
+                        description={t('submission.empty_state_hint', { defaultValue: 'Submissions you lodge or are asked to review will appear here.' })}
+                        action={showCommissionCreate ? (
+                          <BaseButton variant="primary" icon={<PlusCircle size={16} />} onClick={() => openCreateModal('commission')}>
+                            {t('submission.new', { defaultValue: 'New submission' })}
+                          </BaseButton>
+                        ) : undefined}
+                      />
+                    )}
                   </td>
                 </tr>
               )}
@@ -629,7 +657,7 @@ export default function SubmissionLog() {
                     onClick={() => navigate(`/submissions/${r.id}`)}
                     className={clsx('cursor-pointer', selected.has(r.id) && 'bg-primary-50/50 dark:bg-primary-900/10')}
                   >
-                    {isAdmin && (
+                    {canBulkAct && (
                       <td onClick={e => e.stopPropagation()}>
                         <BaseCheckbox
                           checked={selected.has(r.id)}
@@ -725,7 +753,7 @@ export default function SubmissionLog() {
                       onClick={() => navigate(`/submissions/${child.id}`)}
                       className="bg-slate-50/60 dark:bg-slate-800/40 cursor-pointer"
                     >
-                      {isAdmin && <td />}
+                      {canBulkAct && <td />}
                       <td>
                         <div className="flex items-center gap-1.5 pl-4">
                           <span className="text-slate-300 dark:text-slate-600 select-none">└</span>

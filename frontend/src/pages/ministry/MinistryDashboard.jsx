@@ -14,6 +14,7 @@ import useChartColors from '../../hooks/useChartColors'
 import { useAuth } from '../../context/AuthContext'
 import { stageLabel, stageBadgeClass, stageMeta } from '../../constants/stages'
 import { normalizeListPayload } from '../../utils/listPayload'
+import InboxBriefCard from '../../components/dashboard/InboxBriefCard'
 import StatCard from '../../components/shared/StatCard'
 import UpcomingSittings from '../../components/meetings/UpcomingSittings'
 
@@ -220,6 +221,7 @@ export default function MinistryDashboard() {
 
   return (
     <div className="space-y-4">
+      <InboxBriefCard />
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

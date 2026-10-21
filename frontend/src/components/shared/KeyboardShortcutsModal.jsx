@@ -20,9 +20,18 @@ export default function KeyboardShortcutsModal({ open, onClose }) {
       closeLabel="Close keyboard shortcuts"
       panelClassName="max-w-md"
       footer={(
-        <p className="text-[11px] text-slate-400 text-center">
-          Press <Kbd>?</Kbd> at any time to toggle this panel
-        </p>
+        <div className="flex w-full items-center justify-between gap-3">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Press <Kbd>?</Kbd> at any time to toggle this panel
+          </p>
+          <button
+            type="button"
+            onClick={() => { onClose?.(); document.dispatchEvent(new CustomEvent('psc:tour:open')) }}
+            className="text-xs font-semibold text-primary-600 dark:text-primary-400 underline underline-offset-2"
+          >
+            Take the tour
+          </button>
+        </div>
       )}
     >
       <ul className="divide-y divide-slate-50 dark:divide-slate-700/50 -mx-1">
@@ -38,7 +47,7 @@ export default function KeyboardShortcutsModal({ open, onClose }) {
               {def.keys.map((k, ki) => (
                 <span key={ki} className="flex items-center gap-1">
                   {ki > 0 && (
-                    <span className="text-slate-300 dark:text-slate-600 text-[10px]">then</span>
+                    <span className="text-slate-300 dark:text-slate-600 text-[10px]">{def.together ? '+' : 'then'}</span>
                   )}
                   <Kbd>{k}</Kbd>
                 </span>

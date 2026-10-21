@@ -48,6 +48,15 @@ function ToastItem({ toast, onRemove }) {
           <p className="text-sm font-semibold leading-snug">{toast.title}</p>
         )}
         <p className="text-sm leading-snug opacity-90">{toast.message}</p>
+        {toast.action && (
+          <button
+            type="button"
+            onClick={() => { toast.action.onClick(); onRemove(toast.id) }}
+            className="mt-1 text-sm font-semibold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded"
+          >
+            {toast.action.label}
+          </button>
+        )}
       </div>
       <button
         type="button"
@@ -70,9 +79,9 @@ export function ToastProvider({ children }) {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
-  const add = useCallback((type, message, title, duration = 4000) => {
+  const add = useCallback((type, message, title, duration = 4000, action) => {
     const id = ++counterRef.current
-    setToasts(prev => [...prev, { id, type, message, title }])
+    setToasts(prev => [...prev, { id, type, message, title, action }])
     const prefix = TYPE_LABELS[type] || 'Notice'
     const text = title ? `${prefix}: ${title}. ${message}` : `${prefix}: ${message}`
     setLiveMessage(text)
@@ -81,6 +90,8 @@ export function ToastProvider({ children }) {
 
   const toast = {
     success: (message, title) => add('success', message, title),
+    // Reversible actions: toast.undoable('Moved to trash', () => restore()) shows an Undo button for 8s.
+    undoable: (message, onUndo, label = 'Undo') => add('success', message, undefined, 8000, { label, onClick: onUndo }),
     error:   (message, title) => add('error',   message, title, 6000),
     warning: (message, title) => add('warning', message, title),
     info:    (message, title) => add('info',    message, title),

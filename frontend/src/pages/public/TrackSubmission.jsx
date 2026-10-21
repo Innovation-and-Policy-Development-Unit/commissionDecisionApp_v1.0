@@ -222,6 +222,15 @@ export default function TrackSubmission() {
                       milestoneIndex={result.milestone_index}
                       isPaused={result.is_paused}
                     />
+                    <p className="mt-4 text-center text-sm text-slate-600" aria-live="polite">
+                      Step {result.milestone_index + 1} of {result.milestones.length}
+                      {!result.is_paused && result.milestones[result.milestone_index + 1] && (
+                        <> · Next: <span className="font-semibold text-slate-800">{result.milestones[result.milestone_index + 1]}</span></>
+                      )}
+                      {!result.is_paused && result.milestone_index === result.milestones.length - 1 && (
+                        <> · <span className="font-semibold text-emerald-700">Complete</span></>
+                      )}
+                    </p>
                   </div>
                 )}
 

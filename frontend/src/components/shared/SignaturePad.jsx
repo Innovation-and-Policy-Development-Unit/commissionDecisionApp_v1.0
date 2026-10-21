@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { RotateCcw, Check, X } from 'lucide-react'
+import { attachDialog } from '../../utils/dialogFocus'
 
 /**
  * Simple HTML5-canvas signature pad.
@@ -88,6 +89,8 @@ export default function SignaturePad({ onDone, onCancel }) {
 
   return (
     <div
+      ref={attachDialog}
+      aria-label="Draw signature"
       className="fixed inset-0 z-[200] flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
     >

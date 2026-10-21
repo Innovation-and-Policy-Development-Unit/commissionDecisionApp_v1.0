@@ -14,7 +14,7 @@ function isTyping() {
  * Registers global keyboard shortcuts.
  *
  * Shortcuts:
- *   /          → open search (always fires, even in inputs, via psc:search:open event)
+ *   /  or  Ctrl/Cmd+K → open search (always fires, even in inputs, via psc:search:open event)
  *   ?          → toggle shortcuts help modal
  *   n          → new submission
  *   g d        → go to dashboard
@@ -35,6 +35,13 @@ export function useGlobalShortcuts({ onToggleShortcuts, navigate }) {
       if (e.key === '?' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault()
         onToggleShortcuts?.()
+        return
+      }
+
+      // Ctrl/Cmd+K — the conventional command-palette shortcut; opens the same search
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        document.dispatchEvent(new CustomEvent('psc:search:open'))
         return
       }
 
@@ -92,6 +99,7 @@ export function useGlobalShortcuts({ onToggleShortcuts, navigate }) {
 /** Shortcut definitions used by the help modal. */
 export const SHORTCUT_DEFS = [
   { keys: ['/'],       description: 'Open search' },
+  { keys: ['Ctrl', 'K'], together: true, description: 'Open search / jump to any page' },
   { keys: ['n'],       description: 'New submission' },
   { keys: ['g', 'd'],  description: 'Go to Dashboard' },
   { keys: ['g', 's'],  description: 'Go to Submissions' },
