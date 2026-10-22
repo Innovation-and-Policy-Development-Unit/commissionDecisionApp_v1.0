@@ -131,6 +131,48 @@ def queue_external_submission_confirmation_emails(submission_id, user_ids):
 
 
 @shared_task
+def send_dg_paper_notice_emails(submission_id, user_ids, submitted_by):
+    from django.contrib.auth.models import User
+
+    from .email_notify import notify_dg_paper_submitted
+    from .models import Submission
+
+    try:
+        submission = Submission.objects.get(pk=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("DG_NOTICE_EMAIL_SKIP | Submission %s not found", submission_id)
+        return
+    users = list(User.objects.filter(pk__in=user_ids, is_active=True))
+    notify_dg_paper_submitted(submission, users, submitted_by)
+
+
+def queue_dg_paper_notice_emails(submission_id, user_ids, submitted_by):
+    try:
+        send_dg_paper_notice_emails.delay(submission_id, user_ids, submitted_by)
+    except Exception as exc:
+        app_log.warning("DG_NOTICE_EMAIL_QUEUE_FALLBACK | Submission %s | %s", submission_id, exc)
+        send_dg_paper_notice_emails(submission_id, user_ids, submitted_by)
+
+
+@shared_task
+def check_dg_signature_for_document(document_id):
+    from .ai.signature_check import check_and_store_document
+    from .models import SubmissionDocument
+
+    doc = SubmissionDocument.objects.select_related("submission").filter(pk=document_id).first()
+    if doc:
+        check_and_store_document(doc)
+
+
+def queue_dg_signature_check(document_id) -> None:
+    """Fire-and-forget: a vision call is too slow and costly to fall back to inline."""
+    try:
+        check_dg_signature_for_document.delay(document_id)
+    except Exception as exc:
+        app_log.warning("DG_SIGNATURE_QUEUE_SKIP | doc %s | %s", document_id, exc)
+
+
+@shared_task
 def send_applicant_tracking_code_email(submission_id):
     from django.utils import timezone
 
@@ -668,6 +710,11 @@ def build_submission_brief_context(submission) -> str:
         f"Assessment deadline: {submission.assessment_deadline_at or '—'}",
         f"Overdue assessment: {submission.is_assessment_overdue}",
         f"DG endorsed by: {submission.dg_endorsed_by.username if submission.dg_endorsed_by_id else '—'}",
+        (
+            f"DG approval on paper (attested by HR, not verified): {submission.dg_approval_name}, "
+            f"signed {submission.dg_approval_date}"
+            if submission.dg_approval_name else "DG approval on paper: not attested"
+        ),
         f"Assigned principal: {submission.assigned_to.username if submission.assigned_to_id else '—'}",
         f"Submission notes: {submission.notes or '—'}",
     ]
@@ -685,6 +732,11 @@ def build_submission_brief_context(submission) -> str:
         facts = doc.extracted_facts or {}
         if isinstance(facts, dict) and facts.get("document_summary"):
             lines.append(f"  Document summary: {facts.get('document_summary')}")
+        from .ai.signature_check import signature_hint_line
+
+        hint = signature_hint_line(doc)
+        if hint:
+            lines.append(hint)
 
     checklist = SubmissionChecklistItem.objects.filter(submission=submission).select_related("document")
     for item in checklist:
@@ -1433,6 +1485,13 @@ def extract_document_facts(document_id: int):
     facts = result.get("key_facts") or {}
     if result.get("document_summary"):
         facts = {**facts, "document_summary": result["document_summary"]}
+    # Keep an earlier DG-signature hint for this same file — re-reading the text must
+    # not throw away a (paid-for) vision check.
+    from .ai.signature_check import FACTS_KEY as _SIG_KEY
+
+    prior_sig = doc.extracted_facts.get(_SIG_KEY) if isinstance(doc.extracted_facts, dict) else None
+    if isinstance(prior_sig, dict) and prior_sig.get("file") == doc.file.name:
+        facts = {**facts, _SIG_KEY: prior_sig}
     doc.extracted_facts = facts
     doc.ocr_status = DocumentOcrStatus.COMPLETED
     doc.ocr_processed_at = timezone.now()
@@ -2042,6 +2101,13 @@ def validate_submission_package_sync(submission_id: int, *, force: bool = False)
             "summary": submission.ai_package_summary or "",
             "gaps": submission.ai_package_gaps or [],
         }
+
+    from .ai.signature_check import ensure_dg_signature_checks
+
+    try:
+        ensure_dg_signature_checks(submission)
+    except Exception as exc:
+        app_log.warning("DG_SIGNATURE_CHECK_ERROR | Submission %s | %s", submission_id, exc)
 
     context = build_submission_package_context(submission)
     result, err = validate_package_from_context(submission, context)

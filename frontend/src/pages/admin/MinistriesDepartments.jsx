@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import SharedModal from '../../components/shared/Modal'
 import { useNavigate } from 'react-router-dom'
-import { Edit2, Plus, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Edit2, Plus, Trash2, X } from 'lucide-react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -40,7 +40,8 @@ export default function MinistriesDepartments() {
   const [error, setError] = useState('')
 
   const [minModal, setMinModal] = useState(null)
-  const [minForm, setMinForm] = useState({ code: '', name: '' })
+  const [minForm, setMinForm] = useState({ code: '', name: '', dg_contact_email: '' })
+  const [dgGaps, setDgGaps] = useState([])
   const [deptModal, setDeptModal] = useState(null)
   const [deptForm, setDeptForm] = useState({ ministry: '', code: '', name: '' })
   const [unitModal, setUnitModal] = useState(null)
@@ -74,6 +75,10 @@ export default function MinistriesDepartments() {
       setMinistries(m)
       setDepartments(d)
       setUnits(u)
+      // Ministries nobody could notify when HR submits a paper (no DG account/email on file).
+      api.get('/ministries/dg-coverage/')
+        .then(r => setDgGaps(r.data?.ministries || []))
+        .catch(() => setDgGaps([]))
       const pm = m.find(
         ministry => /prime minister/i.test(ministry.name) || ministry.code === 'MPM' || ministry.code === 'OPM',
       )
@@ -109,10 +114,14 @@ export default function MinistriesDepartments() {
     setSaving(true)
     try {
       if (minModal === 'create') {
-        await api.post('/ministries/', { code: minForm.code.trim(), name: minForm.name.trim() })
+        await api.post('/ministries/', {
+          code: minForm.code.trim(), name: minForm.name.trim(), dg_contact_email: minForm.dg_contact_email.trim(),
+        })
         toast.success('Ministry created.')
       } else {
-        await api.patch(`/ministries/${minModal.id}/`, { code: minForm.code.trim(), name: minForm.name.trim() })
+        await api.patch(`/ministries/${minModal.id}/`, {
+          code: minForm.code.trim(), name: minForm.name.trim(), dg_contact_email: minForm.dg_contact_email.trim(),
+        })
         toast.success('Ministry updated.')
       }
       setMinModal(null)
@@ -401,7 +410,7 @@ export default function MinistriesDepartments() {
             <button
               type="button"
               onClick={() => {
-                setMinForm({ code: '', name: '' })
+                setMinForm({ code: '', name: '', dg_contact_email: '' })
                 setError('')
                 setMinModal('create')
               }}
@@ -411,6 +420,16 @@ export default function MinistriesDepartments() {
             </button>
           </div>
         </div>
+        {dgGaps.length > 0 && (
+          <div className="mx-4 mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20 px-4 py-3 text-xs text-amber-800 dark:text-amber-200">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>
+              <strong>{dgGaps.length} ministr{dgGaps.length === 1 ? 'y has' : 'ies have'} nobody to notify</strong>{' '}
+              when HR submits a paper — no Director-General account with an email, and no notice email set:{' '}
+              {dgGaps.map(g => g.name).join(', ')}.
+            </span>
+          </div>
+        )}
         <div className="table-wrapper">
           <table className="table">
             <thead>
@@ -425,12 +444,13 @@ export default function MinistriesDepartments() {
                 </th>
                 <th>Code</th>
                 <th>Name</th>
+                <th>DG notice email</th>
                 <th className="sr-only">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={4} className="py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={5} className="py-8 text-center text-slate-400">Loading…</td></tr>
               ) : (
                 ministries.map(m => (
                   <tr key={m.id} className={selectedMin.has(m.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}>
@@ -444,12 +464,13 @@ export default function MinistriesDepartments() {
                     </td>
                     <td><span className="font-mono text-xs font-semibold text-primary-600 dark:text-primary-400">{m.code}</span></td>
                     <td><span className="text-sm font-medium text-slate-800 dark:text-slate-200">{m.name}</span></td>
+                    <td><span className="text-xs text-slate-500 dark:text-slate-400">{m.dg_contact_email || '—'}</span></td>
                     <td>
                       <div className="flex items-center gap-0.5 justify-end">
                         <button
                           type="button"
                           className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-colors"
-                          onClick={() => { setMinForm({ code: m.code, name: m.name }); setError(''); setMinModal(m) }}
+                          onClick={() => { setMinForm({ code: m.code, name: m.name, dg_contact_email: m.dg_contact_email || '' }); setError(''); setMinModal(m) }}
                         >
                           <Edit2 size={13} />
                         </button>
@@ -744,6 +765,22 @@ export default function MinistriesDepartments() {
                 onChange={e => setMinForm(f => ({ ...f, name: e.target.value }))}
                 required
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Director-General notice email
+              </label>
+              <input
+                type="email"
+                className="input text-sm"
+                value={minForm.dg_contact_email}
+                onChange={e => setMinForm(f => ({ ...f, dg_contact_email: e.target.value }))}
+                placeholder="dg@ministry.gov.vu"
+              />
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Used when the ministry has no Director-General account with an email. The DG is told
+                here when HR submits a paper they approved on paper.
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className="btn-outline text-sm py-2 px-4" onClick={() => setMinModal(null)}>

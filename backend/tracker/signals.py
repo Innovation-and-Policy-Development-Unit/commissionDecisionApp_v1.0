@@ -23,6 +23,27 @@ def notification_post_save(sender, instance, created, **kwargs):
     transaction.on_commit(lambda: send_web_push_notification.delay(instance.id))
 
 
+@receiver(post_save, sender="tracker.SubmissionDocument")
+def submission_document_post_save(sender, instance, created, **kwargs):
+    """A file uploaded into the DG's signed-letter slot gets its signature hint right
+    away, so HR sees "signature found / not found" while they can still rescan."""
+    if not created or not instance.required_document_id:
+        return
+    from .ai.signature_check import is_dg_slot
+
+    if not is_dg_slot(instance.required_document):
+        return
+
+    doc_id = instance.id
+
+    def _queue():
+        from .tasks import queue_dg_signature_check
+
+        queue_dg_signature_check(doc_id)
+
+    transaction.on_commit(_queue)
+
+
 @receiver(post_save, sender="tracker.FeedbackComment")
 def feedback_comment_post_save(sender, instance, created, **kwargs):
     """Trigger AI analysis on newly created feedback comments."""

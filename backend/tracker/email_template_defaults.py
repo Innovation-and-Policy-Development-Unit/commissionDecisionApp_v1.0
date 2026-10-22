@@ -572,6 +572,26 @@ DEFAULT_EMAIL_TEMPLATES = [
         "body_html_template": "",
     },
     {
+        "slug": "submission_dg_paper_notice",
+        "name": "Paper submitted under the DG's approval — notice to the DG",
+        "category": "submission_workflow",
+        "description": "Sent to the ministry's Director-General when HR submits a paper to PSC. The DG "
+                        "approves on paper, outside SCDMS, so this is a read-only heads-up that lets "
+                        "the DG flag a paper they did not approve.",
+        "placeholders": _ph("submission_reference, submission_title, submission_url, submitted_by, approval_name, approval_date"),
+        "subject_template": "Submitted to PSC with your approval: {{submission_reference}}",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "{{submitted_by}} has submitted \"{{submission_title}}\" ({{submission_reference}}) "
+            "to the Public Service Commission. The submission states that the Director-General "
+            "({{approval_name}}) signed the paper on {{approval_date}}.\n\n"
+            "No action is needed in SCDMS. If you did not approve this paper, please contact the "
+            "PSC Secretariat straight away so it can be stopped.\n\n"
+            "View submission: {{submission_url}}"
+        ),
+        "body_html_template": "",
+    },
+    {
         "slug": "submission_received_confirmation",
         "name": "Submission received — external confirmation",
         "category": "submission_workflow",
@@ -1010,6 +1030,14 @@ SAMPLE_EMAIL_CONTEXTS = {
         "submission_title": "Senior appointment — Ministry of Finance",
         "submission_url": "http://localhost:8080/submissions/1",
         "new_stage": "Submitted to PSC",
+    },
+    "submission_dg_paper_notice": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Senior appointment — Ministry of Finance",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "submitted_by": "Jane Tari",
+        "approval_name": "Mr. John Kalo",
+        "approval_date": "14 Oct 2026",
     },
     "submission_received_confirmation": {
         "submission_reference": "PSC-2026-0042",

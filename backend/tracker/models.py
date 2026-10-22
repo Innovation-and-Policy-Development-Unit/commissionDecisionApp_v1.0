@@ -185,6 +185,11 @@ class EmploymentType(models.TextChoices):
 class Ministry(models.Model):
     code = models.CharField(max_length=32, unique=True)
     name = models.CharField(max_length=255)
+    dg_contact_email = models.EmailField(
+        blank=True,
+        help_text="Fallback address for the notice sent to the Director-General when HR submits a "
+                  "paper, used when the ministry has no Head of Agency account with an email.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1936,6 +1941,20 @@ class Submission(models.Model):
     )
     dg_endorsed_at = models.DateTimeField(null=True, blank=True,
         help_text="When the Head of Agency endorsed this submission.")
+    # The DG now approves a ministry paper on paper, outside SCDMS. HR attests who
+    # signed and when at submit time, so a disputed paper has a named person behind it.
+    dg_approval_name = models.CharField(
+        max_length=255, blank=True,
+        help_text="Director-General who signed the paper, as entered by HR when submitting.",
+    )
+    dg_approval_date = models.DateField(
+        null=True, blank=True, help_text="Date the DG signed the paper (HR attestation).",
+    )
+    dg_approval_attested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="dg_approval_attestations",
+    )
+    dg_approval_attested_at = models.DateTimeField(null=True, blank=True)
     implementation_status = models.CharField(
         max_length=24,
         choices=ImplementationStatus.choices,

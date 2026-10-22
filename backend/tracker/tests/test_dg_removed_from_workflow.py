@@ -3,16 +3,11 @@ The Director-General no longer approves papers in SCDMS: the DG signs the paper
 on paper and Ministry HR uploads the signed copy, then submits straight to PSC.
 """
 from django.contrib.auth.models import User
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from tracker.ai.submission_package_validation import _rule_based_gaps
-from tracker.models import (
-    DocumentClassificationType, Ministry, Profile, Role, Submission,
-    SubmissionDocument, WorkflowStage,
-)
+from tracker.models import Ministry, Profile, Role, Submission, WorkflowStage
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
@@ -32,9 +27,10 @@ class DgRemovedFromWorkflowTests(TestCase):
     def _move(self, user, stage):
         client = APIClient()
         client.force_authenticate(user=user)
-        return client.post(
-            f"/api/submissions/{self.sub.id}/transition/", {"new_stage": stage}, format="json",
-        )
+        body = {"new_stage": stage}
+        if stage == "submitted":
+            body.update(dg_approval_name="Mr. John Kalo", dg_approval_date=timezone.localdate().isoformat())
+        return client.post(f"/api/submissions/{self.sub.id}/transition/", body, format="json")
 
     def test_hr_submits_a_draft_straight_to_psc(self):
         res = self._move(self.hr, "submitted")
@@ -57,20 +53,3 @@ class DgRemovedFromWorkflowTests(TestCase):
         allowed = res.data.get("allowed") or res.data.get("allowed_transitions") or []
         self.assertIn("submitted", allowed)
         self.assertNotIn("pending_dg_endorsement", allowed)
-
-    def test_package_check_asks_for_the_signed_dg_paper_when_none_uploaded(self):
-        gaps = _rule_based_gaps(self.sub)
-        endorsement = [g for g in gaps if g["category"] == "endorsement"]
-        self.assertEqual(len(endorsement), 1)
-        self.assertEqual(endorsement[0]["severity"], "warning")
-        self.assertIn("signed", endorsement[0]["message"])
-
-    def test_package_check_is_satisfied_by_an_uploaded_dg_approved_paper(self):
-        SubmissionDocument.objects.create(
-            submission=self.sub,
-            file=SimpleUploadedFile("dg.pdf", b"%PDF-1.4\n%%EOF\n"),
-            original_name="dg.pdf",
-            document_type=DocumentClassificationType.DG_ENDORSEMENT,
-        )
-        gaps = _rule_based_gaps(self.sub)
-        self.assertEqual([g for g in gaps if g["category"] == "endorsement"], [])

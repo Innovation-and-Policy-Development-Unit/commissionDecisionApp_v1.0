@@ -4,6 +4,12 @@ import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import api from '../../api/client'
 import clsx from 'clsx'
 
+const SIGNATURE_HINT = {
+  seen: { label: 'DG signature seen', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  not_seen: { label: 'No DG signature found', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+  unclear: { label: 'DG signature unclear', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
+}
+
 const STATUS_STYLES = {
   pending: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
   processing: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -30,6 +36,7 @@ export default function DocumentFactsPanel({ submissionId, doc, canExtract, onRe
   const [busy, setBusy] = useState(false)
   const facts = doc.extracted_facts || {}
   const keyFacts = facts.key_facts || facts
+  const signature = SIGNATURE_HINT[facts.dg_signature_check?.verdict]
 
   const runExtract = async () => {
     setBusy(true)
@@ -47,6 +54,14 @@ export default function DocumentFactsPanel({ submissionId, doc, canExtract, onRe
         <span className={clsx('text-[10px] font-bold uppercase px-2 py-0.5 rounded-full', STATUS_STYLES[doc.ocr_status] || STATUS_STYLES.pending)}>
           {doc.ocr_status_display || doc.ocr_status || 'pending'}
         </span>
+        {signature && (
+          <span
+            className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full', signature.cls)}
+            title={`AI hint — not a verification. ${facts.dg_signature_check.where || ''} ${facts.dg_signature_check.note || ''}`.trim()}
+          >
+            {signature.label}
+          </span>
+        )}
         {(doc.ocr_status === 'processing' || busy) && (
           <AiProcessingIndicator label="AI is thinking…" size="sm" variant="slate" />
         )}

@@ -568,7 +568,11 @@ class OduChecklistDraftGateTests(TestCase):
     def _transition(self, new_stage="submitted"):
         return self.client.post(
             f"/api/submissions/{self.submission.id}/transition/",
-            {"new_stage": new_stage},
+            {
+                "new_stage": new_stage,
+                "dg_approval_name": "Mr. John Kalo",
+                "dg_approval_date": timezone.localdate().isoformat(),
+            },
             format="json",
         )
 

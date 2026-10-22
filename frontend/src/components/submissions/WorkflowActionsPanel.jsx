@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import BaseButton from '../shared/BaseButton'
 import BaseMessageBar from '../shared/BaseMessageBar'
 import RichNoteModal from '../shared/RichNoteModal'
+import DgApprovalDialog from './DgApprovalDialog'
 
 /**
  * Stage-based action buttons that replace the generic "Move to Next Stage" dropdown.
@@ -35,6 +36,7 @@ const STAGE_ACTIONS = {
       transitionTo: 'submitted',
       requiresNote: false,
       ministryOnly: true,
+      requiresDgAttestation: true,
     },
     // Internal (OPSC-unit) drafts that route through a manager-approval step
     // before the Secretary — e.g. Compliance Principal, VIPAM Principal.
@@ -427,7 +429,7 @@ export default function WorkflowActionsPanel({
   allowed = [],        // array of target stage strings from backend
   canEndorse = false,  // explicit flag from backend for the DG endorse action
   checklist = [],       // current submission's checklist items — gates "Submit to Secretary"
-  onTransition,        // async fn(targetStage, remarks, acknowledgeGaps?)
+  onTransition,        // async fn(targetStage, remarks, acknowledgeGaps?, extra?)
   onEndorse,           // async fn() — calls /submissions/{id}/endorse/
   busy = false,
   error,
@@ -435,6 +437,7 @@ export default function WorkflowActionsPanel({
 }) {
   const { t } = useTranslation()
   const [activeAction, setActiveAction] = useState(null) // action requiring a note
+  const [attestAction, setAttestAction] = useState(null) // action requiring the DG approval attestation
   const [localBusy, setLocalBusy] = useState(false)
 
   const stage = submission?.current_stage
@@ -528,16 +531,25 @@ export default function WorkflowActionsPanel({
 
   const executing = busy || localBusy
 
-  const execute = async (action, remarksHtml = '') => {
+  // Ministry papers: HR names the DG who signed and when. A resubmission after a
+  // clarification only needs it if none was recorded before.
+  const ministryOrigin = !submission?.is_internal && !submission?.secretary_only
+  const needsAttestation = (action) => ministryOrigin && (
+    action.requiresDgAttestation
+    || (action.id === 'resubmit' && !submission?.dg_approval_name)
+  )
+
+  const execute = async (action, remarksHtml = '', extra = {}) => {
     setLocalBusy(true)
     setError?.('')
     try {
       if (action.endpoint === 'endorse') {
         await onEndorse()
       } else {
-        await onTransition(action.transitionTo, remarksHtml)
+        await onTransition(action.transitionTo, remarksHtml, false, extra)
       }
       setActiveAction(null)
+      setAttestAction(null)
     } catch (err) {
       // onTransition / onEndorse already set error via setError
     } finally {
@@ -546,7 +558,10 @@ export default function WorkflowActionsPanel({
   }
 
   const handleClick = (action) => {
-    if (action.requiresNote) {
+    if (needsAttestation(action)) {
+      setAttestAction(action)
+      setError?.('')
+    } else if (action.requiresNote) {
       setActiveAction(action)
       setError?.('')
     } else {
@@ -598,6 +613,15 @@ export default function WorkflowActionsPanel({
           </div>
         ))}
       </div>
+
+      <DgApprovalDialog
+        open={!!attestAction}
+        initialName={submission?.dg_approval_name || ''}
+        busy={executing}
+        error={error}
+        onConfirm={(extra) => execute(attestAction, '', extra)}
+        onCancel={() => { setAttestAction(null); setError?.('') }}
+      />
 
       <RichNoteModal
         open={!!activeAction}
