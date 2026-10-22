@@ -134,6 +134,23 @@ def notify_external_submission_confirmation(
         send_templated_email(slug="submission_received_confirmation", to=[email], context=ctx)
 
 
+def notify_dg_paper_submitted(submission: Submission, dg_users: Iterable[User], submitted_by: str) -> None:
+    """Read-only heads-up to the ministry DG that a paper went to PSC under their
+    (paper) approval. The DG approves outside SCDMS, so this is what lets them
+    flag a paper they never approved."""
+    base_ctx = {**submission_email_context(submission), "submitted_by": submitted_by}
+    seen: set[str] = set()
+    for user in dg_users:
+        email = (getattr(user, "email", None) or "").strip().lower()
+        if not email or email in seen:
+            continue
+        seen.add(email)
+        send_templated_email(
+            slug="submission_dg_paper_notice", to=[email],
+            context=merge_recipient_context(user, **base_ctx),
+        )
+
+
 def notify_applicant_tracking_code(submission: Submission) -> bool:
     """Email the employee/public servant the submission is about (not the
     ministry HR/DG who lodged it — they already have a logged-in account)

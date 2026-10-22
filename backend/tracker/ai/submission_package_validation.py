@@ -116,22 +116,16 @@ def _rule_based_gaps(submission: Submission) -> list[dict[str, str]]:
             })
 
         # The DG approves the paper on paper, outside SCDMS, and HR uploads the
-        # signed copy — so there is no recorded endorsement to check, only the
-        # upload. dg_endorsed_by is only set on papers endorsed before that change.
-        from ..models import DocumentClassificationType
+        # signed copy — so there is no recorded endorsement to check. The AI
+        # signature hint (ensure_dg_signature_checks, run just before this) is
+        # advisory only. dg_endorsed_by is only set on papers endorsed before
+        # that change.
+        if doc_count and not submission.dg_endorsed_by_id:
+            from .signature_check import dg_signature_gap
 
-        if not SubmissionDocument.objects.filter(
-            submission=submission,
-            document_type=DocumentClassificationType.DG_ENDORSEMENT,
-        ).exists() and not submission.dg_endorsed_by_id:
-            gaps.append({
-                "severity": "warning",
-                "category": "endorsement",
-                "message": (
-                    "No DG / Head of Agency approval found among the uploads — attach the "
-                    "paper signed by your Director-General."
-                ),
-            })
+            gap = dg_signature_gap(submission)
+            if gap:
+                gaps.append(gap)
 
     return gaps
 

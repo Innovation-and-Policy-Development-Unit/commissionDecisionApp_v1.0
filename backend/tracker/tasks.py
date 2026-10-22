@@ -131,6 +131,30 @@ def queue_external_submission_confirmation_emails(submission_id, user_ids):
 
 
 @shared_task
+def send_dg_paper_notice_emails(submission_id, user_ids, submitted_by):
+    from django.contrib.auth.models import User
+
+    from .email_notify import notify_dg_paper_submitted
+    from .models import Submission
+
+    try:
+        submission = Submission.objects.get(pk=submission_id)
+    except Submission.DoesNotExist:
+        app_log.warning("DG_NOTICE_EMAIL_SKIP | Submission %s not found", submission_id)
+        return
+    users = list(User.objects.filter(pk__in=user_ids, is_active=True))
+    notify_dg_paper_submitted(submission, users, submitted_by)
+
+
+def queue_dg_paper_notice_emails(submission_id, user_ids, submitted_by):
+    try:
+        send_dg_paper_notice_emails.delay(submission_id, user_ids, submitted_by)
+    except Exception as exc:
+        app_log.warning("DG_NOTICE_EMAIL_QUEUE_FALLBACK | Submission %s | %s", submission_id, exc)
+        send_dg_paper_notice_emails(submission_id, user_ids, submitted_by)
+
+
+@shared_task
 def send_applicant_tracking_code_email(submission_id):
     from django.utils import timezone
 
@@ -685,6 +709,11 @@ def build_submission_brief_context(submission) -> str:
         facts = doc.extracted_facts or {}
         if isinstance(facts, dict) and facts.get("document_summary"):
             lines.append(f"  Document summary: {facts.get('document_summary')}")
+        from .ai.signature_check import signature_hint_line
+
+        hint = signature_hint_line(doc)
+        if hint:
+            lines.append(hint)
 
     checklist = SubmissionChecklistItem.objects.filter(submission=submission).select_related("document")
     for item in checklist:
@@ -2042,6 +2071,13 @@ def validate_submission_package_sync(submission_id: int, *, force: bool = False)
             "summary": submission.ai_package_summary or "",
             "gaps": submission.ai_package_gaps or [],
         }
+
+    from .ai.signature_check import ensure_dg_signature_checks
+
+    try:
+        ensure_dg_signature_checks(submission)
+    except Exception as exc:
+        app_log.warning("DG_SIGNATURE_CHECK_ERROR | Submission %s | %s", submission_id, exc)
 
     context = build_submission_package_context(submission)
     result, err = validate_package_from_context(submission, context)

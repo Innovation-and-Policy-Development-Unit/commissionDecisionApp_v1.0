@@ -956,9 +956,40 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         )
 
     if target == WorkflowStage.SUBMITTED:
-        from .tasks import queue_external_submission_confirmation_emails
+        from .tasks import queue_dg_paper_notice_emails, queue_external_submission_confirmation_emails
 
-        confirm_recipients = _dg_recipients_for_submission(submission) + _hr_recipients_for_submission(submission)
+        dg_users = _dg_recipients_for_submission(submission)
+        confirm_recipients = dg_users + _hr_recipients_for_submission(submission)
+
+        # A ministry paper HR submits straight from Draft carries the DG's offline
+        # (paper) approval. Tell the DG it went in under their name so a paper they
+        # never approved gets caught; they get this read-only notice in place of
+        # the generic receipt below.
+        actor_role = getattr(getattr(actor, "psc_profile", None), "role", None)
+        if (
+            dg_users
+            and prev == WorkflowStage.DRAFT
+            and actor_role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}
+            and not submission.is_internal
+            and not submission.secretary_only
+            and not submission.lodged_from_paper
+        ):
+            submitted_by = (actor.get_full_name() or actor.username).strip()
+            for user in dg_users:
+                NotificationModel.objects.create(
+                    recipient=user,
+                    submission=submission,
+                    channel=NotificationModel.Channel.BOTH,
+                    title=f"Submitted to PSC with your approval: {submission.reference_number}",
+                    body=(
+                        f"{submitted_by} submitted '{submission.title}' to PSC. It states that you "
+                        "approved the signed paper. No action is needed — if you did not approve "
+                        "it, contact the PSC Secretariat."
+                    ),
+                )
+            queue_dg_paper_notice_emails(submission.id, [u.id for u in dg_users], submitted_by)
+            dg_ids = {u.id for u in dg_users}
+            confirm_recipients = [u for u in confirm_recipients if u.id not in dg_ids]
         queue_external_submission_confirmation_emails(
             submission.id, [u.id for u in confirm_recipients],
         )
