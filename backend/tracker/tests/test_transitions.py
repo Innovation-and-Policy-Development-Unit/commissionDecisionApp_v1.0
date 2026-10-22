@@ -27,12 +27,13 @@ class TransitionTests(TestCase):
             self._call(role, current, target)
 
     # ── Ministry roles ────────────────────────────────────────────────────
-    def test_ministry_hr_submits_draft_to_dg(self):
-        self._call(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
+    # The DG approves the paper on paper, outside SCDMS; HR uploads the signed
+    # copy and submits straight to PSC. There is no DG step in the workflow.
+    def test_ministry_hr_submits_draft_to_psc(self):
+        self._call(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
 
-    def test_ministry_hr_cannot_submit_directly_to_psc(self):
-        # HR must route through the DG; direct Draft -> Submitted is no longer allowed.
-        self._denied(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
+    def test_ministry_hr_can_no_longer_send_draft_to_dg(self):
+        self._denied(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
 
     def test_ministry_hr_cannot_skip_to_assessment(self):
         self._denied(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.UNDER_ASSESSMENT)
@@ -40,16 +41,23 @@ class TransitionTests(TestCase):
     def test_ministry_hr_cannot_approve(self):
         self._denied(Role.MINISTRY_HR, WorkflowStage.FORWARDED_TO_COMMISSION, WorkflowStage.APPROVED)
 
-    def test_dept_admin_submits_draft_to_dg(self):
-        self._call(Role.DEPT_ADMIN, WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
+    def test_dept_admin_submits_draft_to_psc(self):
+        self._call(Role.DEPT_ADMIN, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
 
     def test_ministry_can_resubmit_after_clarification(self):
-        self._call(Role.MINISTRY_HR, WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_DG_ENDORSEMENT)
+        self._call(Role.MINISTRY_HR, WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED)
+
+    def test_clarification_cannot_go_back_to_dg(self):
+        self._denied(
+            Role.MINISTRY_HR, WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_DG_ENDORSEMENT,
+        )
 
     def test_ministry_can_respond_to_deferral(self):
         self._call(Role.MINISTRY_HR, WorkflowStage.DEFERRED_BACK_TO_HR, WorkflowStage.DRAFT)
 
-    # ── Director-General (Head of Agency) endorsement ─────────────────────
+    # ── Director-General (Head of Agency): LEGACY only ────────────────────
+    # Nothing enters PENDING_DG_ENDORSEMENT any more, but papers already there
+    # when the DG step was removed can still be endorsed or returned.
     # Option A: DG endorsement uses the dedicated /endorse/ endpoint which
     # chains PENDING_DG_ENDORSEMENT → DG_APPROVED → SUBMITTED in one call.
     # The standard transition endpoint no longer allows DG → SUBMITTED directly.
@@ -63,9 +71,13 @@ class TransitionTests(TestCase):
     def test_hr_cannot_endorse_to_psc(self):
         self._denied(Role.MINISTRY_HR, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED)
 
-    def test_hr_targets_from_draft_is_pending_dg(self):
+    def test_hr_targets_from_draft_is_submitted(self):
         targets = iter_allowed_targets(Role.MINISTRY_HR, WorkflowStage.DRAFT)
-        self.assertEqual(targets, [WorkflowStage.PENDING_DG_ENDORSEMENT.value])
+        self.assertEqual(targets, [WorkflowStage.SUBMITTED.value])
+
+    def test_dg_cannot_start_endorsement_on_a_draft(self):
+        self._denied(Role.HEAD_OF_AGENCY, WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
+        self.assertEqual(iter_allowed_targets(Role.HEAD_OF_AGENCY, WorkflowStage.DRAFT), [])
 
     def test_dg_targets_from_pending(self):
         """DG can return to draft or endorse via DG_APPROVED; SUBMITTED is via /endorse/."""
@@ -553,7 +565,7 @@ class OduChecklistDraftGateTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.hr)
 
-    def _transition(self, new_stage="pending_dg_endorsement"):
+    def _transition(self, new_stage="submitted"):
         return self.client.post(
             f"/api/submissions/{self.submission.id}/transition/",
             {"new_stage": new_stage},
@@ -580,7 +592,11 @@ class OduChecklistDraftGateTests(TestCase):
         resp = self._transition()
         self.assertEqual(resp.status_code, 200)
         self.submission.refresh_from_db()
-        self.assertEqual(self.submission.current_stage, WorkflowStage.PENDING_DG_ENDORSEMENT)
+        # Submitted to PSC, then auto-routed onward by form type.
+        self.assertIn(
+            self.submission.current_stage,
+            {WorkflowStage.SUBMITTED, WorkflowStage.MANAGER_CHECKLIST_REVIEW},
+        )
 
     def test_non_restructure_form_type_unaffected(self):
         # A form type with no seeded RequiredDocument rows, so the unrelated

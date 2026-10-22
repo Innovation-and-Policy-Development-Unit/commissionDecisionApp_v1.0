@@ -27,8 +27,10 @@ Review:
   this kind of submission elsewhere.
 - Uploaded supporting files and whether they match the ask
 - Digitized form fields (Form 3-7, dynamic PSC forms, restructure data) for blanks or placeholders
-- DG / Head of Agency endorsement — ONLY relevant for external ministry-origin submissions.
-  The context explicitly states whether this submission "follows normal PSC route" with no DG
+- DG / Head of Agency approval — ONLY relevant for external ministry-origin submissions. The DG
+  signs the paper on paper, outside SCDMS, and HR uploads the signed copy; there is no DG step
+  or endorsement record in the system, so judge it only from the uploaded files. The context
+  explicitly states whether this submission "follows normal PSC route" with no DG
   in its workflow (OPSC-internal submissions such as CSU/ODU appointing OPSC staff). When the
   context says no DG applies, you MUST NOT raise any gap about a missing DG/HoA endorsement —
   doing so is a false positive, not a real gap.
@@ -113,11 +115,22 @@ def _rule_based_gaps(submission: Submission) -> list[dict[str, str]]:
                 "message": "No supporting documents uploaded yet.",
             })
 
-        if not submission.dg_endorsed_by_id:
+        # The DG approves the paper on paper, outside SCDMS, and HR uploads the
+        # signed copy — so there is no recorded endorsement to check, only the
+        # upload. dg_endorsed_by is only set on papers endorsed before that change.
+        from ..models import DocumentClassificationType
+
+        if not SubmissionDocument.objects.filter(
+            submission=submission,
+            document_type=DocumentClassificationType.DG_ENDORSEMENT,
+        ).exists() and not submission.dg_endorsed_by_id:
             gaps.append({
                 "severity": "warning",
                 "category": "endorsement",
-                "message": "DG / Head of Agency endorsement is not recorded on this submission.",
+                "message": (
+                    "No DG / Head of Agency approval found among the uploads — attach the "
+                    "paper signed by your Director-General."
+                ),
             })
 
     return gaps
