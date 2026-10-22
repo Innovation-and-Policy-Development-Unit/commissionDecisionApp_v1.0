@@ -24,14 +24,17 @@ import RichNoteModal from '../shared/RichNoteModal'
 // variant: BaseButton variant
 const STAGE_ACTIONS = {
   draft: [
+    // Ministry HR: the Director-General approves the paper on paper, outside
+    // SCDMS — HR uploads the signed copy and submits straight to PSC.
     {
-      id: 'submit_to_dg',
-      label: 'Submit to DG',
-      description: 'Send to Director-General for endorsement',
+      id: 'submit_to_psc_ministry',
+      label: 'Submit to PSC',
+      description: 'Your Director-General has approved the paper and the signed copy is uploaded',
       icon: Send,
       variant: 'primary',
-      transitionTo: 'pending_dg_endorsement',
+      transitionTo: 'submitted',
       requiresNote: false,
+      ministryOnly: true,
     },
     // Internal (OPSC-unit) drafts that route through a manager-approval step
     // before the Secretary — e.g. Compliance Principal, VIPAM Principal.
@@ -65,6 +68,7 @@ const STAGE_ACTIONS = {
       variant: 'primary',
       transitionTo: 'submitted',
       requiresNote: false,
+      internalOnly: true,
     },
   ],
 
@@ -128,6 +132,9 @@ const STAGE_ACTIONS = {
     },
   ],
 
+  // LEGACY: DG endorsement is no longer part of the workflow (the DG signs on
+  // paper). These two stages only hold papers that were already there when the
+  // step was removed, so the DG / HR can still finish them.
   pending_dg_endorsement: [
     {
       id: 'endorse',
@@ -151,7 +158,6 @@ const STAGE_ACTIONS = {
     },
   ],
 
-  // Fallback — shouldn't normally show with Option A (endorse auto-forwards to submitted)
   dg_approved: [
     {
       id: 'submit_to_psc',
@@ -194,18 +200,6 @@ const STAGE_ACTIONS = {
       icon: Send,
       variant: 'outline',
       transitionTo: 'pending_manager_approval',
-      requiresNote: false,
-    },
-  ],
-
-  deferred_back_to_hr: [
-    {
-      id: 'resubmit_to_dg',
-      label: 'Re-submit to DG',
-      description: 'Return to DG for re-endorsement after addressing feedback',
-      icon: Send,
-      variant: 'primary',
-      transitionTo: 'pending_dg_endorsement',
       requiresNote: false,
     },
   ],
@@ -511,6 +505,11 @@ export default function WorkflowActionsPanel({
   const visibleActions = stageActions
     .filter(action => {
       if (action.endpoint === 'endorse') return canEndorse
+      // One "Submit" per kind of draft: ministry papers go to PSC, OPSC-internal
+      // ones to the Secretary.
+      const ministryOrigin = !submission?.is_internal && !submission?.secretary_only
+      if (action.ministryOnly && !ministryOrigin) return false
+      if (action.internalOnly && ministryOrigin) return false
       return allowed.includes(action.transitionTo)
     })
     .map(action => ({
