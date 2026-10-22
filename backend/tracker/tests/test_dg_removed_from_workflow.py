@@ -27,9 +27,10 @@ class DgRemovedFromWorkflowTests(TestCase):
     def _move(self, user, stage):
         client = APIClient()
         client.force_authenticate(user=user)
-        return client.post(
-            f"/api/submissions/{self.sub.id}/transition/", {"new_stage": stage}, format="json",
-        )
+        body = {"new_stage": stage}
+        if stage == "submitted":
+            body.update(dg_approval_name="Mr. John Kalo", dg_approval_date=timezone.localdate().isoformat())
+        return client.post(f"/api/submissions/{self.sub.id}/transition/", body, format="json")
 
     def test_hr_submits_a_draft_straight_to_psc(self):
         res = self._move(self.hr, "submitted")

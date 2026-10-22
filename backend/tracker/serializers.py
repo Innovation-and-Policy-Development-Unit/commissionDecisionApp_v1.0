@@ -122,7 +122,18 @@ class KnowledgeArticleSerializer(serializers.ModelSerializer):
 class MinistrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Ministry
-        fields = ("id", "code", "name")
+        fields = ("id", "code", "name", "dg_contact_email")
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # The DG's fallback address is only for the people who maintain ministries.
+        from .rbac import rbac_can_mutate_ministry_department
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not (user and user.is_authenticated and rbac_can_mutate_ministry_department(user)):
+            data.pop("dg_contact_email", None)
+        return data
 
     def validate_code(self, value):
         value = (value or "").strip()
@@ -1040,6 +1051,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "dg_endorsed_by",
             "dg_endorsed_by_name",
             "dg_endorsed_at",
+            "dg_approval_name",
+            "dg_approval_date",
             "received_at",
             "registered_at",
             "assessment_started_at",
@@ -1107,6 +1120,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_policy_generated_at",
         )
         read_only_fields = (
+            "dg_approval_name",
+            "dg_approval_date",
             "subway_map",
             "applicant_tracking_code",
             "lodged_from_paper",
@@ -1583,6 +1598,9 @@ class TransitionSerializer(serializers.Serializer):
     )
     acknowledge_gaps = serializers.BooleanField(required=False, default=False)
     acknowledge_no_form_type = serializers.BooleanField(required=False, default=False)
+    # HR attests the DG signed the paper (ministry papers, Draft -> Submitted).
+    dg_approval_name = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    dg_approval_date = serializers.DateField(required=False, allow_null=True)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):

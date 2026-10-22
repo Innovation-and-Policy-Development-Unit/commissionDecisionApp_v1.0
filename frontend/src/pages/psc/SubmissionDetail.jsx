@@ -864,7 +864,7 @@ const stageDescriptions = {
    * (or '' for actions with no note); the backend derives the plain-text
    * `remarks` it hashes/emails/etc. from this HTML server-side.
    */
-  const performTransition = async (newStage, transitionRemarks = '', acknowledgeGaps = false) => {
+  const performTransition = async (newStage, transitionRemarks = '', acknowledgeGaps = false, extra = {}) => {
     setBusy(true)
     setError('')
     const runOnce = async (ack = false) => {
@@ -872,6 +872,7 @@ const stageDescriptions = {
         new_stage: newStage,
         remarks_html: transitionRemarks,
         acknowledge_gaps: ack,
+        ...extra,
       })
       setRemarks('')
       await reload()
@@ -1274,6 +1275,17 @@ const stageDescriptions = {
                 <p className="text-xs text-slate-500 dark:text-slate-400">Department</p>
                 <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{submission.department?.name || '—'}</p>
               </div>
+              {submission.dg_approval_name && (
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">DG approval (on paper)</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{submission.dg_approval_name}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Signed {submission.dg_approval_date
+                      ? new Date(submission.dg_approval_date).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
+                      : '—'} · attested by HR
+                  </p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Submission Type</p>
                 <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">

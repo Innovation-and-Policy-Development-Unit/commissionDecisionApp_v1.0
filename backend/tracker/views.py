@@ -488,6 +488,13 @@ def _updated_fields(submission, prev, target):
     if prev == WorkflowStage.PENDING_DG_ENDORSEMENT and target == WorkflowStage.SUBMITTED:
         fields.add("dg_endorsed_by")
         fields.add("dg_endorsed_at")
+    if target == WorkflowStage.SUBMITTED and prev in (
+        WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION,
+    ):
+        fields.update({
+            "dg_approval_name", "dg_approval_date",
+            "dg_approval_attested_by", "dg_approval_attested_at",
+        })
     if target == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
         # Auto-derived from form type whenever routed_unit was still blank
         # (see the transition() body above) — not just on the DRAFT ->
@@ -959,6 +966,7 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         from .tasks import queue_dg_paper_notice_emails, queue_external_submission_confirmation_emails
 
         dg_users = _dg_recipients_for_submission(submission)
+        dg_fallback_email = (submission.ministry.dg_contact_email or "").strip() if submission.ministry_id else ""
         confirm_recipients = dg_users + _hr_recipients_for_submission(submission)
 
         # A ministry paper HR submits straight from Draft carries the DG's offline
@@ -967,7 +975,7 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         # the generic receipt below.
         actor_role = getattr(getattr(actor, "psc_profile", None), "role", None)
         if (
-            dg_users
+            (dg_users or dg_fallback_email)
             and prev == WorkflowStage.DRAFT
             and actor_role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}
             and not submission.is_internal
@@ -1873,6 +1881,38 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
+        # ── Ministry paper: HR attests the DG signed it (on paper, outside SCDMS) ──
+        dg_attestation = None
+        if (
+            prev in {WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION}
+            and target == WorkflowStage.SUBMITTED
+            and profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}
+            and not submission.is_internal
+            and not submission.secretary_only
+            and not submission.lodged_from_paper
+        ):
+            att_name = (ser.validated_data.get("dg_approval_name") or "").strip()
+            att_date = ser.validated_data.get("dg_approval_date")
+            # A resubmission after clarification keeps the earlier attestation
+            # unless HR sends a new one.
+            if att_name or att_date or not submission.dg_approval_name:
+                if not att_name:
+                    return Response(
+                        {"detail": "Enter the name of the Director-General who approved this paper."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if not att_date:
+                    return Response(
+                        {"detail": "Enter the date the Director-General signed the paper."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if att_date > timezone.localdate():
+                    return Response(
+                        {"detail": "The Director-General's signing date cannot be in the future."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                dg_attestation = (att_name, att_date)
+
         # ── Rich-text remarks: sanitize, then derive the plain-text `remarks` ──
         # value that everything else in this view (blank-remarks guards, the
         # decision proof hash, email notifications, AI context) keeps reading
@@ -2305,6 +2345,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
             submission.current_stage = target
 
+            if dg_attestation:
+                submission.dg_approval_name, submission.dg_approval_date = dg_attestation
+                submission.dg_approval_attested_by = request.user
+                submission.dg_approval_attested_at = timezone.now()
+
             # ── Attachment form approved: mark it present on the parent's checklist ──
             # e.g. PSC Form 2-2 reaching Approved satisfies the "PSC Form 2-2" required
             # item on its parent PSC Form 2-1, which the mandatory-checklist gate above
@@ -2423,6 +2468,17 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     actor=request.user,
                     remarks=remarks,
                 )
+
+            if dg_attestation:
+                from django.utils.html import escape
+
+                _att_note = (
+                    f"DG approval on paper attested by HR: {dg_attestation[0]}, "
+                    f"signed {dg_attestation[1]:%d %b %Y}."
+                )
+                remarks = f"{remarks} {_att_note}".strip()
+                if remarks_html:
+                    remarks_html = f"{remarks_html}<p>{escape(_att_note)}</p>"
 
             _event = WorkflowEvent.objects.create(
                 submission=submission,
@@ -5114,9 +5170,28 @@ class MinistryViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
         return qs
 
     def get_permissions(self):
-        if self.action in ("create", "update", "partial_update", "destroy"):
+        if self.action in ("create", "update", "partial_update", "destroy", "dg_coverage"):
             return [permissions.IsAuthenticated(), CanMutateMinistryDepartment()]
         return [permissions.IsAuthenticated(), HasProfilePermission()]
+
+    @action(detail=False, methods=["get"], url_path="dg-coverage")
+    def dg_coverage(self, request):
+        """Ministries nobody could tell when HR submits a paper: no active Head of
+        Agency account with an email, and no fallback DG email set. Always fresh
+        (not cached) since it depends on user accounts as well as ministries."""
+        from .models import Profile
+
+        covered = set(
+            Profile.objects.filter(
+                role=Role.HEAD_OF_AGENCY, user__is_active=True, ministry__isnull=False,
+            ).exclude(user__email="").values_list("ministry_id", flat=True)
+        )
+        missing = [
+            {"id": m.id, "code": m.code, "name": m.name}
+            for m in Ministry.objects.all().order_by("name")
+            if m.id not in covered and not (m.dg_contact_email or "").strip()
+        ]
+        return Response({"count": len(missing), "ministries": missing})
 
 
 class DepartmentViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):

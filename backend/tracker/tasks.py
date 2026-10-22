@@ -155,6 +155,24 @@ def queue_dg_paper_notice_emails(submission_id, user_ids, submitted_by):
 
 
 @shared_task
+def check_dg_signature_for_document(document_id):
+    from .ai.signature_check import check_and_store_document
+    from .models import SubmissionDocument
+
+    doc = SubmissionDocument.objects.select_related("submission").filter(pk=document_id).first()
+    if doc:
+        check_and_store_document(doc)
+
+
+def queue_dg_signature_check(document_id) -> None:
+    """Fire-and-forget: a vision call is too slow and costly to fall back to inline."""
+    try:
+        check_dg_signature_for_document.delay(document_id)
+    except Exception as exc:
+        app_log.warning("DG_SIGNATURE_QUEUE_SKIP | doc %s | %s", document_id, exc)
+
+
+@shared_task
 def send_applicant_tracking_code_email(submission_id):
     from django.utils import timezone
 
@@ -692,6 +710,11 @@ def build_submission_brief_context(submission) -> str:
         f"Assessment deadline: {submission.assessment_deadline_at or '—'}",
         f"Overdue assessment: {submission.is_assessment_overdue}",
         f"DG endorsed by: {submission.dg_endorsed_by.username if submission.dg_endorsed_by_id else '—'}",
+        (
+            f"DG approval on paper (attested by HR, not verified): {submission.dg_approval_name}, "
+            f"signed {submission.dg_approval_date}"
+            if submission.dg_approval_name else "DG approval on paper: not attested"
+        ),
         f"Assigned principal: {submission.assigned_to.username if submission.assigned_to_id else '—'}",
         f"Submission notes: {submission.notes or '—'}",
     ]
@@ -1462,6 +1485,13 @@ def extract_document_facts(document_id: int):
     facts = result.get("key_facts") or {}
     if result.get("document_summary"):
         facts = {**facts, "document_summary": result["document_summary"]}
+    # Keep an earlier DG-signature hint for this same file — re-reading the text must
+    # not throw away a (paid-for) vision check.
+    from .ai.signature_check import FACTS_KEY as _SIG_KEY
+
+    prior_sig = doc.extracted_facts.get(_SIG_KEY) if isinstance(doc.extracted_facts, dict) else None
+    if isinstance(prior_sig, dict) and prior_sig.get("file") == doc.file.name:
+        facts = {**facts, _SIG_KEY: prior_sig}
     doc.extracted_facts = facts
     doc.ocr_status = DocumentOcrStatus.COMPLETED
     doc.ocr_processed_at = timezone.now()
