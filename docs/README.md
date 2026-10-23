@@ -12,6 +12,7 @@
 | [business/](business/) | Concept notes, quotations, feature lists |
 | [demo/](demo/) | Demo scenarios and validation HTML/QMD |
 | [forms/](forms/) | PSC form XML samples and workflow write-ups |
+| [training/commissioner-training-program.md](training/commissioner-training-program.md) | Commissioner training program — session outline, modules, exercises, sign-off |
 | [IMPLEMENTATION_PROMPT_MEETING_RECORDING.md](IMPLEMENTATION_PROMPT_MEETING_RECORDING.md) | Meeting recording feature notes |
 
 Application code lives in `backend/` and `frontend/`. Operational runbooks stay in the root [README.md](../README.md).
