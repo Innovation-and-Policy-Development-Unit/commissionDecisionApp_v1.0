@@ -82,8 +82,13 @@ const RichNoteEditor = forwardRef(function RichNoteEditor(
   const editorRef = useRef(null)
 
   const editor = useEditor({
+    // TipTap 3 no longer re-renders on every transaction by default; the
+    // toolbar's isActive() highlighting depends on it.
+    shouldRerenderOnTransaction: true,
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      // TipTap 3's StarterKit adds Link and Underline by default; keep the
+      // toolbar's existing feature set (bold, italic, lists, headings, image).
+      StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false, underline: false }),
       RemarksImage.configure({ inline: false, allowBase64: false }),
       Placeholder.configure({ placeholder: placeholder || 'Add a note…' }),
     ],
