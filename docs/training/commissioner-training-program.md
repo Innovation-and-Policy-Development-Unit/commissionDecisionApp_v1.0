@@ -2,7 +2,7 @@
 
 **Audience:** The Chairperson and Commissioners of the Public Service Commission (roles `chairperson`, `psc_commissioner`)
 **Delivered by:** OPSC Secretariat with IPDU (system support)
-**Format:** One in-person session of about 2 hours 15 minutes + a 30-minute follow-up at the first live sitting
+**Format:** One in-person morning session, 9:00 am to 12:00 noon, followed by lunch, + a 30-minute follow-up at the first live sitting
 **Target window:** Week of 9 November 2026 (tentative — follows HR training, then OPSC staff training; the Commission has not confirmed dates)
 
 ---
@@ -37,18 +37,19 @@ If item 1 fails for any Commissioner, postpone that person's session rather than
 
 ---
 
-## 3. Session outline (about 2 hours 15 minutes)
+## 3. Session outline (9:00 am – 12:00 noon, then lunch)
 
 | Time | Module | Format |
 |------|--------|--------|
-| 0:00 – 0:10 | **Welcome and what changes** — what moves from USB/paper to SCDMS, what stays on paper | Talk |
-| 0:10 – 0:30 | **Module 1: Getting in** — web address, sign-in, password, two-factor, signing out | Live demo + each person does it |
-| 0:30 – 0:55 | **Module 2: Reading the agenda and papers** | Demo + exercise A |
-| 0:55 – 1:15 | **Module 3: Private preparation notes** | Exercise B |
-| 1:15 – 1:25 | Break | |
-| 1:25 – 1:45 | **Module 4: Other Matters and the sitting** | Demo + exercise C |
-| 1:45 – 2:05 | **Module 5: Minutes — review, comment, sign** | Exercise D |
-| 2:05 – 2:15 | **Module 6: Security, getting help, Q&A** | Talk |
+| 9:00 – 9:15 | **Welcome and what changes** — what moves from USB/paper to SCDMS, what stays on paper | Talk |
+| 9:15 – 9:45 | **Module 1: Getting in** — web address, sign-in, password, two-factor, signing out | Live demo + each person does it |
+| 9:45 – 10:20 | **Module 2: Reading the agenda and papers** | Demo + exercise A |
+| 10:20 – 10:45 | **Module 3: Private preparation notes** | Exercise B |
+| 10:45 – 11:00 | Break | |
+| 11:00 – 11:25 | **Module 4: Other Matters and the sitting** | Demo + exercise C |
+| 11:25 – 11:50 | **Module 5: Minutes — review, comment, sign** | Exercise D |
+| 11:50 – 12:00 | **Module 6: Security, getting help, Q&A** | Talk |
+| 12:00 | Lunch — training ends | |
 
 ---
 
