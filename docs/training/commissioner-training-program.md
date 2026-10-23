@@ -25,7 +25,7 @@ Commissioners are not asked to learn the submission workflow, checklists, or uni
 
 | # | Item | Owner | Done |
 |---|------|-------|------|
-| 1 | VPN access provisioned by DCDT and **tested from each Commissioner's own connection** (Starlink / Vodafone / Digicel) — credentials alone are not enough | IPDU + DCDT | ☐ |
+| 1 | SCDMS address confirmed and **opened successfully from each Commissioner's own connection** (Starlink / Vodafone / Digicel) — an account alone is not enough | IPDU | ☐ |
 | 2 | Each Commissioner has a personal SCDMS account with the correct role; **no shared or default-password accounts** | IPDU | ☐ |
 | 3 | Seeded demo accounts changed or disabled before real papers are loaded | IPDU | ☐ |
 | 4 | Training sitting created with `seed_training_sitting` (see §5) | IPDU | ☐ |
@@ -42,7 +42,7 @@ If item 1 fails for any Commissioner, postpone that person's session rather than
 | Time | Module | Format |
 |------|--------|--------|
 | 0:00 – 0:10 | **Welcome and what changes** — what moves from USB/paper to SCDMS, what stays on paper | Talk |
-| 0:10 – 0:30 | **Module 1: Getting in** — VPN, sign-in, password, two-factor, signing out | Live demo + each person does it |
+| 0:10 – 0:30 | **Module 1: Getting in** — web address, sign-in, password, two-factor, signing out | Live demo + each person does it |
 | 0:30 – 0:55 | **Module 2: Reading the agenda and papers** | Demo + exercise A |
 | 0:55 – 1:15 | **Module 3: Private preparation notes** | Exercise B |
 | 1:15 – 1:25 | Break | |
@@ -56,16 +56,15 @@ If item 1 fails for any Commissioner, postpone that person's session rather than
 
 ### Module 1 — Getting in
 
-**Learning outcome:** Connect through the VPN and sign in without assistance.
+**Learning outcome:** Open SCDMS and sign in without assistance.
 
-- SCDMS is on the government private network only. It is reached through the DCDT VPN (HTTPS only); there is no public website.
-- Connect the VPN first, then open `https://scdms.psc.gov.vu`.
+- For the pilot SCDMS runs on a cloud server and is opened in a normal web browser from any internet connection. The Secretariat gives you the address. (No VPN is needed for now.)
 - Change your temporary password at first sign-in (**Account** page). Use a password you do not use anywhere else.
-- Enable two-factor sign-in if offered on your account.
-- Never share VPN or SCDMS credentials. DCDT logs all VPN access, and every action in SCDMS is attributed to your account.
+- Turn on two-factor sign-in. The system is reachable over the internet, so a password alone is not enough protection.
+- Never share your SCDMS password. Every action in SCDMS is attributed to your account.
 - Sign out when finished on any shared or borrowed device.
 
-**Practice:** Each Commissioner connects the VPN, signs in, changes their password, and opens the Dashboard.
+**Practice:** Each Commissioner opens SCDMS, signs in, changes their password, turns on two-factor sign-in, and opens the Dashboard.
 
 ### Module 2 — Reading the agenda and papers
 
@@ -121,7 +120,7 @@ Your two responsibilities in SCDMS: comment on time, and sign the paper copy.
 
 ### Module 6 — Security, getting help, Q&A
 
-- Only open SCDMS over the VPN. Do not forward agenda emails or screenshots of papers outside the Commission.
+- Only use the official SCDMS address the Secretariat gave you. Do not forward agenda emails or screenshots of papers outside the Commission.
 - Treat any papers saved to a personal device as confidential; delete them when no longer needed.
 - If you suspect someone else has used your account, tell the Secretary and IPDU immediately so the password can be reset.
 - Support contacts and hours: *(Secretariat to insert before the session)*.
@@ -170,7 +169,8 @@ No test. A Commissioner is **signed off** when the trainer has seen them do each
 
 | Skill | Seen |
 |-------|------|
-| Connect the VPN and sign in | ☐ |
+| Open SCDMS and sign in | ☐ |
+| Turn on two-factor sign-in | ☐ |
 | Change password | ☐ |
 | Open the next sitting's agenda | ☐ |
 | Open a supporting document from an agenda item | ☐ |
@@ -184,7 +184,7 @@ Anyone not signed off gets a 30-minute one-to-one before the first live sitting.
 
 ## 7. Quick-reference card (print one page per Commissioner)
 
-**Getting in:** Connect VPN → `https://scdms.psc.gov.vu` → sign in.
+**Getting in:** open the SCDMS address from the Secretariat in your browser → sign in.
 
 **Before every sitting:**
 1. You get an "agenda circulated" email. It is only an index.
@@ -205,12 +205,13 @@ Anyone not signed off gets a 30-minute one-to-one before the first live sitting.
 | When | What |
 |------|------|
 | Day of session | Trainer records who is signed off and who needs a one-to-one |
-| First live sitting | 30-minute check-in before or after: did the agenda email arrive, could everyone open papers, any VPN problems |
+| First live sitting | 30-minute check-in before or after: did the agenda email arrive, could everyone open papers, any sign-in or access problems |
 | One month after go-live | Short feedback round (3 questions: what helped, what blocked, what to change); update this program and the quick-reference card |
 
 ## 9. Open points to confirm with the Commission
 
+- The SCDMS web address for the cloud pilot. The system moves to a cloud server for about 6 months, so no VPN is needed for now; DCDT is still configuring VPN access for later.
 - Final training date (week of 9 Nov is the working assumption, not confirmed).
 - Whether Commissioners will use personal devices or Commission-issued tablets.
-- Whether the Secretariat will keep a paper fall-back for the first live sitting. The agreed direction is to drop USB drives entirely once VPN works; this program assumes that.
+- Whether the Secretariat will keep a paper fall-back for the first live sitting. The agreed direction is to drop USB drives entirely once access works; this program assumes that.
 - Support contact numbers and hours for the quick-reference card.
