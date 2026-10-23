@@ -28,7 +28,7 @@ Commissioners are not asked to learn the submission workflow, checklists, or uni
 | 1 | VPN access provisioned by DCDT and **tested from each Commissioner's own connection** (Starlink / Vodafone / Digicel) — credentials alone are not enough | IPDU + DCDT | ☐ |
 | 2 | Each Commissioner has a personal SCDMS account with the correct role; **no shared or default-password accounts** | IPDU | ☐ |
 | 3 | Seeded demo accounts changed or disabled before real papers are loaded | IPDU | ☐ |
-| 4 | A **training sitting** exists with 4–5 dummy agenda items (see §5) and is clearly labelled "TRAINING" | Secretariat | ☐ |
+| 4 | Training sitting created with `seed_training_sitting` (see §5) | IPDU | ☐ |
 | 5 | The agenda-circulated email is confirmed to reach every Commissioner's address | Secretariat | ☐ |
 | 6 | Each Commissioner brings the device they will really use (laptop, tablet or phone) | Commissioners | ☐ |
 | 7 | Printed one-page quick-reference card (§7) for each attendee | Secretariat | ☐ |
@@ -78,7 +78,7 @@ If item 1 fails for any Commissioner, postpone that person's session rather than
 - Submission signatures: HR obtains the Director-General's approval on paper and uploads the signed copy. SCDMS records the DG's name and signing date and shows an advisory "signature seen / not found" hint. It does not prove a signature is genuine; raise any doubt with the Secretary.
 - The AI brief is a reading aid. Decisions are based on the papers and the Commission's deliberation.
 
-**Practice A:** Open the training sitting's agenda. For each of the five dummy items: open the documents, read the brief, and say which section it sits under.
+**Practice A:** Open the training sitting's agenda. For each of the four practice items: open the documents, read the brief, and say which section it sits under.
 
 ### Module 3 — Private preparation notes
 
@@ -129,21 +129,38 @@ Your two responsibilities in SCDMS: comment on time, and sign the paper copy.
 
 ---
 
-## 5. Training sitting (dummy data)
+## 5. Training sitting (practice data)
 
-Create one sitting named "TRAINING SITTING — not real" with five items, using fictional ministries and no real staff names:
+Build it with one command (Secretariat/IPDU, a day or two before the session):
 
-| # | Section | Item | Used for |
-|---|---------|------|----------|
-| 1 | Structure | Fictional ministry restructure with before/after chart attached | Opening documents, reading the brief |
-| 2 | Appointments | Fictional senior appointment with signed DG letter attached | Seeing the DG paper-approval details |
-| 3 | Policy | Fictional policy amendment, 12-page PDF | Long document reading |
-| 4 | Deferred | An item carried over from a "previous" training sitting | Deferred agenda view |
-| 5 | Other Matters | Left empty | Exercise C |
+```bash
+docker exec scdms-backend-1 python manage.py seed_training_sitting
+```
 
-Plus one set of dummy minutes at status *circulated to Commissioners* with a comment deadline.
+It creates a sitting named "TRAINING SITTING — practice only, not real" with an already-circulated agenda, so Commissioners start exactly where they would after the Chairperson endorses a real agenda:
 
-Delete the training sitting and its notes after the session so it does not pollute real reporting.
+| # | Item | Used for |
+|---|------|----------|
+| 1 | Fictional ministry restructure, with proposal letter and before/after chart | Opening documents, reading the brief |
+| 2 | Fictional senior appointment, with signed DG approval letter | Seeing the paper DG approval |
+| 3 | Fictional leave-policy amendment, 12-page PDF | Long document reading |
+| 4 | Fictional acting appointment, deferred from a previous practice sitting | Deferred agenda view and its history |
+| — | Other Matters left empty | Exercise C |
+
+It also creates a completed previous sitting whose minutes are already circulated to Commissioners, with a two-day comment deadline and one example comment, for Exercise D.
+
+The practice data is safe to load on the live system:
+
+- Records use `TRAIN-...` reference numbers, so real PSC submission and meeting numbering is not used up.
+- The AI briefs and quality scores are pre-written, so no AI calls are made now or when a Commissioner opens an item.
+- No emails or notifications are sent, so Commissioners do not receive a real "agenda circulated" email.
+- It uses a separate "Training Ministry" and touches no user accounts.
+
+Remove all of it afterwards (this also deletes the Commissioners' practice notes on these items):
+
+```bash
+docker exec scdms-backend-1 python manage.py seed_training_sitting --cleanup
+```
 
 ---
 
