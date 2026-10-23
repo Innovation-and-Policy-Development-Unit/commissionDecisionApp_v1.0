@@ -2,7 +2,7 @@
 
 **Audience:** The Chairperson and Commissioners of the Public Service Commission (roles `chairperson`, `psc_commissioner`)
 **Delivered by:** OPSC Secretariat with IPDU (system support)
-**Format:** One 2-hour in-person session + a 30-minute follow-up at the first live sitting
+**Format:** One in-person session of about 2 hours 15 minutes + a 30-minute follow-up at the first live sitting
 **Target window:** Week of 9 November 2026 (tentative — follows HR training, then OPSC staff training; the Commission has not confirmed dates)
 
 ---
@@ -37,7 +37,7 @@ If item 1 fails for any Commissioner, postpone that person's session rather than
 
 ---
 
-## 3. Session outline (2 hours)
+## 3. Session outline (about 2 hours 15 minutes)
 
 | Time | Module | Format |
 |------|--------|--------|
