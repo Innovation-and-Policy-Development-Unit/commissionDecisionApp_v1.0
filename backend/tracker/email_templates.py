@@ -88,6 +88,7 @@ TONES: dict[str, tuple[str, str, str]] = {
 SLUG_META: dict[str, tuple[str, str, str]] = {
     "new_user_welcome": ("user-plus", "indigo", "Welcome to SCDMS"),
     "password_reset": ("lock", "indigo", "Forgot your password?"),
+    "login_otp": ("lock", "indigo", "Your sign-in code"),
     "account_locked_user": ("lock", "danger", "Your account was locked"),
     "account_locked_admin": ("shield-alert", "danger", "Security alert: account lockout"),
     "account_unlocked_user": ("unlock", "success", "Your account is unlocked"),

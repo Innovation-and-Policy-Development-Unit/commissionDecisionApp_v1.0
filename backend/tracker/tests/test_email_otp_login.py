@@ -48,6 +48,15 @@ class EmailOTPLoginTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["otpuser@example.org"])
 
+    def test_email_uses_branded_login_otp_template(self):
+        self._login()
+        msg = mail.outbox[0]
+        self.assertEqual(msg.subject, "Your SCDMS sign-in code")
+        html = msg.alternatives[0][0]
+        self.assertIn("data-opsc-email-frame", html)
+        self.assertIn(self._sent_code(), html)
+        self.assertIn("Your sign-in code", html)
+
     def test_correct_code_returns_tokens_and_trusted_session(self):
         self._login()
         resp = self.client.post("/api/auth/email-otp/verify/",

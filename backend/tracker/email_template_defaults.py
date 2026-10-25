@@ -100,6 +100,33 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "login_otp",
+        "name": "Sign-in verification code",
+        "category": "authentication",
+        "description": "Sent after a correct password; carries the one-time code that completes sign-in.",
+        "placeholders": _ph("otp_code, expiry_minutes, login_url"),
+        "subject_template": "Your SCDMS sign-in code",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "Your SCDMS sign-in code is: {{otp_code}}\n\n"
+            "It expires in {{expiry_minutes}} minutes and can be used once.\n\n"
+            "If you did not just try to sign in, someone may know your password. "
+            "Please change it and tell your administrator."
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 16px 0;\">Use this code to finish signing in to SCDMS:</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<span style=\"display:inline-block;background:#eef2ff;color:#312e81;border-radius:12px;"
+            "padding:14px 22px;font:700 32px/1 'Courier New',monospace;letter-spacing:8px;\">{{otp_code}}</span>"
+            "</p>"
+            "<p style=\"margin:0 0 10px 0;color:#64748b;font-size:13px;\">It expires in {{expiry_minutes}} minutes "
+            "and can be used once.</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">If you did not just try to sign in, someone may "
+            "know your password. Please change it and tell your administrator.</p>"
+        ),
+    },
+    {
         "slug": "pin_reset",
         "name": "Session PIN reset",
         "category": "authentication",
@@ -906,6 +933,11 @@ SAMPLE_EMAIL_CONTEXTS = {
     "password_reset": {
         "reset_url": "http://localhost:8080/auth/reset-password/confirm?token=sample",
         "expiry_hours": "1",
+        "login_url": "http://localhost:8080/auth/login",
+    },
+    "login_otp": {
+        "otp_code": "482913",
+        "expiry_minutes": "10",
         "login_url": "http://localhost:8080/auth/login",
     },
     "pin_reset": {
