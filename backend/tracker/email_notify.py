@@ -436,6 +436,36 @@ def send_password_reset_email(*, user: User, reset_url: str, to_email: str) -> b
         return False
 
 
+def send_login_otp_email(*, user: User, code: str, to_email: str, minutes: int) -> bool:
+    """
+    Email the one-time sign-in code. Plain text on purpose: it must go out even
+    if the template tables are empty, and the code should be easy to copy.
+    Returns True when delivery succeeded, False otherwise.
+    """
+    import logging
+
+    from django.core.mail import send_mail
+
+    from .email_templates import get_from_email
+
+    log = logging.getLogger("scdms.security")
+    subject = "Your SCDMS sign-in code"
+    message = (
+        f"Hello {user.get_full_name() or user.username},\n\n"
+        f"Your SCDMS sign-in code is: {code}\n\n"
+        f"It expires in {minutes} minutes and can be used once.\n\n"
+        "If you did not just try to sign in, someone may know your password — "
+        "please change it and tell your administrator."
+    )
+    try:
+        send_mail(subject, message, get_from_email(), [to_email], fail_silently=False)
+        log.info("LOGIN_OTP_EMAIL_SENT | username=%s | to=%s", user.username, to_email)
+        return True
+    except Exception:
+        log.exception("LOGIN_OTP_EMAIL_FAILED | username=%s | to=%s", user.username, to_email)
+        return False
+
+
 def send_pin_reset_email(*, user: User, reset_url: str, to_email: str) -> bool:
     """
     Send session-PIN reset link to a registered user. Never sends the PIN

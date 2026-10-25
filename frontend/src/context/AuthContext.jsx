@@ -227,8 +227,8 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (username, password) => {
     const { data } = await api.post('/auth/token/', { username, password })
 
-    if (data.two_factor_required || data.pin_required || data.must_change_password) {
-      return data  // Let the UI handle 2FA, PIN, or forced password-change step
+    if (data.two_factor_required || data.email_otp_required || data.pin_required || data.must_change_password) {
+      return data  // Let the UI handle 2FA, emailed code, PIN, or forced password-change step
     }
 
     setTokens(data.access, data.refresh)

@@ -66,7 +66,7 @@ class DeadlineReminderDraftViewSet(
         if draft.status == DeadlineReminderDraft.Status.SENT:
             return Response({"detail": "This reminder was already sent."}, status=400)
 
-        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or "noreply@psc.gov.vu"
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or "noreply@opsc-scdms.org"
         try:
             send_mail(
                 subject=draft.subject,

@@ -92,6 +92,7 @@ from .views import (
     LogoutView,
     UserAdminViewSet,
     VerifyOTPView,
+    EmailOTPVerifyView,
     APIKeyViewSet,
     SystemSettingViewSet,
     EmailTemplateViewSet,
@@ -265,6 +266,8 @@ urlpatterns = [
     path("auth/totp/verify-setup/", TOTPVerifySetupView.as_view(), name="totp-verify-setup"),
     path("auth/totp/verify/", VerifyOTPView.as_view(), name="totp-verify"),
     path("auth/totp/disable/", DisableTOTPView.as_view(), name="totp-disable"),
+    # Emailed one-time sign-in code (replaces TOTP while LOGIN_EMAIL_OTP_REQUIRED is on)
+    path("auth/email-otp/verify/", EmailOTPVerifyView.as_view(), name="email-otp-verify"),
     # Session PIN (trusted-device re-authentication)
     path("auth/session-pin/setup/", SessionPinSetupView.as_view(), name="session-pin-setup"),
     path("auth/session-pin/verify/", SessionPinVerifyView.as_view(), name="session-pin-verify"),

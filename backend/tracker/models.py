@@ -1207,6 +1207,44 @@ class PinResetToken(models.Model):
         )
 
 
+class LoginEmailOTP(models.Model):
+    """One-time code emailed after a correct password. Only a hash is stored;
+    a new code supersedes any earlier unused one for the same user."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="login_email_otps"
+    )
+    code_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    consumed = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "consumed", "expires_at"], name="loginotp_user_active_idx")]
+
+    @classmethod
+    def issue(cls, user):
+        """Invalidate earlier codes and return (row, plaintext_code)."""
+        from django.contrib.auth.hashers import make_password
+
+        cls.objects.filter(user=user, consumed=False).update(consumed=True)
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        ttl = int(getattr(settings, "LOGIN_EMAIL_OTP_TTL_MINUTES", 10))
+        row = cls.objects.create(
+            user=user,
+            code_hash=make_password(code),
+            expires_at=timezone.now() + timedelta(minutes=ttl),
+        )
+        return row, code
+
+    @classmethod
+    def active_for(cls, user):
+        return cls.objects.filter(
+            user=user, consumed=False, expires_at__gt=timezone.now()
+        ).first()
+
+
 class APIKey(models.Model):
     """Permanent or long-lived keys for external system integration."""
     name = models.CharField(max_length=255)

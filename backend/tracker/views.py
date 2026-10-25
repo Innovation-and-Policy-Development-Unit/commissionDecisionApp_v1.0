@@ -167,7 +167,7 @@ from .api_cache import (
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
-from .throttles import AiAnalysisTriggerThrottle, PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle
+from .throttles import AiAnalysisTriggerThrottle, OTPVerifyThrottle, PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle
 from .auth import LenientJWTAuthentication
 from .models import (
     AuditLog,
@@ -238,6 +238,29 @@ def mfa_globally_enabled():
     if val is None or val == "":
         return default
     return val.lower() in ("true", "1", "yes", "on")
+
+
+def email_otp_login_enabled():
+    """Whether a correct password must be followed by an emailed one-time code.
+
+    Env default (LOGIN_EMAIL_OTP_REQUIRED) can be overridden live by a
+    SystemSetting row of the same name, mirroring mfa_globally_enabled().
+    """
+    from django.conf import settings as django_settings
+    from .models import SystemSetting
+
+    default = getattr(django_settings, "LOGIN_EMAIL_OTP_REQUIRED", False)
+    val = SystemSetting.get_val("LOGIN_EMAIL_OTP_REQUIRED")
+    if val is None or val == "":
+        return default
+    return val.lower() in ("true", "1", "yes", "on")
+
+
+def _mask_email(email):
+    local, _, domain = (email or "").partition("@")
+    if not domain:
+        return ""
+    return f"{local[:2]}{'*' * max(len(local) - 2, 1)}@{domain}"
 
 
 def _resolve_submission_ministry_id(profile, request, validated_data):
@@ -7674,6 +7697,11 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
                     status=status.HTTP_200_OK,
                 )
 
+        # Emailed one-time code. Checked before TOTP so authenticator-app 2FA
+        # stays dormant (even for users enrolled earlier) while this is on.
+        if email_otp_login_enabled():
+            return _begin_email_otp_login(request, user, ip)
+
         # While the Settings > Security master switch is off, 2FA is fully paused —
         # even for users who previously enrolled — so pilot accounts aren't blocked
         # by an authenticator prompt. Their totp_secret/two_factor_enabled are left
@@ -7733,6 +7761,124 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
             {"access": str(refresh.access_token), "refresh": str(refresh)},
             status=status.HTTP_200_OK,
         )
+
+
+def _begin_email_otp_login(request, user, ip):
+    """Email a sign-in code to the account's registered address (step 2 of login)."""
+    from django.conf import settings as django_settings
+    from .email_notify import send_login_otp_email
+    from .models import LoginEmailOTP
+
+    to_email = (user.email or "").strip()
+    if not to_email:
+        _security_log.warning("LOGIN_OTP_NO_EMAIL | username=%s | ip=%s", user.username, ip)
+        return Response(
+            {"detail": "No email address is registered for this account. "
+                       "Please contact a system administrator."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    ttl = int(django_settings.LOGIN_EMAIL_OTP_TTL_MINUTES)
+    cooldown = int(django_settings.LOGIN_EMAIL_OTP_RESEND_SECONDS)
+    existing = LoginEmailOTP.active_for(user)
+    # A repeat sign-in inside the cooldown keeps the code already sent, so the
+    # login form can't be used to flood someone's inbox.
+    if not (existing and (timezone.now() - existing.created_at).total_seconds() < cooldown):
+        _row, code = LoginEmailOTP.issue(user)
+        if not send_login_otp_email(user=user, code=code, to_email=to_email, minutes=ttl):
+            _row.delete()
+            return Response(
+                {"detail": "We couldn't send the verification email. Please try again shortly."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+    _security_log.info("LOGIN_EMAIL_OTP_REQUIRED | username=%s | ip=%s", user.username, ip)
+    return Response(
+        {
+            "email_otp_required": True,
+            "username": user.username,
+            "email_hint": _mask_email(to_email),
+            "expires_in_minutes": ttl,
+            "detail": "We emailed you a 6-digit code.",
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+class EmailOTPVerifyView(APIView):
+    """Verify the emailed sign-in code; on success return JWT tokens and open a
+    TrustedSession (same shape as VerifyOTPView)."""
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
+    throttle_classes = [OTPVerifyThrottle]
+
+    def post(self, request):
+        from django.conf import settings as django_settings
+        from django.contrib.auth.hashers import check_password
+        from .models import LoginEmailOTP
+
+        username = (request.data.get("username") or "").strip()
+        code = (request.data.get("code") or "").strip()
+        if not username or not code:
+            return Response({"detail": "Username and verification code are required."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        generic = Response(
+            {"detail": "That code has expired or is no longer valid. Please sign in again."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        user = User.objects.filter(username=username, is_active=True).first()
+        row = LoginEmailOTP.active_for(user) if user else None
+        if not row:
+            return generic
+
+        if row.attempts >= int(django_settings.LOGIN_EMAIL_OTP_MAX_ATTEMPTS):
+            row.consumed = True
+            row.save(update_fields=["consumed"])
+            return generic
+
+        if not check_password(code, row.code_hash):
+            row.attempts += 1
+            row.consumed = row.attempts >= int(django_settings.LOGIN_EMAIL_OTP_MAX_ATTEMPTS)
+            row.save(update_fields=["attempts", "consumed"])
+            _security_log.warning("LOGIN_EMAIL_OTP_FAILED | username=%s", username)
+            return Response(
+                {"detail": "Invalid verification code."} if not row.consumed else generic.data,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        row.consumed = True
+        row.save(update_fields=["consumed"])
+
+        profile = _profile(user)
+        if profile and (profile.hard_locked or profile.force_password_change):
+            return generic
+
+        ip = (
+            request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+            or request.META.get("REMOTE_ADDR", "unknown")
+        )
+        TrustedSession.objects.filter(user=user, is_active=True).update(is_active=False)
+        ts = TrustedSession.objects.create(
+            user=user,
+            expires_at=TrustedSession.compute_expiry(),
+            ip_address=ip,
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:512] or "",
+        )
+
+        _security_log.info("LOGIN_EMAIL_OTP_SUCCESS | username=%s | ip=%s", user.username, ip)
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        _log(request, _AL.Action.LOGIN,
+             resource_type="User", resource_id=user.id,
+             resource_label=user.username,
+             description=f"Successful login with email code: {user.username}")
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(user)
+        refresh["auth_method"] = "email_otp"
+        refresh["trusted_session_id"] = ts.id
+        return Response({"access": str(refresh.access_token), "refresh": str(refresh)})
 
 
 class LogoutView(APIView):

@@ -437,7 +437,7 @@ _default_email_backend = (
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', _default_email_backend)
 DEFAULT_FROM_EMAIL = os.getenv(
     'DEFAULT_FROM_EMAIL',
-    'onboarding@resend.dev' if _resend_api_key else 'PSC Tracker <noreply@psc.gov.vu>',
+    'onboarding@resend.dev' if _resend_api_key else 'PSC Tracker <noreply@opsc-scdms.org>',
 )
 
 # SMTP defaults (overridden by .env; DynamicEmailBackend also reads SMTP_* env first)
@@ -450,6 +450,15 @@ EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', os.getenv('SMTP_SSL', 'false')).lower
 
 # When True, the login flow requires a second factor (OTP)
 TWO_FACTOR_REQUIRED = os.getenv('TWO_FACTOR_REQUIRED', 'false').lower() in ('1', 'true', 'yes')
+
+# When True, a correct username/password is followed by a one-time code emailed
+# to the account's registered address. Takes precedence over authenticator-app
+# (TOTP) 2FA, which stays dormant while this is on.
+LOGIN_EMAIL_OTP_REQUIRED = os.getenv('LOGIN_EMAIL_OTP_REQUIRED', 'false').lower() in ('1', 'true', 'yes')
+LOGIN_EMAIL_OTP_TTL_MINUTES = int(os.getenv('LOGIN_EMAIL_OTP_TTL_MINUTES', '10'))
+LOGIN_EMAIL_OTP_MAX_ATTEMPTS = int(os.getenv('LOGIN_EMAIL_OTP_MAX_ATTEMPTS', '5'))
+# Minimum gap before a fresh code is emailed again for the same account.
+LOGIN_EMAIL_OTP_RESEND_SECONDS = int(os.getenv('LOGIN_EMAIL_OTP_RESEND_SECONDS', '30'))
 
 # When True, the login page shows simulated push notification instead of manual TOTP input
 DEMO_MODE = os.getenv('DEMO_MODE', 'true').lower() in ('1', 'true', 'yes')

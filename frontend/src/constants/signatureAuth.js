@@ -6,6 +6,11 @@ export const AUTH_METHOD_INFO = {
     variant: 'success',
     detail: 'Signed from a session authenticated with a one-time TOTP code.',
   },
+  email_otp: {
+    label: 'Verified via Email Code',
+    variant: 'success',
+    detail: 'Signed from a session authenticated with a one-time code sent to the user\'s registered email.',
+  },
   pin: {
     label: 'Trusted Session (PIN)',
     variant: 'info',
