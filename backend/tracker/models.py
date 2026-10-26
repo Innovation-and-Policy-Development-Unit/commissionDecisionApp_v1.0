@@ -1048,6 +1048,41 @@ class Profile(models.Model):
         return f"{self.user.username} ({self.role})"
 
 
+class DGApprovalToken(models.Model):
+    """One emailed approval link for a submission awaiting its Director-General.
+
+    Only the SHA-256 of the token is stored, so a database read cannot be
+    turned into approvals. Single-use: the first approve/return consumes it.
+    A new link (resend) or any change of stage cancels the previous one.
+    """
+    submission = models.ForeignKey(
+        "Submission", on_delete=models.CASCADE, related_name="dg_approval_tokens",
+    )
+    dg_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="dg_approval_tokens",
+        help_text="The Head of Agency account this link was issued to.",
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    outcome = models.CharField(
+        max_length=16, blank=True,
+        choices=[("approved", "Approved"), ("returned", "Returned for changes")],
+    )
+    used_ip = models.GenericIPAddressField(null=True, blank=True)
+    used_user_agent = models.CharField(max_length=512, blank=True)
+    failed_pin_attempts = models.PositiveSmallIntegerField(default=0)
+    last_reminded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def is_active(self):
+        return self.used_at is None and self.cancelled_at is None and timezone.now() < self.expires_at
+
+
 class TrustedSession(models.Model):
     """
     Records a successful TOTP verification so the user can re-authenticate
@@ -1993,6 +2028,16 @@ class Submission(models.Model):
         on_delete=models.SET_NULL, related_name="dg_approval_attestations",
     )
     dg_approval_attested_at = models.DateTimeField(null=True, blank=True)
+    dg_approval_method = models.CharField(
+        max_length=16, blank=True,
+        choices=[
+            ("paper", "Signed on paper (HR attested)"),
+            ("email_link", "Approved by emailed link"),
+            ("in_app", "Approved in SCDMS"),
+        ],
+        help_text="How the Director-General's approval was given. Blank for papers submitted "
+                  "before this was recorded.",
+    )
     implementation_status = models.CharField(
         max_length=24,
         choices=ImplementationStatus.choices,

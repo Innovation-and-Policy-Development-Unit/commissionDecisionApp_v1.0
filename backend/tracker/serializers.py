@@ -1053,6 +1053,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "dg_endorsed_at",
             "dg_approval_name",
             "dg_approval_date",
+            "dg_approval_method",
             "received_at",
             "registered_at",
             "assessment_started_at",
@@ -1122,6 +1123,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "dg_approval_name",
             "dg_approval_date",
+            "dg_approval_method",
             "subway_map",
             "applicant_tracking_code",
             "lodged_from_paper",

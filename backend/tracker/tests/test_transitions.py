@@ -27,13 +27,13 @@ class TransitionTests(TestCase):
             self._call(role, current, target)
 
     # ── Ministry roles ────────────────────────────────────────────────────
-    # The DG approves the paper on paper, outside SCDMS; HR uploads the signed
-    # copy and submits straight to PSC. There is no DG step in the workflow.
+    # HR either submits straight to PSC (DG signed on paper, HR attests) or sends the
+    # paper to the DG for approval by emailed link (gated by dg_approval.can_send_to_dg).
     def test_ministry_hr_submits_draft_to_psc(self):
         self._call(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.SUBMITTED)
 
-    def test_ministry_hr_can_no_longer_send_draft_to_dg(self):
-        self._denied(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
+    def test_ministry_hr_can_send_draft_to_dg(self):
+        self._call(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)
 
     def test_ministry_hr_cannot_skip_to_assessment(self):
         self._denied(Role.MINISTRY_HR, WorkflowStage.DRAFT, WorkflowStage.UNDER_ASSESSMENT)
@@ -47,17 +47,16 @@ class TransitionTests(TestCase):
     def test_ministry_can_resubmit_after_clarification(self):
         self._call(Role.MINISTRY_HR, WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED)
 
-    def test_clarification_cannot_go_back_to_dg(self):
-        self._denied(
+    def test_clarification_can_go_to_dg(self):
+        self._call(
             Role.MINISTRY_HR, WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_DG_ENDORSEMENT,
         )
 
     def test_ministry_can_respond_to_deferral(self):
         self._call(Role.MINISTRY_HR, WorkflowStage.DEFERRED_BACK_TO_HR, WorkflowStage.DRAFT)
 
-    # ── Director-General (Head of Agency): LEGACY only ────────────────────
-    # Nothing enters PENDING_DG_ENDORSEMENT any more, but papers already there
-    # when the DG step was removed can still be endorsed or returned.
+    # ── Director-General (Head of Agency) ─────────────────────────────────
+    # The DG approves a paper HR sent them, or returns it to HR.
     # Option A: DG endorsement uses the dedicated /endorse/ endpoint which
     # chains PENDING_DG_ENDORSEMENT → DG_APPROVED → SUBMITTED in one call.
     # The standard transition endpoint no longer allows DG → SUBMITTED directly.
@@ -71,9 +70,11 @@ class TransitionTests(TestCase):
     def test_hr_cannot_endorse_to_psc(self):
         self._denied(Role.MINISTRY_HR, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.SUBMITTED)
 
-    def test_hr_targets_from_draft_is_submitted(self):
+    def test_hr_targets_from_draft(self):
         targets = iter_allowed_targets(Role.MINISTRY_HR, WorkflowStage.DRAFT)
-        self.assertEqual(targets, [WorkflowStage.SUBMITTED.value])
+        self.assertCountEqual(
+            targets, [WorkflowStage.SUBMITTED.value, WorkflowStage.PENDING_DG_ENDORSEMENT.value],
+        )
 
     def test_dg_cannot_start_endorsement_on_a_draft(self):
         self._denied(Role.HEAD_OF_AGENCY, WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT)

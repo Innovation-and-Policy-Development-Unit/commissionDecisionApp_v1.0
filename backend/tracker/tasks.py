@@ -711,9 +711,15 @@ def build_submission_brief_context(submission) -> str:
         f"Overdue assessment: {submission.is_assessment_overdue}",
         f"DG endorsed by: {submission.dg_endorsed_by.username if submission.dg_endorsed_by_id else '—'}",
         (
-            f"DG approval on paper (attested by HR, not verified): {submission.dg_approval_name}, "
-            f"signed {submission.dg_approval_date}"
-            if submission.dg_approval_name else "DG approval on paper: not attested"
+            f"DG approval recorded in SCDMS ({submission.get_dg_approval_method_display()}): "
+            f"{submission.dg_approval_name} on {submission.dg_endorsed_at:%d %b %Y} — a system record, "
+            "not a paper signature"
+            if submission.dg_approval_method in ("email_link", "in_app") and submission.dg_endorsed_at
+            else (
+                f"DG approval on paper (attested by HR, not verified): {submission.dg_approval_name}, "
+                f"signed {submission.dg_approval_date}"
+                if submission.dg_approval_name else "DG approval on paper: not attested"
+            )
         ),
         f"Assigned principal: {submission.assigned_to.username if submission.assigned_to_id else '—'}",
         f"Submission notes: {submission.notes or '—'}",

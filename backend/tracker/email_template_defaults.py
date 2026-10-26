@@ -619,6 +619,29 @@ DEFAULT_EMAIL_TEMPLATES = [
         "body_html_template": "",
     },
     {
+        "slug": "submission_dg_approval_link",
+        "name": "Approval needed — link to the Director-General",
+        "category": "submission_workflow",
+        "description": "Sent to the ministry's Director-General when HR sends a paper for approval. The "
+                        "link opens a page where the DG reviews the paper and approves it or returns it "
+                        "to HR, confirming with their session PIN. No sign-in is needed.",
+        "placeholders": _ph("submission_reference, submission_title, submission_url, approval_url, expiry_days, reminder_note"),
+        "subject_template": "Your approval is needed: {{submission_reference}}",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "{{reminder_note}}\"{{submission_title}}\" ({{submission_reference}}) was prepared by your "
+            "ministry's HR and needs your approval before it is sent to the Public Service Commission.\n\n"
+            "Review and approve it here — you do not need to sign in:\n"
+            "{{approval_url}}\n\n"
+            "You will confirm with your SCDMS session PIN. You can also approve or return it by signing "
+            "in to SCDMS: {{submission_url}}\n\n"
+            "This link is for you only and works once. It expires in {{expiry_days}} days; HR can send "
+            "a new one. Please do not forward this email.\n\n"
+            "If you were not expecting this, contact the PSC Secretariat."
+        ),
+        "body_html_template": "",
+    },
+    {
         "slug": "submission_received_confirmation",
         "name": "Submission received — external confirmation",
         "category": "submission_workflow",
@@ -929,6 +952,14 @@ SAMPLE_EMAIL_CONTEXTS = {
     "new_user_welcome": {
         "initial_password": "TempPass123!",
         "login_url": "http://localhost:8080/auth/login",
+    },
+    "submission_dg_approval_link": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Confirmation of appointment — Ministry officers",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "approval_url": "http://localhost:8080/dg-approval/sample-token",
+        "expiry_days": "7",
+        "reminder_note": "",
     },
     "password_reset": {
         "reset_url": "http://localhost:8080/auth/reset-password/confirm?token=sample",

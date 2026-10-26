@@ -16,6 +16,7 @@ import SetPinPage from '../pages/auth/SetPinPage'
 import LockScreen from '../pages/auth/LockScreen'
 import Error404 from '../pages/auth/Error404'
 import TrackSubmission from '../pages/public/TrackSubmission'
+import DgApproval from '../pages/public/DgApproval'
 
 // Core navigation pages — small enough to be eager so the list/detail loop feels instant.
 import HomeDashboard from '../pages/HomeDashboard'
@@ -103,6 +104,7 @@ export default function AppRouter() {
       <Route path="/auth/set-pin"                  element={<SetPinPage />} />
       <Route path="/auth/lock"                     element={<LockScreen />} />
       <Route path="/track"                         element={<TrackSubmission />} />
+      <Route path="/dg-approval/:token"            element={<DgApproval />} />
 
       <Route element={<RequireAuth />}>
         <Route path="/secretariat/agenda/sitting-pack" element={<S><AgendaSittingPack /></S>} />

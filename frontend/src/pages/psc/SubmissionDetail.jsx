@@ -166,6 +166,7 @@ export default function SubmissionDetail() {
   }, [id])
   const [allowed, setAllowed]       = useState([])
   const [canEndorse, setCanEndorse] = useState(false)
+  const [dgFlow, setDgFlow] = useState({ canResend: false, send: null, status: null })
   const [remarks, setRemarks]       = useState('')
   const [error, setError]           = useState('')
   const [busy, setBusy]             = useState(false)
@@ -378,6 +379,7 @@ export default function SubmissionDetail() {
     setChecklist(data.checklist || [])
     setAllowed(nextAllowed)
     setCanEndorse(tr.can_endorse ?? false)
+    setDgFlow({ canResend: !!tr.can_resend_dg_link, send: tr.dg_send ?? null, status: tr.dg_status ?? null })
     setAnnotationCounts(data.annotation_counts || {})
     setSignatureCounts(data.signature_counts || {})
   }, [])
@@ -538,13 +540,14 @@ export default function SubmissionDetail() {
   }
 
   const fetchTransitions = useCallback(async () => {
-    if (!id || !user) { setAllowed([]); setCanEndorse(false); return }
+    if (!id || !user) { setAllowed([]); setCanEndorse(false); setDgFlow({ canResend: false, send: null, status: null }); return }
     try {
       const r = await api.get(`/submissions/${id}/allowed_transitions/`)
       setAllowed(r.data.allowed || [])
       setCanEndorse(r.data.can_endorse ?? false)
+      setDgFlow({ canResend: !!r.data.can_resend_dg_link, send: r.data.dg_send ?? null, status: r.data.dg_status ?? null })
     } catch {
-      setAllowed([]); setCanEndorse(false)
+      setAllowed([]); setCanEndorse(false); setDgFlow({ canResend: false, send: null, status: null })
     }
   }, [id, user])
 
@@ -941,6 +944,24 @@ const stageDescriptions = {
     }
   }
 
+  /** HR: email the Director-General a fresh approval link. */
+  const performResendDgLink = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const { data } = await api.post(`/submissions/${id}/resend-dg-link/`)
+      await reload()
+      if (data.sent) toast.success(data.detail)
+      else toast.error(data.detail)
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Could not send the link.'
+      setError(String(msg))
+      toast.error(String(msg))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // Legacy alias (unused — kept so nothing crashes if any lingering ref exists)
   const submitTransition = async e => { e?.preventDefault?.() }
 
@@ -1096,11 +1117,15 @@ const stageDescriptions = {
           <Lock size={14} className="mt-0.5 shrink-0" />
           <span>
             {user?.role === 'head_of_agency'
-              ? t('submission.readonly_dg', { defaultValue: 'View-only: as Director-General you can follow your ministry’s submissions but not edit their content.' })
+              ? (submission.current_stage === 'pending_dg_endorsement'
+                  ? t('submission.readonly_dg_pending', { defaultValue: 'View-only: as Director-General you can approve this submission or return it to HR, but not edit its content.' })
+                  : t('submission.readonly_dg', { defaultValue: 'View-only: as Director-General you can follow your ministry’s submissions but not edit their content.' }))
               : (user?.role === 'psc_secretary' || user?.role === 'psc_officer')
               ? (isComplianceSubmission
                   ? t('submission.readonly_secretary_compliance', { defaultValue: 'Read-only: you review this submission but do not edit the source form. Only Compliance staff can amend its content.' })
                   : t('submission.readonly_secretary', { defaultValue: 'Read-only: you review this submission but do not edit the source form. Only the submitting Ministry can amend its content.' }))
+              : submission.current_stage === 'pending_dg_endorsement'
+              ? t('submission.readonly_hr_with_dg', { defaultValue: 'Read-only: this submission is with the Director-General for approval. You can edit it again only if the DG returns it to draft.' })
               : t('submission.readonly_hr', { defaultValue: 'Read-only: this submission has been submitted to PSC. You can edit it again only if PSC returns it to draft.' })}
           </span>
         </div>
@@ -1277,12 +1302,23 @@ const stageDescriptions = {
               </div>
               {submission.dg_approval_name && (
                 <div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">DG approval (on paper)</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {submission.dg_approval_method === 'paper' || !submission.dg_approval_method
+                      ? 'DG approval (on paper)'
+                      : 'DG approval (in SCDMS)'}
+                  </p>
                   <p className="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{submission.dg_approval_name}</p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Signed {submission.dg_approval_date
-                      ? new Date(submission.dg_approval_date).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
-                      : '—'} · attested by HR
+                    {submission.dg_approval_method === 'paper' || !submission.dg_approval_method ? 'Signed' : 'Approved'}{' '}
+                    {(submission.dg_approval_method === 'email_link' || submission.dg_approval_method === 'in_app') && submission.dg_endorsed_at
+                      ? new Date(submission.dg_endorsed_at).toLocaleString('en-VU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      : (submission.dg_approval_date
+                        ? new Date(submission.dg_approval_date).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : '—')}
+                    {' · '}
+                    {submission.dg_approval_method === 'email_link' ? 'by emailed link, confirmed with PIN'
+                      : submission.dg_approval_method === 'in_app' ? 'signed in to SCDMS'
+                      : 'attested by HR'}
                   </p>
                 </div>
               )}
@@ -1882,9 +1918,13 @@ const stageDescriptions = {
             submission={submission}
             allowed={allowed}
             canEndorse={canEndorse}
+            canResendDgLink={dgFlow.canResend}
+            dgSend={dgFlow.send}
+            dgStatus={dgFlow.status}
             checklist={checklist}
             onTransition={performTransition}
             onEndorse={performEndorse}
+            onResendDgLink={performResendDgLink}
             busy={busy}
             error={error}
             setError={setError}

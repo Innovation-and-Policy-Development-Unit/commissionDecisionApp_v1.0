@@ -63,6 +63,12 @@ class SubmissionTrackThrottle(AnonRateThrottle):
     scope = 'submission_track'
 
 
+class DGApprovalThrottle(AnonRateThrottle):
+    """Limit the Director-General's public approval-link requests per IP — slows token
+    guessing on the unauthenticated approval pages (the tokens are also 256-bit)."""
+    scope = 'dg_approval'
+
+
 class BackupRestoreThrottle(UserRateThrottle):
     """Limit database-restore attempts per admin user — a destructive,
     whole-database-overwriting action that should never be high-frequency."""

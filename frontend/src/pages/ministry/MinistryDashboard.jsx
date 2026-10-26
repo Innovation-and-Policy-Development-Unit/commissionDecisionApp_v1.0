@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, Cell,
 } from 'recharts'
 import {
-  ArrowRight, Building2, FileEdit, Undo2, Activity, Gavel,
+  ArrowRight, Building2, FileEdit, PenLine, Undo2, Activity, Gavel,
   TrendingUp, TrendingDown,
 } from 'lucide-react'
 import api from '../../api/client'
@@ -20,9 +20,8 @@ import UpcomingSittings from '../../components/meetings/UpcomingSittings'
 
 // ── Stage groupings (mirror backend tracker.models.WorkflowStage) ─────────────
 const STAGE_GROUPS = {
-  // The two DG stages are legacy: the DG now approves on paper, so nothing
-  // enters them any more. Papers still sitting there count as ministry drafts.
-  draft:        ['draft', 'pending_dg_endorsement', 'dg_approved'],
+  draft:        ['draft', 'dg_approved'],
+  awaiting_dg:  ['pending_dg_endorsement'],
   returned:     ['returned_for_clarification', 'deferred_back_to_hr'],
   psc_review: [
     'pending_manager_approval', 'pending_second_approval', 'submitted',
@@ -43,6 +42,7 @@ const sumStages = (byStage, codes) => codes.reduce((total, code) => total + (byS
 // Workflow-status KPI cards (ministry-specific framing for HR).
 const KPIS = [
   { id: 'draft',       labelKey: 'ministry_dashboard.hr.drafts',           icon: FileEdit, color: 'blue',    stages: STAGE_GROUPS.draft },
+  { id: 'awaiting_dg', labelKey: 'ministry_dashboard.hr.awaiting_dg',      icon: PenLine,  color: 'amber',   stages: STAGE_GROUPS.awaiting_dg },
   { id: 'returned',    labelKey: 'ministry_dashboard.hr.returned',         icon: Undo2,    color: 'red',     stages: STAGE_GROUPS.returned },
   { id: 'psc_review',  labelKey: 'ministry_dashboard.hr.under_psc_review', icon: Activity, color: 'purple',  stages: STAGE_GROUPS.psc_review },
   { id: 'decided',     labelKey: 'ministry_dashboard.hr.decided',          icon: Gavel,    color: 'emerald', stages: STAGE_GROUPS.decided },
