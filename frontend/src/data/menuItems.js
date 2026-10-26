@@ -31,7 +31,6 @@ const menuItems = [
     items: [
       { label: 'Dashboard',   labelKey: 'nav.dashboard',   icon: LayoutDashboard, path: '/' },
       { label: 'Submissions', labelKey: 'nav.submissions', icon: FileText,        path: '/submissions' },
-      { label: 'Lodge Signed Paper', labelKey: 'nav.lodge_signed_paper', icon: FileText, path: '/submissions/lodge-paper', userFlag: 'can_lodge_signed_paper' },
     ],
   },
   {
@@ -160,11 +159,11 @@ const menuItems = [
   },
 ]
 
-// A menu item whose path is the parent of another item's path (e.g.
-// /submissions and /submissions/lodge-paper) must only highlight on an exact
-// match, otherwise NavLink's prefix matching lights up both entries at once.
-// Detail pages under it (/submissions/123) still highlight the parent because
-// no menu item claims those paths.
+// A menu item whose path is the parent of another item's path (a parent and a
+// nested entry) must only highlight on an exact match, otherwise NavLink's
+// prefix matching lights up both entries at once. Detail pages under it
+// (/submissions/123) still highlight the parent because no menu item claims
+// those paths.
 const allMenuPaths = []
 const collectPaths = (items) => items.forEach((it) => {
   if (it.path) allMenuPaths.push(it.path)
