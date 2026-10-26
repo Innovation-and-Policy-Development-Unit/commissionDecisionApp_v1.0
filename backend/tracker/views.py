@@ -7994,6 +7994,7 @@ def _begin_email_otp_login(request, user, ip):
             "username": user.username,
             "email_hint": _mask_email(to_email),
             "expires_in_minutes": ttl,
+            "resend_after_seconds": cooldown,
             "detail": "We emailed you a 6-digit code.",
         },
         status=status.HTTP_200_OK,
@@ -8023,27 +8024,40 @@ class EmailOTPVerifyView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
         user = User.objects.filter(username=username, is_active=True).first()
-        row = LoginEmailOTP.active_for(user) if user else None
-        if not row:
+        max_attempts = int(django_settings.LOGIN_EMAIL_OTP_MAX_ATTEMPTS)
+        # Any code still live may be used — asking for another code does not kill one
+        # whose email is still on its way. Wrong guesses count against every live code,
+        # so the total number of guesses stays at LOGIN_EMAIL_OTP_MAX_ATTEMPTS.
+        rows = LoginEmailOTP.live_for(user) if user else []
+        if not rows:
             return generic
 
-        if row.attempts >= int(django_settings.LOGIN_EMAIL_OTP_MAX_ATTEMPTS):
-            row.consumed = True
-            row.save(update_fields=["consumed"])
+        usable = []
+        for r in rows:
+            if r.attempts >= max_attempts:
+                r.consumed = True
+                r.save(update_fields=["consumed"])
+            else:
+                usable.append(r)
+        if not usable:
             return generic
 
-        if not check_password(code, row.code_hash):
-            row.attempts += 1
-            row.consumed = row.attempts >= int(django_settings.LOGIN_EMAIL_OTP_MAX_ATTEMPTS)
-            row.save(update_fields=["attempts", "consumed"])
+        if not any(check_password(code, r.code_hash) for r in usable):
+            for r in usable:
+                r.attempts += 1
+                r.consumed = r.attempts >= max_attempts
+                r.save(update_fields=["attempts", "consumed"])
             _security_log.warning("LOGIN_EMAIL_OTP_FAILED | username=%s", username)
+            exhausted = all(r.consumed for r in usable)
             return Response(
-                {"detail": "Invalid verification code."} if not row.consumed else generic.data,
+                {"detail": "Invalid verification code."} if not exhausted else generic.data,
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        row.consumed = True
-        row.save(update_fields=["consumed"])
+        # Single use: a correct code retires every live code.
+        for r in usable:
+            r.consumed = True
+            r.save(update_fields=["consumed"])
 
         profile = _profile(user)
         if profile and (profile.hard_locked or profile.force_password_change):

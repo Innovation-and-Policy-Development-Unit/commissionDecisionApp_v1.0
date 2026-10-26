@@ -1115,17 +1115,15 @@ class TrustedSession(models.Model):
         """Return the earlier of (from_dt + SESSION_TRUST_HOURS) or today at
         5pm Pacific/Efate.
 
-        Was 8h by default — users reported being asked for just a PIN (not a
-        full re-login) after being away "a few hours", which traced back to
-        this window being wider than the "quick resume" purpose it's meant
-        for. 2h still covers a single meeting/lunch break without repeated
-        TOTP friction, while making "away a few hours" correctly require a
-        full login again."""
+        8h by default: a working day, so the emailed code is needed once a day
+        per device and later returns need only the PIN. (It was 2h for a while,
+        which sent people back to the emailed code several times a day.) The 5pm
+        cap still ends the day, and SESSION_TRUST_HOURS overrides the length."""
         from_dt = from_dt or timezone.now()
         tz = timezone.get_current_timezone()
         local_dt = timezone.localtime(from_dt, timezone=tz)
 
-        option_a = from_dt + timedelta(hours=int(os.getenv('SESSION_TRUST_HOURS', '2')))
+        option_a = from_dt + timedelta(hours=int(os.getenv('SESSION_TRUST_HOURS', '8')))
 
         today_5pm = local_dt.replace(hour=17, minute=0, second=0, microsecond=0)
         option_b = today_5pm if timezone.is_aware(today_5pm) else timezone.make_aware(today_5pm, timezone=tz)
@@ -1258,12 +1256,26 @@ class LoginEmailOTP(models.Model):
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["user", "consumed", "expires_at"], name="loginotp_user_active_idx")]
 
+    # Codes that may be valid at once: the new one plus the latest earlier ones. A code
+    # email can take a minute or two to arrive; if asking again killed the first one,
+    # the email that finally lands would carry a dead code.
+    MAX_LIVE_CODES = 3
+
     @classmethod
     def issue(cls, user):
-        """Invalidate earlier codes and return (row, plaintext_code)."""
+        """Issue a new code, keeping the latest earlier ones valid until they expire
+        (older ones are retired). Returns (row, plaintext_code)."""
         from django.contrib.auth.hashers import make_password
 
-        cls.objects.filter(user=user, consumed=False).update(consumed=True)
+        keep = cls.MAX_LIVE_CODES - 1
+        live_ids = list(
+            cls.objects.filter(user=user, consumed=False, expires_at__gt=timezone.now())
+            .order_by("-created_at", "-id").values_list("id", flat=True)
+        )
+        retire = set(live_ids[keep:])
+        cls.objects.filter(user=user, consumed=False).exclude(
+            id__in=[i for i in live_ids if i not in retire]
+        ).update(consumed=True)
         code = f"{secrets.randbelow(1_000_000):06d}"
         ttl = int(getattr(settings, "LOGIN_EMAIL_OTP_TTL_MINUTES", 10))
         row = cls.objects.create(
@@ -1278,6 +1290,14 @@ class LoginEmailOTP(models.Model):
         return cls.objects.filter(
             user=user, consumed=False, expires_at__gt=timezone.now()
         ).first()
+
+    @classmethod
+    def live_for(cls, user):
+        """Every code that can still be used, newest first."""
+        return list(
+            cls.objects.filter(user=user, consumed=False, expires_at__gt=timezone.now())
+            .order_by("-created_at", "-id")[: cls.MAX_LIVE_CODES]
+        )
 
 
 class APIKey(models.Model):

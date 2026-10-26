@@ -450,11 +450,12 @@ def send_login_otp_email(*, user: User, code: str, to_email: str, minutes: int) 
     from .email_templates import get_from_email, send_templated_email
 
     log = logging.getLogger("scdms.security")
+    # No login_url on purpose: the code email carries no links (see LINK_FREE_SLUGS), so
+    # nothing in it needs scanning before it reaches the inbox.
     ctx = merge_recipient_context(
         user,
         otp_code=code,
         expiry_minutes=str(minutes),
-        login_url=f"{get_frontend_base_url()}/auth/login",
     )
     if send_templated_email(
         slug="login_otp",
