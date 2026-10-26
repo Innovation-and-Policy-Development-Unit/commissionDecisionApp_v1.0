@@ -459,7 +459,7 @@ LOGIN_EMAIL_OTP_REQUIRED = os.getenv('LOGIN_EMAIL_OTP_REQUIRED', 'false').lower(
 LOGIN_EMAIL_OTP_TTL_MINUTES = int(os.getenv('LOGIN_EMAIL_OTP_TTL_MINUTES', '10'))
 LOGIN_EMAIL_OTP_MAX_ATTEMPTS = int(os.getenv('LOGIN_EMAIL_OTP_MAX_ATTEMPTS', '5'))
 # Minimum gap before a fresh code is emailed again for the same account.
-LOGIN_EMAIL_OTP_RESEND_SECONDS = int(os.getenv('LOGIN_EMAIL_OTP_RESEND_SECONDS', '30'))
+LOGIN_EMAIL_OTP_RESEND_SECONDS = int(os.getenv('LOGIN_EMAIL_OTP_RESEND_SECONDS', '60'))
 
 # When True, the login page shows simulated push notification instead of manual TOTP input
 DEMO_MODE = os.getenv('DEMO_MODE', 'true').lower() in ('1', 'true', 'yes')

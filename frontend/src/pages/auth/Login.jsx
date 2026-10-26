@@ -61,6 +61,7 @@ export default function Login() {
   const [emailOtp,         setEmailOtp]         = useState('')
   const [emailHint,        setEmailHint]        = useState('')
   const [notice,           setNotice]           = useState('')
+  const [resendIn,         setResendIn]         = useState(0) // seconds until another code may be requested
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword,      setNewPassword]      = useState('')
   const [confirmPassword,  setConfirmPassword]  = useState('')
@@ -80,6 +81,13 @@ export default function Login() {
       setShowPasswordChange(true)
     }
   }, [accessToken, user, authReady])
+
+  // Count down until another code may be requested (the server enforces the same wait).
+  useEffect(() => {
+    if (resendIn <= 0) return undefined
+    const timer = setTimeout(() => setResendIn(n => n - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [resendIn])
 
   const policyLines = useMemo(() => policyHintLines(passwordPolicy), [passwordPolicy])
   const minPasswordLength = passwordPolicy?.min_length ?? 8
@@ -102,6 +110,7 @@ export default function Login() {
 
   const applyLoginResponse = data => {
     if (data?.email_otp_required) {
+      setResendIn(data.resend_after_seconds ?? 60)
       setEmailHint(data.email_hint || '')
       setEmailOtp('')
       setShowEmailOtp(true)
@@ -188,9 +197,10 @@ export default function Login() {
     try {
       // Re-running the password step is what issues a fresh code; the server
       // ignores it if one was sent within the last few seconds.
-      await login(username.trim(), loginPasswordRef.current)
+      const data = await login(username.trim(), loginPasswordRef.current)
       setEmailOtp('')
-      setNotice('If a code was not sent in the last minute, a new one is on its way.')
+      setResendIn(data?.resend_after_seconds ?? 60)
+      setNotice('A new code is on its way. Codes already sent to you still work for 10 minutes — use whichever arrives first.')
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not resend the code.')
     } finally {
@@ -384,6 +394,10 @@ export default function Login() {
                     {notice}
                   </BaseMessageBar>
                 )}
+                <p className="text-xs text-center text-slate-500 -mt-4 mb-6">
+                  The code can take up to 2 minutes to arrive. Please wait, and check your spam folder —
+                  asking for another one will not make it faster.
+                </p>
 
                 <form onSubmit={handleVerifyEmailOtp} className="space-y-5">
                   <BaseInput
@@ -414,8 +428,8 @@ export default function Login() {
                     <BaseButton type="button" variant="ghost" size="sm" onClick={backToSignIn}>
                       Back to sign in
                     </BaseButton>
-                    <BaseButton type="button" variant="ghost" size="sm" onClick={handleResendEmailOtp} disabled={loading}>
-                      Resend code
+                    <BaseButton type="button" variant="ghost" size="sm" onClick={handleResendEmailOtp} disabled={loading || resendIn > 0}>
+                      {resendIn > 0 ? `Resend code (${resendIn}s)` : 'Resend code'}
                     </BaseButton>
                   </div>
                 </form>

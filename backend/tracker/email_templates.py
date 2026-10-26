@@ -148,6 +148,12 @@ def _icon_badge_html(icon_key: str, tone_key: str) -> str:
     )
 
 
+# Emails that must carry no links at all. Mail filters (Microsoft Defender's Safe Links
+# and similar) check every URL in a message — against a young sender domain that adds
+# a wait of up to minutes, which for a sign-in code is the user staring at the screen.
+LINK_FREE_SLUGS = frozenset({"login_otp"})
+
+
 def _brand_frame(inner_html: str, context: dict[str, Any], *, slug: str | None = None) -> str:
     """
     Wrap template HTML in the OPSC-branded shell so all emails share one
@@ -164,6 +170,15 @@ def _brand_frame(inner_html: str, context: dict[str, Any], *, slug: str | None =
     portal_url = html.escape(get_frontend_base_url(), quote=True)
     icon_key, tone_key, heading = SLUG_META.get(slug or "", _DEFAULT_META)
     icon_badge = _icon_badge_html(icon_key, tone_key)
+    portal_row = (
+        ""
+        if slug in LINK_FREE_SLUGS
+        else (
+            '<tr><td align="center" style="padding-top:8px;font:400 12px/1.6 Arial,sans-serif;">'
+            f'<a href="{portal_url}" style="color:#4f46e5;text-decoration:none;font-weight:700;">{portal_url}</a>'
+            "</td></tr>"
+        )
+    )
 
     return (
         "<!DOCTYPE html>"
@@ -198,9 +213,7 @@ def _brand_frame(inner_html: str, context: dict[str, Any], *, slug: str | None =
         "Office of the Public Service Commission<br>"
         "Government of the Republic of Vanuatu"
         "</td></tr>"
-        '<tr><td align="center" style="padding-top:8px;font:400 12px/1.6 Arial,sans-serif;">'
-        f'<a href="{portal_url}" style="color:#4f46e5;text-decoration:none;font-weight:700;">{portal_url}</a>'
-        "</td></tr>"
+        f"{portal_row}"
         '<tr><td align="center" style="padding-top:16px;font:400 11px/1.6 Arial,sans-serif;color:#94a3b8;">'
         "This is an automated message from the Submission &amp; Commission Decision Management System (SCDMS)."
         "</td></tr>"
