@@ -27,6 +27,10 @@ class ImportUsersTests(TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def _count(self):
+        # Migrations seed demo users (e.g. "admin"); count only the CSV's mailboxes.
+        return User.objects.filter(email__iendswith="@psc.gov.vu").count()
+
     def _run(self, body, *flags):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "users.csv"
@@ -64,18 +68,18 @@ class ImportUsersTests(TestCase):
         bad = ROW_B.replace("Manager HRMIS (Read-Only Reviewer)", "Grand Vizier")
         with self.assertRaises(CommandError):
             self._run(HEADER + ROW_A + bad)
-        self.assertEqual(User.objects.count(), 0)
+        self.assertEqual(self._count(), 0)
 
     def test_unknown_unit_is_rejected(self):
         with self.assertRaises(CommandError):
             self._run(HEADER + ROW_A.replace("Compliance Unit", "Nonexistent Unit"))
-        self.assertEqual(User.objects.count(), 0)
+        self.assertEqual(self._count(), 0)
 
     def test_rerun_skips_existing_then_emails_them_in_second_pass(self):
         self._run(HEADER + ROW_A)
-        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(self._count(), 1)
         self._run(HEADER + ROW_A, "--send-emails")  # phase 2: mail without recreating
-        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(self._count(), 1)
         self.assertEqual(len(mail.outbox), 1)
 
     def test_existing_user_who_changed_password_is_not_emailed(self):
@@ -88,7 +92,7 @@ class ImportUsersTests(TestCase):
 
     def test_only_restricts_the_run(self):
         self._run(HEADER + ROW_A + ROW_B, "--only", "cthyna")
-        self.assertEqual(list(User.objects.values_list("username", flat=True)), ["cthyna"])
+        self.assertEqual(list(User.objects.filter(email__iendswith="@psc.gov.vu").values_list("username", flat=True)), ["cthyna"])
 
     def test_duplicate_username_in_file_is_rejected(self):
         with self.assertRaises(CommandError):
