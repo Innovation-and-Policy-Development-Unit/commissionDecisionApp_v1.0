@@ -107,6 +107,10 @@
   </table>
 </div>
 
+{% if dg_approval_statement %}
+<div class="notes-block" style="border-left:3px solid #15803d; margin-top:10px;"><strong>Director-General approval</strong><br>{{ dg_approval_statement }}</div>
+{% endif %}
+
 {% if submission.notes %}
 <h3 class="section">Notes</h3>
 <div class="notes-block">{{ submission.notes }}</div>

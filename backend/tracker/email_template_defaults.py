@@ -642,6 +642,24 @@ DEFAULT_EMAIL_TEMPLATES = [
         "body_html_template": "",
     },
     {
+        "slug": "submission_dg_link_expired",
+        "name": "DG approval link needs resending — notice to HR",
+        "category": "submission_workflow",
+        "description": "Sent to the HR officer who sent a paper to the Director-General when the DG's approval "
+                        "link expired unused, or was cancelled after too many wrong PINs, so the paper is not "
+                        "left waiting on a link that no longer works.",
+        "placeholders": _ph("submission_reference, submission_title, submission_url, dg_name, reason"),
+        "subject_template": "Resend the Director-General's approval link: {{submission_reference}}",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "The approval link sent to {{dg_name}} for \"{{submission_title}}\" ({{submission_reference}}) "
+            "{{reason}}, so the paper is still waiting for the Director-General.\n\n"
+            "Open the submission and choose \"Resend link to DG\":\n{{submission_url}}\n\n"
+            "The Director-General can also sign in to SCDMS and approve it there."
+        ),
+        "body_html_template": "",
+    },
+    {
         "slug": "submission_received_confirmation",
         "name": "Submission received — external confirmation",
         "category": "submission_workflow",
@@ -960,6 +978,13 @@ SAMPLE_EMAIL_CONTEXTS = {
         "approval_url": "http://localhost:8080/dg-approval/sample-token",
         "expiry_days": "7",
         "reminder_note": "",
+    },
+    "submission_dg_link_expired": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Confirmation of appointment — Ministry officers",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "dg_name": "Daniel Garae",
+        "reason": "has expired",
     },
     "password_reset": {
         "reset_url": "http://localhost:8080/auth/reset-password/confirm?token=sample",

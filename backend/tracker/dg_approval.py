@@ -175,7 +175,12 @@ def check_pin(token: DGApprovalToken, pin: str) -> tuple[bool, str]:
     token.failed_pin_attempts += 1
     if token.failed_pin_attempts >= MAX_PIN_ATTEMPTS:
         token.cancelled_at = timezone.now()
-        token.save(update_fields=["failed_pin_attempts", "cancelled_at"])
+        token.expiry_notified_at = token.cancelled_at
+        token.save(update_fields=["failed_pin_attempts", "cancelled_at", "expiry_notified_at"])
+        try:
+            notify_hr_link_dead(token.submission, reason="was cancelled after too many wrong PINs")
+        except Exception:
+            logger.exception("DG lock-out notice failed for %s", token.submission.reference_number)
         return False, "locked"
     token.save(update_fields=["failed_pin_attempts"])
     return False, "wrong_pin"
@@ -187,6 +192,36 @@ def consume(token: DGApprovalToken, outcome: str, ip: str | None, user_agent: st
     token.used_ip = ip or None
     token.used_user_agent = (user_agent or "")[:512]
     token.save(update_fields=["used_at", "outcome", "used_ip", "used_user_agent"])
+
+
+# ── the record of the approval, for printed papers ──────────────────────────────
+
+def approval_statement(submission) -> str:
+    """One plain sentence stating how the Director-General approved, for the printed
+    submission summary. Electronic approvals say so (and that no handwritten signature
+    exists); papers approved on paper repeat HR's attestation as such."""
+    name = (submission.dg_approval_name or "").strip()
+    if not name:
+        return ""
+    method = submission.dg_approval_method
+    if method in ("email_link", "in_app") and submission.dg_endorsed_at:
+        when = timezone.localtime(submission.dg_endorsed_at)
+        how = (
+            "by emailed link, confirmed with the Director-General's SCDMS PIN"
+            if method == "email_link" else "while signed in to SCDMS"
+        )
+        ministry = submission.ministry.name if submission.ministry_id else "the ministry"
+        return (
+            f"Approved electronically by {name}, Director-General, {ministry}, on "
+            f"{when:%d %B %Y} at {when:%H:%M} ({how}). This is a system record; the paper "
+            "carries no handwritten signature."
+        )
+    if submission.dg_approval_date:
+        return (
+            f"Director-General approval: {name}, signed on paper on {submission.dg_approval_date:%d %B %Y} "
+            "(recorded by ministry HR when the paper was submitted)."
+        )
+    return ""
 
 
 # ── email ────────────────────────────────────────────────────────────────────
@@ -206,7 +241,10 @@ def send_approval_email(submission, dg_user, raw: str, *, reminder: bool = False
         **submission_email_context(submission),
         approval_url=approval_url(raw),
         expiry_days=str(TOKEN_TTL_DAYS),
-        reminder_note="This is a reminder: " if reminder else "",
+        reminder_note=(
+            "Reminder: this is waiting for your approval, and this link replaces the one we "
+            "sent earlier. " if reminder else ""
+        ),
     )
     return send_templated_email(slug="submission_dg_approval_link", to=[dg_user.email.strip()], context=ctx)
 
@@ -215,5 +253,96 @@ def issue_and_send(submission, *, reminder: bool = False) -> bool:
     """Issue a new link to the ministry's DG and email it. Returns whether the email
     was handed to the mail backend; the link exists either way, so HR can resend."""
     dg = resolve_dg(submission)
-    _, raw = issue_token(submission, dg)
+    row, raw = issue_token(submission, dg)
+    if reminder:
+        # Marks the paper as reminded: the new token carries it, so the daily job
+        # sends one reminder per paper, not one every few days.
+        row.last_reminded_at = timezone.now()
+        row.save(update_fields=["last_reminded_at"])
     return send_approval_email(submission, dg, raw, reminder=reminder)
+
+
+# ── follow-ups: day-3 reminder to the DG, expiry / lock-out notice to HR ─────────
+
+def _hr_user(submission):
+    user = submission.created_by
+    return user if user is not None and user.is_active else None
+
+
+def notify_hr_link_dead(submission, *, reason: str) -> None:
+    """Tell HR the DG's link no longer works, so the paper is not left waiting on a
+    dead link. In-app notice plus an email; `reason` is a short phrase for both."""
+    from .email_notify import merge_recipient_context, submission_email_context
+    from .email_templates import send_templated_email
+    from .models import Notification
+
+    hr = _hr_user(submission)
+    if hr is None:
+        return
+    dg = (
+        DGApprovalToken.objects.filter(submission=submission).select_related("dg_user")
+        .order_by("-created_at").first()
+    )
+    dg_name = (dg.dg_user.get_full_name() or dg.dg_user.username) if dg else "the Director-General"
+    Notification.objects.create(
+        recipient=hr, submission=submission, channel=Notification.Channel.BOTH,
+        title=f"DG approval link needs resending: {submission.reference_number}",
+        body=(
+            f"The approval link sent to {dg_name} for '{submission.title}' {reason}. "
+            "Open the submission and use Resend link to DG — or the DG can sign in and approve."
+        ),
+    )
+    send_templated_email(
+        slug="submission_dg_link_expired", to=[hr.email.strip()] if (hr.email or "").strip() else [],
+        context=merge_recipient_context(
+            hr, **submission_email_context(submission), dg_name=dg_name, reason=reason,
+        ),
+    )
+
+
+def run_follow_ups(now=None) -> dict:
+    """The daily job. (1) One reminder to the DG for a paper still waiting after
+    REMINDER_AFTER_DAYS — a fresh link, since the first can't be shown again.
+    (2) One notice to HR for a paper whose latest link has expired unused."""
+    now = now or timezone.now()
+    reminded = expired = 0
+
+    cutoff = now - timedelta(days=REMINDER_AFTER_DAYS)
+    due = (
+        DGApprovalToken.objects.filter(
+            used_at__isnull=True, cancelled_at__isnull=True, expires_at__gt=now,
+            created_at__lte=cutoff, submission__current_stage=WorkflowStage.PENDING_DG_ENDORSEMENT,
+        ).select_related("submission")
+    )
+    for token in due:
+        submission = token.submission
+        if DGApprovalToken.objects.filter(submission=submission, last_reminded_at__isnull=False).exists():
+            continue
+        try:
+            issue_and_send(submission, reminder=True)
+            reminded += 1
+        except DGApprovalError:
+            logger.warning("DG reminder skipped for %s: no usable DG", submission.reference_number)
+        except Exception:
+            logger.exception("DG reminder failed for %s", submission.reference_number)
+
+    lapsed = (
+        DGApprovalToken.objects.filter(
+            used_at__isnull=True, cancelled_at__isnull=True, expires_at__lte=now,
+            expiry_notified_at__isnull=True,
+            submission__current_stage=WorkflowStage.PENDING_DG_ENDORSEMENT,
+        ).select_related("submission")
+    )
+    for token in lapsed:
+        latest = (
+            DGApprovalToken.objects.filter(submission=token.submission).order_by("-created_at").first()
+        )
+        token.expiry_notified_at = now
+        token.save(update_fields=["expiry_notified_at"])
+        if latest and latest.pk == token.pk:
+            try:
+                notify_hr_link_dead(token.submission, reason="has expired")
+                expired += 1
+            except Exception:
+                logger.exception("DG expiry notice failed for %s", token.submission.reference_number)
+    return {"reminded": reminded, "expired": expired}

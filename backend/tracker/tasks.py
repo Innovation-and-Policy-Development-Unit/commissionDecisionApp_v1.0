@@ -146,6 +146,19 @@ def send_dg_paper_notice_emails(submission_id, user_ids, submitted_by):
     notify_dg_paper_submitted(submission, users, submitted_by)
 
 
+@shared_task
+def send_dg_approval_follow_ups():
+    """Daily: remind a DG whose approval link has waited three days, and tell HR when a
+    link expired unused (see dg_approval.run_follow_ups)."""
+    from .dg_approval import email_approval_enabled, run_follow_ups
+
+    if not email_approval_enabled():
+        return {"reminded": 0, "expired": 0, "skipped": "switch off"}
+    result = run_follow_ups()
+    app_log.info("DG_APPROVAL_FOLLOW_UPS | %s", result)
+    return result
+
+
 def queue_dg_paper_notice_emails(submission_id, user_ids, submitted_by):
     try:
         send_dg_paper_notice_emails.delay(submission_id, user_ids, submitted_by)

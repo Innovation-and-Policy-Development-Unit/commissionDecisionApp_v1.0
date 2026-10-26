@@ -109,6 +109,7 @@ SLUG_META: dict[str, tuple[str, str, str]] = {
     "submission_deferred_back_hr": ("corner-down-left", "amber", "Deferred back to your ministry"),
     "submission_pending_dg_endorsement": ("clock", "amber", "Awaiting DG endorsement"),
     "submission_dg_approval_link": ("clock", "amber", "Your approval is needed"),
+    "submission_dg_link_expired": ("clock", "amber", "The DG's approval link needs resending"),
     "submission_returned_to_hr": ("corner-down-left", "amber", "Returned for changes"),
     "submission_approved": ("check-circle", "success", "Submission approved"),
     "submission_rejected": ("x-circle", "danger", "Submission not approved"),
