@@ -67,10 +67,6 @@ def rbac_user_can_regenerate_ai_brief(user: User) -> bool:
     return rbac_user_has_permission(user, "regenerate_ai_brief")
 
 
-def rbac_user_can_lodge_signed_paper(user: User) -> bool:
-    return rbac_user_has_permission(user, "lodge_signed_paper")
-
-
 def rbac_user_can_view_audit_log(user: User) -> bool:
     """True if admin/staff/superuser or has the view_audit_trail permission."""
     if not user.is_authenticated:

@@ -62,7 +62,7 @@ export { COMMISSION_DECISION_VIEW_ROLES }
 /** Menu audience tags on nav items / groups */
 export function menuItemVisibleForUser(item, user) {
   // Capability-gated items: visible when the server-sent user flag is true
-  // (e.g. `can_lodge_signed_paper`, mirroring the backend RBAC permission).
+  // (a `can_*` flag mirroring a backend RBAC permission).
   if (item.userFlag) {
     if (!user) return false
     return userIsAdmin(user) || Boolean(user[item.userFlag])
