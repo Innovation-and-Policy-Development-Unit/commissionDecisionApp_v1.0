@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom'
-import { ArrowRight, ShieldCheck, Lock } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Lock, Mail } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/client'
 import BaseButton from '../../components/shared/BaseButton'
@@ -57,6 +57,10 @@ export default function Login() {
   const [loading,          setLoading]          = useState(false)
   const [show2FA,          setShow2FA]          = useState(false)
   const [otp,              setOtp]              = useState('')
+  const [showEmailOtp,     setShowEmailOtp]     = useState(false)
+  const [emailOtp,         setEmailOtp]         = useState('')
+  const [emailHint,        setEmailHint]        = useState('')
+  const [notice,           setNotice]           = useState('')
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword,      setNewPassword]      = useState('')
   const [confirmPassword,  setConfirmPassword]  = useState('')
@@ -97,7 +101,11 @@ export default function Login() {
   }
 
   const applyLoginResponse = data => {
-    if (data?.two_factor_required) {
+    if (data?.email_otp_required) {
+      setEmailHint(data.email_hint || '')
+      setEmailOtp('')
+      setShowEmailOtp(true)
+    } else if (data?.two_factor_required) {
       if (data.setup_required) {
         sessionStorage.setItem('psc_setup_username', username)
         navigate('/auth/totp-setup', { state: { from: location.state?.from } })
@@ -149,6 +157,53 @@ export default function Login() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleVerifyEmailOtp = async e => {
+    if (e) e.preventDefault()
+    setError('')
+    setNotice('')
+    setLoading(true)
+    try {
+      const { data } = await api.post('/auth/email-otp/verify/', { username: username.trim(), code: emailOtp })
+      setTokens(data.access, data.refresh)
+      const me = await refreshMe()
+      if (me?.must_change_password) {
+        setShowPasswordChange(true)
+        return
+      }
+      // A user with no session PIN yet is routed to /auth/set-pin by RequireAuth.
+      goToApp()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Invalid verification code.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResendEmailOtp = async () => {
+    setError('')
+    setNotice('')
+    setLoading(true)
+    try {
+      // Re-running the password step is what issues a fresh code; the server
+      // ignores it if one was sent within the last few seconds.
+      await login(username.trim(), loginPasswordRef.current)
+      setEmailOtp('')
+      setNotice('If a code was not sent in the last minute, a new one is on its way.')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not resend the code.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const backToSignIn = () => {
+    setShowEmailOtp(false)
+    setEmailOtp('')
+    setError('')
+    setNotice('')
+    loginPasswordRef.current = ''
   }
 
   const handleChangePassword = async e => {
@@ -304,6 +359,65 @@ export default function Login() {
                   >
                     Update password &amp; continue
                   </BaseButton>
+                </form>
+              </>
+            ) : showEmailOtp ? (
+              /* ── Emailed one-time code step ── */
+              <>
+                <div className="flex justify-center mb-5">
+                  <div className="bg-gradient-dark" style={{ width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Mail size={26} color="white" />
+                  </div>
+                </div>
+                <h1 className="text-xl font-bold text-center text-slate-900 mb-1">Check your email</h1>
+                <p className="text-sm text-center text-slate-500 mb-7">
+                  Enter the 6-digit code we sent{emailHint ? <> to <span className="font-medium text-slate-700">{emailHint}</span></> : null}.
+                </p>
+
+                {error && (
+                  <BaseMessageBar intent="error" className="mb-4">
+                    {error}
+                  </BaseMessageBar>
+                )}
+                {notice && !error && (
+                  <BaseMessageBar intent="info" className="mb-4">
+                    {notice}
+                  </BaseMessageBar>
+                )}
+
+                <form onSubmit={handleVerifyEmailOtp} className="space-y-5">
+                  <BaseInput
+                    label="Verification Code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="——————"
+                    value={emailOtp}
+                    onChange={e => setEmailOtp(e.target.value.replace(/\D/g, ''))}
+                    required
+                    autoFocus
+                    inputClassName="text-center text-3xl font-mono tracking-[0.4em]"
+                  />
+                  <BaseButton
+                    type="submit"
+                    variant="primary"
+                    className="w-full !py-3"
+                    loading={loading}
+                    loadingLabel="Verifying"
+                    disabled={emailOtp.length < 6}
+                  >
+                    Verify &amp; Continue
+                  </BaseButton>
+
+                  <div className="flex items-center justify-between mt-4">
+                    <BaseButton type="button" variant="ghost" size="sm" onClick={backToSignIn}>
+                      Back to sign in
+                    </BaseButton>
+                    <BaseButton type="button" variant="ghost" size="sm" onClick={handleResendEmailOtp} disabled={loading}>
+                      Resend code
+                    </BaseButton>
+                  </div>
                 </form>
               </>
             ) : !show2FA ? (

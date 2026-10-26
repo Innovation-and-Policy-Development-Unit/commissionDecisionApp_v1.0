@@ -436,6 +436,51 @@ def send_password_reset_email(*, user: User, reset_url: str, to_email: str) -> b
         return False
 
 
+def send_login_otp_email(*, user: User, code: str, to_email: str, minutes: int) -> bool:
+    """
+    Email the one-time sign-in code using the admin-editable ``login_otp``
+    template (same branded layout as every other SCDMS email), falling back to
+    plain text if the template is missing or inactive so sign-in never depends
+    on it. Returns True when delivery succeeded, False otherwise.
+    """
+    import logging
+
+    from django.core.mail import send_mail
+
+    from .email_templates import get_from_email, send_templated_email
+
+    log = logging.getLogger("scdms.security")
+    ctx = merge_recipient_context(
+        user,
+        otp_code=code,
+        expiry_minutes=str(minutes),
+        login_url=f"{get_frontend_base_url()}/auth/login",
+    )
+    if send_templated_email(
+        slug="login_otp",
+        to=[to_email],
+        context=ctx,
+        fail_silently=False,
+    ):
+        log.info("LOGIN_OTP_EMAIL_SENT | username=%s | to=%s", user.username, to_email)
+        return True
+
+    message = (
+        f"Hello {user.get_full_name() or user.username},\n\n"
+        f"Your SCDMS sign-in code is: {code}\n\n"
+        f"It expires in {minutes} minutes and can be used once.\n\n"
+        "If you did not just try to sign in, someone may know your password — "
+        "please change it and tell your administrator."
+    )
+    try:
+        send_mail("Your SCDMS sign-in code", message, get_from_email(), [to_email], fail_silently=False)
+        log.info("LOGIN_OTP_EMAIL_SENT | username=%s | to=%s | fallback=plain", user.username, to_email)
+        return True
+    except Exception:
+        log.exception("LOGIN_OTP_EMAIL_FAILED | username=%s | to=%s", user.username, to_email)
+        return False
+
+
 def send_pin_reset_email(*, user: User, reset_url: str, to_email: str) -> bool:
     """
     Send session-PIN reset link to a registered user. Never sends the PIN
