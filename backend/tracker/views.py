@@ -515,7 +515,7 @@ def _updated_fields(submission, prev, target):
         WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION,
     ):
         fields.update({
-            "dg_approval_name", "dg_approval_date",
+            "dg_approval_name", "dg_approval_date", "dg_approval_method",
             "dg_approval_attested_by", "dg_approval_attested_at",
         })
     if target == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
@@ -835,6 +835,15 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
         and target == WorkflowStage.PENDING_DG_ENDORSEMENT
     ):
         recipients = _dg_recipients_for_submission(submission)
+        if not recipients:
+            # The DG account may carry a department; the emailed link goes to the
+            # ministry's one active DG regardless, so the in-app notice should too.
+            from . import dg_approval
+
+            try:
+                recipients = [dg_approval.resolve_dg(submission)]
+            except dg_approval.DGApprovalError:
+                recipients = []
         actor_name = (actor.get_full_name() or actor.username) if actor else "Ministry HR"
         title = f"Endorsement required: {submission.reference_number}"
         body = (
@@ -2425,6 +2434,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
             if dg_attestation:
                 submission.dg_approval_name, submission.dg_approval_date = dg_attestation
+                submission.dg_approval_method = "paper"
                 submission.dg_approval_attested_by = request.user
                 submission.dg_approval_attested_at = timezone.now()
 
@@ -4264,6 +4274,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from django.template.loader import render_to_string
         from weasyprint import HTML
 
+        from . import dg_approval
         from .audit import log_action as _log
         from .models import AuditLog as _AL, PSCFormType, WorkflowStage
         from .opsc_access import MINISTRY_SIDE_ROLES
@@ -4321,6 +4332,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             "checklist": checklist,
             "documents": documents,
             "board_paper": board_paper,
+            "dg_approval_statement": dg_approval.approval_statement(submission),
             "reviewer_content": reviewer_content,
             "generated_at": timezone.now(),
             "generated_by": request.user.get_full_name() or request.user.username,

@@ -52,7 +52,9 @@ MILESTONES = [
 # point of tracking a decision, so it's shown plainly.
 STAGE_INFO = {
     # ── Submitted ──
-    WorkflowStage.PENDING_DG_ENDORSEMENT: {"milestone": 0, "paused": False, "label": "Submitted"},
+    # Still with the ministry's Director-General — not yet lodged with PSC, so it is not
+    # on the forward path at all.
+    WorkflowStage.PENDING_DG_ENDORSEMENT: {"milestone": None, "paused": False, "label": "Awaiting ministry approval"},
     WorkflowStage.DG_APPROVED: {"milestone": 0, "paused": False, "label": "Submitted"},
     WorkflowStage.PENDING_MANAGER_APPROVAL: {"milestone": 0, "paused": False, "label": "Submitted"},
     WorkflowStage.PENDING_PRINCIPAL_REVIEW: {"milestone": 0, "paused": False, "label": "Submitted"},

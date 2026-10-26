@@ -1075,6 +1075,10 @@ class DGApprovalToken(models.Model):
     used_user_agent = models.CharField(max_length=512, blank=True)
     failed_pin_attempts = models.PositiveSmallIntegerField(default=0)
     last_reminded_at = models.DateTimeField(null=True, blank=True)
+    expiry_notified_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When HR was told this link expired or was locked (so the daily job tells them once).",
+    )
 
     class Meta:
         ordering = ["-created_at"]
