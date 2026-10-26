@@ -121,7 +121,12 @@ def _rule_based_gaps(submission: Submission) -> list[dict[str, str]]:
         # advisory only. dg_endorsed_by is only set on papers endorsed before
         # that change.
         if doc_count and not submission.dg_endorsed_by_id:
+            from ..dg_approval import can_send_to_dg
             from .signature_check import dg_signature_gap
+
+            # Where the DG can approve in SCDMS there is no signed copy to look for.
+            if can_send_to_dg(submission)[0]:
+                return gaps
 
             gap = dg_signature_gap(submission)
             if gap:

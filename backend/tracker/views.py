@@ -537,6 +537,25 @@ def _updated_fields(submission, prev, target):
     return fields
 
 
+def _email_dg_approval_link(submission_id):
+    """Issue the DG's approval link and email it (after the transition commits).
+    A failure is logged, never raised: the paper is already with the DG, who can also
+    approve by signing in, and HR can resend the link."""
+    import logging
+
+    from . import dg_approval
+
+    try:
+        submission = Submission.objects.select_related("ministry").get(pk=submission_id)
+        if submission.current_stage != WorkflowStage.PENDING_DG_ENDORSEMENT:
+            return
+        dg_approval.issue_and_send(submission)
+    except Exception:
+        logging.getLogger("scdms.app").exception(
+            "DG approval link could not be sent for submission %s", submission_id
+        )
+
+
 def _dg_recipients_for_submission(submission):
     """Resolve the Head of Agency (DG) who endorses this submission.
 
@@ -811,7 +830,10 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
             f"Please review and submit the submission to the Public Service Commission."
         )
 
-    elif prev == WorkflowStage.DRAFT and target == WorkflowStage.PENDING_DG_ENDORSEMENT:
+    elif (
+        prev in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
+        and target == WorkflowStage.PENDING_DG_ENDORSEMENT
+    ):
         recipients = _dg_recipients_for_submission(submission)
         actor_name = (actor.get_full_name() or actor.username) if actor else "Ministry HR"
         title = f"Endorsement required: {submission.reference_number}"
@@ -974,7 +996,13 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
             body=body,
         )
 
-    if recipient_list and title:
+    # The DG's email for "sent for approval" carries the approval link (see
+    # _email_dg_approval_link), so skip the generic transition email for it.
+    _dg_link_email = (
+        prev in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
+        and target == WorkflowStage.PENDING_DG_ENDORSEMENT
+    )
+    if recipient_list and title and not _dg_link_email:
         from .tasks import queue_transition_emails
 
         label = ""
@@ -2007,6 +2035,19 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 "Direct ministry submission is currently disabled. Please deliver the signed "
                 "submission to the PSC registry — the Receptionist will lodge it on your behalf."
             )
+        # ── Send to the DG for approval (emailed link): needs the switch on and
+        # exactly one active DG account with an email — otherwise HR would send a
+        # paper nobody can approve.
+        if (
+            target == WorkflowStage.PENDING_DG_ENDORSEMENT
+            and prev in {WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION}
+        ):
+            from . import dg_approval
+
+            _dg_ok, _dg_reason = dg_approval.can_send_to_dg(submission)
+            if not _dg_ok:
+                return Response({"detail": _dg_reason}, status=status.HTTP_400_BAD_REQUEST)
+
         if (
             profile.role == Role.RECEPTIONIST
             and target == WorkflowStage.MANAGER_CHECKLIST_REVIEW
@@ -2248,7 +2289,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         if (
             prev in {WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED}
-            and target in {WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW}
+            and target in {
+                WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
+                WorkflowStage.PENDING_DG_ENDORSEMENT,
+            }
             and not acknowledge_gaps
             and not submission.secretary_only
             and package_validation_enabled()
@@ -2305,11 +2349,22 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             from .submission_checklist import ensure_submission_checklist_items
 
             ensure_submission_checklist_items(submission)
-            unchecked_mandatory = submission.checklist_items.filter(
+            _mandatory_qs = submission.checklist_items.filter(
                 document__mandatory_for_stage=prev,
                 is_present=False,
                 document__is_active=True
-            ).count()
+            )
+            if target == WorkflowStage.PENDING_DG_ENDORSEMENT:
+                # The DG's signed letter is what this step produces — it is marked
+                # present automatically when the DG approves.
+                from .ai.signature_check import is_dg_slot
+
+                unchecked_mandatory = sum(
+                    1 for _i in _mandatory_qs.select_related("document")
+                    if not is_dg_slot(_i.document)
+                )
+            else:
+                unchecked_mandatory = _mandatory_qs.count()
 
             if unchecked_mandatory > 0:
                 return Response(
@@ -2479,6 +2534,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
             submission.save(update_fields=_updated_fields(submission, prev, target))
 
+            if prev == WorkflowStage.PENDING_DG_ENDORSEMENT:
+                from . import dg_approval
+
+                dg_approval.cancel_tokens(submission)
+
             # ── Secretary approval: auto-place directly onto the correct agenda ──
             if target == WorkflowStage.FORWARDED_TO_COMMISSION:
                 self._auto_place_on_agenda(submission)
@@ -2555,6 +2615,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 submission, prev, target, request.user, remarks
             )
         )
+
+        if target == WorkflowStage.PENDING_DG_ENDORSEMENT:
+            transaction.on_commit(lambda: _email_dg_approval_link(submission.id))
 
         from .tasks import SUBMISSION_BRIEF_STAGES, queue_submission_brief
         if target in SUBMISSION_BRIEF_STAGES:
@@ -2634,12 +2697,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="endorse")
     def endorse(self, request, pk=None):
-        """DG endorsement — Option A: atomically chains PENDING_DG_ENDORSEMENT
-        → DG_APPROVED (stamps dg_endorsed_by/at) → SUBMITTED in one transaction.
-        HR never has to click "Submit to PSC" after the DG endorses."""
-        from .audit import log_action as _log
-        from .models import AuditLog as _AL
-
+        """DG endorsement from a signed-in session — chains PENDING_DG_ENDORSEMENT
+        → DG_APPROVED → SUBMITTED in one transaction (see _complete_dg_endorsement).
+        The DG can also approve through the emailed link, with the same result."""
         submission = self.get_object()
         profile = _profile(request.user)
 
@@ -2655,21 +2715,47 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 "Only the Director-General (Head of Agency) may endorse this submission."
             )
 
+        self._complete_dg_endorsement(submission, request.user, method="in_app", request=request)
+        return Response(
+            SubmissionDetailSerializer(submission, context={"request": request}).data
+        )
+
+    def _complete_dg_endorsement(self, submission, actor, *, method, request=None):
+        """Record the DG's approval and hand the paper to PSC. Shared by the in-app
+        /endorse/ action (method="in_app") and the emailed approval link
+        (method="email_link"), so both leave identical records. HR never has to click
+        "Submit to PSC" after the DG endorses."""
+        from . import dg_approval
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
         prev = WorkflowStage.PENDING_DG_ENDORSEMENT
         now = timezone.now()
 
         with transaction.atomic():
             # Step 1: record DG approval and stamp endorser
             submission.current_stage = WorkflowStage.DG_APPROVED
-            submission.dg_endorsed_by = request.user
+            submission.dg_endorsed_by = actor
             submission.dg_endorsed_at = now
-            submission.save(update_fields=["current_stage", "dg_endorsed_by", "dg_endorsed_at", "updated_at"])
+            submission.dg_approval_method = method
+            submission.dg_approval_name = (actor.get_full_name() or actor.username).strip()
+            submission.dg_approval_date = timezone.localdate()
+            submission.save(update_fields=[
+                "current_stage", "dg_endorsed_by", "dg_endorsed_at", "dg_approval_method",
+                "dg_approval_name", "dg_approval_date", "updated_at",
+            ])
+            dg_approval.cancel_tokens(submission)
+            self._mark_dg_letter_present(submission, actor, now)
             WorkflowEvent.objects.create(
                 submission=submission,
-                actor=request.user,
+                actor=actor,
                 previous_stage=prev,
                 new_stage=WorkflowStage.DG_APPROVED,
-                remarks="Endorsed by DG — forwarding directly to PSC.",
+                remarks=(
+                    "Approved by the Director-General through the emailed link — forwarding directly to PSC."
+                    if method == "email_link"
+                    else "Endorsed by DG — forwarding directly to PSC."
+                ),
             )
 
             # Step 2: auto-forward to SUBMITTED (skip HR "submit to PSC" click)
@@ -2678,7 +2764,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission.save(update_fields=["current_stage", "scheduled_meeting_id", "updated_at"])
             WorkflowEvent.objects.create(
                 submission=submission,
-                actor=request.user,
+                actor=actor,
                 previous_stage=WorkflowStage.DG_APPROVED,
                 new_stage=WorkflowStage.SUBMITTED,
                 remarks="Automatically submitted to PSC following DG endorsement.",
@@ -2690,7 +2776,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             resource_type="Submission",
             resource_id=submission.id,
             resource_label=submission.reference_number,
-            description=f"DG endorsed and auto-submitted to PSC: {submission.title}",
+            description=(
+                f"DG endorsed and auto-submitted to PSC ({method}): {submission.title} "
+                f"— {actor.get_full_name() or actor.username}"
+            ),
+            extra_data={"method": method, "dg_user_id": actor.id},
         )
 
         # transition() already does this after every transition (line 1837) —
@@ -2704,15 +2794,89 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         try:
             _dispatch_transition_notifications(
-                submission, WorkflowStage.DG_APPROVED, WorkflowStage.SUBMITTED, request.user,
+                submission, WorkflowStage.DG_APPROVED, WorkflowStage.SUBMITTED, actor,
             )
         except Exception:
             pass
 
         invalidate_submission(submission.id)
-        return Response(
-            SubmissionDetailSerializer(submission, context={"request": request}).data
+
+
+    def _mark_dg_letter_present(self, submission, actor, when):
+        """The DG's approval is the DG letter: tick any 'DG endorsement letter' slot on
+        the checklist so the manager's review is not blocked by a document that no
+        longer exists on paper."""
+        from .ai.signature_check import is_dg_slot
+        from .submission_checklist import ensure_submission_checklist_items
+
+        ensure_submission_checklist_items(submission)
+        for item in submission.checklist_items.select_related("document"):
+            if not item.is_present and is_dg_slot(item.document):
+                item.is_present = True
+                item.checked_by = actor
+                item.checked_at = when
+                item.notes = "Director-General approved this submission in SCDMS."
+                item.save(update_fields=["is_present", "checked_by", "checked_at", "notes"])
+
+    def _return_from_dg(self, submission, actor, remarks, *, request=None):
+        """The DG returns a paper to HR for changes (in-app transition or emailed link)."""
+        from . import dg_approval
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        prev = WorkflowStage.PENDING_DG_ENDORSEMENT
+        with transaction.atomic():
+            submission.current_stage = WorkflowStage.DRAFT
+            submission.save(update_fields=["current_stage", "updated_at"])
+            WorkflowEvent.objects.create(
+                submission=submission, actor=actor, previous_stage=prev,
+                new_stage=WorkflowStage.DRAFT, remarks=remarks,
+            )
+            dg_approval.cancel_tokens(submission)
+        _log(
+            request, _AL.Action.UPDATE,
+            resource_type="Submission", resource_id=submission.id,
+            resource_label=submission.reference_number,
+            description=f"DG returned to HR for changes: {submission.title} — {actor.get_full_name() or actor.username}",
+            extra_data={"dg_user_id": actor.id},
         )
+        try:
+            _dispatch_transition_notifications(submission, prev, WorkflowStage.DRAFT, actor, remarks)
+        except Exception:
+            pass
+        invalidate_submission(submission.id)
+
+    @action(detail=True, methods=["post"], url_path="resend-dg-link")
+    def resend_dg_link(self, request, pk=None):
+        """HR sends the Director-General a fresh approval link (the old one stops working)."""
+        from . import dg_approval
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.MINISTRY_HR, Role.DEPT_ADMIN} and not (
+            request.user.is_staff or request.user.is_superuser
+        ):
+            raise PermissionDenied("Only ministry HR can resend the Director-General's link.")
+        if submission.current_stage != WorkflowStage.PENDING_DG_ENDORSEMENT:
+            return Response(
+                {"detail": "This submission is not waiting for the Director-General."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        latest = submission.dg_approval_tokens.order_by("-created_at").first()
+        if latest and (timezone.now() - latest.created_at).total_seconds() < 120:
+            return Response(
+                {"detail": "A link was sent less than two minutes ago. Please wait before sending another."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        try:
+            sent = dg_approval.issue_and_send(submission)
+        except dg_approval.DGApprovalError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            "detail": "A new approval link was sent to the Director-General." if sent
+            else "The link was created but the email could not be sent. Try again shortly.",
+            "sent": bool(sent),
+        })
 
     @action(detail=True, methods=["post"], url_path="validate-package")
     def validate_package(self, request, pk=None):
@@ -3724,6 +3888,17 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 secretary_only=submission.secretary_only,
                 form_type_code=submission.form_type_code or "",
             )
+        from . import dg_approval
+
+        dg_send = {"available": False, "enabled": False, "reason": ""}
+        if WorkflowStage.PENDING_DG_ENDORSEMENT in allowed:
+            _ok, _reason = dg_approval.can_send_to_dg(submission)
+            dg_send = {
+                "available": _ok, "enabled": dg_approval.feature_active_for(submission),
+                "reason": _reason,
+            }
+            if not _ok:
+                allowed = [t for t in allowed if t != WorkflowStage.PENDING_DG_ENDORSEMENT]
         guidance = submission.ai_transition_guidance or {}
         stale = (
             not guidance.get("processed")
@@ -3741,9 +3916,29 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 or self.request.user.is_superuser
             )
         )
+        dg_status = None
+        if submission.current_stage == WorkflowStage.PENDING_DG_ENDORSEMENT:
+            latest = submission.dg_approval_tokens.select_related("dg_user").order_by("-created_at").first()
+            dg_status = {
+                "dg_name": (latest.dg_user.get_full_name() or latest.dg_user.username) if latest else "",
+                "link_sent_at": latest.created_at if latest else None,
+                "link_expires_at": latest.expires_at if latest else None,
+                "link_active": bool(latest and latest.is_active()),
+            }
+        can_resend_dg_link = (
+            submission.current_stage == WorkflowStage.PENDING_DG_ENDORSEMENT
+            and (
+                profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}
+                or self.request.user.is_staff
+                or self.request.user.is_superuser
+            )
+        )
         return {
             "allowed": allowed,
             "can_endorse": can_endorse,
+            "can_resend_dg_link": can_resend_dg_link,
+            "dg_send": dg_send,
+            "dg_status": dg_status,
             "transition_guidance": guidance,
             "transition_guidance_pending": stale,
         }

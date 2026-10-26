@@ -256,14 +256,16 @@ _STAGE_GRAPH = {
     # ── Ministry pre-submission ────────────────────────────────────────────
     WorkflowStage.DRAFT: [
         WorkflowStage.SUBMITTED,
+        # Send to the DG for approval by emailed link (dg_approval.can_send_to_dg
+        # hides/enforces this — it is off until the switch is on and a DG exists).
+        WorkflowStage.PENDING_DG_ENDORSEMENT,
         # Receptionist intake: route a lodged (scanned + OCR'd) paper submission
         # straight to the responsible unit Manager for checklist review.
         WorkflowStage.MANAGER_CHECKLIST_REVIEW,
     ],
-    # LEGACY: DG endorsement is no longer part of the workflow — the DG approves
-    # the paper on paper before HR submits (agreed with management). Nothing
-    # enters these two stages any more; the edges out of them stay so papers
-    # already sitting there when this changed can still be completed.
+    # The DG approves by emailed link (or by signing in) when HR sends a paper
+    # here. HR may still submit straight to PSC with the DG's paper approval
+    # attested (Draft -> Submitted) — the fallback while DG accounts are set up.
     WorkflowStage.PENDING_DG_ENDORSEMENT: [
         WorkflowStage.DG_APPROVED,   # DG endorses → back to HR to forward to PSC
         WorkflowStage.DRAFT,         # DG returns to HR for changes
@@ -280,6 +282,7 @@ _STAGE_GRAPH = {
     ],
     WorkflowStage.RETURNED_FOR_CLARIFICATION: [
         WorkflowStage.SUBMITTED,
+        WorkflowStage.PENDING_DG_ENDORSEMENT,
         WorkflowStage.DRAFT,
     ],
     # ── Manager checklist review ──────────────────────────────────────────
@@ -409,8 +412,11 @@ _STAGE_GRAPH = {
 # then upload and fill the submission in SCDMS and submit it straight to PSC.
 _MINISTRY_HR_ALLOWED = {
     (WorkflowStage.DRAFT,                      WorkflowStage.SUBMITTED),
+    (WorkflowStage.DRAFT,                      WorkflowStage.PENDING_DG_ENDORSEMENT),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.SUBMITTED),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_DG_ENDORSEMENT),
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
+    # Papers the DG endorsed in SCDMS: HR submits (the emailed route submits automatically).
     # LEGACY: papers already endorsed by the DG before that step was removed.
     (WorkflowStage.DG_APPROVED,                WorkflowStage.SUBMITTED),
     (WorkflowStage.DEFERRED_BACK_TO_HR,        WorkflowStage.MATTERS_ARISING),
@@ -420,9 +426,8 @@ _MINISTRY_HR_ALLOWED = {
     (WorkflowStage.DG_APPROVED,                WorkflowStage.RECALLED),
 }
 
-# Head of Agency (DG): LEGACY only — finish papers that were already awaiting
-# endorsement when the DG step was removed (endorse, or return to HR). The DG
-# can no longer start that step on a draft.
+# Head of Agency (DG): approve a paper HR sent them (which submits it to PSC), or
+# return it to HR for changes. The DG cannot start that step on a draft.
 _MINISTRY_DG_ALLOWED = {
     (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED),  # DG endorses → back to HR
     (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DRAFT),        # DG returns for changes
@@ -728,9 +733,9 @@ def assert_transition_allowed(
     if role == Role.HEAD_OF_AGENCY:
         if (current_stage, target_stage) not in _MINISTRY_DG_ALLOWED:
             raise PermissionDenied(
-                "The Director-General no longer approves papers in SCDMS — the DG signs the "
-                "paper on paper and HR uploads it. You can only finish a paper that was "
-                "already awaiting your endorsement."
+                "The Director-General can approve a paper HR has sent for approval, or return it "
+                "to HR for changes. A draft cannot be sent to the Director-General from this "
+                "account."
             )
         return
 

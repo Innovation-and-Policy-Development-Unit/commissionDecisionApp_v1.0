@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Send, CheckCircle2, RotateCcw, ClipboardCheck, ClipboardList,
-  ArrowRight, Clock, XCircle, Users,
+  ArrowRight, Clock, XCircle, Users, AlertCircle,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import BaseButton from '../shared/BaseButton'
@@ -25,8 +25,21 @@ import DgApprovalDialog from './DgApprovalDialog'
 // variant: BaseButton variant
 const STAGE_ACTIONS = {
   draft: [
-    // Ministry HR: the Director-General approves the paper on paper, outside
-    // SCDMS — HR uploads the signed copy and submits straight to PSC.
+    // Ministry HR: send the paper to the Director-General, who approves it by an
+    // emailed link (no sign-in, no paper signature). Offered only when the backend
+    // says it is switched on and the ministry has exactly one DG account.
+    {
+      id: 'submit_to_dg',
+      label: 'Send to DG for approval',
+      description: 'Your Director-General approves by emailed link — no paper signing or signed copy to upload',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'pending_dg_endorsement',
+      requiresNote: false,
+      ministryOnly: true,
+    },
+    // Fallback: the DG signed on paper, outside SCDMS — HR uploads the signed
+    // copy and submits straight to PSC.
     {
       id: 'submit_to_psc_ministry',
       label: 'Submit to PSC',
@@ -134,9 +147,7 @@ const STAGE_ACTIONS = {
     },
   ],
 
-  // LEGACY: DG endorsement is no longer part of the workflow (the DG signs on
-  // paper). These two stages only hold papers that were already there when the
-  // step was removed, so the DG / HR can still finish them.
+  // The DG approves by emailed link, or by signing in and using Endorse here.
   pending_dg_endorsement: [
     {
       id: 'endorse',
@@ -145,6 +156,15 @@ const STAGE_ACTIONS = {
       icon: CheckCircle2,
       variant: 'primary',
       endpoint: 'endorse',
+      requiresNote: false,
+    },
+    {
+      id: 'resend_dg_link',
+      label: 'Resend link to DG',
+      description: 'Email the Director-General a fresh approval link (the old one stops working)',
+      icon: Send,
+      variant: 'outline',
+      endpoint: 'resend-dg-link',
       requiresNote: false,
     },
     {
@@ -181,6 +201,16 @@ const STAGE_ACTIONS = {
       variant: 'primary',
       transitionTo: 'submitted',
       requiresNote: false,
+    },
+    {
+      id: 'resubmit_to_dg',
+      label: 'Send to DG for approval',
+      description: 'Your Director-General approves the revised paper by emailed link',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'pending_dg_endorsement',
+      requiresNote: false,
+      ministryOnly: true,
     },
     // Compliance Senior, sent back by their Principal. Either resubmit for
     // another round of review (the loop is unbounded), or — once the
@@ -428,6 +458,10 @@ export default function WorkflowActionsPanel({
   submission,
   allowed = [],        // array of target stage strings from backend
   canEndorse = false,  // explicit flag from backend for the DG endorse action
+  canResendDgLink = false, // HR: may send the DG a fresh approval link
+  dgSend = null,       // { available, enabled, reason } — can this draft go to the DG?
+  dgStatus = null,     // { dg_name, link_sent_at, link_expires_at, link_active } while with the DG
+  onResendDgLink,      // async fn() — calls /submissions/{id}/resend-dg-link/
   checklist = [],       // current submission's checklist items — gates "Submit to Secretary"
   onTransition,        // async fn(targetStage, remarks, acknowledgeGaps?, extra?)
   onEndorse,           // async fn() — calls /submissions/{id}/endorse/
@@ -496,6 +530,20 @@ export default function WorkflowActionsPanel({
       })
     }
   }
+  if (stage === 'pending_dg_endorsement' && dgStatus) {
+    const who = dgStatus.dg_name || 'the Director-General'
+    const fmt = d => (d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '')
+    statusItems.push({
+      Icon: Clock,
+      tone: 'waiting',
+      text: dgStatus.link_active
+        ? `Waiting for ${who} — link sent ${fmt(dgStatus.link_sent_at)}, valid until ${fmt(dgStatus.link_expires_at)}`
+        : `Waiting for ${who} — the link has expired or was used. Resend it, or the DG can sign in to approve.`,
+    })
+  }
+  if (stage === 'draft' && dgSend?.enabled && !dgSend.available && dgSend.reason) {
+    statusItems.push({ Icon: AlertCircle, tone: 'pending', text: `Cannot send to the DG yet: ${dgSend.reason}` })
+  }
   if (checklistTotalCount > 0) {
     statusItems.push({
       Icon: ClipboardList,
@@ -508,6 +556,7 @@ export default function WorkflowActionsPanel({
   const visibleActions = stageActions
     .filter(action => {
       if (action.endpoint === 'endorse') return canEndorse
+      if (action.endpoint === 'resend-dg-link') return canResendDgLink
       // One "Submit" per kind of draft: ministry papers go to PSC, OPSC-internal
       // ones to the Secretary.
       const ministryOrigin = !submission?.is_internal && !submission?.secretary_only
@@ -517,6 +566,10 @@ export default function WorkflowActionsPanel({
     })
     .map(action => ({
       ...action,
+      // With the DG-approval route open, the paper route is the fallback.
+      ...(action.id === 'submit_to_psc_ministry' && allowed.includes('pending_dg_endorsement')
+        ? { variant: 'outline', label: 'Submit to PSC — DG signed on paper' }
+        : {}),
       Icon: action.icon,
       disabledReason: awaitingAssignedReview
         ? 'Waiting for the assigned principal to complete their review and submit it back to you.'
@@ -545,6 +598,8 @@ export default function WorkflowActionsPanel({
     try {
       if (action.endpoint === 'endorse') {
         await onEndorse()
+      } else if (action.endpoint === 'resend-dg-link') {
+        await onResendDgLink()
       } else {
         await onTransition(action.transitionTo, remarksHtml, false, extra)
       }

@@ -43,6 +43,7 @@ from .deadline_reminder_views import DeadlineReminderDraftViewSet
 from .ui_translation_views import UiTranslationViewSet
 from .daily_brief.views import DailyBriefViewSet
 from .public_tracking_views import track_submission_view
+from .dg_approval_views import dg_approval_decide_view, dg_approval_document_view, dg_approval_summary_view
 from .views import (
     AgendaDeferralViewSet,
     AuditLogViewSet,
@@ -222,6 +223,10 @@ urlpatterns = [
     path("me/change-password/", change_password_view),
     path("auth/password-policy/", password_policy_view),
     path("track/<str:tracking_code>/", track_submission_view, name="track-submission"),
+    # Director-General approval by emailed link — public, the token is the credential.
+    path("dg-approval/<str:token>/", dg_approval_summary_view, name="dg-approval-summary"),
+    path("dg-approval/<str:token>/decide/", dg_approval_decide_view, name="dg-approval-decide"),
+    path("dg-approval/<str:token>/documents/<int:doc_id>/", dg_approval_document_view, name="dg-approval-document"),
     path("upcoming-sittings/", upcoming_sittings_view),
     path("push/vapid-public-key/", vapid_public_key_view),
     path("dashboard/", dashboard_view),
