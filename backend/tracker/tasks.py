@@ -214,6 +214,106 @@ def queue_applicant_tracking_code_email(submission_id):
         send_applicant_tracking_code_email(submission_id)
 
 
+# ── Sign-in / recovery emails ───────────────────────────────────────────────
+# Sent from Celery so the login and "forgot password / PIN" requests don't
+# wait on the mail provider. The reset links are rebuilt here from the token's
+# id, so the secret link never travels through the broker; the sign-in code
+# does (it is hashed in the DB and can't be rebuilt), but it is single-use and
+# expires in minutes.
+
+
+@shared_task
+def send_login_otp_email_task(user_id, otp_id, code, to_email, minutes):
+    from django.contrib.auth.models import User
+
+    from .email_notify import send_login_otp_email
+    from .models import LoginEmailOTP
+
+    user = User.objects.filter(pk=user_id).first()
+    sent = bool(user) and send_login_otp_email(user=user, code=code, to_email=to_email, minutes=minutes)
+    if not sent:
+        # Nothing reached the inbox, so don't make the user sit out the resend
+        # cooldown (the login view reuses a still-live code inside it).
+        LoginEmailOTP.objects.filter(pk=otp_id).delete()
+    return bool(sent)
+
+
+def queue_login_otp_email(user_id, otp_id, code, to_email, minutes) -> bool:
+    """True once the email is queued (or sent, when the broker is down and it
+    falls back to sending inline); False only if the inline send failed."""
+    try:
+        send_login_otp_email_task.delay(user_id, otp_id, code, to_email, minutes)
+        return True
+    except Exception as exc:
+        app_log.warning("LOGIN_OTP_EMAIL_QUEUE_FALLBACK | User %s | %s", user_id, exc)
+        return send_login_otp_email_task(user_id, otp_id, code, to_email, minutes)
+
+
+def _audit_reset_email(resource_type, user, noun, sent):
+    from .audit import log_action
+    from .models import AuditLog
+
+    log_action(
+        None,
+        AuditLog.Action.SETTINGS,
+        resource_type=resource_type,
+        resource_id=user.id,
+        resource_label=user.username,
+        description=f"{noun} email sent to {user.email}" if sent else f"{noun} email failed for {user.email}",
+        extra_data={"email": user.email, "status": "sent" if sent else "failed"},
+    )
+
+
+@shared_task
+def send_password_reset_email_task(token_id, base_url, to_email):
+    from .email_notify import send_password_reset_email
+    from .models import PasswordResetToken
+
+    token = PasswordResetToken.objects.select_related("user").filter(pk=token_id).first()
+    if not token:
+        return False
+    sent = send_password_reset_email(
+        user=token.user,
+        reset_url=f"{base_url}/auth/reset-password/confirm?token={token.token}",
+        to_email=to_email,
+    )
+    _audit_reset_email("PasswordResetEmail", token.user, "Password reset", sent)
+    return sent
+
+
+def queue_password_reset_email(token_id, base_url, to_email):
+    try:
+        send_password_reset_email_task.delay(token_id, base_url, to_email)
+    except Exception as exc:
+        app_log.warning("PASSWORD_RESET_EMAIL_QUEUE_FALLBACK | Token %s | %s", token_id, exc)
+        send_password_reset_email_task(token_id, base_url, to_email)
+
+
+@shared_task
+def send_pin_reset_email_task(token_id, base_url, to_email):
+    from .email_notify import send_pin_reset_email
+    from .models import PinResetToken
+
+    token = PinResetToken.objects.select_related("user").filter(pk=token_id).first()
+    if not token:
+        return False
+    sent = send_pin_reset_email(
+        user=token.user,
+        reset_url=f"{base_url}/auth/forgot-pin/confirm?token={token.token}",
+        to_email=to_email,
+    )
+    _audit_reset_email("PinResetEmail", token.user, "Session PIN reset", sent)
+    return sent
+
+
+def queue_pin_reset_email(token_id, base_url, to_email):
+    try:
+        send_pin_reset_email_task.delay(token_id, base_url, to_email)
+    except Exception as exc:
+        app_log.warning("PIN_RESET_EMAIL_QUEUE_FALLBACK | Token %s | %s", token_id, exc)
+        send_pin_reset_email_task(token_id, base_url, to_email)
+
+
 @shared_task
 def send_submission_ready_for_manager_email(submission_id, assignee_id, manager_ids):
     """Email the unit manager(s) after a principal/senior hands a submission

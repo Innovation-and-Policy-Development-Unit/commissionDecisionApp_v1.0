@@ -667,6 +667,15 @@ class Meeting(models.Model):
     def __str__(self):
         return f"{self.reference_number} — {self.title}"
 
+    @classmethod
+    def upcoming_for_estimate(cls):
+        """Open meetings in date order — what ``Submission.estimate_meeting_date``
+        picks the next one from (the first whose cutoff is not before the
+        submission's ``received_at``)."""
+        return cls.objects.filter(
+            status__in=[MeetingStatus.SCHEDULED, MeetingStatus.IN_PROGRESS],
+        ).order_by("date", "id")
+
     # Number of days before the meeting date that submissions close automatically.
     CUTOFF_DAYS_BEFORE = 3
 
@@ -2358,6 +2367,12 @@ class Submission(models.Model):
     @property
     def estimated_meeting_date(self):
         """Return the estimated date this submission will be heard, or None."""
+        return self.estimate_meeting_date()
+
+    def estimate_meeting_date(self, upcoming_meetings=None):
+        """Same as ``estimated_meeting_date``. A list serialising many rows can
+        pass ``upcoming_meetings`` (see ``Meeting.upcoming_for_estimate``) so the
+        next-meeting lookup is done once for the page instead of once per row."""
         if self.scheduled_meeting_id:
             return self.scheduled_meeting.date
         pre_meeting_stages = {
@@ -2369,10 +2384,18 @@ class Submission(models.Model):
             WorkflowStage.DEFERRED_BACK_TO_HR,
         }
         if self.current_stage in pre_meeting_stages:
-            next_mtg = Meeting.objects.filter(
-                status__in=[MeetingStatus.SCHEDULED, MeetingStatus.IN_PROGRESS],
-                submission_cutoff__gte=self.received_at,
-            ).order_by("date").first()
+            if upcoming_meetings is None:
+                next_mtg = Meeting.upcoming_for_estimate().filter(
+                    submission_cutoff__gte=self.received_at,
+                ).first()
+            else:
+                next_mtg = next(
+                    (
+                        m for m in upcoming_meetings
+                        if m.submission_cutoff and m.submission_cutoff >= self.received_at
+                    ),
+                    None,
+                )
             if next_mtg:
                 return next_mtg.date
         return None

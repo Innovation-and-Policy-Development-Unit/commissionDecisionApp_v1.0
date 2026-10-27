@@ -776,7 +776,13 @@ class SubmissionListSerializer(serializers.ModelSerializer):
         return obj.is_assessment_overdue
 
     def get_estimated_meeting_date(self, obj):
-        return obj.estimated_meeting_date
+        # Open meetings are loaded once per request, not once per row.
+        meetings = self.context.get("_upcoming_meetings")
+        if meetings is None:
+            meetings = self.context["_upcoming_meetings"] = list(
+                Meeting.upcoming_for_estimate().filter(submission_cutoff__isnull=False)
+            )
+        return obj.estimate_meeting_date(upcoming_meetings=meetings)
 
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.get_full_name() or obj.assigned_to.username if obj.assigned_to else None
