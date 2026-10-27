@@ -1,5 +1,6 @@
 import re
 from datetime import timedelta
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core import mail
@@ -10,6 +11,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
 from ..models import LoginEmailOTP, Profile, Role, TrustedSession
+from ..tasks import send_login_otp_email_task
 
 
 @override_settings(
@@ -24,6 +26,13 @@ from ..models import LoginEmailOTP, Profile, Role, TrustedSession
 class EmailOTPLoginTests(TestCase):
     def setUp(self):
         cache.clear()
+        # The code email is sent by a Celery task; with no worker here, run it inline.
+        inline = mock.patch(
+            "tracker.tasks.send_login_otp_email_task.delay",
+            side_effect=lambda *a, **kw: send_login_otp_email_task(*a, **kw),
+        )
+        inline.start()
+        self.addCleanup(inline.stop)
         self.client = APIClient()
         self.user = User.objects.create_user(
             "otpuser", email="otpuser@example.org", password="TestPass123!")

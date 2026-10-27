@@ -115,7 +115,10 @@ DATABASES = {
         'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
         'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
         'PORT': os.getenv('POSTGRES_PORT', '5432'),
-        'CONN_MAX_AGE': int(os.getenv('CONN_MAX_AGE', '300')),
+        # 0 = close the connection after each request. The app runs under ASGI,
+        # where persistent connections are never reused or closed (one leaks per
+        # request thread) and exhausted Postgres's connection limit in production.
+        'CONN_MAX_AGE': int(os.getenv('CONN_MAX_AGE', '0')),
         'OPTIONS': {
             'connect_timeout': int(os.getenv('POSTGRES_CONNECT_TIMEOUT', '10')),
         },
@@ -137,7 +140,7 @@ if _database_url:
 
     DATABASES["default"] = dj_database_url.config(
         default=_database_url,
-        conn_max_age=int(os.getenv("CONN_MAX_AGE", "600")),
+        conn_max_age=int(os.getenv("CONN_MAX_AGE", "0")),  # 0: see the ASGI note above
         conn_health_checks=True,
         ssl_require=_database_url.startswith("postgres") and "sslmode=disable" not in _database_url,
     )

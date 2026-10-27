@@ -296,7 +296,9 @@ def _resolve_opsc_submission_org(profile):
         raise PermissionDenied(str(exc)) from exc
 
 
-def _submission_queryset_for(user):
+def _submission_queryset_for(user, *, with_events=True):
+    # with_events=False skips the workflow-event prefetch for callers (the list)
+    # whose serializer never shows events — it loads every event of every row.
     qs = Submission.objects.select_related(
         "ministry",
         "department",
@@ -305,9 +307,11 @@ def _submission_queryset_for(user):
         "parent_submission",
         "scheduled_meeting",
         "assigned_to",
+        # allocated_to_label reads the assignee's role per row.
+        "assigned_to__psc_profile",
         "dg_endorsed_by",
     ).prefetch_related(
-        "events__actor",
+        *(["events__actor"] if with_events else []),
         "attached_submissions",
         Prefetch(
             "co_assignments",
@@ -1175,7 +1179,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def get_queryset(self):
-        qs = _submission_queryset_for(self.request.user)
+        qs = _submission_queryset_for(self.request.user, with_events=self.action != 'list')
         if self.action != 'list':
             return qs
 
@@ -7829,8 +7833,8 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
 def _begin_email_otp_login(request, user, ip):
     """Email a sign-in code to the account's registered address (step 2 of login)."""
     from django.conf import settings as django_settings
-    from .email_notify import send_login_otp_email
     from .models import LoginEmailOTP
+    from .tasks import queue_login_otp_email
 
     to_email = (user.email or "").strip()
     if not to_email:
@@ -7848,7 +7852,9 @@ def _begin_email_otp_login(request, user, ip):
     # login form can't be used to flood someone's inbox.
     if not (existing and (timezone.now() - existing.created_at).total_seconds() < cooldown):
         _row, code = LoginEmailOTP.issue(user)
-        if not send_login_otp_email(user=user, code=code, to_email=to_email, minutes=ttl):
+        # Queued, not sent inline: the request returns without waiting on the mail
+        # provider; the task drops the code again if the send fails.
+        if not queue_login_otp_email(user.id, _row.id, code, to_email, ttl):
             _row.delete()
             return Response(
                 {"detail": "We couldn't send the verification email. Please try again shortly."},
@@ -8277,41 +8283,29 @@ class PasswordResetRequestView(APIView):
         ser.is_valid(raise_exception=True)
         email = ser.validated_data["email"]
 
-        from .email_notify import find_active_user_by_email, send_password_reset_email
+        from .email_notify import find_active_user_by_email
+        from .tasks import queue_password_reset_email
 
         user = find_active_user_by_email(email)
         if user:
             token = PasswordResetToken.generate_for(user)
             base = _password_reset_frontend_base(request)
-            reset_url = f"{base}/auth/reset-password/confirm?token={token.token}"
-            sent = send_password_reset_email(
-                user=user,
-                reset_url=reset_url,
-                to_email=(user.email or email).strip(),
-            )
+            # Queued rather than sent inline, so the reply takes the same time
+            # whether or not the address is registered (the task audit-logs the
+            # outcome; this entry keeps the request's IP and user agent).
+            queue_password_reset_email(token.id, base, (user.email or email).strip())
             from .audit import log_action as _log
             from .models import AuditLog as _AL
 
-            if sent:
-                _log(
-                    request,
-                    _AL.Action.SETTINGS,
-                    resource_type="PasswordResetEmail",
-                    resource_id=user.id,
-                    resource_label=user.username,
-                    description=f"Password reset email sent to {user.email}",
-                    extra_data={"email": user.email, "status": "sent"},
-                )
-            else:
-                _log(
-                    request,
-                    _AL.Action.SETTINGS,
-                    resource_type="PasswordResetEmail",
-                    resource_id=user.id,
-                    resource_label=user.username,
-                    description=f"Password reset email failed for {user.email}",
-                    extra_data={"email": user.email, "status": "failed"},
-                )
+            _log(
+                request,
+                _AL.Action.SETTINGS,
+                resource_type="PasswordResetEmail",
+                resource_id=user.id,
+                resource_label=user.username,
+                description=f"Password reset email requested for {user.email}",
+                extra_data={"email": user.email, "status": "queued"},
+            )
         # Do not reveal whether the email is registered (anti-enumeration).
         return Response({"detail": "If that email is registered, a reset link has been sent."})
 
@@ -8370,41 +8364,29 @@ class PinResetRequestView(APIView):
         ser.is_valid(raise_exception=True)
         email = ser.validated_data["email"]
 
-        from .email_notify import find_active_user_by_email, send_pin_reset_email
+        from .email_notify import find_active_user_by_email
+        from .tasks import queue_pin_reset_email
 
         user = find_active_user_by_email(email)
         if user:
             token = PinResetToken.generate_for(user)
             base = _password_reset_frontend_base(request)
-            reset_url = f"{base}/auth/forgot-pin/confirm?token={token.token}"
-            sent = send_pin_reset_email(
-                user=user,
-                reset_url=reset_url,
-                to_email=(user.email or email).strip(),
-            )
+            # Queued rather than sent inline, so the reply takes the same time
+            # whether or not the address is registered (the task audit-logs the
+            # outcome; this entry keeps the request's IP and user agent).
+            queue_pin_reset_email(token.id, base, (user.email or email).strip())
             from .audit import log_action as _log
             from .models import AuditLog as _AL
 
-            if sent:
-                _log(
-                    request,
-                    _AL.Action.SETTINGS,
-                    resource_type="PinResetEmail",
-                    resource_id=user.id,
-                    resource_label=user.username,
-                    description=f"Session PIN reset email sent to {user.email}",
-                    extra_data={"email": user.email, "status": "sent"},
-                )
-            else:
-                _log(
-                    request,
-                    _AL.Action.SETTINGS,
-                    resource_type="PinResetEmail",
-                    resource_id=user.id,
-                    resource_label=user.username,
-                    description=f"Session PIN reset email failed for {user.email}",
-                    extra_data={"email": user.email, "status": "failed"},
-                )
+            _log(
+                request,
+                _AL.Action.SETTINGS,
+                resource_type="PinResetEmail",
+                resource_id=user.id,
+                resource_label=user.username,
+                description=f"Session PIN reset email requested for {user.email}",
+                extra_data={"email": user.email, "status": "queued"},
+            )
         # Do not reveal whether the email is registered (anti-enumeration).
         return Response({"detail": "If that email is registered, a PIN reset link has been sent."})
 
