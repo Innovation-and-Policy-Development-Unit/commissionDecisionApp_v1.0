@@ -9,7 +9,8 @@ Facilitator Guide, "Before the day"):
     Senior Administration Officer, HR Unit Manager and Principal, Secretary,
     Chairperson, and a ministry HR officer to play the ministry);
   * one practice Confirmation of Appointment per team, already at
-    "Submitted to PSC" with every required document attached;
+    "Manager Checklist Review" (routed to the HR unit, as the system does
+    automatically for an online submission) with every required document attached;
   * one practice sitting for the Exercise 3 agenda.
 
 Nothing here touches real data or real people:
@@ -27,6 +28,7 @@ Usage:
     python manage.py seed_opsc_training --teams 8
     python manage.py seed_opsc_training --teams 8 --facilitator-email me@example.org
     python manage.py seed_opsc_training --cleanup
+    python manage.py seed_opsc_training --advance-existing   # move cases still at Submitted
 """
 
 import secrets
@@ -94,6 +96,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--cleanup", action="store_true", help="Remove all practice data and exit.")
+        parser.add_argument(
+            "--advance-existing", action="store_true",
+            help="Move practice cases still at Submitted to Manager Checklist Review and exit.",
+        )
         parser.add_argument("--teams", type=int, default=8, help="Practice cases to create, one per team (default 8).")
         parser.add_argument(
             "--facilitator-email", default="",
@@ -159,6 +165,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if options["cleanup"]:
             return self._cleanup()
+        if options["advance_existing"]:
+            return self._advance_existing()
 
         teams = options["teams"]
         if teams < 1 or teams > 30:
@@ -218,7 +226,7 @@ class Command(BaseCommand):
                 self._case(n, form_type, ministry, lodger, now)
 
         self.stdout.write(self.style.SUCCESS(
-            f"Created {teams} practice case(s) {REF_PREFIX}01..{teams:02d} at Submitted to PSC, "
+            f"Created {teams} practice case(s) {REF_PREFIX}01..{teams:02d} at Manager Checklist Review, "
             f"the practice sitting {MEETING_REF} ({meeting_date:%d %b %Y}), and {len(ACCOUNTS)} practice accounts. "
             "No emails, notifications or AI calls were made."
         ))
@@ -231,6 +239,26 @@ class Command(BaseCommand):
                 "These accounts have no email address, so they cannot sign in until one is set "
                 "(Admin > Users), because sign-in needs an emailed code."
             ))
+
+    @staticmethod
+    def _route_like_the_system(sub):
+        """What the system does on its own when an online submission reaches Submitted:
+        set the unit from the form type and move to Manager Checklist Review, with a
+        "System" workflow event and the checklist-review clock started."""
+        from ...views import SubmissionViewSet
+
+        SubmissionViewSet()._auto_advance_submitted_to_checklist_review(sub)
+
+    def _advance_existing(self):
+        cases = Submission._base_manager.filter(
+            reference_number__startswith=REF_PREFIX, current_stage=WorkflowStage.SUBMITTED
+        ).order_by("reference_number")
+        with mock.patch("tracker.tasks.queue_automation_event"):
+            for sub in cases:
+                self._route_like_the_system(sub)
+                sub.refresh_from_db()
+                self.stdout.write(f"  {sub.reference_number}: {sub.current_stage}, unit {sub.routed_unit}")
+        self.stdout.write(self.style.SUCCESS(f"Moved {cases.count()} practice case(s). No notifications sent."))
 
     def _case(self, n, form_type, ministry, lodger, now):
         sub = Submission.objects.create(
@@ -260,4 +288,5 @@ class Command(BaseCommand):
             item.checked_at = now
             item.notes = "[TRAINING] Practice document."
             item.save(update_fields=["is_present", "checked_by", "checked_at", "notes"])
+        self._route_like_the_system(sub)
         return sub
