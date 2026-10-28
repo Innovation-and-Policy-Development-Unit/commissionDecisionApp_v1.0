@@ -9,7 +9,9 @@ Usage:
 
 CSV columns: first_name, last_name, email, role, ministry, department, unit, is_active.
 `role` is the role's display label (e.g. "Compliance Manager") or its code
-(e.g. "compliance_manager"). `unit` may be blank. The username is the part of the
+(e.g. "compliance_manager"). `unit` may be blank, and so may `department` except for
+a Department Admin Officer (a ministry HR officer or Director-General is ministry-wide).
+The username is the part of the
 email before the "@".
 
 Every account is created with force_password_change=True, so the temporary
@@ -141,6 +143,13 @@ class Command(BaseCommand):
             ministry = Ministry.objects.filter(name__iexact=row["ministry"]).first()
             if not ministry:
                 problems.append(f"unknown ministry {row['ministry']!r}")
+            elif not row["department"]:
+                # Ministry-wide roles (ministry HR, Director-General) belong to no single
+                # department; a department admin is scoped to one, so it must be named.
+                if role == Role.DEPT_ADMIN:
+                    problems.append("a Department Admin Officer needs a department")
+                elif row["unit"]:
+                    problems.append("a unit needs a department")
             else:
                 department = Department.objects.filter(ministry=ministry, name__iexact=row["department"]).first()
                 if not department:

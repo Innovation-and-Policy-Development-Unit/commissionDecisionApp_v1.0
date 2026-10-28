@@ -102,3 +102,23 @@ class ImportUsersTests(TestCase):
         self._run(HEADER + ROW_A.replace("TRUE", "FALSE"), "--send-emails")
         self.assertFalse(User.objects.get(username="cthyna").is_active)
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_ministry_hr_may_have_no_department(self):
+        row = "Ana,Hr,ahr@psc.gov.vu,ministry_hr,Ministry of the Prime Minister,,,TRUE\n"
+        self._run(HEADER + row)
+        profile = User.objects.get(username="ahr").psc_profile
+        self.assertEqual(profile.role, Role.MINISTRY_HR)
+        self.assertEqual(profile.ministry.name, "Ministry of the Prime Minister")
+        self.assertIsNone(profile.department)
+
+    def test_department_admin_needs_a_department(self):
+        row = "Dan,Admin,dadmin@psc.gov.vu,dept_admin,Ministry of the Prime Minister,,,TRUE\n"
+        with self.assertRaises(CommandError):
+            self._run(HEADER + row)
+        self.assertEqual(self._count(), 0)
+
+    def test_unit_without_department_is_rejected(self):
+        row = "Ana,Hr,ahr@psc.gov.vu,ministry_hr,Ministry of the Prime Minister,,Compliance Unit,TRUE\n"
+        with self.assertRaises(CommandError):
+            self._run(HEADER + row)
+        self.assertEqual(self._count(), 0)
