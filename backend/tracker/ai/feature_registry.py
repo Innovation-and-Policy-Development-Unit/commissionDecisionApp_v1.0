@@ -61,6 +61,7 @@ FEATURE_MODEL_TIER: dict[str, ModelTier] = {
     # Implemented today (tasks.py)
     "feedback_triage": "haiku",
     "submission_executive_brief": "sonnet",
+    "dg_approval_brief": "sonnet",
     "minutes_draft": "sonnet",
     "transcript_refine": "haiku",
     "decision_extract": "haiku",

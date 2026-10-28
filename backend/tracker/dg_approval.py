@@ -254,6 +254,13 @@ def issue_and_send(submission, *, reminder: bool = False) -> bool:
     was handed to the mail backend; the link exists either way, so HR can resend."""
     dg = resolve_dg(submission)
     row, raw = issue_token(submission, dg)
+    try:
+        # The page works without the summary, so a failure here must never stop the link.
+        from .tasks import queue_dg_brief
+
+        queue_dg_brief(submission.id)
+    except Exception:
+        logger.exception("DG summary could not be queued for %s", submission.reference_number)
     if reminder:
         # Marks the paper as reminded: the new token carries it, so the daily job
         # sends one reminder per paper, not one every few days.

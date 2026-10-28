@@ -49,6 +49,7 @@ FEATURE_AGENDA_BLURB         = "agenda_blurb"
 FEATURE_NL_SEARCH            = "nl_search"
 FEATURE_CHECKLIST_AUTOFILL   = "checklist_autofill"
 FEATURE_WORKLOAD_SUGGESTION  = "workload_suggestion"
+FEATURE_DG_BRIEF             = "dg_brief"
 
 ALL_FEATURES = (
     FEATURE_SUBMISSION_BRIEF,
@@ -63,6 +64,7 @@ ALL_FEATURES = (
     FEATURE_NL_SEARCH,
     FEATURE_CHECKLIST_AUTOFILL,
     FEATURE_WORKLOAD_SUGGESTION,
+    FEATURE_DG_BRIEF,
 )
 
 _log = logging.getLogger("scdms.app")

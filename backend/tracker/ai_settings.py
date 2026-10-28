@@ -17,6 +17,10 @@ SETTING_PACKAGE_VALIDATION_ENABLED = "AI_PACKAGE_VALIDATION_ENABLED"
 # hidden and officers fill the checklist manually.
 SETTING_CHECKLIST_AUTOFILL_ENABLED = "AI_CHECKLIST_AUTOFILL_ENABLED"
 
+# AI summary on the Director-General's emailed approval page. When disabled the
+# page shows the paper and its documents only.
+SETTING_DG_BRIEF_ENABLED = "AI_DG_BRIEF_ENABLED"
+
 
 def package_validation_enabled() -> bool:
     """True if the AI pre-submit package validation feature is active."""
@@ -32,3 +36,11 @@ def checklist_autofill_enabled() -> bool:
     from .models import SystemSetting
 
     return ai_enabled() and SystemSetting.get_bool(SETTING_CHECKLIST_AUTOFILL_ENABLED, default=True)
+
+
+def dg_brief_enabled() -> bool:
+    """True if the Director-General's approval page gets an AI summary of the paper."""
+    from .ai.claude_client import ai_enabled
+    from .models import SystemSetting
+
+    return ai_enabled() and SystemSetting.get_bool(SETTING_DG_BRIEF_ENABLED, default=True)
