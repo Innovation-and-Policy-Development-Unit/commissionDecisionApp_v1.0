@@ -62,6 +62,24 @@ def _form_fields(submission):
     return rows
 
 
+def _ai_brief(sub):
+    """The AI summary for the page, or None when there is nothing to show (switched off,
+    failed, never started). 'pending' tells the page to keep checking."""
+    if sub.ai_dg_brief_status == "pending":
+        return {"status": "pending"}
+    brief = sub.ai_dg_brief or {}
+    if sub.ai_dg_brief_status != "ready" or not brief.get("request"):
+        return None
+    return {
+        "status": "ready",
+        "request": brief["request"],
+        "key_facts": brief.get("key_facts", []),
+        "documents": brief.get("documents", []),
+        "points_to_check": brief.get("points_to_check", []),
+        "generated_at": sub.ai_dg_brief_generated_at,
+    }
+
+
 def _summary(token):
     from .agenda_carryover import carryover_status
 
@@ -91,6 +109,7 @@ def _summary(token):
         "prepared_by": (creator.get_full_name() or creator.username) if creator else "",
         "prepared_at": sub.created_at if hasattr(sub, "created_at") else None,
         "form_fields": _form_fields(sub),
+        "ai_brief": _ai_brief(sub),
         "documents": docs,
         "sitting": carryover_status(sub),
         "dg_name": dg.get_full_name() or dg.username,
@@ -109,12 +128,13 @@ def dg_approval_summary_view(request, token):
     row = dg_approval.find_live_token(token)
     if row is None:
         return _not_found()
-    log_action(
-        request, AuditLog.Action.READ,
-        resource_type="Submission", resource_id=row.submission_id,
-        resource_label=row.submission.reference_number,
-        description=f"DG approval link opened: {row.dg_user.username}",
-    )
+    if not request.query_params.get("poll"):  # the page re-checks while the summary is written
+        log_action(
+            request, AuditLog.Action.READ,
+            resource_type="Submission", resource_id=row.submission_id,
+            resource_label=row.submission.reference_number,
+            description=f"DG approval link opened: {row.dg_user.username}",
+        )
     return _protect(Response(_summary(row)))
 
 

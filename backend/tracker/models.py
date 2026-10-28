@@ -2094,6 +2094,19 @@ class Submission(models.Model):
         default="",
         help_text="Fingerprint of stage/docs/checklist when brief was generated.",
     )
+    # ── AI summary for the Director-General's approval page ──────────────────
+    ai_dg_brief = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="AI summary shown to the Director-General on the emailed approval page.",
+    )
+    ai_dg_brief_status = models.CharField(
+        max_length=8,
+        blank=True,
+        default="",
+        help_text="'', 'pending', 'ready' or 'failed'.",
+    )
+    ai_dg_brief_generated_at = models.DateTimeField(null=True, blank=True)
     # ── AI quality score (compliance / unit review triage) ───────────────────
     ai_quality_score = models.PositiveSmallIntegerField(
         null=True,

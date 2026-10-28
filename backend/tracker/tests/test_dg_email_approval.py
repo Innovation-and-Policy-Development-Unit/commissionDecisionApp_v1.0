@@ -240,6 +240,18 @@ class DGEmailApprovalTests(TestCase):
         self.assertEqual(res.status_code, 400)
         self.assertEqual(res.data["code"], "remarks_required")
 
+    def test_returning_needs_the_pin_too(self):
+        self._send_to_dg()
+        token = self._raw_token()
+        wrong = self._decide(token, decision="return", pin="0000", remarks="Fix the costs.")
+        self.assertEqual(wrong.status_code, 400)
+        self.assertEqual(wrong.data["code"], "wrong_pin")
+        missing = self._decide(token, decision="return", remarks="Fix the costs.")
+        self.assertEqual(missing.status_code, 400)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.current_stage, WorkflowStage.PENDING_DG_ENDORSEMENT)
+        self.assertIsNone(DGApprovalToken.objects.get().used_at)
+
     def test_returning_sends_the_paper_back_to_hr_as_a_draft(self):
         self._send_to_dg()
         res = self._decide(self._raw_token(), decision="return", pin=PIN, remarks="Cost table is missing.")

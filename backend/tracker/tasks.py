@@ -973,6 +973,187 @@ def generate_submission_brief(self, submission_id: int, force: bool = False):
         app_log.error("BRIEF_FAIL | Submission %s | %s", submission_id, exc)
 
 
+# ── Director-General approval summary ──────────────────────────────────────────
+
+DG_BRIEF_INSTRUCTION = """You help the Director-General of a Vanuatu ministry decide whether to approve a paper \
+that their HR officer wants to send to the Public Service Commission. The Director-General should not have to \
+open every attachment.
+
+Use ONLY the text provided. Do not invent names, dates, amounts or facts: if something is not stated, say it is \
+not stated. Do not recommend approving or refusing. Write plain, professional English, and explain any Bislama \
+or French.
+
+Output valid JSON only (no markdown fences):
+{
+  "request": "One or two sentences: what the paper asks the Public Service Commission to decide",
+  "key_facts": [{"label": "e.g. Officer, Position, Effective date, Amount", "value": "..."}],
+  "documents": [{"name": "exact file name", "summary": "One sentence on what the document says"}],
+  "points_to_check": ["Mismatches between the form and the documents, missing or unreadable items, or anything \
+the Director-General should look at before approving; empty array if none"]
+}"""
+
+DG_BRIEF_DOC_CHARS = 3500
+DG_BRIEF_TOTAL_CHARS = 24000
+
+
+def build_dg_brief_context(submission) -> str:
+    """The paper as the Director-General would read it: the form, then each document's text."""
+    from .dg_approval_views import _form_fields
+    from .models import PSCFormType, SubmissionDocument
+
+    form_type = PSCFormType.objects.filter(code=submission.form_type_code).values_list("name", flat=True).first()
+    creator = submission.created_by
+    lines = [
+        f"Reference: {submission.reference_number}",
+        f"Title: {submission.title}",
+        f"Form type: {form_type or submission.form_type_code or '—'}",
+        f"Ministry: {submission.ministry.name if submission.ministry_id else '—'}",
+        f"Department: {submission.department.name if submission.department_id else '—'}",
+        f"Classification: {submission.get_classification_display()}",
+        f"Prepared by: {(creator.get_full_name() or creator.username) if creator else '—'}",
+        f"Notes from HR: {submission.notes or '—'}",
+    ]
+    fields = _form_fields(submission)
+    if fields:
+        lines.append("Form answers:")
+        lines += [f"- {f['label']}: {f['value']}" for f in fields]
+    if submission.ai_package_summary:
+        lines.append(f"Package completeness check: {submission.ai_package_summary}")
+    for gap in submission.ai_package_gaps or []:
+        if isinstance(gap, dict):
+            lines.append(f"- Gap found by that check: {gap.get('message') or gap.get('detail') or gap.get('gap') or gap}")
+
+    budget = DG_BRIEF_TOTAL_CHARS
+    for doc in SubmissionDocument.objects.filter(submission=submission, archived_at__isnull=True).order_by("uploaded_at"):
+        desc = f" ({doc.description})" if doc.description else ""
+        lines.append(f"Document: {doc.original_name}{desc}")
+        text = (doc.extracted_text or "").strip()
+        if not text:
+            lines.append("  (no readable text could be extracted from this file)")
+            continue
+        snippet = " ".join(text.split())[:min(DG_BRIEF_DOC_CHARS, max(budget, 0))]
+        budget -= len(snippet)
+        lines.append(f"  Text: {snippet}")
+    return "\n".join(lines)
+
+
+def _clean_dg_brief(data) -> dict:
+    """Keep only the expected shapes and sizes from the model's answer."""
+    if not isinstance(data, dict):
+        return {}
+
+    def text(value, limit):
+        return " ".join(str(value or "").split())[:limit]
+
+    facts = [
+        {"label": text(f.get("label"), 60), "value": text(f.get("value"), 300)}
+        for f in (data.get("key_facts") or []) if isinstance(f, dict)
+    ]
+    docs = [
+        {"name": text(d.get("name"), 200), "summary": text(d.get("summary"), 400)}
+        for d in (data.get("documents") or []) if isinstance(d, dict)
+    ]
+    points = [text(p, 400) for p in (data.get("points_to_check") or []) if isinstance(p, str)]
+    brief = {
+        "request": text(data.get("request"), 700),
+        "key_facts": [f for f in facts if f["label"] and f["value"]][:12],
+        "documents": [d for d in docs if d["name"] and d["summary"]][:15],
+        "points_to_check": [p for p in points if p][:8],
+    }
+    return brief if brief["request"] else {}
+
+
+def queue_dg_brief(submission_id: int) -> None:
+    """Start the DG summary unless the current one already covers this paper. Async only:
+    the DG's page shows 'being prepared' meanwhile and works without it if this fails."""
+    from .ai_settings import dg_brief_enabled
+    from .models import Submission
+
+    if not dg_brief_enabled():
+        return
+    submission = Submission.objects.filter(pk=submission_id).first()
+    if submission is None:
+        return
+    if (
+        submission.ai_dg_brief_status == "ready"
+        and (submission.ai_dg_brief or {}).get("context_key") == compute_submission_ai_context_key(submission)
+    ):
+        return
+    Submission.objects.filter(pk=submission_id).update(ai_dg_brief_status="pending")
+    try:
+        generate_dg_brief.delay(submission_id)
+    except Exception as exc:
+        app_log.warning("DG_BRIEF_QUEUE_SKIP | Submission %s | %s", submission_id, exc)
+        Submission.objects.filter(pk=submission_id).update(ai_dg_brief_status="failed")
+
+
+@shared_task(bind=True, max_retries=2)
+def generate_dg_brief(self, submission_id: int):
+    """Write the summary the Director-General reads on the emailed approval page."""
+    from celery.exceptions import Retry
+    from django.utils import timezone
+
+    from .ai.claude_client import ai_enabled, complete_json_with_error, is_retryable_ai_error
+    from .ai.feature_registry import get_model_tier
+    from .ai.reliability import FEATURE_DG_BRIEF, log_ai_call, timed_call
+    from .models import AIGenerationLog, Submission
+
+    try:
+        submission = Submission.objects.select_related("ministry", "department", "created_by").get(id=submission_id)
+    except Submission.DoesNotExist:
+        return
+
+    def fail(detail):
+        Submission.objects.filter(pk=submission_id).update(ai_dg_brief_status="failed")
+        app_log.error("DG_BRIEF_FAIL | Submission %s | %s", submission_id, detail)
+
+    if not ai_enabled():
+        log_ai_call(feature=FEATURE_DG_BRIEF, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail="GEMINI_API_KEY missing")
+        return fail("GEMINI_API_KEY missing")
+
+    tier = get_model_tier("dg_approval_brief")
+    attempt = self.request.retries + 1
+    try:
+        with timed_call() as elapsed:
+            data, api_err = complete_json_with_error(
+                system=DG_BRIEF_INSTRUCTION,
+                user=f"Paper:\n\n{build_dg_brief_context(submission)}",
+                tier=tier,
+                max_tokens=2048,
+            )
+        brief = _clean_dg_brief(data) if data else {}
+        if not brief:
+            detail = api_err or "The model returned no usable summary."
+            if api_err and is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+                log_ai_call(feature=FEATURE_DG_BRIEF, submission_id=submission_id,
+                            status=AIGenerationLog.Status.RETRYING, error_detail=detail,
+                            model_tier=tier, latency_ms=elapsed(), attempt=attempt)
+                raise self.retry(countdown=20 * (2 ** self.request.retries))
+            log_ai_call(feature=FEATURE_DG_BRIEF, submission_id=submission_id,
+                        status=AIGenerationLog.Status.FAILED, error_detail=detail,
+                        model_tier=tier, latency_ms=elapsed(), attempt=attempt)
+            return fail(detail)
+
+        brief["context_key"] = compute_submission_ai_context_key(submission)
+        submission.ai_dg_brief = brief
+        submission.ai_dg_brief_status = "ready"
+        submission.ai_dg_brief_generated_at = timezone.now()
+        submission.save(update_fields=["ai_dg_brief", "ai_dg_brief_status", "ai_dg_brief_generated_at", "updated_at"])
+        log_ai_call(feature=FEATURE_DG_BRIEF, submission_id=submission_id,
+                    status=AIGenerationLog.Status.SUCCESS, model_tier=tier,
+                    latency_ms=elapsed(), attempt=attempt)
+    except Retry:
+        raise
+    except Exception as exc:
+        detail = str(exc)
+        if is_retryable_ai_error(detail) and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=20 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_DG_BRIEF, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=detail, attempt=attempt)
+        fail(detail)
+
+
 # ── Meeting transcription (Whisper → Claude refine) ────────────────────────────
 
 
