@@ -16,7 +16,7 @@ Created on 2026-10-28 by `python manage.py seed_opsc_training --teams 8`
 | Practice ministry | "Ministry of Practice Services (practice only)", code `PRAC` |
 | Practice cases (Exercise 1) | `TRAIN-OPSC-E1-01` to `TRAIN-OPSC-E1-08`: one per team (team N uses case N) |
 | Form type | `RECRUIT-CONFIRM`, Confirmation of Appointment Submission Paper (routes to the HR unit) |
-| Case stage at start | **Submitted to PSC**, with all three required documents already attached |
+| Case stage at start | **Manager Checklist Review**, routed unit HR, with all three required documents already attached. This is where an online HR submission arrives: the system routes it automatically (see point 3 below). |
 | Case title | `[TRAINING] Confirmation of appointment — Team N (practice only)` |
 | Lodged by | `practice.ministry.hr` |
 | Practice sitting (Exercise 3) | `TRAIN-OPSC-MTG-001`, "OPSC TRAINING SITTING — practice only, not real", 30 Oct 2026 09:00; submission cutoff 29 Oct 17:00 |
@@ -57,10 +57,18 @@ Checked against the code (cited files), not the live screens; the Wednesday dry 
    ministry HR officers (`perform_create` in the meetings viewset). Participants should not create
    their own practice meeting; the workbook step "create a practice meeting" should be replaced with
    "open the practice sitting your facilitator names".
-3. **Route to Manager is one click.** The unit comes from the form type
-   (`PSCFormType.routed_unit`, `backend/tracker/intake_routing.py`); there is no choice of unit. The
-   stage after it is **Manager Checklist Review**. "Registered and Routed" is not reachable
+3. **Online submissions are routed automatically; there is no PSC Officer routing step.** When HR
+   submits (or the DG endorses), the system moves the case from Submitted to **Manager Checklist
+   Review** by itself, setting the unit from the form type (`PSCFormType.routed_unit`,
+   `_auto_advance_submitted_to_checklist_review` in `backend/tracker/views.py`) and recording a
+   "System" workflow event; the checklist-review clock starts then. The practice cases start there.
+   The **Route to Manager** button only appears on a case left at Submitted: a form type with no unit
+   assigned, the receptionist paper-intake path, or a case created outside the normal submit flow.
+   Teach it as an exception, not as step one. There is no choice of unit when it is pressed.
+   "Registered and Routed" is not reachable
    (`frontend/src/components/submissions/WorkflowActionsPanel.jsx`, `transitions.py`).
+   Exercise 1 therefore starts at the manager's checklist review; the old "PSC Officer receives and
+   routes" part should become a short note about exceptions.
 4. **Assessment flow.** At Manager Checklist Review the manager *allocates* the case to a principal or
    senior officer (stage unchanged). The principal/senior does the review and presses **Submit to
    Manager** (hand back). Only then can the manager press **Submit to Secretary**. A manager is blocked
@@ -74,6 +82,9 @@ Checked against the code (cited files), not the live screens; the Wednesday dry 
    `--facilitator-email`.
 7. **Menu names.** The Implementation page is "Implementation", the decisions list is "Decisions"; both,
    and Pending Decisions, look role-restricted.
+
+The practice HR Unit Manager sees all eight cases; the practice HR Unit Principal sees a case only
+after the manager allocates it to them.
 
 ## Cleaning up after the training
 
