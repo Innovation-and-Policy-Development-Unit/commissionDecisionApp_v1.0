@@ -95,6 +95,11 @@ class DigitizedFormRequiredTests(_Base):
         PSCFormResponse.objects.create(submission=self.sub, form_type=self.form_type, data={"officer_name": ""})
         self.assertIn("incomplete", digitized_form_gap(self.sub))
 
+    def test_training_ministry_needs_no_form(self):
+        self.ministry.code = "PRAC"
+        self.ministry.save()
+        self.assertIsNone(digitized_form_gap(self.sub))
+
     def test_complete_form_passes(self):
         PSCFormResponse.objects.create(submission=self.sub, form_type=self.form_type, data={"officer_name": "A"})
         self.assertIsNone(digitized_form_gap(self.sub))

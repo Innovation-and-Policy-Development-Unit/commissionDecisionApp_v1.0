@@ -64,9 +64,12 @@ def digitized_form_gap(submission) -> str | None:
     schema just needs to have been saved at all.
     """
     from .models import PSCFormResponse
+    from .recall_window import is_practice
 
     form_type = PSCFormType.objects.filter(code=submission.form_type_code).first()
     if not form_type or not form_type.is_digitized or form_type.digitized_form_key == "psc_3_7":
+        return None
+    if is_practice(submission):  # training ministry: role-players do not fill in forms
         return None
     try:
         response = submission.dynamic_form_response
