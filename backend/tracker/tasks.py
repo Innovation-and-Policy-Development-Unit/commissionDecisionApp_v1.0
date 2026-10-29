@@ -1860,14 +1860,12 @@ def classify_submission_document(document_id: int, *, force: bool = False):
     doc.document_type_confidence = result.get("confidence")
     doc.document_type_note = (result.get("note") or "")[:255]
     doc.document_classified_at = timezone.now()
-    doc.save(
-        update_fields=[
-            "document_type",
-            "document_type_confidence",
-            "document_type_note",
-            "document_classified_at",
-        ]
-    )
+    fields = ["document_type", "document_type_confidence", "document_type_note", "document_classified_at"]
+    if doc.document_type == DocumentClassificationType.DG_ENDORSEMENT and not (doc.description or "").strip():
+        # Name the scanned, signed DG letter so everyone can find it in the package.
+        doc.description = "DG endorsement letter"
+        fields.append("description")
+    doc.save(update_fields=fields)
     app_log.info(
         "DOC_CLASSIFY_OK | doc=%s | type=%s conf=%s",
         document_id,
@@ -4178,3 +4176,50 @@ def run_integrity_sweep():
     from .integrity_sweep import run_sweep
 
     run_sweep()
+
+
+@shared_task
+def release_recall_window_submissions():
+    """Route ministry submissions whose 24-hour recall window has closed."""
+    from .recall_window import release_due_submissions
+
+    moved = release_due_submissions()
+    if moved:
+        app_log.info("RECALL_WINDOW_RELEASE_SWEEP | released %s submission(s)", moved)
+    return moved
+
+
+def queue_pack_split(pack_id: int) -> None:
+    try:
+        split_submission_pack.delay(pack_id)
+    except Exception as exc:  # noqa: BLE001
+        app_log.warning("PACK_SPLIT_QUEUE_FALLBACK | pack=%s | %s", pack_id, exc)
+        split_submission_pack(pack_id)
+
+
+@shared_task
+def split_submission_pack(pack_id: int):
+    """Split a combined scan into separate required documents (see pack_split.py)."""
+    from .models import SubmissionDocument
+    from .pack_split import split_pack
+
+    try:
+        pack = SubmissionDocument.objects.select_related("submission").get(id=pack_id)
+    except SubmissionDocument.DoesNotExist:
+        return
+    pack.pack_status = "processing"
+    pack.pack_error = ""
+    pack.save(update_fields=["pack_status", "pack_error"])
+    try:
+        count = split_pack(pack)
+        pack.pack_status = "done"
+        pack.save(update_fields=["pack_status"])
+        app_log.info("PACK_SPLIT_OK | doc=%s | %s part(s)", pack_id, count)
+    except Exception as exc:  # noqa: BLE001
+        app_log.exception("PACK_SPLIT_FAIL | doc=%s", pack_id)
+        pack.pack_status = "failed"
+        pack.pack_error = str(exc)[:500]
+        pack.save(update_fields=["pack_status", "pack_error"])
+    from .api_cache import invalidate_submission
+
+    invalidate_submission(pack.submission_id)

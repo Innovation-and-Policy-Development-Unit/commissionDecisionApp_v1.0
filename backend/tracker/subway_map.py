@@ -136,6 +136,51 @@ def allocated_to_label(submission) -> str | None:
     return None
 
 
+_MINISTRY_HAS_IT = frozenset({
+    WorkflowStage.DRAFT,
+    WorkflowStage.DG_APPROVED,
+    WorkflowStage.RETURNED_FOR_CLARIFICATION,
+    WorkflowStage.DEFERRED_BACK_TO_HR,
+    WorkflowStage.RECALLED,
+})
+
+
+def ministry_with_label(submission) -> str:
+    """Who has this submission right now, in terms a ministry-side viewer may
+    see: the ministry itself, the DG, an OPSC unit, the Secretary or the
+    Commission. Never an individual OPSC officer's name — that stays internal
+    (see allocated_to_label)."""
+    stage = submission.current_stage
+    if stage in _MINISTRY_HAS_IT:
+        return "Your ministry"
+    if stage == WorkflowStage.PENDING_DG_ENDORSEMENT:
+        return "Ministry DG"
+    if stage in (
+        WorkflowStage.PENDING_SECRETARY_APPROVAL,
+        WorkflowStage.SECRETARY_REVIEW,
+        WorkflowStage.MINUTES_DRAFTED_SIGNED,
+    ):
+        return "OPSC Secretary"
+    if stage in (
+        WorkflowStage.FORWARDED_TO_COMMISSION,
+        WorkflowStage.COMMISSION_SITTING,
+        WorkflowStage.MATTERS_ARISING,
+        WorkflowStage.APPROVED,
+        WorkflowStage.NOTED,
+        WorkflowStage.NOT_APPROVED,
+        WorkflowStage.REJECTED,
+    ):
+        return "Commission"
+    if submission.routed_unit and stage in (
+        WorkflowStage.REGISTERED_ROUTED,
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+        WorkflowStage.UNDER_ASSESSMENT,
+        WorkflowStage.COMPLIANCE_UNDER_REVIEW,
+    ):
+        return f"OPSC {_unit_label(submission.routed_unit)}"
+    return "OPSC"
+
+
 def stage_display_label(submission) -> str | None:
     """Submission-context-aware override for the stage badge shown in the
     Submissions list and on the detail page (see frontend `StageBadge` /

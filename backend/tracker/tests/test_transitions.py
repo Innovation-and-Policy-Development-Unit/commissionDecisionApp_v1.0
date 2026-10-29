@@ -594,6 +594,11 @@ class OduChecklistDraftGateTests(TestCase):
         ODURestructureChecklist.objects.create(
             submission=self.submission, status=ODUChecklistStatus.SUBMITTED, created_by=self.hr,
         )
+        # The digitized form must be saved before a ministry paper can go to PSC.
+        from tracker.models import PSCFormResponse, PSCFormType
+
+        form_type = PSCFormType.objects.get(code=self.submission.form_type_code)
+        PSCFormResponse.objects.create(submission=self.submission, form_type=form_type, data={})
         resp = self._transition()
         self.assertEqual(resp.status_code, 200)
         self.submission.refresh_from_db()

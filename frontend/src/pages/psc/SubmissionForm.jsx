@@ -217,7 +217,7 @@ function InternalDocumentUpload({ files, onChange }) {
         <p className="text-sm text-slate-600 dark:text-slate-400">
           <strong className="text-blue-600 dark:text-blue-400">Click to browse</strong> or drag files here
         </p>
-        <p className="text-xs text-slate-400">PDF, Word, Excel — max 20 MB per file</p>
+        <p className="text-xs text-slate-400">PDF, Word, Excel — max 250 MB per file</p>
         <input
           ref={inputRef}
           type="file"
@@ -884,7 +884,9 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
       setDepartments([])
       return
     }
-    api.get('/departments/', { params: { ministry: mid } }).then(res => setDepartments(res.data))
+    // PSC staff can pick any ministry, so they need every department, not just the first ministry's.
+    const deptParams = (isMinistryUser && userMid) ? { ministry: mid } : undefined
+    api.get('/departments/', { params: deptParams }).then(res => setDepartments(res.data))
     api.get('/units/', { params: { ministry: mid } }).then(res => setUnits(res.data.results || res.data))
   }, [ministries, isMinistryUser, user?.ministry?.id, user?.ministry_id])
 

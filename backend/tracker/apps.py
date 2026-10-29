@@ -82,6 +82,15 @@ class TrackerConfig(AppConfig):
             )
 
         try:
+            from .recall_window import sync_recall_window_scheduler
+            sync_recall_window_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger("scdms.security").warning(
+                "Recall-window schedule could not be synced: %s", exc
+            )
+
+        try:
             from .logout_scheduler import sync_force_logout_scheduler
             sync_force_logout_scheduler()
         except Exception as exc:  # noqa: BLE001

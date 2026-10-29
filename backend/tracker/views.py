@@ -689,8 +689,15 @@ def _chain_transition_allowed(submission, role, target, user=None):
     return target in targets
 
 
-def _dispatch_transition_notifications(submission, prev, target, actor, remarks=""):
-    """Create in-app Notification records for the relevant parties."""
+def _dispatch_transition_notifications(
+    submission, prev, target, actor, remarks="", *, hold_opsc=False, receipts=True,
+):
+    """Create in-app Notification records for the relevant parties.
+
+    hold_opsc: the paper is waiting out its recall window, so notify nobody at OPSC yet
+    (the ministry's receipt emails still go). receipts=False: skip those receipt emails
+    (used when the held paper is later released to OPSC).
+    """
     from .models import Meeting, Notification as NotificationModel
 
     recipients = []
@@ -999,7 +1006,7 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
                     ),
                 )
 
-    recipient_list = list(recipients)
+    recipient_list = [] if hold_opsc else list(recipients)
     for user in recipient_list:
         NotificationModel.objects.create(
             recipient=user,
@@ -1026,7 +1033,7 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
             decision_label=label, remarks=remarks,
         )
 
-    if target == WorkflowStage.SUBMITTED:
+    if target == WorkflowStage.SUBMITTED and receipts:
         from .tasks import queue_dg_paper_notice_emails, queue_external_submission_confirmation_emails
 
         dg_users = _dg_recipients_for_submission(submission)
@@ -1062,6 +1069,17 @@ def _dispatch_transition_notifications(submission, prev, target, actor, remarks=
             queue_dg_paper_notice_emails(submission.id, [u.id for u in dg_users], submitted_by)
             dg_ids = {u.id for u in dg_users}
             confirm_recipients = [u for u in confirm_recipients if u.id not in dg_ids]
+        # The person who pressed Submit always gets the receipt, even if they are not
+        # one of the ministry's HR officers (e.g. a department admin).
+        if (
+            actor
+            and getattr(actor, "is_active", False)
+            and getattr(actor, "pk", None)
+            and actor.pk not in {u.pk for u in dg_users}
+            and actor.pk not in {u.pk for u in confirm_recipients}
+            and (actor_role in {Role.MINISTRY_HR, Role.DEPT_ADMIN} or submission.created_by_id == actor.pk)
+        ):
+            confirm_recipients.append(actor)
         queue_external_submission_confirmation_emails(
             submission.id, [u.id for u in confirm_recipients],
         )
@@ -2153,6 +2171,28 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ):
             target = WorkflowStage.SECRETARY_REVIEW
 
+        # ── Digitized form must be complete before a ministry paper goes to PSC ──
+        # No acknowledge_gaps override: this is the paper itself, not an AI hint.
+        if (
+            prev in {
+                WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION,
+                WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED,
+            }
+            and target in {
+                WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
+                WorkflowStage.PENDING_DG_ENDORSEMENT,
+            }
+            and profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}
+            and not submission.is_internal
+            and not submission.secretary_only
+            and not submission.lodged_from_paper
+        ):
+            from .dynamic_form_validation import digitized_form_gap
+
+            form_gap = digitized_form_gap(submission)
+            if form_gap:
+                return Response({"detail": form_gap}, status=status.HTTP_400_BAD_REQUEST)
+
         # ── A3: pre-submit package validation (draft → submitted) ───────────────
         from .ai_settings import package_validation_enabled
 
@@ -2477,12 +2517,23 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         # submitting their own internal draft) doesn't set routed_unit until
         # this call runs — dispatching notifications first silently fell back
         # to PSC_OFFICER instead of the actual responsible unit's manager.
-        self._auto_advance_submitted_to_checklist_review(submission)
+        # A ministry paper waits out its recall window at Submitted: it is neither routed
+        # nor announced to OPSC until recall_window.release() runs (see recall_window.py).
+        from .recall_window import window_applies as _recall_window_applies
+
+        _hold_for_recall = (
+            target == WorkflowStage.SUBMITTED
+            and prev in {WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT,
+                         WorkflowStage.DG_APPROVED}
+            and _recall_window_applies(submission, request.user)
+        )
+        if not _hold_for_recall:
+            self._auto_advance_submitted_to_checklist_review(submission)
 
         # ── Fire notifications after commit ──
         transaction.on_commit(
             lambda: _dispatch_transition_notifications(
-                submission, prev, target, request.user, remarks
+                submission, prev, target, request.user, remarks, hold_opsc=_hold_for_recall,
             )
         )
 
@@ -2748,6 +2799,34 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             "sent": bool(sent),
         })
 
+    @action(detail=True, methods=["post"], url_path="send-now")
+    def send_now(self, request, pk=None):
+        """Ministry ends the recall window early: route the paper to OPSC straight away."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        from .recall_window import release
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
+            raise PermissionDenied("Only the submitting ministry can send a paper on early.")
+        if submission.current_stage != WorkflowStage.SUBMITTED:
+            return Response(
+                {"detail": "This paper is not waiting in the recall window."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not release(submission, actor=request.user):
+            return Response(
+                {"detail": "This paper could not be routed to a unit yet."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        _log(request, _AL.Action.UPDATE, resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Ministry sent {submission.reference_number} to OPSC before the recall window closed")
+        invalidate_submission(submission.id)
+        submission.refresh_from_db()
+        return Response({"current_stage": submission.current_stage})
+
     @action(detail=True, methods=["post"], url_path="validate-package")
     def validate_package(self, request, pk=None):
         """A3 — queue pre-submit package validation (Haiku, async)."""
@@ -2782,6 +2861,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         }
         if profile.role not in _submit_roles and not request.user.is_staff:
             raise PermissionDenied("You do not have permission to validate this submission package.")
+
+        if profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN} and not submission.is_internal:
+            from .dynamic_form_validation import digitized_form_gap
+
+            form_gap = digitized_form_gap(submission)
+            if form_gap:
+                return Response({"detail": form_gap}, status=status.HTTP_400_BAD_REQUEST)
 
         if submission.current_stage not in {
             WorkflowStage.DRAFT,
@@ -4403,7 +4489,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
     # Real government reports (scanned Corporate Plans etc.) routinely exceed
     # 20MB — matches nginx's client_max_body_size (frontend/app-locations.conf).
-    MAX_UPLOAD_FILE_SIZE = 50 * 1024 * 1024
+    MAX_UPLOAD_FILE_SIZE = 250 * 1024 * 1024
+    # A combined scan of a whole package; the nginx limit matches (frontend/app-locations.conf).
+    MAX_PACK_FILE_SIZE = 250 * 1024 * 1024
 
     @action(detail=True, methods=["get", "post"])
     def documents(self, request, pk=None):
@@ -4534,6 +4622,53 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if len(created_docs) == 1:
             return Response(SubmissionDocumentSerializer(created_docs[0]).data, status=status.HTTP_201_CREATED)
         return Response(SubmissionDocumentSerializer(created_docs, many=True).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="documents/pack")
+    def upload_pack(self, request, pk=None):
+        """Upload ONE combined scan holding several required documents. It is split into
+        separate documents in the background; the original scan stays on the submission."""
+        from .file_validation import FileValidationError, validate_upload
+        from .tasks import queue_pack_split
+        from .transitions import assert_can_edit_submission
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in {
+            Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.PSC_ADMIN, Role.PSC_OFFICER,
+            Role.PSC_SECRETARY, Role.CSU_MANAGER, Role.ODU_MANAGER,
+        }:
+            raise PermissionDenied("You may not upload documents to this submission.")
+        assert_can_edit_submission(profile.role, submission)
+
+        uploaded = request.FILES.get("file")
+        if not uploaded:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        if not uploaded.name.lower().endswith(".pdf"):
+            return Response({"detail": "A combined scan must be a PDF."}, status=status.HTTP_400_BAD_REQUEST)
+        if uploaded.size > self.MAX_PACK_FILE_SIZE:
+            return Response(
+                {"detail": f"File exceeds the {self.MAX_PACK_FILE_SIZE // (1024*1024)} MB limit."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_upload(uploaded, kind="document")
+        except FileValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        pack = SubmissionDocument.objects.create(
+            submission=submission, file=uploaded, original_name=uploaded.name,
+            description="Combined scan", uploaded_by=request.user, pack_status="queued",
+        )
+        queue_pack_split(pack.id)
+
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+        _log(request, _AL.Action.CREATE, resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Combined scan uploaded: {pack.original_name} on {submission.reference_number}",
+             extra_data={"document_id": pack.id})
+        invalidate_submission(submission.id)
+        return Response(SubmissionDocumentSerializer(pack).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="remarks-images")
     def upload_remarks_image(self, request, pk=None):

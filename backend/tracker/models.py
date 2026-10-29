@@ -2709,6 +2709,23 @@ class SubmissionDocument(models.Model):
         blank=True,
         help_text="E3 suggested redaction spans (human approves).",
     )
+    # Combined-scan upload: one PDF holding several required documents is split into
+    # separate documents; each piece points back at the scan it came from.
+    ai_summary = models.TextField(
+        blank=True, help_text="Short summary of this document, written when a combined scan is split.",
+    )
+    pack_source = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL, related_name='pack_parts',
+        help_text="The combined scan this document was split out of.",
+    )
+    page_range = models.CharField(
+        max_length=32, blank=True, help_text="Pages of the combined scan this document covers, e.g. 3-5.",
+    )
+    pack_status = models.CharField(
+        max_length=16, blank=True,
+        help_text="Set only on a combined scan itself: queued / processing / done / failed.",
+    )
+    pack_error = models.TextField(blank=True)
 
     class Meta:
         ordering = ['uploaded_at']

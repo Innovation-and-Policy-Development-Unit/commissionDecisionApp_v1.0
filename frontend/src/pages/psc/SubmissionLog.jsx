@@ -127,6 +127,9 @@ export default function SubmissionLog() {
   // Who a submission is currently allocated to — internal OPSC staffing
   // detail, never shown to ministry-side viewers (API strips it for them too).
   const showAssignedColumn = userIsOpscInternal(user)
+  // Ministry-side viewers get a coarse "With" column (their ministry, DG, an OPSC unit,
+  // Secretary, Commission) — never an individual officer's name.
+  const showWithColumn = Boolean(user) && !showAssignedColumn
   // Per-unit pending-count filter — only useful to viewers with a cross-unit
   // queryset (admin, secretary, etc.); unit managers/principals are already
   // hard-scoped to their own unit server-side, so it'd be a no-op for them.
@@ -353,7 +356,7 @@ export default function SubmissionLog() {
     } catch { /* handled by api interceptor */ }
   }
 
-  const cols = (canBulkAct ? 1 : 0) + 4 + (showActionsColumn ? 1 : 0) + (showQualityColumn ? 1 : 0) + (showAssignedColumn ? 1 : 0)
+  const cols = (canBulkAct ? 1 : 0) + 4 + (showActionsColumn ? 1 : 0) + (showQualityColumn ? 1 : 0) + (showAssignedColumn ? 1 : 0) + (showWithColumn ? 1 : 0)
 
   return (
     <div>
@@ -608,6 +611,9 @@ export default function SubmissionLog() {
                 {showAssignedColumn && (
                   <th>{t('submission.assigned_to', { defaultValue: 'With' })}</th>
                 )}
+                {showWithColumn && (
+                  <th>{t('submission.with', { defaultValue: 'With' })}</th>
+                )}
                 {showQualityColumn && (
                   <th className="w-16">{t('submission.quality_column')}</th>
                 )}
@@ -700,6 +706,11 @@ export default function SubmissionLog() {
                     {showAssignedColumn && (
                       <td className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
                         {r.allocated_to_label || <span className="text-slate-500 dark:text-slate-400">Unassigned</span>}
+                      </td>
+                    )}
+                    {showWithColumn && (
+                      <td className="text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        {r.with_label || '—'}
                       </td>
                     )}
                     {showQualityColumn && (

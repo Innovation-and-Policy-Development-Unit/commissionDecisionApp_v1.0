@@ -26,6 +26,8 @@ import SecretariatBriefCard from '../../components/submissions/SecretariatBriefC
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
 import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
+import { useDraftAutosave } from '../../hooks/useDraftAutosave'
+import RecallWindowCard from '../../components/submissions/RecallWindowCard'
 import DecisionServicePanel from '../../components/submissions/DecisionServicePanel'
 import SubmissionPackageValidation from '../../components/submissions/SubmissionPackageValidation'
 import DeadlineReminderDrafts from '../../components/submissions/DeadlineReminderDrafts'
@@ -262,6 +264,16 @@ export default function SubmissionDetail() {
   // means the submission is locked for this user; undefined (older payloads)
   // stays permissive and the server still enforces.
   const contentEditable = submission?.can_edit !== false
+  // Unsaved digitized-form edits survive an accidental refresh (this browser only).
+  const autosaveForms = Boolean(user && id && contentEditable && isDraftLikeStage)
+  const form37Draft = useDraftAutosave(
+    `scdms:draft:form37:${user?.id ?? 'anon'}:${id}`, form37, setForm37,
+    { enabled: autosaveForms && form37 !== null },
+  )
+  const dynamicFormDraft = useDraftAutosave(
+    `scdms:draft:dynamic-form:${user?.id ?? 'anon'}:${id}`, dynamicForm, setDynamicForm,
+    { enabled: autosaveForms && dynamicForm !== null },
+  )
   // A Compliance self-submission's own creator (or draft-edit delegate) may
   // also attach documents while drafting — mirrors the backend's
   // is_own_compliance_draft carve-out on SubmissionViewSet.documents().
@@ -676,6 +688,36 @@ export default function SubmissionDetail() {
       setUploadBusy(false)
     }
   }
+
+  // One combined scan holding several required documents: the server splits it into
+  // separate documents in the background (summary + page range on each).
+  const handleUploadPack = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setUploadBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      await api.post(`/submissions/${id}/documents/pack/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      await fetchDocuments()
+      toast.success('Scan uploaded. It is being split into separate documents — this can take a few minutes.')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Upload failed.')
+    } finally {
+      setUploadBusy(false)
+    }
+  }
+
+  // While a combined scan is still being split, keep refreshing the document list.
+  const packBusy = documents.some(d => ['queued', 'processing'].includes(d.pack_status))
+  useEffect(() => {
+    if (!packBusy) return undefined
+    const t = setInterval(() => { fetchDocuments() }, 5000)
+    return () => clearInterval(t)
+  }, [packBusy])
 
   // Upload a document specifically for a required checklist item — tags the
   // file with required_document so the backend auto-marks the item present
@@ -1110,6 +1152,16 @@ const stageDescriptions = {
         </div>
       )}
 
+      {[['Form 3-7', form37Draft], ['form', dynamicFormDraft]].map(([label, d]) => d.draft && (
+        <div key={label} className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+          <span>
+            You have unsaved changes to this {label} from {new Date(d.draft.savedAt).toLocaleString()}, kept in this browser.
+          </span>
+          <button type="button" onClick={d.restore} className="font-semibold underline underline-offset-2">Restore</button>
+          <button type="button" onClick={d.discard} className="underline underline-offset-2 opacity-80">Discard</button>
+        </div>
+      ))}
+
       <CarryoverBanner status={submission.carryover_status} />
 
       {submission.can_edit === false && (
@@ -1126,7 +1178,7 @@ const stageDescriptions = {
                   : t('submission.readonly_secretary', { defaultValue: 'Read-only: you review this submission but do not edit the source form. Only the submitting Ministry can amend its content.' }))
               : submission.current_stage === 'pending_dg_endorsement'
               ? t('submission.readonly_hr_with_dg', { defaultValue: 'Read-only: this submission is with the Director-General for approval. You can edit it again only if the DG returns it to draft.' })
-              : t('submission.readonly_hr', { defaultValue: 'Read-only: this submission has been submitted to PSC. You can edit it again only if PSC returns it to draft.' })}
+              : t('submission.readonly_hr', { defaultValue: 'Read-only: this submission has been submitted to PSC. You can edit it again if PSC returns it for clarification.' })}
           </span>
         </div>
       )}
@@ -1439,6 +1491,7 @@ const stageDescriptions = {
                         if (!payload[k]) payload[k] = null
                       })
                       await api.post(`/submissions/${id}/form37/`, payload)
+                      form37Draft.markSaved()
                       toast.success('Form 3-7 saved.')
                     } catch {
                       toast.error('Failed to save Form 3-7.')
@@ -1503,6 +1556,7 @@ const stageDescriptions = {
                                   form_type: submission?.form_type_detail?.id,
                                   data: dynamicForm,
                                 })
+                                dynamicFormDraft.markSaved()
                                 toast.success('Form saved.')
                               } catch {
                                 toast.error('Failed to save form.')
@@ -1525,6 +1579,7 @@ const stageDescriptions = {
                                   form_type: submission?.form_type_detail?.id,
                                   data: dynamicForm,
                                 })
+                                dynamicFormDraft.markSaved()
                                 toast.success('Form saved.')
                               } catch {
                                 toast.error('Failed to save form.')
@@ -1550,7 +1605,8 @@ const stageDescriptions = {
                               form_type: submission?.form_type_detail?.id,
                               data: dynamicForm,
                             })
-                            toast.success('Form saved.')
+                            dynamicFormDraft.markSaved()
+                                toast.success('Form saved.')
                           } catch {
                             toast.error('Failed to save form.')
                           } finally {
@@ -1746,6 +1802,22 @@ const stageDescriptions = {
                           {doc.description && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{doc.description}</p>
                           )}
+                          {doc.ai_summary && (
+                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 italic">{doc.ai_summary}</p>
+                          )}
+                          {doc.page_range && (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Pages {doc.page_range} of the combined scan</p>
+                          )}
+                          {doc.pack_status && doc.pack_status !== 'done' && (
+                            <p className={`text-xs font-medium mt-1 ${doc.pack_status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-300'}`}>
+                              {doc.pack_status === 'failed'
+                                ? `Could not split this scan: ${doc.pack_error || 'unknown error'}. Upload the documents separately.`
+                                : 'Splitting into separate documents…'}
+                            </p>
+                          )}
+                          {doc.pack_status === 'done' && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Split into separate documents below — this is the original scan, kept on record.</p>
+                          )}
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                             {formatBytes(doc.file_size)}{doc.file_size ? ' · ' : ''}{doc.uploaded_by_username} · {new Date(doc.uploaded_at).toLocaleDateString('en-VU', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </p>
@@ -1825,7 +1897,17 @@ const stageDescriptions = {
                         accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                       />
                     </label>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">PDF, Word, Excel, or images — max 20 MB</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">PDF, Word, Excel, or images — max 250 MB</p>
+                    <div className="border-t border-slate-100 dark:border-slate-700 pt-3 space-y-1">
+                      <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors border border-primary-600 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-slate-700 ${uploadBusy ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <Upload size={14} />
+                        Upload one combined scan (split automatically)
+                        <input type="file" className="sr-only" disabled={uploadBusy} onChange={handleUploadPack} accept=".pdf" />
+                      </label>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Scan all your documents into one or two PDFs. We separate them, match them to the required documents and add a short summary to each. Check the result before you submit.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1913,6 +1995,24 @@ const stageDescriptions = {
               )}
             </div>
           )}
+
+          <RecallWindowCard
+            deadline={submission.recall_deadline}
+            busy={busy}
+            onSendNow={async () => {
+              setBusy(true)
+              setError('')
+              try {
+                await api.post(`/submissions/${id}/send-now/`)
+                await reload()
+                toast.success('Sent to OPSC.')
+              } catch (err) {
+                setError(err.response?.data?.detail || 'Could not send the paper on.')
+              } finally {
+                setBusy(false)
+              }
+            }}
+          />
 
           <WorkflowActionsPanel
             submission={submission}

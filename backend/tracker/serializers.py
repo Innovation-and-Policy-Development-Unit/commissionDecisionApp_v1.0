@@ -761,6 +761,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
     logged_by = serializers.CharField(source="created_by.username", read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
     allocated_to_label = serializers.SerializerMethodField()
+    with_label = serializers.SerializerMethodField()
     stage_display_label = serializers.SerializerMethodField()
     co_assignments = CoAssignmentSerializer(many=True, read_only=True)
     is_assessment_overdue = serializers.SerializerMethodField()
@@ -797,6 +798,11 @@ class SubmissionListSerializer(serializers.ModelSerializer):
         if label:
             return label
         return self.get_assigned_to_name(obj)
+
+    def get_with_label(self, obj):
+        from .subway_map import ministry_with_label
+
+        return ministry_with_label(obj)
 
     def get_stage_display_label(self, obj):
         from .subway_map import stage_display_label
@@ -842,6 +848,7 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "assigned_to",
             "assigned_to_name",
             "allocated_to_label",
+            "with_label",
             "stage_display_label",
             "assigned_at",
             "ready_for_manager_at",
@@ -890,6 +897,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     preliminary_quality_score = serializers.SerializerMethodField()
     subway_map = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    recall_deadline = serializers.SerializerMethodField()
     carryover_status = serializers.SerializerMethodField()
     on_commission_agenda = serializers.SerializerMethodField()
 
@@ -938,6 +946,20 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         if not request or not getattr(request, "user", None) or request.user.is_anonymous:
             return None
         return can_edit_submission(profile_role(request.user), obj)
+
+    def get_recall_deadline(self, obj):
+        """End of the ministry's 24-hour recall window while the paper still waits at
+        Submitted; None otherwise. Only shown to the ministry side."""
+        from .opsc_access import is_opsc_internal
+        from .recall_window import recall_deadline
+
+        request = self.context.get("request")
+        if not request or not getattr(request, "user", None) or request.user.is_anonymous:
+            return None
+        if is_opsc_internal(request.user):
+            return None
+        deadline = recall_deadline(obj)
+        return deadline.isoformat() if deadline else None
 
     def get_subway_map(self, obj):
         from .subway_map import build_subway_map
@@ -1107,6 +1129,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "preliminary_quality_score",
             "subway_map",
             "can_edit",
+            "recall_deadline",
             "ai_package_gaps",
             "ai_package_ready",
             "ai_package_summary",
@@ -1198,6 +1221,7 @@ class SubmissionDocumentSerializer(serializers.ModelSerializer):
             'document_type', 'document_type_display', 'document_type_confidence',
             'document_type_note', 'document_classified_at',
             'ai_annotation_suggestions', 'ai_redaction_spans',
+            'ai_summary', 'pack_source', 'page_range', 'pack_status', 'pack_error',
         )
         read_only_fields = fields
 
