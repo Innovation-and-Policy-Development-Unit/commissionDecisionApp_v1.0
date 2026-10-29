@@ -32,6 +32,7 @@ Practice accounts (no email address set by default):
 | `practice.secretary` | PSC Secretary | CSU |
 | `practice.chairperson` | Chairman | CSU |
 | `practice.ministry.hr` | Ministry HR Officer | practice ministry |
+| `practice.dg` | Director-General (Head of Agency) | practice ministry |
 
 Participants use their own accounts for the role they hold; the practice accounts cover roles
 they do not hold. Practice accounts are role-wide, so they also see the one real case in the system.
@@ -93,6 +94,6 @@ sudo -n docker exec scdms-backend-1 python manage.py seed_opsc_training --cleanu
 ```
 
 Removes the practice ministry, cases (including Exercise 5 cases lodged under it), their tasks and
-files, the practice sitting and the seven accounts. It then lists internal cases created around the
+files, the practice sitting and the eight accounts. It then lists internal cases created around the
 training day (the Exercise 6 ones) for manual review. If the backend container was recreated, copy the
 command file back into it first.

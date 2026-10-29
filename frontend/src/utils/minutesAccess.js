@@ -4,6 +4,7 @@ import { userIsAdmin } from './adminAccess'
  *  All other OPSC staff get the read-only view (signed minutes only). */
 const MINUTES_EDIT_ROLES = new Set([
   'psc_secretary',
+  'senior_admin_officer',
   'psc_admin',
   'chairperson',
   'psc_commissioner',

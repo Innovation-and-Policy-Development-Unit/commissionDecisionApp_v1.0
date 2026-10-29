@@ -95,6 +95,11 @@ class DigitizedFormRequiredTests(_Base):
         PSCFormResponse.objects.create(submission=self.sub, form_type=self.form_type, data={"officer_name": ""})
         self.assertIn("incomplete", digitized_form_gap(self.sub))
 
+    def test_training_ministry_needs_no_form(self):
+        self.ministry.code = "PRAC"
+        self.ministry.save()
+        self.assertIsNone(digitized_form_gap(self.sub))
+
     def test_complete_form_passes(self):
         PSCFormResponse.objects.create(submission=self.sub, form_type=self.form_type, data={"officer_name": "A"})
         self.assertIsNone(digitized_form_gap(self.sub))
@@ -166,6 +171,17 @@ class RecallWindowTests(_Base):
         self.assertEqual(res.status_code, 200, res.content)
         res = c.post(f"/api/submissions/{self.sub.id}/transition/", {"new_stage": "draft"}, format="json")
         self.assertEqual(res.status_code, 200, res.content)
+
+    def test_training_ministry_papers_skip_the_window(self):
+        self.ministry.code = "PRAC"
+        self.ministry.save()
+        res, _ = self.submit()
+        self.assertEqual(res.status_code, 200, res.content)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        self.assertTrue(Notification.objects.filter(recipient=self.manager).exists())
+        body = self.api(self.hr).get(f"/api/submissions/{self.sub.id}/").json()
+        self.assertFalse(body["recall_deadline"])
 
     @override_settings(SUBMISSION_RECALL_WINDOW_HOURS=0)
     def test_window_can_be_switched_off(self):

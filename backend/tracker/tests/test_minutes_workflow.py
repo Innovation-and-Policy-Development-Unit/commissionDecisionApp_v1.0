@@ -35,6 +35,16 @@ class MinutesWorkflowTests(TestCase):
         self.client.force_authenticate(user=user)
         return self.client.post(f"/api/minutes/{self.minutes.id}/{path}/", data or {}, format="json")
 
+    def test_minute_taker_can_create_and_edit_a_minute(self):
+        meeting = Meeting.objects.create(
+            title="Second Sitting", date="2026-09-08", time="09:00", venue="Boardroom",
+        )
+        self.client.force_authenticate(user=self.taker)
+        res = self.client.post("/api/minutes/", {"meeting": meeting.id, "content": {"agenda_items": []}}, format="json")
+        self.assertEqual(res.status_code, 201, res.data)
+        res = self.client.patch(f"/api/minutes/{res.data['id']}/", {"content": {"agenda_items": []}}, format="json")
+        self.assertEqual(res.status_code, 200, res.data)
+
     def test_full_lifecycle(self):
         res = self._post(self.taker, "submit-for-review")
         self.assertEqual(res.status_code, 200, res.data)
