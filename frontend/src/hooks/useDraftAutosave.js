@@ -22,10 +22,32 @@ function hasContent(value) {
  * Drafts hold form text only (never files) and live in this browser only.
  */
 export function useDraftAutosave(key, values, setValues, { enabled = true, delay = 800 } = {}) {
-  const [draft, setDraft] = useState(() => (enabled && key ? read(key) : null))
+  const [draft, setDraft] = useState(null)
   const [savedAt, setSavedAt] = useState(null)
-  // Don't overwrite a stored draft with the empty form before the user has chosen.
-  const decided = useRef(!draft)
+  // Don't overwrite a stored draft with the form before the user has chosen.
+  const decided = useRef(false)
+  const valuesRef = useRef(values)
+  valuesRef.current = values
+
+  // Look for a stored draft whenever the key or `enabled` changes — so a form that
+  // loads its values from the server first (enabled flips on later) still gets one.
+  // A draft identical to what is already on screen is stale and silently dropped.
+  useEffect(() => {
+    if (!enabled || !key) {
+      decided.current = false
+      setDraft(null)
+      return
+    }
+    const stored = read(key)
+    const same = stored && JSON.stringify(stored.values) === JSON.stringify(valuesRef.current)
+    if (stored && !same) {
+      decided.current = false
+      setDraft(stored)
+    } else {
+      decided.current = true
+      setDraft(null)
+    }
+  }, [key, enabled])
 
   useEffect(() => {
     if (!enabled || !key || !decided.current) return undefined
@@ -47,6 +69,13 @@ export function useDraftAutosave(key, values, setValues, { enabled = true, delay
     setDraft(null)
   }, [key])
 
+  // The values were saved to the server: drop the stored copy but keep autosaving
+  // (clear() is for a form that is finished and about to close).
+  const markSaved = useCallback(() => {
+    try { localStorage.removeItem(key) } catch { /* ignore */ }
+    setDraft(null)
+  }, [key])
+
   const restore = useCallback(() => {
     if (draft?.values) setValues(prev => ({ ...prev, ...draft.values }))
     decided.current = true
@@ -59,5 +88,5 @@ export function useDraftAutosave(key, values, setValues, { enabled = true, delay
     setDraft(null)
   }, [key])
 
-  return { draft, savedAt, restore, discard, clear }
+  return { draft, savedAt, restore, discard, clear, markSaved }
 }

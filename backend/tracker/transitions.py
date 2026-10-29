@@ -127,6 +127,11 @@ _CONTENT_VIEW_ONLY_ROLES = {Role.HEAD_OF_AGENCY, Role.PSC_SECRETARY, Role.PSC_OF
 _SECRETARY_OWN_DRAFT_ROLES = {Role.PSC_SECRETARY, Role.PSC_OFFICER}
 
 
+# A paper PSC returns for clarification is editable again by its drafter, so it can be
+# corrected and resubmitted without waiting for it to be bounced all the way to DRAFT.
+_DRAFTER_EDIT_STAGES = frozenset({WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION})
+
+
 def can_edit_submission(role, submission) -> bool:
     """Whether a user with ``role`` may edit the *content* of ``submission``.
 
@@ -134,9 +139,9 @@ def can_edit_submission(role, submission) -> bool:
     transition rules, not by this gate.
     """
     if role in _DRAFT_ONLY_EDIT_ROLES:
-        return submission.current_stage == WorkflowStage.DRAFT
+        return submission.current_stage in _DRAFTER_EDIT_STAGES
     if role in _SECRETARY_OWN_DRAFT_ROLES and submission.secretary_only:
-        return submission.current_stage == WorkflowStage.DRAFT
+        return submission.current_stage in _DRAFTER_EDIT_STAGES
     if role in _CONTENT_VIEW_ONLY_ROLES:
         return False
     return True
@@ -157,8 +162,8 @@ def assert_can_edit_submission(role, submission) -> None:
             "ministry HR / CSU Manager can edit its content."
         )
     raise PermissionDenied(
-        "This submission is read-only because it is no longer in draft. It can only be "
-        "edited while still in draft, before it is submitted."
+        "This submission is read-only because it is with PSC. It can only be edited while "
+        "it is a draft, or after PSC returns it for clarification."
     )
 
 # ---------------------------------------------------------------------------
@@ -283,6 +288,10 @@ _STAGE_GRAPH = {
     WorkflowStage.RETURNED_FOR_CLARIFICATION: [
         WorkflowStage.SUBMITTED,
         WorkflowStage.PENDING_DG_ENDORSEMENT,
+        WorkflowStage.DRAFT,
+    ],
+    # A paper the ministry recalled in its recall window can be reopened, fixed and resubmitted.
+    WorkflowStage.RECALLED: [
         WorkflowStage.DRAFT,
     ],
     # ── Manager checklist review ──────────────────────────────────────────
@@ -424,6 +433,7 @@ _MINISTRY_HR_ALLOWED = {
     (WorkflowStage.SUBMITTED,                  WorkflowStage.RECALLED),
     (WorkflowStage.PENDING_DG_ENDORSEMENT,     WorkflowStage.RECALLED),
     (WorkflowStage.DG_APPROVED,                WorkflowStage.RECALLED),
+    (WorkflowStage.RECALLED,                   WorkflowStage.DRAFT),
 }
 
 # Head of Agency (DG): approve a paper HR sent them (which submits it to PSC), or

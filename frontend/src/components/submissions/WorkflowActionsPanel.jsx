@@ -25,25 +25,12 @@ import DgApprovalDialog from './DgApprovalDialog'
 // variant: BaseButton variant
 const STAGE_ACTIONS = {
   draft: [
-    // Ministry HR: send the paper to the Director-General, who approves it by an
-    // emailed link (no sign-in, no paper signature). Offered only when the backend
-    // says it is switched on and the ministry has exactly one DG account.
-    {
-      id: 'submit_to_dg',
-      label: 'Send to DG for approval',
-      description: 'Your Director-General approves by emailed link — no paper signing or signed copy to upload',
-      icon: Send,
-      variant: 'primary',
-      transitionTo: 'pending_dg_endorsement',
-      requiresNote: false,
-      ministryOnly: true,
-    },
-    // Fallback: the DG signed on paper, outside SCDMS — HR uploads the signed
-    // copy and submits straight to PSC.
+    // The DG signs the endorsement letter on paper, outside SCDMS — HR uploads the
+    // scan with the package and submits to PSC.
     {
       id: 'submit_to_psc_ministry',
       label: 'Submit to PSC',
-      description: 'Your Director-General has approved the paper and the signed copy is uploaded',
+      description: 'Your Director-General has signed the endorsement letter and the scan is uploaded',
       icon: Send,
       variant: 'primary',
       transitionTo: 'submitted',
@@ -202,16 +189,6 @@ const STAGE_ACTIONS = {
       transitionTo: 'submitted',
       requiresNote: false,
     },
-    {
-      id: 'resubmit_to_dg',
-      label: 'Send to DG for approval',
-      description: 'Your Director-General approves the revised paper by emailed link',
-      icon: Send,
-      variant: 'primary',
-      transitionTo: 'pending_dg_endorsement',
-      requiresNote: false,
-      ministryOnly: true,
-    },
     // Compliance Senior, sent back by their Principal. Either resubmit for
     // another round of review (the loop is unbounded), or — once the
     // Principal's comments say it's ready — submit it on to the Manager
@@ -241,6 +218,17 @@ const STAGE_ACTIONS = {
   // judgement call left to make, so this is a single action straight there.
   // received_by_psc / registered_routed are no longer reachable stages.
   submitted: [
+    // Ministry: the recall window — take the paper back before OPSC sees it.
+    {
+      id: 'recall',
+      label: 'Recall submission',
+      description: 'Take this paper back so you can correct it. Possible until the recall window closes.',
+      icon: RotateCcw,
+      variant: 'outline',
+      transitionTo: 'recalled',
+      requiresNote: true,
+      ministryOnly: true,
+    },
     {
       id: 'route_to_manager',
       label: 'Route to Manager',
@@ -249,6 +237,20 @@ const STAGE_ACTIONS = {
       variant: 'primary',
       transitionTo: 'manager_checklist_review',
       requiresNote: false,
+    },
+  ],
+
+  // A recalled paper: reopen it as a draft to correct and submit again.
+  recalled: [
+    {
+      id: 'reopen_recalled',
+      label: 'Reopen as draft',
+      description: 'Make this paper editable again, then submit it when ready',
+      icon: RotateCcw,
+      variant: 'primary',
+      transitionTo: 'draft',
+      requiresNote: false,
+      ministryOnly: true,
     },
   ],
 
@@ -567,9 +569,6 @@ export default function WorkflowActionsPanel({
     .map(action => ({
       ...action,
       // With the DG-approval route open, the paper route is the fallback.
-      ...(action.id === 'submit_to_psc_ministry' && allowed.includes('pending_dg_endorsement')
-        ? { variant: 'outline', label: 'Submit to PSC — DG signed on paper' }
-        : {}),
       Icon: action.icon,
       disabledReason: awaitingAssignedReview
         ? 'Waiting for the assigned principal to complete their review and submit it back to you.'

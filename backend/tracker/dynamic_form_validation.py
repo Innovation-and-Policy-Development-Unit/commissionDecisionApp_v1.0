@@ -54,3 +54,26 @@ def validate_dynamic_form_data(form_type: PSCFormType, data) -> list[str]:
             errors.append(f"Field '{field.field_key}' is required for Form {form_type.code}.")
 
     return errors
+
+
+def digitized_form_gap(submission) -> str | None:
+    """Why this submission's digitized form is not ready to go to PSC, or None.
+
+    Only for form types flagged is_digitized. The legacy PSC 3-7 form is stored
+    elsewhere, so it is not checked here. A dedicated form with no Form Builder
+    schema just needs to have been saved at all.
+    """
+    from .models import PSCFormResponse
+
+    form_type = PSCFormType.objects.filter(code=submission.form_type_code).first()
+    if not form_type or not form_type.is_digitized or form_type.digitized_form_key == "psc_3_7":
+        return None
+    try:
+        response = submission.dynamic_form_response
+    except PSCFormResponse.DoesNotExist:
+        return f"Complete and save the {form_type.name} (Digitized Form tab) before you validate or submit."
+    errors = validate_dynamic_form_data(form_type, response.data)
+    if errors:
+        shown = "; ".join(errors[:3]) + (f" (+{len(errors) - 3} more)" if len(errors) > 3 else "")
+        return f"The {form_type.name} is incomplete: {shown}"
+    return None

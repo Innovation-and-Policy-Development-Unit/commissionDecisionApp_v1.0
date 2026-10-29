@@ -468,6 +468,9 @@ LOGIN_EMAIL_OTP_RESEND_SECONDS = int(os.getenv('LOGIN_EMAIL_OTP_RESEND_SECONDS',
 DEMO_MODE = os.getenv('DEMO_MODE', 'true').lower() in ('1', 'true', 'yes')
 
 # ── Redis cache (DB 1 — Celery broker/result stay on DB 0) ───────────────────
+# Ministry submissions wait this long at "Submitted" (recallable, not yet routed to OPSC). 0 = route immediately.
+SUBMISSION_RECALL_WINDOW_HOURS = int(os.getenv('SUBMISSION_RECALL_WINDOW_HOURS', '24'))
+
 CACHE_ENABLED = os.getenv('CACHE_ENABLED', 'true').lower() in ('1', 'true', 'yes')
 CACHE_REF_LIST_TTL = int(os.getenv('CACHE_REF_LIST_TTL', '120'))
 CACHE_REF_RETRIEVE_TTL = int(os.getenv('CACHE_REF_RETRIEVE_TTL', '180'))

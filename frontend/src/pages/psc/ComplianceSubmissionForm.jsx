@@ -5,6 +5,7 @@ import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { isComplianceRole } from '../../constants/compliance'
+import { useDraftAutosave } from '../../hooks/useDraftAutosave'
 
 /**
  * New OPSC-internal submission flow for Compliance Senior, Principal, and Manager.
@@ -19,6 +20,7 @@ export default function ComplianceSubmissionForm({ modal = false, onClose, onSuc
   const [formTypes, setFormTypes] = useState([])
   const [loadingTypes, setLoadingTypes] = useState(true)
   const [form, setForm] = useState({ form_type_code: '', title: '', notes: '' })
+  const draftState = useDraftAutosave(`scdms:draft:compliance-submission:${user?.id ?? 'anon'}`, form, setForm)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -78,6 +80,7 @@ export default function ComplianceSubmissionForm({ modal = false, onClose, onSuc
         payload.form_category = selected.form_category
       }
       const { data } = await api.post('/submissions/', payload)
+      draftState.clear()
       toast.success('Internal compliance submission created. Complete the digitized form on the detail page.')
       if (onSuccess) onSuccess(data.id)
       else navigate(`/submissions/${data.id}`)
@@ -91,6 +94,15 @@ export default function ComplianceSubmissionForm({ modal = false, onClose, onSuc
 
   const inner = (
     <form onSubmit={submit} className="space-y-5">
+      {draftState.draft && (
+        <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+          <span className="flex-1 min-w-0">
+            You have an unsaved draft from {new Date(draftState.draft.savedAt).toLocaleString()}.
+          </span>
+          <button type="button" onClick={draftState.restore} className="font-semibold underline underline-offset-2">Restore draft</button>
+          <button type="button" onClick={draftState.discard} className="underline underline-offset-2 opacity-80">Discard</button>
+        </div>
+      )}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">
           {error}
