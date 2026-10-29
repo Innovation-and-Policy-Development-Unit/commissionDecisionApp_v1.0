@@ -11,6 +11,7 @@ export default function LockScreen() {
   const [username, setUsername] = useState('')
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
+  const [mustSignIn, setMustSignIn] = useState(false)
   const [loading, setLoading] = useState(false)
   const [now, setNow] = useState(() => new Date())
 
@@ -42,6 +43,9 @@ export default function LockScreen() {
       const result = await unlock(pin)
       if (!result.ok) {
         setError(result.detail)
+        // The PIN may be fine: the device's sign-in has simply expired, so only a full
+        // sign-in will help — typing the PIN again never will.
+        setMustSignIn(result.code === 'trusted_session_expired')
         return
       }
       const from = location.state?.from?.pathname || '/'
@@ -112,6 +116,15 @@ export default function LockScreen() {
           {error && (
             <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
+              {mustSignIn && (
+                <button
+                  type="button"
+                  onClick={async () => { await logout('manual'); navigate('/auth/login', { replace: true }) }}
+                  className="mt-3 block w-full rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                >
+                  Sign in again
+                </button>
+              )}
             </div>
           )}
 

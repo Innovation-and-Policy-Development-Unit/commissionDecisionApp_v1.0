@@ -92,7 +92,11 @@ export function AuthProvider({ children }) {
       clearLockState()
       return { ok: true }
     } catch (err) {
-      return { ok: false, detail: err.response?.data?.detail || 'Invalid PIN.' }
+      const data = err.response?.data
+      const detail = data?.detail
+        || (err.response?.status === 429 ? 'Too many attempts. Wait a minute and try again.' : null)
+        || (err.response ? 'Could not check your PIN. Please try again.' : 'Cannot reach the server. Check your connection.')
+      return { ok: false, detail, code: data?.code }
     }
   }, [])
 

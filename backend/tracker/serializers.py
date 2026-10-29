@@ -2865,13 +2865,17 @@ class SessionPinVerifySerializer(serializers.Serializer):
 
         from django.contrib.auth.hashers import check_password
         if not check_password(attrs["pin"], profile.session_pin):
-            raise serializers.ValidationError("Invalid PIN.")
+            raise serializers.ValidationError("Invalid PIN.", code="invalid_pin")
 
         # Verify a trusted session exists and is valid
         from .models import TrustedSession
         ts = TrustedSession.valid_for(user)
         if not ts:
-            raise serializers.ValidationError("Trusted session has expired. Please log in with your authenticator app.")
+            raise serializers.ValidationError(
+                "Your sign-in has expired on this device (this happens after a PIN reset or at the "
+                "end of the day). Please sign in again with your password.",
+                code="trusted_session_expired",
+            )
 
         attrs["user"] = user
         attrs["trusted_session"] = ts

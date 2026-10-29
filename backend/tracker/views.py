@@ -2519,13 +2519,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         # to PSC_OFFICER instead of the actual responsible unit's manager.
         # A ministry paper waits out its recall window at Submitted: it is neither routed
         # nor announced to OPSC until recall_window.release() runs (see recall_window.py).
-        from .recall_window import window_applies as _recall_window_applies
+        from .recall_window import holds_now as _recall_holds_now
 
         _hold_for_recall = (
             target == WorkflowStage.SUBMITTED
             and prev in {WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT,
                          WorkflowStage.DG_APPROVED}
-            and _recall_window_applies(submission, request.user)
+            and _recall_holds_now(submission, request.user)
         )
         if not _hold_for_recall:
             self._auto_advance_submitted_to_checklist_review(submission)
@@ -8352,7 +8352,16 @@ class SessionPinVerifyView(APIView):
 
     def post(self, request):
         ser = SessionPinVerifySerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
+        if not ser.is_valid():
+            # The lock screen reads `detail`; DRF's default body (non_field_errors) made every
+            # refusal look like "Invalid PIN". `code` lets it tell a wrong PIN from an expired
+            # sign-in.
+            errors = ser.errors.get("non_field_errors") or next(iter(ser.errors.values()))
+            first = errors[0]
+            return Response(
+                {"detail": str(first), "code": getattr(first, "code", "invalid")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         user = ser.validated_data["user"]
         ts = ser.validated_data["trusted_session"]
 
