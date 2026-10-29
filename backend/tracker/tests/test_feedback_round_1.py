@@ -213,3 +213,108 @@ class PackSplitTests(TestCase):
         segs = _segments_by_keywords(texts, self.SLOTS)
         self.assertEqual([(s["start_page"], s["end_page"], s["required_document_id"]) for s in segs],
                          [(1, 2, 1), (3, 3, 2)])
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class PinVerifyMessageTests(TestCase):
+    """The lock screen reads `detail`; every refusal used to look like "Invalid PIN"."""
+
+    def setUp(self):
+        from django.contrib.auth.hashers import make_password
+
+        self.user = User.objects.create_user("pin_user", password="x")
+        Profile.objects.create(user=self.user, role=Role.MINISTRY_HR, session_pin=make_password("1234"))
+
+    def verify(self, pin):
+        return APIClient().post("/api/auth/session-pin/verify/", {"username": "pin_user", "pin": pin}, format="json")
+
+    def test_wrong_pin_says_so(self):
+        res = self.verify("9999")
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json(), {"detail": "Invalid PIN.", "code": "invalid_pin"})
+
+    def test_right_pin_with_expired_sign_in_says_sign_in_again(self):
+        res = self.verify("1234")
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["code"], "trusted_session_expired")
+        self.assertIn("sign in again", res.json()["detail"])
+
+
+class SeedCleanupTests(TestCase):
+    def test_cleanup_removes_exercise_4_cases_in_real_ministries_only(self):
+        from django.core.management import call_command
+
+        from tracker.models import DecisionService
+
+        ministry = Ministry.objects.create(code="ZZ_E4", name="Real Ministry")
+        secretary = User.objects.create_user("practice.secretary", password="x")
+        owner = User.objects.create_user("zz_owner", password="x")
+        mk = lambda ref, test: Submission.objects.create(  # noqa: E731
+            reference_number=ref, title=ref, ministry=ministry, form_type_code="X",
+            current_stage=WorkflowStage.MINUTES_DRAFTED_SIGNED, received_at=timezone.now(), is_test=test,
+            created_by=owner,
+        )
+        practice = mk("TRAIN-OPSC-E4-SOMEONE", True)
+        real_lookalike = mk("TRAIN-OPSC-E4-REAL", False)   # not a test case: must survive
+        other = mk("PSC-2026-99999", False)
+        DecisionService.objects.create(
+            submission=practice, ministry=ministry, letter_body="x", served_by=secretary,
+        )
+
+        call_command("seed_opsc_training", "--cleanup", stdout=mock.MagicMock())
+
+        left = set(Submission._base_manager.values_list("reference_number", flat=True))
+        self.assertNotIn(practice.reference_number, left)
+        self.assertIn(real_lookalike.reference_number, left)
+        self.assertIn(other.reference_number, left)
+        self.assertFalse(DecisionService.objects.exists())
+        self.assertFalse(User.objects.filter(username="practice.secretary").exists())
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"], SUBMISSION_RECALL_WINDOW_HOURS=24)
+class RecallWindowCutoffTests(_Base):
+    def meeting(self, hours_from_now):
+        from datetime import timedelta
+
+        from tracker.models import Meeting, MeetingStatus
+
+        when = timezone.now() + timedelta(hours=hours_from_now)
+        return Meeting.objects.create(
+            reference_number=f"ZZ-MTG-{hours_from_now}", title="Sitting", date=(when + timedelta(days=3)).date(),
+            time="09:00", venue="Room", status=MeetingStatus.SCHEDULED, submission_cutoff=when,
+        )
+
+    def test_window_closes_at_the_due_date_when_that_comes_first(self):
+        from datetime import timedelta
+
+        cutoff = self.meeting(10).submission_cutoff
+        self.submit()
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.current_stage, WorkflowStage.SUBMITTED)
+        deadline = self.api(self.hr).get(f"/api/submissions/{self.sub.id}/").json()["recall_deadline"]
+        self.assertAlmostEqual(
+            timezone.datetime.fromisoformat(deadline).timestamp(), cutoff.timestamp(), delta=1,
+        )
+        # ...and the sweep releases it then, not 24 hours after submitting.
+        from tracker.recall_window import release_due_submissions
+
+        self.assertEqual(release_due_submissions(), 0)
+        self.meeting_obj = self.sub.scheduled_meeting
+        self.meeting_obj.submission_cutoff = timezone.now() - timedelta(minutes=1)
+        self.meeting_obj.save()
+        self.assertEqual(release_due_submissions(), 1)
+
+    def test_paper_submitted_right_at_the_due_date_is_routed_straight_away(self):
+        self.meeting(0)   # cutoff is now, so it is already past by the time the paper is submitted
+        self.submit()
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+
+    def test_a_far_off_due_date_keeps_the_full_24_hours(self):
+        self.meeting(24 * 10)
+        self.submit()
+        self.sub.refresh_from_db()
+        from datetime import timedelta
+        from tracker.recall_window import recall_deadline, submitted_at
+
+        self.assertEqual(recall_deadline(self.sub), submitted_at(self.sub) + timedelta(hours=24))

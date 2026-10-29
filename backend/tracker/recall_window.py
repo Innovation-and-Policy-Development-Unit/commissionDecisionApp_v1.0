@@ -52,6 +52,26 @@ def submitted_at(submission):
     return event.created_at if event else None
 
 
+def window_end(submission, started):
+    """When the recall window closes for a paper submitted at `started`: 24 hours later, or
+    the due date of the sitting it is queued for if that comes first. The sitting's due
+    date is the ministry's own deadline, so a paper submitted near it reaches OPSC no
+    later than one submitted exactly on time would have."""
+    end = started + timedelta(hours=window_hours())
+    meeting = getattr(submission, "scheduled_meeting", None)
+    if meeting is not None:
+        end = min(end, meeting.effective_cutoff)
+    return end
+
+
+def holds_now(submission, actor) -> bool:
+    """Whether a paper being submitted right now should wait out a recall window at all."""
+    if not window_applies(submission, actor):
+        return False
+    now = timezone.now()
+    return window_end(submission, now) > now + timedelta(minutes=1)
+
+
 def recall_deadline(submission):
     """End of the recall window, or None when the paper is no longer waiting in it."""
     from .models import WorkflowStage
@@ -61,7 +81,7 @@ def recall_deadline(submission):
     if submission.is_internal or submission.secretary_only or submission.lodged_from_paper:
         return None
     started = submitted_at(submission)
-    return started + timedelta(hours=window_hours()) if started else None
+    return window_end(submission, started) if started else None
 
 
 def release(submission, actor=None) -> bool:
@@ -89,13 +109,13 @@ def release_due_submissions() -> int:
     """Release every ministry submission whose recall window has closed."""
     from .models import Submission, WorkflowStage
 
-    cutoff = timezone.now() - timedelta(hours=window_hours())
+    now = timezone.now()
     moved = 0
     for submission in Submission.objects.filter(
         current_stage=WorkflowStage.SUBMITTED, is_internal=False, secretary_only=False,
-    ):
+    ).select_related("scheduled_meeting"):
         started = submitted_at(submission)
-        if started and started <= cutoff and release(submission):
+        if started and window_end(submission, started) <= now and release(submission):
             moved += 1
     return moved
 

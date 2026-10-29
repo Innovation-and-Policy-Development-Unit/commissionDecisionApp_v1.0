@@ -63,6 +63,9 @@ MINISTRY_CODE = "PRAC"
 MINISTRY_NAME = "Ministry of Practice Services (practice only)"
 FORM_TYPE_CODE = "RECRUIT-CONFIRM"  # Confirmation of Appointment
 REF_PREFIX = "TRAIN-OPSC-E1-"
+# Exercise 4 cases (decision already served): one per ministry HR account, created in the
+# trainee's own ministry, so --cleanup must find them by reference, not by ministry.
+E4_REF_PREFIX = "TRAIN-OPSC-E4-"
 MEETING_REF = "TRAIN-OPSC-MTG-001"
 TRAINING_DATE = (2026, 10, 30)
 
@@ -115,12 +118,20 @@ class Command(BaseCommand):
         from django.conf import settings
 
         usernames = [a[0] for a in ACCOUNTS]
+        # Exercise 4 cases live in real ministries (is_test, TRAIN-OPSC-E4-<USERNAME>); they go
+        # first so the practice accounts that served their decisions can then be deleted.
+        e4 = Submission._base_manager.filter(reference_number__startswith=E4_REF_PREFIX, is_test=True)
+        e4_ids = list(e4.values_list("id", flat=True))
         files = [
             d.file.name
-            for d in SubmissionDocument.all_objects.filter(submission__ministry__code=MINISTRY_CODE)
+            for d in SubmissionDocument.all_objects.filter(
+                submission__ministry__code=MINISTRY_CODE
+            ) | SubmissionDocument.all_objects.filter(submission_id__in=e4_ids)
             if d.file
         ]
         with transaction.atomic():
+            n_e4_tasks = CommissionTask._base_manager.filter(submission_id__in=e4_ids).delete()[0]
+            n_e4 = Submission._base_manager.filter(id__in=e4_ids).delete()[0]
             # Tasks only SET_NULL their links, so delete them explicitly.
             n_tasks = CommissionTask._base_manager.filter(
                 submission__ministry__code=MINISTRY_CODE
@@ -147,6 +158,7 @@ class Command(BaseCommand):
                     pass
         self.stdout.write(self.style.SUCCESS(
             f"Practice data removed: {n_subs} case row(s), {n_tasks} task row(s), {n_mtgs} meeting row(s), "
+            f"{len(e4_ids)} Exercise 4 case(s) in real ministries ({n_e4} row(s) incl. {n_e4_tasks} task row(s)), "
             f"{len(files)} file(s); practice accounts deleted"
             + (f" (deactivated instead: {', '.join(kept)})." if kept else ".")
         ))
