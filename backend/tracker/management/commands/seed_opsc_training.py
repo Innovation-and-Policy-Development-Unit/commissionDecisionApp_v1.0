@@ -78,6 +78,7 @@ ACCOUNTS = [
     ("practice.secretary", "Practice", "Secretary", Role.PSC_SECRETARY, "CSU"),
     ("practice.chairperson", "Practice", "Chairperson", Role.CHAIRPERSON, "CSU"),
     ("practice.ministry.hr", "Practice", "Ministry HR Officer", Role.MINISTRY_HR, None),
+    ("practice.dg", "Practice", "Director-General", Role.HEAD_OF_AGENCY, None),
 ]
 
 
