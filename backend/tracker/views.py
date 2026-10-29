@@ -11876,6 +11876,12 @@ class FeedbackChecklistViewSet(viewsets.ViewSet):
 # ── Minutes & Transcript ──────────────────────────────────────────────────────
 
 
+# Who may create and edit minutes. The Senior Admin Officer is the minute-taker.
+_MINUTE_EDITOR_ROLES = {
+    Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN, Role.CHAIRPERSON, Role.PSC_COMMISSIONER,
+}
+
+
 class MinutesViewSet(viewsets.ModelViewSet):
     """CRUD for meeting minutes documents, plus AI generation actions.
 
@@ -11916,14 +11922,14 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         profile = _profile(self.request.user)
-        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.CHAIRPERSON, Role.PSC_COMMISSIONER}:
-            raise PermissionDenied("Only PSC Secretary, Admin, Chairperson, or Commissioners can create minutes.")
+        if profile.role not in _MINUTE_EDITOR_ROLES:
+            raise PermissionDenied("Only the Secretary, Senior Admin Officer (minute-taker), Admin, Chairperson, or Commissioners can create minutes.")
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
         profile = _profile(self.request.user)
-        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.CHAIRPERSON, Role.PSC_COMMISSIONER}:
-            raise PermissionDenied("Only PSC Secretary, Admin, Chairperson, or Commissioners can edit minutes.")
+        if profile.role not in _MINUTE_EDITOR_ROLES:
+            raise PermissionDenied("Only the Secretary, Senior Admin Officer (minute-taker), Admin, Chairperson, or Commissioners can edit minutes.")
         incoming = serializer.validated_data.get("content")
         if incoming is not None:
             # An editor not cleared on a locked item was sent a placeholder;
@@ -11944,8 +11950,8 @@ class MinutesViewSet(viewsets.ModelViewSet):
         """
         minutes = self.get_object()
         profile = _profile(request.user)
-        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.CHAIRPERSON, Role.PSC_COMMISSIONER}:
-            raise PermissionDenied("Only PSC Secretary, Admin, Chairperson, or Commissioners can record agenda adoption.")
+        if profile.role not in _MINUTE_EDITOR_ROLES:
+            raise PermissionDenied("Only the Secretary, Senior Admin Officer (minute-taker), Admin, Chairperson, or Commissioners can record agenda adoption.")
         if request.data.get("adopted", True):
             minutes.agenda_adopted_by = request.user
             minutes.agenda_adopted_at = timezone.now()
