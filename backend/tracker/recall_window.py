@@ -22,15 +22,24 @@ PERIODIC_NAME = "release-recall-window-submissions"
 CRON = "*/5 * * * *"
 
 
+# The training ministry (seed_opsc_training) lodges papers live during the OPSC staff
+# training, so its papers go straight to the unit instead of waiting a day.
+PRACTICE_MINISTRY_CODES = frozenset({"PRAC"})
+
+
 def window_hours() -> int:
     return max(0, int(getattr(settings, "SUBMISSION_RECALL_WINDOW_HOURS", 24)))
+
+
+def is_practice(submission) -> bool:
+    return submission.ministry.code in PRACTICE_MINISTRY_CODES
 
 
 def window_applies(submission, actor) -> bool:
     """True when this ministry-lodged submission should wait out the recall window."""
     from .models import Role
 
-    if window_hours() <= 0:
+    if window_hours() <= 0 or is_practice(submission):
         return False
     role = getattr(getattr(actor, "psc_profile", None), "role", None)
     return (
@@ -79,6 +88,8 @@ def recall_deadline(submission):
     if submission.current_stage != WorkflowStage.SUBMITTED or window_hours() <= 0:
         return None
     if submission.is_internal or submission.secretary_only or submission.lodged_from_paper:
+        return None
+    if is_practice(submission):
         return None
     started = submitted_at(submission)
     return window_end(submission, started) if started else None
