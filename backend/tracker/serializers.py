@@ -37,6 +37,7 @@ from .models import (
     PSCFormResponse,
     PSCFormType,
     SubmissionChecklistResponse,
+    FlyingAgendaBrief,
     Role,
     RoleDefinition,
     SecurityIncident,
@@ -900,6 +901,36 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     recall_deadline = serializers.SerializerMethodField()
     carryover_status = serializers.SerializerMethodField()
     on_commission_agenda = serializers.SerializerMethodField()
+    agenda_placement = serializers.SerializerMethodField()
+
+    def get_agenda_placement(self, obj):
+        """Which meeting and agenda number this submission sits at.
+
+        Staff asked to be told the agenda item a submission ended up as — it
+        was only ever visible on the board-paper header, not on the submission
+        itself. Reuses that header's "<section> — Item <n>" wording.
+        """
+        from .agenda_sections import agenda_section_label
+
+        meeting = obj.scheduled_meeting
+        if not meeting:
+            return None
+        item = next(
+            (i for i in obj.agenda_placements.all() if i.meeting_id == meeting.id), None,
+        )
+        if not item:
+            return None
+        return {
+            "agenda_item_id": item.id,
+            "meeting_reference": meeting.reference_number,
+            "meeting_date": meeting.date,
+            "agenda_status": meeting.agenda_status,
+            "section_label": agenda_section_label(item.category or ""),
+            "sequence": item.sequence,
+            "label": f"{agenda_section_label(item.category or '')} — Item {item.sequence}",
+            "is_flying": item.is_flying,
+            "raised_by": item.raised_by_label,
+        }
 
     def get_active_draft_delegate(self, obj):
         # `.all()` (not `.filter(...)`) so this reuses the prefetched,
@@ -1084,6 +1115,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "scheduled_meeting",
             "carryover_status",
             "on_commission_agenda",
+            "agenda_placement",
             "implementation_status",
             "implementation_due_date",
             "commission_approved_at",
@@ -2003,6 +2035,26 @@ class UserAdminUpdateSerializer(serializers.Serializer):
         return instance
 
 
+class FlyingAgendaBriefSerializer(serializers.ModelSerializer):
+    """The short brief a responsible unit files for a flying agenda item."""
+
+    is_complete = serializers.BooleanField(read_only=True)
+    completed_by_name = serializers.SerializerMethodField()
+
+    def get_completed_by_name(self, obj):
+        if not obj.completed_by_id:
+            return ""
+        return obj.completed_by.get_full_name() or obj.completed_by.username
+
+    class Meta:
+        model = FlyingAgendaBrief
+        fields = (
+            "subject", "background", "recommendation",
+            "is_complete", "completed_at", "completed_by_name", "updated_at",
+        )
+        read_only_fields = ("completed_at", "updated_at")
+
+
 class AgendaItemSerializer(serializers.ModelSerializer):
     submission_reference = serializers.CharField(source="submission.reference_number", read_only=True)
     submission_title     = serializers.CharField(source="submission.title", read_only=True)
@@ -2010,6 +2062,14 @@ class AgendaItemSerializer(serializers.ModelSerializer):
     category_display     = serializers.SerializerMethodField()
     form_type_display    = serializers.SerializerMethodField()
     lodged_from_paper    = serializers.BooleanField(source="submission.lodged_from_paper", read_only=True)
+    responsible_unit     = serializers.CharField(source="submission.routed_unit", read_only=True)
+    flying_brief         = serializers.SerializerMethodField()
+
+    def get_flying_brief(self, obj):
+        if not obj.is_flying:
+            return None
+        brief = getattr(obj, "flying_brief", None)
+        return FlyingAgendaBriefSerializer(brief).data if brief else None
 
     def get_submission_ministry(self, obj):
         return obj.submission.ministry.name if obj.submission.ministry else ""
@@ -2046,8 +2106,12 @@ class AgendaItemSerializer(serializers.ModelSerializer):
             "form_type_code", "form_type_display",
             "matters_arising_agenda_no", "matters_arising_meeting_ref",
             "agenda_blurb", "agenda_blurb_processed", "lodged_from_paper",
+            "is_flying", "raised_by_label", "responsible_unit", "flying_brief",
         )
-        read_only_fields = ("agenda_blurb", "agenda_blurb_processed", "form_type_code")
+        read_only_fields = (
+            "agenda_blurb", "agenda_blurb_processed", "form_type_code",
+            "is_flying", "raised_by_label",
+        )
 
 
 class MeetingSerializer(serializers.ModelSerializer):

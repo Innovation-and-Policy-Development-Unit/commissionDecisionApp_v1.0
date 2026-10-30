@@ -138,6 +138,7 @@ from .serializers import (
     SessionPinVerifySerializer,
     DecisionExtractSerializer,
     CommissionSubTaskSerializer,
+    FlyingAgendaBriefSerializer,
     FlyingMinuteSignatureSerializer,
     TaskReportSerializer,
     ChecklistItemSerializer,
@@ -332,7 +333,7 @@ def _submission_queryset_for(user, *, with_events=True):
         "assigned_to__psc_profile",
         "dg_endorsed_by",
     ).prefetch_related(
-        *(["events__actor"] if with_events else []),
+        *(["events__actor", "agenda_placements"] if with_events else []),
         "attached_submissions",
         Prefetch(
             "co_assignments",
@@ -578,6 +579,28 @@ def _email_dg_approval_link(submission_id):
     except Exception:
         logging.getLogger("scdms.app").exception(
             "DG approval link could not be sent for submission %s", submission_id
+        )
+
+
+def _notify_flying_item_added_safe(item_id):
+    """Tell the responsible unit Manager about a flying agenda item.
+
+    Best-effort on purpose: a notification that cannot be delivered must not
+    take the agenda item with it — the Commission has already raised the
+    matter and the item has to stay on the agenda either way.
+    """
+    import logging
+
+    from .models import AgendaItem
+
+    try:
+        from .email_notify import notify_flying_item_added
+
+        item = AgendaItem.objects.select_related("submission", "meeting").get(pk=item_id)
+        notify_flying_item_added(item)
+    except Exception:
+        logging.getLogger("scdms.app").exception(
+            "Flying agenda notification could not be sent for agenda item %s", item_id
         )
 
 
@@ -9212,6 +9235,10 @@ class MeetingViewSet(viewsets.ModelViewSet):
         Role.SENIOR_ADMIN_OFFICER,
         Role.PSC_ADMIN,
         Role.PSC_COMMISSIONER,
+        # Manager CSU takes the minutes for the sitting in practice, and the
+        # flying agenda leans on that: saving the minutes is how the system
+        # learns which items the Commission has already taken.
+        Role.CSU_MANAGER,
     }
 
     def _minute_intake_permission(self, request):
@@ -9282,6 +9309,20 @@ class MeetingViewSet(viewsets.ModelViewSet):
                     setattr(row, field, entry[field])
                     update_fields.append(field)
             row.save(update_fields=update_fields)
+
+        # Saving the minutes is how the system learns where the Commission has
+        # got to, so this is where the outstanding flying briefs get chased.
+        # Best-effort: a notification must never cost the minute taker's notes.
+        try:
+            from .flying_agenda import on_minutes_saved
+
+            on_minutes_saved(meeting)
+        except Exception:
+            import logging
+
+            logging.getLogger("scdms.app").exception(
+                "Flying agenda chase failed for meeting %s", meeting.pk
+            )
 
         rows = ensure_intake_rows(meeting)
         return Response(
@@ -9771,6 +9812,73 @@ class MeetingViewSet(viewsets.ModelViewSet):
             "created_at": item.created_at,
         }
 
+    # ── Flying agenda (extra matters raised during the sitting) ───────────
+    @action(detail=True, methods=["post"], url_path="flying-agenda")
+    def flying_agenda_toggle(self, request, pk=None):
+        """Secretary opens or closes this sitting's flying agenda."""
+        from . import flying_agenda as fa
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        enabled = bool(request.data.get("enabled"))
+        fa.set_enabled(meeting, user=request.user, profile=profile, enabled=enabled)
+        _log(request, _AL.Action.UPDATE, resource_type="Meeting",
+             resource_label=meeting.reference_number,
+             description=(
+                 f"Secretary {'opened' if enabled else 'closed'} the flying agenda for "
+                 f"{meeting.reference_number}."
+             ))
+        return Response({
+            "flying_agenda_enabled": meeting.flying_agenda_enabled,
+            "detail": (
+                "Manager CSU can now add extra matters raised by the Commission."
+                if enabled else "The flying agenda is closed for this sitting."
+            ),
+        })
+
+    @action(detail=True, methods=["post"], url_path="flying-agenda/items")
+    def flying_agenda_add_item(self, request, pk=None):
+        """Manager CSU adds a matter a commissioner raised during the sitting."""
+        from . import flying_agenda as fa
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        item = fa.add_item(
+            meeting,
+            actor=request.user,
+            profile=profile,
+            title=request.data.get("title"),
+            responsible_unit=(request.data.get("responsible_unit") or "").strip(),
+            raised_by_label=request.data.get("raised_by") or "",
+            notes=request.data.get("notes") or "",
+        )
+        _log(request, _AL.Action.CREATE, resource_type="AgendaItem",
+             resource_label=item.submission.reference_number,
+             description=(
+                 f"Manager CSU added flying agenda item {item.sequence} to "
+                 f"{meeting.reference_number} for the {item.submission.routed_unit} unit "
+                 f"(cutoff and workflow override)."
+             ))
+
+        _item_id = item.id
+        transaction.on_commit(lambda: _notify_flying_item_added_safe(_item_id))
+
+        return Response(
+            AgendaItemSerializer(item).data, status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["get"], url_path="flying-agenda/progress")
+    def flying_agenda_progress(self, request, pk=None):
+        """How far down the agenda the Commission has worked, and which flying
+        briefs are still outstanding."""
+        from . import flying_agenda as fa
+
+        return Response(fa.sitting_progress(self.get_object()))
+
     @action(detail=True, methods=["post"], url_path="flying-minute/sign")
     def flying_minute_sign(self, request, pk=None):
         """Commission member signs a Flying Minute (SOP Section 8)."""
@@ -9942,7 +10050,7 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         meeting_id = self.request.query_params.get("meeting")
         if meeting_id:
             qs = qs.filter(meeting_id=meeting_id)
-        qs = qs.order_by("sequence", "id")
+        qs = qs.order_by("is_flying", "sequence", "id")
 
         # Draft/with_chairman agenda content (submission titles, ministries,
         # blurbs) must not reach Commissioners or read-only OPSC viewers
@@ -9960,6 +10068,30 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
                 else:
                     qs = qs.filter(meeting__agenda_status=AgendaStatus.CIRCULATED)
         return qs
+
+    @action(detail=True, methods=["get", "patch"], url_path="flying-brief")
+    def flying_brief(self, request, pk=None):
+        """The responsible unit's Manager files the brief for a flying item."""
+        from . import flying_agenda as fa
+        from .models import FlyingAgendaBrief
+
+        item = self.get_object()
+        if not item.is_flying:
+            return Response(
+                {"detail": "This is not a flying agenda item."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        profile = _profile(request.user)
+
+        if request.method == "GET":
+            brief, _ = FlyingAgendaBrief.objects.get_or_create(agenda_item=item)
+            return Response(FlyingAgendaBriefSerializer(brief).data)
+
+        fa.assert_may_fill_brief(item, profile)
+        ser = FlyingAgendaBriefSerializer(data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        brief = fa.save_brief(item, user=request.user, **ser.validated_data)
+        return Response(FlyingAgendaBriefSerializer(brief).data)
 
     def perform_update(self, serializer):
         self._require_agenda_manager()

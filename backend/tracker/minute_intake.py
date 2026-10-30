@@ -38,6 +38,12 @@ def meeting_allows_minute_intake(meeting: Meeting) -> bool:
 
 def _agenda_title_description(item: AgendaItem) -> tuple[str, str]:
     sub = item.submission
+    # A flying item's substance is the brief the responsible unit filed, not
+    # an agenda blurb — there was never an endorsed agenda entry to blurb.
+    brief = getattr(item, "flying_brief", None)
+    if item.is_flying and brief:
+        title = (brief.subject or "").strip() or (sub.title if sub else f"Agenda item {item.sequence}")
+        return title, (brief.background or "").strip()
     if item.category == "matters_arising" and item.matters_arising_meeting_ref:
         title = f"Matters arising — {item.matters_arising_agenda_no or ''}".strip()
         if item.matters_arising_meeting_ref:
@@ -53,7 +59,11 @@ def _agenda_title_description(item: AgendaItem) -> tuple[str, str]:
 def ensure_intake_rows(meeting: Meeting) -> list[MinuteAgendaIntake]:
     """Create empty intake rows for each agenda item if missing."""
     rows = []
-    for item in meeting.agenda_items.select_related("submission").order_by("category", "sequence", "id"):
+    for item in (
+        meeting.agenda_items
+        .select_related("submission", "flying_brief")
+        .order_by("is_flying", "category", "sequence", "id")
+    ):
         title, description = _agenda_title_description(item)
         row, _ = MinuteAgendaIntake.objects.get_or_create(
             meeting=meeting,
