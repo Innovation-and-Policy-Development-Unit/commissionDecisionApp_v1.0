@@ -2738,6 +2738,8 @@ class MinutesSerializer(serializers.ModelSerializer):
     submitted_for_review_by_name = serializers.SerializerMethodField()
     secretary_reviewed_by_name = serializers.SerializerMethodField()
     chairman_reviewed_by_name = serializers.SerializerMethodField()
+    compliance_reviewed_by_name = serializers.SerializerMethodField()
+    review_state = serializers.SerializerMethodField()
     returned_by_name = serializers.SerializerMethodField()
     tasks_allocated_by_name = serializers.SerializerMethodField()
     comments = MinutesCommentSerializer(many=True, read_only=True)
@@ -2754,6 +2756,8 @@ class MinutesSerializer(serializers.ModelSerializer):
             "submitted_for_review_by", "submitted_for_review_by_name", "submitted_for_review_at", "review_due_at",
             "secretary_reviewed_by", "secretary_reviewed_by_name", "secretary_reviewed_at",
             "chairman_reviewed_by", "chairman_reviewed_by_name", "chairman_reviewed_at",
+            "compliance_reviewed_by", "compliance_reviewed_by_name", "compliance_reviewed_at",
+            "draft_review_due_at", "review_state",
             "commissioner_circulated_at", "commissioner_review_due_at",
             "returned_by", "returned_by_name", "returned_at",
             "tasks_allocated_by", "tasks_allocated_by_name", "tasks_allocated_at",
@@ -2768,6 +2772,8 @@ class MinutesSerializer(serializers.ModelSerializer):
             "submitted_for_review_by", "submitted_for_review_at", "review_due_at",
             "secretary_reviewed_by", "secretary_reviewed_at",
             "chairman_reviewed_by", "chairman_reviewed_at",
+            "compliance_reviewed_by", "compliance_reviewed_at",
+            "draft_review_due_at",
             "commissioner_circulated_at", "commissioner_review_due_at",
             "returned_by", "returned_at",
             "tasks_allocated_by", "tasks_allocated_at",
@@ -2781,6 +2787,22 @@ class MinutesSerializer(serializers.ModelSerializer):
 
     def get_chairman_reviewed_by_name(self, obj):
         return obj.chairman_reviewed_by.username if obj.chairman_reviewed_by else None
+
+    def get_compliance_reviewed_by_name(self, obj):
+        return obj.compliance_reviewed_by.username if obj.compliance_reviewed_by else None
+
+    def get_review_state(self, obj):
+        """Who still has to approve, and how long each stage was given — so the
+        UI can say what it is waiting on without re-deriving the rules."""
+        from . import minutes_review as mr
+
+        return {
+            "compliance_required": mr.requires_compliance_review(obj),
+            "pending_reviewers": mr.pending_reviewers(obj),
+            "draft_review_days": mr.draft_review_days(),
+            "secretariat_review_days": mr.secretariat_review_days(),
+            "commissioner_review_days": mr.commissioner_review_days(),
+        }
 
     def get_returned_by_name(self, obj):
         return obj.returned_by.username if obj.returned_by else None

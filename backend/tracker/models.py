@@ -4280,6 +4280,15 @@ class Minutes(models.Model):
         help_text="When signed minutes were circulated to managers for task allocation.")
     minutes_due_at = models.DateTimeField(null=True, blank=True,
         help_text="SLA: minutes must be finalised within 3 days of the meeting.")
+    # ── The minute-taker's own review of the draft, 1 working day ──────────
+    # Set when the draft is first built from the minute intake. The minute
+    # taker (Manager CSU in practice) reads their own draft back and submits
+    # it on; until this was tracked, a draft could sit untouched for days with
+    # nothing saying it was late.
+    draft_review_due_at = models.DateTimeField(null=True, blank=True)
+    # Chase state, so the daily sweep tells someone once rather than every day.
+    draft_review_reminded_at = models.DateTimeField(null=True, blank=True)
+    review_reminded_at = models.DateTimeField(null=True, blank=True)
     # ── Secretariat dual review: Secretary + Chairman, 1 working day SLA ──
     submitted_for_review_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
@@ -4297,6 +4306,16 @@ class Minutes(models.Model):
         on_delete=models.SET_NULL, related_name="chairman_reviewed_minutes",
     )
     chairman_reviewed_at = models.DateTimeField(null=True, blank=True)
+    # ── Compliance business: the Compliance Manager reviews it too ─────────
+    # Only required when the sitting actually took compliance matters (see
+    # minutes_review.requires_compliance_review) — otherwise the Compliance
+    # Manager is not a reviewer of these minutes at all and the Secretary and
+    # Chairman alone carry them.
+    compliance_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="compliance_reviewed_minutes",
+    )
+    compliance_reviewed_at = models.DateTimeField(null=True, blank=True)
     # ── Commissioner circulation (pre-signature), 2 working day SLA ───────
     commissioner_circulated_at = models.DateTimeField(null=True, blank=True)
     commissioner_review_due_at = models.DateTimeField(null=True, blank=True)

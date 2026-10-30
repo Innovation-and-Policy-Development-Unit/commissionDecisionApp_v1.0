@@ -138,7 +138,15 @@ def apply_intake_to_minutes(meeting: Meeting, user) -> Minutes:
     if "closing" not in content:
         content["closing"] = ""
     minutes_obj.content = content
-    minutes_obj.save(update_fields=["content", "updated_at"])
+    fields = ["content", "updated_at"]
+    # The minute taker's own read-back window starts when the draft first
+    # exists, and only then — rebuilding it later must not reset the clock.
+    if created and minutes_obj.status == MinutesStatus.DRAFT:
+        from .minutes_review import draft_review_days, due_in_working_days
+
+        minutes_obj.draft_review_due_at = due_in_working_days(draft_review_days())
+        fields.append("draft_review_due_at")
+    minutes_obj.save(update_fields=fields)
     return minutes_obj
 
 

@@ -4223,3 +4223,55 @@ def split_submission_pack(pack_id: int):
     from .api_cache import invalidate_submission
 
     invalidate_submission(pack.submission_id)
+
+
+# ── Minutes review deadlines ──────────────────────────────────────────────────
+
+@shared_task
+def remind_overdue_minute_reviews():
+    """Daily chase on the three minute-review windows.
+
+    Each stage has its own window (see minutes_review): the minute taker reads
+    their draft back, the Secretary and Chairman — and the Compliance Manager
+    on a sitting that took compliance business — approve it, then every
+    Commissioner gets it for comment. Before this, the due dates were recorded
+    but nothing ever chased them, so a draft could sit for a week with no one
+    the wiser.
+
+    One notice per minutes per stage, tracked on the record itself, so running
+    the sweep again does not chase the same people twice.
+    """
+    from django.utils import timezone
+
+    from .email_notify import notify_minutes_draft_review_due, notify_minutes_review_overdue
+    from .models import Minutes, MinutesStatus
+
+    now = timezone.now()
+    chased = 0
+
+    # 1) The minute taker's own read-back of the draft.
+    for minutes in Minutes.objects.filter(
+        status=MinutesStatus.DRAFT,
+        draft_review_due_at__isnull=False,
+        draft_review_due_at__lt=now,
+        draft_review_reminded_at__isnull=True,
+    ).select_related("meeting", "created_by"):
+        notify_minutes_draft_review_due(minutes, overdue=True)
+        minutes.draft_review_reminded_at = now
+        minutes.save(update_fields=["draft_review_reminded_at", "updated_at"])
+        chased += 1
+
+    # 2) The Secretary, Chairman and (where it applies) Compliance Manager.
+    for minutes in Minutes.objects.filter(
+        status=MinutesStatus.PENDING_SECRETARIAT_REVIEW,
+        review_due_at__isnull=False,
+        review_due_at__lt=now,
+        review_reminded_at__isnull=True,
+    ).select_related("meeting"):
+        notify_minutes_review_overdue(minutes)
+        minutes.review_reminded_at = now
+        minutes.save(update_fields=["review_reminded_at", "updated_at"])
+        chased += 1
+
+    app_log.info("MINUTES_REVIEW_CHASE | %d minutes chased", chased)
+    return chased

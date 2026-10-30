@@ -25,15 +25,31 @@ const MINUTES_STATUS = {
 // Roles permitted to upload the scanned, manually-signed minutes. Mirrors the backend gate.
 const SIGNED_UPLOAD_ROLES = new Set(['senior_admin_officer', 'psc_admin'])
 const SEND_FOR_SIGNATURE_ROLES = new Set(['senior_admin_officer', 'psc_secretary', 'psc_admin'])
-const SUBMIT_REVIEW_ROLES = new Set(['senior_admin_officer', 'psc_secretary', 'psc_admin'])
+// Manager CSU takes the minutes in practice; the Senior Admin Officer is the
+// role the SOP names. Both draft them and hand them on.
+const SUBMIT_REVIEW_ROLES = new Set(['senior_admin_officer', 'csu_manager', 'psc_secretary', 'psc_admin'])
+// Manager Compliance only reviews a sitting that took compliance business —
+// the backend decides that and reports it as review_state.compliance_required.
 const SECRETARIAT_APPROVE_ROLES = new Set(['psc_secretary', 'chairperson', 'psc_admin'])
-const CIRCULATE_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'psc_admin'])
+const COMPLIANCE_APPROVE_ROLE = 'compliance_manager'
+const CIRCULATE_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'csu_manager', 'psc_admin'])
 const COMMISSIONER_COMMENT_ROLES = new Set(['psc_commissioner', 'chairperson', 'psc_secretary', 'psc_admin'])
 const ALLOCATE_TASKS_ROLES = new Set(['psc_secretary', 'psc_admin'])
 
 function formatDateTime(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+function isOverdue(iso) {
+  return Boolean(iso) && new Date(iso) < new Date()
+}
+
+// The review windows are settings — the Commission is trialling how long
+// Commissioners get — so the figure is read from the API, never written here.
+function workingDays(days) {
+  if (days === null || days === undefined) return ''
+  return ` (${days} working day${days === 1 ? '' : 's'})`
 }
 
 // The agenda's adoption is the first order of business at the sitting, so
@@ -562,14 +578,46 @@ export default function MinutesEditor() {
         </div>
       )}
 
+      {/* The minute taker reads their own draft back before it goes anywhere.
+          The window was never shown, so a draft could sit untouched. */}
+      {minutes?.id && minutes.status === 'draft' && minutes.draft_review_due_at && (
+        <div className={clsx(
+          'card card-compact mb-6 text-sm',
+          isOverdue(minutes.draft_review_due_at)
+            ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10'
+            : 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10',
+        )}>
+          <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">
+            {isOverdue(minutes.draft_review_due_at)
+              ? 'Your read-back of this draft is overdue'
+              : 'Read this draft back, then submit it for review'}
+          </p>
+          <p className="text-slate-600 dark:text-slate-400">
+            Due {formatDateTime(minutes.draft_review_due_at)}
+            {workingDays(minutes.review_state?.draft_review_days)}
+          </p>
+        </div>
+      )}
+
       {minutes?.id && minutes.status === 'pending_secretariat_review' && (
         <div className="card card-compact mb-6 border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10 text-sm">
-          <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">Awaiting Secretary & Chairman review</p>
-          <p className="text-slate-600 dark:text-slate-400">Due {formatDateTime(minutes.review_due_at)} (1 working day)</p>
+          <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">
+            Awaiting review{minutes.review_state?.compliance_required ? ' — compliance business on this agenda' : ''}
+          </p>
+          <p className="text-slate-600 dark:text-slate-400">
+            Due {formatDateTime(minutes.review_due_at)}
+            {workingDays(minutes.review_state?.secretariat_review_days)}
+          </p>
           <p className="mt-2 text-slate-600 dark:text-slate-400">
             Secretary: {minutes.secretary_reviewed_by_name ? `✓ approved ${formatDateTime(minutes.secretary_reviewed_at)}` : 'awaiting approval'}
             {' · '}
             Chairman: {minutes.chairman_reviewed_by_name ? `✓ approved ${formatDateTime(minutes.chairman_reviewed_at)}` : 'awaiting approval'}
+            {minutes.review_state?.compliance_required && (
+              <>
+                {' · '}
+                Manager Compliance: {minutes.compliance_reviewed_by_name ? `✓ approved ${formatDateTime(minutes.compliance_reviewed_at)}` : 'awaiting approval'}
+              </>
+            )}
           </p>
         </div>
       )}
@@ -580,7 +628,10 @@ export default function MinutesEditor() {
             {minutes.status === 'circulated_to_commissioners' ? 'Circulated to Commissioners for comment' : 'Returned to Secretariat'}
           </p>
           {minutes.status === 'circulated_to_commissioners' && (
-            <p className="text-slate-600 dark:text-slate-400">Due {formatDateTime(minutes.commissioner_review_due_at)} (2 working days)</p>
+            <p className="text-slate-600 dark:text-slate-400">
+              Due {formatDateTime(minutes.commissioner_review_due_at)}
+              {workingDays(minutes.review_state?.commissioner_review_days)}
+            </p>
           )}
           <div className="mt-3 space-y-2">
             {(minutes.comments || []).length === 0 && (
@@ -731,7 +782,10 @@ export default function MinutesEditor() {
                   Submit for Review
                 </button>
               )}
-              {minutes.status === 'pending_secretariat_review' && SECRETARIAT_APPROVE_ROLES.has(user?.role) && (
+              {minutes.status === 'pending_secretariat_review' && (
+                SECRETARIAT_APPROVE_ROLES.has(user?.role)
+                || (user?.role === COMPLIANCE_APPROVE_ROLE && minutes.review_state?.compliance_required)
+              ) && (
                 <button onClick={() => changeStatus('approve')} disabled={saving} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-orange-500/20 disabled:opacity-60">
                   <CheckCircle2 size={16} />
                   Approve

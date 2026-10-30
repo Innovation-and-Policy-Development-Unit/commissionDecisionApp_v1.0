@@ -1319,20 +1319,78 @@ def notify_flying_item_incomplete(item) -> None:
 
 
 def notify_minutes_submitted_for_review(minutes) -> None:
-    """Tell the Secretary and Chairperson that minutes are waiting on their
-    1-day review. Best-effort, in-app only."""
-    from .models import Role
+    """Tell everyone who has to approve these minutes that they are waiting.
+
+    That is the Secretary and the Chairperson, plus the Compliance Manager
+    when the sitting took compliance business. Best-effort, in-app only.
+    """
+    from . import minutes_review as mr
 
     ref = minutes.meeting.reference_number if minutes.meeting else ""
+    days = mr.secretariat_review_days()
     reviewers = list(
         User.objects.filter(
-            is_active=True, psc_profile__role__in=[Role.PSC_SECRETARY, Role.CHAIRPERSON],
+            is_active=True, psc_profile__role__in=mr.pending_reviewers(minutes),
         ).select_related("psc_profile")
     )
     _notify_users(
         reviewers,
         title=f"Minutes awaiting your review — {ref}".strip(),
-        body="Draft minutes have been submitted and need your review and approval within 1 working day.",
+        body=(
+            "Draft minutes have been submitted and need your review and approval "
+            f"within {days} working day{'s' if days != 1 else ''}."
+        ),
+    )
+
+
+def notify_minutes_draft_review_due(minutes, *, overdue: bool) -> None:
+    """Chase the minute taker over their own read-back of the draft."""
+    from . import minutes_review as mr
+
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    # Whoever drafted these minutes owns the read-back; fall back to the role
+    # when that account is gone or deactivated.
+    if minutes.created_by_id and minutes.created_by.is_active:
+        takers = [minutes.created_by]
+    else:
+        takers = list(
+            User.objects.filter(is_active=True, psc_profile__role__in=list(mr.MINUTE_TAKER_ROLES))
+            .select_related("psc_profile")
+        )
+    _notify_users(
+        takers,
+        title=(
+            f"Draft minutes overdue — {ref}".strip() if overdue
+            else f"Draft minutes to read back — {ref}".strip()
+        ),
+        body=(
+            "The draft minutes are past the time allowed to read them back and "
+            "submit them to the Secretary and Chairman."
+            if overdue else
+            "The draft minutes are built. Read them back and submit them for review."
+        ),
+        link=f"/secretariat/meetings/{minutes.meeting_id}/minutes",
+    )
+
+
+def notify_minutes_review_overdue(minutes) -> None:
+    """Tell the outstanding reviewers, and the Secretary, that they are late."""
+    from . import minutes_review as mr
+    from .models import Role
+
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    waiting = mr.pending_reviewers(minutes)
+    if not waiting:
+        return
+    recipients = list(
+        User.objects.filter(
+            is_active=True, psc_profile__role__in=list(set(waiting) | {Role.PSC_SECRETARY}),
+        ).select_related("psc_profile")
+    )
+    _notify_users(
+        recipients,
+        title=f"Minutes review overdue — {ref}".strip(),
+        body="These minutes are past their review window and still need approval.",
     )
 
 

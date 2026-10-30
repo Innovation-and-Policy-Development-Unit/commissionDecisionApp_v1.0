@@ -64,6 +64,7 @@ from .models import (
     Unit,
 )
 from .models import PasswordResetToken, PinResetToken
+from .minutes_access import FULL_ACCESS_ROLES as MINUTES_FULL_ACCESS_ROLES
 from .opsc_access import (
     COMMISSION_TASK_MANAGER_ROLES,
     COMMISSION_TASK_STAFF_ROLES,
@@ -12025,6 +12026,8 @@ class FeedbackChecklistViewSet(viewsets.ViewSet):
 # Who may create and edit minutes. The Senior Admin Officer is the minute-taker.
 _MINUTE_EDITOR_ROLES = {
     Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN, Role.CHAIRPERSON, Role.PSC_COMMISSIONER,
+    # Manager CSU takes the minutes in practice, so they draft and edit them.
+    Role.CSU_MANAGER,
 }
 
 
@@ -12042,10 +12045,8 @@ class MinutesViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = MinutesSerializer
 
-    _FULL_ACCESS_ROLES = {
-        Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.CHAIRPERSON,
-        Role.PSC_COMMISSIONER, Role.SENIOR_ADMIN_OFFICER,
-    }
+    # Same list the redaction uses — it was duplicated here and the two drifted.
+    _FULL_ACCESS_ROLES = MINUTES_FULL_ACCESS_ROLES
 
     def get_queryset(self):
         from .opsc_access import MINISTRY_SIDE_ROLES
@@ -12063,6 +12064,22 @@ class MinutesViewSet(viewsets.ModelViewSet):
             return qs
         if profile.role in MINISTRY_SIDE_ROLES:
             return qs.none()
+        if profile.role == Role.COMPLIANCE_MANAGER:
+            # They are a reviewer of any sitting that took compliance business,
+            # so those minutes have to be reachable before they are signed —
+            # otherwise the review they were asked to do is impossible. Other
+            # sittings stay as they are for everyone else: signed only.
+            from django.db.models import Q
+
+            from .models import AgendaCategory, RoutedUnit
+
+            compliance_meetings = AgendaItem.objects.filter(
+                Q(category=AgendaCategory.DISCIPLINE_COMPLIANCE)
+                | Q(submission__routed_unit=RoutedUnit.COMPLIANCE),
+            ).values("meeting_id")
+            return qs.filter(
+                Q(status=MinutesStatus.SIGNED) | Q(meeting_id__in=compliance_meetings),
+            )
         # All other OPSC-internal staff: endorsed minutes only.
         return qs.filter(status=MinutesStatus.SIGNED)
 
@@ -12257,12 +12274,17 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="submit-for-review")
     def submit_for_review(self, request, pk=None):
-        """Minute-taker submits drafted minutes to the Secretary and Chairman,
-        who each have 1 working day to independently approve."""
+        """Minute-taker submits drafted minutes on to the reviewers, who each
+        have their own window to approve independently."""
+        from . import minutes_review as mr
+
         minutes = self.get_object()
         profile = _profile(self.request.user)
-        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_SECRETARY, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the minute-taker (Senior Admin Officer), Secretary, or Admin can submit minutes for review.")
+        if profile.role not in (mr.MINUTE_TAKER_ROLES | {Role.PSC_SECRETARY, Role.PSC_ADMIN}):
+            raise PermissionDenied(
+                "Only the minute-taker (Senior Admin Officer or Manager CSU), the "
+                "Secretary, or an Admin can submit minutes for review.",
+            )
         if minutes.status != MinutesStatus.DRAFT:
             return Response({"detail": "Only draft minutes can be submitted for review."}, status=400)
 
@@ -12270,13 +12292,19 @@ class MinutesViewSet(viewsets.ModelViewSet):
         minutes.status = MinutesStatus.PENDING_SECRETARIAT_REVIEW
         minutes.submitted_for_review_by = request.user
         minutes.submitted_for_review_at = now
-        minutes.review_due_at = timezone.make_aware(
-            datetime.combine(add_working_days(now, 1), time(23, 59, 59)), timezone.get_current_timezone(),
-        )
+        minutes.review_due_at = mr.due_in_working_days(mr.secretariat_review_days(), start=now)
+        # The minute taker's own window closes the moment they hand it on, and
+        # the reviewers' chase starts fresh (minutes can come back and go round
+        # again via return-to-secretariat).
+        minutes.draft_review_due_at = None
+        minutes.draft_review_reminded_at = None
+        minutes.review_reminded_at = None
         minutes.secretary_reviewed_by = None
         minutes.secretary_reviewed_at = None
         minutes.chairman_reviewed_by = None
         minutes.chairman_reviewed_at = None
+        minutes.compliance_reviewed_by = None
+        minutes.compliance_reviewed_at = None
         minutes.save()
 
         try:
@@ -12290,15 +12318,23 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="secretariat-approve")
     def secretariat_approve(self, request, pk=None):
-        """Secretary or Chairman independently approves minutes that are
-        pending secretariat review. Once both have approved, status advances
-        to Reviewed and the minute-taker is notified."""
+        """Secretary, Chairman — and the Compliance Manager when the sitting
+        took compliance business — each approve independently. Once every
+        required approval is in, status advances to Reviewed and the
+        minute-taker is notified."""
+        from . import minutes_review as mr
+
         minutes = self.get_object()
         profile = _profile(self.request.user)
         if minutes.status != MinutesStatus.PENDING_SECRETARIAT_REVIEW:
             return Response({"detail": "Minutes are not pending secretariat review."}, status=400)
-        if profile.role not in {Role.PSC_SECRETARY, Role.CHAIRPERSON, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Secretary or Chairperson can approve minutes at this stage.")
+
+        compliance_required = mr.requires_compliance_review(minutes)
+        allowed = {Role.PSC_SECRETARY, Role.CHAIRPERSON, Role.PSC_ADMIN}
+        if compliance_required:
+            allowed.add(Role.COMPLIANCE_MANAGER)
+        if profile.role not in allowed:
+            raise PermissionDenied("You are not a reviewer of these minutes.")
 
         now = timezone.now()
         acted = False
@@ -12310,10 +12346,18 @@ class MinutesViewSet(viewsets.ModelViewSet):
             minutes.chairman_reviewed_by = request.user
             minutes.chairman_reviewed_at = now
             acted = True
+        if (
+            compliance_required
+            and profile.role in {Role.COMPLIANCE_MANAGER, Role.PSC_ADMIN}
+            and not minutes.compliance_reviewed_by
+        ):
+            minutes.compliance_reviewed_by = request.user
+            minutes.compliance_reviewed_at = now
+            acted = True
         if not acted:
             return Response({"detail": "You have already approved these minutes."}, status=400)
 
-        if minutes.secretary_reviewed_by and minutes.chairman_reviewed_by:
+        if mr.secretariat_review_complete(minutes):
             minutes.status = MinutesStatus.REVIEWED
         minutes.save()
 
@@ -12332,9 +12376,11 @@ class MinutesViewSet(viewsets.ModelViewSet):
         """Secretary circulates reviewed minutes to every Commissioner for
         comment ahead of the sitting where they'll be tabled for endorsement.
         2 working day SLA."""
+        from . import minutes_review as mr
+
         minutes = self.get_object()
         profile = _profile(self.request.user)
-        if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+        if profile.role not in (mr.MINUTE_TAKER_ROLES | {Role.PSC_SECRETARY, Role.PSC_ADMIN}):
             raise PermissionDenied("Only the Secretary, minute-taker, or Admin can circulate minutes to Commissioners.")
         if minutes.status != MinutesStatus.REVIEWED:
             return Response({"detail": "Minutes must be Reviewed before circulating to Commissioners."}, status=400)
@@ -12342,8 +12388,10 @@ class MinutesViewSet(viewsets.ModelViewSet):
         now = timezone.now()
         minutes.status = MinutesStatus.CIRCULATED_TO_COMMISSIONERS
         minutes.commissioner_circulated_at = now
-        minutes.commissioner_review_due_at = timezone.make_aware(
-            datetime.combine(add_working_days(now, 2), time(23, 59, 59)), timezone.get_current_timezone(),
+        # How long the Commissioners get is the window the Commission wanted to
+        # trial — a setting, not a number here.
+        minutes.commissioner_review_due_at = mr.due_in_working_days(
+            mr.commissioner_review_days(), start=now,
         )
         minutes.save()
 

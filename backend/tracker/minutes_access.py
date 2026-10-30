@@ -12,13 +12,18 @@ from __future__ import annotations
 
 from .models import AgendaItem, Minutes, Role
 
-# Roles that always see the full minutes (and may edit them).
+# Roles that always see the full minutes (and may edit them). The minute taker
+# is in here because they wrote the document: Manager CSU takes the minutes in
+# practice, the Senior Admin Officer is the role the SOP names. Both therefore
+# see every unit's agenda items rather than the redacted view their own unit
+# would otherwise get.
 FULL_ACCESS_ROLES = frozenset({
     Role.PSC_SECRETARY,
     Role.PSC_ADMIN,
     Role.CHAIRPERSON,
     Role.PSC_COMMISSIONER,
     Role.SENIOR_ADMIN_OFFICER,
+    Role.CSU_MANAGER,
 })
 
 # Unit staff → submission routing key (Submission.routed_unit).
