@@ -334,3 +334,54 @@ class RecallWindowCutoffTests(_Base):
         from tracker.recall_window import recall_deadline, submitted_at
 
         self.assertEqual(recall_deadline(self.sub), submitted_at(self.sub) + timedelta(hours=24))
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class LoginWithEmailTests(TestCase):
+    """Staff type the address their reset email went to; it must behave like the username."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.user = User.objects.create_user("emailuser", email="Email.User@Example.org", password="TestPass123!")
+        Profile.objects.create(user=self.user, role=Role.PSC_OFFICER)
+        self.client = APIClient()
+
+    def login(self, who, password="TestPass123!"):
+        return self.client.post("/api/auth/token/", {"username": who, "password": password})
+
+    def test_email_signs_in_like_the_username(self):
+        by_name = self.login("emailuser")
+        from django.core.cache import cache
+
+        cache.clear()
+        by_email = self.login("email.user@example.org")      # case does not matter
+        self.assertEqual(by_email.status_code, by_name.status_code, by_email.content)
+        self.assertEqual(by_email.status_code, 200)
+        self.assertNotEqual(by_email.json().get("detail"), "No active account found with the given credentials")
+
+    def test_wrong_password_by_email_is_the_same_generic_failure(self):
+        res = self.login("email.user@example.org", "wrong")
+        self.assertEqual(res.status_code, 401)
+
+    def test_unknown_email_fails_generically(self):
+        self.assertEqual(self.login("nobody@example.org").status_code, 401)
+
+    def test_an_address_shared_by_two_accounts_is_not_guessed(self):
+        other = User.objects.create_user("emailuser2", email="email.user@example.org", password="TestPass123!")
+        Profile.objects.create(user=other, role=Role.PSC_OFFICER)
+        self.assertEqual(self.login("email.user@example.org").status_code, 401)
+
+    def test_a_permanently_locked_account_stays_locked_when_the_email_is_used(self):
+        profile = self.user.psc_profile
+        profile.hard_locked = True
+        profile.save(update_fields=["hard_locked"])
+        res = self.login("email.user@example.org")
+        self.assertEqual(res.status_code, 403)
+        self.assertTrue(res.json().get("hard_locked"))
+
+    def test_a_deactivated_account_cannot_sign_in_by_email(self):
+        self.user.is_active = False
+        self.user.save()
+        self.assertEqual(self.login("email.user@example.org").status_code, 401)

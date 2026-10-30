@@ -109,6 +109,8 @@ export default function Login() {
   }
 
   const applyLoginResponse = data => {
+    // They may have typed their email address: from here on use the account's real username.
+    if (data?.username) setUsername(data.username)
     if (data?.email_otp_required) {
       setResendIn(data.resend_after_seconds ?? 60)
       setEmailHint(data.email_hint || '')
@@ -449,11 +451,11 @@ export default function Login() {
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <BaseInput
-                    label="Username"
+                    label="Username or email"
                     type="text"
                     value={username}
                     onChange={e => setUsername(e.target.value)}
-                    placeholder="Enter your username"
+                    placeholder="Username or email address"
                     required
                     autoFocus
                   />
