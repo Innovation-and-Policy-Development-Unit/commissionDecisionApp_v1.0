@@ -1521,12 +1521,23 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission = serializer.save(**kwargs)
 
         elif profile.role in {Role.VIPAM_PRINCIPAL, Role.VIPAM_SENIOR, Role.VIPAM_MANAGER}:
-            # VIPAM internal submission — goes through approval chain before Secretary
+            # VIPAM internal submission — goes through approval chain before Secretary.
+            # The responsible unit comes from the form type, not from who typed it:
+            # a Direct Appointment is an HR Unit submission type (RECRUIT-DIRECT,
+            # routed_unit='hr' since migration 0183) even when VIPAM raises it, and
+            # VIPAM staff reported it staying in their own queue. routed_unit was
+            # hardcoded to VIPAM here, and the auto-routing on entering Manager
+            # Checklist Review only fills the field when it is blank, so the form
+            # type's own routing never got a look in. Falls back to VIPAM for a form
+            # type that has no routing of its own.
+            from .intake_routing import routed_unit_for_form_type
+
             org = _resolve_opsc_submission_org(profile)
+            _form_code = (self.request.data.get("form_type_code") or "").strip()
             kwargs = {
                 "current_stage": WorkflowStage.DRAFT,
                 "is_internal": True,
-                "routed_unit": RoutedUnit.VIPAM,
+                "routed_unit": routed_unit_for_form_type(_form_code) or RoutedUnit.VIPAM,
                 "ministry_id": org["ministry_id"],
                 "department_id": org["department_id"],
                 "unit_id": org.get("unit_id"),

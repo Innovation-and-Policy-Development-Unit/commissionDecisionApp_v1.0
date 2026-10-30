@@ -1,18 +1,24 @@
 """OPSC staff training feedback: the submissions list defaults to every status,
-unit Principals see their Seniors' work, and a duplicate title is blocked while
-the first submission is still open."""
+unit Principals see their Seniors' work, a duplicate title is blocked while the
+first submission is still open, and a Direct Appointment belongs to the HR Unit
+however it was raised."""
 
+from importlib import import_module
+
+from django.apps import apps as global_apps
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from ..models import (
+    Department,
     FormCategory,
     Ministry,
     Profile,
     PSCFormType,
     Role,
+    RoutedUnit,
     Submission,
     WorkflowStage,
 )
@@ -154,3 +160,126 @@ class DuplicateTitleTests(_Base):
     def test_a_first_submission_is_not_blocked_by_itself(self):
         res = self._create("Brand new matter")
         self.assertEqual(res.status_code, 201, res.data)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class DirectAppointmentRoutingTests(TestCase):
+    """A Direct Appointment is an HR Unit submission type. VIPAM raised them and
+    they stayed in VIPAM's queue, because the create path stamped its own unit on
+    the submission and the auto-routing only fills that field when it is blank."""
+
+    def setUp(self):
+        # resolve_opsc_submission_org needs the OPM ministry and OPSC department.
+        self.opm = Ministry.objects.create(code="OPM", name="Ministry of the Prime Minister")
+        Department.objects.create(
+            ministry=self.opm, code="OPSC", name="Office of the Public Service Commission",
+        )
+        self.form_cat = FormCategory.objects.create(code="psc_da", name="PSC DA")
+        # RECRUIT-DIRECT is seeded by migrations 0157/0183/0186 — routed to the
+        # HR Unit, in the Direct Appointment section. Assert that, don't recreate it.
+        self.direct = PSCFormType.objects.get(code="RECRUIT-DIRECT")
+        self.assertEqual(self.direct.routed_unit, "hr")
+        self.assertEqual(self.direct.agenda_category, "direct_appointment")
+        self.vipam_own = PSCFormType.objects.create(
+            code="VIPAM-OWN", name="A VIPAM matter", routed_unit="",
+            agenda_category="other", is_active=True,
+        )
+        self.principal = User.objects.create_user("da_vipam_principal", password="x")
+        Profile.objects.create(user=self.principal, role=Role.VIPAM_PRINCIPAL, ministry=self.opm)
+
+    def _create(self, form_code, title):
+        client = APIClient()
+        client.force_authenticate(user=self.principal)
+        return client.post("/api/submissions/", {
+            "title": title,
+            "form_category": self.form_cat.id,
+            "form_type_code": form_code,
+            "received_at": timezone.now().isoformat(),
+        }, format="json")
+
+    def test_vipam_raising_a_direct_appointment_routes_it_to_hr(self):
+        res = self._create("RECRUIT-DIRECT", "Direct appointment, Harbour Master")
+        self.assertEqual(res.status_code, 201, res.data)
+        sub = Submission.objects.get(pk=res.data["id"])
+        self.assertEqual(sub.routed_unit, RoutedUnit.HR)
+
+    def test_a_form_type_with_no_routing_of_its_own_stays_with_vipam(self):
+        res = self._create("VIPAM-OWN", "Something VIPAM owns")
+        self.assertEqual(res.status_code, 201, res.data)
+        sub = Submission.objects.get(pk=res.data["id"])
+        self.assertEqual(sub.routed_unit, RoutedUnit.VIPAM)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class DirectAppointmentMigrationTests(TestCase):
+    """The data half: form types configured as VIPAM move to HR, and the
+    submissions the old create path stranded follow them — but only the ones
+    nobody has started on."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(code="ZZ_DA", name="Direct Appointment Ministry")
+        self.hr = User.objects.create_user("da_hr", password="x")
+        Profile.objects.create(user=self.hr, role=Role.MINISTRY_HR, ministry=self.ministry)
+        self.officer = User.objects.create_user("da_officer", password="x")
+        Profile.objects.create(user=self.officer, role=Role.VIPAM_PRINCIPAL, ministry=self.ministry)
+        self.migration = import_module(
+            "tracker.migrations.0290_direct_appointment_to_hr_unit",
+        )
+
+    def _run(self):
+        self.migration.direct_appointment_to_hr(global_apps, None)
+
+    def _sub(self, title, form_code, stage, **kwargs):
+        return Submission.objects.create(
+            title=title, ministry=self.ministry, form_type_code=form_code,
+            current_stage=stage, routed_unit="vipam",
+            received_at=timezone.now(), created_by=self.hr, **kwargs,
+        )
+
+    def test_a_vipam_configured_direct_appointment_type_moves_to_hr(self):
+        ft = PSCFormType.objects.create(
+            code="VIPAM-DIRECT", name="Direct Appointment (VIPAM)", routed_unit="vipam",
+            agenda_category="direct_appointment", is_active=True,
+        )
+        self._run()
+        ft.refresh_from_db()
+        self.assertEqual(ft.routed_unit, "hr")
+
+    def test_vipams_other_work_is_left_alone(self):
+        ft = PSCFormType.objects.create(
+            code="VIPAM-ACTING", name="Acting Appointment", routed_unit="vipam",
+            agenda_category="appointment", is_active=True,
+        )
+        self._run()
+        ft.refresh_from_db()
+        self.assertEqual(ft.routed_unit, "vipam", "only the Direct Appointment section moves")
+
+    def test_untouched_submissions_follow_the_type(self):
+        waiting = self._sub("Not started", "RECRUIT-DIRECT", WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        self._run()
+        waiting.refresh_from_db()
+        self.assertEqual(waiting.routed_unit, "hr")
+
+    def test_work_already_under_way_stays_with_vipam(self):
+        assigned = self._sub(
+            "Being assessed", "RECRUIT-DIRECT", WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+            assigned_to=self.officer,
+        )
+        in_assessment = self._sub("Under assessment", "RECRUIT-DIRECT", WorkflowStage.UNDER_ASSESSMENT)
+        self._run()
+        for sub in (assigned, in_assessment):
+            sub.refresh_from_db()
+            self.assertEqual(sub.routed_unit, "vipam", sub.title)
+
+    def test_running_it_twice_changes_nothing_further(self):
+        waiting = self._sub("Not started", "RECRUIT-DIRECT", WorkflowStage.DRAFT)
+        self._run()
+        self._run()
+        waiting.refresh_from_db()
+        self.assertEqual(waiting.routed_unit, "hr")
+
+    def test_it_is_a_no_op_with_nothing_to_move(self):
+        before = dict(PSCFormType.objects.values_list("code", "routed_unit"))
+        self._run()
+        self.assertEqual(dict(PSCFormType.objects.values_list("code", "routed_unit")), before)
+
