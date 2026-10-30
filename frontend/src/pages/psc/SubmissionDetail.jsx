@@ -879,16 +879,21 @@ export default function SubmissionDetail() {
 const hrAction = needsHrAction(submission?.current_stage)
 const terminal = isTerminal(submission?.current_stage)
 
-// The remarks from the transition that put this submission into its current
-// "sent back" stage — e.g. a Compliance Principal's comments, or a ministry
-// clarification reason — otherwise only visible by digging into the
-// Activity tab, even though the banner below tells you to act without
-// saying what was actually said.
-const latestReturnRemark = hrAction
-  ? [...(submission?.events || [])].reverse().find(
-      ev => ev.new_stage === submission?.current_stage && ev.remarks,
-    )
-  : null
+// The note from the transition that put this submission into its current
+// stage. Only the "send back", hold and decision actions ask for a note
+// (requiresNote in WorkflowActionsPanel), so whenever one is attached it is
+// something whoever now holds the submission has to read — a Principal
+// returning a draft to a Senior, the Secretary handing one back to a unit
+// Manager, a Compliance Principal's comments. This used to be shown only on
+// the two stages where ministry HR has to act, which left every
+// OPSC-internal return looking noteless: the recipient got the submission
+// back with no idea what had been asked of them.
+const latestStageNote = [...(submission?.events || [])].reverse().find(
+  ev => ev.new_stage === submission?.current_stage && ev.remarks,
+)
+const stageNoteHeading = hrAction
+  ? (submission?.routed_unit === 'compliance' ? "Principal's comments" : 'Reason for return')
+  : 'Note from the reviewer'
 
 const stageDescriptions = {
   commission_sitting: 'Matters at this stage may be deferred to a later meeting (tabled) or referred for legal advice as needed.',
@@ -1281,6 +1286,20 @@ const stageDescriptions = {
 
           {effectiveTab === 'overview' && (
           <>
+          {/* What the last reviewer wrote — shown on every stage, draft included */}
+          {latestStageNote && (
+            <div className="card card-compact border-l-4 border-l-orange-400">
+              <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-0.5">
+                {stageNoteHeading}
+              </p>
+              <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{latestStageNote.remarks}</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                {latestStageNote.actor_username}
+                {' · '}
+                {new Date(latestStageNote.created_at).toLocaleString('en-VU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          )}
           {/* Stage guidance (subway map is at page top) */}
           {submission.current_stage !== 'draft' && (hrAction || terminal || submission.current_stage === 'matters_arising') && (
             <div className={`card card-compact space-y-2 ${hrAction ? 'border-l-4 border-l-orange-400' : terminal ? 'border-l-4 border-l-emerald-400' : ''}`}>
@@ -1290,14 +1309,6 @@ const stageDescriptions = {
                     <RefreshCw size={12} className="animate-spin shrink-0" />
                     Action needed — see the journey map above for where to respond.
                   </p>
-                  {latestReturnRemark && (
-                    <div className="text-xs text-slate-700 dark:text-slate-300 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-900/40 rounded-lg px-3 py-2">
-                      <p className="font-semibold text-orange-700 dark:text-orange-300 mb-0.5">
-                        {submission?.routed_unit === 'compliance' ? "Principal's comments" : 'Reason for return'}
-                      </p>
-                      <p className="whitespace-pre-wrap">{latestReturnRemark.remarks}</p>
-                    </div>
-                  )}
                 </>
               )}
               {terminal && (

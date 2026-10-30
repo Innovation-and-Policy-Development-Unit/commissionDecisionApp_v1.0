@@ -56,6 +56,37 @@ MANAGER_ROLE_TO_ROUTED_UNIT: dict[str, str] = {
     Role.IPDU_MANAGER: "ipdu",
 }
 
+# A unit Principal oversees their unit's Seniors, so they are scoped to the
+# same `routed_unit` queryset their Manager gets — not just the submissions
+# assigned to them personally. Compliance is deliberately absent: its staff
+# are scoped by form category instead (see _submission_queryset_for).
+PRINCIPAL_ROLE_TO_ROUTED_UNIT: dict[str, str] = {
+    Role.ODU_PRINCIPAL: "odu",
+    Role.VIPAM_PRINCIPAL: "vipam",
+    Role.HR_UNIT_PRINCIPAL: "hr",
+}
+
+# Every OPSC unit role, for answering "whose unit does this staff member
+# belong to" — used to find an OPSC-internal paper a unit's own staff drafted
+# before `routed_unit` is derived on submit (it is blank until then).
+UNIT_STAFF_ROLE_TO_ROUTED_UNIT: dict[str, str] = {
+    Role.ODU_MANAGER: "odu",
+    Role.ODU_PRINCIPAL: "odu",
+    Role.ODU_SENIOR: "odu",
+    Role.HR_UNIT_MANAGER: "hr",
+    Role.HR_UNIT_PRINCIPAL: "hr",
+    Role.HR_UNIT_SENIOR: "hr",
+    Role.VIPAM_MANAGER: "vipam",
+    Role.VIPAM_PRINCIPAL: "vipam",
+    Role.VIPAM_SENIOR: "vipam",
+    Role.COMPLIANCE_MANAGER: "compliance",
+    Role.COMPLIANCE_PRINCIPAL: "compliance",
+    Role.COMPLIANCE_SENIOR: "compliance",
+    Role.CSU_MANAGER: "csu",
+    Role.CSU_SENIOR: "csu",
+    Role.IPDU_MANAGER: "ipdu",
+}
+
 MANAGER_ROLE_TO_PRINCIPAL_ROLE: dict[str, str] = {
     Role.ODU_MANAGER: Role.ODU_PRINCIPAL,
     Role.VIPAM_MANAGER: Role.VIPAM_PRINCIPAL,
@@ -94,6 +125,13 @@ COMMISSION_TASK_MANAGER_ROLES: frozenset[str] = OPSC_UNIT_MANAGER_ROLES | frozen
 COMMISSION_TASK_STAFF_ROLES: frozenset[str] = (
     OPSC_UNIT_PRINCIPAL_ROLES | frozenset({Role.PRINCIPAL_OFFICER, Role.SENIOR_OFFICER})
 )
+
+
+def unit_staff_roles_for(routed_unit: str | None) -> set[str]:
+    """Every OPSC role belonging to `routed_unit` (manager, principal, senior)."""
+    if not routed_unit:
+        return set()
+    return {r for r, unit in UNIT_STAFF_ROLE_TO_ROUTED_UNIT.items() if unit == routed_unit}
 
 
 def manager_allowed_staff_roles(manager_role: str | None) -> set[str]:

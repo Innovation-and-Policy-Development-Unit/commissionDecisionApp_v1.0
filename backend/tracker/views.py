@@ -69,7 +69,9 @@ from .opsc_access import (
     COMMISSION_TASK_STAFF_ROLES,
     MANAGER_ROLE_TO_ROUTED_UNIT,
     OPSC_UNIT_MANAGER_ROLES,
+    PRINCIPAL_ROLE_TO_ROUTED_UNIT,
     manager_allowed_staff_roles,
+    unit_staff_roles_for,
     user_can_view_all_commission_tasks,
     user_can_view_commission_minutes,
     user_can_work_commission_task,
@@ -296,6 +298,25 @@ def _resolve_opsc_submission_org(profile):
         raise PermissionDenied(str(exc)) from exc
 
 
+def _unit_queue(qs, routed_unit, user):
+    """Everything an OPSC unit's Manager and Principal should see.
+
+    That is the unit's routed queue, plus the OPSC-internal papers the unit's
+    own staff drafted: `routed_unit` is blank until it is derived on submit, so
+    those drafts would otherwise be invisible to everyone but their author —
+    which is what VIPAM hit when a saved submission vanished from the list.
+    """
+    return qs.filter(
+        models.Q(routed_unit=routed_unit)
+        | models.Q(assigned_to=user)
+        | models.Q(
+            is_internal=True,
+            routed_unit="",
+            created_by__psc_profile__role__in=unit_staff_roles_for(routed_unit),
+        )
+    )
+
+
 def _submission_queryset_for(user, *, with_events=True):
     # with_events=False skips the workflow-event prefetch for callers (the list)
     # whose serializer never shows events — it loads every event of every row.
@@ -344,15 +365,6 @@ def _submission_queryset_for(user, *, with_events=True):
         if not profile.department_id:
             return qs.none()
         return qs.filter(department_id=profile.department_id, is_internal=False)
-    _UNIT_PRINCIPAL_ROLES = {
-        Role.ODU_PRINCIPAL,
-        Role.HR_UNIT_PRINCIPAL,
-        Role.VIPAM_PRINCIPAL,
-        Role.COMPLIANCE_PRINCIPAL,
-        Role.ODU_SENIOR,
-        Role.HR_UNIT_SENIOR,
-        Role.VIPAM_SENIOR,
-    }
     if role in {Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL}:
         # Compliance staff see all OPSC-internal compliance submissions (created
         # natively in SCDMS — no external case link required).
@@ -360,9 +372,18 @@ def _submission_queryset_for(user, *, with_events=True):
             form_category__code__in=["COMPLIANCE", "discipline_compliance"],
             is_internal=True,
         )
-    if role in _UNIT_PRINCIPAL_ROLES:
-        # Principals see only submissions explicitly assigned to them
-        return qs.filter(assigned_to=user)
+    if role in PRINCIPAL_ROLE_TO_ROUTED_UNIT:
+        # A unit Principal supervises that unit's Senior Officers, so they see
+        # the whole unit's queue — the same `routed_unit` scope their Manager
+        # gets — not just what has been assigned to them personally. Before
+        # this, a Principal could not see their Seniors' work at all.
+        return _unit_queue(qs, PRINCIPAL_ROLE_TO_ROUTED_UNIT[role], user)
+    if role in {Role.ODU_SENIOR, Role.HR_UNIT_SENIOR, Role.VIPAM_SENIOR}:
+        # Senior Officers stay scoped to their own work: what the Manager or
+        # Principal assigned them, plus the OPSC-internal papers they drafted
+        # themselves (nobody has assigned those to anyone yet, so without the
+        # second clause a Senior's own draft 404'd on them).
+        return qs.filter(models.Q(assigned_to=user) | models.Q(is_internal=True, created_by=user))
     if role == Role.SENIOR_OFFICER:
         # Senior Officer has two unrelated capacities (see _UNIT_PRINCIPAL_ROLES
         # in transitions.py): a per-unit checklist-review assignee — scoped like
@@ -391,7 +412,7 @@ def _submission_queryset_for(user, *, with_events=True):
         Role.ODU_MANAGER: "odu",
     }
     if role in _unit_manager_to_routed:
-        return qs.filter(routed_unit=_unit_manager_to_routed[role])
+        return _unit_queue(qs, _unit_manager_to_routed[role], user)
     # Manager IPDU: like the unit managers above once a submission is routed
     # to "ipdu", but — like CSU Manager's own branch — must also see their
     # own drafts before routed_unit is set (it's blank until auto-derived on
@@ -1206,33 +1227,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         params = self.request.query_params
 
         stage = params.get('current_stage')
-        if stage == '__all__':
-            pass  # explicit "All statuses" — bypass the default narrowing below
-        elif stage:
+        # No stage requested means every stage in the viewer's queryset. Unit
+        # managers/principals/seniors used to get a narrowed default (only the
+        # stages still in their unit's court), which hid their own Drafts and
+        # anything they had forwarded on: VIPAM staff reported saving a
+        # submission and not finding it in the list afterwards. `__all__` is
+        # kept as a no-op so the Stage filter's "All statuses" option and any
+        # bookmarked link carrying it still work.
+        if stage and stage != '__all__':
             qs = qs.filter(current_stage=stage)
-        else:
-            # Unit managers/principals/seniors are scoped to their whole unit's
-            # queryset (routed_unit for ODU/HR/VIPAM, form_category for
-            # Compliance — see _submission_queryset_for), which never shrinks —
-            # a submission they've forwarded on (to the Secretary, Commission,
-            # etc.) stays in that queryset forever and clutters their default
-            # list. With no explicit stage requested, narrow to the stages
-            # still actually in their court; everything else is still one
-            # click away via the Stage filter's "All statuses" option.
-            profile = _profile(self.request.user)
-            _unit_scoped_roles = {
-                Role.ODU_MANAGER, Role.ODU_PRINCIPAL, Role.ODU_SENIOR,
-                Role.HR_UNIT_MANAGER, Role.HR_UNIT_PRINCIPAL, Role.HR_UNIT_SENIOR,
-                Role.VIPAM_MANAGER, Role.VIPAM_PRINCIPAL, Role.VIPAM_SENIOR,
-                Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_SENIOR,
-            }
-            if profile and profile.role in _unit_scoped_roles:
-                qs = qs.filter(current_stage__in={
-                    WorkflowStage.MANAGER_CHECKLIST_REVIEW,
-                    WorkflowStage.UNDER_ASSESSMENT,
-                    WorkflowStage.DEFERRED_BACK_TO_HR,
-                    WorkflowStage.DEFERRED_BACK_TO_UNIT,
-                })
 
         ministry = params.get('ministry')
         if ministry:

@@ -1423,6 +1423,56 @@ class SubmissionPrivateNoteSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "submission", "updated_at")
 
 
+# A submission is "settled" once the Commission has ruled on it or it has left
+# the pipeline. Until then its title is taken, so a second submission with the
+# same title from the same ministry/unit is a double entry rather than a new
+# matter. The deferred / tabled / sent-back stages are deliberately absent —
+# those submissions are still in flight.
+_SETTLED_STAGES = frozenset({
+    WorkflowStage.APPROVED,
+    WorkflowStage.NOTED,
+    WorkflowStage.NOT_APPROVED,
+    WorkflowStage.REJECTED,
+    WorkflowStage.RETURNED,
+    WorkflowStage.RECALLED,
+    WorkflowStage.MINUTES_DRAFTED_SIGNED,
+    WorkflowStage.DECISION_ENTERED_ASSIGNED,
+    WorkflowStage.UNDER_IMPLEMENTATION,
+    WorkflowStage.IMPLEMENTATION_REPORT,
+})
+
+
+def assert_title_not_duplicate(title, *, ministry_id, unit_id, is_test, exclude_pk=None):
+    """Reject a second still-open submission with the same title from the same
+    ministry — or, for OPSC-internal papers, the same unit.
+
+    Staff in training lodged the same paper twice without noticing. Scoping the
+    block to still-open submissions keeps legitimate repeats working: once the
+    first "Monthly report" has been decided, the next one goes through.
+    """
+    cleaned = (title or "").strip()
+    if not cleaned or ministry_id is None:
+        return
+    qs = Submission.objects.filter(
+        title__iexact=cleaned,
+        ministry_id=ministry_id,
+        unit_id=unit_id,
+        is_attachment=False,
+        is_test=is_test,
+    ).exclude(current_stage__in=_SETTLED_STAGES)
+    if exclude_pk:
+        qs = qs.exclude(pk=exclude_pk)
+    clash = qs.only("reference_number").first()
+    if clash:
+        label = clash.reference_number or "Another draft"
+        raise serializers.ValidationError({
+            "title": (
+                f"{label} already uses this title and is still open. Open that "
+                "submission instead, or give this one a title that tells the two apart."
+            ),
+        })
+
+
 class SubmissionWriteSerializer(serializers.ModelSerializer):
     # Ministry is required for external submissions but auto-resolved for internal
     # (CSU/ODU) submissions on the backend, so we make it optional here.
@@ -1558,6 +1608,39 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
                 apply_agenda_section_defaults(attrs)
             except ValueError as exc:
                 raise serializers.ValidationError({"agenda_category": str(exc)}) from exc
+
+        # Block a duplicate title (an attachment legitimately repeats its form's
+        # name, so those are exempt). The ministry/unit the submission belongs to
+        # is only resolved server-side after validation on the internal and
+        # ministry_hr create paths, so fall back to the creator's own org — the
+        # same "resolved later" caveat as notify_emails above.
+        if "title" in attrs and not (attrs.get("is_attachment") or getattr(self.instance, "is_attachment", False)):
+            ministry = attrs.get("ministry") or (self.instance.ministry if self.instance else None)
+            unit = attrs.get("unit") or (self.instance.unit if self.instance else None)
+            ministry_id = ministry.id if ministry else None
+            unit_id = unit.id if unit else None
+            if ministry_id is None:
+                from .opsc_access import MINISTRY_SIDE_ROLES
+
+                if role in MINISTRY_SIDE_ROLES:
+                    ministry_id, unit_id = profile.ministry_id, unit_id or profile.unit_id
+                else:
+                    from .org_structure import resolve_opsc_submission_org
+
+                    try:
+                        org = resolve_opsc_submission_org(profile)
+                    except ValueError:
+                        org = None  # the view rejects this create anyway
+                    if org:
+                        ministry_id = org["ministry_id"]
+                        unit_id = unit_id or org.get("unit_id")
+            assert_title_not_duplicate(
+                attrs["title"],
+                ministry_id=ministry_id,
+                unit_id=unit_id,
+                is_test=bool(attrs.get("is_test") or getattr(self.instance, "is_test", False)),
+                exclude_pk=self.instance.pk if self.instance else None,
+            )
         return attrs
 
     def create(self, validated_data):
