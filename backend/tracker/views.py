@@ -361,8 +361,10 @@ def _submission_queryset_for(user, *, with_events=True):
             is_internal=True,
         )
     if role in _UNIT_PRINCIPAL_ROLES:
-        # Principals see only submissions explicitly assigned to them
-        return qs.filter(assigned_to=user)
+        # Principals see submissions explicitly assigned to them, plus the OPSC-internal
+        # papers they created themselves (a VIPAM Principal drafts those, and nobody has
+        # assigned them to anyone yet, so without this their own draft 404'd).
+        return qs.filter(models.Q(assigned_to=user) | models.Q(is_internal=True, created_by=user))
     if role == Role.SENIOR_OFFICER:
         # Senior Officer has two unrelated capacities (see _UNIT_PRINCIPAL_ROLES
         # in transitions.py): a per-unit checklist-review assignee — scoped like
@@ -1505,6 +1507,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 "department_id": org["department_id"],
                 "unit_id": org.get("unit_id"),
             }
+            # The approval chain (Manager, then Secretary) hangs off the agenda section, and
+            # the internal submission form doesn't send one, so take it from the form type.
+            if not validated.get("agenda_category"):
+                _ft = PSCFormType.objects.filter(code=(self.request.data.get("form_type_code") or "").strip()).first()
+                if _ft and _ft.agenda_category:
+                    kwargs["agenda_category"] = _ft.agenda_category
             submission = serializer.save(**kwargs)
 
         elif profile.role in {

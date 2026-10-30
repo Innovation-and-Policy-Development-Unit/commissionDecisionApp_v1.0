@@ -385,3 +385,85 @@ class LoginWithEmailTests(TestCase):
         self.user.is_active = False
         self.user.save()
         self.assertEqual(self.login("email.user@example.org").status_code, 401)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class ResetThenLoginTests(TestCase):
+    """A password set through the emailed reset link must work for the very next sign-in."""
+
+    def test_new_password_signs_in_straight_away(self):
+        from django.core.cache import cache
+
+        from tracker.models import PasswordResetToken
+
+        cache.clear()
+        user = User.objects.create_user("resetter", email="resetter@example.org", password="OldPass123!")
+        Profile.objects.create(user=user, role=Role.PSC_OFFICER, force_password_change=True)
+        token = PasswordResetToken.generate_for(user)
+        client = APIClient()
+        res = client.post("/api/auth/password-reset/confirm/", {"token": token.token, "password": "BrandNew#2026x"})
+        self.assertEqual(res.status_code, 200, res.content)
+        old = client.post("/api/auth/token/", {"username": "resetter", "password": "OldPass123!"})
+        self.assertEqual(old.status_code, 401)
+        cache.clear()
+        new = client.post("/api/auth/token/", {"username": "resetter", "password": "BrandNew#2026x"})
+        self.assertEqual(new.status_code, 200, new.content)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class VipamInternalSubmissionTests(TestCase):
+    """VIPAM Principal drafts an internal practice paper → VIPAM Manager approves → Secretary."""
+
+    def setUp(self):
+        from tracker.models import FormCategory
+
+        opsc, _ = Ministry.objects.get_or_create(code="MPM", defaults={"name": "Prime Minister Office"})
+        self.principal = User.objects.create_user("vp_principal", password="x")
+        Profile.objects.create(user=self.principal, role=Role.VIPAM_PRINCIPAL, ministry=opsc)
+        self.manager = User.objects.create_user("vp_manager", password="x")
+        Profile.objects.create(user=self.manager, role=Role.VIPAM_MANAGER, ministry=opsc)
+        self.secretary = User.objects.create_user("vp_secretary", password="x")
+        Profile.objects.create(user=self.secretary, role=Role.PSC_SECRETARY, ministry=opsc)
+        self.category = FormCategory.objects.create(code="INTERNAL", name="Internal Submissions")
+        PSCFormType.objects.create(
+            code="INT-VIPAM-TEST", name="[PRACTICE] VIPAM internal submission",
+            form_category=self.category, routed_unit="vipam", agenda_category="training", is_active=True,
+        )
+
+    def api(self, user):
+        c = APIClient()
+        c.force_authenticate(user=user)
+        return c
+
+    def test_principal_can_see_and_send_their_own_draft_and_manager_can_approve(self):
+        c = self.api(self.principal)
+        res = c.post("/api/submissions/", {
+            "title": "[PRACTICE] VIPAM test", "form_type_code": "INT-VIPAM-TEST",
+            "form_category": self.category.id, "received_at": timezone.now().isoformat(),
+        }, format="json")
+        self.assertEqual(res.status_code, 201, res.content)
+        sid = res.json()["id"]
+        self.assertEqual(c.get(f"/api/submissions/{sid}/").status_code, 200)   # was 404
+
+        res = c.post(f"/api/submissions/{sid}/transition/", {"new_stage": "pending_manager_approval"}, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+
+        res = self.api(self.manager).post(
+            f"/api/submissions/{sid}/transition/", {"new_stage": "submitted"}, format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)   # last chain step: on to the Secretary
+        self.assertEqual(self.api(self.secretary).get(f"/api/submissions/{sid}/").status_code, 200)
+        res = self.api(self.secretary).post(
+            f"/api/submissions/{sid}/transition/", {"new_stage": "secretary_review"}, format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+
+    def test_a_principal_does_not_see_other_peoples_internal_drafts(self):
+        other = User.objects.create_user("vp_other", password="x")
+        Profile.objects.create(user=other, role=Role.VIPAM_PRINCIPAL, ministry=self.principal.psc_profile.ministry)
+        res = self.api(other).post("/api/submissions/", {
+            "title": "Theirs", "form_type_code": "INT-VIPAM-TEST", "form_category": self.category.id,
+            "received_at": timezone.now().isoformat(),
+        }, format="json")
+        sid = res.json()["id"]
+        self.assertEqual(self.api(self.principal).get(f"/api/submissions/{sid}/").status_code, 404)
