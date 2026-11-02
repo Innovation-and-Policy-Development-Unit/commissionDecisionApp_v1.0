@@ -658,6 +658,19 @@ class Meeting(models.Model):
         help_text="Chairperson who endorsed the agenda.",
     )
     agenda_approved_at = models.DateTimeField(null=True, blank=True)
+    # ── Flying agenda (extra items raised during the sitting) ──────────────
+    # Commissioners endorse the agenda first and then sometimes raise a few
+    # further matters, which go at the end of the agenda and have no
+    # submission behind them yet. The Secretary opens this per meeting;
+    # Manager CSU (who is in the room as minute taker) is then the one who
+    # can add them. Closed by default — nothing late gets on an agenda
+    # unless the Secretary has said so for that sitting.
+    flying_agenda_enabled = models.BooleanField(default=False)
+    flying_agenda_enabled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="flying_agendas_enabled",
+    )
+    flying_agenda_enabled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -771,9 +784,22 @@ class AgendaItem(models.Model):
         help_text="AI-generated 2–3 sentence agenda blurb for the sitting pack.",
     )
     agenda_blurb_processed = models.BooleanField(default=False)
+    # ── Flying agenda ──────────────────────────────────────────────────────
+    # Raised by a commissioner during the sitting, after the agenda was
+    # endorsed. These are appended after every endorsed item in the order
+    # they were raised, which is what `is_flying` leading Meta.ordering does
+    # — they must not be folded into a category's type-grouped sequence.
+    is_flying = models.BooleanField(
+        default=False,
+        help_text="Added during the sitting by Manager CSU, after the agenda was endorsed.",
+    )
+    raised_by_label = models.CharField(
+        max_length=150, blank=True,
+        help_text="Flying items only — the commissioner who raised the matter, as typed by Manager CSU.",
+    )
 
     class Meta:
-        ordering = ["category", "sequence", "added_at"]
+        ordering = ["is_flying", "category", "sequence", "added_at"]
         unique_together = ("meeting", "submission")
 
     def __str__(self):
@@ -781,6 +807,50 @@ class AgendaItem(models.Model):
 
         label = agenda_section_label(self.category or "")
         return f"{self.meeting.reference_number} [{label}] #{self.sequence}: {self.submission.reference_number}"
+
+
+class FlyingAgendaBrief(models.Model):
+    """What the responsible unit must put in front of the Commission for a
+    flying agenda item.
+
+    A full submission cannot be assembled in the time between a commissioner
+    raising the matter and the Commission working down the agenda to it, so
+    the responsible unit Manager files a short brief instead — subject,
+    background, recommendation. The formal paperwork follows after the
+    sitting if the Commission approves.
+    """
+
+    agenda_item = models.OneToOneField(
+        AgendaItem, on_delete=models.CASCADE, related_name="flying_brief",
+    )
+    subject = models.CharField(max_length=512, blank=True)
+    background = models.TextField(blank=True)
+    recommendation = models.TextField(blank=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="flying_briefs_completed",
+    )
+    completed_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Set once all three parts are filled — what 'ready for the Commission' means here.",
+    )
+    # Chasing state, so a warning fires once rather than on every minute save.
+    approaching_notified_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the responsible unit Manager was warned the Commission was close to this item.",
+    )
+    incomplete_alerted_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the Secretary and Manager CSU were told the item came up with no brief filed.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def is_complete(self) -> bool:
+        return bool(self.subject.strip() and self.background.strip() and self.recommendation.strip())
+
+    def __str__(self):
+        return f"Flying brief — {self.agenda_item}"
 
 
 class MeetingOtherMatter(models.Model):
@@ -4210,6 +4280,15 @@ class Minutes(models.Model):
         help_text="When signed minutes were circulated to managers for task allocation.")
     minutes_due_at = models.DateTimeField(null=True, blank=True,
         help_text="SLA: minutes must be finalised within 3 days of the meeting.")
+    # ── The minute-taker's own review of the draft, 1 working day ──────────
+    # Set when the draft is first built from the minute intake. The minute
+    # taker (Manager CSU in practice) reads their own draft back and submits
+    # it on; until this was tracked, a draft could sit untouched for days with
+    # nothing saying it was late.
+    draft_review_due_at = models.DateTimeField(null=True, blank=True)
+    # Chase state, so the daily sweep tells someone once rather than every day.
+    draft_review_reminded_at = models.DateTimeField(null=True, blank=True)
+    review_reminded_at = models.DateTimeField(null=True, blank=True)
     # ── Secretariat dual review: Secretary + Chairman, 1 working day SLA ──
     submitted_for_review_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
@@ -4227,6 +4306,16 @@ class Minutes(models.Model):
         on_delete=models.SET_NULL, related_name="chairman_reviewed_minutes",
     )
     chairman_reviewed_at = models.DateTimeField(null=True, blank=True)
+    # ── Compliance business: the Compliance Manager reviews it too ─────────
+    # Only required when the sitting actually took compliance matters (see
+    # minutes_review.requires_compliance_review) — otherwise the Compliance
+    # Manager is not a reviewer of these minutes at all and the Secretary and
+    # Chairman alone carry them.
+    compliance_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="compliance_reviewed_minutes",
+    )
+    compliance_reviewed_at = models.DateTimeField(null=True, blank=True)
     # ── Commissioner circulation (pre-signature), 2 working day SLA ───────
     commissioner_circulated_at = models.DateTimeField(null=True, blank=True)
     commissioner_review_due_at = models.DateTimeField(null=True, blank=True)
@@ -4311,7 +4400,9 @@ class MinuteAgendaIntake(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["agenda_item__sequence", "agenda_item__id"]
+        # Same flying-last order as AgendaItem, so the minute taker works down
+        # the list in the order the Commission actually takes the items.
+        ordering = ["agenda_item__is_flying", "agenda_item__sequence", "agenda_item__id"]
         constraints = [
             models.UniqueConstraint(
                 fields=["meeting", "agenda_item"],

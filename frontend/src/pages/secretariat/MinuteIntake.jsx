@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import PageHeader from '../../components/shared/PageHeader'
+import FlyingAgendaPanel from '../../components/meeting/FlyingAgendaPanel'
 import SubmissionContextPanel from '../../components/minute-intake/SubmissionContextPanel'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
@@ -462,6 +463,18 @@ export default function MinuteIntake() {
       {notAllowed && (
         <div className="mb-4 card p-4 text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
           {t('minute_intake.not_allowed')}
+        </div>
+      )}
+
+      {/* Extra matters the Commission raises mid-sitting — the Secretary opens
+          the window, Manager CSU adds them as they come. A new item appears in
+          the list below once the intake rows are reloaded. */}
+      {!notAllowed && activeMeetingId && (
+        <div className="mb-4">
+          <FlyingAgendaPanel
+            meetingId={activeMeetingId}
+            onItemAdded={() => loadIntake(activeMeetingId)}
+          />
         </div>
       )}
 
