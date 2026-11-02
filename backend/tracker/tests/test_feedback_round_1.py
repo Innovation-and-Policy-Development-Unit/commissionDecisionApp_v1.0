@@ -458,7 +458,7 @@ class VipamInternalSubmissionTests(TestCase):
         )
         self.assertEqual(res.status_code, 200, res.content)
 
-    def test_a_principal_does_not_see_other_peoples_internal_drafts(self):
+    def test_a_principal_sees_their_units_internal_drafts(self):
         other = User.objects.create_user("vp_other", password="x")
         Profile.objects.create(user=other, role=Role.VIPAM_PRINCIPAL, ministry=self.principal.psc_profile.ministry)
         res = self.api(other).post("/api/submissions/", {
@@ -466,4 +466,5 @@ class VipamInternalSubmissionTests(TestCase):
             "received_at": timezone.now().isoformat(),
         }, format="json")
         sid = res.json()["id"]
-        self.assertEqual(self.api(self.principal).get(f"/api/submissions/{sid}/").status_code, 404)
+        # A unit Principal supervises the whole unit's queue (OPSC training feedback).
+        self.assertEqual(self.api(self.principal).get(f"/api/submissions/{sid}/").status_code, 200)
