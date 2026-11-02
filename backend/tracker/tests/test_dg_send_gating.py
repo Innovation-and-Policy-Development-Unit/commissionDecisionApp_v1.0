@@ -152,3 +152,13 @@ class DgSignedLetterRequiredTests(TestCase):
         )
         res = self._submit()
         self.assertEqual(res.status_code, 200, res.content)
+
+    def test_dg_letter_slot_is_shown_as_required_while_with_hr(self):
+        client = APIClient()
+        client.force_authenticate(user=self.hr)
+        res = client.get(f"/api/submissions/{self.sub.id}/checklist/")
+        self.assertEqual(res.status_code, 200, res.content)
+        item = next(i for i in res.data if i["document"] == self.slot.id)
+        self.assertEqual(item["mandatory_for_stage"], WorkflowStage.DRAFT)
+        self.slot.refresh_from_db()
+        self.assertFalse(self.slot.mandatory_for_stage)
