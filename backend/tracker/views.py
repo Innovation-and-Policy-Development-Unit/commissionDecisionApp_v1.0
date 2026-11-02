@@ -361,8 +361,10 @@ def _submission_queryset_for(user, *, with_events=True):
             is_internal=True,
         )
     if role in _UNIT_PRINCIPAL_ROLES:
-        # Principals see only submissions explicitly assigned to them
-        return qs.filter(assigned_to=user)
+        # Principals see submissions explicitly assigned to them, plus the OPSC-internal
+        # papers they created themselves (a VIPAM Principal drafts those, and nobody has
+        # assigned them to anyone yet, so without this their own draft 404'd).
+        return qs.filter(models.Q(assigned_to=user) | models.Q(is_internal=True, created_by=user))
     if role == Role.SENIOR_OFFICER:
         # Senior Officer has two unrelated capacities (see _UNIT_PRINCIPAL_ROLES
         # in transitions.py): a per-unit checklist-review assignee — scoped like
@@ -1505,6 +1507,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 "department_id": org["department_id"],
                 "unit_id": org.get("unit_id"),
             }
+            # The approval chain (Manager, then Secretary) hangs off the agenda section, and
+            # the internal submission form doesn't send one, so take it from the form type.
+            if not validated.get("agenda_category"):
+                _ft = PSCFormType.objects.filter(code=(self.request.data.get("form_type_code") or "").strip()).first()
+                if _ft and _ft.agenda_category:
+                    kwargs["agenda_category"] = _ft.agenda_category
             submission = serializer.save(**kwargs)
 
         elif profile.role in {
@@ -7736,6 +7744,22 @@ from rest_framework_simplejwt.views import TokenObtainPairView as SimpleJWTToken
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
 
+def resolve_login_identifier(identifier: str) -> str:
+    """The username to sign in as for what the user typed in the username box.
+
+    An email address resolves to its account's username when exactly one active account
+    has that address. Anything else (a plain username, an unknown address, an address
+    shared by two accounts) is returned unchanged so it fails like any wrong username.
+    """
+    typed = (identifier or "").strip()
+    if "@" not in typed:
+        return typed
+    matches = list(
+        User.objects.filter(is_active=True, email__iexact=typed).exclude(email="").values_list("username", flat=True)[:2]
+    )
+    return matches[0] if len(matches) == 1 else typed
+
+
 @method_decorator(
     ratelimit(key="ip", rate=os.getenv("LOGIN_RATE_LIMIT", "5/m"), method="POST", block=True),
     name="dispatch",
@@ -7754,7 +7778,12 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
             request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
             or request.META.get("REMOTE_ADDR", "unknown")
         )
-        req_username = (request.data.get("username") or "").strip()
+        # Staff think of their email address as their login (it is what the password-reset
+        # and welcome emails go to), so accept it. Everything below, including the lockout
+        # checks, then runs on the real username.
+        req_username = resolve_login_identifier((request.data.get("username") or "").strip())
+        login_data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        login_data["username"] = req_username
 
         from .audit import log_action as _log
         from .models import AuditLog as _AL
@@ -7795,7 +7824,7 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
         failures_before = _axes_failures_for(req_username) if req_username else 0
 
         # Standard credential validation (django-axes enforces the temporary lock)
-        serializer = self.get_serializer(data=request.data)
+        serializer = self.get_serializer(data=login_data)
         try:
             serializer.is_valid(raise_exception=True)
         except Exception:
