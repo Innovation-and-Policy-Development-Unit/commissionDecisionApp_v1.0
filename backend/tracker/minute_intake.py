@@ -38,6 +38,12 @@ def meeting_allows_minute_intake(meeting: Meeting) -> bool:
 
 def _agenda_title_description(item: AgendaItem) -> tuple[str, str]:
     sub = item.submission
+    # A flying item's substance is the brief the responsible unit filed, not
+    # an agenda blurb — there was never an endorsed agenda entry to blurb.
+    brief = getattr(item, "flying_brief", None)
+    if item.is_flying and brief:
+        title = (brief.subject or "").strip() or (sub.title if sub else f"Agenda item {item.sequence}")
+        return title, (brief.background or "").strip()
     if item.category == "matters_arising" and item.matters_arising_meeting_ref:
         title = f"Matters arising — {item.matters_arising_agenda_no or ''}".strip()
         if item.matters_arising_meeting_ref:
@@ -53,7 +59,11 @@ def _agenda_title_description(item: AgendaItem) -> tuple[str, str]:
 def ensure_intake_rows(meeting: Meeting) -> list[MinuteAgendaIntake]:
     """Create empty intake rows for each agenda item if missing."""
     rows = []
-    for item in meeting.agenda_items.select_related("submission").order_by("category", "sequence", "id"):
+    for item in (
+        meeting.agenda_items
+        .select_related("submission", "flying_brief")
+        .order_by("is_flying", "category", "sequence", "id")
+    ):
         title, description = _agenda_title_description(item)
         row, _ = MinuteAgendaIntake.objects.get_or_create(
             meeting=meeting,
@@ -128,7 +138,15 @@ def apply_intake_to_minutes(meeting: Meeting, user) -> Minutes:
     if "closing" not in content:
         content["closing"] = ""
     minutes_obj.content = content
-    minutes_obj.save(update_fields=["content", "updated_at"])
+    fields = ["content", "updated_at"]
+    # The minute taker's own read-back window starts when the draft first
+    # exists, and only then — rebuilding it later must not reset the clock.
+    if created and minutes_obj.status == MinutesStatus.DRAFT:
+        from .minutes_review import draft_review_days, due_in_working_days
+
+        minutes_obj.draft_review_due_at = due_in_working_days(draft_review_days())
+        fields.append("draft_review_due_at")
+    minutes_obj.save(update_fields=fields)
     return minutes_obj
 
 

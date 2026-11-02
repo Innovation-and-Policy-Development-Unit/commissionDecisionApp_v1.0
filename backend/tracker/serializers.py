@@ -37,6 +37,7 @@ from .models import (
     PSCFormResponse,
     PSCFormType,
     SubmissionChecklistResponse,
+    FlyingAgendaBrief,
     Role,
     RoleDefinition,
     SecurityIncident,
@@ -900,6 +901,36 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     recall_deadline = serializers.SerializerMethodField()
     carryover_status = serializers.SerializerMethodField()
     on_commission_agenda = serializers.SerializerMethodField()
+    agenda_placement = serializers.SerializerMethodField()
+
+    def get_agenda_placement(self, obj):
+        """Which meeting and agenda number this submission sits at.
+
+        Staff asked to be told the agenda item a submission ended up as — it
+        was only ever visible on the board-paper header, not on the submission
+        itself. Reuses that header's "<section> — Item <n>" wording.
+        """
+        from .agenda_sections import agenda_section_label
+
+        meeting = obj.scheduled_meeting
+        if not meeting:
+            return None
+        item = next(
+            (i for i in obj.agenda_placements.all() if i.meeting_id == meeting.id), None,
+        )
+        if not item:
+            return None
+        return {
+            "agenda_item_id": item.id,
+            "meeting_reference": meeting.reference_number,
+            "meeting_date": meeting.date,
+            "agenda_status": meeting.agenda_status,
+            "section_label": agenda_section_label(item.category or ""),
+            "sequence": item.sequence,
+            "label": f"{agenda_section_label(item.category or '')} — Item {item.sequence}",
+            "is_flying": item.is_flying,
+            "raised_by": item.raised_by_label,
+        }
 
     def get_active_draft_delegate(self, obj):
         # `.all()` (not `.filter(...)`) so this reuses the prefetched,
@@ -1084,6 +1115,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "scheduled_meeting",
             "carryover_status",
             "on_commission_agenda",
+            "agenda_placement",
             "implementation_status",
             "implementation_due_date",
             "commission_approved_at",
@@ -1423,6 +1455,56 @@ class SubmissionPrivateNoteSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "submission", "updated_at")
 
 
+# A submission is "settled" once the Commission has ruled on it or it has left
+# the pipeline. Until then its title is taken, so a second submission with the
+# same title from the same ministry/unit is a double entry rather than a new
+# matter. The deferred / tabled / sent-back stages are deliberately absent —
+# those submissions are still in flight.
+_SETTLED_STAGES = frozenset({
+    WorkflowStage.APPROVED,
+    WorkflowStage.NOTED,
+    WorkflowStage.NOT_APPROVED,
+    WorkflowStage.REJECTED,
+    WorkflowStage.RETURNED,
+    WorkflowStage.RECALLED,
+    WorkflowStage.MINUTES_DRAFTED_SIGNED,
+    WorkflowStage.DECISION_ENTERED_ASSIGNED,
+    WorkflowStage.UNDER_IMPLEMENTATION,
+    WorkflowStage.IMPLEMENTATION_REPORT,
+})
+
+
+def assert_title_not_duplicate(title, *, ministry_id, unit_id, is_test, exclude_pk=None):
+    """Reject a second still-open submission with the same title from the same
+    ministry — or, for OPSC-internal papers, the same unit.
+
+    Staff in training lodged the same paper twice without noticing. Scoping the
+    block to still-open submissions keeps legitimate repeats working: once the
+    first "Monthly report" has been decided, the next one goes through.
+    """
+    cleaned = (title or "").strip()
+    if not cleaned or ministry_id is None:
+        return
+    qs = Submission.objects.filter(
+        title__iexact=cleaned,
+        ministry_id=ministry_id,
+        unit_id=unit_id,
+        is_attachment=False,
+        is_test=is_test,
+    ).exclude(current_stage__in=_SETTLED_STAGES)
+    if exclude_pk:
+        qs = qs.exclude(pk=exclude_pk)
+    clash = qs.only("reference_number").first()
+    if clash:
+        label = clash.reference_number or "Another draft"
+        raise serializers.ValidationError({
+            "title": (
+                f"{label} already uses this title and is still open. Open that "
+                "submission instead, or give this one a title that tells the two apart."
+            ),
+        })
+
+
 class SubmissionWriteSerializer(serializers.ModelSerializer):
     # Ministry is required for external submissions but auto-resolved for internal
     # (CSU/ODU) submissions on the backend, so we make it optional here.
@@ -1558,6 +1640,39 @@ class SubmissionWriteSerializer(serializers.ModelSerializer):
                 apply_agenda_section_defaults(attrs)
             except ValueError as exc:
                 raise serializers.ValidationError({"agenda_category": str(exc)}) from exc
+
+        # Block a duplicate title (an attachment legitimately repeats its form's
+        # name, so those are exempt). The ministry/unit the submission belongs to
+        # is only resolved server-side after validation on the internal and
+        # ministry_hr create paths, so fall back to the creator's own org — the
+        # same "resolved later" caveat as notify_emails above.
+        if "title" in attrs and not (attrs.get("is_attachment") or getattr(self.instance, "is_attachment", False)):
+            ministry = attrs.get("ministry") or (self.instance.ministry if self.instance else None)
+            unit = attrs.get("unit") or (self.instance.unit if self.instance else None)
+            ministry_id = ministry.id if ministry else None
+            unit_id = unit.id if unit else None
+            if ministry_id is None:
+                from .opsc_access import MINISTRY_SIDE_ROLES
+
+                if role in MINISTRY_SIDE_ROLES:
+                    ministry_id, unit_id = profile.ministry_id, unit_id or profile.unit_id
+                else:
+                    from .org_structure import resolve_opsc_submission_org
+
+                    try:
+                        org = resolve_opsc_submission_org(profile)
+                    except ValueError:
+                        org = None  # the view rejects this create anyway
+                    if org:
+                        ministry_id = org["ministry_id"]
+                        unit_id = unit_id or org.get("unit_id")
+            assert_title_not_duplicate(
+                attrs["title"],
+                ministry_id=ministry_id,
+                unit_id=unit_id,
+                is_test=bool(attrs.get("is_test") or getattr(self.instance, "is_test", False)),
+                exclude_pk=self.instance.pk if self.instance else None,
+            )
         return attrs
 
     def create(self, validated_data):
@@ -1920,6 +2035,26 @@ class UserAdminUpdateSerializer(serializers.Serializer):
         return instance
 
 
+class FlyingAgendaBriefSerializer(serializers.ModelSerializer):
+    """The short brief a responsible unit files for a flying agenda item."""
+
+    is_complete = serializers.BooleanField(read_only=True)
+    completed_by_name = serializers.SerializerMethodField()
+
+    def get_completed_by_name(self, obj):
+        if not obj.completed_by_id:
+            return ""
+        return obj.completed_by.get_full_name() or obj.completed_by.username
+
+    class Meta:
+        model = FlyingAgendaBrief
+        fields = (
+            "subject", "background", "recommendation",
+            "is_complete", "completed_at", "completed_by_name", "updated_at",
+        )
+        read_only_fields = ("completed_at", "updated_at")
+
+
 class AgendaItemSerializer(serializers.ModelSerializer):
     submission_reference = serializers.CharField(source="submission.reference_number", read_only=True)
     submission_title     = serializers.CharField(source="submission.title", read_only=True)
@@ -1927,6 +2062,14 @@ class AgendaItemSerializer(serializers.ModelSerializer):
     category_display     = serializers.SerializerMethodField()
     form_type_display    = serializers.SerializerMethodField()
     lodged_from_paper    = serializers.BooleanField(source="submission.lodged_from_paper", read_only=True)
+    responsible_unit     = serializers.CharField(source="submission.routed_unit", read_only=True)
+    flying_brief         = serializers.SerializerMethodField()
+
+    def get_flying_brief(self, obj):
+        if not obj.is_flying:
+            return None
+        brief = getattr(obj, "flying_brief", None)
+        return FlyingAgendaBriefSerializer(brief).data if brief else None
 
     def get_submission_ministry(self, obj):
         return obj.submission.ministry.name if obj.submission.ministry else ""
@@ -1963,8 +2106,12 @@ class AgendaItemSerializer(serializers.ModelSerializer):
             "form_type_code", "form_type_display",
             "matters_arising_agenda_no", "matters_arising_meeting_ref",
             "agenda_blurb", "agenda_blurb_processed", "lodged_from_paper",
+            "is_flying", "raised_by_label", "responsible_unit", "flying_brief",
         )
-        read_only_fields = ("agenda_blurb", "agenda_blurb_processed", "form_type_code")
+        read_only_fields = (
+            "agenda_blurb", "agenda_blurb_processed", "form_type_code",
+            "is_flying", "raised_by_label",
+        )
 
 
 class MeetingSerializer(serializers.ModelSerializer):
@@ -2591,6 +2738,8 @@ class MinutesSerializer(serializers.ModelSerializer):
     submitted_for_review_by_name = serializers.SerializerMethodField()
     secretary_reviewed_by_name = serializers.SerializerMethodField()
     chairman_reviewed_by_name = serializers.SerializerMethodField()
+    compliance_reviewed_by_name = serializers.SerializerMethodField()
+    review_state = serializers.SerializerMethodField()
     returned_by_name = serializers.SerializerMethodField()
     tasks_allocated_by_name = serializers.SerializerMethodField()
     comments = MinutesCommentSerializer(many=True, read_only=True)
@@ -2607,6 +2756,8 @@ class MinutesSerializer(serializers.ModelSerializer):
             "submitted_for_review_by", "submitted_for_review_by_name", "submitted_for_review_at", "review_due_at",
             "secretary_reviewed_by", "secretary_reviewed_by_name", "secretary_reviewed_at",
             "chairman_reviewed_by", "chairman_reviewed_by_name", "chairman_reviewed_at",
+            "compliance_reviewed_by", "compliance_reviewed_by_name", "compliance_reviewed_at",
+            "draft_review_due_at", "review_state",
             "commissioner_circulated_at", "commissioner_review_due_at",
             "returned_by", "returned_by_name", "returned_at",
             "tasks_allocated_by", "tasks_allocated_by_name", "tasks_allocated_at",
@@ -2621,6 +2772,8 @@ class MinutesSerializer(serializers.ModelSerializer):
             "submitted_for_review_by", "submitted_for_review_at", "review_due_at",
             "secretary_reviewed_by", "secretary_reviewed_at",
             "chairman_reviewed_by", "chairman_reviewed_at",
+            "compliance_reviewed_by", "compliance_reviewed_at",
+            "draft_review_due_at",
             "commissioner_circulated_at", "commissioner_review_due_at",
             "returned_by", "returned_at",
             "tasks_allocated_by", "tasks_allocated_at",
@@ -2634,6 +2787,22 @@ class MinutesSerializer(serializers.ModelSerializer):
 
     def get_chairman_reviewed_by_name(self, obj):
         return obj.chairman_reviewed_by.username if obj.chairman_reviewed_by else None
+
+    def get_compliance_reviewed_by_name(self, obj):
+        return obj.compliance_reviewed_by.username if obj.compliance_reviewed_by else None
+
+    def get_review_state(self, obj):
+        """Who still has to approve, and how long each stage was given — so the
+        UI can say what it is waiting on without re-deriving the rules."""
+        from . import minutes_review as mr
+
+        return {
+            "compliance_required": mr.requires_compliance_review(obj),
+            "pending_reviewers": mr.pending_reviewers(obj),
+            "draft_review_days": mr.draft_review_days(),
+            "secretariat_review_days": mr.secretariat_review_days(),
+            "commissioner_review_days": mr.commissioner_review_days(),
+        }
 
     def get_returned_by_name(self, obj):
         return obj.returned_by.username if obj.returned_by else None

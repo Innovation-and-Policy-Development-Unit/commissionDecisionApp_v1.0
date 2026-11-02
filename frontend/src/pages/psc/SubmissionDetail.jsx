@@ -5,6 +5,7 @@ import PageHeader from '../../components/shared/PageHeader'
 import SubmissionSubwayMap from '../../components/submissions/SubmissionSubwayMap'
 import VisualAuditTrail from '../../components/audit/VisualAuditTrail'
 import VerificationBadge from '../../components/audit/VerificationBadge'
+import FlyingBriefPanel from '../../components/submissions/FlyingBriefPanel'
 import SubmissionPresenceBar from '../../components/submissions/SubmissionPresenceBar'
 import SubmissionActivity from '../../components/submissions/SubmissionActivity'
 import PrivateNotePanel from '../../components/submissions/PrivateNotePanel'
@@ -21,7 +22,7 @@ import {
   stageLabel, stageBadgeClass, stageDotClass, stageMeta,
   needsHrAction, isTerminal, STAGE_LABELS,
 } from '../../constants/stages'
-import { ArrowRight, AlertTriangle, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardCheck, LayoutGrid, MessageSquare, FileSignature, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download } from 'lucide-react'
+import { ArrowRight, AlertTriangle, CalendarDays, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardCheck, LayoutGrid, MessageSquare, FileSignature, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
@@ -879,16 +880,21 @@ export default function SubmissionDetail() {
 const hrAction = needsHrAction(submission?.current_stage)
 const terminal = isTerminal(submission?.current_stage)
 
-// The remarks from the transition that put this submission into its current
-// "sent back" stage — e.g. a Compliance Principal's comments, or a ministry
-// clarification reason — otherwise only visible by digging into the
-// Activity tab, even though the banner below tells you to act without
-// saying what was actually said.
-const latestReturnRemark = hrAction
-  ? [...(submission?.events || [])].reverse().find(
-      ev => ev.new_stage === submission?.current_stage && ev.remarks,
-    )
-  : null
+// The note from the transition that put this submission into its current
+// stage. Only the "send back", hold and decision actions ask for a note
+// (requiresNote in WorkflowActionsPanel), so whenever one is attached it is
+// something whoever now holds the submission has to read — a Principal
+// returning a draft to a Senior, the Secretary handing one back to a unit
+// Manager, a Compliance Principal's comments. This used to be shown only on
+// the two stages where ministry HR has to act, which left every
+// OPSC-internal return looking noteless: the recipient got the submission
+// back with no idea what had been asked of them.
+const latestStageNote = [...(submission?.events || [])].reverse().find(
+  ev => ev.new_stage === submission?.current_stage && ev.remarks,
+)
+const stageNoteHeading = hrAction
+  ? (submission?.routed_unit === 'compliance' ? "Principal's comments" : 'Reason for return')
+  : 'Note from the reviewer'
 
 const stageDescriptions = {
   commission_sitting: 'Matters at this stage may be deferred to a later meeting (tabled) or referred for legal advice as needed.',
@@ -1146,6 +1152,29 @@ const stageDescriptions = {
         onStationSelect={setAuditStationFilter}
       />
 
+      {/* Staff asked to be told which agenda number a submission became — it
+          was only ever on the board-paper header, never on the submission. */}
+      {submission.agenda_placement && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-2 text-xs">
+          <CalendarDays size={13} className="text-slate-400 shrink-0" />
+          <span className="font-semibold text-slate-900 dark:text-slate-100">
+            {submission.agenda_placement.meeting_reference}
+          </span>
+          <span className="text-slate-400">·</span>
+          <span className="text-slate-700 dark:text-slate-300">{submission.agenda_placement.label}</span>
+          {submission.agenda_placement.agenda_status === 'circulated' && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+              Endorsed
+            </span>
+          )}
+          {submission.agenda_placement.is_flying && (
+            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+              Raised at the sitting
+            </span>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />{error}
@@ -1281,6 +1310,26 @@ const stageDescriptions = {
 
           {effectiveTab === 'overview' && (
           <>
+          {submission.agenda_placement?.is_flying && (
+            <FlyingBriefPanel
+              placement={submission.agenda_placement}
+              routedUnit={submission.routed_unit}
+            />
+          )}
+          {/* What the last reviewer wrote — shown on every stage, draft included */}
+          {latestStageNote && (
+            <div className="card card-compact border-l-4 border-l-orange-400">
+              <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-0.5">
+                {stageNoteHeading}
+              </p>
+              <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{latestStageNote.remarks}</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                {latestStageNote.actor_username}
+                {' · '}
+                {new Date(latestStageNote.created_at).toLocaleString('en-VU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          )}
           {/* Stage guidance (subway map is at page top) */}
           {submission.current_stage !== 'draft' && (hrAction || terminal || submission.current_stage === 'matters_arising') && (
             <div className={`card card-compact space-y-2 ${hrAction ? 'border-l-4 border-l-orange-400' : terminal ? 'border-l-4 border-l-emerald-400' : ''}`}>
@@ -1290,14 +1339,6 @@ const stageDescriptions = {
                     <RefreshCw size={12} className="animate-spin shrink-0" />
                     Action needed — see the journey map above for where to respond.
                   </p>
-                  {latestReturnRemark && (
-                    <div className="text-xs text-slate-700 dark:text-slate-300 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-900/40 rounded-lg px-3 py-2">
-                      <p className="font-semibold text-orange-700 dark:text-orange-300 mb-0.5">
-                        {submission?.routed_unit === 'compliance' ? "Principal's comments" : 'Reason for return'}
-                      </p>
-                      <p className="whitespace-pre-wrap">{latestReturnRemark.remarks}</p>
-                    </div>
-                  )}
                 </>
               )}
               {terminal && (

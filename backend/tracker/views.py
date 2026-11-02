@@ -64,12 +64,15 @@ from .models import (
     Unit,
 )
 from .models import PasswordResetToken, PinResetToken
+from .minutes_access import FULL_ACCESS_ROLES as MINUTES_FULL_ACCESS_ROLES
 from .opsc_access import (
     COMMISSION_TASK_MANAGER_ROLES,
     COMMISSION_TASK_STAFF_ROLES,
     MANAGER_ROLE_TO_ROUTED_UNIT,
     OPSC_UNIT_MANAGER_ROLES,
+    PRINCIPAL_ROLE_TO_ROUTED_UNIT,
     manager_allowed_staff_roles,
+    unit_staff_roles_for,
     user_can_view_all_commission_tasks,
     user_can_view_commission_minutes,
     user_can_work_commission_task,
@@ -136,6 +139,7 @@ from .serializers import (
     SessionPinVerifySerializer,
     DecisionExtractSerializer,
     CommissionSubTaskSerializer,
+    FlyingAgendaBriefSerializer,
     FlyingMinuteSignatureSerializer,
     TaskReportSerializer,
     ChecklistItemSerializer,
@@ -296,6 +300,25 @@ def _resolve_opsc_submission_org(profile):
         raise PermissionDenied(str(exc)) from exc
 
 
+def _unit_queue(qs, routed_unit, user):
+    """Everything an OPSC unit's Manager and Principal should see.
+
+    That is the unit's routed queue, plus the OPSC-internal papers the unit's
+    own staff drafted: `routed_unit` is blank until it is derived on submit, so
+    those drafts would otherwise be invisible to everyone but their author —
+    which is what VIPAM hit when a saved submission vanished from the list.
+    """
+    return qs.filter(
+        models.Q(routed_unit=routed_unit)
+        | models.Q(assigned_to=user)
+        | models.Q(
+            is_internal=True,
+            routed_unit="",
+            created_by__psc_profile__role__in=unit_staff_roles_for(routed_unit),
+        )
+    )
+
+
 def _submission_queryset_for(user, *, with_events=True):
     # with_events=False skips the workflow-event prefetch for callers (the list)
     # whose serializer never shows events — it loads every event of every row.
@@ -311,7 +334,7 @@ def _submission_queryset_for(user, *, with_events=True):
         "assigned_to__psc_profile",
         "dg_endorsed_by",
     ).prefetch_related(
-        *(["events__actor"] if with_events else []),
+        *(["events__actor", "agenda_placements"] if with_events else []),
         "attached_submissions",
         Prefetch(
             "co_assignments",
@@ -344,15 +367,6 @@ def _submission_queryset_for(user, *, with_events=True):
         if not profile.department_id:
             return qs.none()
         return qs.filter(department_id=profile.department_id, is_internal=False)
-    _UNIT_PRINCIPAL_ROLES = {
-        Role.ODU_PRINCIPAL,
-        Role.HR_UNIT_PRINCIPAL,
-        Role.VIPAM_PRINCIPAL,
-        Role.COMPLIANCE_PRINCIPAL,
-        Role.ODU_SENIOR,
-        Role.HR_UNIT_SENIOR,
-        Role.VIPAM_SENIOR,
-    }
     if role in {Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL}:
         # Compliance staff see all OPSC-internal compliance submissions (created
         # natively in SCDMS — no external case link required).
@@ -360,9 +374,18 @@ def _submission_queryset_for(user, *, with_events=True):
             form_category__code__in=["COMPLIANCE", "discipline_compliance"],
             is_internal=True,
         )
-    if role in _UNIT_PRINCIPAL_ROLES:
-        # Principals see only submissions explicitly assigned to them
-        return qs.filter(assigned_to=user)
+    if role in PRINCIPAL_ROLE_TO_ROUTED_UNIT:
+        # A unit Principal supervises that unit's Senior Officers, so they see
+        # the whole unit's queue — the same `routed_unit` scope their Manager
+        # gets — not just what has been assigned to them personally. Before
+        # this, a Principal could not see their Seniors' work at all.
+        return _unit_queue(qs, PRINCIPAL_ROLE_TO_ROUTED_UNIT[role], user)
+    if role in {Role.ODU_SENIOR, Role.HR_UNIT_SENIOR, Role.VIPAM_SENIOR}:
+        # Senior Officers stay scoped to their own work: what the Manager or
+        # Principal assigned them, plus the OPSC-internal papers they drafted
+        # themselves (nobody has assigned those to anyone yet, so without the
+        # second clause a Senior's own draft 404'd on them).
+        return qs.filter(models.Q(assigned_to=user) | models.Q(is_internal=True, created_by=user))
     if role == Role.SENIOR_OFFICER:
         # Senior Officer has two unrelated capacities (see _UNIT_PRINCIPAL_ROLES
         # in transitions.py): a per-unit checklist-review assignee — scoped like
@@ -391,7 +414,7 @@ def _submission_queryset_for(user, *, with_events=True):
         Role.ODU_MANAGER: "odu",
     }
     if role in _unit_manager_to_routed:
-        return qs.filter(routed_unit=_unit_manager_to_routed[role])
+        return _unit_queue(qs, _unit_manager_to_routed[role], user)
     # Manager IPDU: like the unit managers above once a submission is routed
     # to "ipdu", but — like CSU Manager's own branch — must also see their
     # own drafts before routed_unit is set (it's blank until auto-derived on
@@ -557,6 +580,28 @@ def _email_dg_approval_link(submission_id):
     except Exception:
         logging.getLogger("scdms.app").exception(
             "DG approval link could not be sent for submission %s", submission_id
+        )
+
+
+def _notify_flying_item_added_safe(item_id):
+    """Tell the responsible unit Manager about a flying agenda item.
+
+    Best-effort on purpose: a notification that cannot be delivered must not
+    take the agenda item with it — the Commission has already raised the
+    matter and the item has to stay on the agenda either way.
+    """
+    import logging
+
+    from .models import AgendaItem
+
+    try:
+        from .email_notify import notify_flying_item_added
+
+        item = AgendaItem.objects.select_related("submission", "meeting").get(pk=item_id)
+        notify_flying_item_added(item)
+    except Exception:
+        logging.getLogger("scdms.app").exception(
+            "Flying agenda notification could not be sent for agenda item %s", item_id
         )
 
 
@@ -1206,33 +1251,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         params = self.request.query_params
 
         stage = params.get('current_stage')
-        if stage == '__all__':
-            pass  # explicit "All statuses" — bypass the default narrowing below
-        elif stage:
+        # No stage requested means every stage in the viewer's queryset. Unit
+        # managers/principals/seniors used to get a narrowed default (only the
+        # stages still in their unit's court), which hid their own Drafts and
+        # anything they had forwarded on: VIPAM staff reported saving a
+        # submission and not finding it in the list afterwards. `__all__` is
+        # kept as a no-op so the Stage filter's "All statuses" option and any
+        # bookmarked link carrying it still work.
+        if stage and stage != '__all__':
             qs = qs.filter(current_stage=stage)
-        else:
-            # Unit managers/principals/seniors are scoped to their whole unit's
-            # queryset (routed_unit for ODU/HR/VIPAM, form_category for
-            # Compliance — see _submission_queryset_for), which never shrinks —
-            # a submission they've forwarded on (to the Secretary, Commission,
-            # etc.) stays in that queryset forever and clutters their default
-            # list. With no explicit stage requested, narrow to the stages
-            # still actually in their court; everything else is still one
-            # click away via the Stage filter's "All statuses" option.
-            profile = _profile(self.request.user)
-            _unit_scoped_roles = {
-                Role.ODU_MANAGER, Role.ODU_PRINCIPAL, Role.ODU_SENIOR,
-                Role.HR_UNIT_MANAGER, Role.HR_UNIT_PRINCIPAL, Role.HR_UNIT_SENIOR,
-                Role.VIPAM_MANAGER, Role.VIPAM_PRINCIPAL, Role.VIPAM_SENIOR,
-                Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_SENIOR,
-            }
-            if profile and profile.role in _unit_scoped_roles:
-                qs = qs.filter(current_stage__in={
-                    WorkflowStage.MANAGER_CHECKLIST_REVIEW,
-                    WorkflowStage.UNDER_ASSESSMENT,
-                    WorkflowStage.DEFERRED_BACK_TO_HR,
-                    WorkflowStage.DEFERRED_BACK_TO_UNIT,
-                })
 
         ministry = params.get('ministry')
         if ministry:
@@ -1495,16 +1522,33 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission = serializer.save(**kwargs)
 
         elif profile.role in {Role.VIPAM_PRINCIPAL, Role.VIPAM_SENIOR, Role.VIPAM_MANAGER}:
-            # VIPAM internal submission — goes through approval chain before Secretary
+            # VIPAM internal submission — goes through approval chain before Secretary.
+            # The responsible unit comes from the form type, not from who typed it:
+            # a Direct Appointment is an HR Unit submission type (RECRUIT-DIRECT,
+            # routed_unit='hr' since migration 0183) even when VIPAM raises it, and
+            # VIPAM staff reported it staying in their own queue. routed_unit was
+            # hardcoded to VIPAM here, and the auto-routing on entering Manager
+            # Checklist Review only fills the field when it is blank, so the form
+            # type's own routing never got a look in. Falls back to VIPAM for a form
+            # type that has no routing of its own.
+            from .intake_routing import routed_unit_for_form_type
+
             org = _resolve_opsc_submission_org(profile)
+            _form_code = (self.request.data.get("form_type_code") or "").strip()
             kwargs = {
                 "current_stage": WorkflowStage.DRAFT,
                 "is_internal": True,
-                "routed_unit": RoutedUnit.VIPAM,
+                "routed_unit": routed_unit_for_form_type(_form_code) or RoutedUnit.VIPAM,
                 "ministry_id": org["ministry_id"],
                 "department_id": org["department_id"],
                 "unit_id": org.get("unit_id"),
             }
+            # The approval chain (Manager, then Secretary) hangs off the agenda section, and
+            # the internal submission form doesn't send one, so take it from the form type.
+            if not validated.get("agenda_category"):
+                _ft = PSCFormType.objects.filter(code=(self.request.data.get("form_type_code") or "").strip()).first()
+                if _ft and _ft.agenda_category:
+                    kwargs["agenda_category"] = _ft.agenda_category
             submission = serializer.save(**kwargs)
 
         elif profile.role in {
@@ -7736,6 +7780,22 @@ from rest_framework_simplejwt.views import TokenObtainPairView as SimpleJWTToken
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
 
+def resolve_login_identifier(identifier: str) -> str:
+    """The username to sign in as for what the user typed in the username box.
+
+    An email address resolves to its account's username when exactly one active account
+    has that address. Anything else (a plain username, an unknown address, an address
+    shared by two accounts) is returned unchanged so it fails like any wrong username.
+    """
+    typed = (identifier or "").strip()
+    if "@" not in typed:
+        return typed
+    matches = list(
+        User.objects.filter(is_active=True, email__iexact=typed).exclude(email="").values_list("username", flat=True)[:2]
+    )
+    return matches[0] if len(matches) == 1 else typed
+
+
 @method_decorator(
     ratelimit(key="ip", rate=os.getenv("LOGIN_RATE_LIMIT", "5/m"), method="POST", block=True),
     name="dispatch",
@@ -7754,7 +7814,12 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
             request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
             or request.META.get("REMOTE_ADDR", "unknown")
         )
-        req_username = (request.data.get("username") or "").strip()
+        # Staff think of their email address as their login (it is what the password-reset
+        # and welcome emails go to), so accept it. Everything below, including the lockout
+        # checks, then runs on the real username.
+        req_username = resolve_login_identifier((request.data.get("username") or "").strip())
+        login_data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        login_data["username"] = req_username
 
         from .audit import log_action as _log
         from .models import AuditLog as _AL
@@ -7795,7 +7860,7 @@ class TokenObtainPairView(SimpleJWTTokenObtainPairView):
         failures_before = _axes_failures_for(req_username) if req_username else 0
 
         # Standard credential validation (django-axes enforces the temporary lock)
-        serializer = self.get_serializer(data=request.data)
+        serializer = self.get_serializer(data=login_data)
         try:
             serializer.is_valid(raise_exception=True)
         except Exception:
@@ -9229,6 +9294,10 @@ class MeetingViewSet(viewsets.ModelViewSet):
         Role.SENIOR_ADMIN_OFFICER,
         Role.PSC_ADMIN,
         Role.PSC_COMMISSIONER,
+        # Manager CSU takes the minutes for the sitting in practice, and the
+        # flying agenda leans on that: saving the minutes is how the system
+        # learns which items the Commission has already taken.
+        Role.CSU_MANAGER,
     }
 
     def _minute_intake_permission(self, request):
@@ -9299,6 +9368,20 @@ class MeetingViewSet(viewsets.ModelViewSet):
                     setattr(row, field, entry[field])
                     update_fields.append(field)
             row.save(update_fields=update_fields)
+
+        # Saving the minutes is how the system learns where the Commission has
+        # got to, so this is where the outstanding flying briefs get chased.
+        # Best-effort: a notification must never cost the minute taker's notes.
+        try:
+            from .flying_agenda import on_minutes_saved
+
+            on_minutes_saved(meeting)
+        except Exception:
+            import logging
+
+            logging.getLogger("scdms.app").exception(
+                "Flying agenda chase failed for meeting %s", meeting.pk
+            )
 
         rows = ensure_intake_rows(meeting)
         return Response(
@@ -9788,6 +9871,73 @@ class MeetingViewSet(viewsets.ModelViewSet):
             "created_at": item.created_at,
         }
 
+    # ── Flying agenda (extra matters raised during the sitting) ───────────
+    @action(detail=True, methods=["post"], url_path="flying-agenda")
+    def flying_agenda_toggle(self, request, pk=None):
+        """Secretary opens or closes this sitting's flying agenda."""
+        from . import flying_agenda as fa
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        enabled = bool(request.data.get("enabled"))
+        fa.set_enabled(meeting, user=request.user, profile=profile, enabled=enabled)
+        _log(request, _AL.Action.UPDATE, resource_type="Meeting",
+             resource_label=meeting.reference_number,
+             description=(
+                 f"Secretary {'opened' if enabled else 'closed'} the flying agenda for "
+                 f"{meeting.reference_number}."
+             ))
+        return Response({
+            "flying_agenda_enabled": meeting.flying_agenda_enabled,
+            "detail": (
+                "Manager CSU can now add extra matters raised by the Commission."
+                if enabled else "The flying agenda is closed for this sitting."
+            ),
+        })
+
+    @action(detail=True, methods=["post"], url_path="flying-agenda/items")
+    def flying_agenda_add_item(self, request, pk=None):
+        """Manager CSU adds a matter a commissioner raised during the sitting."""
+        from . import flying_agenda as fa
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        item = fa.add_item(
+            meeting,
+            actor=request.user,
+            profile=profile,
+            title=request.data.get("title"),
+            responsible_unit=(request.data.get("responsible_unit") or "").strip(),
+            raised_by_label=request.data.get("raised_by") or "",
+            notes=request.data.get("notes") or "",
+        )
+        _log(request, _AL.Action.CREATE, resource_type="AgendaItem",
+             resource_label=item.submission.reference_number,
+             description=(
+                 f"Manager CSU added flying agenda item {item.sequence} to "
+                 f"{meeting.reference_number} for the {item.submission.routed_unit} unit "
+                 f"(cutoff and workflow override)."
+             ))
+
+        _item_id = item.id
+        transaction.on_commit(lambda: _notify_flying_item_added_safe(_item_id))
+
+        return Response(
+            AgendaItemSerializer(item).data, status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["get"], url_path="flying-agenda/progress")
+    def flying_agenda_progress(self, request, pk=None):
+        """How far down the agenda the Commission has worked, and which flying
+        briefs are still outstanding."""
+        from . import flying_agenda as fa
+
+        return Response(fa.sitting_progress(self.get_object()))
+
     @action(detail=True, methods=["post"], url_path="flying-minute/sign")
     def flying_minute_sign(self, request, pk=None):
         """Commission member signs a Flying Minute (SOP Section 8)."""
@@ -9959,7 +10109,7 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         meeting_id = self.request.query_params.get("meeting")
         if meeting_id:
             qs = qs.filter(meeting_id=meeting_id)
-        qs = qs.order_by("sequence", "id")
+        qs = qs.order_by("is_flying", "sequence", "id")
 
         # Draft/with_chairman agenda content (submission titles, ministries,
         # blurbs) must not reach Commissioners or read-only OPSC viewers
@@ -9977,6 +10127,30 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
                 else:
                     qs = qs.filter(meeting__agenda_status=AgendaStatus.CIRCULATED)
         return qs
+
+    @action(detail=True, methods=["get", "patch"], url_path="flying-brief")
+    def flying_brief(self, request, pk=None):
+        """The responsible unit's Manager files the brief for a flying item."""
+        from . import flying_agenda as fa
+        from .models import FlyingAgendaBrief
+
+        item = self.get_object()
+        if not item.is_flying:
+            return Response(
+                {"detail": "This is not a flying agenda item."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        profile = _profile(request.user)
+
+        if request.method == "GET":
+            brief, _ = FlyingAgendaBrief.objects.get_or_create(agenda_item=item)
+            return Response(FlyingAgendaBriefSerializer(brief).data)
+
+        fa.assert_may_fill_brief(item, profile)
+        ser = FlyingAgendaBriefSerializer(data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        brief = fa.save_brief(item, user=request.user, **ser.validated_data)
+        return Response(FlyingAgendaBriefSerializer(brief).data)
 
     def perform_update(self, serializer):
         self._require_agenda_manager()
@@ -11899,6 +12073,8 @@ class FeedbackChecklistViewSet(viewsets.ViewSet):
 # Who may create and edit minutes. The Senior Admin Officer is the minute-taker.
 _MINUTE_EDITOR_ROLES = {
     Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN, Role.CHAIRPERSON, Role.PSC_COMMISSIONER,
+    # Manager CSU takes the minutes in practice, so they draft and edit them.
+    Role.CSU_MANAGER,
 }
 
 
@@ -11916,10 +12092,8 @@ class MinutesViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = MinutesSerializer
 
-    _FULL_ACCESS_ROLES = {
-        Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.CHAIRPERSON,
-        Role.PSC_COMMISSIONER, Role.SENIOR_ADMIN_OFFICER,
-    }
+    # Same list the redaction uses — it was duplicated here and the two drifted.
+    _FULL_ACCESS_ROLES = MINUTES_FULL_ACCESS_ROLES
 
     def get_queryset(self):
         from .opsc_access import MINISTRY_SIDE_ROLES
@@ -11937,6 +12111,22 @@ class MinutesViewSet(viewsets.ModelViewSet):
             return qs
         if profile.role in MINISTRY_SIDE_ROLES:
             return qs.none()
+        if profile.role == Role.COMPLIANCE_MANAGER:
+            # They are a reviewer of any sitting that took compliance business,
+            # so those minutes have to be reachable before they are signed —
+            # otherwise the review they were asked to do is impossible. Other
+            # sittings stay as they are for everyone else: signed only.
+            from django.db.models import Q
+
+            from .models import AgendaCategory, RoutedUnit
+
+            compliance_meetings = AgendaItem.objects.filter(
+                Q(category=AgendaCategory.DISCIPLINE_COMPLIANCE)
+                | Q(submission__routed_unit=RoutedUnit.COMPLIANCE),
+            ).values("meeting_id")
+            return qs.filter(
+                Q(status=MinutesStatus.SIGNED) | Q(meeting_id__in=compliance_meetings),
+            )
         # All other OPSC-internal staff: endorsed minutes only.
         return qs.filter(status=MinutesStatus.SIGNED)
 
@@ -12131,12 +12321,17 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="submit-for-review")
     def submit_for_review(self, request, pk=None):
-        """Minute-taker submits drafted minutes to the Secretary and Chairman,
-        who each have 1 working day to independently approve."""
+        """Minute-taker submits drafted minutes on to the reviewers, who each
+        have their own window to approve independently."""
+        from . import minutes_review as mr
+
         minutes = self.get_object()
         profile = _profile(self.request.user)
-        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_SECRETARY, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the minute-taker (Senior Admin Officer), Secretary, or Admin can submit minutes for review.")
+        if profile.role not in (mr.MINUTE_TAKER_ROLES | {Role.PSC_SECRETARY, Role.PSC_ADMIN}):
+            raise PermissionDenied(
+                "Only the minute-taker (Senior Admin Officer or Manager CSU), the "
+                "Secretary, or an Admin can submit minutes for review.",
+            )
         if minutes.status != MinutesStatus.DRAFT:
             return Response({"detail": "Only draft minutes can be submitted for review."}, status=400)
 
@@ -12144,13 +12339,19 @@ class MinutesViewSet(viewsets.ModelViewSet):
         minutes.status = MinutesStatus.PENDING_SECRETARIAT_REVIEW
         minutes.submitted_for_review_by = request.user
         minutes.submitted_for_review_at = now
-        minutes.review_due_at = timezone.make_aware(
-            datetime.combine(add_working_days(now, 1), time(23, 59, 59)), timezone.get_current_timezone(),
-        )
+        minutes.review_due_at = mr.due_in_working_days(mr.secretariat_review_days(), start=now)
+        # The minute taker's own window closes the moment they hand it on, and
+        # the reviewers' chase starts fresh (minutes can come back and go round
+        # again via return-to-secretariat).
+        minutes.draft_review_due_at = None
+        minutes.draft_review_reminded_at = None
+        minutes.review_reminded_at = None
         minutes.secretary_reviewed_by = None
         minutes.secretary_reviewed_at = None
         minutes.chairman_reviewed_by = None
         minutes.chairman_reviewed_at = None
+        minutes.compliance_reviewed_by = None
+        minutes.compliance_reviewed_at = None
         minutes.save()
 
         try:
@@ -12164,15 +12365,23 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="secretariat-approve")
     def secretariat_approve(self, request, pk=None):
-        """Secretary or Chairman independently approves minutes that are
-        pending secretariat review. Once both have approved, status advances
-        to Reviewed and the minute-taker is notified."""
+        """Secretary, Chairman — and the Compliance Manager when the sitting
+        took compliance business — each approve independently. Once every
+        required approval is in, status advances to Reviewed and the
+        minute-taker is notified."""
+        from . import minutes_review as mr
+
         minutes = self.get_object()
         profile = _profile(self.request.user)
         if minutes.status != MinutesStatus.PENDING_SECRETARIAT_REVIEW:
             return Response({"detail": "Minutes are not pending secretariat review."}, status=400)
-        if profile.role not in {Role.PSC_SECRETARY, Role.CHAIRPERSON, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Secretary or Chairperson can approve minutes at this stage.")
+
+        compliance_required = mr.requires_compliance_review(minutes)
+        allowed = {Role.PSC_SECRETARY, Role.CHAIRPERSON, Role.PSC_ADMIN}
+        if compliance_required:
+            allowed.add(Role.COMPLIANCE_MANAGER)
+        if profile.role not in allowed:
+            raise PermissionDenied("You are not a reviewer of these minutes.")
 
         now = timezone.now()
         acted = False
@@ -12184,10 +12393,18 @@ class MinutesViewSet(viewsets.ModelViewSet):
             minutes.chairman_reviewed_by = request.user
             minutes.chairman_reviewed_at = now
             acted = True
+        if (
+            compliance_required
+            and profile.role in {Role.COMPLIANCE_MANAGER, Role.PSC_ADMIN}
+            and not minutes.compliance_reviewed_by
+        ):
+            minutes.compliance_reviewed_by = request.user
+            minutes.compliance_reviewed_at = now
+            acted = True
         if not acted:
             return Response({"detail": "You have already approved these minutes."}, status=400)
 
-        if minutes.secretary_reviewed_by and minutes.chairman_reviewed_by:
+        if mr.secretariat_review_complete(minutes):
             minutes.status = MinutesStatus.REVIEWED
         minutes.save()
 
@@ -12206,9 +12423,11 @@ class MinutesViewSet(viewsets.ModelViewSet):
         """Secretary circulates reviewed minutes to every Commissioner for
         comment ahead of the sitting where they'll be tabled for endorsement.
         2 working day SLA."""
+        from . import minutes_review as mr
+
         minutes = self.get_object()
         profile = _profile(self.request.user)
-        if profile.role not in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+        if profile.role not in (mr.MINUTE_TAKER_ROLES | {Role.PSC_SECRETARY, Role.PSC_ADMIN}):
             raise PermissionDenied("Only the Secretary, minute-taker, or Admin can circulate minutes to Commissioners.")
         if minutes.status != MinutesStatus.REVIEWED:
             return Response({"detail": "Minutes must be Reviewed before circulating to Commissioners."}, status=400)
@@ -12216,8 +12435,10 @@ class MinutesViewSet(viewsets.ModelViewSet):
         now = timezone.now()
         minutes.status = MinutesStatus.CIRCULATED_TO_COMMISSIONERS
         minutes.commissioner_circulated_at = now
-        minutes.commissioner_review_due_at = timezone.make_aware(
-            datetime.combine(add_working_days(now, 2), time(23, 59, 59)), timezone.get_current_timezone(),
+        # How long the Commissioners get is the window the Commission wanted to
+        # trial — a setting, not a number here.
+        minutes.commissioner_review_due_at = mr.due_in_working_days(
+            mr.commissioner_review_days(), start=now,
         )
         minutes.save()
 
