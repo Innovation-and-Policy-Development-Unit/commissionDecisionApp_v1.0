@@ -27,7 +27,7 @@ export default function DgApprovalDialog({ open, initialName = '', busy = false,
       onClose={busy ? undefined : onCancel}
       size="sm"
       title="Director-General approval"
-      subtitle="Your DG signs the paper on paper; you upload the signed copy."
+      subtitle="Your DG signs the endorsement or cover letter on paper; upload the signed copy first."
       footer={(
         <div className="flex justify-end gap-2">
           <BaseButton variant="outline" onClick={onCancel} disabled={busy}>Cancel</BaseButton>
