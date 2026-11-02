@@ -8,7 +8,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10)
 /**
  * HR attests that the Director-General has signed the paper (on paper, outside
  * SCDMS) before it goes to PSC. The name and date are saved on the submission
- * and in its audit trail; the DG is told by email that it went in under their name.
+ * and in its audit trail.
  */
 export default function DgApprovalDialog({ open, initialName = '', busy = false, error = '', onConfirm, onCancel }) {
   const [name, setName] = useState(initialName)
@@ -80,7 +80,6 @@ export default function DgApprovalDialog({ open, initialName = '', busy = false,
           />
           <span>
             I confirm the Director-General has signed this paper and the signed copy is uploaded.
-            The DG will be emailed that it was submitted under their approval.
           </span>
         </label>
       </div>

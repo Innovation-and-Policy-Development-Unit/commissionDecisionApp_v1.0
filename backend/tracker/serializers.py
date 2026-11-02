@@ -1407,6 +1407,26 @@ class ChecklistItemSerializer(serializers.ModelSerializer):
                   'mandatory_for_stage', 'content_mismatch')
         read_only_fields = ('document', 'checked_by_username', 'checked_at')
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # The DG signs on paper and HR must upload the signed letter before a ministry
+        # paper goes to PSC (enforced in SubmissionViewSet.transition), so show that slot
+        # as required while the paper is with HR. The stored flag stays blank so the
+        # OPSC-side checklist gates are unchanged.
+        sub = instance.submission
+        if (
+            not data.get('mandatory_for_stage')
+            and sub.current_stage in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
+            and not sub.is_internal
+            and not sub.secretary_only
+            and not sub.lodged_from_paper
+        ):
+            from .ai.signature_check import is_dg_slot
+
+            if is_dg_slot(instance.document):
+                data['mandatory_for_stage'] = sub.current_stage
+        return data
+
 
 def ministry_email_domains(ministry_id):
     """Email domains observed on this ministry's existing verified accounts
