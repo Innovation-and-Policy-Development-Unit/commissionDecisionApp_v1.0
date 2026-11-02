@@ -1,0 +1,372 @@
+# Exercise workbook
+
+**SCDMS training for OPSC staff, 30 October 2026**
+
+Name: ____________________  Unit: ____________________  My role: ____________________
+
+> Terminology: the system calls every paper a **submission** — the menu is *Submissions*, the
+> button is *New Submission*. The word "case" does not appear anywhere on screen, so this
+> workbook uses "submission" throughout.
+
+## Before you start
+
+- The SCDMS is in its pilot. It is not finished, and you may find screens or buttons that are
+  missing, slow or wrong. That is why we are testing it. Write every problem on the error log.
+  Do not work around it silently.
+- Use practice submissions only. The people and submissions in the exercises are fictional. Do
+  not enter or upload real staff records today.
+- Open only the practice submissions whose reference starts with `TRAIN-OPSC`. Do not open any
+  other submission.
+- You work in a team of four or five. Each team has its own practice submission, so you will
+  pass it from role to role. Your facilitator will tell you which role you play in each exercise.
+- Use your own laptop. Each person does their own step. The others watch and help, then you swap.
+- What you see depends on your role and on the stage the submission has reached. If a button is
+  not there, check the stage first, then ask a facilitator.
+- Write anything that is wrong, confusing or slow on the error log at the back. OPSC will use it
+  to improve the system.
+- If a screen looks stale, press the **refresh arrow** in the top bar, or refresh the page fully
+  with Ctrl + F5.
+- Your own list only shows the stages that are in your court. A unit manager's or officer's
+  default *Submissions* list shows Manager Checklist Review, Under Assessment and the two
+  deferred-back stages only. When you send a submission on — or return it to the ministry — it
+  leaves your list until it comes back. It is not lost: set the Stage filter to **All statuses**
+  to find it.
+- If you finish early, do the "If you finish early" tasks at the end of the exercise.
+
+## Session 1: Signing in (25 minutes)
+
+Tick each box as you do it.
+
+- [ ] I signed in with my own account and password.
+- [ ] The system asked me to change my temporary password, and I changed it.
+- [ ] The system sent a 6-digit code to my work email; I received it and entered it.
+- [ ] I set my session PIN and wrote it down somewhere safe.
+- [ ] I locked the screen (user menu → **Lock Session**) and unlocked it again with my PIN.
+- [ ] I can see the menu for my role. I listed three items on it: ______________________________
+
+## Exercise 1: Receiving, routing and the manager's checklist (35 minutes)
+
+Your team's practice Confirmation of Appointment is already in the system, as if from a ministry.
+Team 1 uses `TRAIN-OPSC-E1-01`, team 2 uses `TRAIN-OPSC-E1-02`, and so on. It is already at the
+stage **Manager Checklist Review**, routed to the HR unit, with the three required documents
+attached.
+
+Your submission reference: ______________________
+
+### Part A: PSC Officer (look at the submission)
+
+1. Open **Submissions** and find your team's submission by its reference number.
+2. Open it. Check it against the Required Documents list. The status strip above the action
+   buttons counts them for you. Write how many documents are present: ______ of ______
+3. Note the stage and which unit's queue the submission appears in: ______________________________
+
+   The system picked the unit from the form type and routed the submission by itself, so there is
+   no routing step. **Route to Manager** appears only on a submission left at *Submitted to PSC*
+   — a form type with no unit, or a paper intake. There is no choice of unit when it is pressed.
+
+### Part B: Unit manager, and principal or senior officer
+
+1. **Manager:** open the submission from your unit's queue. Check that it is yours and not
+   another unit's. The stage is Manager Checklist Review.
+2. **Round 1 (manager).** Return it to the ministry. Press **Return for Clarification** and write
+   a clear reason the ministry can act on. The facilitator, as the ministry, will respond. The
+   submission leaves your list while it is with the ministry. When the ministry resubmits, the
+   system routes it back to the manager by itself, so it returns to Manager Checklist Review.
+3. **Round 2 (manager).** Open it again. In the **Allocate to officer** box choose a principal or
+   senior officer and press **Allocate**. The stage does not change. While the submission is
+   allocated to someone who has not handed it back, you cannot move it on — *Submit to Secretary*
+   stays greyed out and says why.
+4. **Principal or senior officer:** open the submission. It only appears in your list once the
+   manager has allocated it to you. Open the **Checklist** tab and read every item.
+
+   Note: the practice submissions arrive with all three documents attached and every checklist
+   item already ticked, with the note "[TRAINING] Practice document." So there is nothing left to
+   mark. Instead, change one item's note to say what you would write if a document were missing
+   or unclear, then go back to the overview and press **Submit back to Manager** in the
+   **Checklist review** box.
+5. **Manager:** read the principal's checklist. If the checklist is complete and satisfactory,
+   press **Submit to Secretary**. (If any required item were unticked, that button would be
+   greyed out until the checklist was complete.)
+
+- [ ] The submission was returned once, allocated, checked by the principal or senior officer,
+      and submitted to the Secretary.
+
+**If you finish early**
+
+- Find the audit trail for your submission and read the entries for your own steps. Find the
+  "System" entry that routed it to your unit.
+- In your Submissions list, set the Stage filter to **All statuses** and find the submission you
+  have just sent to the Secretary.
+- Write, in one sentence, how you would explain to a ministry why a submission was returned:
+  ____________________________
+
+## Exercise 2: Assessment, returns and Secretary approval (65 minutes)
+
+Continue with your team's submission. It is now with the Secretary for approval. Swap roles so
+that nobody plays the same role as in Exercise 1.
+
+### Part A: Secretary or Secretary's office
+
+1. Open the submission waiting for your approval and read it.
+2. Imagine that the assessment needs more work. Press **Return to Assessment** and write a reason
+   that names the point to be addressed: ______________________________
+3. The submission moves to **Under Assessment**. Find **Assessment Started** on the submission.
+   The 21 working-day assessment timer starts now.
+
+### Part B: Unit manager
+
+1. Open the submission. The stage is Under Assessment.
+2. In the **Allocate to officer** box choose a principal or senior officer and press **Allocate**.
+   The stage does not change.
+
+### Part C: Principal or senior officer
+
+1. Open the submission from your list and read the form and the documents.
+2. In the **Assessment** box, type your assessment. It should say what the submission asks for,
+   what the documents show, and your recommendation: ______________________________
+   (**Submit back to Manager** stays greyed out until you have typed something.)
+3. Complete the table below, then press **Submit back to Manager**.
+
+| Situation | What you do, and what the manager can then press (Submit to Secretary, Return for Clarification or Defer) |
+|---|---|
+| The documents are complete and the submission meets the requirement | |
+| The performance appraisal is missing | |
+| The submission is complete, but the minister has asked you to wait for new information | |
+
+### Part D: Manager and Secretary
+
+1. **Manager:** read the assessment. Press **Submit to Secretary**.
+2. **Secretary:** open the submission, read the assessment and press **Forward to Commission**.
+3. Now think about the other choice. When would you use **Defer**? ______________________________
+
+- [ ] The submission was returned to assessment, allocated, assessed, submitted and is Forwarded
+      to Commission.
+
+**If you finish early**
+
+- Find the 21 working-day assessment timer on your submission. It started when the submission
+  entered Under Assessment, not when it was lodged. How many working days does it have left? ____
+- If you can see **Pending Decisions** in your menu, open it and find your submission.
+
+## Exercise 3: The Commission sitting (45 minutes)
+
+Roles: Secretariat staff (Senior Administration Officer, Secretary's office) do the steps. Other
+team members follow on the facilitator's screen and then do Part C. The facilitator plays the
+Chairperson and the Secretary for the minute steps.
+
+### Part A: Meeting and agenda
+
+1. Your facilitator has already made one shared practice sitting for all teams: **OPSC TRAINING
+   SITTING** (`TRAIN-OPSC-MTG-001`), on 30 October 2026. Open **Meetings** and check that you can
+   see it. Do not make another meeting.
+2. **Secretariat:** open **Agenda** and choose the practice sitting. Press **Add Item**. In the
+   **Add Agenda Item** box pick your team's submission, then press **Add to Agenda**. (The page
+   says that normal approvals place themselves automatically. That does not apply to practice
+   submissions, so you add them yourselves.) Which section is it in? ______________________________
+3. Your facilitator now explains the next step: the Secretary presses **Submit to Chairman**, and
+   the Chairperson presses **Endorse & Circulate to Members**, which issues the agenda to the
+   Commission members. You do not do this today: the system blocks both while a practice
+   submission is on the agenda, and names the submission that has to come off first.
+
+### Part B: The sitting and the outcome
+
+1. On the sitting day, open the submission and press **Mark as Sitting for Commission Decision**.
+   (It has to be on the agenda first, which you did in Part A.)
+2. Your facilitator will tell you the practice outcome. Record it with the button that matches:
+   **Approve**, **Noted**, **Not Approved**, **Reject**, **Deferred Back to Unit**, **Defer to
+   Next Meeting** or **Return to Ministry**. All but *Approve* and *Noted* ask you for a reason.
+3. Write down which button you pressed and the stage the submission moved to:
+   ______________________________
+
+   Note: Commissioners and the Chairperson do not press these buttons. The Secretariat records
+   the Commission's outcome from the sitting.
+
+### Part C: Minutes
+
+1. **Secretariat (Senior Administration Officer):** open **Minutes** and draft the minute for
+   your submission, then press **Submit for Review**. Use the facilitator's practice notes.
+2. Check that the decision in the minute matches the outcome you recorded.
+3. After Submit for Review, **both** the Secretary and the Chairperson must press **Approve**
+   (the facilitator plays the Chairperson); the minute only moves on once both have. Then the
+   Secretary or the Senior Administration Officer presses **Circulate to Commissioners**. A
+   facilitator, as a Commissioner, presses **Return to Secretariat**. Secretariat: press **Send
+   for Signature**, then **Download for Signature**, then **Upload Signed Minutes** (use the
+   practice signed minute your facilitator gives you — only the Senior Administration Officer can
+   upload it).
+
+- [ ] The submission has a Commission outcome and a signed minute.
+
+**If you finish early**
+
+- Open the **Deferred agenda** and find where a deferred submission would show.
+- If you can see **Decisions** in your menu, open it and find your submission.
+
+## Exercise 4: After the decision (40 minutes)
+
+The minute is signed. Your team's submission is now decided. The Commission approved the
+appointment.
+
+### Part A: Serve the decision
+
+1. The Secretary, Senior Administration Officer or administrator opens the submission and finds
+   the **Decision Service** panel.
+2. Press **Serve decision**. Write the letter subject and the letter text. The text is served
+   exactly as written and cannot be edited afterwards, so read it before you press the button.
+3. The facilitator, as the ministry HR officer, acknowledges receipt. Check the submission and
+   write the date and time of the acknowledgement: ______________________
+
+### Part B: Allocate the tasks
+
+1. **Secretary:** open the signed minute in **Minutes** and press **Allocate Decision Tasks to
+   Managers**. This gives the task to the responsible unit manager, and moves the submission to
+   **Decision Entered and Assigned**.
+2. **Unit manager:** open **Minutes decision tasks** and find the task for your submission. For
+   an appointment, which unit will prepare the permanent appointment letter? ______________________
+3. **Unit manager:** open the task, choose one or more staff under **Assign staff**, and set a
+   due date.
+
+### Part C: Carry out the task and report
+
+1. The assigned officer opens the task. The facilitator gives you a practice letter: there is no
+   file upload on a task, so this is where today's pilot stops short — say what you would do with
+   the letter outside the system, and note it on the error log.
+2. Press **Post update** on the task with the date. Change the **Task status** as you go: Open,
+   In progress, then Completed.
+3. Check the submission's stage and write it down: ______________________
+
+   Expected answer: it still reads **Decision Entered and Assigned**. Nothing today moves it to
+   Under Implementation — there are no stage buttons after the decision.
+
+- [ ] The decision is served and acknowledged, the task is allocated, and the task is Completed.
+
+**If you finish early**
+
+- Find the **Re-serve corrected letter** button. When would you need it? ____________________
+- Open **Implementation** if you can see it in your menu. It is a rollup — percentages by
+  ministry, not a list of submissions. Write one number from it that would be useful to you:
+  ____________________
+
+## Exercise 5: A whole submission, changing roles (45 minutes)
+
+Compliance Unit and CSU staff: do Exercise 6 (your unit's own internal submission) instead of
+this exercise. VIPAM staff stay with their team and do this exercise.
+
+Your team chooses a different submission type from the practice files folder (for example Direct
+Appointment, Temporary Appointment, Age Retirement, Resignation or Leave Payout — all of them
+route to the HR unit). Your facilitator lodges it as the ministry. Then you run it from receipt
+to the final letter, changing roles at each step so that everyone plays at least two roles.
+
+| Step | Role | Who (name) |
+|---|---|---|
+| Receive and check the documents | PSC Officer | |
+| Allocate and checklist review | Unit manager, then principal or senior officer | |
+| Assessment note (only if the Secretary uses Return to Assessment) | Principal or senior officer | |
+| Secretary approval | Secretary's office | |
+| Agenda, outcome and minute | Secretariat | |
+| Serve the decision | Secretary's office | |
+| Allocate and carry out the task | Manager and assigned officer | |
+
+Write the reference: ____________________ and the type: ____________________
+
+- [ ] The submission reached the final letter and I played at least two roles.
+
+**If you finish early**
+
+- Return a second submission at the manager's checklist step. After the ministry's reply, write
+  the stage it is at, and who must act next: ______________________
+- Write the three things you would tell a new colleague about your role in the SCDMS:
+  ______________________________
+
+## Exercise 6: Your unit's own internal submission (45 minutes)
+
+An internal submission is one that OPSC staff create themselves, not a ministry. There is no Head
+of Agency or DG step, and the checklist leaves out the ministry-only items. Each unit has its own
+route. Do the part for your unit: the Compliance Unit (Part A) or the Corporate Services Unit
+(Part B). Type the details from the Exercise 6 Case Sheets, and use the practice files in your
+unit's folder. Use practice data only.
+
+### Part A: Compliance Unit (Senior, Principal, Manager)
+
+A practice Staff Member Disciplinary Report (SMDR). Your facilitator gives you the fictional
+facts: ______________________
+
+1. **Senior:** press **New Submission** and choose the Compliance form *Staff Member Disciplinary
+   Report (SMDR)*. Fill in the form and attach the practice documents. Save as a draft, then
+   press **Submit to Principal**.
+2. **Principal:** open the draft and read it. Press **Return to Senior** with a comment that says
+   it is ready for the Manager.
+3. **Senior:** open the returned submission and press **Submit to Manager**. (The other button is
+   **Resubmit to Principal**, which sends it back to the Principal. Use it only if the Principal's
+   comment asks for changes. They are alternatives, not a sequence.)
+4. **Manager:** read it. Press **Return for Changes** once, with feedback. It goes back to Draft.
+   Senior: press **Submit to Principal** again. Principal: press **Return to Senior** with a
+   comment that says it is ready. Senior: press **Submit to Manager**. Manager: press **Approve &
+   Send to Secretary**.
+
+   Facilitator note: that button was missing for the Compliance Manager until the fix of
+   29 October. If it is still not on the Manager's screen, the fix has not reached this server —
+   record it on the error log and ask the facilitator to move the submission on.
+5. **Secretary:** the submission reaches the Secretary's approval, as in Exercise 2. Press
+   **Forward to Commission**.
+
+Write the stage shown after each step: ______________________________________________
+
+- [ ] The submission went Senior, Principal, Manager and Secretary, with no ministry or DG step.
+
+**If you finish early:** find the required documents for the SMDR. Which are mandatory?
+______________________
+
+### Part B: Corporate Services Unit (CSU Manager)
+
+A practice Temporary Appointment for an OPSC staff member. CSU managers use the same submission
+types as the HR Unit.
+
+1. Press **New Submission** and choose the Temporary Appointment type. Fill in the form and
+   attach the practice files from folder 9 (`9_CSU_Temporary_Appointment_OPSC_Staff`).
+2. Check the Required Documents list. Which ministry item is missing from your list because this
+   is an internal submission? ______________________
+3. Press **Submit**. Your submission now follows the normal route. The system routes it to the HR
+   unit manager for checklist review by itself — not to you, even though you created it. Then the
+   unit manager checks it, and so on, as in Exercises 1 and 2.
+4. Open your Submissions list. As a CSU Manager you see every OPSC-internal submission, not only
+   your own, so use the reference number to find yours. Write the stage it is at now:
+   ______________________
+
+- [ ] The submission was submitted and moved to Manager Checklist Review.
+
+**If you finish early:** follow your submission through Exercises 1 and 2 with a team.
+
+## Error log
+
+Write each problem as it happens. Use one line per problem.
+
+| No. | Where (page, button) | What happened | What you expected |
+|---|---|---|---|
+| 1 | | | |
+| 2 | | | |
+| 3 | | | |
+| 4 | | | |
+| 5 | | | |
+| 6 | | | |
+
+## Evaluation form
+
+Please circle a number, where 1 is very poor and 5 is very good.
+
+| Question | Rating |
+|---|---|
+| Session 1: signing in | 1  2  3  4  5 |
+| Exercise 1: receiving and the manager's checklist | 1  2  3  4  5 |
+| Exercise 2: assessment and Secretary approval | 1  2  3  4  5 |
+| Exercise 3: the Commission sitting and minutes | 1  2  3  4  5 |
+| Exercise 4: after the decision | 1  2  3  4  5 |
+| Exercise 5 or 6: a whole submission | 1  2  3  4  5 |
+| The practice submission and the team work | 1  2  3  4  5 |
+
+What was the most useful part of the day? ________________________________
+
+What was missing or confusing? ________________________________
+
+What would make you use the SCDMS instead of paper or email? ________________________________
+
+Other comments: ________________________________

@@ -20,6 +20,9 @@ import DgApprovalDialog from './DgApprovalDialog'
 
 // ── Stage → action definitions ───────────────────────────────────────────────
 // transitionTo: target stage code sent to the standard /transition/ endpoint
+// transitionToAny: candidate target stages, in preference order — the first one
+//   the backend lists as allowed is used (for actions whose destination stage
+//   depends on the submission's route)
 // endpoint: custom API path (e.g. 'endorse') — uses POST /submissions/{id}/{endpoint}/
 // requiresNote: opens an inline textarea before executing
 // variant: BaseButton variant
@@ -98,7 +101,14 @@ const STAGE_ACTIONS = {
       description: 'Approve and forward to the Secretary for review',
       icon: CheckCircle2,
       variant: 'primary',
-      transitionTo: 'submitted',
+      // Which stage "send to the Secretary" means depends on the route, so take
+      // whichever one the backend allows: a Compliance Manager's approval goes
+      // to the Secretary Approval Gate (_COMPLIANCE_MANAGER_APPROVAL_ALLOWED in
+      // transitions.py), while the last step of an agenda-section approval chain
+      // goes to Submitted (_chain_targets_for_role in views.py). Hardcoding
+      // 'submitted' meant this button never passed the `allowed` filter below
+      // for Compliance, so that Manager only ever saw "Return for Changes".
+      transitionToAny: ['pending_secretary_approval', 'submitted'],
       requiresNote: false,
     },
     {
@@ -455,6 +465,14 @@ const SECRETARY_ONLY_MANAGER_CHECKLIST_ACTIONS = STAGE_ACTIONS.manager_checklist
     : action
 )
 
+/** The stage this action actually targets for this submission: its fixed
+ *  `transitionTo`, or the first of its `transitionToAny` the backend allows. */
+const resolveTarget = (action, allowed) => (
+  action.transitionToAny
+    ? action.transitionToAny.find(stage => allowed.includes(stage))
+    : (allowed.includes(action.transitionTo) ? action.transitionTo : undefined)
+)
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function WorkflowActionsPanel({
   submission,
@@ -564,10 +582,11 @@ export default function WorkflowActionsPanel({
       const ministryOrigin = !submission?.is_internal && !submission?.secretary_only
       if (action.ministryOnly && !ministryOrigin) return false
       if (action.internalOnly && ministryOrigin) return false
-      return allowed.includes(action.transitionTo)
+      return !!resolveTarget(action, allowed)
     })
     .map(action => ({
       ...action,
+      transitionTo: resolveTarget(action, allowed) ?? action.transitionTo,
       // With the DG-approval route open, the paper route is the fallback.
       Icon: action.icon,
       disabledReason: awaitingAssignedReview

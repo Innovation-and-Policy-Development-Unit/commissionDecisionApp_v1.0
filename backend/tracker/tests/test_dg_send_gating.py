@@ -4,11 +4,15 @@ ministry has exactly one active DG account with an email. HR can always submit
 straight to PSC with the DG's paper approval attested (the fallback path).
 """
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from tracker.models import Ministry, Profile, Role, Submission, SystemSetting, WorkflowStage
+from tracker.models import (
+    Ministry, Profile, PSCFormType, RequiredDocument, Role, Submission, SubmissionDocument,
+    SystemSetting, WorkflowStage,
+)
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
@@ -101,3 +105,50 @@ class DgSendGatingTests(TestCase):
         self._switch()
         res = self._move(self.dg, "pending_dg_endorsement")
         self.assertEqual(res.status_code, 403)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class DgSignedLetterRequiredTests(TestCase):
+    """The DG signs on paper, so HR must upload the signed letter before submitting."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(code="ZZ_DGL", name="DG Letter Ministry")
+        self.hr = User.objects.create_user("dgl_hr", password="x")
+        Profile.objects.create(user=self.hr, role=Role.MINISTRY_HR, ministry=self.ministry)
+        self.ft = PSCFormType.objects.create(code="ZZ-DGL", name="DG letter form")
+        self.slot = RequiredDocument.objects.create(
+            form_type=self.ft, name="DG's Endorsement Letter", is_active=True,
+        )
+        self.sub = Submission.objects.create(
+            title="Establishment of a new post", ministry=self.ministry,
+            form_type_code="ZZ-DGL", current_stage=WorkflowStage.DRAFT,
+            received_at=timezone.now(), created_by=self.hr,
+        )
+
+    def _submit(self):
+        client = APIClient()
+        client.force_authenticate(user=self.hr)
+        return client.post(
+            f"/api/submissions/{self.sub.id}/transition/",
+            {
+                "new_stage": "submitted",
+                "dg_approval_name": "Mr. John Kalo",
+                "dg_approval_date": timezone.localdate().isoformat(),
+            },
+            format="json",
+        )
+
+    def test_blocked_without_the_signed_letter(self):
+        res = self._submit()
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("DG-signed", res.data["detail"])
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.current_stage, WorkflowStage.DRAFT)
+
+    def test_allowed_once_the_letter_is_uploaded(self):
+        SubmissionDocument.objects.create(
+            submission=self.sub, required_document=self.slot, original_name="dg.pdf",
+            file=SimpleUploadedFile("dg.pdf", b"%PDF-1.4\n%%EOF\n", content_type="application/pdf"),
+        )
+        res = self._submit()
+        self.assertEqual(res.status_code, 200, res.content)

@@ -1851,6 +1851,26 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     )
                 dg_attestation = (att_name, att_date)
 
+            # The DG signs on paper, so the signed endorsement/cover letter must be
+            # uploaded to the paper's DG slot before it goes to PSC. Papers whose
+            # checklist has no DG slot have nowhere to upload it and are not held.
+            from .ai.signature_check import is_dg_slot
+            from .submission_checklist import ensure_submission_checklist_items
+
+            ensure_submission_checklist_items(submission)
+            _dg_slot_ids = [
+                _i.document_id
+                for _i in submission.checklist_items.select_related("document").filter(document__is_active=True)
+                if is_dg_slot(_i.document)
+            ]
+            if _dg_slot_ids and not submission.documents.filter(
+                required_document_id__in=_dg_slot_ids, archived_at__isnull=True,
+            ).exists():
+                return Response(
+                    {"detail": "Upload the DG-signed endorsement or cover letter before submitting this paper to PSC."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # ── Rich-text remarks: sanitize, then derive the plain-text `remarks` ──
         # value that everything else in this view (blank-remarks guards, the
         # decision proof hash, email notifications, AI context) keeps reading
