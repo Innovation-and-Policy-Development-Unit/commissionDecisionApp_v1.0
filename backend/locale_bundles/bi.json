@@ -564,8 +564,8 @@
     "radar_completion": "Finis",
     "radar_quality": "Kwoliti",
     "radar_volume": "Volium",
-    "seed_banner_title": "I no gat eni submisen long databes yet.",
-    "seed_banner_hint": "Long backend direktori ronem {{seed}}, no startem bakegen Docker {{backend}} sevis wetem {{flag}} (defolt) blong sistem i save mekem ol mok kes atomatik."
+    "seed_banner_title": "I no gat eni submisen yet",
+    "seed_banner_hint": "Ol submisen we ol ministri oli putum bambae oli kamaot long ples ya."
   },
   "submission": {
     "create": "Mekem Submisen",
@@ -617,8 +617,8 @@
     "ai_brief_subtitle": "Samari we AI i jeneret — yu no nid long riviu evri dokumen.",
     "ai_brief_generating": "I jeneret brief…",
     "ai_brief_regenerate": "Jeneret gen",
-    "ai_brief_empty": "Brief i no save jeneret. Jekem GEMINI_API_KEY mo trae gen.",
-    "ai_brief_timeout": "Brief i tekem taem tumas. Jekem Celery worker mo GEMINI_API_KEY long .env, mo klik Regenerate.",
+    "ai_brief_empty": "Sistem i no save mekem brief ya. Traem Jeneret gen, mo talem long IT sapos i gohed blong fel.",
+    "ai_brief_timeout": "Brief ya i tekem longfala taem moa long nomol. Traem Jeneret gen smol taem bakegen, mo talem long IT sapos i gohed.",
     "ai_brief_generated": "I jeneret long {{time}}",
     "quality_title": "Skor blong kwoliti blong submisen",
     "quality_subtitle": "AI blong ol reviewer — skor ia i save soem hao mo wok blong jekem bifo assessment.",

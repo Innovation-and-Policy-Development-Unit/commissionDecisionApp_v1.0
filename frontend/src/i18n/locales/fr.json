@@ -564,8 +564,8 @@
     "radar_completion": "Achèvement",
     "radar_quality": "Qualité",
     "radar_volume": "Volume",
-    "seed_banner_title": "Aucune soumission dans la base de données pour l'instant.",
-    "seed_banner_hint": "Depuis le dossier backend exécutez {{seed}}, ou redémarrez le service Docker {{backend}} avec {{flag}} (par défaut) pour créer automatiquement des cas factices."
+    "seed_banner_title": "Aucune soumission pour le moment",
+    "seed_banner_hint": "Les soumissions déposées par les ministères apparaîtront ici."
   },
   "submission": {
     "create": "Créer une soumission",
@@ -617,8 +617,8 @@
     "ai_brief_subtitle": "Résumé généré automatiquement pour approuver ou orienter sans tout lire.",
     "ai_brief_generating": "Génération du brief…",
     "ai_brief_regenerate": "Régénérer",
-    "ai_brief_empty": "Brief non généré. Vérifiez GEMINI_API_KEY et réessayez.",
-    "ai_brief_timeout": "La génération prend trop de temps. Vérifiez Celery, GEMINI_API_KEY dans .env, puis Régénérer.",
+    "ai_brief_empty": "Le résumé n'a pas pu être généré. Essayez Régénérer, et prévenez le service informatique si cela persiste.",
+    "ai_brief_timeout": "Le résumé prend plus de temps que d'habitude. Réessayez Régénérer dans un instant, et prévenez le service informatique si cela persiste.",
     "ai_brief_generated": "Généré le {{time}}"
   },
   "stage": {
