@@ -173,11 +173,7 @@ export default function PscDashboard() {
         <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
           <p className="font-medium">{t('dashboard.seed_banner_title')}</p>
           <p className="mt-1 text-sky-900/90 dark:text-sky-200/90">
-            {t('dashboard.seed_banner_hint', {
-              seed: 'python manage.py seed_tracker',
-              backend: 'backend',
-              flag: 'AUTO_SEED=1',
-            })}
+            {t('dashboard.seed_banner_hint')}
           </p>
         </div>
       )}

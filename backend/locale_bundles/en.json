@@ -634,8 +634,8 @@
     "radar_completion": "Completion",
     "radar_quality": "Quality",
     "radar_volume": "Volume",
-    "seed_banner_title": "No submissions in the database yet.",
-    "seed_banner_hint": "From the backend directory run {{seed}}, or restart the Docker {{backend}} service with {{flag}} (default) so dummy cases are created automatically."
+    "seed_banner_title": "No submissions yet",
+    "seed_banner_hint": "Submissions lodged by ministries will appear here."
   },
   "inbox_brief": {
     "morning_title": "Your morning briefing",
@@ -736,8 +736,8 @@
     "ai_brief_subtitle": "Auto-generated summary so you can route or approve without reading every document.",
     "ai_brief_generating": "Generating brief…",
     "ai_brief_regenerate": "Regenerate",
-    "ai_brief_empty": "Brief could not be generated. Check GEMINI_API_KEY and try Regenerate.",
-    "ai_brief_timeout": "Brief generation is taking too long. Ensure Celery worker is running, GEMINI_API_KEY is set in .env, then click Regenerate.",
+    "ai_brief_empty": "The brief could not be generated. Try Regenerate, and let IT know if it keeps failing.",
+    "ai_brief_timeout": "The brief is taking longer than usual. Try Regenerate in a moment, and let IT know if it keeps timing out.",
     "ai_brief_generated": "Generated {{time}}",
     "quality_title": "Submission quality score",
     "quality_subtitle": "AI triage for reviewers — higher scores usually mean less rework before assessment.",
