@@ -567,6 +567,13 @@ class OduChecklistDraftGateTests(TestCase):
         self.client.force_authenticate(user=self.hr)
 
     def _transition(self, new_stage="submitted"):
+        # This class is about the ODU checklist gate. Clear the package gate here
+        # rather than in setUp, because these tests change the form type and save the
+        # digitized form first, both of which re-open it.
+        from tracker.tests.gate_helpers import satisfy_submit_gate
+
+        satisfy_submit_gate(self.submission, self.hr)
+        self.submission.refresh_from_db()
         return self.client.post(
             f"/api/submissions/{self.submission.id}/transition/",
             {

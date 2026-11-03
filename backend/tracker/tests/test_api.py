@@ -199,10 +199,14 @@ class SubmissionAPITests(TestCase):
             current_stage=WorkflowStage.DRAFT,
         )
         resp = self.client.post(f"/api/submissions/{sub.id}/validate-package/")
-        self.assertEqual(resp.status_code, 202)
-        from ..tasks import validate_submission_package_task
+        # 202 when the AI check is queued; 200 when AI is off and the deterministic
+        # rules ran inline. Submitting is gated on a validation that passed, so the
+        # endpoint has to work either way.
+        self.assertIn(resp.status_code, (200, 202), resp.content)
+        if resp.status_code == 202:
+            from ..tasks import validate_submission_package_task
 
-        validate_submission_package_task(sub.id, force=True)
+            validate_submission_package_task(sub.id, force=True)
         data = self.client.get(f"/api/submissions/{sub.id}/").json()
         self.assertTrue(data.get("ai_package_processed"))
         self.assertIsInstance(data.get("ai_package_gaps"), list)

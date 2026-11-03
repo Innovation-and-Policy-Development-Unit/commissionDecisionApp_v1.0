@@ -12,6 +12,7 @@ from tracker.models import (
     Submission, WorkflowEvent, WorkflowStage,
 )
 from tracker.dynamic_form_validation import digitized_form_gap
+from tracker.tests.gate_helpers import satisfy_submit_gate
 from tracker.pack_split import _normalise, _segments_by_keywords
 from tracker.subway_map import ministry_with_label
 from tracker.transitions import can_edit_submission
@@ -119,6 +120,8 @@ class RecallWindowTests(_Base):
         super().setUp()
         self.manager = User.objects.create_user("fb_mgr", password="x")
         Profile.objects.create(user=self.manager, role=Role.HR_UNIT_MANAGER)
+        # These are about the window after submit, not about the pre-submit gate.
+        satisfy_submit_gate(self.sub, self.hr)
 
     def test_submit_waits_at_submitted_and_opsc_is_not_told(self):
         res, receipt = self.submit()
@@ -192,6 +195,10 @@ class RecallWindowTests(_Base):
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
 class ReceiptAndDgTests(_Base):
+    def setUp(self):
+        super().setUp()
+        satisfy_submit_gate(self.sub, self.hr)
+
     def test_department_admin_who_submits_gets_the_receipt(self):
         admin = User.objects.create_user("fb_admin", password="x", email="admin@example.org")
         dept = Department.objects.create(ministry=self.ministry, code="D1", name="Dept One")
@@ -289,6 +296,10 @@ class SeedCleanupTests(TestCase):
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"], SUBMISSION_RECALL_WINDOW_HOURS=24)
 class RecallWindowCutoffTests(_Base):
+    def setUp(self):
+        super().setUp()
+        satisfy_submit_gate(self.sub, self.hr)
+
     def meeting(self, hours_from_now):
         from datetime import timedelta
 

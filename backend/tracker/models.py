@@ -2236,6 +2236,12 @@ class Submission(models.Model):
         help_text="True once the latest package validation completed.",
     )
     ai_package_generated_at = models.DateTimeField(null=True, blank=True)
+    ai_package_signature = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Fingerprint of docs/checklist/form when the package was last validated.",
+    )
     ai_transition_guidance = models.JSONField(
         default=dict,
         blank=True,

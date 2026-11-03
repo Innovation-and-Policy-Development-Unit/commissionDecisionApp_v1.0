@@ -483,6 +483,7 @@ export default function WorkflowActionsPanel({
   dgStatus = null,     // { dg_name, link_sent_at, link_expires_at, link_active } while with the DG
   onResendDgLink,      // async fn() — calls /submissions/{id}/resend-dg-link/
   checklist = [],       // current submission's checklist items — gates "Submit to Secretary"
+  submitBlockers = [],  // [{code, message}] from the server — what stops this going to PSC
   onTransition,        // async fn(targetStage, remarks, acknowledgeGaps?, extra?)
   onEndorse,           // async fn() — calls /submissions/{id}/endorse/
   busy = false,
@@ -571,6 +572,11 @@ export default function WorkflowActionsPanel({
       text: `${checklistDoneCount} of ${checklistTotalCount} required documents complete`,
     })
   }
+  // The server decides what stops a ministry paper going to PSC; list every reason
+  // here rather than leaving the reader to guess from one disabled button.
+  submitBlockers.forEach(blocker => {
+    statusItems.push({ Icon: AlertCircle, tone: 'pending', text: blocker.message })
+  })
 
   // Filter to only actions the current user is allowed to perform
   const visibleActions = stageActions
@@ -589,7 +595,9 @@ export default function WorkflowActionsPanel({
       transitionTo: resolveTarget(action, allowed) ?? action.transitionTo,
       // With the DG-approval route open, the paper route is the fallback.
       Icon: action.icon,
-      disabledReason: awaitingAssignedReview
+      disabledReason: (action.id === 'submit_to_psc_ministry' && submitBlockers.length > 0)
+        ? submitBlockers[0].message
+        : awaitingAssignedReview
         ? 'Waiting for the assigned principal to complete their review and submit it back to you.'
         : (action.requiresChecklistComplete && !checklistComplete)
         ? 'Complete the checklist — mark every required document present — before submitting to the Secretary.'
