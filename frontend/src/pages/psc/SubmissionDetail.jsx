@@ -179,6 +179,8 @@ export default function SubmissionDetail() {
   // Checklist tab has reported in (or not applicable to this submission).
   const [oduChecklistComplete, setOduChecklistComplete] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
+  // What the server says is stopping this paper going to PSC — drives the Submit button.
+  const [submitBlockers, setSubmitBlockers] = useState([])
   const [boardPaperDirty, setBoardPaperDirty] = useState(false)
   const [documents, setDocuments]   = useState([])
   const [uploadBusy, setUploadBusy] = useState(false)
@@ -392,6 +394,7 @@ export default function SubmissionDetail() {
     setChecklist(data.checklist || [])
     setAllowed(nextAllowed)
     setCanEndorse(tr.can_endorse ?? false)
+    setSubmitBlockers(tr.submit_blockers || [])
     setDgFlow({ canResend: !!tr.can_resend_dg_link, send: tr.dg_send ?? null, status: tr.dg_status ?? null })
     setAnnotationCounts(data.annotation_counts || {})
     setSignatureCounts(data.signature_counts || {})
@@ -2086,6 +2089,7 @@ const stageDescriptions = {
             dgSend={dgFlow.send}
             dgStatus={dgFlow.status}
             checklist={checklist}
+            submitBlockers={submitBlockers}
             onTransition={performTransition}
             onEndorse={performEndorse}
             onResendDgLink={performResendDgLink}

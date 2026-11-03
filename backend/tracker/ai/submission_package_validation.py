@@ -152,6 +152,25 @@ def _compute_ready(gaps: list[dict[str, str]]) -> bool:
     return not any(g.get("severity") == "critical" for g in gaps)
 
 
+def rule_based_result(submission: Submission) -> dict[str, Any]:
+    """Validation without calling a model at all.
+
+    Submitting is gated on a validation that passed, so the check has to stay runnable
+    when the AI feature is switched off or its key is missing — otherwise no ministry
+    paper could be submitted at all.
+    """
+    gaps = _rule_based_gaps(submission)
+    ready = _compute_ready(gaps)
+    return {
+        "ready": ready,
+        "summary": (
+            "Checked against the required-document and form rules. "
+            + ("Package looks ready to submit." if ready else "Fix the critical items before submitting.")
+        ),
+        "gaps": gaps,
+    }
+
+
 def validate_package_from_context(
     submission: Submission, context: str
 ) -> tuple[dict[str, Any] | None, str | None]:
@@ -233,6 +252,11 @@ def persist_package_validation(submission: Submission, result: dict[str, Any]) -
     submission.ai_package_summary = str(result.get("summary") or "")[:2000]
     submission.ai_package_processed = True
     submission.ai_package_generated_at = timezone.now()
+    # Stamp what was validated, so adding or removing a document afterwards makes this
+    # result stale — the submission row itself is not touched by an upload.
+    from ..submit_gate import package_signature
+
+    submission.ai_package_signature = package_signature(submission)
     submission.save(
         update_fields=[
             "ai_package_gaps",
@@ -240,6 +264,7 @@ def persist_package_validation(submission: Submission, result: dict[str, Any]) -
             "ai_package_summary",
             "ai_package_processed",
             "ai_package_generated_at",
+            "ai_package_signature",
             "updated_at",
         ]
     )

@@ -2235,8 +2235,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ):
             target = WorkflowStage.SECRETARY_REVIEW
 
-        # ── Digitized form must be complete before a ministry paper goes to PSC ──
-        # No acknowledge_gaps override: this is the paper itself, not an AI hint.
+        # ── The package must be complete before a ministry paper goes to PSC ──
+        # Every required document uploaded, the digitized form filled in, and a package
+        # validation run that came back clean. No acknowledge_gaps override: these are
+        # the paper itself, not an AI hint. tracker.submit_gate holds the rules, and the
+        # same list is sent to the client so the Submit button cannot disagree.
         if (
             prev in {
                 WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION,
@@ -2246,16 +2249,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 WorkflowStage.SUBMITTED, WorkflowStage.SECRETARY_REVIEW,
                 WorkflowStage.PENDING_DG_ENDORSEMENT,
             }
-            and profile.role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}
-            and not submission.is_internal
-            and not submission.secretary_only
-            and not submission.lodged_from_paper
         ):
-            from .dynamic_form_validation import digitized_form_gap
+            from .submit_gate import submit_blockers
 
-            form_gap = digitized_form_gap(submission)
-            if form_gap:
-                return Response({"detail": form_gap}, status=status.HTTP_400_BAD_REQUEST)
+            blockers = submit_blockers(submission, profile.role)
+            if blockers:
+                return Response(
+                    {"detail": blockers[0]["message"], "submit_blockers": blockers},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         # ── A3: pre-submit package validation (draft → submitted) ───────────────
         from .ai_settings import package_validation_enabled
@@ -2901,11 +2903,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         from .ai_settings import package_validation_enabled
 
-        if not package_validation_enabled():
-            return Response(
-                {"detail": "AI package validation is currently disabled by the administrator."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # With AI off, run the deterministic rules instead of refusing: submitting is
+        # gated on a validation that passed, so this must always be runnable.
+        ai_validation = package_validation_enabled()
 
         _submit_roles = {
             Role.MINISTRY_HR,
@@ -2947,6 +2947,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        if not ai_validation:
+            from .ai.submission_package_validation import persist_package_validation, rule_based_result
+
+            persist_package_validation(submission, rule_based_result(submission))
+            submission.refresh_from_db()
+            return Response(SubmissionDetailSerializer(submission).data)
 
         submission.ai_package_processed = False
         submission.save(update_fields=["ai_package_processed", "updated_at"])
@@ -3953,6 +3960,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 or self.request.user.is_superuser
             )
         )
+        from .submit_gate import submit_blockers
+
         return {
             "allowed": allowed,
             "can_endorse": can_endorse,
@@ -3961,6 +3970,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             "dg_status": dg_status,
             "transition_guidance": guidance,
             "transition_guidance_pending": stale,
+            "submit_blockers": submit_blockers(submission, profile.role),
         }
 
     def _checklist_payload(self, submission):
