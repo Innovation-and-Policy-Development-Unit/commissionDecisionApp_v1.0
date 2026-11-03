@@ -1062,6 +1062,28 @@ const stageDescriptions = {
     setActiveTab(tab)
   }
 
+  // Arrow keys move between tabs, as a tablist is expected to. Only the
+  // selected tab is in the tab order (roving tabindex), so Tab leaves the bar
+  // and lands in the panel rather than walking through every section.
+  const handleTabKeyDown = async (e) => {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key]
+    let target = null
+    if (step) {
+      const i = TABS.findIndex(t => t.key === effectiveTab)
+      target = TABS[(i + step + TABS.length) % TABS.length]
+    } else if (e.key === 'Home') {
+      target = TABS[0]
+    } else if (e.key === 'End') {
+      target = TABS[TABS.length - 1]
+    }
+    if (!target) return
+    e.preventDefault()
+    await handleTabChange(target.key)
+    const el = document.getElementById(`tab-${target.key}`)
+    el?.focus()
+    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }
+
   if (pageLoading && !submission) {
     return <PageSkeleton detailMode />
   }
@@ -1264,49 +1286,50 @@ const stageDescriptions = {
       )}
 
       <div className="sticky top-16 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 mb-4 bg-slate-100 dark:bg-slate-900 border-b border-slate-200/70 dark:border-slate-800">
-        <div className="hidden sm:flex items-center gap-1 rounded-lg bg-white/70 dark:bg-slate-800 backdrop-blur-sm p-1 overflow-x-auto">
-          {TABS.map(tab => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => handleTabChange(tab.key)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
-                effectiveTab === tab.key
-                  ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              <tab.Icon size={13} />
-              {tab.label}
-              {tab.key === 'commission_paper' && boardPaperDirty && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Unsaved changes" />
-              )}
-            </button>
-          ))}
-        </div>
-        <div className="flex sm:hidden gap-1 overflow-x-auto pb-1">
-          {TABS.map(tab => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => handleTabChange(tab.key)}
-              className={`shrink-0 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap ${
-                effectiveTab === tab.key
-                  ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                  : 'text-slate-500 dark:text-slate-400'
-              }`}
-            >
-              <tab.Icon size={13} />
-              {tab.label}
-            </button>
-          ))}
+        <div
+          role="tablist"
+          aria-label="Submission sections"
+          onKeyDown={handleTabKeyDown}
+          className="flex items-center gap-1 p-1 rounded-xl overflow-x-auto bg-slate-200/80 dark:bg-slate-950/60 ring-1 ring-inset ring-slate-300/80 dark:ring-slate-700/80"
+        >
+          {TABS.map(tab => {
+            const selected = effectiveTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                id={`tab-${tab.key}`}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls="submission-tab-panel"
+                tabIndex={selected ? 0 : -1}
+                onClick={() => handleTabChange(tab.key)}
+                className={`shrink-0 inline-flex items-center gap-2 rounded-lg px-3 sm:px-3.5 py-2 text-sm font-semibold whitespace-nowrap transition-colors ${
+                  selected
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-md ring-1 ring-slate-300/80 dark:ring-slate-600'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <tab.Icon size={16} className={selected ? 'text-primary-600 dark:text-primary-400' : ''} />
+                {tab.label}
+                {tab.key === 'commission_paper' && boardPaperDirty && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Unsaved changes" />
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        {/* ── Left: details + timeline ── */}
-        <div className="lg:col-span-2 space-y-4">
+        {/* ── Left: details + timeline — the panel the tablist above controls ── */}
+        <div
+          id="submission-tab-panel"
+          role="tabpanel"
+          aria-labelledby={`tab-${effectiveTab}`}
+          className="lg:col-span-2 space-y-4"
+        >
 
           {effectiveTab === 'overview' && (
           <>
