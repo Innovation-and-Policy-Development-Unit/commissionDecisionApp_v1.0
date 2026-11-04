@@ -28,7 +28,7 @@ DECISION_STAGES = frozenset({
 
 # What a ministry-side viewer sees instead of the outcome, and what the applicant's
 # public tracking page shows once a decision exists but has not been served.
-PENDING_LETTER_LABEL = "With the Commission — decision pending issue of letter"
+PENDING_LETTER_LABEL = "The Commission has deliberated"
 PUBLIC_PENDING_LABEL = "Decision issued to your ministry"
 
 
@@ -68,6 +68,27 @@ def hide_from(submission, user) -> bool:
     if is_opsc_internal(user):
         return False
     return not decision_visible_to_ministry(submission)
+
+
+def redact_audit_trail(entries, submission, user):
+    """Drop the decision from a ministry-side audit trail until the letter is served.
+
+    The trail is a merged timeline of workflow events and audit entries, and it spells
+    the outcome out twice — "Commission Sitting → Approved" and the remark the
+    Commission left. Entries are removed rather than reworded: inventing a stage that
+    never happened would be worse in a record meant to be evidence, and they reappear
+    in full once the decision has been served.
+    """
+    if not hide_from(submission, user):
+        return entries
+    kept = []
+    for entry in entries:
+        if entry.get("entry_type") == "workflow" and is_decision_stage(entry.get("new_stage")):
+            continue
+        if entry.get("entry_type") == "audit" and entry.get("action") == "DECISION":
+            continue
+        kept.append(entry)
+    return kept
 
 
 def served_notice_recipients(submission):
