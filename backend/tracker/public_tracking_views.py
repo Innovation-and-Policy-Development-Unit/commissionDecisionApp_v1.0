@@ -47,9 +47,13 @@ MILESTONES = [
 # belong on the forward path at all), whether the stage represents a pause/
 # hold rather than forward progress, and a display label. Labels are mostly
 # the stage's own human-readable name; overrides exist only to strip internal
-# jargon/system references (e.g. "(CMS)"), never to hide an outcome — the
-# actual result (Approved / Not Approved / Rejected / Returned) is the whole
-# point of tracking a decision, so it's shown plainly.
+# jargon/system references (e.g. "(CMS)").
+#
+# Outcomes are the exception. A Commission decision is not official until its
+# letter has been served on the ministry, and no decision may be given out
+# before that — so while a decision is waiting on its letter this page says
+# only that one was issued to the ministry, and the labels below are used once
+# it has been served. See tracker/decision_disclosure.py.
 STAGE_INFO = {
     # ── Submitted ──
     # Still with the ministry's Director-General — not yet lodged with PSC, so it is not
@@ -113,13 +117,29 @@ def _stage_history(submission):
         .exclude(stage=WorkflowStage.DRAFT)
         .order_by("occurred_at")
     )
+    from .decision_disclosure import PUBLIC_PENDING_LABEL, decision_visible_to_ministry, is_decision_stage
+
+    served = decision_visible_to_ministry(submission)
     history = []
     for event in events:
         info = STAGE_INFO.get(event.stage)
         if info is None:
             continue
-        history.append({"stage_label": info["label"], "occurred_at": event.occurred_at})
+        label = info["label"]
+        if is_decision_stage(event.stage) and not served:
+            label = PUBLIC_PENDING_LABEL
+        history.append({"stage_label": label, "occurred_at": event.occurred_at})
     return history
+
+
+def _public_stage_label(submission, info):
+    """The outcome itself, once the letter has been served; before that, only that a
+    decision was issued to the ministry."""
+    from .decision_disclosure import PUBLIC_PENDING_LABEL, decision_visible_to_ministry
+
+    if decision_visible_to_ministry(submission):
+        return info["label"]
+    return PUBLIC_PENDING_LABEL
 
 
 @api_view(["GET"])
@@ -164,7 +184,7 @@ def track_submission_view(request, tracking_code):
         "ministry": submission.ministry.name,
         "unit": submission.unit.name if submission.unit else None,
         "assigned_role": assigned_role,
-        "current_stage_label": info["label"],
+        "current_stage_label": _public_stage_label(submission, info),
         "is_paused": info["paused"],
         "milestone_index": info["milestone"],
         "milestones": MILESTONES,
