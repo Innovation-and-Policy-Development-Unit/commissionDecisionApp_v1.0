@@ -7,8 +7,7 @@ PSC 10-2(a/b/c) agreement form itself, which is a form a ministry fills in, not 
 paper HRM lodges, so there was nothing for HRM to choose.
 
 Adds the type, routed to the HR Unit, in the Performance Management category. It is
-a plain submission paper (no digitised form yet), so HRM attaches the report as a
-document. ``get_or_create`` so an admin-made type of the same code is not touched.
+created without a form; migration 0296 adds the digitised form. ``get_or_create`` so an admin-made type of the same code is not touched.
 """
 from django.db import migrations
 

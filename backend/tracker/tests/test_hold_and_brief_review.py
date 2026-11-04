@@ -156,3 +156,16 @@ class SeededDefaultsTests(TestCase):
         ft = PSCFormType.objects.get(code="SEO-PA-REPORT")
         self.assertEqual(ft.routed_unit, "hr")
         self.assertTrue(ft.is_active)
+
+    def test_seo_report_form_is_digitised_with_required_report_document(self):
+        from ..models import PSCFormField, RequiredDocument
+
+        ft = PSCFormType.objects.get(code="SEO-PA-REPORT")
+        self.assertTrue(ft.is_digitized)
+        fields = PSCFormField.objects.filter(form_type=ft)
+        keys = set(fields.values_list("field_key", flat=True))
+        self.assertEqual(len(keys), fields.count())  # no duplicate keys
+        for needed in ("purpose", "issue", "compliance_rate", "recommendation", "result_by_ministry"):
+            self.assertIn(needed, keys)
+        self.assertTrue(fields.filter(field_type="section_header", start_new_page=True).exists())
+        self.assertTrue(RequiredDocument.objects.filter(form_type=ft).exists())
