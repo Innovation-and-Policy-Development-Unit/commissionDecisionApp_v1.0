@@ -1013,11 +1013,24 @@ def _dispatch_transition_notifications(
             )
 
     elif target == WorkflowStage.DEFERRED_BACK_TO_HR:
+        # A deferral has a letter prepared for it like any other outcome, so the
+        # ministry hears about it when that letter is served, not here. Tell the
+        # responsible unit instead, because somebody has to prepare that letter.
+        _defer_role = {
+            "odu": Role.ODU_MANAGER,
+            "hr": Role.HR_UNIT_MANAGER,
+            "vipam": Role.VIPAM_MANAGER,
+            "compliance": Role.COMPLIANCE_MANAGER,
+            "ipdu": Role.IPDU_MANAGER,
+        }.get(submission.routed_unit, Role.PSC_OFFICER)
         recipients = User.objects.filter(
-            pk=submission.created_by_id, is_active=True,
+            psc_profile__role__in=[_defer_role, Role.PSC_MANAGER], is_active=True,
         )
-        title = f"Deferred back to HR: {submission.reference_number}"
-        body = f"The Commission has deferred '{submission.title}' back to your ministry for further action."
+        title = f"Deferred — letter to prepare: {submission.reference_number}"
+        body = (
+            f"The Commission deferred '{submission.title}' back to the ministry. "
+            f"Prepare the decision letter and serve it — the ministry is not told until you do."
+        )
 
     elif target in (WorkflowStage.APPROVED, WorkflowStage.REJECTED):
         unit_to_role = {
@@ -1031,11 +1044,11 @@ def _dispatch_transition_notifications(
         label = "approved" if target == WorkflowStage.APPROVED else "rejected"
         title = f"Submission {label}: {submission.reference_number}"
         body = f"'{submission.title}' has been {label} by the Commission."
+        # OPSC only. The submitting ministry is told when the decision letter is
+        # served on them, which is the point at which the outcome becomes official.
         recipients = User.objects.filter(
             psc_profile__role__in=[manager_role, Role.PSC_MANAGER],
             is_active=True,
-        ).union(
-            User.objects.filter(pk=submission.created_by_id, is_active=True)
         )
         # Also notify the assigned principal who carried out the assessment
         if submission.assigned_to_id:
@@ -5117,6 +5130,26 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             submission, served_by=request.user,
             letter_subject=letter_subject, letter_body=letter_body,
         )
+
+        # Serving the letter is the moment the ministry is told anything at all: the
+        # decision notifications were held back for exactly this.
+        from .decision_disclosure import served_notice_recipients
+
+        _served_for = submission.get_current_stage_display()
+        Notification.objects.bulk_create([
+            Notification(
+                recipient=u,
+                submission=submission,
+                title=f"Commission decision served: {submission.reference_number}",
+                body=(
+                    f"The Commission's decision on '{submission.title}' has been served on "
+                    f"your ministry: {_served_for}. The signed letter is on the submission. "
+                    f"Please acknowledge receipt."
+                ),
+                link=f"/submissions/{submission.id}",
+            )
+            for u in served_notice_recipients(submission)
+        ])
 
         _log(request, _AL.Action.DECISION,
              resource_type="Submission", resource_id=submission.id,

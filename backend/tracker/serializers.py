@@ -739,6 +739,34 @@ def _strip_ai_brief_if_ministry(data: dict, request) -> dict:
     return data
 
 
+def _mask_decision_if_not_served(data: dict, request, instance) -> dict:
+    """A Commission outcome is not the ministry's to know until its letter is served.
+
+    The frontend hides the badge too, but the API response must not carry the outcome
+    at all — not in the stage, not in the decision date, and not in the event timeline,
+    which otherwise spells it out in full.
+    """
+    from .decision_disclosure import PENDING_LETTER_LABEL, hide_from, is_decision_stage
+
+    user = getattr(request, "user", None) if request else None
+    if not hide_from(instance, user):
+        return data
+
+    if "current_stage" in data:
+        data["current_stage"] = "forwarded_to_commission"
+    if "stage_display_label" in data:
+        data["stage_display_label"] = PENDING_LETTER_LABEL
+    if "commission_approved_at" in data:
+        data["commission_approved_at"] = None
+    events = data.get("events")
+    if isinstance(events, list):
+        data["events"] = [
+            e for e in events
+            if not (isinstance(e, dict) and is_decision_stage(e.get("new_stage")))
+        ]
+    return data
+
+
 def _strip_internal_allocation_if_ministry(data: dict, request) -> dict:
     """Who a submission is currently allocated to within OPSC is internal
     staffing detail — never expose it to a ministry-side viewer, even though
@@ -822,8 +850,10 @@ class SubmissionListSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data = _strip_ai_brief_if_ministry(data, self.context.get("request"))
-        return _strip_internal_allocation_if_ministry(data, self.context.get("request"))
+        request = self.context.get("request")
+        data = _strip_ai_brief_if_ministry(data, request)
+        data = _mask_decision_if_not_served(data, request, instance)
+        return _strip_internal_allocation_if_ministry(data, request)
 
     class Meta:
         model = Submission
@@ -1030,6 +1060,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         data = _strip_ai_brief_if_ministry(data, request)
         data = _strip_internal_allocation_if_ministry(data, request)
+        data = _mask_decision_if_not_served(data, request, instance)
 
         from .opsc_access import is_opsc_internal
 
