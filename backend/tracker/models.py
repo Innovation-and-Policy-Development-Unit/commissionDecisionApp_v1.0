@@ -2241,6 +2241,33 @@ class Submission(models.Model):
         blank=True,
         help_text="When the unit was last chased to serve this decision letter.",
     )
+    # ── Hold on actioning a decision / serving its letter ───────────────────
+    decision_hold_active = models.BooleanField(
+        default=False,
+        help_text="While true the decision letter cannot be served and the "
+                  "unserved-decision chase is paused. Only the Secretary sets it.",
+    )
+    decision_hold_reason = models.TextField(blank=True, default="")
+    decision_held_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="decision_holds_placed",
+    )
+    decision_held_at = models.DateTimeField(null=True, blank=True)
+    decision_hold_released_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the last hold was lifted; the unserved-decision window "
+                  "restarts from here.",
+    )
+    # ── Responsible-unit sign-off of the AI brief ───────────────────────────
+    ai_brief_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="ai_briefs_reviewed",
+    )
+    ai_brief_reviewed_at = models.DateTimeField(null=True, blank=True)
+    ai_brief_edited = models.BooleanField(
+        default=False,
+        help_text="True when the reviewer changed the AI text before confirming it.",
+    )
     ai_package_signature = models.CharField(
         max_length=64,
         blank=True,

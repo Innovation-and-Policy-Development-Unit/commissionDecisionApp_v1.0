@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react'
+import { Sparkles, RefreshCw, AlertCircle, CheckCircle2, Pencil } from 'lucide-react'
 import AiProcessingIndicator from '../shared/AiProcessingIndicator'
 import api from '../../api/client'
 import { isTabVisible } from '../../hooks/useVisibilityAwareInterval'
+import { useToast } from '../../context/ToastContext'
 
 const POLL_MS = 3000
 const POLL_MAX = 40
 
 export default function SecretariatBriefCard({ submission, submissionId, onUpdated, canRegenerate = false }) {
   const { t } = useTranslation()
+  const toast = useToast()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [confirming, setConfirming] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [pollTimedOut, setPollTimedOut] = useState(false)
 
@@ -56,6 +61,33 @@ export default function SecretariatBriefCard({ submission, submissionId, onUpdat
       /* parent may show toast */
     } finally {
       setRegenerating(false)
+    }
+  }
+
+  const canReview = submission?.ai_brief_can_review === true
+  const reviewedAt = submission?.ai_brief_reviewed_at
+    ? new Date(submission.ai_brief_reviewed_at).toLocaleString('en-VU', {
+        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      })
+    : null
+
+  const startEdit = () => {
+    setDraft(submission.ai_brief_summary || '')
+    setEditing(true)
+  }
+
+  const confirmBrief = async () => {
+    setConfirming(true)
+    try {
+      const body = editing ? { summary: draft } : {}
+      const res = await api.post(`/submissions/${submissionId}/review-brief/`, body)
+      onUpdated?.(res.data)
+      setEditing(false)
+      toast.success('AI brief confirmed.')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not confirm the brief.')
+    } finally {
+      setConfirming(false)
     }
   }
 
@@ -125,6 +157,14 @@ export default function SecretariatBriefCard({ submission, submissionId, onUpdat
             variant="indigo"
           />
         </div>
+      ) : showBrief && editing ? (
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={14}
+          className="w-full text-sm leading-relaxed rounded-xl px-4 py-3 border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900"
+          aria-label="AI brief text"
+        />
       ) : showBrief ? (
         <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed bg-white/60 dark:bg-slate-800/40 rounded-xl px-4 py-3 border border-indigo-100 dark:border-indigo-900/50">
           {submission.ai_brief_summary}
@@ -139,6 +179,42 @@ export default function SecretariatBriefCard({ submission, submissionId, onUpdat
           </p>
         </div>
       ) : null}
+
+      {showBrief && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {reviewedAt ? (
+            <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 size={14} />
+              Reviewed by {submission.ai_brief_reviewed_by_name || 'the responsible unit'} on {reviewedAt}
+              {submission.ai_brief_edited ? ' (edited)' : ''}
+            </p>
+          ) : (
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Not yet reviewed by the responsible unit. The Commission reads this same brief.
+            </p>
+          )}
+          {canReview && !editing && (
+            <>
+              <button type="button" onClick={startEdit} className="btn-outline btn-sm">
+                <Pencil size={14} /> Edit
+              </button>
+              {!reviewedAt && (
+                <button type="button" onClick={confirmBrief} disabled={confirming} className="btn-primary btn-sm disabled:opacity-50">
+                  <CheckCircle2 size={14} /> Confirm brief
+                </button>
+              )}
+            </>
+          )}
+          {canReview && editing && (
+            <>
+              <button type="button" onClick={confirmBrief} disabled={confirming || !draft.trim()} className="btn-primary btn-sm disabled:opacity-50">
+                <CheckCircle2 size={14} /> Save and confirm
+              </button>
+              <button type="button" onClick={() => setEditing(false)} className="btn-outline btn-sm">Cancel</button>
+            </>
+          )}
+        </div>
+      )}
 
       {generatedAt && submission?.ai_brief_processed && showBrief && (
         <p className="text-[10px] text-slate-400 mt-2 uppercase tracking-widest">

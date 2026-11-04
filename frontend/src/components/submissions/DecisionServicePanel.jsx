@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Send, CheckCircle2, Clock, Download, ShieldCheck, X } from 'lucide-react'
+import { Send, CheckCircle2, Clock, Download, ShieldCheck, X, PauseCircle, PlayCircle } from 'lucide-react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -38,17 +38,23 @@ export default function DecisionServicePanel({ submission }) {
   const [body, setBody] = useState('')
   const [ackNote, setAckNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [hold, setHold] = useState(null)
+  const [holdOpen, setHoldOpen] = useState(false)
+  const [holdReason, setHoldReason] = useState('')
 
   const role = user?.role
   const applicable = POST_DECISION_STAGES.includes(submission?.current_stage)
   const canView = applicable && VIEW_ROLES.includes(role)
   const canServe = SERVE_ROLES.includes(role)
   const canAck = ACK_ROLES.includes(role)
+  const canHold = role === 'psc_secretary'
+  const onHold = hold?.active === true
 
   const load = useCallback(async () => {
     try {
       const r = await api.get(`/submissions/${submission.id}/decision-service/`)
       setServices(r.data.services || [])
+      setHold(r.data.hold || null)
     } catch {
       setServices([])
     }
@@ -63,6 +69,35 @@ export default function DecisionServicePanel({ submission }) {
   const active = services.find(s => !s.superseded) || null
   const history = services.filter(s => s !== active)
   const awaitingAck = active && !active.acknowledged_at
+
+  const placeHold = async () => {
+    if (!holdReason.trim()) { toast.error('Give the reason for the hold.'); return }
+    setBusy(true)
+    try {
+      await api.post(`/submissions/${submission.id}/hold-decision/`, { reason: holdReason })
+      setHoldOpen(false)
+      setHoldReason('')
+      await load()
+      toast.success('Decision put on hold. Its letter cannot be served until you release it.')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not put the decision on hold.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const releaseHold = async () => {
+    setBusy(true)
+    try {
+      await api.post(`/submissions/${submission.id}/release-decision/`)
+      await load()
+      toast.success('Hold released.')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not release the hold.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const openServeModal = async () => {
     const last = services[0]
@@ -187,18 +222,41 @@ export default function DecisionServicePanel({ submission }) {
           <ShieldCheck size={14} className="text-slate-400" />
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Decision Service</h3>
         </div>
-        {canServe && (
-          <BaseButton
-            variant={active ? 'ghost' : 'primary'}
-            size="sm"
-            icon={<Send size={13} />}
-            onClick={openServeModal}
-            disabled={busy}
-          >
-            {active ? 'Re-serve corrected letter' : 'Serve decision'}
-          </BaseButton>
-        )}
+        <div className="flex items-center gap-2">
+          {canHold && (onHold ? (
+            <BaseButton variant="ghost" size="sm" icon={<PlayCircle size={13} />} onClick={releaseHold} disabled={busy}>
+              Release hold
+            </BaseButton>
+          ) : (
+            <BaseButton variant="ghost" size="sm" icon={<PauseCircle size={13} />} onClick={() => setHoldOpen(true)} disabled={busy}>
+              Put on hold
+            </BaseButton>
+          ))}
+          {canServe && (
+            <BaseButton
+              variant={active ? 'ghost' : 'primary'}
+              size="sm"
+              icon={<Send size={13} />}
+              onClick={openServeModal}
+              disabled={busy || onHold}
+              title={onHold ? 'This decision is on hold' : undefined}
+            >
+              {active ? 'Re-serve corrected letter' : 'Serve decision'}
+            </BaseButton>
+          )}
+        </div>
       </div>
+
+      {onHold && (
+        <div className="mb-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-100">
+          <p className="font-semibold flex items-center gap-1.5"><PauseCircle size={14} /> On hold</p>
+          <p className="mt-1">{hold.reason}</p>
+          <p className="text-xs mt-1 text-amber-800/80 dark:text-amber-200/80">
+            Held by {hold.held_by}{hold.held_at ? ` · ${fmtDateTime(hold.held_at)}` : ''}. The letter cannot be
+            served and the decision cannot move into implementation until the Secretary releases it.
+          </p>
+        </div>
+      )}
 
       {!active && history.length === 0 ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -234,6 +292,27 @@ export default function DecisionServicePanel({ submission }) {
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
             Your name and the time of acknowledgement are permanently recorded.
           </p>
+        </div>
+      )}
+
+      {holdOpen && (
+        <div ref={attachDialog} aria-label="Put decision on hold" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-3">Put this decision on hold</h3>
+            <BaseTextarea
+              label="Reason (kept on the record)"
+              rows={4}
+              value={holdReason}
+              onChange={e => setHoldReason(e.target.value)}
+              disabled={busy}
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <BaseButton variant="ghost" size="sm" onClick={() => setHoldOpen(false)} disabled={busy}>Cancel</BaseButton>
+              <BaseButton variant="primary" size="sm" icon={<PauseCircle size={13} />} onClick={placeHold} disabled={busy}>
+                Put on hold
+              </BaseButton>
+            </div>
+          </div>
         </div>
       )}
 

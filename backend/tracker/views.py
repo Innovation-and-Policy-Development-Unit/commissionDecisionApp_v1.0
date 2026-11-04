@@ -215,6 +215,16 @@ from .models import (
 )
 
 
+def _hold_payload(submission) -> dict:
+    held_by = submission.decision_held_by
+    return {
+        "active": submission.decision_hold_active,
+        "reason": submission.decision_hold_reason if submission.decision_hold_active else "",
+        "held_by": (held_by.get_full_name() or held_by.username) if held_by else "",
+        "held_at": submission.decision_held_at if submission.decision_hold_active else None,
+    }
+
+
 def _profile(user):
     from .profile_utils import ensure_psc_profile
 
@@ -2272,6 +2282,31 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # ── A decision on hold is not actioned ──────────────────────────────────
+        if submission.decision_hold_active and target in {
+            WorkflowStage.UNDER_IMPLEMENTATION, WorkflowStage.IMPLEMENTATION_REPORT,
+        }:
+            return Response(
+                {"detail": "This decision is on hold, so it cannot move into "
+                           "implementation. The Secretary must release the hold first.",
+                 "on_hold": True},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── The responsible unit signs off the AI brief before the paper leaves it ──
+        if (
+            prev == WorkflowStage.UNDER_ASSESSMENT
+            and target == WorkflowStage.PENDING_SECRETARY_APPROVAL
+        ):
+            from .brief_review import blocker as brief_blocker
+
+            brief_msg = brief_blocker(submission)
+            if brief_msg:
+                return Response(
+                    {"detail": brief_msg, "brief_review_required": True},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # ── A3: pre-submit package validation (draft → submitted) ───────────────
         from .ai_settings import package_validation_enabled
 
@@ -3070,6 +3105,37 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         queue_submission_brief(submission.id, force=True, sync_fallback=False)
         return Response(SubmissionDetailSerializer(submission).data)
 
+    @action(detail=True, methods=["post"], url_path="review-brief")
+    def review_brief(self, request, pk=None):
+        """The responsible unit confirms (and may correct) the AI brief.
+
+        Body: { summary? } — corrected text; omit to confirm as written.
+        """
+        from .audit import log_action as _log
+        from .brief_review import can_review_brief, confirm, has_reviewable_brief
+        from .models import AuditLog as _AL
+
+        submission = self.get_object()
+        if not can_review_brief(request.user, submission):
+            raise PermissionDenied(
+                "Only the officer this paper is allocated to, or the unit Manager, "
+                "can review its AI brief."
+            )
+        if not has_reviewable_brief(submission):
+            return Response(
+                {"detail": "There is no AI brief to review yet."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        confirm(submission, request.user, text=request.data.get("summary"))
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description="AI brief reviewed by the responsible unit"
+                         + (" (edited)" if submission.ai_brief_edited else ""))
+        invalidate_submission(submission.id)
+        return Response(SubmissionDetailSerializer(
+            submission, context=self.get_serializer_context()).data)
+
     @action(detail=True, methods=["get"], url_path="assignable-officers")
     def assignable_officers(self, request, pk=None):
         """List officers the current unit manager may allocate this submission to."""
@@ -3564,6 +3630,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         update_fields = ["ready_for_manager_at"]
         if submission.current_stage == WorkflowStage.UNDER_ASSESSMENT:
+            from .brief_review import blocker as brief_blocker
+
+            brief_msg = brief_blocker(submission)
+            if brief_msg:
+                return Response(
+                    {"detail": brief_msg, "brief_review_required": True},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             from .rich_text import html_to_plain_text, sanitize_remarks_html
 
             assessment_html = sanitize_remarks_html(request.data.get("assessment_html", ""))
@@ -5094,14 +5168,82 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         """All service records for this submission, newest first."""
         from .serializers import DecisionServiceSerializer
 
+        from .decision_service import MINISTRY_ACK_ROLES
+
         submission = self.get_object()
-        self._assert_decision_service_viewer(request, submission)
+        viewer = self._assert_decision_service_viewer(request, submission)
         services = submission.decision_services.select_related(
             "served_by", "acknowledged_by",
         )
+        # Why a decision is held is the Secretariat's business, not the ministry's.
+        hold = None if viewer.role in MINISTRY_ACK_ROLES else _hold_payload(submission)
         return Response({
             "services": DecisionServiceSerializer(services, many=True).data,
+            "hold": hold,
         })
+
+    @action(detail=True, methods=["post"], url_path="hold-decision")
+    def hold_decision(self, request, pk=None):
+        """Secretary puts a decision on hold: its letter cannot be served meanwhile."""
+        from .audit import log_action as _log
+        from .decision_service import HOLDABLE_STAGES
+        from .models import AuditLog as _AL
+
+        submission = self.get_object()
+        if _profile(request.user).role != Role.PSC_SECRETARY:
+            raise PermissionDenied("Only the Secretary can hold a decision.")
+        if submission.current_stage not in HOLDABLE_STAGES:
+            return Response(
+                {"detail": "Only a paper the Commission has decided can be put on hold."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if submission.decision_hold_active:
+            return Response({"detail": "This decision is already on hold."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        reason = (request.data.get("reason") or "").strip()
+        if not reason:
+            return Response({"detail": "Give the reason for the hold."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        submission.decision_hold_active = True
+        submission.decision_hold_reason = reason
+        submission.decision_held_by = request.user
+        submission.decision_held_at = timezone.now()
+        submission.save(update_fields=[
+            "decision_hold_active", "decision_hold_reason",
+            "decision_held_by", "decision_held_at", "updated_at",
+        ])
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Decision put on hold: {reason}")
+        invalidate_submission(submission.id)
+        return Response({"hold": _hold_payload(submission)})
+
+    @action(detail=True, methods=["post"], url_path="release-decision")
+    def release_decision(self, request, pk=None):
+        """Secretary lifts the hold; the unserved-decision window restarts."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        submission = self.get_object()
+        if _profile(request.user).role != Role.PSC_SECRETARY:
+            raise PermissionDenied("Only the Secretary can release a held decision.")
+        if not submission.decision_hold_active:
+            return Response({"detail": "This decision is not on hold."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        submission.decision_hold_active = False
+        submission.decision_hold_released_at = timezone.now()
+        submission.decision_service_reminded_at = None
+        submission.save(update_fields=[
+            "decision_hold_active", "decision_hold_released_at",
+            "decision_service_reminded_at", "updated_at",
+        ])
+        _log(request, _AL.Action.UPDATE,
+             resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description="Decision hold released")
+        invalidate_submission(submission.id)
+        return Response({"hold": _hold_payload(submission)})
 
     @action(detail=True, methods=["post"], url_path="serve-decision")
     def serve_decision(self, request, pk=None):
@@ -5121,6 +5263,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER} \
                 and not request.user.is_staff:
             raise PermissionDenied("Only the Secretariat may serve decisions.")
+        if submission.decision_hold_active:
+            return Response(
+                {"detail": "This decision is on hold, so its letter cannot be served. "
+                           "The Secretary must release the hold first.",
+                 "on_hold": True},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if submission.current_stage not in SERVABLE_STAGES:
             return Response(
                 {"detail": "A decision can only be served after the Commission has decided "

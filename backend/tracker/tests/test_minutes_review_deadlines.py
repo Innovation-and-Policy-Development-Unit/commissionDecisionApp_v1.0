@@ -86,16 +86,16 @@ class ConfigurableWindowTests(_Base):
     def test_the_windows_come_from_settings(self):
         self.assertEqual(mr.draft_review_days(), 1)
         self.assertEqual(mr.secretariat_review_days(), 1)
-        self.assertEqual(mr.commissioner_review_days(), 2)
+        self.assertEqual(mr.commissioner_review_days(), 3)
 
         self._set_days(mr.SETTING_COMMISSIONER_REVIEW_DAYS, "5")
         self.assertEqual(mr.commissioner_review_days(), 5)
 
     def test_a_nonsense_value_falls_back_to_the_default(self):
         self._set_days(mr.SETTING_COMMISSIONER_REVIEW_DAYS, "not a number")
-        self.assertEqual(mr.commissioner_review_days(), 2)
+        self.assertEqual(mr.commissioner_review_days(), 3)
         SystemSetting.objects.filter(key=mr.SETTING_COMMISSIONER_REVIEW_DAYS).update(value="-3")
-        self.assertEqual(mr.commissioner_review_days(), 2)
+        self.assertEqual(mr.commissioner_review_days(), 3)
 
     def test_the_commissioner_window_follows_the_setting(self):
         self._set_days(mr.SETTING_COMMISSIONER_REVIEW_DAYS, "4")
