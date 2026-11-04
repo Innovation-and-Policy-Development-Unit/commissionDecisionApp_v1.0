@@ -4181,12 +4181,17 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .decision_proof import build_visual_audit_trail
         from .opsc_access import MINISTRY_SIDE_ROLES
 
+        from .decision_disclosure import redact_audit_trail
+
         profile = _profile(request.user)
         submission = self.get_object()
         entries = build_visual_audit_trail(submission)
         if profile.role in MINISTRY_SIDE_ROLES:
             for entry in entries:
                 entry.pop("ip_address", None)
+        # The trail names the outcome twice over; it waits for the letter like
+        # everything else the ministry sees.
+        entries = redact_audit_trail(entries, submission, request.user)
         return Response({
             "submission_id": submission.id,
             "reference_number": submission.reference_number,
@@ -4211,17 +4216,25 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         from .models import AuditLog as _AL, WorkflowStage
         from .opsc_access import MINISTRY_SIDE_ROLES
 
+        from .decision_disclosure import PENDING_LETTER_LABEL, hide_from, redact_audit_trail
+
         profile = _profile(request.user)
         submission = self.get_object()
         entries = build_visual_audit_trail(submission)
         if profile.role in MINISTRY_SIDE_ROLES:
             for entry in entries:
                 entry.pop("ip_address", None)
+        entries = redact_audit_trail(entries, submission, request.user)
 
         stage_labels = dict(WorkflowStage.choices)
+        _hidden = hide_from(submission, request.user)
+        _stage_label = (
+            PENDING_LETTER_LABEL if _hidden
+            else stage_labels.get(submission.current_stage, submission.current_stage)
+        )
         html = render_to_string("tracker/audit_trail_pdf.html", {
             "submission": submission,
-            "stage_label": stage_labels.get(submission.current_stage, submission.current_stage),
+            "stage_label": _stage_label,
             "entries": entries,
             "generated_at": timezone.now(),
             "generated_by": request.user.get_full_name() or request.user.username,

@@ -80,6 +80,63 @@ class ApiMaskingTests(_Base):
         data = self.api(self.hr).get(f"/api/submissions/{self.sub.id}/").json()
         self.assertEqual(data["current_stage"], WorkflowStage.APPROVED)
 
+    def test_journey_map_does_not_name_the_outcome(self):
+        data = self.api(self.hr).get(f"/api/submissions/{self.sub.id}/").json()
+        subway = data["subway_map"]
+        self.assertEqual(subway["status_detail"], dd.PENDING_LETTER_LABEL)
+        self.assertNotEqual(subway["current_stage"], WorkflowStage.APPROVED)
+        substages = [st.get("current_substage") for st in subway["stations"]]
+        self.assertNotIn(WorkflowStage.APPROVED, substages)
+
+    def test_journey_map_still_shows_the_outcome_to_opsc(self):
+        data = self.api(self.officer).get(f"/api/submissions/{self.sub.id}/").json()
+        self.assertEqual(data["subway_map"]["status_detail"], "Approved by the Commission")
+
+    def test_journey_map_names_the_outcome_once_served(self):
+        self.serve()
+        data = self.api(self.hr).get(f"/api/submissions/{self.sub.id}/").json()
+        self.assertEqual(data["subway_map"]["status_detail"], "Approved by the Commission")
+
+    def test_audit_trail_does_not_name_the_outcome(self):
+        from tracker.models import WorkflowEvent
+
+        WorkflowEvent.objects.create(
+            submission=self.sub, previous_stage=WorkflowStage.COMMISSION_SITTING,
+            new_stage=WorkflowStage.APPROVED, remarks="Approved at the sitting.",
+        )
+        res = self.api(self.hr).get(f"/api/submissions/{self.sub.id}/visual-audit-trail/")
+        self.assertEqual(res.status_code, 200, res.content)
+        blob = str(res.json())
+        self.assertNotIn("Approved at the sitting.", blob)
+        self.assertNotIn(WorkflowStage.APPROVED, [
+            e.get("new_stage") for e in res.json()["entries"]
+        ])
+
+    def test_audit_trail_shows_opsc_the_outcome(self):
+        from tracker.models import WorkflowEvent
+
+        WorkflowEvent.objects.create(
+            submission=self.sub, previous_stage=WorkflowStage.COMMISSION_SITTING,
+            new_stage=WorkflowStage.APPROVED, remarks="Approved at the sitting.",
+        )
+        res = self.api(self.officer).get(f"/api/submissions/{self.sub.id}/visual-audit-trail/")
+        self.assertIn(WorkflowStage.APPROVED, [
+            e.get("new_stage") for e in res.json()["entries"]
+        ])
+
+    def test_audit_trail_returns_the_outcome_once_served(self):
+        from tracker.models import WorkflowEvent
+
+        WorkflowEvent.objects.create(
+            submission=self.sub, previous_stage=WorkflowStage.COMMISSION_SITTING,
+            new_stage=WorkflowStage.APPROVED, remarks="Approved at the sitting.",
+        )
+        self.serve()
+        res = self.api(self.hr).get(f"/api/submissions/{self.sub.id}/visual-audit-trail/")
+        self.assertIn(WorkflowStage.APPROVED, [
+            e.get("new_stage") for e in res.json()["entries"]
+        ])
+
     def test_decision_events_are_withheld(self):
         from tracker.models import WorkflowEvent
 

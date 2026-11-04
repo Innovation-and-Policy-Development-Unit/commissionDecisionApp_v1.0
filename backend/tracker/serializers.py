@@ -764,6 +764,19 @@ def _mask_decision_if_not_served(data: dict, request, instance) -> dict:
             e for e in events
             if not (isinstance(e, dict) and is_decision_stage(e.get("new_stage")))
         ]
+
+    # The journey map is built separately from the stage field and spells the outcome
+    # out under the DECISION station ("Approved by the Commission"), so it has to be
+    # masked too. The matter still shows as having reached Decision — that much the
+    # ministry may know — but not which way it went.
+    subway = data.get("subway_map")
+    if isinstance(subway, dict):
+        subway["status_detail"] = PENDING_LETTER_LABEL
+        if is_decision_stage(subway.get("current_stage")):
+            subway["current_stage"] = "forwarded_to_commission"
+        for station in subway.get("stations") or []:
+            if isinstance(station, dict) and is_decision_stage(station.get("current_substage")):
+                station["current_substage"] = None
     return data
 
 
