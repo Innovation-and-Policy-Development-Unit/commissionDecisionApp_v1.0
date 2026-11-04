@@ -5135,6 +5135,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         # decision notifications were held back for exactly this.
         from .decision_disclosure import served_notice_recipients
 
+        # Clear the chase mark, so a later decision on this paper can be chased afresh.
+        if submission.decision_service_reminded_at:
+            submission.decision_service_reminded_at = None
+            submission.save(update_fields=["decision_service_reminded_at", "updated_at"])
+
         _served_for = submission.get_current_stage_display()
         Notification.objects.bulk_create([
             Notification(

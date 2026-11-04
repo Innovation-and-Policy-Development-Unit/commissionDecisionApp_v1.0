@@ -4225,6 +4225,67 @@ def split_submission_pack(pack_id: int):
     invalidate_submission(pack.submission_id)
 
 
+# ── Decision letters still to be served ───────────────────────────────────────
+
+DECISION_SERVICE_DAYS_SETTING = "DECISION_SERVICE_DAYS"
+
+
+def decision_service_days() -> int:
+    from .models import SystemSetting
+
+    return max(0, SystemSetting.get_int(DECISION_SERVICE_DAYS_SETTING, 2))
+
+
+@shared_task
+def remind_unserved_decisions():
+    """Daily chase on decisions whose letter has not been served.
+
+    A ministry is told its outcome only when the letter is served
+    (tracker.decision_disclosure), so a decision nobody serves leaves them unable to
+    tell "not yet decided" from "decided and not sent". Nothing used to chase this
+    because the outcome reached them anyway.
+
+    One notice per submission, tracked on the record, so the sweep does not chase the
+    same unit every morning. Serving the letter clears the mark.
+    """
+    from django.utils import timezone
+
+    from .decision_disclosure import current_service, is_decision_stage
+    from .email_notify import notify_decision_unserved
+    from .models import Submission, WorkflowEvent, working_days_elapsed
+
+    now = timezone.now()
+    window = decision_service_days()
+    chased = 0
+
+    candidates = Submission._base_manager.filter(
+        decision_service_reminded_at__isnull=True,
+    ).select_related("ministry")
+
+    for submission in candidates:
+        if not is_decision_stage(submission.current_stage):
+            continue
+        if current_service(submission) is not None:
+            continue
+        decided = (
+            WorkflowEvent.objects
+            .filter(submission=submission, new_stage=submission.current_stage)
+            .order_by("-created_at").values_list("created_at", flat=True).first()
+        )
+        if decided is None:
+            continue
+        elapsed = working_days_elapsed(decided, now)
+        if elapsed < window:
+            continue
+        notify_decision_unserved(submission, elapsed)
+        submission.decision_service_reminded_at = now
+        submission.save(update_fields=["decision_service_reminded_at", "updated_at"])
+        chased += 1
+
+    app_log.info("DECISION_SERVICE_CHASE | %d decision(s) chased", chased)
+    return chased
+
+
 # ── Minutes review deadlines ──────────────────────────────────────────────────
 
 @shared_task

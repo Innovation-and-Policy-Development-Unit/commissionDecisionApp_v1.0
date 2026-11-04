@@ -138,3 +138,56 @@ class PublicTrackingTests(_Base):
         labels = [h["stage_label"] for h in _stage_history(self.sub)]
         self.assertIn(dd.PUBLIC_PENDING_LABEL, labels)
         self.assertNotIn("Approved", labels)
+
+
+class UnservedChaseTests(_Base):
+    """A decision nobody serves must not leave the ministry in silence unnoticed."""
+
+    def setUp(self):
+        super().setUp()
+        self.manager = User.objects.create_user("dd_mgr", password="x")
+        Profile.objects.create(user=self.manager, role=Role.HR_UNIT_MANAGER)
+        self.sub.routed_unit = "hr"
+        self.sub.save(update_fields=["routed_unit"])
+
+    def decide(self, days_ago):
+        from datetime import timedelta
+
+        from tracker.models import WorkflowEvent
+
+        event = WorkflowEvent.objects.create(
+            submission=self.sub, previous_stage=WorkflowStage.COMMISSION_SITTING,
+            new_stage=WorkflowStage.APPROVED, remarks="Approved",
+        )
+        WorkflowEvent.objects.filter(pk=event.pk).update(
+            created_at=timezone.now() - timedelta(days=days_ago),
+        )
+
+    def sweep(self):
+        from tracker.tasks import remind_unserved_decisions
+
+        return remind_unserved_decisions()
+
+    def test_a_fresh_decision_is_not_chased_yet(self):
+        self.decide(days_ago=0)
+        self.assertEqual(self.sweep(), 0)
+
+    def test_an_old_unserved_decision_is_chased(self):
+        self.decide(days_ago=7)
+        self.assertEqual(self.sweep(), 1)
+        self.assertTrue(Notification.objects.filter(recipient=self.manager).exists())
+
+    def test_the_same_decision_is_not_chased_twice(self):
+        self.decide(days_ago=7)
+        self.assertEqual(self.sweep(), 1)
+        self.assertEqual(self.sweep(), 0)
+
+    def test_a_served_decision_is_never_chased(self):
+        self.decide(days_ago=7)
+        self.serve()
+        self.assertEqual(self.sweep(), 0)
+
+    def test_the_ministry_is_not_told_by_the_chase(self):
+        self.decide(days_ago=7)
+        self.sweep()
+        self.assertFalse(Notification.objects.filter(recipient=self.hr).exists())
