@@ -27,6 +27,9 @@ SERVABLE_STAGES = frozenset({
     "implementation_report",
 })
 
+# A decision can be held for as long as its letter or implementation is still to come.
+HOLDABLE_STAGES = SERVABLE_STAGES
+
 MINISTRY_ACK_ROLES = frozenset({"ministry_hr", "dept_admin", "head_of_agency"})
 
 

@@ -759,6 +759,8 @@ def _mark_submission_brief_failed(submission, message: str) -> None:
     submission.ai_brief_processed = True
     submission.ai_brief_generated_at = timezone.now()
     submission.ai_brief_context_key = compute_submission_ai_context_key(submission)
+    from .brief_review import clear_review
+
     submission.save(
         update_fields=[
             "ai_brief_summary",
@@ -766,6 +768,7 @@ def _mark_submission_brief_failed(submission, message: str) -> None:
             "ai_brief_generated_at",
             "ai_brief_context_key",
             "updated_at",
+            *clear_review(submission),
         ]
     )
 
@@ -1039,12 +1042,15 @@ def generate_submission_brief(self, submission_id: int, force: bool = False):
         submission.ai_brief_processed = True
         submission.ai_brief_generated_at = timezone.now()
         submission.ai_brief_context_key = compute_submission_ai_context_key(submission)
+        from .brief_review import clear_review
+
         submission.save(update_fields=[
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",
             "ai_brief_context_key",
             "updated_at",
+            *clear_review(submission),
         ])
         log_ai_call(feature=FEATURE_SUBMISSION_BRIEF, submission_id=submission_id,
                     status=AIGenerationLog.Status.SUCCESS, model_tier=tier,
@@ -4267,6 +4273,8 @@ def remind_unserved_decisions():
             continue
         if current_service(submission) is not None:
             continue
+        if submission.decision_hold_active:
+            continue
         decided = (
             WorkflowEvent.objects
             .filter(submission=submission, new_stage=submission.current_stage)
@@ -4274,6 +4282,9 @@ def remind_unserved_decisions():
         )
         if decided is None:
             continue
+        # A lifted hold restarts the window: the delay up to then was deliberate.
+        if submission.decision_hold_released_at and submission.decision_hold_released_at > decided:
+            decided = submission.decision_hold_released_at
         elapsed = working_days_elapsed(decided, now)
         if elapsed < window:
             continue

@@ -907,6 +907,8 @@ class SubmissionListSerializer(serializers.ModelSerializer):
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",
+            "ai_brief_reviewed_at",
+            "ai_brief_edited",
             "ai_quality_score",
             "ai_quality_explanation",
             "ai_quality_dimensions",
@@ -922,6 +924,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
     form_category = FormCategorySerializer(read_only=True)
     events = WorkflowEventSerializer(many=True, read_only=True)
     logged_by = serializers.CharField(source="created_by.username", read_only=True)
+    ai_brief_can_review = serializers.SerializerMethodField()
+    ai_brief_reviewed_by_name = serializers.SerializerMethodField()
     assigned_to_name = serializers.SerializerMethodField()
     allocated_to_label = serializers.SerializerMethodField()
     stage_display_label = serializers.SerializerMethodField()
@@ -1050,6 +1054,19 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
 
     def get_estimated_meeting_date(self, obj):
         return obj.estimated_meeting_date
+
+    def get_ai_brief_can_review(self, obj):
+        from .brief_review import can_review_brief
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or user.is_anonymous:
+            return False
+        return can_review_brief(user, obj)
+
+    def get_ai_brief_reviewed_by_name(self, obj):
+        user = obj.ai_brief_reviewed_by
+        return (user.get_full_name() or user.username) if user else ""
 
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.get_full_name() or obj.assigned_to.username if obj.assigned_to else None
@@ -1196,6 +1213,10 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",
+            "ai_brief_reviewed_at",
+            "ai_brief_edited",
+            "ai_brief_can_review",
+            "ai_brief_reviewed_by_name",
             "ai_quality_score",
             "ai_quality_explanation",
             "ai_quality_dimensions",
@@ -1238,6 +1259,8 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
             "ai_brief_summary",
             "ai_brief_processed",
             "ai_brief_generated_at",
+            "ai_brief_reviewed_at",
+            "ai_brief_edited",
             "ai_quality_score",
             "ai_quality_explanation",
             "ai_quality_dimensions",
