@@ -1227,6 +1227,43 @@ def notify_minutes_signed(minutes) -> None:
     )
 
 
+def notify_decision_unserved(submission, days: int) -> None:
+    """Chase the unit that owes a ministry its decision letter.
+
+    Since the letter became the only thing that tells a ministry its outcome, a
+    decision nobody serves leaves them with no way to tell "not yet decided" from
+    "decided and not sent".
+    """
+    from .models import Role
+
+    unit_role = {
+        "odu": Role.ODU_MANAGER,
+        "hr": Role.HR_UNIT_MANAGER,
+        "vipam": Role.VIPAM_MANAGER,
+        "compliance": Role.COMPLIANCE_MANAGER,
+        "ipdu": Role.IPDU_MANAGER,
+    }.get(submission.routed_unit, Role.PSC_OFFICER)
+    recipients = list(
+        User.objects.filter(
+            is_active=True,
+            psc_profile__role__in=[unit_role, Role.PSC_MANAGER, Role.PSC_SECRETARY],
+        ).select_related("psc_profile")
+    )
+    if not recipients:
+        return
+    ministry = submission.ministry.name if submission.ministry_id else "the ministry"
+    _notify_users(
+        recipients,
+        title=f"Decision letter not served: {submission.reference_number}",
+        body=(
+            f"The Commission decided '{submission.title}' {days} working day(s) ago and the "
+            f"letter has not been served on {ministry}. Until it is, they are told nothing "
+            f"about the outcome."
+        ),
+        link=f"/submissions/{submission.id}",
+    )
+
+
 def _notify_users(users, *, title: str, body: str, link: str = "/secretariat/minutes") -> None:
     from .models import Notification
 

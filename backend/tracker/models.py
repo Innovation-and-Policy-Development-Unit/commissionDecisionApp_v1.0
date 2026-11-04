@@ -2236,6 +2236,11 @@ class Submission(models.Model):
         help_text="True once the latest package validation completed.",
     )
     ai_package_generated_at = models.DateTimeField(null=True, blank=True)
+    decision_service_reminded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the unit was last chased to serve this decision letter.",
+    )
     ai_package_signature = models.CharField(
         max_length=64,
         blank=True,
