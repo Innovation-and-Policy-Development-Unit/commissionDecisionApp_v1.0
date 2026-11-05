@@ -22,9 +22,24 @@ HR_UNIT_AUTHOR_ROLES = frozenset({
     Role.HR_UNIT_MANAGER,
 })
 
+# ODU reports on overseas travel to the Commission (total trips, total cost, ...).
+# It is ODU's own paper, so it is created inside OPSC and climbs the same ladder; the
+# travel report itself is attached as the paper's required document.
+ODU_INTERNAL_FORM_CODES = frozenset({"ODU-TRAVEL-REPORT"})
+
+ODU_UNIT_AUTHOR_ROLES = frozenset({
+    Role.ODU_SENIOR,
+    Role.ODU_PRINCIPAL,
+    Role.ODU_MANAGER,
+})
+
+# Internal papers whose required documents are listed and enforced before the author
+# sends the paper up the ladder (ministry papers have their own submit gate).
+INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS = ODU_INTERNAL_FORM_CODES
+
 # Everyone who authors an OPSC-internal paper of their own and climbs the ladder:
-# HR (the SEO report) and VIPAM, alongside Compliance (which lists its own roles).
-UNIT_AUTHOR_ROLES = HR_UNIT_AUTHOR_ROLES | frozenset({
+# HR (the SEO report), VIPAM and ODU, alongside Compliance (which lists its own roles).
+UNIT_AUTHOR_ROLES = HR_UNIT_AUTHOR_ROLES | ODU_UNIT_AUTHOR_ROLES | frozenset({
     Role.VIPAM_SENIOR,
     Role.VIPAM_PRINCIPAL,
     Role.VIPAM_MANAGER,
@@ -35,6 +50,7 @@ UNIT_REVIEW_ROLES = {
     "compliance": {"principal": Role.COMPLIANCE_PRINCIPAL, "manager": Role.COMPLIANCE_MANAGER},
     "hr": {"principal": Role.HR_UNIT_PRINCIPAL, "manager": Role.HR_UNIT_MANAGER},
     "vipam": {"principal": Role.VIPAM_PRINCIPAL, "manager": Role.VIPAM_MANAGER},
+    "odu": {"principal": Role.ODU_PRINCIPAL, "manager": Role.ODU_MANAGER},
 }
 
 

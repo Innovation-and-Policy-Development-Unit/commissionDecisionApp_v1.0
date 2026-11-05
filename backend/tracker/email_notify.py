@@ -661,6 +661,33 @@ def hr_managers() -> list[User]:
     )
 
 
+def meeting_audience() -> list[User]:
+    """Active users told about a new / moved sitting: all submitters (ministry
+    HR, department admins) and all OPSC staff, one entry per person."""
+    from .models import Role
+
+    submitters = [Role.MINISTRY_HR, Role.DEPT_ADMIN]
+    opsc_staff = [
+        Role.PSC_ADMIN, Role.RECEPTIONIST, Role.PSC_OFFICER, Role.PSC_SECRETARY,
+        Role.SENIOR_ADMIN_OFFICER, Role.PSC_MANAGER, Role.PRINCIPAL_OFFICER,
+        Role.SENIOR_OFFICER, Role.SECRETARY_OPSC, Role.HRMIS_REVIEWER,
+        Role.VIPAM_MANAGER, Role.HR_UNIT_MANAGER, Role.ODU_MANAGER,
+        Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_SENIOR, Role.CSU_MANAGER,
+        Role.IPDU_MANAGER, Role.VIPAM_PRINCIPAL, Role.HR_UNIT_PRINCIPAL,
+        Role.ODU_PRINCIPAL, Role.COMPLIANCE_PRINCIPAL, Role.VIPAM_SENIOR,
+        Role.HR_UNIT_SENIOR, Role.ODU_SENIOR, Role.CSU_SENIOR,
+    ]
+    return list(
+        User.objects.filter(
+            is_active=True,
+            psc_profile__role__in=submitters + opsc_staff,
+        )
+        .exclude(email="")
+        .select_related("psc_profile")
+        .distinct()
+    )
+
+
 # English fallback for the agenda PDF's own labels — used if the bundled
 # locale JSON is missing/unreadable, or for a language with no override.
 # Sourced from the same `agenda.doc_*` keys the on-screen Agenda page uses
@@ -1004,7 +1031,7 @@ def notify_meeting_scheduled(meeting) -> None:
 
     from .models import Notification
 
-    recipients = hr_managers()
+    recipients = meeting_audience()
     members = commission_members()
     if not recipients and not members:
         return
@@ -1083,7 +1110,7 @@ def notify_meeting_postponed(meeting, old_date, old_time, old_cutoff) -> None:
 
     from .models import Notification
 
-    recipients = hr_managers()
+    recipients = meeting_audience()
     members = commission_members()
     if not recipients and not members:
         return

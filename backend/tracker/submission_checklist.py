@@ -50,14 +50,22 @@ def resolve_required_documents(submission: Submission):
     if submission.is_attachment or submission.secretary_only:
         return RequiredDocument.objects.none()
     is_compliance_case = submission.form_type_code in _COMPLIANCE_FORM_TYPE_CODES
-    if submission.is_internal and not submission.follows_normal_route and not is_compliance_case:
+    from .hr_internal import INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS
+
+    has_own_documents = submission.form_type_code in INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS
+    if (
+        submission.is_internal and not submission.follows_normal_route
+        and not is_compliance_case and not has_own_documents
+    ):
         return RequiredDocument.objects.none()
 
     # OPSC-internal submissions that follow the normal route (e.g. CSU/ODU
     # appointing OPSC staff) have no Director-General in their workflow, so
     # ministry-only items (DG endorsement letters, etc.) don't apply. Same
     # reasoning applies to Compliance cases (also DG-less and internal-origin).
-    skip_ministry_only = submission.is_internal and (submission.follows_normal_route or is_compliance_case)
+    skip_ministry_only = submission.is_internal and (
+        submission.follows_normal_route or is_compliance_case or has_own_documents
+    )
     # ORG-3.1's extra DG Endorsement Letter only applies to department-level
     # restructures — see 0203_org_3_1_conditional_dg_letter.py.
     skip_department_only = not _is_department_level_restructure(submission)
@@ -68,7 +76,7 @@ def resolve_required_documents(submission: Submission):
 
     if form_type_obj:
         type_specific = RequiredDocument.objects.filter(
-            is_active=True, form_type=form_type_obj
+            is_active=True, opsc_supplied=False, form_type=form_type_obj
         )
         if skip_ministry_only:
             type_specific = type_specific.exclude(ministry_only=True)
@@ -77,7 +85,7 @@ def resolve_required_documents(submission: Submission):
         if type_specific.exists():
             return type_specific
         qs = RequiredDocument.objects.filter(
-            is_active=True, form_type__isnull=True
+            is_active=True, opsc_supplied=False, form_type__isnull=True
         ).filter(
             models.Q(form_category=submission.form_category)
             | models.Q(form_category__isnull=True)
@@ -89,7 +97,7 @@ def resolve_required_documents(submission: Submission):
         return qs
 
     qs = RequiredDocument.objects.filter(
-        is_active=True, form_type__isnull=True
+        is_active=True, opsc_supplied=False, form_type__isnull=True
     ).filter(
         models.Q(form_category=submission.form_category)
         | models.Q(form_category__isnull=True)

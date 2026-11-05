@@ -102,8 +102,13 @@ const PACKAGE_VALIDATE_ROLES = [
   'ministry_hr', 'dept_admin', 'head_of_agency',
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
   'csu_manager', 'ipdu_manager', 'vipam_principal', 'vipam_senior',
+  'odu_manager', 'odu_principal', 'odu_senior',
   'compliance_manager', 'compliance_senior', 'compliance_principal',
 ]
+// ODU's own papers (the overseas travel report) list their required document and
+// take the file from ODU staff, who attach it themselves rather than tick a box.
+const ODU_OWN_PAPER_CODES = ['ODU-TRAVEL-REPORT']
+const ODU_AUTHOR_ROLES = ['odu_manager', 'odu_principal', 'odu_senior']
 const CHECKLIST_EDIT_ROLES = [
   'ministry_hr', 'dept_admin', 'head_of_agency',
   'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer',
@@ -360,12 +365,15 @@ export default function SubmissionDetail() {
   const showPolicyGuardrail = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
     && policyGuardrailApplies(submission)
   const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
-  const isMinistrySubmitterChecklist = user && MINISTRY_SUBMITTER_ROLES.includes(user.role)
+  const isOduOwnPaper = ODU_OWN_PAPER_CODES.includes(submission?.form_type_code)
+    && !!user && ODU_AUTHOR_ROLES.includes(user.role)
+  const isMinistrySubmitterChecklist = (user && MINISTRY_SUBMITTER_ROLES.includes(user.role)) || isOduOwnPaper
   const canEditChecklist = user && CHECKLIST_EDIT_ROLES.includes(user.role) && !isMinistrySubmitterChecklist
   // is_internal submissions that follow the normal route (e.g. CSU Manager's)
   // still get a checklist — only the short internal-only path skips it.
   const showChecklist = !submission?.is_attachment && !submission?.secretary_only
-    && !(submission?.is_internal && !submission?.follows_normal_route)
+    && !(submission?.is_internal && !submission?.follows_normal_route
+         && !ODU_OWN_PAPER_CODES.includes(submission?.form_type_code))
 
   // ── Tab visibility — which of the fixed tab set applies to this
   // submission/role, so a tab with nothing in it never shows up. ──

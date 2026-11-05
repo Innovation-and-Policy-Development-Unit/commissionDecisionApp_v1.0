@@ -75,4 +75,5 @@ FEATURE_MODEL_TIER: dict[str, ModelTier] = {
     "annotation_assist": "sonnet",
     "redaction_preview": "sonnet",
     "minute_intake_format": "sonnet",
+    "odu_paper_draft": "sonnet",
 }

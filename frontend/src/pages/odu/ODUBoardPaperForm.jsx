@@ -14,8 +14,8 @@
  *   submission    – the submission object (for stage/role gating)
  */
 
-import { useEffect, useState, useCallback } from 'react'
-import { FileSignature, Save, Send, ThumbsUp, CheckCircle2, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { FileSignature, Save, Send, ThumbsUp, CheckCircle2, Plus, Trash2, Sparkles, Paperclip, Download } from 'lucide-react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -187,7 +187,50 @@ const EMPTY_FORM = {
   action_officer: '', psc_file: '', prepared_by: '',
   date_submitted_to_psc_by_ministry: '',
   subject: '', background: '', issues: '', discussions: '', odu_assessment: '',
+  dsspac_summary: '', grt_summary: '', finance_summary: '',
   costing_rows: [], costing_notes: '',
+}
+
+const AI_FIELD_LABELS = {
+  subject: 'Subject', background: 'Background', issues: 'Issues', discussions: 'Discussions',
+  odu_assessment: 'ODU Assessment', dsspac_summary: 'DSSPAC summary', grt_summary: 'GRT summary',
+  finance_summary: 'Finance summary',
+}
+
+/** One analysis: the attached file (ODU uploads it) and ODU's summary of it for the paper. */
+function AnalysisBlock({ item, summary, onSummary, readOnly, canUpload, onUpload, uploading, onDownload }) {
+  const inputRef = useRef(null)
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.label} analysis</p>
+        <div className="flex items-center gap-2 text-xs">
+          {item.document_id ? (
+            <button type="button" onClick={() => onDownload(item)} className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-400">
+              <Download size={12} /> {item.file_name}
+            </button>
+          ) : (
+            <span className="text-amber-700 dark:text-amber-400">Not attached yet</span>
+          )}
+          {canUpload && (
+            <>
+              <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(item, f); e.target.value = '' }} />
+              <button type="button" disabled={uploading} onClick={() => inputRef.current?.click()} className="btn-outline inline-flex items-center gap-1 py-1 px-2 text-xs">
+                <Paperclip size={12} /> {uploading ? 'Uploading…' : (item.document_id ? 'Replace' : 'Attach')}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {readOnly ? (
+        <ReadField label={`Summary of the ${item.label} analysis`} value={summary} span />
+      ) : (
+        <Field label={`Summary of the ${item.label} analysis (goes into the paper)`}>
+          <textarea className="input min-h-[90px]" value={summary} onChange={e => onSummary(e.target.value)} />
+        </Field>
+      )}
+    </div>
+  )
 }
 
 export default function ODUBoardPaperForm({ submissionId, submission, onDirtyChange }) {
@@ -202,6 +245,8 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
   const [submitting, setSubmitting] = useState(false)
   const [managerApproving, setManagerApproving] = useState(false)
   const [secretaryApproving, setSecretaryApproving] = useState(false)
+  const [uploadingKey, setUploadingKey] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
 
   const isOduPrincipal = userIsOduPrincipalWorker(user?.role)
   const isOduManager = user?.role === 'odu_manager'
@@ -329,6 +374,80 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
     }
   }
 
+  // While the AI is drafting, check back until it finishes.
+  useEffect(() => {
+    if (paper?.ai_draft_state !== 'running' || !paper?.id) return undefined
+    const t = setInterval(async () => {
+      try {
+        const r = await api.get(`/odu-board-papers/${paper.id}/`)
+        setPaper(prev => ({ ...prev, ...r.data }))
+      } catch { /* try again on the next tick */ }
+    }, 4000)
+    return () => clearInterval(t)
+  }, [paper?.ai_draft_state, paper?.id])
+
+  const handleAiDraft = async () => {
+    if (!paper?.id) return
+    setAiBusy(true)
+    try {
+      const r = await api.post(`/odu-board-papers/${paper.id}/ai-draft/`)
+      setPaper(prev => ({ ...prev, ...r.data }))
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not start the AI draft.')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const useSuggestion = (field) => {
+    const text = paper?.ai_draft?.[field]
+    if (text) set(field, text)
+  }
+  const useAllSuggestions = () => {
+    const d = paper?.ai_draft || {}
+    setForm(prev => {
+      const next = { ...prev }
+      Object.keys(AI_FIELD_LABELS).forEach(k => { if (d[k]) next[k] = d[k] })
+      return next
+    })
+    setDirty(true)
+  }
+  const useMinistryCosting = () => {
+    const rows = paper?.ai_draft?.costing_rows || []
+    if (rows.length) set('costing_rows', rows.map(r => ({ ...EMPTY_ROW, ...r })))
+  }
+
+  const handleUploadAnalysis = async (item, file) => {
+    if (!paper?.id) return
+    setUploadingKey(item.key)
+    try {
+      const fd = new FormData()
+      fd.append('kind', item.key)
+      fd.append('file', file)
+      const r = await api.post(`/odu-board-papers/${paper.id}/analysis/`, fd)
+      setPaper(prev => ({ ...prev, ...r.data }))
+      toast.success(`${item.label} analysis attached.`)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not attach the file.')
+    } finally {
+      setUploadingKey('')
+    }
+  }
+
+  const handleDownloadAnalysis = async (item) => {
+    try {
+      const r = await api.get(`/submissions/${submissionId}/documents/${item.document_id}/`, { responseType: 'blob' })
+      const url = URL.createObjectURL(r.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = item.file_name || 'analysis'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Could not download the file.')
+    }
+  }
+
   if (paper === undefined) {
     return (
       <div className="card card-compact">
@@ -381,6 +500,58 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
           </div>
         )}
       </div>
+
+      {!readOnly && status === 'draft' && (
+        <div className="mb-5 rounded-lg border border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30 p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-violet-900 dark:text-violet-200">
+              <Sparkles size={13} className="inline mr-1" />
+              Draft the paper from the ministry’s submission, your checklist and the attached analyses. Suggestions only — nothing is filled in until you use it.
+            </p>
+            <button type="button" onClick={handleAiDraft} disabled={aiBusy || paper?.ai_draft_state === 'running'} className="btn-outline inline-flex items-center gap-1.5 text-xs py-1 px-2.5">
+              <Sparkles size={13} />
+              {paper?.ai_draft_state === 'running' ? 'Drafting…' : (paper?.ai_draft_at ? 'Draft again' : 'Draft with AI')}
+            </button>
+          </div>
+          {paper?.ai_draft_state === 'failed' && (
+            <p className="mt-2 text-xs text-red-700 dark:text-red-400">{paper.ai_draft_error || 'The draft could not be produced.'}</p>
+          )}
+          {paper?.ai_draft_at && paper?.ai_draft_state !== 'running' && (
+            <div className="mt-3 space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">AI draft — verify every line before using it</p>
+              {Object.keys(AI_FIELD_LABELS).filter(k => paper.ai_draft?.[k]).map(k => (
+                <div key={k} className="rounded border border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 p-2">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{AI_FIELD_LABELS[k]}</span>
+                    <button type="button" onClick={() => useSuggestion(k)} className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">Use this</button>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{paper.ai_draft[k]}</p>
+                </div>
+              ))}
+              {(paper.ai_draft?.costing_rows || []).length > 0 && (
+                <button type="button" onClick={useMinistryCosting} className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                  Copy the ministry’s costing table ({paper.ai_draft.costing_rows.length} rows, as entered)
+                </button>
+              )}
+              {(paper.ai_draft?.gaps || []).length > 0 && (
+                <ul className="list-disc pl-5 text-xs text-amber-800 dark:text-amber-300">
+                  {paper.ai_draft.gaps.map((g, i) => <li key={i}>{g}</li>)}
+                </ul>
+              )}
+              {Object.keys(AI_FIELD_LABELS).some(k => paper.ai_draft?.[k]) && (
+                <button type="button" onClick={useAllSuggestions} className="btn-outline text-xs py-1 px-2.5">Use all text suggestions</button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {status === 'draft' && (paper?.gaps || []).length > 0 && (
+        <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200">
+          <p className="font-semibold mb-1">Still to do before this goes to the Manager (save first to refresh):</p>
+          <ul className="list-disc pl-5">{paper.gaps.map(g => <li key={g}>{g}</li>)}</ul>
+        </div>
+      )}
 
       <div className="space-y-6 text-sm">
         {/* Header */}
@@ -487,6 +658,29 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
               <textarea className="input min-h-[140px]" value={form.odu_assessment} onChange={e => set('odu_assessment', e.target.value)} />
             </Field>
           )}
+        </div>
+
+        {/* The three analyses: attached in full, summarised in the paper */}
+        <div>
+          <SectionHeader title="Analyses — DSSPAC, GRT and Finance" />
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+            Attach each full analysis, then summarise it here. The Commission reads the summaries; the attachments stay on the file.
+          </p>
+          <div className="space-y-3">
+            {(paper?.analysis_documents || []).map(item => (
+              <AnalysisBlock
+                key={item.key}
+                item={item}
+                summary={form[`${item.key}_summary`] || ''}
+                onSummary={v => set(`${item.key}_summary`, v)}
+                readOnly={readOnly}
+                canUpload={canEdit}
+                onUpload={handleUploadAnalysis}
+                uploading={uploadingKey === item.key}
+                onDownload={handleDownloadAnalysis}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Costing */}

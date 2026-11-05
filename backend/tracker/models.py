@@ -2988,6 +2988,12 @@ class RequiredDocument(models.Model):
                   "PSC route (e.g. CSU/ODU appointments of OPSC staff), which have no "
                   "Director-General step in their workflow.",
     )
+    opsc_supplied = models.BooleanField(
+        default=False,
+        help_text="Supplied by OPSC itself (e.g. ODU's DSSPAC / GRT / Finance analyses), "
+                  "not asked of the ministry. Kept off the ministry's checklist and out of "
+                  "its submit gate; the owning unit uploads it on its own paper.",
+    )
     restructure_department_only = models.BooleanField(
         default=False,
         help_text="Only required when the submission's Organisation Restructure form "
@@ -4794,6 +4800,17 @@ class ODURestructureBoardPaper(models.Model):
     issues          = models.TextField(blank=True)
     discussions     = models.TextField(blank=True)
     odu_assessment  = models.TextField(blank=True)
+    # The Commission reads these three summaries; the full analyses are attached to
+    # the submission by ODU (required documents) and not repeated in the paper.
+    dsspac_summary  = models.TextField(blank=True, help_text="Summary of the attached DSSPAC analysis.")
+    grt_summary     = models.TextField(blank=True, help_text="Summary of the attached GRT analysis.")
+    finance_summary = models.TextField(blank=True, help_text="Summary of the attached Finance analysis.")
+
+    # ── AI draft (suggestions only: never written into the fields above) ─────
+    ai_draft = models.JSONField(default=dict, blank=True)
+    ai_draft_state = models.CharField(max_length=12, blank=True, default="")  # running | done | failed
+    ai_draft_error = models.TextField(blank=True)
+    ai_draft_at = models.DateTimeField(null=True, blank=True)
 
     # ── Costing table ─────────────────────────────────────────────────────────
     # Array of position rows, same shape as RestructureSubmissionData.costing_rows:
