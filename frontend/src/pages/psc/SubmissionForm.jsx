@@ -41,6 +41,12 @@ const CSU_ROLE = 'csu_manager'
  * dedicated submission-type catalog (routed_unit === 'ipdu'). */
 const IPDU_ROLE = 'ipdu_manager'
 
+/** HR Unit staff author one OPSC-internal paper of their own, the SEO
+ * Performance Agreement progress report. Every other HR submission type is
+ * lodged by ministries, so only these codes are offered to them. */
+const HR_AUTHOR_ROLES = ['hr_unit_senior', 'hr_unit_principal', 'hr_unit_manager']
+const HR_INTERNAL_FORM_CODES = ['SEO-PA-REPORT']
+
 /** Roles allowed to log a new submission at all — kept in sync with the
  * `allowed` check below. Exported so list-page "New submission" buttons
  * (e.g. SubmissionLog.jsx) can hide themselves for roles that would just
@@ -48,7 +54,7 @@ const IPDU_ROLE = 'ipdu_manager'
  * message here instead of showing a button that doesn't work. */
 export const SUBMISSION_CREATE_ALLOWED_ROLES = [
   'receptionist', 'psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
-  CSU_ROLE, IPDU_ROLE, ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
+  CSU_ROLE, IPDU_ROLE, ...HR_AUTHOR_ROLES, ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
 ]
 
 const DEFAULT_TITLE_PLACEHOLDER = 'e.g. Appointment of Director Finance & Administration'
@@ -705,7 +711,7 @@ function CommissionSubmissionForm({
 // Internal Submission Form (CSU Manager / ODU)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function InternalSubmissionForm({ modal, onClose, onSuccess, internalFormTypes, isCsuUser }) {
+function InternalSubmissionForm({ modal, onClose, onSuccess, internalFormTypes, isCsuUser, subtitle }) {
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -771,9 +777,9 @@ function InternalSubmissionForm({ modal, onClose, onSuccess, internalFormTypes, 
       {!modal && (
         <PageHeader
           title="New internal submission"
-          subtitle={isCsuUser
+          subtitle={subtitle || (isCsuUser
             ? "Routed to the HR Unit for checklist review and assessment, same as any other submission."
-            : "OPSC internal submissions route directly to the Secretary for review."}
+            : "OPSC internal submissions route directly to the Secretary for review.")}
         />
       )}
 
@@ -845,6 +851,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   const isInternalUser = user && INTERNAL_ROLES.includes(user.role)
   const isCsuUser = user && user.role === CSU_ROLE
   const isIpduUser = user && user.role === IPDU_ROLE
+  const isHrAuthorUser = user && HR_AUTHOR_ROLES.includes(user.role)
   const isComplianceUser = user && isComplianceRole(user.role)
   const isMinistryUser = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
 
@@ -859,6 +866,9 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
 
   // Manager IPDU: its own dedicated catalog (IPDU-TASKFORCE / IPDU-ALLOWANCE).
   const ipduFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'ipdu')
+
+  // HR Unit staff: only the SEO progress report.
+  const hrAuthorFormTypesResolved = formTypes.filter(ft => HR_INTERNAL_FORM_CODES.includes(ft.code))
 
   // Compliance unit: COMP-* submission types (routed_unit === 'compliance').
   const complianceFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'compliance')
@@ -926,6 +936,20 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
         onSuccess={onSuccess}
         internalFormTypes={complianceFormTypesResolved}
         isCsuUser={false}
+      />
+    )
+  }
+
+  // ── HR Unit: its own SEO progress report, internal, up the Senior → Principal → Manager ladder ──
+  if (isHrAuthorUser) {
+    return (
+      <InternalSubmissionForm
+        modal={modal}
+        onClose={onClose}
+        onSuccess={onSuccess}
+        internalFormTypes={hrAuthorFormTypesResolved}
+        isCsuUser={false}
+        subtitle="Reviewed by your Principal and Manager, then goes to the Secretary for approval before the Commission."
       />
     )
   }
