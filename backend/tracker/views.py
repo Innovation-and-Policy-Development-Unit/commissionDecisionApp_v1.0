@@ -3,7 +3,7 @@ from pathlib import Path
 from django.contrib.auth.models import User
 from django.db import models, transaction
 from django.db.models import Count, Prefetch
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.urls import get_resolver
 from django.urls.resolvers import URLPattern, URLResolver
@@ -68,10 +68,18 @@ from .minutes_access import FULL_ACCESS_ROLES as MINUTES_FULL_ACCESS_ROLES
 from .hr_internal import (
     HR_INTERNAL_FORM_CODES,
     HR_UNIT_AUTHOR_ROLES,
+    INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS,
+    ODU_INTERNAL_FORM_CODES,
+    ODU_UNIT_AUTHOR_ROLES,
     UNIT_AUTHOR_ROLES,
     UNIT_REVIEW_ROLES,
     unit_may_work_on_internal_paper,
 )
+# Ministry-side accounts never see ODU's internal working papers (opsc_supplied documents).
+_MINISTRY_SIDE_ROLES = frozenset({
+    Role.MINISTRY_HR, Role.DEPT_ADMIN, Role.HEAD_OF_AGENCY, Role.DG_DIRECTOR, Role.TRAVELLER,
+})
+
 from .opsc_access import (
     COMMISSION_TASK_MANAGER_ROLES,
     COMMISSION_TASK_STAFF_ROLES,
@@ -1620,6 +1628,36 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     kwargs["agenda_category"] = _ft.agenda_category
             submission = serializer.save(**kwargs)
 
+        elif profile.role in ODU_UNIT_AUTHOR_ROLES:
+            # ODU's own OPSC-internal papers (the overseas travel report to the
+            # Commission). PSC-staff-only, routed to ODU from the start, walked up the
+            # Senior -> Principal -> Manager ladder to the Secretary Approval Gate. ODU's
+            # ordinary work (restructures, travel approvals) is ministry-lodged and
+            # untouched; staff cannot create those here.
+            from .travel_forms import normalize_form_type_code
+
+            form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
+            if form_code not in ODU_INTERNAL_FORM_CODES:
+                raise ValidationError({
+                    "form_type_code": "ODU staff can only create the overseas travel report here; "
+                                      "other ODU submission types are lodged by ministries."
+                })
+            org = _resolve_opsc_submission_org(profile)
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": True,
+                "routed_unit": RoutedUnit.ODU,
+                "form_type_code": form_code,
+                "ministry_id": org["ministry_id"],
+                "department_id": org["department_id"],
+                "unit_id": org.get("unit_id"),
+            }
+            if not validated.get("agenda_category"):
+                _ft = PSCFormType.objects.filter(code=form_code).first()
+                if _ft and _ft.agenda_category:
+                    kwargs["agenda_category"] = _ft.agenda_category
+            submission = serializer.save(**kwargs)
+
         elif profile.role in {
             Role.COMPLIANCE_SENIOR,
             Role.COMPLIANCE_PRINCIPAL,
@@ -2329,6 +2367,27 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # ── An ODU travel report goes up the ladder with its report attached ────
+        if (
+            submission.is_internal and not submission.follows_normal_route
+            and submission.form_type_code in INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS
+            and prev in {WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION}
+            and target in {
+                WorkflowStage.PENDING_PRINCIPAL_REVIEW, WorkflowStage.PENDING_MANAGER_APPROVAL,
+                WorkflowStage.PENDING_SECOND_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL,
+                WorkflowStage.SUBMITTED,
+            }
+        ):
+            from .submit_gate import missing_required_documents
+
+            _missing = missing_required_documents(submission)
+            if _missing:
+                return Response(
+                    {"detail": "Attach every required document before sending this on — "
+                               "still missing: %s." % "; ".join(_missing)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # ── A decision on hold is not actioned ──────────────────────────────────
         if submission.decision_hold_active and target in {
             WorkflowStage.UNDER_IMPLEMENTATION, WorkflowStage.IMPLEMENTATION_REPORT,
@@ -3014,6 +3073,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.IPDU_MANAGER,
             Role.VIPAM_PRINCIPAL,
             Role.VIPAM_SENIOR,
+            Role.ODU_PRINCIPAL,
+            Role.ODU_SENIOR,
             Role.COMPLIANCE_MANAGER,
             Role.COMPLIANCE_SENIOR,
             Role.COMPLIANCE_PRINCIPAL,
@@ -3444,6 +3505,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL,
         Role.HR_UNIT_MANAGER, Role.HR_UNIT_PRINCIPAL,
         Role.VIPAM_MANAGER, Role.VIPAM_PRINCIPAL,
+        Role.ODU_MANAGER, Role.ODU_PRINCIPAL,
     })
 
     @staticmethod
@@ -4112,7 +4174,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     def _checklist_payload(self, submission):
         if (
             submission.is_attachment
-            or (submission.is_internal and not submission.follows_normal_route)
+            or (
+                submission.is_internal and not submission.follows_normal_route
+                and submission.form_type_code not in INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS
+            )
             or getattr(submission, "secretary_only", False)
         ):
             return []
@@ -4587,7 +4652,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         if (
             submission.is_attachment
-            or (submission.is_internal and not submission.follows_normal_route)
+            or (
+                submission.is_internal and not submission.follows_normal_route
+                and submission.form_type_code not in INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS
+            )
             or getattr(submission, "secretary_only", False)
         ):
             return Response([])
@@ -4724,6 +4792,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         if request.method == "GET":
             docs = SubmissionDocument.objects.filter(submission=submission)
+            if profile.role in _MINISTRY_SIDE_ROLES:
+                # ODU's own analyses are internal working papers, not the ministry's.
+                docs = docs.exclude(required_document__opsc_supplied=True)
             return Response(SubmissionDocumentSerializer(docs, many=True).data)
 
         # POST — upload
@@ -5010,6 +5081,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         submission = self.get_object()
         doc = get_object_or_404(SubmissionDocument, id=doc_id, submission=submission)
+        if (
+            doc.required_document_id and doc.required_document.opsc_supplied
+            and _profile(request.user).role in _MINISTRY_SIDE_ROLES
+        ):
+            raise Http404
 
         if request.method == "DELETE":
             from .audit import log_action as _log
@@ -13624,6 +13700,11 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
                 {"detail": "Only a Draft Commission paper can be submitted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        from .odu_paper_gate import gap_message
+
+        _gap = gap_message(paper)
+        if _gap:
+            return Response({"detail": _gap}, status=status.HTTP_400_BAD_REQUEST)
         paper.status = BoardPaperStatus.SUBMITTED
         paper.submitted_for_review_at = timezone.now()
         paper.submitted_for_review_by = request.user
@@ -13635,6 +13716,92 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
                          f"{paper.submission.reference_number}",
              extra_data={"board_paper_id": paper.id})
         return Response(ODUBoardPaperSerializer(paper).data)
+
+    @action(detail=True, methods=["post"], url_path="analysis")
+    def analysis(self, request, pk=None):
+        """Attach (or replace) one of ODU's three analyses - DSSPAC, GRT or Finance.
+
+        ODU is the only author of these, so they go on a dedicated slot rather than the
+        ministry's checklist, and the ministry never sees them. Replacing archives the
+        old file, never deletes it."""
+        from .file_validation import FileValidationError, validate_upload
+        from .models import RequiredDocument, SubmissionDocument
+        from .odu_paper_gate import ANALYSES
+
+        paper = self.get_object()
+        profile = _profile(request.user)
+        self._require_odu_role(profile)
+        if paper.status == BoardPaperStatus.DRAFT:
+            _require_assigned_officer_or_manager(profile, paper.submission, request.user.id)
+        elif paper.status == BoardPaperStatus.SUBMITTED:
+            if profile.role != Role.ODU_MANAGER:
+                raise PermissionDenied("Only the Manager ODU can change the analyses once the paper is submitted.")
+        else:
+            raise PermissionDenied("This Commission paper is approved and locked.")
+
+        key = (request.data.get("kind") or "").strip().lower()
+        match = next((a for a in ANALYSES if a[1].replace("_summary", "") == key), None)
+        if not match:
+            return Response({"detail": "kind must be dsspac, grt or finance."}, status=status.HTTP_400_BAD_REQUEST)
+        uploaded = request.FILES.get("file")
+        if not uploaded:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_upload(uploaded, kind="document")
+        except FileValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        slot = RequiredDocument.objects.filter(name=match[0], opsc_supplied=True, is_active=True).first()
+        if not slot:
+            return Response({"detail": "This analysis slot is not configured."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            SubmissionDocument.objects.filter(
+                submission=paper.submission, required_document=slot, archived_at__isnull=True,
+            ).update(archived_at=timezone.now(), archived_by=request.user)
+            doc = SubmissionDocument.objects.create(
+                submission=paper.submission, file=uploaded, original_name=uploaded.name,
+                description=f"{match[2]} analysis", uploaded_by=request.user, required_document=slot,
+            )
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        _log(request, _AL.Action.CREATE, resource_type="Submission",
+             resource_id=paper.submission_id, resource_label=paper.submission.reference_number,
+             description=f"{match[2]} analysis attached to the Commission paper on "
+                         f"{paper.submission.reference_number}",
+             extra_data={"document_id": doc.id})
+        invalidate_submission(paper.submission_id)
+        return Response(ODUBoardPaperSerializer(paper).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="ai-draft")
+    def ai_draft(self, request, pk=None):
+        """Ask the AI for a first draft of the paper. Runs in the background; the result
+        lands in ``ai_draft`` as suggestions the officer chooses from, and never overwrites
+        the paper. Only whoever may edit the paper can ask."""
+        paper = self.get_object()
+        profile = _profile(request.user)
+        self._require_odu_role(profile)
+        if paper.status != BoardPaperStatus.DRAFT:
+            return Response({"detail": "A draft can only be requested while the paper is a Draft."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        _require_assigned_officer_or_manager(profile, paper.submission, request.user.id)
+        if paper.ai_draft_state == "running":
+            return Response(ODUBoardPaperSerializer(paper).data, status=status.HTTP_202_ACCEPTED)
+        paper.ai_draft_state = "running"
+        paper.ai_draft_error = ""
+        paper.save(update_fields=["ai_draft_state", "ai_draft_error"])
+        from .tasks import draft_odu_paper_task
+
+        pid = paper.id
+
+        def _go():
+            try:
+                draft_odu_paper_task.delay(pid)
+            except Exception:  # no broker: run it here rather than leave it "running"
+                draft_odu_paper_task(pid)
+
+        transaction.on_commit(_go)
+        return Response(ODUBoardPaperSerializer(paper).data, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=["post"], url_path="manager-approve")
     def manager_approve(self, request, pk=None):
@@ -13651,6 +13818,14 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
                 {"detail": "Only a Draft or Submitted Commission paper can be approved by the manager."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if paper.status == BoardPaperStatus.DRAFT:
+            # The Manager approving their own draft skips the Principal step, not the
+            # analyses: the same attachments and summaries are still required.
+            from .odu_paper_gate import gap_message
+
+            _gap = gap_message(paper)
+            if _gap:
+                return Response({"detail": _gap}, status=status.HTTP_400_BAD_REQUEST)
         paper.status = BoardPaperStatus.MANAGER_APPROVED
         paper.manager_approved_at = timezone.now()
         paper.manager_approved_by = request.user

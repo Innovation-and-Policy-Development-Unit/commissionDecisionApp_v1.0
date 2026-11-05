@@ -24,7 +24,6 @@ const FALLBACK_FORM_TYPES = []
 
 /** Roles that submit OPSC-internal submissions (no checklist, straight to Secretary). */
 const INTERNAL_ROLES = [
-  'odu_principal',
   'vipam_manager',
   'vipam_principal',
   'vipam_senior',
@@ -47,6 +46,12 @@ const IPDU_ROLE = 'ipdu_manager'
 const HR_AUTHOR_ROLES = ['hr_unit_senior', 'hr_unit_principal', 'hr_unit_manager']
 const HR_INTERNAL_FORM_CODES = ['SEO-PA-REPORT']
 
+/** ODU staff author one OPSC-internal paper of their own, the overseas travel
+ * report (total trips, total cost, ...); the report itself is attached to it.
+ * ODU's other submission types are lodged by ministries. */
+const ODU_AUTHOR_ROLES = ['odu_senior', 'odu_principal', 'odu_manager']
+const ODU_INTERNAL_FORM_CODES = ['ODU-TRAVEL-REPORT']
+
 /** Roles allowed to log a new submission at all — kept in sync with the
  * `allowed` check below. Exported so list-page "New submission" buttons
  * (e.g. SubmissionLog.jsx) can hide themselves for roles that would just
@@ -54,7 +59,7 @@ const HR_INTERNAL_FORM_CODES = ['SEO-PA-REPORT']
  * message here instead of showing a button that doesn't work. */
 export const SUBMISSION_CREATE_ALLOWED_ROLES = [
   'receptionist', 'psc_officer', 'psc_admin', 'psc_secretary', 'ministry_hr', 'dept_admin', 'head_of_agency',
-  CSU_ROLE, IPDU_ROLE, ...HR_AUTHOR_ROLES, ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
+  CSU_ROLE, IPDU_ROLE, ...HR_AUTHOR_ROLES, ...ODU_AUTHOR_ROLES, ...INTERNAL_ROLES, 'compliance_senior', 'compliance_principal', 'compliance_manager',
 ]
 
 const DEFAULT_TITLE_PLACEHOLDER = 'e.g. Appointment of Director Finance & Administration'
@@ -852,6 +857,7 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   const isCsuUser = user && user.role === CSU_ROLE
   const isIpduUser = user && user.role === IPDU_ROLE
   const isHrAuthorUser = user && HR_AUTHOR_ROLES.includes(user.role)
+  const isOduAuthorUser = user && ODU_AUTHOR_ROLES.includes(user.role)
   const isComplianceUser = user && isComplianceRole(user.role)
   const isMinistryUser = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
 
@@ -869,6 +875,9 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
 
   // HR Unit staff: only the SEO progress report.
   const hrAuthorFormTypesResolved = formTypes.filter(ft => HR_INTERNAL_FORM_CODES.includes(ft.code))
+
+  // ODU staff: only the overseas travel report.
+  const oduAuthorFormTypesResolved = formTypes.filter(ft => ODU_INTERNAL_FORM_CODES.includes(ft.code))
 
   // Compliance unit: COMP-* submission types (routed_unit === 'compliance').
   const complianceFormTypesResolved = formTypes.filter(ft => ft.routed_unit === 'compliance')
@@ -950,6 +959,20 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
         internalFormTypes={hrAuthorFormTypesResolved}
         isCsuUser={false}
         subtitle="Reviewed by your Principal and Manager, then goes to the Secretary for approval before the Commission."
+      />
+    )
+  }
+
+  // ── ODU: its own overseas travel report, internal, up the Senior → Principal → Manager ladder ──
+  if (isOduAuthorUser) {
+    return (
+      <InternalSubmissionForm
+        modal={modal}
+        onClose={onClose}
+        onSuccess={onSuccess}
+        internalFormTypes={oduAuthorFormTypesResolved}
+        isCsuUser={false}
+        subtitle="Attach the travel report. Reviewed by your Principal and Manager, then goes to the Secretary for approval before the Commission."
       />
     )
   }

@@ -3295,6 +3295,38 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
         from .agenda_sections import agenda_section_label
         return f"{agenda_section_label(item.category)} — Item {item.sequence}"
 
+    analysis_documents = serializers.SerializerMethodField()
+    gaps = serializers.SerializerMethodField()
+
+    def get_analysis_documents(self, obj):
+        """The three attached analyses: which slot, and the file in it (if any)."""
+        from .models import RequiredDocument, SubmissionDocument
+        from .odu_paper_gate import ANALYSES
+
+        out = []
+        for doc_name, field, label in ANALYSES:
+            slot = RequiredDocument.objects.filter(name=doc_name, opsc_supplied=True, is_active=True).first()
+            file = (
+                SubmissionDocument.objects.filter(
+                    submission=obj.submission, required_document=slot, archived_at__isnull=True,
+                ).order_by("-uploaded_at").first()
+                if slot else None
+            )
+            out.append({
+                "key": field.replace("_summary", ""),
+                "label": label,
+                "required_document_id": slot.id if slot else None,
+                "document_id": file.id if file else None,
+                "file_name": file.original_name if file else "",
+                "uploaded_at": file.uploaded_at if file else None,
+            })
+        return out
+
+    def get_gaps(self, obj):
+        from .odu_paper_gate import paper_gaps
+
+        return paper_gaps(obj)
+
     class Meta:
         model  = ODURestructureBoardPaper
         fields = [
@@ -3310,6 +3342,9 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
             "date_submitted_to_psc_by_ministry",
             # Body
             "subject", "background", "issues", "discussions", "odu_assessment",
+            "dsspac_summary", "grt_summary", "finance_summary",
+            "analysis_documents", "gaps",
+            "ai_draft", "ai_draft_state", "ai_draft_error", "ai_draft_at",
             # Costing
             "costing_rows", "costing_notes",
             # Meta
@@ -3323,6 +3358,8 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
             "secretary_approved_at", "secretary_approved_by_name",
             "returned_at", "returned_by_name", "return_note",
             "meeting_reference", "meeting_date", "agenda_item_number",
+            "analysis_documents", "gaps",
+            "ai_draft", "ai_draft_state", "ai_draft_error", "ai_draft_at",
         ]
 
 

@@ -958,6 +958,33 @@ def _format_submission_brief(data: dict) -> str:
     return "\n".join(parts).strip()
 
 
+@shared_task
+def draft_odu_paper_task(paper_id: int):
+    """Draft suggestions for ODU's Commission paper (see ai.odu_paper_draft)."""
+    from django.utils import timezone
+
+    from .ai.odu_paper_draft import draft_paper
+    from .models import ODURestructureBoardPaper
+
+    paper = ODURestructureBoardPaper.objects.select_related("submission").filter(pk=paper_id).first()
+    if not paper:
+        return
+    try:
+        suggestions, err = draft_paper(paper)
+    except Exception as exc:  # never leave the paper stuck on "running"
+        app_log.exception("ODU_PAPER_DRAFT_FAIL | paper=%s", paper_id)
+        suggestions, err = None, str(exc)
+    from .ai.odu_paper_draft import ministry_costing_rows
+
+    # The ministry's costing table is copied, not generated, so it is offered even
+    # when the AI could not write the narrative.
+    paper.ai_draft = suggestions or {"costing_rows": ministry_costing_rows(paper.submission)}
+    paper.ai_draft_state = "done" if suggestions else "failed"
+    paper.ai_draft_error = "" if suggestions else (err or "The draft could not be produced.")
+    paper.ai_draft_at = timezone.now()
+    paper.save(update_fields=["ai_draft", "ai_draft_state", "ai_draft_error", "ai_draft_at"])
+
+
 @shared_task(bind=True, max_retries=3)
 def generate_submission_brief(self, submission_id: int, force: bool = False):
     """Generate an AI executive brief for PSC Secretary review.

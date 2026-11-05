@@ -1,13 +1,13 @@
 """Tests for the new-meeting HR notification and recipient resolution."""
 
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from ..email_notify import hr_managers, notify_meeting_scheduled
+from ..email_notify import hr_managers, meeting_audience, notify_meeting_scheduled
 from ..models import Meeting, MeetingType, Notification, Profile, Role
 
 
@@ -31,12 +31,40 @@ class HrManagersTests(TestCase):
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class MeetingAudienceTests(TestCase):
+    def test_submitters_and_opsc_staff_but_not_commissioners(self):
+        want = [
+            _user("a_min", Role.MINISTRY_HR, email="a@gov.vu"),
+            _user("a_dept", Role.DEPT_ADMIN, email="b@gov.vu"),
+            _user("a_off", Role.PSC_OFFICER, email="c@gov.vu"),
+            _user("a_odu", Role.ODU_SENIOR, email="d@gov.vu"),
+            _user("a_sec", Role.SECRETARY_OPSC, email="e@gov.vu"),
+        ]
+        _user("a_comm", Role.PSC_COMMISSIONER, email="f@gov.vu")      # own copy
+        _user("a_dg", Role.HEAD_OF_AGENCY, email="g@gov.vu")
+        _user("a_none", Role.ODU_SENIOR, email="")
+        _user("a_off2", Role.ODU_SENIOR, email="h@gov.vu", active=False)
+        self.assertEqual({u.id for u in meeting_audience()}, {u.id for u in want})
+
+    def test_scheduled_notice_reaches_staff_and_submitters(self):
+        staff = _user("a_off", Role.PSC_OFFICER, email="c@gov.vu")
+        dept = _user("a_dept", Role.DEPT_ADMIN, email="b@gov.vu")
+        meeting = Meeting.objects.create(
+            title="Sitting", date=timezone.localdate() + timedelta(days=10),
+            time=time(9, 0), venue="Boardroom", type=MeetingType.ORDINARY,
+        )
+        notify_meeting_scheduled(meeting)
+        for u in (staff, dept):
+            self.assertEqual(Notification.objects.filter(recipient=u).count(), 1)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
 class NotifyMeetingScheduledTests(TestCase):
     def _meeting(self, mtype=MeetingType.ORDINARY):
         return Meeting.objects.create(
             title="Ordinary Commission Sitting",
             date=timezone.localdate() + timedelta(days=10),
-            time="09:00", venue="PSC Boardroom", type=mtype,
+            time=time(9, 0), venue="PSC Boardroom", type=mtype,
         )
 
     def test_creates_inapp_notification_per_hr_manager(self):

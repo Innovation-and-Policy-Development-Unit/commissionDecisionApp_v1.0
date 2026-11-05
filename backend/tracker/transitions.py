@@ -55,11 +55,14 @@ _AUTHOR_TIER = {
     Role.VIPAM_MANAGER: "manager",
     Role.VIPAM_PRINCIPAL: "principal",
     Role.VIPAM_SENIOR: "senior",
+    Role.ODU_MANAGER: "manager",
+    Role.ODU_PRINCIPAL: "principal",
+    Role.ODU_SENIOR: "senior",
 }
 _COMPLIANCE_SUBMITTER_ROLES = set(_AUTHOR_TIER)
 
 # Units whose internal papers use this ladder instead of an agenda-section approval chain.
-LADDER_UNITS = frozenset({"compliance", "hr", "vipam"})
+LADDER_UNITS = frozenset({"compliance", "hr", "vipam", "odu"})
 
 _COMPLIANCE_CREATOR_ALLOWED = {
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
