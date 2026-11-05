@@ -65,6 +65,11 @@ from .models import (
 )
 from .models import PasswordResetToken, PinResetToken
 from .minutes_access import FULL_ACCESS_ROLES as MINUTES_FULL_ACCESS_ROLES
+from .hr_internal import (
+    HR_INTERNAL_FORM_CODES,
+    HR_UNIT_AUTHOR_ROLES,
+    UNIT_REVIEW_ROLES,
+)
 from .opsc_access import (
     COMMISSION_TASK_MANAGER_ROLES,
     COMMISSION_TASK_STAFF_ROLES,
@@ -828,11 +833,11 @@ def _dispatch_transition_notifications(
         body = f"'{submission.title}' has completed all approvals and is ready for your review."
 
     # ── Compliance Principal review gate (Senior-created submissions) ──────
-    elif target == WorkflowStage.PENDING_PRINCIPAL_REVIEW and submission.routed_unit == RoutedUnit.COMPLIANCE:
+    elif target == WorkflowStage.PENDING_PRINCIPAL_REVIEW and submission.routed_unit in UNIT_REVIEW_ROLES:
         recipients = User.objects.filter(
-            psc_profile__role=Role.COMPLIANCE_PRINCIPAL, is_active=True,
+            psc_profile__role=UNIT_REVIEW_ROLES[submission.routed_unit]["principal"], is_active=True,
         )
-        actor_name = (actor.get_full_name() or actor.username) if actor else "Compliance staff"
+        actor_name = (actor.get_full_name() or actor.username) if actor else "Unit staff"
         title = f"Review required: {submission.reference_number}"
         body = (
             f"'{submission.title}' submitted by {actor_name} is awaiting your review "
@@ -840,11 +845,11 @@ def _dispatch_transition_notifications(
         )
 
     # ── Compliance Manager approval gate (Principal/Senior-created submissions) ──
-    elif target == WorkflowStage.PENDING_MANAGER_APPROVAL and submission.routed_unit == RoutedUnit.COMPLIANCE:
+    elif target == WorkflowStage.PENDING_MANAGER_APPROVAL and submission.routed_unit in UNIT_REVIEW_ROLES:
         recipients = User.objects.filter(
-            psc_profile__role=Role.COMPLIANCE_MANAGER, is_active=True,
+            psc_profile__role=UNIT_REVIEW_ROLES[submission.routed_unit]["manager"], is_active=True,
         )
-        actor_name = (actor.get_full_name() or actor.username) if actor else "Compliance staff"
+        actor_name = (actor.get_full_name() or actor.username) if actor else "Unit staff"
         title = f"Approval required: {submission.reference_number}"
         body = (
             f"'{submission.title}' submitted by {actor_name} is awaiting your approval "
@@ -1574,6 +1579,35 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     kwargs["agenda_category"] = _ft.agenda_category
             submission = serializer.save(**kwargs)
 
+        elif profile.role in HR_UNIT_AUTHOR_ROLES:
+            # HR Unit's own OPSC-internal papers (the SEO Performance Agreement progress
+            # report). PSC-staff-only, routed to HR from the start, and walked up the
+            # Senior -> Principal -> Manager ladder to the Secretary Approval Gate — see
+            # tracker.hr_internal. Every other HR submission type is lodged by ministries.
+            from .travel_forms import normalize_form_type_code
+
+            form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
+            if form_code not in HR_INTERNAL_FORM_CODES:
+                raise ValidationError({
+                    "form_type_code": "HR Unit staff can only create the SEO progress report here; "
+                                      "other HR submission types are lodged by ministries."
+                })
+            org = _resolve_opsc_submission_org(profile)
+            kwargs = {
+                "current_stage": WorkflowStage.DRAFT,
+                "is_internal": True,
+                "routed_unit": RoutedUnit.HR,
+                "form_type_code": form_code,
+                "ministry_id": org["ministry_id"],
+                "department_id": org["department_id"],
+                "unit_id": org.get("unit_id"),
+            }
+            if not validated.get("agenda_category"):
+                _ft = PSCFormType.objects.filter(code=form_code).first()
+                if _ft and _ft.agenda_category:
+                    kwargs["agenda_category"] = _ft.agenda_category
+            submission = serializer.save(**kwargs)
+
         elif profile.role in {
             Role.COMPLIANCE_SENIOR,
             Role.COMPLIANCE_PRINCIPAL,
@@ -1978,9 +2012,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         # role-only, so this ownership check has to live here.
         _COMPLIANCE_SELF_SUBMIT_ROLES = {
             Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_MANAGER,
-        }
+        } | HR_UNIT_AUTHOR_ROLES
         if (
             profile.role in _COMPLIANCE_SELF_SUBMIT_ROLES
+            and submission.is_internal and not submission.follows_normal_route
             and prev in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
             and target in (
                 WorkflowStage.PENDING_PRINCIPAL_REVIEW,
@@ -3392,9 +3427,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     # these actions just manage who currently holds the delegation.
     _COMPLIANCE_SELF_SUBMIT_ROLES = frozenset({
         Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_MANAGER,
-    })
+    }) | HR_UNIT_AUTHOR_ROLES
     _DRAFT_DELEGATE_GRANTOR_ROLES = frozenset({
         Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL,
+        Role.HR_UNIT_MANAGER, Role.HR_UNIT_PRINCIPAL,
     })
 
     @staticmethod

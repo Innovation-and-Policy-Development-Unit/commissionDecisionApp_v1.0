@@ -37,11 +37,21 @@ SECRETARY_TRAVEL_SUBMITTER_ROLES = {
 #                       Treated as a unit principal (not a manager) in all workflows.
 # compliance_principal — analyst: same assessment rights as compliance_senior but
 #                        for routine matters.
-_COMPLIANCE_SUBMITTER_ROLES = {
-    Role.COMPLIANCE_SENIOR,
-    Role.COMPLIANCE_PRINCIPAL,
-    Role.COMPLIANCE_MANAGER,
+# The HR Unit authors OPSC-internal papers of its own (the SEO Performance Agreement
+# progress report) and walks them up the same Senior -> Principal -> Manager ladder,
+# ending at the Secretary Approval Gate, so it shares these tables with Compliance.
+# Only internal papers reach the code that uses them, and HR staff create exactly one
+# kind (hr_internal.HR_INTERNAL_FORM_CODES), so ordinary HR checklist/assessment work
+# is untouched.
+_AUTHOR_TIER = {
+    Role.COMPLIANCE_MANAGER: "manager",
+    Role.COMPLIANCE_PRINCIPAL: "principal",
+    Role.COMPLIANCE_SENIOR: "senior",
+    Role.HR_UNIT_MANAGER: "manager",
+    Role.HR_UNIT_PRINCIPAL: "principal",
+    Role.HR_UNIT_SENIOR: "senior",
 }
+_COMPLIANCE_SUBMITTER_ROLES = set(_AUTHOR_TIER)
 
 _COMPLIANCE_CREATOR_ALLOWED = {
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
@@ -672,12 +682,12 @@ def assert_transition_allowed(
         if role in _COMPLIANCE_SUBMITTER_ROLES:
             if (current_stage, target_stage) in _COMPLIANCE_CREATOR_ALLOWED:
                 return
-            if role == Role.COMPLIANCE_MANAGER:
+            if _AUTHOR_TIER[role] == "manager":
                 if (current_stage, target_stage) in _COMPLIANCE_MANAGER_DIRECT_SUBMIT_ALLOWED:
                     return
                 if (current_stage, target_stage) in _COMPLIANCE_MANAGER_APPROVAL_ALLOWED:
                     return
-            elif role == Role.COMPLIANCE_PRINCIPAL:
+            elif _AUTHOR_TIER[role] == "principal":
                 if (current_stage, target_stage) in _COMPLIANCE_PRINCIPAL_SUBMIT_FOR_APPROVAL_ALLOWED:
                     return
                 if (current_stage, target_stage) in _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED:
@@ -939,10 +949,10 @@ def iter_allowed_targets(
             return list(_INTERNAL_STAGE_GRAPH.get(current_stage, []))
         if role in _COMPLIANCE_SUBMITTER_ROLES:
             pairs = set(_COMPLIANCE_CREATOR_ALLOWED)
-            if role == Role.COMPLIANCE_MANAGER:
+            if _AUTHOR_TIER[role] == "manager":
                 pairs |= _COMPLIANCE_MANAGER_DIRECT_SUBMIT_ALLOWED
                 pairs |= _COMPLIANCE_MANAGER_APPROVAL_ALLOWED
-            elif role == Role.COMPLIANCE_PRINCIPAL:
+            elif _AUTHOR_TIER[role] == "principal":
                 pairs |= _COMPLIANCE_PRINCIPAL_SUBMIT_FOR_APPROVAL_ALLOWED
                 pairs |= _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED
             else:
