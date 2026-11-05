@@ -4374,3 +4374,57 @@ def remind_overdue_minute_reviews():
 
     app_log.info("MINUTES_REVIEW_CHASE | %d minutes chased", chased)
     return chased
+
+
+@shared_task(bind=True, max_retries=4)
+def review_annual_report_task(self, submission_id: int):
+    """AI first-pass review of a submitted Annual Report (see ai.annual_report_review)."""
+    from django.utils import timezone
+
+    from .ai.annual_report_review import documents_waiting_for_text, review_report
+    from .models import Notification, ReportAIReview, Submission
+
+    submission = Submission.objects.filter(pk=submission_id, form_type_code="ANNUAL-REPORT").first()
+    if not submission:
+        return
+    review, _ = ReportAIReview.objects.get_or_create(submission=submission)
+    # Scanned documents are read in the background; wait for them rather than judging
+    # the report as empty.
+    if documents_waiting_for_text(submission) and self.request.retries < self.max_retries:
+        review.state = ReportAIReview.State.RUNNING
+        review.started_at = review.started_at or timezone.now()
+        review.save(update_fields=["state", "started_at"])
+        raise self.retry(countdown=90)
+    try:
+        result, err = review_report(submission)
+    except Exception as exc:  # never leave the review stuck on "running"
+        app_log.exception("ANNUAL_REVIEW_FAIL | submission=%s", submission_id)
+        result, err = None, str(exc)
+    review.state = ReportAIReview.State.DONE if result else ReportAIReview.State.FAILED
+    review.result = result or {}
+    review.error = "" if result else (err or "The review could not be produced.")
+    review.reviewed_at = timezone.now()
+    review.save(update_fields=["state", "result", "error", "reviewed_at"])
+    if result and submission.assigned_to_id:
+        Notification.objects.create(
+            recipient_id=submission.assigned_to_id,
+            channel=Notification.Channel.IN_APP,
+            title="AI review of the Annual Report is ready",
+            body=(
+                f"{submission.reference_number} — {submission.title}: the AI's first-pass review "
+                "against the guideline is ready on the review checklist."
+            ),
+        )
+
+
+def queue_annual_report_review(submission_id: int) -> None:
+    from .models import ReportAIReview
+
+    try:
+        ReportAIReview.objects.update_or_create(
+            submission_id=submission_id,
+            defaults={"state": ReportAIReview.State.RUNNING, "error": ""},
+        )
+        review_annual_report_task.delay(submission_id)
+    except Exception as exc:
+        app_log.warning("ANNUAL_REVIEW_QUEUE_FAIL | %s | %s", submission_id, exc)

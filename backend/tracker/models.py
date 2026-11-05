@@ -4731,6 +4731,33 @@ class BoardPaperStatus(models.TextChoices):
     SECRETARY_APPROVED = "secretary_approved", "Approved by Secretary"
 
 
+class ReportAIReview(models.Model):
+    """AI first-pass review of a ministry report against the OPSC guideline.
+
+    Written by ``ai.annual_report_review`` when HR submits an Annual Report. It is advice
+    for the allocated ODU officer only: the officer ticks the real review checklist, and
+    nothing here is ever shown to the ministry or applied without that officer's say.
+    """
+
+    class State(models.TextChoices):
+        RUNNING = "running", "Running"
+        DONE = "done", "Done"
+        FAILED = "failed", "Failed"
+
+    submission = models.OneToOneField(
+        'Submission', on_delete=models.CASCADE, related_name='report_ai_review',
+    )
+    state = models.CharField(max_length=10, choices=State.choices, blank=True, default="")
+    result = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"AI review of {self.submission_id} ({self.state or 'not run'})"
+
+
 class ODURestructureBoardPaper(models.Model):
     """
     The PSC Board Submission Paper for an Organisation Restructure /
