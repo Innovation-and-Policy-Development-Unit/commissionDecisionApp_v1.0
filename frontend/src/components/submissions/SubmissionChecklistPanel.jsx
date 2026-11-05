@@ -160,6 +160,81 @@ function FieldRenderer({ field, value, onChange, readOnly, suggestion, onAcceptS
   )
 }
 
+const REC_LABEL = {
+  accept: ['Looks complete — can proceed', 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-700/40 dark:text-emerald-300'],
+  accept_with_follow_up: ['Minor gaps — ask the ministry to follow up', 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-700/40 dark:text-amber-300'],
+  return_for_clarification: ['Material gaps — consider returning for clarification', 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-900/20 dark:border-rose-700/40 dark:text-rose-300'],
+}
+
+function AIReviewCard({ review, canEdit, rerunning, onRerun }) {
+  if (!review) return null
+  const r = review.result || {}
+  const c = r.counts || {}
+  const rec = REC_LABEL[r.recommendation]
+  const late = review.lateness || r.lateness || {}
+  return (
+    <div className="mb-4 p-3 rounded-lg border border-violet-200 dark:border-violet-700/40 bg-violet-50/60 dark:bg-violet-900/10 text-xs">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <p className="font-semibold text-violet-700 dark:text-violet-300 flex items-center gap-1.5">
+          <Sparkles size={13} /> AI first-pass review against the Annual Report Guideline
+        </p>
+        {canEdit && review.state !== 'running' && (
+          <button type="button" onClick={onRerun} disabled={rerunning}
+            className="inline-flex items-center gap-1 text-violet-600 dark:text-violet-300 hover:underline disabled:opacity-50">
+            <RefreshCw size={11} className={rerunning ? 'animate-spin' : ''} /> Run again
+          </button>
+        )}
+      </div>
+      {late.late && (
+        <p className="mb-2 px-2 py-1 rounded bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 font-medium">
+          Lodged {late.days_late} day{late.days_late === 1 ? '' : 's'} after the 31 March deadline.
+        </p>
+      )}
+      {review.state === 'running' && (
+        <p className="text-violet-600 dark:text-violet-300 flex items-center gap-1.5">
+          <RefreshCw size={12} className="animate-spin" /> Reading the report… this takes a few minutes for a long report.
+        </p>
+      )}
+      {review.state === 'failed' && (
+        <p className="text-amber-700 dark:text-amber-400">The AI review could not be completed: {review.error || 'unknown error'}. You can still complete the checklist yourself.</p>
+      )}
+      {review.state === 'done' && (
+        <>
+          {rec && (
+            <p className={`mb-2 px-2 py-1 rounded border font-medium ${rec[1]}`}>Suggested: {rec[0]}</p>
+          )}
+          {r.summary && <p className="mb-2 text-slate-700 dark:text-slate-300">{r.summary}</p>}
+          <p className="text-slate-600 dark:text-slate-400">
+            {c.met || 0} of {r.total || 0} items found · {c.partial || 0} partly · {c.not_found || 0} not found.
+            {' '}Each suggestion below is advice only — tick an item once you have checked it in the report.
+          </p>
+          {r.unreadable_documents > 0 && (
+            <p className="mt-1 text-amber-700 dark:text-amber-400">{r.unreadable_documents} uploaded document(s) had no readable text, so the AI could not check them.</p>
+          )}
+          {r.truncated && (
+            <p className="mt-1 text-amber-700 dark:text-amber-400">The report is very long; only the first part was read. Check the later sections yourself.</p>
+          )}
+          <p className="mt-1 text-slate-500 dark:text-slate-500">Whether the cover letter is signed by the Director General must be checked by you on the document itself.</p>
+        </>
+      )}
+    </div>
+  )
+}
+
+function suggestionsFromReview(review, data) {
+  const items = review?.state === 'done' ? review.result?.items : null
+  if (!items) return {}
+  const out = {}
+  for (const [key, it] of Object.entries(items)) {
+    if (data?.[key] === true) continue
+    const where = it.evidence ? ` “${it.evidence}”` : ''
+    if (it.status === 'met') out[key] = { value: true, notes: `Found.${where} ${it.note || ''}`.trim() }
+    else if (it.status === 'partial') out[key] = { value: false, notes: `Only partly there. ${it.note || ''}${where}`.trim() }
+    else out[key] = { value: false, notes: 'Not found in the report.' }
+  }
+  return out
+}
+
 export default function SubmissionChecklistPanel({ submissionId, autofillEnabled = true }) {
   const toast = useToast()
   const [checklist, setChecklist] = useState(null)   // API response
@@ -174,6 +249,8 @@ export default function SubmissionChecklistPanel({ submissionId, autofillEnabled
   const [suggestions, setSuggestions] = useState({})  // { field_key: { value, notes } }
   const [autofilling, setAutofilling] = useState(false)
   const [autofillError, setAutofillError] = useState('')
+  const [aiReview, setAiReview] = useState(null)
+  const [rerunning, setRerunning] = useState(false)
 
   const fetch = useCallback(async () => {
     setLoading(true)
@@ -186,6 +263,8 @@ export default function SubmissionChecklistPanel({ submissionId, autofillEnabled
       setCanEdit(r.data.can_edit)
       setCanApprove(r.data.can_approve)
       setManagerNote(r.data.manager_comments || '')
+      setAiReview(r.data.ai_review || null)
+      if (r.data.can_edit) setSuggestions(suggestionsFromReview(r.data.ai_review, r.data.data))
     } catch (err) {
       const status = err.response?.status
       const detail = err.response?.data?.detail
@@ -201,6 +280,35 @@ export default function SubmissionChecklistPanel({ submissionId, autofillEnabled
   }, [submissionId])
 
   useEffect(() => { fetch() }, [fetch])
+
+  // While the AI review is still reading the report, check back until it is done.
+  useEffect(() => {
+    if (aiReview?.state !== 'running') return undefined
+    const t = setInterval(async () => {
+      try {
+        const r = await api.get(`/submission-checklists/ensure/?submission=${submissionId}`)
+        const rv = r.data.ai_review
+        if (rv && rv.state !== 'running') {
+          setAiReview(rv)
+          if (r.data.can_edit) setSuggestions(suggestionsFromReview(rv, data))
+        }
+      } catch { /* try again on the next tick */ }
+    }, 6000)
+    return () => clearInterval(t)
+  }, [aiReview?.state, submissionId, data])
+
+  const rerunReview = async () => {
+    setRerunning(true)
+    try {
+      await api.post('/submission-checklists/ai-review/', { submission: submissionId })
+      setAiReview(prev => ({ ...(prev || {}), state: 'running', error: '' }))
+      setSuggestions({})
+    } catch (err) {
+      toast.error(formatApiError(err, 'Could not start the AI review.'))
+    } finally {
+      setRerunning(false)
+    }
+  }
 
   const handleChange = (key, val) => setData(prev => ({ ...prev, [key]: val }))
 
@@ -347,6 +455,8 @@ export default function SubmissionChecklistPanel({ submissionId, autofillEnabled
 
       {!collapsed && (
         <>
+          <AIReviewCard review={aiReview} canEdit={canEdit} rerunning={rerunning} onRerun={rerunReview} />
+
           {/* Manager note (returned) */}
           {status === 'returned' && checklist.manager_comments && (
             <div className="mb-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-700/40 text-xs text-rose-800 dark:text-rose-300">

@@ -61,6 +61,11 @@ ANNUAL_REPORT_CHECKLIST = (
         ]),
         ("E. Financial & External Oversight", [
             ("financial_note_check", "Financial Statements referenced/attached", "financial_note"),
+            ("fin_representation_check", "Statement of Representation included", None),
+            ("fin_appropriation_check", "Statement of Appropriation included", None),
+            ("fin_expense_summary_check", "Expense Summary Report included", None),
+            ("fin_commitments_check", "Statement of Commitments & Contingencies included", None),
+            ("leave_accrual_check", "Leave accrual analysis included", None),
             ("dev_projects_check", "Development projects & technical assistance listed", "dev_projects"),
             ("statutory_authorities_check", "Statutory authorities listed", "statutory_authorities"),
             ("non_statutory_bodies_check", "Non-statutory bodies listed", "non_statutory_bodies"),

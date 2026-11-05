@@ -41,7 +41,7 @@ class AnnualReportChecklistTests(TestCase):
         self.ministry = Ministry.objects.create(code="TST-ARC", name="Test Ministry ARC")
         self.hr = User.objects.create_user("hruser_arc", password="x")
 
-    def test_checklist_matches_three_item_list(self):
+    def test_required_documents_are_the_cover_letter_and_the_report(self):
         submission = Submission.objects.create(
             reference_number="SUB-ARC-001",
             title="Ministry Annual Report 2026",
@@ -53,23 +53,13 @@ class AnnualReportChecklistTests(TestCase):
         )
         names = {d.name for d in resolve_required_documents(submission)}
         self.assertEqual(names, {
-            "Ministry Annual Report Document",
-            "Checklist as Per AR Guideline",
-            "Copy of Signed Business Plan for the Report Year",
+            "Signed Cover Letter by Director General",
+            "Annual Report (copy)",
         })
-
-    def test_business_plan_item_has_required_form_set(self):
-        from ..models import RequiredDocument
-        item = RequiredDocument.objects.get(
-            form_type__code="ANNUAL-REPORT",
-            name="Copy of Signed Business Plan for the Report Year",
-            is_active=True,
-        )
-        self.assertEqual(item.required_form.code, "BUSINESS-PLAN")
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
-class LinkBusinessPlanToAnnualReportTests(TestCase):
+class LinkCorporatePlanToBusinessPlanTests(TestCase):
     def setUp(self):
         self.ministry = Ministry.objects.create(code="TST-ARL", name="Test Ministry ARL")
         self.hr = User.objects.create_user("hruser_arl", password="x")
@@ -77,8 +67,8 @@ class LinkBusinessPlanToAnnualReportTests(TestCase):
 
         self.annual_report = Submission.objects.create(
             reference_number="SUB-ARL-AR",
-            title="Ministry Annual Report 2026",
-            form_type_code="ANNUAL-REPORT",
+            title="Ministry Business Plan 2026",
+            form_type_code="BUSINESS-PLAN",
             ministry=self.ministry,
             routed_unit=RoutedUnit.ODU,
             current_stage=WorkflowStage.DRAFT,
@@ -87,8 +77,8 @@ class LinkBusinessPlanToAnnualReportTests(TestCase):
         )
         self.business_plan = Submission.objects.create(
             reference_number="SUB-ARL-BP",
-            title="Ministry Business Plan 2026",
-            form_type_code="BUSINESS-PLAN",
+            title="Ministry Corporate Plan",
+            form_type_code="CORPORATE-PLAN",
             ministry=self.ministry,
             current_stage=WorkflowStage.APPROVED,
             received_at=timezone.now(),
@@ -97,7 +87,7 @@ class LinkBusinessPlanToAnnualReportTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.hr)
 
-    def test_link_approved_business_plan_marks_checklist_present(self):
+    def test_link_approved_corporate_plan_marks_checklist_present(self):
         resp = self.client.post(
             f"/api/submissions/{self.business_plan.id}/link-as-attachment/",
             {"parent_submission": self.annual_report.id},
@@ -110,7 +100,7 @@ class LinkBusinessPlanToAnnualReportTests(TestCase):
 
         item = SubmissionChecklistItem.objects.get(
             submission=self.annual_report,
-            document__name="Copy of Signed Business Plan for the Report Year",
+            document__name="Copy of Signed Ministry Corporate Plan",
         )
         self.assertTrue(item.is_present)
 
