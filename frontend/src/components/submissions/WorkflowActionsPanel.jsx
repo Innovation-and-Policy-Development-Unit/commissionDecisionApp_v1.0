@@ -57,11 +57,24 @@ const STAGE_ACTIONS = {
     {
       id: 'submit_to_principal',
       label: 'Submit to Principal',
-      description: 'Send to your Principal for review before it goes to your Manager',
+      description: 'Send to your Principal for review (comments only) before the next step',
       icon: Send,
       variant: 'primary',
       transitionTo: 'pending_principal_review',
       requiresNote: false,
+    },
+    // A unit Manager's own draft goes to the Secretary Approval Gate — the Manager is
+    // the approver, so there is no one above them in the unit to sign it off. They may
+    // first send it down to the Principal for comments (Submit to Principal above).
+    {
+      id: 'submit_to_secretary',
+      label: 'Submit to Secretary',
+      description: 'Send to the Secretary for approval before it goes to the Commission',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'pending_secretary_approval',
+      requiresNote: false,
+      internalOnly: true,
     },
     // Internal (OPSC-unit) drafts that route straight to the Secretary —
     // e.g. Compliance Manager's own draft, secretary-only travel forms.
@@ -117,7 +130,10 @@ const STAGE_ACTIONS = {
       description: 'Send back to the drafter for changes',
       icon: RotateCcw,
       variant: 'outline',
-      transitionTo: 'draft',
+      // A paper that has been submitted is not a draft again: it comes back as
+      // "Returned for clarification". Attachments (PSC 2-2 etc.) were never
+      // submitted to PSC and still go back to Draft.
+      transitionToAny: ['returned_for_clarification', 'draft'],
       requiresNote: true,
       notePlaceholder: 'Describe what changes are needed…',
       noteLabel: 'Feedback',
@@ -203,6 +219,16 @@ const STAGE_ACTIONS = {
     // another round of review (the loop is unbounded), or — once the
     // Principal's comments say it's ready — submit it on to the Manager
     // directly; the Principal never forwards it themselves.
+    {
+      id: 'resubmit_to_secretary',
+      label: 'Submit to Secretary',
+      description: 'Send to the Secretary for approval before it goes to the Commission',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'pending_secretary_approval',
+      requiresNote: false,
+      internalOnly: true,
+    },
     {
       id: 'resubmit_to_principal',
       label: 'Resubmit to Principal',

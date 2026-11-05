@@ -68,7 +68,9 @@ from .minutes_access import FULL_ACCESS_ROLES as MINUTES_FULL_ACCESS_ROLES
 from .hr_internal import (
     HR_INTERNAL_FORM_CODES,
     HR_UNIT_AUTHOR_ROLES,
+    UNIT_AUTHOR_ROLES,
     UNIT_REVIEW_ROLES,
+    unit_may_work_on_internal_paper,
 )
 from .opsc_access import (
     COMMISSION_TASK_MANAGER_ROLES,
@@ -718,7 +720,12 @@ def _chain_targets_for_role(submission, role, user=None):
     if idx >= 0:
         step_roles = chain[idx].get("roles", [])
         if role in step_roles:
-            targets = [WorkflowStage.DRAFT]   # can always return for changes
+            # Can always return for changes. A submitted internal paper comes back as
+            # "Returned for clarification"; an attachment was never submitted to PSC.
+            targets = [
+                WorkflowStage.RETURNED_FOR_CLARIFICATION if submission.is_internal
+                else WorkflowStage.DRAFT
+            ]
             if idx + 1 < len(chain):
                 targets.append(chain[idx + 1]["stage"])   # next step
             elif submission.is_internal:
@@ -743,6 +750,11 @@ def _chain_transition_allowed(submission, role, target, user=None):
     from .models import Role as _Role
     if role == _Role.PSC_ADMIN:
         return None   # admin always uses default logic
+    # Compliance, HR and VIPAM papers climb Senior -> Principal -> Manager -> Secretary
+    # (tracker.transitions), not an agenda-section chain, so the chain never applies.
+    from .transitions import LADDER_UNITS
+    if submission.is_internal and submission.routed_unit in LADDER_UNITS:
+        return None
     targets = _chain_targets_for_role(submission, role, user=user)
     if targets is None:
         return None
@@ -2012,7 +2024,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         # role-only, so this ownership check has to live here.
         _COMPLIANCE_SELF_SUBMIT_ROLES = {
             Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_MANAGER,
-        } | HR_UNIT_AUTHOR_ROLES
+        } | UNIT_AUTHOR_ROLES
         if (
             profile.role in _COMPLIANCE_SELF_SUBMIT_ROLES
             and submission.is_internal and not submission.follows_normal_route
@@ -3427,10 +3439,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     # these actions just manage who currently holds the delegation.
     _COMPLIANCE_SELF_SUBMIT_ROLES = frozenset({
         Role.COMPLIANCE_SENIOR, Role.COMPLIANCE_PRINCIPAL, Role.COMPLIANCE_MANAGER,
-    }) | HR_UNIT_AUTHOR_ROLES
+    }) | UNIT_AUTHOR_ROLES
     _DRAFT_DELEGATE_GRANTOR_ROLES = frozenset({
         Role.COMPLIANCE_MANAGER, Role.COMPLIANCE_PRINCIPAL,
         Role.HR_UNIT_MANAGER, Role.HR_UNIT_PRINCIPAL,
+        Role.VIPAM_MANAGER, Role.VIPAM_PRINCIPAL,
     })
 
     @staticmethod
@@ -4736,7 +4749,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if profile.role in _upload_allowed_roles:
             from .transitions import assert_can_edit_submission
             assert_can_edit_submission(profile.role, submission)
-        elif not is_own_compliance_draft:
+        elif not (
+            is_own_compliance_draft
+            # A unit's Principal or Manager adds documents to a paper their Senior is
+            # drafting, and a Senior to one a Principal returned: VIPAM's Principal could
+            # not upload a required document at all.
+            or unit_may_work_on_internal_paper(profile.role, submission)
+        ):
             raise PermissionDenied("Only ministry HR, PSC staff, or OPSC unit staff may upload documents.")
 
         # Support multiple files in one request (for internal submissions free-form upload)
@@ -5075,9 +5094,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             Role.CSU_MANAGER, Role.ODU_MANAGER,
         }
         if profile.role not in _replace_allowed_roles:
-            raise PermissionDenied("Only ministry HR, PSC staff, or OPSC unit staff may replace documents.")
-        from .transitions import assert_can_edit_submission
-        assert_can_edit_submission(profile.role, submission)
+            if not unit_may_work_on_internal_paper(profile.role, submission):
+                raise PermissionDenied("Only ministry HR, PSC staff, or OPSC unit staff may replace documents.")
+        else:
+            from .transitions import assert_can_edit_submission
+            assert_can_edit_submission(profile.role, submission)
 
         uploaded = request.FILES.get("file")
         if not uploaded:
@@ -5556,7 +5577,10 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if profile.role in allowed_write_roles:
             from .transitions import assert_can_edit_submission
             assert_can_edit_submission(profile.role, submission)
-        elif not is_own_compliance_draft:
+        elif not (
+            is_own_compliance_draft
+            or unit_may_work_on_internal_paper(profile.role, submission)
+        ):
             raise PermissionDenied("You do not have permission to submit form data.")
 
         try:

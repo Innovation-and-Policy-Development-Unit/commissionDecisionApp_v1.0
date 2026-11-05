@@ -459,13 +459,15 @@ class VipamInternalSubmissionTests(TestCase):
         res = c.post(f"/api/submissions/{sid}/transition/", {"new_stage": "pending_manager_approval"}, format="json")
         self.assertEqual(res.status_code, 200, res.content)
 
+        # VIPAM climbs the Senior -> Principal -> Manager ladder now, not the agenda-section
+        # chain: the Manager's approval lands at the Secretary Approval Gate.
         res = self.api(self.manager).post(
-            f"/api/submissions/{sid}/transition/", {"new_stage": "submitted"}, format="json",
+            f"/api/submissions/{sid}/transition/", {"new_stage": "pending_secretary_approval"}, format="json",
         )
-        self.assertEqual(res.status_code, 200, res.content)   # last chain step: on to the Secretary
+        self.assertEqual(res.status_code, 200, res.content)
         self.assertEqual(self.api(self.secretary).get(f"/api/submissions/{sid}/").status_code, 200)
         res = self.api(self.secretary).post(
-            f"/api/submissions/{sid}/transition/", {"new_stage": "secretary_review"}, format="json",
+            f"/api/submissions/{sid}/transition/", {"new_stage": "forwarded_to_commission"}, format="json",
         )
         self.assertEqual(res.status_code, 200, res.content)
 
