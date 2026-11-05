@@ -9,9 +9,11 @@ from .odu_checklist_rules import ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
 # ---------------------------------------------------------------------------
 # Internal submission roles — only unit managers (not principals) create submissions
 # ---------------------------------------------------------------------------
-INTERNAL_SUBMITTER_ROLES = {
-    Role.VIPAM_PRINCIPAL,   # creates VIPAM submissions; vipam_manager is an approver in the chain
-}
+# VIPAM used to live here (Principal creates, Manager approves via an agenda-section chain).
+# VIPAM now climbs the same Senior -> Principal -> Manager ladder as Compliance and the HR
+# Unit (see _AUTHOR_TIER), so nobody takes the short internal-only path any more. The set
+# stays, empty, because the chain code in views.py still consults it.
+INTERNAL_SUBMITTER_ROLES: set = set()
 # CSU Manager also creates OPSC-internal submissions (is_internal=True), but they
 # follow the normal PSC route (follows_normal_route=True on the submission), not
 # this short internal-only path — see _CSU_MANAGER_ALLOWED below. ODU Manager does
@@ -50,8 +52,14 @@ _AUTHOR_TIER = {
     Role.HR_UNIT_MANAGER: "manager",
     Role.HR_UNIT_PRINCIPAL: "principal",
     Role.HR_UNIT_SENIOR: "senior",
+    Role.VIPAM_MANAGER: "manager",
+    Role.VIPAM_PRINCIPAL: "principal",
+    Role.VIPAM_SENIOR: "senior",
 }
 _COMPLIANCE_SUBMITTER_ROLES = set(_AUTHOR_TIER)
+
+# Units whose internal papers use this ladder instead of an agenda-section approval chain.
+LADDER_UNITS = frozenset({"compliance", "hr", "vipam"})
 
 _COMPLIANCE_CREATOR_ALLOWED = {
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.DRAFT),
@@ -99,7 +107,16 @@ _COMPLIANCE_SENIOR_SUBMIT_TO_MANAGER_ALLOWED = {
 # straight to the Secretary Approval Gate.
 _COMPLIANCE_MANAGER_APPROVAL_ALLOWED = {
     (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL),
-    (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.DRAFT),   # return for changes
+    # Return for changes. The paper was already submitted, so it comes back as
+    # "Returned for clarification", not as a Draft it never was again.
+    (WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.RETURNED_FOR_CLARIFICATION),
+}
+# A Manager who authors a paper may send it down to their Principal for comments before
+# submitting it to the Secretary. The Principal only returns it with comments, as for a
+# Senior's paper; the Manager then submits it on.
+_COMPLIANCE_MANAGER_REVIEW_REQUEST_ALLOWED = {
+    (WorkflowStage.DRAFT, WorkflowStage.PENDING_PRINCIPAL_REVIEW),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_PRINCIPAL_REVIEW),
 }
 
 # ---------------------------------------------------------------------------
@@ -207,11 +224,13 @@ _INTERNAL_STAGE_GRAPH = {
         WorkflowStage.PENDING_SECOND_APPROVAL,
         WorkflowStage.SUBMITTED,
         WorkflowStage.PENDING_SECRETARY_APPROVAL,   # Compliance Manager approves → Secretary Approval Gate
-        WorkflowStage.DRAFT,    # return for changes
+        WorkflowStage.RETURNED_FOR_CLARIFICATION,   # return for changes (the paper was submitted)
+        WorkflowStage.DRAFT,    # legacy return target
     ],
     WorkflowStage.PENDING_SECOND_APPROVAL: [
         WorkflowStage.SUBMITTED,
-        WorkflowStage.DRAFT,    # return for changes
+        WorkflowStage.RETURNED_FOR_CLARIFICATION,
+        WorkflowStage.DRAFT,    # legacy return target
     ],
     WorkflowStage.SUBMITTED: [
         WorkflowStage.SECRETARY_REVIEW,
@@ -687,6 +706,8 @@ def assert_transition_allowed(
                     return
                 if (current_stage, target_stage) in _COMPLIANCE_MANAGER_APPROVAL_ALLOWED:
                     return
+                if (current_stage, target_stage) in _COMPLIANCE_MANAGER_REVIEW_REQUEST_ALLOWED:
+                    return
             elif _AUTHOR_TIER[role] == "principal":
                 if (current_stage, target_stage) in _COMPLIANCE_PRINCIPAL_SUBMIT_FOR_APPROVAL_ALLOWED:
                     return
@@ -952,6 +973,7 @@ def iter_allowed_targets(
             if _AUTHOR_TIER[role] == "manager":
                 pairs |= _COMPLIANCE_MANAGER_DIRECT_SUBMIT_ALLOWED
                 pairs |= _COMPLIANCE_MANAGER_APPROVAL_ALLOWED
+                pairs |= _COMPLIANCE_MANAGER_REVIEW_REQUEST_ALLOWED
             elif _AUTHOR_TIER[role] == "principal":
                 pairs |= _COMPLIANCE_PRINCIPAL_SUBMIT_FOR_APPROVAL_ALLOWED
                 pairs |= _COMPLIANCE_PRINCIPAL_REVIEW_ALLOWED

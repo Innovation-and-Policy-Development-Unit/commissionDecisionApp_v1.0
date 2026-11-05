@@ -164,7 +164,9 @@ class TransitionTests(TestCase):
         self._call_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL)
 
     def test_compliance_manager_returns_for_changes(self):
-        self._call_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.DRAFT)
+        # The paper was already submitted, so it comes back as Returned for clarification.
+        self._call_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.RETURNED_FOR_CLARIFICATION)
+        self._denied_internal(Role.COMPLIANCE_MANAGER, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.DRAFT)
 
     def test_compliance_principal_cannot_approve_pending_manager_approval(self):
         self._denied_internal(Role.COMPLIANCE_PRINCIPAL, WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL)
@@ -178,11 +180,18 @@ class TransitionTests(TestCase):
 
     def test_compliance_manager_targets_from_draft(self):
         targets = iter_allowed_targets(Role.COMPLIANCE_MANAGER, WorkflowStage.DRAFT, is_internal=True)
-        self.assertEqual(targets, [WorkflowStage.PENDING_SECRETARY_APPROVAL.value])
+        # Straight to the Secretary, or down to the Principal for comments first.
+        self.assertEqual(set(targets), {
+            WorkflowStage.PENDING_SECRETARY_APPROVAL.value,
+            WorkflowStage.PENDING_PRINCIPAL_REVIEW.value,
+        })
 
     def test_compliance_manager_targets_from_pending_manager_approval(self):
         targets = iter_allowed_targets(Role.COMPLIANCE_MANAGER, WorkflowStage.PENDING_MANAGER_APPROVAL, is_internal=True)
-        self.assertEqual(set(targets), {WorkflowStage.PENDING_SECRETARY_APPROVAL.value, WorkflowStage.DRAFT.value})
+        self.assertEqual(set(targets), {
+            WorkflowStage.PENDING_SECRETARY_APPROVAL.value,
+            WorkflowStage.RETURNED_FOR_CLARIFICATION.value,
+        })
 
     def test_compliance_manager_approval_reaches_secretary_approval_gate(self):
         """After the Manager approves, the Secretary can forward the compliance
