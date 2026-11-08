@@ -61,6 +61,11 @@ class AnnualReportChecklistTests(TestCase):
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
 class LinkCorporatePlanToBusinessPlanTests(TestCase):
     def setUp(self):
+        # See test_business_plan_fixes.LinkExistingAttachmentTests: the linked item is dormant.
+        from ..models import RequiredDocument
+        RequiredDocument.objects.filter(
+            form_type__code="BUSINESS-PLAN", name="Copy of Signed Ministry Corporate Plan",
+        ).update(is_active=True)
         self.ministry = Ministry.objects.create(code="TST-ARL", name="Test Ministry ARL")
         self.hr = User.objects.create_user("hruser_arl", password="x")
         Profile.objects.create(user=self.hr, role=Role.MINISTRY_HR, ministry=self.ministry)

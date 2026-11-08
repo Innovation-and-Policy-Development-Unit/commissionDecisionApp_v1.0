@@ -37,7 +37,7 @@ class CorporatePlanChecklistTests(TestCase):
             created_by=self.hr,
         )
         names = {d.name for d in resolve_required_documents(submission)}
-        self.assertEqual(names, {"Signed Ministry Corporate Plan Document"})
+        self.assertEqual(names, {"Signed Cover Letter by Director General", "Corporate Plan (copy)"})
 
     def test_old_generic_items_deactivated(self):
         old_names = [
