@@ -13,6 +13,7 @@ import ExecutiveBriefPanel from '../../components/sitting-pack/ExecutiveBriefPan
 import SittingPackPapersPanel from '../../components/sitting-pack/SittingPackPapersPanel'
 import MeetingHistoryPanel from '../../components/sitting-pack/MeetingHistoryPanel'
 import PrivateNotePanel from '../../components/submissions/PrivateNotePanel'
+import CommissionerAssistant, { CASE_ASSISTANT_ROLES } from '../../components/submissions/CommissionerAssistant'
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseBadge from '../../components/shared/BaseBadge'
@@ -46,6 +47,7 @@ export default function AgendaSittingPack() {
   const canViewBrief = userIsOpscInternal(user)
   const canRegenerateBrief = userCanRegenerateAiBrief(user)
   // Matches the backend's my-note permission check (SubmissionViewSet.my_note).
+  const canUseAssistant = Boolean(user && CASE_ASSISTANT_ROLES.includes(user.role))
   const canUseNotes = user && ['psc_commissioner', 'chairperson', 'psc_admin'].includes(user.role)
 
   const { categoryOrder, allSections } = useAgendaSections()
@@ -290,6 +292,7 @@ export default function AgendaSittingPack() {
             {[
               { key: 'papers', label: t('sitting_pack.papers_tab') },
               ...(canViewBrief ? [{ key: 'brief', label: t('sitting_pack.brief_tab') }] : []),
+              ...(canUseAssistant ? [{ key: 'ai', label: t('sitting_pack.ai_tab', 'Ask AI') }] : []),
               ...(canUseNotes ? [{ key: 'notes', label: t('sitting_pack.notes_tab') }] : []),
               { key: 'history', label: t('sitting_pack.history_tab') },
             ].map((tab) => (
@@ -315,6 +318,14 @@ export default function AgendaSittingPack() {
               selectedSubmissionId && <PrivateNotePanel submissionId={selectedSubmissionId} />
             ) : rightTab === 'brief' && canViewBrief ? (
               <ExecutiveBriefPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} canRegenerate={canRegenerateBrief} />
+            ) : rightTab === 'ai' && canUseAssistant ? (
+              selectedSubmissionId ? (
+                <div className="h-full overflow-y-auto">
+                  <CommissionerAssistant key={selectedSubmissionId} submissionId={selectedSubmissionId} role={user?.role} />
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 p-4">Select an agenda item to review it or ask the AI about it.</p>
+              )
             ) : rightTab === 'history' ? (
               <MeetingHistoryPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} excludeMeetingId={meetingId} />
             ) : null}
