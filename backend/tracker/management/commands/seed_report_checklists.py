@@ -152,6 +152,7 @@ CORPORATE_PLAN_CHECKLIST = (
             ("minister_name_check", "Minister / Portfolio Head stated", "minister_name"),
             ("ps_name_check", "Permanent/Principal Secretary stated", "ps_name"),
             ("plan_duration_check", "Plan duration stated (5-year framework)", "plan_duration"),
+            ("plan_five_year_check", "Plan covers five years", None),
         ]),
         ("B. Strategic Framework", [
             ("vision_statement_check", "Vision Statement included", "vision_statement"),

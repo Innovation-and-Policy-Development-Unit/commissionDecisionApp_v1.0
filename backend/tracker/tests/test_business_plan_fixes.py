@@ -41,7 +41,7 @@ class BusinessPlanChecklistTests(TestCase):
         self.ministry = Ministry.objects.create(code="TST-BPC", name="Test Ministry BPC")
         self.hr = User.objects.create_user("hruser_bpc", password="x")
 
-    def test_checklist_matches_three_item_list(self):
+    def test_required_documents_are_the_cover_letter_and_the_plan(self):
         submission = Submission.objects.create(
             reference_number="SUB-BPC-001",
             title="Ministry Business Plan 2027",
@@ -53,24 +53,27 @@ class BusinessPlanChecklistTests(TestCase):
         )
         names = {d.name for d in resolve_required_documents(submission)}
         self.assertEqual(names, {
-            "Signed Ministry Business Plan Document",
-            "Copy of Signed Ministry Corporate Plan",
-            "Checklist as Per BP Guideline",
+            "Signed Cover Letter by Director General",
+            "Business Plan (copy)",
         })
 
-    def test_corporate_plan_item_has_required_form_set(self):
+    def test_linked_corporate_plan_and_guideline_checklist_are_no_longer_required(self):
         from ..models import RequiredDocument
-        item = RequiredDocument.objects.get(
-            form_type__code="BUSINESS-PLAN",
-            name="Copy of Signed Ministry Corporate Plan",
-            is_active=True,
-        )
-        self.assertEqual(item.required_form.code, "CORPORATE-PLAN")
+        for name in ("Copy of Signed Ministry Corporate Plan", "Checklist as Per BP Guideline"):
+            self.assertFalse(
+                RequiredDocument.objects.get(form_type__code="BUSINESS-PLAN", name=name).is_active, name,
+            )
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
 class LinkExistingAttachmentTests(TestCase):
     def setUp(self):
+        # No active Business Plan item links a Corporate Plan any more; the endpoint is kept,
+        # so switch the old item back on here to keep covering it.
+        from ..models import RequiredDocument
+        RequiredDocument.objects.filter(
+            form_type__code="BUSINESS-PLAN", name="Copy of Signed Ministry Corporate Plan",
+        ).update(is_active=True)
         self.ministry = Ministry.objects.create(code="TST-LNK", name="Test Ministry LNK")
         self.hr = User.objects.create_user("hruser_lnk", password="x")
         Profile.objects.create(user=self.hr, role=Role.MINISTRY_HR, ministry=self.ministry)

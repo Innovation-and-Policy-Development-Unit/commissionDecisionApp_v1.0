@@ -2779,11 +2779,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             sid = submission.id
             transaction.on_commit(lambda: queue_submission_quality_score(sid, force=False))
 
-        if target == WorkflowStage.SUBMITTED and submission.form_type_code == "ANNUAL-REPORT":
-            from .tasks import queue_annual_report_review
+        from .ai.annual_report_review import REVIEWED_FORM_TYPES as _REVIEWED_FORM_TYPES
+
+        if target == WorkflowStage.SUBMITTED and submission.form_type_code in _REVIEWED_FORM_TYPES:
+            from .tasks import queue_report_review
 
             sid = submission.id
-            transaction.on_commit(lambda: queue_annual_report_review(sid))
+            transaction.on_commit(lambda: queue_report_review(sid))
 
         if target == WorkflowStage.APPROVED and submission.requires_travel_letter:
             sid = submission.id
@@ -16117,24 +16119,28 @@ class SubmissionChecklistViewSet(viewsets.GenericViewSet):
         data = serializer.data
         data["can_edit"] = can_edit
         data["can_approve"] = profile.role in CHECKLIST_APPROVE_ROLES or request.user.is_superuser
-        if submission.form_type_code == "ANNUAL-REPORT":
-            from .ai.annual_report_review import payload as _ai_review_payload
+        from .ai.annual_report_review import REVIEWED_FORM_TYPES as _REVIEWED, payload as _ai_review_payload
 
+        if submission.form_type_code in _REVIEWED:
             data["ai_review"] = _ai_review_payload(submission)
         return Response(data)
 
     @action(detail=False, methods=["post"], url_path="ai-review")
     def ai_review(self, request):
-        """Re-run the AI first-pass review of an Annual Report (ODU staff only)."""
-        from .tasks import queue_annual_report_review
+        """Re-run the AI first-pass review of an Annual Report, Business Plan or Corporate Plan (ODU staff only)."""
+        from .ai.annual_report_review import REVIEWED_FORM_TYPES as _REVIEWED
+        from .tasks import queue_report_review
 
         profile = _profile(request.user)
         if not (profile.role in CHECKLIST_EDIT_ROLES or request.user.is_superuser):
             raise PermissionDenied("Only ODU reviewers can run the AI review.")
         submission = get_object_or_404(Submission, pk=request.data.get("submission"))
-        if submission.form_type_code != "ANNUAL-REPORT":
-            return Response({"detail": "The AI review is only for Annual Reports."}, status=400)
-        queue_annual_report_review(submission.id)
+        if submission.form_type_code not in _REVIEWED:
+            return Response(
+                {"detail": "The AI review is only for Annual Reports, Business Plans and Corporate Plans."},
+                status=400,
+            )
+        queue_report_review(submission.id)
         return Response({"state": "running"}, status=status.HTTP_202_ACCEPTED)
 
     def partial_update(self, request, pk=None):

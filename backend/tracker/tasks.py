@@ -4438,18 +4438,25 @@ def remind_overdue_minute_reviews():
 
 @shared_task(bind=True, max_retries=4)
 def review_annual_report_task(self, submission_id: int):
-    """AI first-pass review of a submitted Annual Report (see ai.annual_report_review)."""
+    """AI first-pass review of a submitted Annual Report, Business Plan or Corporate Plan.
+
+    The task keeps its original name so tasks already queued across a deploy still run.
+    See ai.annual_report_review.
+    """
     from django.utils import timezone
 
-    from .ai.annual_report_review import documents_waiting_for_text, review_report
+    from .ai.annual_report_review import (
+        REVIEWED_FORM_TYPES, documents_waiting_for_text, profile_for, review_report,
+    )
     from .models import Notification, ReportAIReview, Submission
 
-    submission = Submission.objects.filter(pk=submission_id, form_type_code="ANNUAL-REPORT").first()
+    submission = Submission.objects.filter(pk=submission_id, form_type_code__in=REVIEWED_FORM_TYPES).first()
     if not submission:
         return
+    label = profile_for(submission.form_type_code).label
     review, _ = ReportAIReview.objects.get_or_create(submission=submission)
     # Scanned documents are read in the background; wait for them rather than judging
-    # the report as empty.
+    # the document as empty.
     if documents_waiting_for_text(submission) and self.request.retries < self.max_retries:
         review.state = ReportAIReview.State.RUNNING
         review.started_at = review.started_at or timezone.now()
@@ -4458,7 +4465,7 @@ def review_annual_report_task(self, submission_id: int):
     try:
         result, err = review_report(submission)
     except Exception as exc:  # never leave the review stuck on "running"
-        app_log.exception("ANNUAL_REVIEW_FAIL | submission=%s", submission_id)
+        app_log.exception("REPORT_REVIEW_FAIL | submission=%s", submission_id)
         result, err = None, str(exc)
     review.state = ReportAIReview.State.DONE if result else ReportAIReview.State.FAILED
     review.result = result or {}
@@ -4469,7 +4476,7 @@ def review_annual_report_task(self, submission_id: int):
         Notification.objects.create(
             recipient_id=submission.assigned_to_id,
             channel=Notification.Channel.IN_APP,
-            title="AI review of the Annual Report is ready",
+            title=f"AI review of the {label} is ready",
             body=(
                 f"{submission.reference_number} — {submission.title}: the AI's first-pass review "
                 "against the guideline is ready on the review checklist."
@@ -4477,7 +4484,7 @@ def review_annual_report_task(self, submission_id: int):
         )
 
 
-def queue_annual_report_review(submission_id: int) -> None:
+def queue_report_review(submission_id: int) -> None:
     from .models import ReportAIReview
 
     try:
@@ -4487,4 +4494,7 @@ def queue_annual_report_review(submission_id: int) -> None:
         )
         review_annual_report_task.delay(submission_id)
     except Exception as exc:
-        app_log.warning("ANNUAL_REVIEW_QUEUE_FAIL | %s | %s", submission_id, exc)
+        app_log.warning("REPORT_REVIEW_QUEUE_FAIL | %s | %s", submission_id, exc)
+
+
+queue_annual_report_review = queue_report_review  # original name, still imported by older callers

@@ -176,7 +176,7 @@ function AIReviewCard({ review, canEdit, rerunning, onRerun }) {
     <div className="mb-4 p-3 rounded-lg border border-violet-200 dark:border-violet-700/40 bg-violet-50/60 dark:bg-violet-900/10 text-xs">
       <div className="flex items-center justify-between gap-2 mb-1">
         <p className="font-semibold text-violet-700 dark:text-violet-300 flex items-center gap-1.5">
-          <Sparkles size={13} /> AI first-pass review against the Annual Report Guideline
+          <Sparkles size={13} /> AI first-pass review against the {review.guideline_name || 'Annual Report Guideline'}
         </p>
         {canEdit && review.state !== 'running' && (
           <button type="button" onClick={onRerun} disabled={rerunning}
@@ -187,12 +187,12 @@ function AIReviewCard({ review, canEdit, rerunning, onRerun }) {
       </div>
       {late.late && (
         <p className="mb-2 px-2 py-1 rounded bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 font-medium">
-          Lodged {late.days_late} day{late.days_late === 1 ? '' : 's'} after the 31 March deadline.
+          Lodged {late.days_late} day{late.days_late === 1 ? '' : 's'} after the {late.deadline_text || '31 March'} deadline.
         </p>
       )}
       {review.state === 'running' && (
         <p className="text-violet-600 dark:text-violet-300 flex items-center gap-1.5">
-          <RefreshCw size={12} className="animate-spin" /> Reading the report… this takes a few minutes for a long report.
+          <RefreshCw size={12} className="animate-spin" /> Reading the {(review.label || 'report').toLowerCase()}… this takes a few minutes for a long document.
         </p>
       )}
       {review.state === 'failed' && (
@@ -204,6 +204,15 @@ function AIReviewCard({ review, canEdit, rerunning, onRerun }) {
             <p className={`mb-2 px-2 py-1 rounded border font-medium ${rec[1]}`}>Suggested: {rec[0]}</p>
           )}
           {r.summary && <p className="mb-2 text-slate-700 dark:text-slate-300">{r.summary}</p>}
+          {r.plan_period && (
+            <p className={`mb-2 px-2 py-1 rounded border font-medium ${r.plan_period.five_years ? REC_LABEL.accept[1] : REC_LABEL.accept_with_follow_up[1]}`}>
+              {!r.plan_period.found
+                ? 'Plan period not found in the document — check that it covers five years.'
+                : r.plan_period.five_years
+                  ? `Plan period ${r.plan_period.start_year} to ${r.plan_period.end_year}: five years.`
+                  : `Plan period ${r.plan_period.start_year} to ${r.plan_period.end_year} is ${r.plan_period.years} year${r.plan_period.years === 1 ? '' : 's'} — a Corporate Plan must cover five years.`}
+            </p>
+          )}
           <p className="text-slate-600 dark:text-slate-400">
             {c.met || 0} of {r.total || 0} items found · {c.partial || 0} partly · {c.not_found || 0} not found.
             {' '}Each suggestion below is advice only — tick an item once you have checked it in the report.
@@ -212,7 +221,7 @@ function AIReviewCard({ review, canEdit, rerunning, onRerun }) {
             <p className="mt-1 text-amber-700 dark:text-amber-400">{r.unreadable_documents} uploaded document(s) had no readable text, so the AI could not check them.</p>
           )}
           {r.truncated && (
-            <p className="mt-1 text-amber-700 dark:text-amber-400">The report is very long; only the first part was read. Check the later sections yourself.</p>
+            <p className="mt-1 text-amber-700 dark:text-amber-400">The document is very long; only the first part was read. Check the later sections yourself.</p>
           )}
           <p className="mt-1 text-slate-500 dark:text-slate-500">Whether the cover letter is signed by the Director General must be checked by you on the document itself.</p>
         </>
