@@ -186,7 +186,7 @@ from .api_cache import (
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
-from .throttles import AiAnalysisTriggerThrottle, OTPVerifyThrottle, PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle
+from .throttles import AiAnalysisTriggerThrottle, StaffChatThrottle, OTPVerifyThrottle, PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle
 from .auth import LenientJWTAuthentication
 from .models import (
     AuditLog,
@@ -14387,6 +14387,173 @@ def get_ai_outcome(request, pk):
     from .serializers import AiOutcomeResultSerializer
     submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
     return Response(AiOutcomeResultSerializer(submission).data)
+
+
+# ── Commissioner AI: review card + per-paper chat ───────────────────────────────
+
+# Who may use the case assistant. Ministry-side roles are excluded on purpose:
+# the recommendation is advice to the Commission, not to the lodging ministry.
+_CASE_ASSISTANT_ROLES = {
+    Role.PSC_COMMISSIONER, Role.CHAIRPERSON, Role.PSC_ADMIN,
+    Role.PSC_SECRETARY, Role.PSC_OFFICER,
+}
+_CASE_CHAT_MAX_QUESTION = 2000
+
+
+def _case_assistant_submission(request, pk):
+    """The submission, if this user may use the case assistant on it; else raises."""
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
+    user = request.user
+    if not (user.is_superuser or _profile(user).role in _CASE_ASSISTANT_ROLES):
+        raise PermissionDenied("The case assistant is available to Commissioners and PSC reviewers.")
+    return submission
+
+
+def _chat_payload(rows):
+    return [
+        {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at}
+        for m in rows
+    ]
+
+
+@api_view(["GET", "POST", "DELETE"])
+@permission_classes([permissions.IsAuthenticated])
+@throttle_classes([StaffChatThrottle])
+def submission_case_chat(request, pk):
+    """Ask the AI about one paper. Each user has their own thread per paper.
+
+    GET returns the thread, POST {"message": "..."} appends a question and its
+    answer, DELETE clears the caller's own thread. Answers are advisory.
+    """
+    from .ai.case_chat import DISCLAIMER, generate_case_chat_reply
+    from .models import SubmissionChatMessage
+
+    submission = _case_assistant_submission(request, pk)
+    thread = SubmissionChatMessage.objects.filter(submission=submission, user=request.user, cleared_by_user=False)
+
+    if request.method == "GET":
+        return Response({"disclaimer": DISCLAIMER, "messages": _chat_payload(thread)})
+
+    if request.method == "DELETE":
+        # Hidden from the asker, kept for the Secretariat's record.
+        thread.update(cleared_by_user=True)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    question = str(request.data.get("message") or "").strip()
+    if not question:
+        return Response({"detail": "Type a question first."}, status=status.HTTP_400_BAD_REQUEST)
+    if len(question) > _CASE_CHAT_MAX_QUESTION:
+        return Response(
+            {"detail": f"Keep the question under {_CASE_CHAT_MAX_QUESTION} characters."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    from .ai.reliability import FEATURE_CASE_CHAT, log_ai_call, timed_call
+    from .models import AIGenerationLog
+
+    history = [{"role": m.role, "content": m.content} for m in thread.order_by("-created_at", "-id")[:12]][::-1]
+    with timed_call() as elapsed:
+        reply, err = generate_case_chat_reply(submission=submission, history=history, question=question)
+    log_ai_call(
+        feature=FEATURE_CASE_CHAT, submission_id=submission.id,
+        status=AIGenerationLog.Status.FAILED if (err or not reply) else AIGenerationLog.Status.SUCCESS,
+        error_detail=err or "", latency_ms=elapsed(),
+    )
+    if err or not reply:
+        # Nothing is stored for a failed turn, so the thread never holds an unanswered question.
+        return Response(
+            {"detail": "The assistant could not answer just now. Please try again in a moment."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    q = SubmissionChatMessage.objects.create(
+        submission=submission, user=request.user, role=SubmissionChatMessage.Role.USER, content=question,
+    )
+    a = SubmissionChatMessage.objects.create(
+        submission=submission, user=request.user, role=SubmissionChatMessage.Role.ASSISTANT, content=reply.strip(),
+    )
+    return Response({"disclaimer": DISCLAIMER, "messages": _chat_payload([q, a])}, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def submission_case_chat_log(request, pk):
+    """Read-only record of every question asked about a paper, for the Secretariat.
+
+    Commissioners' threads are private to each other, but the Secretariat keeps
+    the record of what the assistant was asked and what it answered.
+    """
+    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
+    if not (request.user.is_superuser or _profile(request.user).role in {Role.PSC_SECRETARY, Role.PSC_ADMIN}):
+        raise PermissionDenied("Only the Secretariat can view the case assistant log.")
+    from .models import SubmissionChatMessage
+
+    threads: dict[int, dict] = {}
+    rows = SubmissionChatMessage.objects.filter(submission=submission).select_related("user").order_by("created_at", "id")
+    for m in rows:
+        t = threads.setdefault(m.user_id, {
+            "user_id": m.user_id, "name": m.user.get_full_name() or m.user.username, "messages": [],
+        })
+        t["messages"].append({"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at})
+    return Response({"threads": list(threads.values())})
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def submission_review_card(request, pk):
+    """The "Review and recommend" card: what the AI checks already concluded,
+    gathered in one place. Reads stored results only — never calls the model."""
+    from .ai.case_chat import DISCLAIMER
+
+    s = _case_assistant_submission(request, pk)
+    return Response({
+        "disclaimer": DISCLAIMER,
+        "recommendation": {
+            "processed": s.ai_outcome_processed,
+            "action": s.ai_outcome_recommendation,
+            "confidence": s.ai_outcome_confidence,
+            "rationale": s.ai_outcome_rationale,
+            "conditions": s.ai_outcome_conditions or [],
+            "precedents": s.ai_outcome_precedents or [],
+            "legal_basis": s.ai_outcome_legal_basis,
+            "generated_at": s.ai_outcome_generated_at,
+        } if s.ai_outcome_processed else None,
+        "risk": {
+            "processed": s.ai_risk_processed,
+            "level": s.ai_risk_level,
+            "score": s.ai_risk_score,
+            "factors": s.ai_risk_factors or [],
+            "recommendation": s.ai_risk_recommendation,
+        } if s.ai_risk_processed else None,
+        "quality": {
+            "score": s.ai_quality_score,
+            "explanation": s.ai_quality_explanation,
+        } if s.ai_quality_score is not None else None,
+        "package": {
+            "ready": s.ai_package_ready,
+            "summary": s.ai_package_summary,
+            "gaps": s.ai_package_gaps or [],
+        } if s.ai_package_processed else None,
+        "questions": {
+            "processed": s.ai_review_questions_processed,
+            "items": s.ai_review_questions or [],
+            "generated_at": s.ai_review_questions_generated_at,
+        },
+        "brief": s.ai_brief_summary or "",
+    })
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+@throttle_classes([AiAnalysisTriggerThrottle])
+def submission_review_card_refresh(request, pk):
+    """Re-run the checks the card summarises (recommendation, risk, questions)."""
+    s = _case_assistant_submission(request, pk)
+    from .tasks import queue_recommended_outcome, queue_review_questions, queue_risk_assessment
+    queue_recommended_outcome(s.id, force=True)
+    queue_risk_assessment(s.id, force=True)
+    queue_review_questions(s.id)
+    return Response({"detail": "Review refresh queued."}, status=status.HTTP_202_ACCEPTED)
 
 
 @api_view(["POST"])

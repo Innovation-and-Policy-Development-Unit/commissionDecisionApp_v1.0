@@ -24,6 +24,7 @@ import {
 } from '../../constants/stages'
 import { ArrowRight, AlertTriangle, CalendarDays, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardCheck, LayoutGrid, MessageSquare, FileSignature, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
+import CommissionerAssistant, { CASE_ASSISTANT_ROLES } from '../../components/submissions/CommissionerAssistant'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
 import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
@@ -2367,6 +2368,13 @@ const stageDescriptions = {
         </div>
       </div>
     </div>
+
+    {/* ── Commissioner AI: review and recommend + ask about this paper ─── */}
+    {submission && CASE_ASSISTANT_ROLES.includes(user?.role) && (
+      <div style={{ marginTop: '32px' }}>
+        <CommissionerAssistant submissionId={id} role={user?.role} />
+      </div>
+    )}
 
     {/* ── AI Analysis Section (PSC staff only) ─────────────────────────── */}
     {submission && !isComplianceRole(user?.role) && (

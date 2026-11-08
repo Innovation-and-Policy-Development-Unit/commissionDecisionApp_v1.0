@@ -2337,6 +2337,11 @@ class Submission(models.Model):
     ai_outcome_legal_basis    = models.TextField(blank=True)
     ai_outcome_generated_at   = models.DateTimeField(null=True, blank=True)
 
+    # ── Commissioner review card: questions worth asking at the sitting ─────
+    ai_review_questions = models.JSONField(null=True, blank=True)
+    ai_review_questions_processed = models.BooleanField(default=False)
+    ai_review_questions_generated_at = models.DateTimeField(null=True, blank=True)
+
     # ── B5 Notice of Allegation ─────────────────────────────────────────────
     ai_noa_processed    = models.BooleanField(default=False, db_index=True)
     ai_noa_content      = models.TextField(blank=True)
@@ -4997,6 +5002,41 @@ class StaffChatMessage(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class SubmissionChatMessage(models.Model):
+    """One turn of a commissioner's / reviewer's AI Q&A about a single submission.
+
+    Kept on the submission (not on the user) so the Secretariat can see what was
+    asked and answered about a paper. Each user has their own thread per paper.
+    """
+
+    class Role(models.TextChoices):
+        USER = "user", "User"
+        ASSISTANT = "assistant", "Assistant"
+
+    submission = models.ForeignKey(
+        "Submission", on_delete=models.CASCADE, related_name="chat_messages",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="submission_chat_messages",
+        help_text="Whose thread this message belongs to (the asker, for both turns).",
+    )
+    role = models.CharField(max_length=16, choices=Role.choices)
+    content = models.TextField()
+    cleared_by_user = models.BooleanField(
+        default=False,
+        help_text="The asker cleared it from their own view; the Secretariat record keeps it.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [models.Index(fields=["submission", "user", "created_at"])]
+
+    def __str__(self):
+        return f"{self.get_role_display()} on submission {self.submission_id}"
 
 
 class UiTranslation(models.Model):
