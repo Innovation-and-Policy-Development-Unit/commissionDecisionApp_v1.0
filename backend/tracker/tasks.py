@@ -3086,7 +3086,9 @@ def generate_recommended_outcome(self, submission_id: int, force: bool = False):
                 attempt=self.request.retries + 1)
 
     submission.ai_outcome_processed = True
-    submission.ai_outcome_recommendation = data.get("recommendation", "")
+    # recommend_outcome() returns the key "recommended_outcome"; this used to read
+    # "recommendation", so the stored recommendation was always blank.
+    submission.ai_outcome_recommendation = data.get("recommended_outcome") or data.get("recommendation", "")
     submission.ai_outcome_confidence = data.get("confidence", 0)
     submission.ai_outcome_rationale = data.get("rationale", "")
     submission.ai_outcome_conditions = data.get("conditions", [])
@@ -3109,6 +3111,64 @@ def queue_recommended_outcome(submission_id: int, force: bool = False) -> None:
     except Exception as exc:
         app_log.warning("B3_OUTCOME_FALLBACK | %s | %s", submission_id, exc)
         generate_recommended_outcome(submission_id, force=force)
+
+
+# ── Commissioner review card: questions to ask ────────────────────────────────
+
+@shared_task(bind=True, max_retries=2)
+def generate_review_questions_task(self, submission_id: int):
+    """Questions a Commissioner should ask about this paper (review card)."""
+    from django.utils import timezone
+    from .models import AIGenerationLog, Submission
+    from .ai.case_chat import generate_review_questions
+    from .ai.claude_client import is_retryable_ai_error
+    from .ai.reliability import FEATURE_REVIEW_QUESTIONS, log_ai_call, timed_call
+
+    try:
+        submission = Submission.objects.select_related("ministry").get(pk=submission_id)
+    except Submission.DoesNotExist:
+        return
+
+    try:
+        with timed_call() as elapsed:
+            questions, err = generate_review_questions(submission)
+    except Exception as exc:
+        app_log.exception("REVIEW_QUESTIONS | Sub %s | unexpected failure", submission_id)
+        questions, err = None, str(exc)
+
+    if err or questions is None:
+        attempt = self.request.retries + 1
+        if is_retryable_ai_error(err or "") and self.request.retries < self.max_retries:
+            log_ai_call(feature=FEATURE_REVIEW_QUESTIONS, submission_id=submission_id,
+                        status=AIGenerationLog.Status.RETRYING, error_detail=err or "", attempt=attempt)
+            raise self.retry(countdown=30 * (2 ** self.request.retries))
+        log_ai_call(feature=FEATURE_REVIEW_QUESTIONS, submission_id=submission_id,
+                    status=AIGenerationLog.Status.FAILED, error_detail=err or "", attempt=attempt)
+        # Mark processed so the card stops showing a spinner; keep any earlier questions.
+        submission.ai_review_questions_processed = True
+        submission.save(update_fields=["ai_review_questions_processed", "updated_at"])
+        return
+
+    log_ai_call(feature=FEATURE_REVIEW_QUESTIONS, submission_id=submission_id,
+                status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(),
+                attempt=self.request.retries + 1)
+    submission.ai_review_questions = questions
+    submission.ai_review_questions_processed = True
+    submission.ai_review_questions_generated_at = timezone.now()
+    submission.save(update_fields=[
+        "ai_review_questions", "ai_review_questions_processed",
+        "ai_review_questions_generated_at", "updated_at",
+    ])
+
+
+def queue_review_questions(submission_id: int) -> None:
+    from .models import Submission
+    Submission.objects.filter(pk=submission_id).update(ai_review_questions_processed=False)
+    try:
+        generate_review_questions_task.delay(submission_id)
+    except Exception as exc:
+        app_log.warning("REVIEW_QUESTIONS_FALLBACK | %s | %s", submission_id, exc)
+        generate_review_questions_task(submission_id)
 
 
 # ── B5: Notice of Allegation ──────────────────────────────────────────────────
