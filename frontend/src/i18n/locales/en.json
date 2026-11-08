@@ -910,6 +910,7 @@
     "papers_tab": "Papers",
     "brief_tab": "Brief",
     "notes_tab": "My Notes",
+    "ai_tab": "Ask AI",
     "history_tab": "History",
     "history_empty": "This is the first time this item has been on an agenda.",
     "history_no_detail": "No deferral or decision recorded for this sitting.",
