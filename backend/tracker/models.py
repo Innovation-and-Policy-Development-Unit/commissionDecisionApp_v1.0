@@ -3716,6 +3716,18 @@ class DecisionLetter(models.Model):
         on_delete=models.SET_NULL, related_name="decision_letters",
         help_text="Convenience link (derived from the task) for ministry/HR lookup.",
     )
+    ministry = models.ForeignKey(
+        'Ministry', null=True, blank=True,
+        on_delete=models.PROTECT, related_name="decision_letters",
+        help_text="Who the letter is addressed to. Blank means the submission's own ministry. "
+                  "Set when the Commission's decision is aimed at a particular ministry from an "
+                  "OPSC-internal paper that covers several (e.g. an ODU performance report).",
+    )
+    department = models.ForeignKey(
+        'Department', null=True, blank=True,
+        on_delete=models.PROTECT, related_name="decision_letters",
+        help_text="Optional department within the ministry the letter is aimed at.",
+    )
     subject = models.CharField(max_length=500)
     body_text = models.TextField(blank=True)
     document = models.FileField(

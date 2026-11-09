@@ -7503,12 +7503,23 @@ class DecisionLetterViewSet(viewsets.ModelViewSet):
             "prepared_by", "signed_by", "picked_up_by",
         )
         if profile and profile.role in MINISTRY_ACK_ROLES:
-            # Ministry side: only their own ministry's letters that have reached
-            # at least the pickup stage.
+            # Ministry side: only letters addressed to their ministry that have reached
+            # at least the pickup stage. A letter addressed to a particular department
+            # is not shown to another department's administrator.
             qs = qs.filter(
-                submission__ministry_id=profile.ministry_id,
+                models.Q(ministry_id=profile.ministry_id)
+                | models.Q(ministry__isnull=True, submission__ministry_id=profile.ministry_id),
                 status__in=["ready_for_pickup", "picked_up"],
             )
+            if profile.role == Role.DEPT_ADMIN:
+                qs = qs.filter(
+                    models.Q(department__isnull=True) | models.Q(department_id=profile.department_id)
+                )
+        elif profile and profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
+            # The Secretary signs every decision letter and the Secretariat records its
+            # hand-over, whether or not the Secretary is allocated the underlying task.
+            # (Without this the letter 404'd for them: they do not see the task register.)
+            pass
         elif not (user.is_staff or user.is_superuser):
             # OPSC side: letters for commission tasks the user can access.
             task_ids = _commission_task_queryset_for(user).values("id")
@@ -7539,13 +7550,23 @@ class DecisionLetterViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(
                 "Only the assigned action officer or unit manager can prepare this letter."
             )
+        from rest_framework.exceptions import ValidationError
+
         from .models import DecisionLetterStatus
 
+        # Who the letter is for. A ministry-lodged paper writes to its own ministry; an
+        # OPSC-internal paper that covers several ministries has none, so the officer must say.
+        submission = task.submission
+        ministry = serializer.validated_data.get("ministry")
+        if ministry is None and (submission is None or submission.is_internal):
+            raise ValidationError({
+                "ministry": "Choose the ministry this letter is addressed to.",
+            })
         serializer.save(
             created_by=self.request.user,
             prepared_by=self.request.user,
             prepared_at=timezone.now(),
-            submission=task.submission,
+            submission=submission,
             status=DecisionLetterStatus.PREPARED,
         )
 
@@ -7587,7 +7608,7 @@ class DecisionLetterViewSet(viewsets.ModelViewSet):
     def notify_pickup(self, request, pk=None):
         """Unit notifies the originating ministry HR that the signed letter is
         ready for physical pickup."""
-        from .decision_service import ministry_recipients
+        from .decision_service import letter_recipients, letter_target
         from .models import DecisionLetterStatus, Notification
 
         letter = self.get_object()
@@ -7603,17 +7624,23 @@ class DecisionLetterViewSet(viewsets.ModelViewSet):
         letter.save(update_fields=["status", "pickup_notified_at", "updated_at"])
 
         sub = letter.submission
-        recipients = ministry_recipients(sub) if sub else []
+        recipients = letter_recipients(letter)
+        # An OPSC-internal paper is never visible to a ministry, so the notification must not
+        # link to it; the letter's own subject says what it is about.
+        link = None if (sub is None or sub.is_internal) else sub
+        _ministry, _dept = letter_target(letter)
+        _for = (_dept.name + ", " if _dept else "") + (_ministry.name if _ministry else "")
         for recipient in recipients:
             Notification.objects.create(
                 recipient=recipient,
-                submission=sub,
+                submission=link,
                 channel=Notification.Channel.BOTH,
                 push=True,
-                title=f"Decision letter ready for pickup: {sub.reference_number if sub else letter.subject}",
+                title=f"Decision letter ready for pickup: {sub.reference_number if link else letter.subject}",
                 body=(
-                    f"The signed decision letter \"{letter.subject}\" is ready for collection "
-                    f"from the responsible OPSC unit. Please arrange pickup."
+                    f"The signed decision letter \"{letter.subject}\""
+                    + (f" for {_for}" if (_for and not link) else "")
+                    + " is ready for collection from the responsible OPSC unit. Please arrange pickup."
                 ),
             )
         return Response({
@@ -7631,8 +7658,11 @@ class DecisionLetterViewSet(viewsets.ModelViewSet):
         letter = self.get_object()
         profile = _profile(request.user)
         is_secretariat = profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}
-        if profile.role not in MINISTRY_ACK_ROLES and not is_secretariat and not request.user.is_staff:
-            raise PermissionDenied("Only ministry HR or the Secretariat can confirm pickup.")
+        # The OPSC unit that hands the letter over may record the collection for the ministry.
+        is_preparer = self._can_prepare(request.user, letter.commission_task)
+        if (profile.role not in MINISTRY_ACK_ROLES and not is_secretariat and not is_preparer
+                and not request.user.is_staff):
+            raise PermissionDenied("Only ministry HR, the Secretariat or the unit that prepared the letter can confirm pickup.")
         if letter.status != DecisionLetterStatus.READY_FOR_PICKUP:
             return Response(
                 {"detail": "The letter is not marked ready for pickup."}, status=400,

@@ -48,6 +48,35 @@ def ministry_recipients(submission):
     ).select_related("psc_profile")
 
 
+def letter_target(letter):
+    """(ministry, department) a decision letter is addressed to: its own, else the submission's."""
+    ministry = letter.ministry or (letter.submission.ministry if letter.submission_id else None)
+    return ministry, letter.department
+
+
+def letter_recipients(letter):
+    """Ministry-side users told a decision letter is ready for collection.
+
+    The ministry's HR officers and Head of Agency. When the letter is aimed at one department,
+    department administrators of *other* departments are left out.
+    """
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
+
+    User = get_user_model()
+    ministry, department = letter_target(letter)
+    if ministry is None:
+        return User.objects.none()
+    qs = User.objects.filter(
+        is_active=True,
+        psc_profile__role__in=list(MINISTRY_ACK_ROLES),
+        psc_profile__ministry_id=ministry.id,
+    )
+    if department is not None:
+        qs = qs.filter(~Q(psc_profile__role="dept_admin") | Q(psc_profile__department_id=department.id))
+    return qs.select_related("psc_profile")
+
+
 def _service_payload(submission, *, outcome, subject, body, served_by) -> dict:
     return {
         "v": 1,
