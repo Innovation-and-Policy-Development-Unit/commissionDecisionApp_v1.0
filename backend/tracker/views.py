@@ -13627,8 +13627,8 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "detail": (
-                        "Commission paper is only shown for ORG-3.1 / PSC 2-1 submissions "
-                        "routed to ODU."
+                        "Commission paper is only shown for restructure (ORG-3.1 / PSC 2-1) "
+                        "and Anomalies submissions routed to ODU."
                     ),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -13787,9 +13787,15 @@ class ODUBoardPaperViewSet(viewsets.ModelViewSet):
         """Ask the AI for a first draft of the paper. Runs in the background; the result
         lands in ``ai_draft`` as suggestions the officer chooses from, and never overwrites
         the paper. Only whoever may edit the paper can ask."""
+        from .odu_paper_gate import paper_needs_analyses
+
         paper = self.get_object()
         profile = _profile(request.user)
         self._require_odu_role(profile)
+        if not paper_needs_analyses(paper.submission):
+            # The prompt is written for restructures; an Anomalies paper has its own shape.
+            return Response({"detail": "The AI draft is only available for restructure papers."},
+                            status=status.HTTP_400_BAD_REQUEST)
         if paper.status != BoardPaperStatus.DRAFT:
             return Response({"detail": "A draft can only be requested while the paper is a Draft."},
                             status=status.HTTP_400_BAD_REQUEST)

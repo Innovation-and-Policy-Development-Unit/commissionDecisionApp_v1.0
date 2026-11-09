@@ -13,8 +13,18 @@ export const ODU_RESTRUCTURE_CHECKLIST_FORM_CODES = ['ORG-3.1', 'PSC 2-1']
 // keep both in sync.
 export const ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES = [
   ...ODU_RESTRUCTURE_CHECKLIST_FORM_CODES,
-  'PSC 2-2', 'BUSINESS-PLAN', 'CORPORATE-PLAN', 'ANNUAL-REPORT',
+  'PSC 2-2', 'BUSINESS-PLAN', 'CORPORATE-PLAN', 'ANNUAL-REPORT', 'ANOMALIES',
 ]
+
+// Anomalies: ODU writes the Commission paper, like a restructure, but there is no 20-item
+// checklist and no DSSPAC / GRT / Finance analyses. Mirrors ODU_BOARD_PAPER_FORM_CODES in
+// odu_checklist_rules.py — keep both in sync.
+export const ODU_ANOMALY_FORM_CODE = 'ANOMALIES'
+export const ODU_BOARD_PAPER_FORM_CODES = [...ODU_RESTRUCTURE_CHECKLIST_FORM_CODES, ODU_ANOMALY_FORM_CODE]
+
+export function submissionUsesOduBoardPaper(submission) {
+  return ODU_BOARD_PAPER_FORM_CODES.includes(submission?.form_type_code || '')
+}
 
 export const ODU_CHECKLIST_REVIEW_STAGE = 'manager_checklist_review'
 
@@ -176,7 +186,7 @@ export function submissionInBoardPaperViewPhase(submission) {
 
 export function canShowBoardPaper(submission, user) {
   if (!user || !submission) return false
-  if (!submissionUsesOduRestructureChecklist(submission)) return false
+  if (!submissionUsesOduBoardPaper(submission)) return false
   const isAdmin = user.is_superuser || user.role === 'psc_admin'
   if (
     (isAdmin || ODU_CHECKLIST_ROLES.includes(user.role))
