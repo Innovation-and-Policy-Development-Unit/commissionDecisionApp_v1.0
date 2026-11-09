@@ -14,7 +14,7 @@ receipt, missing ones are made here) and, where ODU reviewed the plan, the AI fi
 plus the text of the paper's attachment. For the performance report it is given the attachment
 only. It is told to use only what it is given.
 
-Business and Corporate Plans are only ACKNOWLEDGED by ODU, never assessed, so the paper reports
+Business Plans, Corporate Plans and Annual Reports are only ACKNOWLEDGED by ODU, never assessed by it in the paper's text, so the paper reports
 what was received and what the plans say, not ODU findings.
 """
 
@@ -44,10 +44,10 @@ SYSTEM = (
     "- issue: what the Commission is asked to note, and why it matters (2 to 4 sentences).\n"
     "- discussion: the overall results (how many were lodged, how many on time, how many late), "
     "what the plans say (common priorities, notable targets, budget or staffing where stated) and "
-    "the ministries or departments of concern. For Business and Corporate Plans ODU only "
+    "the ministries or departments of concern. For these ministry submissions ODU only "
     "acknowledged receipt and did NOT assess them: never say ODU assessed or reviewed them.\n"
     "- recommendation: begin \"It is recommended that the Public Service Commission note ...\" (for "
-    "Business and Corporate Plans, note the plans received). If "
+    "ministry plans and reports, note those received). If "
     "there are ministries of concern, add what the Commission may wish to consider for each, as a "
     "suggestion. If any were lodged late, say that the Commission is asked to decide what to do "
     "about the lateness.\n"

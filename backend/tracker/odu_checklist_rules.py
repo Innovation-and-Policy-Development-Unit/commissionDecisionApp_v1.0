@@ -33,10 +33,9 @@ ODU_CONSOLIDATED_COVERS = {
 ODU_CONSOLIDATED_FORM_CODES = frozenset(ODU_CONSOLIDATED_COVERS)
 # Ministry submissions that end at ODU (Manager notes them) instead of going to the Commission.
 ODU_NOTED_AT_ODU_FORM_CODES = frozenset(ODU_CONSOLIDATED_COVERS.values())
-# Business and Corporate Plans are only ACKNOWLEDGED by ODU (no review, no clarification, no
-# Secretary): the Manager ODU records receipt and the submission ends there. (Annual Reports are
-# still reviewed before they are noted.)
-ODU_ACKNOWLEDGE_ONLY_FORM_CODES = frozenset({"BUSINESS-PLAN", "CORPORATE-PLAN"})
+# Business Plans, Corporate Plans and Annual Reports are only ACKNOWLEDGED by ODU (no review, no
+# clarification, no Secretary): the Manager ODU records receipt and the submission ends there.
+ODU_ACKNOWLEDGE_ONLY_FORM_CODES = frozenset({"BUSINESS-PLAN", "CORPORATE-PLAN", "ANNUAL-REPORT"})
 
 # A salary / establishment anomaly the ministry asks the Commission to correct. Like a
 # restructure, the Commission reads ODU's own paper, not the ministry's; unlike a

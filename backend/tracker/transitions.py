@@ -853,7 +853,7 @@ def assert_transition_allowed(
                 return
             if form_type_code in ODU_ACKNOWLEDGE_ONLY_FORM_CODES:
                 raise PermissionDenied(
-                    "ODU only acknowledges receipt of Business and Corporate Plans: acknowledge "
+                    "ODU only acknowledges receipt of Business Plans, Corporate Plans and Annual Reports: acknowledge "
                     "it here. There is no review, clarification request or Secretary step."
                 )
             if target_stage == WorkflowStage.PENDING_SECRETARY_APPROVAL:

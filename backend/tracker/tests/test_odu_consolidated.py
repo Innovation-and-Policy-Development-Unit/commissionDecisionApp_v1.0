@@ -130,10 +130,11 @@ class ConsolidatedPaperTests(TestCase):
                     [WorkflowStage.NOTED], (role, code),
                 )
 
-    def test_an_annual_report_is_still_reviewed_before_it_is_noted(self):
-        targets = iter_allowed_targets(Role.ODU_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, form_type_code="ANNUAL-REPORT")
-        self.assertIn(WorkflowStage.NOTED, targets)
-        self.assertGreater(len(targets), 1)  # not acknowledge-only: other routes remain open
+    def test_an_annual_report_is_also_only_acknowledged(self):
+        self.assertEqual(
+            iter_allowed_targets(Role.ODU_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, form_type_code="ANNUAL-REPORT"),
+            [WorkflowStage.NOTED],
+        )
 
     def test_acknowledging_needs_no_principal_review_and_no_checklist(self):
         # Assigned to a principal who never handed it back, documents not ticked: still acknowledged.
@@ -165,10 +166,29 @@ class ConsolidatedPaperTests(TestCase):
         with mock.patch.dict("os.environ", {"ODU_RECEIPT_DUE_CORPORATE_PLAN": "01-01"}):
             self.assertEqual(consolidation_gaps(paper), [])  # passed long ago
 
-    def test_the_two_plan_types_have_different_due_dates(self):
+    def test_the_types_have_different_due_dates(self):
         from ..odu_consolidation import receipt_due_date
         self.assertEqual(receipt_due_date("BUSINESS-PLAN", 2027).isoformat(), "2027-02-28")
+        self.assertEqual(receipt_due_date("ANNUAL-REPORT", 2027).isoformat(), "2027-03-31")
         self.assertIsNone(receipt_due_date("CORPORATE-PLAN", 2027))
+
+    def test_an_annual_report_paper_opens_early_once_every_ministry_has_lodged(self):
+        from unittest import mock
+
+        # (migrations seed the real ministries too: every one but OPSC's own has to have lodged)
+        for m in Ministry.objects.exclude(departments__code="OPSC"):
+            self._plan(m, WorkflowStage.NOTED, code="ANNUAL-REPORT", ref=f"SUB-AR-{m.code}")
+        paper = self._paper("ODU-ANNUAL-REPORTS")
+        with mock.patch.dict("os.environ", {"ODU_RECEIPT_DUE_ANNUAL_REPORT": "12-31"}):
+            self.assertEqual(consolidation_gaps(paper), [])  # all lodged: no need to wait
+
+    def test_it_waits_for_the_due_date_while_a_ministry_has_not_lodged(self):
+        from unittest import mock
+
+        self._plan(self.ma, WorkflowStage.NOTED, code="ANNUAL-REPORT", ref="SUB-AR-ONE")
+        paper = self._paper("ODU-ANNUAL-REPORTS")
+        with mock.patch.dict("os.environ", {"ODU_RECEIPT_DUE_ANNUAL_REPORT": "12-31"}):
+            self.assertIn("receipt due date", consolidation_gaps(paper)[0])
 
     # ── coverage ──
     def test_noted_plans_are_ready_to_be_covered_and_unnoted_ones_hold_the_paper_up(self):
