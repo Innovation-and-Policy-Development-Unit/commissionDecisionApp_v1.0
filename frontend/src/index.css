@@ -3,7 +3,8 @@
 
 /* Navy (default) — #004276 */
 :root,
-[data-theme="navy"] {
+[data-theme="navy"],
+[data-theme="psc-blue"] {
   --p-50:  240 247 255;
   --p-100: 220 236 252;
   --p-200: 180 213 245;
@@ -26,27 +27,27 @@
   --fontFamilyBase: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
   --fontFamilyMonospace: Consolas, 'Courier New', monospace;
 
-  --fontSizeBase100: 12px;
-  --fontSizeBase200: 12px;
-  --fontSizeBase300: 14px;
-  --fontSizeBase400: 16px;
-  --fontSizeBase500: 20px;
-  --fontSizeBase600: 24px;
-  --fontSizeHero700: 28px;
-  --fontSizeHero800: 32px;
-  --fontSizeHero900: 40px;
-  --fontSizeHero1000: 68px;
+  --fontSizeBase100: calc(12px * var(--font-scale, 1));
+  --fontSizeBase200: calc(12px * var(--font-scale, 1));
+  --fontSizeBase300: calc(14px * var(--font-scale, 1));
+  --fontSizeBase400: calc(16px * var(--font-scale, 1));
+  --fontSizeBase500: calc(20px * var(--font-scale, 1));
+  --fontSizeBase600: calc(24px * var(--font-scale, 1));
+  --fontSizeHero700: calc(28px * var(--font-scale, 1));
+  --fontSizeHero800: calc(32px * var(--font-scale, 1));
+  --fontSizeHero900: calc(40px * var(--font-scale, 1));
+  --fontSizeHero1000: calc(68px * var(--font-scale, 1));
 
-  --lineHeightBase100: 16px;
-  --lineHeightBase200: 16px;
-  --lineHeightBase300: 20px;
-  --lineHeightBase400: 22px;
-  --lineHeightBase500: 28px;
-  --lineHeightBase600: 32px;
-  --lineHeightHero700: 36px;
-  --lineHeightHero800: 40px;
-  --lineHeightHero900: 52px;
-  --lineHeightHero1000: 92px;
+  --lineHeightBase100: calc(16px * var(--font-scale, 1));
+  --lineHeightBase200: calc(16px * var(--font-scale, 1));
+  --lineHeightBase300: calc(20px * var(--font-scale, 1));
+  --lineHeightBase400: calc(22px * var(--font-scale, 1));
+  --lineHeightBase500: calc(28px * var(--font-scale, 1));
+  --lineHeightBase600: calc(32px * var(--font-scale, 1));
+  --lineHeightHero700: calc(36px * var(--font-scale, 1));
+  --lineHeightHero800: calc(40px * var(--font-scale, 1));
+  --lineHeightHero900: calc(52px * var(--font-scale, 1));
+  --lineHeightHero1000: calc(92px * var(--font-scale, 1));
 
   --fontWeightRegular: 400;
   --fontWeightMedium: 500;
@@ -103,7 +104,8 @@
 }
 
 /* Emerald — #10b981 */
-[data-theme="green"] {
+[data-theme="green"],
+[data-theme="emerald"] {
   --p-50:  236 253 245;
   --p-100: 209 250 229;
   --p-200: 167 243 208;
@@ -118,7 +120,8 @@
 }
 
 /* Orange — WCAG AA: p-500/600 for fills; --p-fg* for text on surfaces */
-[data-theme="orange"] {
+[data-theme="orange"],
+[data-theme="amber"] {
   --p-50:  255 247 237;
   --p-100: 255 237 213;
   --p-200: 254 215 170;
@@ -136,7 +139,8 @@
 }
 
 /* Rose — #f43f5e */
-[data-theme="red"] {
+[data-theme="red"],
+[data-theme="rose"] {
   --p-50:  255 241 242;
   --p-100: 255 228 230;
   --p-200: 254 205 211;
@@ -151,7 +155,8 @@
 }
 
 /* Corporate Blue — Professional Corporate Blue Elegance (#003366 / #006699 / #0099CC / #B3C7E6) */
-[data-theme="corporate-blue"] {
+[data-theme="corporate-blue"],
+[data-theme="ocean"] {
   --p-50:  232 238 248;
   --p-100: 179 199 230;  /* #B3C7E6 */
   --p-200: 119 184 221;
@@ -163,6 +168,57 @@
   --p-800:   0  38  77;
   --p-900:   0  28  56;
   --p-hex: #006699;
+}
+
+/* Violet — #7c3aed */
+[data-theme="violet"] {
+  --p-50:  245 243 255;
+  --p-100: 237 233 254;
+  --p-200: 221 214 254;
+  --p-300: 196 181 253;
+  --p-400: 167 139 250;
+  --p-500: 124  58 237;
+  --p-600: 109  40 217;
+  --p-700:  91  33 182;
+  --p-800:  76  29 149;
+  --p-900:  46  16 101;
+  --p-hex: #7c3aed;
+  --p-fg: 91 33 182;
+  --p-fg-on-dark: 196 181 253;
+}
+
+/* Teal — #0f766e */
+[data-theme="teal"] {
+  --p-50:  240 253 250;
+  --p-100: 204 251 241;
+  --p-200: 153 246 228;
+  --p-300:  94 234 212;
+  --p-400:  20 154 140;
+  --p-500:  15 118 110;
+  --p-600:  17  94  89;
+  --p-700:  19  78  74;
+  --p-800:  17  63  60;
+  --p-900:   4  47  46;
+  --p-hex: #0f766e;
+  --p-fg: 19 78 74;
+  --p-fg-on-dark: 94 234 212;
+}
+
+/* Graphite — #334155 (neutral, understated) */
+[data-theme="graphite"] {
+  --p-50:  248 250 252;
+  --p-100: 241 245 249;
+  --p-200: 226 232 240;
+  --p-300: 203 213 225;
+  --p-400: 100 116 139;
+  --p-500:  51  65  85;
+  --p-600:  30  41  59;
+  --p-700:  22  31  46;
+  --p-800:  15  23  42;
+  --p-900:   8  12  24;
+  --p-hex: #334155;
+  --p-fg: 30 41 59;
+  --p-fg-on-dark: 203 213 225;
 }
 
 /* Dynamic primary using current preset */
@@ -358,16 +414,21 @@
 
   /* Orange preset on light: link text uses --p-fg */
   html:not(.dark) [data-theme="orange"] .text-primary-500,
-  html:not(.dark) [data-theme="orange"] .text-primary-600 {
+  html:not(.dark) [data-theme="orange"] .text-primary-600,
+  html:not(.dark) [data-theme="amber"] .text-primary-500,
+  html:not(.dark) [data-theme="amber"] .text-primary-600 {
     color: rgb(var(--p-fg, 124 45 18)) !important;
   }
 
-  html:not(.dark) [data-theme="orange"] .badge-primary {
+  html:not(.dark) [data-theme="orange"] .badge-primary,
+  html:not(.dark) [data-theme="amber"] .badge-primary {
     color: rgb(var(--p-fg, 124 45 18)) !important;
   }
 
   .dark [data-theme="orange"] .text-primary-300,
-  .dark [data-theme="orange"] .text-primary-400 {
+  .dark [data-theme="orange"] .text-primary-400,
+  .dark [data-theme="amber"] .text-primary-300,
+  .dark [data-theme="amber"] .text-primary-400 {
     color: rgb(var(--p-fg-on-dark, 253 186 116)) !important;
   }
 
@@ -999,3 +1060,27 @@ html:not(.dark) .placeholder-slate-400::placeholder { color: #64748b; }
   }
   .animate-spin { animation: spin 2.5s linear infinite !important; }
 }
+
+/* ─── Appearance panel: font, font size, density, corners ─────────────────────
+   Set as data-* attributes on <html> by ThemeContext. Text sizes and rem spacing both follow
+   --font-scale, so a larger setting grows text and its room together. */
+html[data-font="humanist"] { --fontFamilyBase: Candara, Calibri, 'Trebuchet MS', 'Segoe UI', sans-serif; }
+html[data-font="serif"]    { --fontFamilyBase: Georgia, Cambria, 'Times New Roman', serif; }
+html[data-font="readable"] { --fontFamilyBase: Verdana, Tahoma, 'Segoe UI', sans-serif; }
+html[data-font="mono"]     { --fontFamilyBase: 'Cascadia Mono', Consolas, 'Courier New', monospace; }
+html[data-font-size="small"]  { --font-scale: 0.9; }
+html[data-font-size="large"]  { --font-scale: 1.15; }
+html[data-font-size="xlarge"] { --font-scale: 1.3; }
+html[data-corners="sharp"] { --radius-scale: 0; }
+html[data-corners="round"] { --radius-scale: 1.7; }
+
+/* Compact density: tighter tables, cards, form controls and alerts */
+html[data-density="compact"] .table thead th,
+html[data-density="compact"] .table tbody td { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+html[data-density="compact"] .card-compact { padding: 0.75rem; }
+html[data-density="compact"] .alert { padding: 0.625rem; }
+html[data-density="compact"] .input,
+html[data-density="compact"] select.input,
+html[data-density="compact"] textarea.input { padding-top: 0.3rem; padding-bottom: 0.3rem; }
+html[data-density="compact"] .btn { padding-top: 0.3rem; padding-bottom: 0.3rem; }
+html[data-density="compact"] .btn-sm { padding-top: 0.15rem; padding-bottom: 0.15rem; }

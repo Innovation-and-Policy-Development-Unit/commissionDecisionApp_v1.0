@@ -1,20 +1,33 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import api from '../api/client'
+import { FACTORY, LEGACY_PRESET } from './appearancePresets'
 const ThemeContext = createContext(null)
 
-// Two modes only: light and dark.
-function readTheme() {
-  const saved = localStorage.getItem('liner-theme')
-  if (saved === 'dark') return 'dark'
-  // Migrate from legacy keys (dim → dark, boolean → dark)
-  if (saved === 'dim') return 'dark'
-  const legacy = localStorage.getItem('liner-dark')
-  if (legacy === 'true') return 'dark'
-  return 'light'
+const APPEARANCE_KEY = 'scdms-appearance'
+
+// What was last known from the server, kept so the page paints in the right look before it answers.
+function readStored() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || 'null')
+    if (saved && typeof saved === 'object') return { org: saved.org || {}, user: saved.user || {} }
+  } catch { /* private mode or bad JSON */ }
+  // Before the Appearance panel existed: a light/dark choice and a colour preset in the browser.
+  const legacyMode = localStorage.getItem('liner-theme') === 'dark' || localStorage.getItem('liner-theme') === 'dim'
+    || localStorage.getItem('liner-dark') === 'true' ? 'dark' : null
+  const legacyPreset = LEGACY_PRESET[localStorage.getItem('liner-color-preset')]
+  return { org: {}, user: { ...(legacyMode ? { mode: legacyMode } : {}), ...(legacyPreset ? { preset: legacyPreset } : {}) } }
 }
 
+const systemDark = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
+
 export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState(readTheme)
+  const [stored, setStored] = useState(readStored)
+  const [canSetOrg, setCanSetOrg] = useState(false)
+  const [osDark, setOsDark] = useState(systemDark)
+  // Organisation default, then the user's own choices on top.
+  const appearance = useMemo(() => ({ ...FACTORY, ...stored.org, ...stored.user }), [stored])
+  const theme = appearance.mode === 'system' ? (osDark ? 'dark' : 'light') : appearance.mode
+  const colorPreset = LEGACY_PRESET[appearance.preset] || appearance.preset
 
   const [isRTL, setIsRTL] = useState(() => {
     const saved = localStorage.getItem('liner-rtl')
@@ -29,10 +42,6 @@ export function ThemeProvider({ children }) {
   const [isHorizontal, setIsHorizontal] = useState(() => {
     const saved = localStorage.getItem('liner-horizontal')
     return saved ? JSON.parse(saved) : false
-  })
-
-  const [colorPreset, setColorPreset] = useState(() => {
-    return localStorage.getItem('liner-color-preset') || 'navy'
   })
 
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false)
@@ -52,6 +61,14 @@ export function ThemeProvider({ children }) {
     fetchFeedbackStatus()
   }, [])
 
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!mq) return undefined
+    const on = (e) => setOsDark(e.matches)
+    mq.addEventListener?.('change', on)
+    return () => mq.removeEventListener?.('change', on)
+  }, [])
+
   // Apply theme — dark adds .dark class, light removes it.
   useEffect(() => {
     const html = document.documentElement
@@ -64,6 +81,16 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('liner-theme', theme)
   }, [theme])
 
+  // Density, corners, font and font size are attributes on <html>; index.css does the rest.
+  useEffect(() => {
+    const html = document.documentElement
+    html.setAttribute('data-density', appearance.density)
+    html.setAttribute('data-corners', appearance.corners)
+    html.setAttribute('data-font', appearance.font)
+    html.setAttribute('data-font-size', appearance.fontSize)
+    try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(stored)) } catch { /* private mode */ }
+  }, [appearance, stored])
+
   // Apply RTL
   useEffect(() => {
     document.documentElement.dir = isRTL ? 'rtl' : 'ltr'
@@ -73,7 +100,6 @@ export function ThemeProvider({ children }) {
   // Apply color preset
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', colorPreset)
-    localStorage.setItem('liner-color-preset', colorPreset)
   }, [colorPreset])
 
   // Persist sidebar state
@@ -86,10 +112,48 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('liner-horizontal', JSON.stringify(isHorizontal))
   }, [isHorizontal])
 
-  const setTheme = (value) => setThemeState(value === 'dim' ? 'dark' : value)
-  const cycleTheme = () => setThemeState(prev => prev === 'light' ? 'dark' : 'light')
+  // Appearance choices are saved to the account (and, for administrators, the organisation default).
+  const applyServer = useCallback((data) => {
+    setStored({ org: data.org || {}, user: data.user || {} })
+    setCanSetOrg(!!data.can_set_org)
+  }, [])
+
+  // Called once someone is signed in: fetch their choices and the organisation default.
+  const loadAppearance = useCallback(async () => {
+    try {
+      const { data } = await api.get('/appearance/')
+      applyServer(data)
+    } catch { /* keep what the browser remembers */ }
+  }, [applyServer])
+
+  const saveUser = useCallback(async (next) => {
+    setStored((prev) => ({ ...prev, user: next })) // instant; the server answer corrects it
+    try {
+      const { data } = await api.put('/appearance/me/', next)
+      applyServer(data)
+    } catch { /* stays on this device until the next save succeeds */ }
+  }, [applyServer])
+
+  const saveOrg = useCallback(async (next) => {
+    setStored((prev) => ({ ...prev, org: next }))
+    try {
+      const { data } = await api.put('/appearance/org/', next)
+      applyServer(data)
+    } catch { loadAppearance() }
+  }, [applyServer, loadAppearance])
+
+  // scope 'me' edits the user's own choices; 'org' edits the organisation default.
+  const setAppearance = useCallback((patch, scope = 'me') => {
+    if (scope === 'org') saveOrg({ ...stored.org, ...patch })
+    else saveUser({ ...stored.user, ...patch })
+  }, [stored, saveUser, saveOrg])
+  const resetAppearance = useCallback(() => saveUser({}), [saveUser])
+
+  const setTheme = (value) => setAppearance({ mode: value === 'dim' ? 'dark' : value })
+  const cycleTheme = () => setAppearance({ mode: theme === 'light' ? 'dark' : 'light' })
   const isDark = theme === 'dark'
-  const toggleDark = () => setThemeState(prev => prev === 'dark' ? 'light' : 'dark')
+  const toggleDark = () => setAppearance({ mode: theme === 'dark' ? 'light' : 'dark' })
+  const setColorPreset = (id) => setAppearance({ preset: LEGACY_PRESET[id] || id })
 
   const toggleRTL = () => setIsRTL(prev => !prev)
   const toggleSidebar = () => setSidebarCollapsed(prev => !prev)
@@ -108,6 +172,13 @@ export function ThemeProvider({ children }) {
       sidebarCollapsed,
       isHorizontal,
       colorPreset,
+      appearance,
+      userChoices: stored.user,
+      orgDefault: { ...FACTORY, ...stored.org },
+      canSetOrg,
+      setAppearance,
+      resetAppearance,
+      loadAppearance,
       settingsPanelOpen,
       feedbackPanelOpen,
       setTheme,

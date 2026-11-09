@@ -39,6 +39,16 @@ export default {
         '5xl': ['var(--fontSizeHero900)', { lineHeight: 'var(--lineHeightHero900)' }],
         '6xl': ['var(--fontSizeHero1000)', { lineHeight: 'var(--lineHeightHero1000)' }],
       },
+      // Corner roundness follows the Appearance "Corners" setting (--radius-scale: 0 sharp, 1 default).
+      borderRadius: {
+        sm: 'calc(0.125rem * var(--radius-scale, 1))',
+        DEFAULT: 'calc(0.25rem * var(--radius-scale, 1))',
+        md: 'calc(0.375rem * var(--radius-scale, 1))',
+        lg: 'calc(0.5rem * var(--radius-scale, 1))',
+        xl: 'calc(0.75rem * var(--radius-scale, 1))',
+        '2xl': 'calc(1rem * var(--radius-scale, 1))',
+        '3xl': 'calc(1.5rem * var(--radius-scale, 1))',
+      },
       fontWeight: {
         normal: 'var(--fontWeightRegular)',
         medium: 'var(--fontWeightMedium)',

@@ -2,18 +2,21 @@ import { useMemo } from 'react'
 import { useTheme } from '../context/ThemeContext'
 
 const presetColors = {
-  navy:   { hex: '#004276', light: '#468cc8' },
-  blue:   { hex: '#3b82f6', light: '#93bbfd' },
-  green:  { hex: '#10b981', light: '#6ee7b7' },
-  orange: { hex: '#f97316', light: '#fdba74' },
-  red:    { hex: '#f43f5e', light: '#fda4af' },
+  'psc-blue': { hex: '#004276', light: '#468cc8' },
+  ocean:      { hex: '#006699', light: '#3ca9d5' },
+  violet:     { hex: '#7c3aed', light: '#c4b5fd' },
+  emerald:    { hex: '#10b981', light: '#6ee7b7' },
+  teal:       { hex: '#0f766e', light: '#5eead4' },
+  amber:      { hex: '#f97316', light: '#fdba74' },
+  rose:       { hex: '#f43f5e', light: '#fda4af' },
+  graphite:   { hex: '#334155', light: '#cbd5e1' },
 }
 
 export default function useChartColors() {
   const { colorPreset, isDark } = useTheme()
 
   return useMemo(() => {
-    const preset = presetColors[colorPreset] || presetColors.navy
+    const preset = presetColors[colorPreset] || presetColors['psc-blue']
     const primary = isDark ? preset.light : preset.hex
 
     return {
