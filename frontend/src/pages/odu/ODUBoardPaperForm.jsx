@@ -501,7 +501,7 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
         )}
       </div>
 
-      {!readOnly && status === 'draft' && (
+      {!readOnly && status === 'draft' && (paper?.analysis_documents || []).length > 0 && (
         <div className="mb-5 rounded-lg border border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30 p-3 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-violet-900 dark:text-violet-200">
@@ -660,7 +660,8 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
           )}
         </div>
 
-        {/* The three analyses: attached in full, summarised in the paper */}
+        {/* The three analyses: attached in full, summarised in the paper (restructure only) */}
+        {(paper?.analysis_documents || []).length > 0 && (
         <div>
           <SectionHeader title="Analyses — DSSPAC, GRT and Finance" />
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
@@ -682,6 +683,7 @@ export default function ODUBoardPaperForm({ submissionId, submission, onDirtyCha
             ))}
           </div>
         </div>
+        )}
 
         {/* Costing */}
         <div>

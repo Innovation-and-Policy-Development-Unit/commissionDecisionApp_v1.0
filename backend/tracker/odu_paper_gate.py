@@ -16,11 +16,20 @@ ANALYSES = (
 )
 
 
+def paper_needs_analyses(submission) -> bool:
+    """Only a restructure carries the DSSPAC / GRT / Finance analyses; an anomaly does not."""
+    from .odu_checklist_rules import ODU_RESTRUCTURE_CHECKLIST_FORM_CODES
+
+    return (submission.form_type_code or "") in ODU_RESTRUCTURE_CHECKLIST_FORM_CODES
+
+
 def paper_gaps(paper) -> list[str]:
     """Plain-English list of what is still missing, empty when the paper may go on."""
     from .models import SubmissionDocument
 
     submission = paper.submission
+    if not paper_needs_analyses(submission):
+        return []
     attached = set(
         SubmissionDocument.objects.filter(
             submission=submission, archived_at__isnull=True,

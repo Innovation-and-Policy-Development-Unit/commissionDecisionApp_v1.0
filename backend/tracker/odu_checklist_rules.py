@@ -18,8 +18,16 @@ ODU_RESTRUCTURE_CHECKLIST_FORM_CODES = frozenset({"ORG-3.1", "PSC 2-1"})
 # submission type. Kept separate from ODU_RESTRUCTURE_CHECKLIST_FORM_CODES
 # above since only PSC 2-1/ORG-3.1 have the 20-item checklist / board paper.
 ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES = ODU_RESTRUCTURE_CHECKLIST_FORM_CODES | frozenset({
-    "PSC 2-2", "BUSINESS-PLAN", "CORPORATE-PLAN", "ANNUAL-REPORT",
+    "PSC 2-2", "BUSINESS-PLAN", "CORPORATE-PLAN", "ANNUAL-REPORT", "ANOMALIES",
 })
+
+# A salary / establishment anomaly the ministry asks the Commission to correct. Like a
+# restructure, the Commission reads ODU's own paper, not the ministry's; unlike a
+# restructure there is no 20-item checklist and no DSSPAC / GRT / Finance analyses.
+ODU_ANOMALY_FORM_CODE = "ANOMALIES"
+
+# Form types for which ODU writes the Commission paper (ODURestructureBoardPaper).
+ODU_BOARD_PAPER_FORM_CODES = ODU_RESTRUCTURE_CHECKLIST_FORM_CODES | frozenset({ODU_ANOMALY_FORM_CODE})
 
 # ODU manager checklist review (workflow diagram: Manager ODU checklist review)
 ODU_CHECKLIST_REVIEW_STAGES = frozenset({WorkflowStage.MANAGER_CHECKLIST_REVIEW})
@@ -245,9 +253,13 @@ def submission_in_board_paper_edit_phase(submission: Submission) -> bool:
     )
 
 
+def submission_uses_odu_board_paper(submission: Submission) -> bool:
+    return (submission.form_type_code or "") in ODU_BOARD_PAPER_FORM_CODES
+
+
 def submission_eligible_for_board_paper(submission: Submission) -> bool:
     return (
-        submission_uses_odu_restructure_checklist(submission)
+        submission_uses_odu_board_paper(submission)
         and submission_in_board_paper_edit_phase(submission)
     )
 
@@ -263,7 +275,7 @@ def submission_in_board_paper_view_phase(submission: Submission) -> bool:
 
 def submission_viewable_board_paper(submission: Submission) -> bool:
     """Board paper can be shown (editable while ODU is working it, read-only after)."""
-    return submission_uses_odu_restructure_checklist(submission) and (
+    return submission_uses_odu_board_paper(submission) and (
         submission_in_board_paper_edit_phase(submission)
         or submission_in_board_paper_view_phase(submission)
     )

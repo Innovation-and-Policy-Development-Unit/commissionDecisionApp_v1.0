@@ -3301,9 +3301,11 @@ class ODUBoardPaperSerializer(serializers.ModelSerializer):
     def get_analysis_documents(self, obj):
         """The three attached analyses: which slot, and the file in it (if any)."""
         from .models import RequiredDocument, SubmissionDocument
-        from .odu_paper_gate import ANALYSES
+        from .odu_paper_gate import ANALYSES, paper_needs_analyses
 
         out = []
+        if not paper_needs_analyses(obj.submission):
+            return out
         for doc_name, field, label in ANALYSES:
             slot = RequiredDocument.objects.filter(name=doc_name, opsc_supplied=True, is_active=True).first()
             file = (
