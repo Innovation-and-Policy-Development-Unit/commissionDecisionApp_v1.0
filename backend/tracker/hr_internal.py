@@ -22,10 +22,16 @@ HR_UNIT_AUTHOR_ROLES = frozenset({
     Role.HR_UNIT_MANAGER,
 })
 
-# ODU reports on overseas travel to the Commission (total trips, total cost, ...).
-# It is ODU's own paper, so it is created inside OPSC and climbs the same ladder; the
-# travel report itself is attached as the paper's required document.
-ODU_INTERNAL_FORM_CODES = frozenset({"ODU-TRAVEL-REPORT"})
+# ODU's own papers to the Commission, created inside OPSC and walked up the same ladder, with
+# the report itself attached as the paper's required document:
+#   ODU-TRAVEL-REPORT        overseas travel (total trips, total cost, ...)
+#   ODU-OPA-FEEDBACK-REPORT  Organisation Performance Assessment Feedback Report: one paper
+#                            covering all ministries, for the Commission to note. ODU's
+#                            general submission template (subject, issue, discussion,
+#                            recommendation) plus the report.
+ODU_TRAVEL_REPORT_CODE = "ODU-TRAVEL-REPORT"
+ODU_OPA_FEEDBACK_REPORT_CODE = "ODU-OPA-FEEDBACK-REPORT"
+ODU_INTERNAL_FORM_CODES = frozenset({ODU_TRAVEL_REPORT_CODE, ODU_OPA_FEEDBACK_REPORT_CODE})
 
 ODU_UNIT_AUTHOR_ROLES = frozenset({
     Role.ODU_SENIOR,

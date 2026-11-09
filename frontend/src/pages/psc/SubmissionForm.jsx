@@ -50,7 +50,7 @@ const HR_INTERNAL_FORM_CODES = ['SEO-PA-REPORT']
  * report (total trips, total cost, ...); the report itself is attached to it.
  * ODU's other submission types are lodged by ministries. */
 const ODU_AUTHOR_ROLES = ['odu_senior', 'odu_principal', 'odu_manager']
-const ODU_INTERNAL_FORM_CODES = ['ODU-TRAVEL-REPORT']
+const ODU_INTERNAL_FORM_CODES = ['ODU-TRAVEL-REPORT', 'ODU-OPA-FEEDBACK-REPORT']
 
 /** Roles allowed to log a new submission at all — kept in sync with the
  * `allowed` check below. Exported so list-page "New submission" buttons
@@ -876,7 +876,8 @@ export default function SubmissionForm({ modal = false, onClose, onSuccess, crea
   // HR Unit staff: only the SEO progress report.
   const hrAuthorFormTypesResolved = formTypes.filter(ft => HR_INTERNAL_FORM_CODES.includes(ft.code))
 
-  // ODU staff: only the overseas travel report.
+  // ODU staff: only their own papers (the overseas travel report and the Organisation
+  // Performance Assessment Feedback Report).
   const oduAuthorFormTypesResolved = formTypes.filter(ft => ODU_INTERNAL_FORM_CODES.includes(ft.code))
 
   // Compliance unit: COMP-* submission types (routed_unit === 'compliance').
