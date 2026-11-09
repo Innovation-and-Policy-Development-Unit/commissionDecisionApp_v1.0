@@ -125,6 +125,73 @@ class OduTemplateDraftTests(TestCase):
         self.assertEqual(out["ministries_of_concern"], [{"ministry": "Ministry B", "reason": "Lodged late and cash flow missing"}])
         self.assertEqual(dr._sanitize("nonsense"), {})
 
+    # ── what each plan says ──
+    DIGEST = {"headline": "Grow rural health access.", "period": "2026 to 2030",
+              "priorities": ["Rural clinics", "Staff housing"], "targets": ["20 new clinics"],
+              "budget_staffing": "VT 2.1 billion", "notable": []}
+
+    def _digest(self, plan):
+        r, _ = ReportAIReview.objects.get_or_create(submission=plan)
+        r.plan_digest = dict(self.DIGEST)
+        r.save()
+
+    def test_the_material_carries_what_each_plan_says_and_never_claims_odu_assessed_it(self):
+        paper = self._paper()
+        plan = self._plan(self.ma, self._on_time(), with_review=False)
+        self._digest(plan)
+        material, _ = dr.build_context(paper)
+        self.assertIn("Grow rural health access.", material)
+        self.assertIn("20 new clinics", material)
+        self.assertIn("VT 2.1 billion", material)
+        self.assertIn("did NOT assess", dr.SYSTEM)
+
+    def test_the_draft_lists_the_plans_received_for_the_discussion(self):
+        paper = self._paper()
+        plan = self._plan(self.ma, self._on_time(), with_review=False)
+        self._digest(plan)
+        with patch.object(dr, "ai_enabled", lambda: True), patch.object(dr, "complete_json_with_error", return_value=(GOOD, None)):
+            draft, _, err = dr.draft_template(paper)
+        self.assertIsNone(err)
+        self.assertEqual(draft["plans"][0]["ministry"], "Ministry A")
+        self.assertEqual(draft["plans"][0]["priorities"], ["Rural clinics", "Staff housing"])
+        self.assertIn("Plans received:", draft["plans_text"])
+        self.assertIn("period 2026 to 2030", draft["plans_text"])
+
+    def test_the_digest_task_stores_the_summary_and_keeps_the_review(self):
+        from ..ai import plan_digest as pd
+        from ..tasks import digest_plan_task
+
+        plan = self._plan(self.ma, self._on_time())
+        SubmissionDocument.objects.create(submission=plan, original_name="plan.pdf", extracted_text="Our plan.", uploaded_by=self.hr)
+        with patch.object(pd, "ai_enabled", lambda: True), patch.object(pd, "complete_json_with_error", return_value=(self.DIGEST, None)):
+            digest_plan_task.apply(args=[plan.id])
+        review = ReportAIReview.objects.get(submission=plan)
+        self.assertEqual(review.plan_digest["priorities"], ["Rural clinics", "Staff housing"])
+        self.assertEqual(review.state, "done")  # the first-pass review is untouched
+
+    def test_a_failed_digest_is_recorded_and_does_not_break_the_draft(self):
+        from ..ai import plan_digest as pd
+
+        paper = self._paper()
+        plan = self._plan(self.ma, self._on_time(), with_review=False)
+        with patch.object(pd, "ai_enabled", lambda: False):
+            dr.ensure_digests(paper)
+        self.assertIn("error", ReportAIReview.objects.get(submission=plan).plan_digest)
+        material, _ = dr.build_context(paper)
+        self.assertIn("Ministry A", material)
+
+    def test_acknowledging_a_plan_queues_its_summary(self):
+        manager = _user("td_manager", Role.ODU_MANAGER)
+        plan = self._plan(self.ma, self._on_time(), with_review=False)
+        plan.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+        plan.save()
+        with patch("tracker.tasks.digest_plan_task.delay") as delay:
+            with self.captureOnCommitCallbacks(execute=True):
+                res = _client(manager).post(f"/api/submissions/{plan.id}/transition/",
+                                            {"new_stage": "noted", "remarks": "Received."}, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        delay.assert_called_once_with(plan.id)
+
     # ── the task ──
     def test_the_task_stores_the_draft_beside_the_paper_and_never_in_it(self):
         from ..tasks import draft_odu_template_task

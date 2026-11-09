@@ -23,7 +23,7 @@ const FIELDS = [
 const POLL_MS = 3000
 const POLL_TIMEOUT_MS = 120000
 
-export default function OduTemplateDraftPanel({ submissionId, canDraft, onUse }) {
+export default function OduTemplateDraftPanel({ submissionId, canDraft, onUse, current = {} }) {
   const toast = useToast()
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -72,9 +72,24 @@ export default function OduTemplateDraftPanel({ submissionId, canDraft, onUse })
     onUse?.(key, text)
     toast.success('Added to the form. Open the Digitized Form tab, check it and save.')
   }
+  const filled = (k) => String(current?.[k] ?? '').trim() !== ''
+  // Fills the empty fields; anything the officer has already written is replaced only if they say so.
   const useAll = () => {
-    FIELDS.forEach(([k]) => { if (data?.draft?.[k]) onUse?.(k, data.draft[k]) })
-    toast.success('All four added to the form. Open the Digitized Form tab, check them and save.')
+    const have = FIELDS.filter(([k]) => data?.draft?.[k] && filled(k)).map(([, label]) => label)
+    const replace = have.length > 0
+      && window.confirm(`${have.join(', ')} already ha${have.length === 1 ? 's' : 've'} text. Replace it with the AI draft?\n\nOK replaces it. Cancel keeps what you wrote and fills only the empty fields.`)
+    FIELDS.forEach(([k]) => {
+      if (data?.draft?.[k] && (replace || !filled(k))) onUse?.(k, data.draft[k])
+    })
+    toast.success('Added to the form. Open the Digitized Form tab, check it and save.')
+  }
+  const addPlans = () => {
+    const text = data?.draft?.plans_text
+    if (!text) return
+    const base = String(current?.discussion ?? '').trim()
+    if (base.includes('Plans received:')) { toast.info?.('The plans list is already in the Discussion.'); return }
+    onUse?.('discussion', base ? `${base}\n\n${text}` : text)
+    toast.success('Plans list added to the Discussion. Open the Digitized Form tab, check it and save.')
   }
 
   if (!data) return null
@@ -103,7 +118,7 @@ export default function OduTemplateDraftPanel({ submissionId, canDraft, onUse })
       {data.state === 'failed' && <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">{data.error || 'The AI could not write a draft just now. Please try again.'}</p>}
       {!draft && !running && data.state !== 'failed' && (
         <p className="text-sm text-slate-500">
-          The AI writes a first draft of the Subject, Issue, Discussion and Recommendation from the ministry plans this paper covers, their first-pass reviews and the attached report. You choose what to use.
+          The AI writes a first draft of the Subject, Issue, Discussion and Recommendation from the ministry plans this paper covers (an AI summary of what each says), their lodging dates and the attached report. You choose what to use.
         </p>
       )}
 
@@ -115,7 +130,8 @@ export default function OduTemplateDraftPanel({ submissionId, canDraft, onUse })
             {!based.attachment_read && based.attachment_files ? ' (the attached file had no readable text, so it was not used)' : ''}.
           </p>
           <div>
-            <BaseButton variant="outline" size="sm" icon={<ArrowDownToLine size={14} />} onClick={useAll}>Use all four in the form</BaseButton>
+            <BaseButton variant="outline" size="sm" icon={<ArrowDownToLine size={14} />} onClick={useAll}>Fill the template</BaseButton>
+            <span className="ml-2 text-xs text-slate-500">Fills the empty fields; asks before replacing your own text.</span>
           </div>
           {FIELDS.map(([key, label]) => draft[key] && (
             <div key={key} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
@@ -127,6 +143,30 @@ export default function OduTemplateDraftPanel({ submissionId, canDraft, onUse })
               <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{draft[key]}</p>
             </div>
           ))}
+          {draft.plans?.length > 0 && (
+            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 overflow-x-auto">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Plans received</span>
+                <button type="button" onClick={addPlans}
+                  className="ml-auto text-xs text-primary-700 dark:text-primary-300 underline">Add this list to the Discussion</button>
+              </div>
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-slate-500">
+                  <th className="pr-3 pb-1">Ministry</th><th className="pr-3 pb-1">Lodged</th><th className="pr-3 pb-1">Period</th><th className="pb-1">Main priorities (AI summary)</th>
+                </tr></thead>
+                <tbody>
+                  {draft.plans.map(p => (
+                    <tr key={p.reference_number} className="align-top border-t border-slate-100 dark:border-slate-800">
+                      <td className="pr-3 py-1 font-medium">{p.ministry}</td>
+                      <td className="pr-3 py-1">{p.received}{p.late ? ` (late ${p.days_late}d)` : ''}</td>
+                      <td className="pr-3 py-1">{p.period || '—'}</td>
+                      <td className="py-1">{p.summarised ? (p.priorities.join('; ') || '—') : 'Not summarised'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {draft.ministries_of_concern?.length > 0 && (
             <div className="text-sm text-slate-700 dark:text-slate-200">
               <span className="font-semibold">Ministries the AI suggests flagging</span>

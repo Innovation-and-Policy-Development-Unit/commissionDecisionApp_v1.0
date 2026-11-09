@@ -1,13 +1,14 @@
 """ODU's consolidated papers: one paper to the Commission per type of ministry submission.
 
-Ministries lodge their Business Plan, Corporate Plan or Annual Report with ODU. ODU reviews each
-one and the Manager NOTES it, which ends that ministry submission at ODU. ODU then writes ONE
+Ministries lodge their Business Plan, Corporate Plan or Annual Report with ODU. For Business and
+Corporate Plans ODU only acknowledges receipt; an Annual Report is reviewed first. The Manager NOTES it, which ends that ministry submission at ODU. ODU then writes ONE
 paper (``ODU-BUSINESS-PLANS``, ``ODU-CORPORATE-PLANS`` or ``ODU-ANNUAL-REPORTS``) covering all
 the ones it has noted. The Commission notes that paper and may decide on particular ministries.
 
 Rules, as ODU set them out:
 
-* ODU waits until every ministry has submitted before it makes the paper.
+* ODU waits until the receipt due date for that type of plan has passed (Business and Corporate
+  Plans each have their own), and until every lodged plan has had its receipt acknowledged.
 * Every lodged plan is covered. A paper cannot go up while a lodged plan of its type is still
   with ODU or with the ministry for clarification.
 * No supplementary paper. A plan that arrives after the paper has gone up waits for the next
@@ -19,7 +20,11 @@ earlier paper covers is attached to it.
 
 from __future__ import annotations
 
+import os
+from datetime import date
+
 from django.db.models import Q
+from django.utils import timezone
 
 from .models import ReportAIReview, Submission, WorkflowStage
 from .odu_checklist_rules import ODU_CONSOLIDATED_COVERS
@@ -41,6 +46,34 @@ WAITING_STAGES = frozenset({
     WorkflowStage.UNDER_ASSESSMENT,
     WorkflowStage.PENDING_SECRETARY_APPROVAL,
 })
+
+
+# Receipt due dates, one per type of plan: ODU may send its paper to the Commission once the due
+# date has passed. "MM-DD" each year; override with the env vars below. A type with no date set has
+# no date gate (the Corporate Plan's date has not been fixed yet).
+_DEFAULT_RECEIPT_DUE = {"BUSINESS-PLAN": "02-28", "CORPORATE-PLAN": ""}
+
+
+def receipt_due_date(plan_type: str, year: int) -> date | None:
+    raw = os.environ.get(f"ODU_RECEIPT_DUE_{plan_type.replace('-', '_')}", _DEFAULT_RECEIPT_DUE.get(plan_type, ""))
+    try:
+        month, day = (int(x) for x in raw.strip().split("-"))
+        return date(year, month, day)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _due_gap(paper, plural: str) -> tuple[date | None, str | None]:
+    """(due date, reason the paper cannot go up yet because the due date has not passed)."""
+    covers = covered_form_type(paper)
+    year = timezone.localtime(paper.received_at or paper.created_at).year
+    due = receipt_due_date(covers, year)
+    if due and timezone.localdate() <= due:
+        return due, (
+            f"the receipt due date for {plural.lower()} is {due.day} {due.strftime('%B %Y')}: "
+            "this paper can go up after that date."
+        )
+    return due, None
 
 
 def covered_form_type(paper) -> str | None:
@@ -78,13 +111,16 @@ def consolidation_gaps(paper) -> list[str]:
         return []
     singular, plural = LABELS[covers]
     gaps: list[str] = []
+    _, due_gap = _due_gap(paper, plural)
+    if due_gap:
+        gaps.append(due_gap)
     still = list(waiting(paper).order_by("ministry__name")[:6])
     if still:
         names = ", ".join(f"{s.ministry.name if s.ministry_id else s.reference_number}" for s in still)
         more = waiting(paper).count() - len(still)
         gaps.append(
             f"{waiting(paper).count()} lodged {plural.lower()} ha{'s' if waiting(paper).count() == 1 else 've'} not "
-            f"been noted by ODU yet ({names}{f' and {more} more' if more > 0 else ''}): "
+            f"had receipt acknowledged by ODU yet ({names}{f' and {more} more' if more > 0 else ''}): "
             "every lodged one has to be covered."
         )
     if not still and not covered(paper).exists() and not ready_to_cover(paper).exists():
@@ -166,6 +202,8 @@ def coverage_payload(paper) -> dict:
         "plan_type": covers,
         "plan_label": singular,
         "plan_label_plural": plural,
+        "receipt_due_date": (_due_gap(paper, plural)[0].isoformat() if _due_gap(paper, plural)[0] else None),
+        "receipt_due_passed": _due_gap(paper, plural)[1] is None,
         "rows": rows_covered + rows_ready + rows_waiting,
         "counts": {"covered": len(rows_covered), "will_cover": len(rows_ready), "waiting": len(rows_waiting)},
         "not_lodged": not_lodged,

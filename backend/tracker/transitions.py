@@ -5,6 +5,7 @@ from django.core.exceptions import PermissionDenied
 from .models import Role, WorkflowStage, MeetingType
 from .opsc_access import OPSC_UNIT_MANAGER_ROLES
 from .odu_checklist_rules import (
+    ODU_ACKNOWLEDGE_ONLY_FORM_CODES,
     ODU_NOTED_AT_ODU_FORM_CODES,
     ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES,
 )
@@ -850,6 +851,11 @@ def assert_transition_allowed(
         ):
             if target_stage == WorkflowStage.NOTED:
                 return
+            if form_type_code in ODU_ACKNOWLEDGE_ONLY_FORM_CODES:
+                raise PermissionDenied(
+                    "ODU only acknowledges receipt of Business and Corporate Plans: acknowledge "
+                    "it here. There is no review, clarification request or Secretary step."
+                )
             if target_stage == WorkflowStage.PENDING_SECRETARY_APPROVAL:
                 raise PermissionDenied(
                     "Ministry plans and reports end at ODU: note it here and cover it in ODU's "
@@ -1012,7 +1018,13 @@ def iter_allowed_targets(
     if role == Role.PSC_ADMIN:
         # Admins normally only see the valid next stages; the UI offers an
         # explicit "override" to jump to any stage when genuinely needed.
-        return list(_STAGE_GRAPH.get(current_stage, []))
+        targets = list(_STAGE_GRAPH.get(current_stage, []))
+        if (
+            current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            and form_type_code in ODU_ACKNOWLEDGE_ONLY_FORM_CODES
+        ):
+            return [WorkflowStage.NOTED]
+        return targets
     if role in {Role.MINISTRY_HR, Role.DEPT_ADMIN}:
         return [t.value for (s, t) in _MINISTRY_HR_ALLOWED if s == current_stage]
     if role == Role.HEAD_OF_AGENCY:
@@ -1048,6 +1060,8 @@ def iter_allowed_targets(
             ):
                 targets = [t for t in targets if t != WorkflowStage.PENDING_SECRETARY_APPROVAL]
                 targets.append(WorkflowStage.NOTED)
+                if form_type_code in ODU_ACKNOWLEDGE_ONLY_FORM_CODES:
+                    targets = [WorkflowStage.NOTED]
             return targets
         return []
     # Unit principals/senior officers can't self-transition at the checklist

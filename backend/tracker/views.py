@@ -186,7 +186,7 @@ from .api_cache import (
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
-from .odu_checklist_rules import ODU_NOTED_AT_ODU_FORM_CODES
+from .odu_checklist_rules import ODU_ACKNOWLEDGE_ONLY_FORM_CODES, ODU_NOTED_AT_ODU_FORM_CODES
 from .throttles import AiAnalysisTriggerThrottle, StaffChatThrottle, OTPVerifyThrottle, PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle
 from .auth import LenientJWTAuthentication
 from .models import (
@@ -2299,6 +2299,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             and prev in (WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.UNDER_ASSESSMENT)
             and submission.assigned_to_id
             and not submission.ready_for_manager_at
+            # ODU only acknowledges receipt of plans: no principal review to wait for.
+            and submission.form_type_code not in ODU_ACKNOWLEDGE_ONLY_FORM_CODES
         ):
             return Response(
                 {
@@ -2544,6 +2546,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             prev == WorkflowStage.MANAGER_CHECKLIST_REVIEW
             and target not in _allowed_targets_with_gaps
             and not submission.secretary_only
+            and submission.form_type_code not in ODU_ACKNOWLEDGE_ONLY_FORM_CODES
         ):
             unchecked_required = submission.checklist_items.exclude(
                 document__mandatory_for_stage__in=["", None]
@@ -2823,6 +2826,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
             sid = submission.id
             transaction.on_commit(lambda: queue_report_review(sid))
+
+        if target == WorkflowStage.NOTED and submission.form_type_code in ODU_ACKNOWLEDGE_ONLY_FORM_CODES:
+            from .tasks import queue_plan_digest
+
+            sid = submission.id
+            transaction.on_commit(lambda: queue_plan_digest(sid))
 
         if target == WorkflowStage.APPROVED and submission.requires_travel_letter:
             sid = submission.id
