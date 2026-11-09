@@ -46,6 +46,10 @@ ODU_UNIT_AUTHOR_ROLES = frozenset({
     Role.ODU_MANAGER,
 })
 
+# ODU papers on the general template (Subject, Issue, Discussion, Recommendation) that the AI can
+# draft the text of: the three consolidated papers and the Performance Assessment Feedback Report.
+ODU_TEMPLATE_DRAFT_FORM_CODES = ODU_CONSOLIDATED_FORM_CODES | frozenset({ODU_OPA_FEEDBACK_REPORT_CODE})
+
 # Internal papers whose required documents are listed and enforced before the author
 # sends the paper up the ladder (ministry papers have their own submit gate).
 INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS = ODU_INTERNAL_FORM_CODES
