@@ -6,7 +6,6 @@ import { useToast } from '../../context/ToastContext'
 
 const SECRETARY_ROLES = new Set(['psc_secretary', 'psc_admin'])
 const MINISTRY_ROLES = new Set(['ministry_hr', 'dept_admin', 'head_of_agency'])
-const SECRETARIAT_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'psc_admin'])
 
 const STATUS_STYLE = {
   draft:            'bg-slate-100 text-slate-700',
@@ -32,6 +31,13 @@ export default function DecisionLetterPanel({ task }) {
   const [showForm, setShowForm] = useState(false)
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  // Who the letter is for. Required when the paper is an OPSC-internal one that covers several
+  // ministries (e.g. ODU's performance report); blank means the paper's own ministry.
+  const [ministries, setMinistries] = useState([])
+  const [departments, setDepartments] = useState([])
+  const [ministryId, setMinistryId] = useState('')
+  const [departmentId, setDepartmentId] = useState('')
+  const needsTarget = Boolean(task.submission_is_internal)
   const signFileRef = useRef(null)
   const [signTargetId, setSignTargetId] = useState(null)
 
@@ -45,17 +51,32 @@ export default function DecisionLetterPanel({ task }) {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    if (!showForm || ministries.length) return
+    api.get('/ministries/').then(res => setMinistries(res.data?.results || res.data || [])).catch(() => {})
+  }, [showForm, ministries.length])
+
+  useEffect(() => {
+    setDepartmentId('')
+    if (!ministryId) { setDepartments([]); return }
+    api.get('/departments/', { params: { ministry: ministryId } })
+      .then(res => setDepartments(res.data?.results || res.data || [])).catch(() => setDepartments([]))
+  }, [ministryId])
+
   const isSecretary = SECRETARY_ROLES.has(role)
   const isMinistry = MINISTRY_ROLES.has(role)
-  const isSecretariat = SECRETARIAT_ROLES.has(role)
 
   const prepare = async (e) => {
     e.preventDefault()
     if (!subject.trim()) { toast.error('Subject is required.'); return }
+    if (needsTarget && !ministryId) { toast.error('Choose the ministry this letter is addressed to.'); return }
     setBusy(true)
     try {
-      await api.post('/decision-letters/', { commission_task: task.id, subject: subject.trim(), body_text: body })
-      setSubject(''); setBody(''); setShowForm(false)
+      await api.post('/decision-letters/', {
+        commission_task: task.id, subject: subject.trim(), body_text: body,
+        ministry: ministryId || null, department: departmentId || null,
+      })
+      setSubject(''); setBody(''); setMinistryId(''); setDepartmentId(''); setShowForm(false)
       toast.success('Letter prepared.')
       await load()
     } catch (ex) { toast.error(ex.response?.data?.detail || 'Could not prepare letter.') }
@@ -112,6 +133,22 @@ export default function DecisionLetterPanel({ task }) {
 
       {showForm && (
         <form onSubmit={prepare} className="space-y-2 mb-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="block text-xs text-slate-500">
+              Addressed to (ministry){needsTarget ? ' *' : ''}
+              <select className="input text-sm mt-1" value={ministryId} onChange={e => setMinistryId(e.target.value)}>
+                <option value="">{needsTarget ? 'Choose a ministry…' : "The paper's own ministry"}</option>
+                {ministries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </label>
+            <label className="block text-xs text-slate-500">
+              Department (optional)
+              <select className="input text-sm mt-1" value={departmentId} onChange={e => setDepartmentId(e.target.value)} disabled={!ministryId || departments.length === 0}>
+                <option value="">Whole ministry</option>
+                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </label>
+          </div>
           <input className="input text-sm" placeholder="Letter subject (e.g. Direct Appointment — J. Doe)" value={subject} onChange={e => setSubject(e.target.value)} />
           <textarea className="input text-sm min-h-[80px]" placeholder="Letter body (optional draft)…" value={body} onChange={e => setBody(e.target.value)} />
           <div className="flex gap-2">
@@ -132,6 +169,11 @@ export default function DecisionLetterPanel({ task }) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{l.subject}</p>
+                  {l.ministry_name && (
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      For: {l.department_name ? `${l.department_name}, ` : ''}{l.ministry_name}
+                    </p>
+                  )}
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     {l.prepared_by_name ? `Prepared by ${l.prepared_by_name}` : ''}
                     {l.signed_by_name ? ` · Signed by ${l.signed_by_name}` : ''}
@@ -161,7 +203,7 @@ export default function DecisionLetterPanel({ task }) {
                     <BellRing size={12} /> Notify HR for Pickup
                   </button>
                 )}
-                {(isMinistry || isSecretariat) && l.status === 'ready_for_pickup' && (
+                {l.status === 'ready_for_pickup' && (
                   <button disabled={busy} onClick={() => markPickedUp(l.id)} className="btn-sm bg-emerald-600 hover:bg-emerald-700 text-white inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold">
                     <PackageCheck size={12} /> Confirm Pickup
                   </button>

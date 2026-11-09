@@ -373,6 +373,9 @@ class CommissionTaskSerializer(serializers.ModelSerializer):
     submission_title = serializers.CharField(
         source="submission.title", read_only=True, default=None,
     )
+    submission_is_internal = serializers.BooleanField(
+        source="submission.is_internal", read_only=True, default=False,
+    )
     assigned_manager_username = serializers.CharField(
         source="assigned_manager.username", read_only=True,
     )
@@ -401,6 +404,7 @@ class CommissionTaskSerializer(serializers.ModelSerializer):
             "submission",
             "submission_reference_number",
             "submission_title",
+            "submission_is_internal",
             "agenda_item",
             # ── Task fields ───────────────────────────────────────────────
             "title",
@@ -428,6 +432,7 @@ class CommissionTaskSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "submission_reference_number",
             "submission_title",
+            "submission_is_internal",
             "meeting_title",
             "assigned_manager_username",
             "assigned_staff_username",
@@ -3684,9 +3689,25 @@ class DecisionLetterSerializer(serializers.ModelSerializer):
     task_title = serializers.CharField(source="commission_task.title", read_only=True)
     has_document = serializers.SerializerMethodField()
     has_signed_scan = serializers.SerializerMethodField()
+    ministry_name = serializers.SerializerMethodField()
+    department_name = serializers.CharField(source="department.name", read_only=True, default=None)
 
     def _name(self, user):
         return (user.get_full_name() or user.username) if user else None
+
+    def get_ministry_name(self, obj):
+        from .decision_service import letter_target
+
+        ministry, _dept = letter_target(obj)
+        return ministry.name if ministry else None
+
+    def validate(self, attrs):
+        ministry, department = attrs.get("ministry"), attrs.get("department")
+        if department is not None and ministry is None:
+            raise serializers.ValidationError({"ministry": "Choose the ministry as well as the department."})
+        if department is not None and ministry is not None and department.ministry_id != ministry.id:
+            raise serializers.ValidationError({"department": "That department does not belong to this ministry."})
+        return attrs
 
     def get_status_label(self, obj):
         return obj.get_status_display()
@@ -3714,6 +3735,7 @@ class DecisionLetterSerializer(serializers.ModelSerializer):
         model = DecisionLetter
         fields = (
             "id", "commission_task", "task_title", "submission", "submission_ref",
+            "ministry", "ministry_name", "department", "department_name",
             "subject", "body_text", "status", "status_label",
             "has_document", "has_signed_scan",
             "prepared_by", "prepared_by_name", "prepared_at",
