@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import PageHeader from '../../components/shared/PageHeader'
@@ -400,6 +400,41 @@ export default function SubmissionDetail() {
   // navigating from a submission that had a Checklist tab to one that
   // doesn't), fall back to Overview instead of rendering an empty pane.
   const effectiveTab = TABS.some(t => t.key === activeTab) ? activeTab : 'overview'
+
+  // ── The white "pill" behind the selected tab slides to the new tab instead of each tab
+  // switching its own background. It is placed by measuring the selected tab, so it follows
+  // whichever tab is really selected (a cancelled "unsaved changes" prompt leaves it where it
+  // was), and is measured again when widths change (tabs appear or go, the unsaved dot shows,
+  // the window or font changes). It is not animated until it has been placed once.
+  const tabListRef = useRef(null)
+  const [pill, setPill] = useState({ left: 0, width: 0, ready: false })
+  const tabKeys = TABS.map(t => t.key).join('|')
+  const tabBarShown = Boolean(submission)
+  useLayoutEffect(() => {
+    const list = tabListRef.current
+    const el = list && document.getElementById(`tab-${effectiveTab}`)
+    if (!list || !el) return undefined
+    const measure = () => setPill(p => (
+      p.left === el.offsetLeft && p.width === el.offsetWidth
+        ? p : { left: el.offsetLeft, width: el.offsetWidth, ready: p.ready }
+    ))
+    measure()
+    const frame = requestAnimationFrame(() => setPill(p => (p.ready ? p : { ...p, ready: true })))
+    let observer
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(measure)
+      observer.observe(list)
+      observer.observe(el)
+    }
+    return () => { cancelAnimationFrame(frame); observer?.disconnect() }
+  }, [effectiveTab, tabKeys, tabBarShown, boardPaperDirty])
+
+  // Keep the selected tab in view when the bar scrolls sideways (narrow screens).
+  const firstTabRender = useRef(true)
+  useEffect(() => {
+    if (firstTabRender.current) { firstTabRender.current = false; return }
+    document.getElementById(`tab-${effectiveTab}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [effectiveTab])
 
   const applyBootstrap = useCallback((data) => {
     const tr = data.allowed_transitions || {}
@@ -1308,8 +1343,17 @@ const stageDescriptions = {
           role="tablist"
           aria-label="Submission sections"
           onKeyDown={handleTabKeyDown}
-          className="flex items-center gap-1 p-1 rounded-xl overflow-x-auto bg-slate-200/80 dark:bg-slate-950/60 ring-1 ring-inset ring-slate-300/80 dark:ring-slate-700/80"
+          ref={tabListRef}
+          className="relative flex items-center gap-1 p-1 rounded-xl overflow-x-auto bg-slate-200/80 dark:bg-slate-950/60 ring-1 ring-inset ring-slate-300/80 dark:ring-slate-700/80"
         >
+          {/* The sliding white pill behind the selected tab (decorative). */}
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute top-1 bottom-1 left-0 rounded-lg bg-white dark:bg-slate-700 shadow-md ring-1 ring-slate-300/80 dark:ring-slate-600 ${
+              pill.ready ? 'transition-[transform,width] duration-300 ease-out motion-reduce:transition-none' : ''
+            }`}
+            style={{ width: pill.width, transform: `translateX(${pill.left}px)`, opacity: pill.width ? 1 : 0 }}
+          />
           {TABS.map(tab => {
             const selected = effectiveTab === tab.key
             return (
@@ -1322,9 +1366,9 @@ const stageDescriptions = {
                 aria-controls="submission-tab-panel"
                 tabIndex={selected ? 0 : -1}
                 onClick={() => handleTabChange(tab.key)}
-                className={`shrink-0 inline-flex items-center gap-2 rounded-lg px-3 sm:px-3.5 py-2 text-sm font-semibold whitespace-nowrap transition-colors ${
+                className={`relative z-10 shrink-0 inline-flex items-center gap-2 rounded-lg px-3 sm:px-3.5 py-2 text-sm font-semibold whitespace-nowrap transition-colors ${
                   selected
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-md ring-1 ring-slate-300/80 dark:ring-slate-600'
+                    ? 'text-slate-900 dark:text-white'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
