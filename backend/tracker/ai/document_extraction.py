@@ -41,6 +41,13 @@ Output valid JSON only:
 MIN_TEXT_CHARS_FOR_SKIP_VISION = 120
 MAX_VISION_PAGES = 5
 MAX_IMAGE_BYTES = 4_500_000
+# Real ministry plans and annual reports run to 160-250 pages. Reading only the first 30 pages
+# meant the AI review judged a 246-page Business Plan from its first tenth. Embedded text is
+# cheap to read, so every page is read; OCR is slow, so it is spent only on pages that have no
+# embedded text of their own (scanned pages, tables saved as pictures), up to a cap.
+MAX_PDF_PAGES = 500
+MAX_OCR_PAGES = 80
+MIN_PAGE_TEXT_CHARS = 30
 
 
 def _tier() -> str:
@@ -52,17 +59,60 @@ def _is_extractable(name: str) -> bool:
     return lower.endswith((".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"))
 
 
-def extract_pdf_text(path: Path) -> str:
+def extract_pdf_text(path: Path, max_pages: int = MAX_PDF_PAGES) -> str:
     try:
         from pypdf import PdfReader
 
         reader = PdfReader(str(path))
         parts = []
-        for page in reader.pages[:30]:
+        for page in reader.pages[:max_pages]:
             parts.append(page.extract_text() or "")
         return "\n".join(parts).strip()
     except Exception as exc:
         logger.debug("PDF text extract failed: %s", exc)
+        return ""
+
+
+def pdf_text_with_ocr(path: Path, *, max_pages: int = MAX_PDF_PAGES, max_ocr_pages: int = MAX_OCR_PAGES) -> str:
+    """Every page's embedded text, plus Tesseract OCR for pages that have none (up to a cap).
+
+    A page counts as having none when its embedded text is under MIN_PAGE_TEXT_CHARS. Order is
+    kept, so the text reads like the document. Returns "" if the file cannot be opened.
+    """
+    try:
+        import fitz
+
+        doc = fitz.open(str(path))
+    except Exception as exc:
+        logger.debug("PDF open failed: %s", exc)
+        return ""
+    can_ocr = _tesseract_available()
+    parts: list[str] = []
+    ocr_done = 0
+    try:
+        for i, page in enumerate(doc):
+            if i >= max_pages:
+                break
+            text = (page.get_text() or "").strip()
+            if len(text) < MIN_PAGE_TEXT_CHARS and can_ocr and ocr_done < max_ocr_pages:
+                text = _ocr_page(page) or text
+                ocr_done += 1
+            parts.append(text)
+    finally:
+        doc.close()
+    return "\n".join(p for p in parts if p).strip()
+
+
+def _ocr_page(page) -> str:
+    try:
+        import pytesseract
+        from PIL import Image
+
+        pix = page.get_pixmap(matrix=__import__("fitz").Matrix(2, 2), alpha=False)
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
+        return (pytesseract.image_to_string(img) or "").strip()
+    except Exception as exc:
+        logger.warning("Tesseract page OCR failed: %s", exc)
         return ""
 
 
@@ -116,6 +166,10 @@ def local_ocr_text(path: Path, original_name: str, max_pages: int = 30) -> str:
     lower = (original_name or "").lower()
 
     if lower.endswith(".pdf"):
+        # Embedded text for every page, OCR only for the pages that have none.
+        mixed = pdf_text_with_ocr(path, max_ocr_pages=max(max_pages, MAX_OCR_PAGES))
+        if len(mixed) >= MIN_TEXT_CHARS_FOR_SKIP_VISION:
+            return mixed
         plain = extract_pdf_text(path)
         if len(plain) >= MIN_TEXT_CHARS_FOR_SKIP_VISION:
             return plain

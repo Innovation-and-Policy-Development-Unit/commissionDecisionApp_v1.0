@@ -1814,7 +1814,7 @@ def extract_document_facts(document_id: int):
         app_log.error("DOC_EXTRACT_FAIL | doc=%s | %s", document_id, doc.ocr_error)
         return
 
-    doc.extracted_text = (result.get("extracted_text") or "")[:500000]
+    doc.extracted_text = (result.get("extracted_text") or "")[:1000000]  # a 246-page plan is ~550,000 characters
     facts = result.get("key_facts") or {}
     if result.get("document_summary"):
         facts = {**facts, "document_summary": result["document_summary"]}
