@@ -21,6 +21,19 @@ ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES = ODU_RESTRUCTURE_CHECKLIST_FORM_C
     "PSC 2-2", "BUSINESS-PLAN", "CORPORATE-PLAN", "ANNUAL-REPORT", "ANOMALIES",
 })
 
+# ODU's consolidated papers: ministries lodge their Business Plan, Corporate Plan or Annual Report
+# with ODU, which reviews and NOTES each one (the ministry's submission ends there). ODU then
+# writes ONE paper per type for the Commission covering every plan or report it has noted.
+# consolidated paper form code -> the ministry form type it covers
+ODU_CONSOLIDATED_COVERS = {
+    "ODU-BUSINESS-PLANS": "BUSINESS-PLAN",
+    "ODU-CORPORATE-PLANS": "CORPORATE-PLAN",
+    "ODU-ANNUAL-REPORTS": "ANNUAL-REPORT",
+}
+ODU_CONSOLIDATED_FORM_CODES = frozenset(ODU_CONSOLIDATED_COVERS)
+# Ministry submissions that end at ODU (Manager notes them) instead of going to the Commission.
+ODU_NOTED_AT_ODU_FORM_CODES = frozenset(ODU_CONSOLIDATED_COVERS.values())
+
 # A salary / establishment anomaly the ministry asks the Commission to correct. Like a
 # restructure, the Commission reads ODU's own paper, not the ministry's; unlike a
 # restructure there is no 20-item checklist and no DSSPAC / GRT / Finance analyses.

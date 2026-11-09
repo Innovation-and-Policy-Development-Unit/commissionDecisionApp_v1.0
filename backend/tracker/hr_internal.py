@@ -31,7 +31,14 @@ HR_UNIT_AUTHOR_ROLES = frozenset({
 #                            recommendation) plus the report.
 ODU_TRAVEL_REPORT_CODE = "ODU-TRAVEL-REPORT"
 ODU_OPA_FEEDBACK_REPORT_CODE = "ODU-OPA-FEEDBACK-REPORT"
-ODU_INTERNAL_FORM_CODES = frozenset({ODU_TRAVEL_REPORT_CODE, ODU_OPA_FEEDBACK_REPORT_CODE})
+#   ODU-BUSINESS-PLANS / ODU-CORPORATE-PLANS / ODU-ANNUAL-REPORTS
+#                            ODU's one paper per type to the Commission, covering every ministry
+#                            plan or report ODU has noted (see odu_consolidation.py).
+from .odu_checklist_rules import ODU_CONSOLIDATED_FORM_CODES  # noqa: E402
+
+ODU_INTERNAL_FORM_CODES = frozenset({
+    ODU_TRAVEL_REPORT_CODE, ODU_OPA_FEEDBACK_REPORT_CODE,
+}) | ODU_CONSOLIDATED_FORM_CODES
 
 ODU_UNIT_AUTHOR_ROLES = frozenset({
     Role.ODU_SENIOR,

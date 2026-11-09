@@ -186,6 +186,7 @@ from .api_cache import (
 )
 from .transitions import assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
+from .odu_checklist_rules import ODU_NOTED_AT_ODU_FORM_CODES
 from .throttles import AiAnalysisTriggerThrottle, StaffChatThrottle, OTPVerifyThrottle, PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle
 from .auth import LenientJWTAuthentication
 from .models import (
@@ -1639,9 +1640,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
             if form_code not in ODU_INTERNAL_FORM_CODES:
                 raise ValidationError({
-                    "form_type_code": "ODU staff can only create the overseas travel report and the "
-                                      "Organisation Performance Assessment Feedback Report here; "
-                                      "other ODU submission types are lodged by ministries."
+                    "form_type_code": "ODU staff can only create ODU's own papers here (the overseas "
+                                      "travel report, the Organisation Performance Assessment "
+                                      "Feedback Report and the consolidated Business Plan, Corporate "
+                                      "Plan and Annual Report papers); other ODU submission types "
+                                      "are lodged by ministries."
                 })
             org = _resolve_opsc_submission_org(profile)
             kwargs = {
@@ -2389,6 +2392,28 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # ── A consolidated ODU paper may only go up once every lodged plan is noted ──
+        from .odu_checklist_rules import ODU_CONSOLIDATED_FORM_CODES as _CONSOLIDATED_CODES
+
+        _consolidating = (
+            submission.is_internal and submission.form_type_code in _CONSOLIDATED_CODES
+            and prev in {WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION}
+            and target in {
+                WorkflowStage.PENDING_PRINCIPAL_REVIEW, WorkflowStage.PENDING_MANAGER_APPROVAL,
+                WorkflowStage.PENDING_SECOND_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL,
+                WorkflowStage.SUBMITTED,
+            }
+        )
+        if _consolidating:
+            from .odu_consolidation import consolidation_gaps
+
+            _gaps = consolidation_gaps(submission)
+            if _gaps:
+                return Response(
+                    {"detail": "Before this paper can go on, " + " ".join(_gaps), "consolidation_gaps": _gaps},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # ── A decision on hold is not actioned ──────────────────────────────────
         if submission.decision_hold_active and target in {
             WorkflowStage.UNDER_IMPLEMENTATION, WorkflowStage.IMPLEMENTATION_REPORT,
@@ -2528,7 +2553,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             ).count()
             if unchecked_required > 0:
                 return Response(
-                    {"detail": f"Cannot submit to Secretary: {unchecked_required} required document(s) are not yet marked present. Complete the checklist first."},
+                    {"detail": f"Cannot {'note this' if target == WorkflowStage.NOTED else 'submit to Secretary'}: {unchecked_required} required document(s) are not yet marked present. Complete the checklist first."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -2674,7 +2699,18 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             if target == WorkflowStage.FORWARDED_TO_COMMISSION:
                 self._auto_place_on_agenda(submission)
 
-            if is_decision_stage(target):
+            if _consolidating:
+                from .odu_consolidation import cover_all
+
+                cover_all(submission)
+
+            # A plan or report that ODU notes is closed at ODU: not a Commission decision,
+            # so no decision proof is made for it.
+            _noted_at_odu = (
+                target == WorkflowStage.NOTED and prev == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+                and submission.form_type_code in ODU_NOTED_AT_ODU_FORM_CODES
+            )
+            if is_decision_stage(target) and not _noted_at_odu:
                 proof_hash, proof_payload = create_decision_proof(
                     submission=submission,
                     previous_stage=prev,
@@ -3810,6 +3846,20 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
 
         return Response(SubmissionDetailSerializer(submission).data)
+
+    @action(detail=True, methods=["get"], url_path="coverage")
+    def coverage(self, request, pk=None):
+        """For an ODU consolidated paper: the ministry plans it covers, will cover, is waiting on."""
+        from .odu_checklist_rules import ODU_CHECKLIST_VIEW_ROLES, ODU_CONSOLIDATED_FORM_CODES
+        from .odu_consolidation import coverage_payload
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if submission.form_type_code not in ODU_CONSOLIDATED_FORM_CODES:
+            return Response({"detail": "This is not a consolidated ODU paper."}, status=status.HTTP_400_BAD_REQUEST)
+        if not (request.user.is_superuser or request.user.is_staff or profile.role in ODU_CHECKLIST_VIEW_ROLES):
+            raise PermissionDenied("You do not have access to the coverage of this paper.")
+        return Response(coverage_payload(submission))
 
     @action(detail=True, methods=["post"], url_path="link-as-attachment")
     def link_as_attachment(self, request, pk=None):

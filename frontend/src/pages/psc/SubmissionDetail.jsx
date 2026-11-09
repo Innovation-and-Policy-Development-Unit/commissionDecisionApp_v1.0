@@ -24,6 +24,7 @@ import {
 } from '../../constants/stages'
 import { ArrowRight, AlertTriangle, CalendarDays, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardCheck, LayoutGrid, MessageSquare, FileSignature, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
+import ConsolidationPanel, { CONSOLIDATED_CODES } from '../../components/submissions/ConsolidationPanel'
 import CommissionerAssistant, { CASE_ASSISTANT_ROLES } from '../../components/submissions/CommissionerAssistant'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
@@ -109,7 +110,10 @@ const PACKAGE_VALIDATE_ROLES = [
 // ODU's own papers (the overseas travel report and the Organisation Performance Assessment
 // Feedback Report) list their required document and
 // take the file from ODU staff, who attach it themselves rather than tick a box.
-const ODU_OWN_PAPER_CODES = ['ODU-TRAVEL-REPORT', 'ODU-OPA-FEEDBACK-REPORT']
+const ODU_OWN_PAPER_CODES = [
+  'ODU-TRAVEL-REPORT', 'ODU-OPA-FEEDBACK-REPORT',
+  'ODU-BUSINESS-PLANS', 'ODU-CORPORATE-PLANS', 'ODU-ANNUAL-REPORTS',
+]
 const ODU_AUTHOR_ROLES = ['odu_manager', 'odu_principal', 'odu_senior']
 const CHECKLIST_EDIT_ROLES = [
   'ministry_hr', 'dept_admin', 'head_of_agency',
@@ -2369,6 +2373,13 @@ const stageDescriptions = {
         </div>
       </div>
     </div>
+
+    {/* ── ODU consolidated paper: the ministry plans it covers ─────────── */}
+    {submission && CONSOLIDATED_CODES.includes(submission.form_type_code) && (
+      <div style={{ marginTop: '32px' }}>
+        <ConsolidationPanel submissionId={id} />
+      </div>
+    )}
 
     {/* ── Commissioner AI: review and recommend + ask about this paper ─── */}
     {submission && CASE_ASSISTANT_ROLES.includes(user?.role) && (

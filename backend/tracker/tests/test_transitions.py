@@ -483,8 +483,24 @@ class RestructurePrincipalDirectClarificationTests(TestCase):
                 form_type_code="ANNUAL-REPORT",
             )
 
-    def test_odu_manager_can_still_approve_route_on_business_corporate_annual(self):
+    def test_odu_manager_notes_business_corporate_annual_instead_of_routing_them_on(self):
+        # Ministry plans and reports now end at ODU (Noted); ODU's own consolidated paper goes
+        # to the Commission. The Manager's route to the Secretary is for the other ODU types.
         for code in ("BUSINESS-PLAN", "CORPORATE-PLAN", "ANNUAL-REPORT"):
+            assert_transition_allowed(
+                role=Role.ODU_MANAGER,
+                current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                target_stage=WorkflowStage.NOTED,
+                form_type_code=code,
+            )
+            with self.assertRaises(PermissionDenied):
+                assert_transition_allowed(
+                    role=Role.ODU_MANAGER,
+                    current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+                    target_stage=WorkflowStage.PENDING_SECRETARY_APPROVAL,
+                    form_type_code=code,
+                )
+        for code in ("PSC 2-2", "PSC 2-1"):
             assert_transition_allowed(
                 role=Role.ODU_MANAGER,
                 current_stage=WorkflowStage.MANAGER_CHECKLIST_REVIEW,

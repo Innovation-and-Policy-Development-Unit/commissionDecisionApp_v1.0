@@ -4,7 +4,10 @@ from django.core.exceptions import PermissionDenied
 
 from .models import Role, WorkflowStage, MeetingType
 from .opsc_access import OPSC_UNIT_MANAGER_ROLES
-from .odu_checklist_rules import ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES
+from .odu_checklist_rules import (
+    ODU_NOTED_AT_ODU_FORM_CODES,
+    ODU_PRINCIPAL_DIRECT_CLARIFICATION_FORM_CODES,
+)
 
 # ---------------------------------------------------------------------------
 # Internal submission roles — only unit managers (not principals) create submissions
@@ -838,6 +841,20 @@ def assert_transition_allowed(
                 "clarification requests to the ministry directly — the Manager ODU "
                 "approves and routes the submission forward."
             )
+        # Ministry Business Plans, Corporate Plans and Annual Reports end at ODU: the Manager
+        # NOTES them, and ODU's own consolidated paper goes to the Commission instead.
+        if (
+            role == Role.ODU_MANAGER
+            and current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+            and form_type_code in ODU_NOTED_AT_ODU_FORM_CODES
+        ):
+            if target_stage == WorkflowStage.NOTED:
+                return
+            if target_stage == WorkflowStage.PENDING_SECRETARY_APPROVAL:
+                raise PermissionDenied(
+                    "Ministry plans and reports end at ODU: note it here and cover it in ODU's "
+                    "consolidated paper for the Commission."
+                )
         # Unit managers may only take the edges the stage graph defines. Without
         # this they returned "allowed" for ANY target (e.g. straight to
         # Forwarded to Commission), bypassing the Secretary approval gate.
@@ -1023,6 +1040,14 @@ def iter_allowed_targets(
                 and WorkflowStage.RETURNED_FOR_CLARIFICATION in targets
             ):
                 targets.remove(WorkflowStage.RETURNED_FOR_CLARIFICATION)
+            # Plans and reports end at ODU (Noted); they do not go on to the Secretary.
+            if (
+                role == Role.ODU_MANAGER
+                and current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+                and form_type_code in ODU_NOTED_AT_ODU_FORM_CODES
+            ):
+                targets = [t for t in targets if t != WorkflowStage.PENDING_SECRETARY_APPROVAL]
+                targets.append(WorkflowStage.NOTED)
             return targets
         return []
     # Unit principals/senior officers can't self-transition at the checklist
