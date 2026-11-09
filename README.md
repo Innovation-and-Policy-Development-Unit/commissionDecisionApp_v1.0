@@ -636,8 +636,8 @@ CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
 
 # ── Google Gemini (AI features) ────────────────────────────────────────────
 GEMINI_API_KEY=
-GEMINI_MODEL_HAIKU=gemini-flash-lite-latest
-GEMINI_MODEL_SONNET=gemini-flash-latest
+GEMINI_MODEL_HAIKU=gemini-3.5-flash-lite
+GEMINI_MODEL_SONNET=gemini-3.8-flash
 
 # ── Monitoring (optional) ─────────────────────────────────────────────────────
 SENTRY_DSN=

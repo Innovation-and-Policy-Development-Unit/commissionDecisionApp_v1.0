@@ -14400,6 +14400,8 @@ _CASE_ASSISTANT_ROLES = {
     Role.PSC_SECRETARY, Role.PSC_OFFICER,
 }
 _CASE_CHAT_MAX_QUESTION = 2000
+# How generate_recommended_outcome records a run that failed (see tasks.py).
+_AI_FAILURE_PREFIXES = ("AI error:", "AI is not configured")
 
 
 def _case_assistant_submission(request, pk):
@@ -14508,13 +14510,17 @@ def submission_review_card(request, pk):
     from .ai.case_chat import DISCLAIMER
 
     s = _case_assistant_submission(request, pk)
+    # The outcome task stores its failure message in the rationale field. Never show that
+    # raw provider text on the card: say the run failed, and leave the detail in the AI log.
+    outcome_failed = bool(s.ai_outcome_processed and (s.ai_outcome_rationale or "").startswith(_AI_FAILURE_PREFIXES))
     return Response({
         "disclaimer": DISCLAIMER,
         "recommendation": {
             "processed": s.ai_outcome_processed,
-            "action": s.ai_outcome_recommendation,
-            "confidence": s.ai_outcome_confidence,
-            "rationale": s.ai_outcome_rationale,
+            "failed": outcome_failed,
+            "action": "" if outcome_failed else s.ai_outcome_recommendation,
+            "confidence": None if outcome_failed else s.ai_outcome_confidence,
+            "rationale": "" if outcome_failed else s.ai_outcome_rationale,
             "conditions": s.ai_outcome_conditions or [],
             "precedents": s.ai_outcome_precedents or [],
             "legal_basis": s.ai_outcome_legal_basis,
