@@ -28,7 +28,7 @@ from .feature_registry import get_model_tier
 
 CHECKLIST_CODE = "ANNUAL-REPORT-CHECKLIST"  # the Annual Report profile's checklist
 CHUNK_CHARS = 45000
-MAX_CHUNKS = 8
+MAX_CHUNKS = 16  # 16 x 45,000 characters: a 246-page Business Plan is about 550,000
 RANK = {"not_found": 0, "partial": 1, "met": 2}
 
 # What the 2021 PSC Guidelines for Preparing Annual Reports ask for, per checklist item.
