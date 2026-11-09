@@ -4498,3 +4498,65 @@ def queue_report_review(submission_id: int) -> None:
 
 
 queue_annual_report_review = queue_report_review  # original name, still imported by older callers
+
+
+# ── ODU's own papers: AI first draft of the template text ───────────────────────
+
+@shared_task(bind=True, max_retries=2)
+def draft_odu_template_task(self, submission_id: int):
+    """AI first draft of Subject / Issue / Discussion / Recommendation for an ODU paper."""
+    from django.utils import timezone
+
+    from .ai.claude_client import is_retryable_ai_error
+    from .ai.odu_template_draft import draft_template
+    from .ai.reliability import FEATURE_ODU_TEMPLATE_DRAFT, log_ai_call, timed_call
+    from .hr_internal import ODU_TEMPLATE_DRAFT_FORM_CODES
+    from .models import AIGenerationLog, ReportAIReview, Submission
+
+    paper = Submission.objects.filter(pk=submission_id, form_type_code__in=ODU_TEMPLATE_DRAFT_FORM_CODES).first()
+    if not paper:
+        return
+    review, _ = ReportAIReview.objects.get_or_create(submission=paper)
+    try:
+        with timed_call() as elapsed:
+            draft, based_on, err = draft_template(paper)
+    except Exception as exc:  # never leave the draft stuck on "running"
+        app_log.exception("ODU_TEMPLATE_DRAFT_FAIL | submission=%s", submission_id)
+        draft, based_on, err = None, {}, str(exc)
+
+    # "nothing to draft from" is an answer for the officer, not a provider failure: no retry.
+    user_facing = bool(err) and err.startswith(("There is nothing to draft", "AI is switched off"))
+    if err and not user_facing and is_retryable_ai_error(err) and self.request.retries < self.max_retries:
+        log_ai_call(feature=FEATURE_ODU_TEMPLATE_DRAFT, submission_id=submission_id,
+                    status=AIGenerationLog.Status.RETRYING, error_detail=err, attempt=self.request.retries + 1)
+        raise self.retry(countdown=30 * (2 ** self.request.retries))
+
+    if draft:
+        log_ai_call(feature=FEATURE_ODU_TEMPLATE_DRAFT, submission_id=submission_id,
+                    status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(), attempt=self.request.retries + 1)
+        review.state = ReportAIReview.State.DONE
+        review.result = {"kind": "odu_template_draft", "draft": draft, "based_on": based_on}
+        review.error = ""
+    else:
+        if not user_facing:
+            log_ai_call(feature=FEATURE_ODU_TEMPLATE_DRAFT, submission_id=submission_id,
+                        status=AIGenerationLog.Status.FAILED, error_detail=err or "", attempt=self.request.retries + 1)
+        review.state = ReportAIReview.State.FAILED
+        # Never show the provider's raw error to the officer; the detail is in the AI log.
+        review.error = err if user_facing else "The AI could not write a draft just now. Please try again."
+        review.result = {"kind": "odu_template_draft", "based_on": based_on}
+    review.reviewed_at = timezone.now()
+    review.save(update_fields=["state", "result", "error", "reviewed_at"])
+
+
+def queue_odu_template_draft(submission_id: int) -> None:
+    from .models import ReportAIReview
+
+    try:
+        ReportAIReview.objects.update_or_create(
+            submission_id=submission_id,
+            defaults={"state": ReportAIReview.State.RUNNING, "error": ""},
+        )
+        draft_odu_template_task.delay(submission_id)
+    except Exception as exc:
+        app_log.warning("ODU_TEMPLATE_DRAFT_QUEUE_FAIL | %s | %s", submission_id, exc)

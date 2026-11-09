@@ -3847,6 +3847,65 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         return Response(SubmissionDetailSerializer(submission).data)
 
+    # ── AI first draft of the text of ODU's own papers ─────────────────────────
+    _TEMPLATE_DRAFT_READ_ROLES = {
+        Role.ODU_SENIOR, Role.ODU_PRINCIPAL, Role.ODU_MANAGER, Role.PSC_ADMIN, Role.PSC_SECRETARY,
+    }
+
+    def _template_draft_paper(self, request, pk, *, writing: bool):
+        from rest_framework.exceptions import ValidationError
+
+        from .hr_internal import ODU_TEMPLATE_DRAFT_FORM_CODES
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        if submission.form_type_code not in ODU_TEMPLATE_DRAFT_FORM_CODES:
+            raise ValidationError({"detail": "The AI draft is only for ODU's own papers on the general template."})
+        if not (request.user.is_superuser or profile.role in self._TEMPLATE_DRAFT_READ_ROLES):
+            raise PermissionDenied("Only ODU can use the AI draft.")
+        if writing:
+            if submission.current_stage not in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION):
+                raise ValidationError({"detail": "A draft can only be asked for while the paper is a draft."})
+            if not (
+                request.user.is_superuser or profile.role == Role.PSC_ADMIN
+                or unit_may_work_on_internal_paper(profile.role, submission)
+            ):
+                raise PermissionDenied("Only ODU staff drafting this paper can ask for a draft.")
+        return submission
+
+    @action(detail=True, methods=["get"], url_path="ai-template-draft")
+    def ai_template_draft(self, request, pk=None):
+        """The AI's suggested text for an ODU paper, and where the request stands."""
+        from .ai.odu_template_draft import DISCLAIMER
+        from .models import ReportAIReview
+
+        submission = self._template_draft_paper(request, pk, writing=False)
+        # Only this feature writes a ReportAIReview for these papers (the first-pass review is
+        # for ministry plans), so any row here is the draft.
+        review = ReportAIReview.objects.filter(submission=submission).first()
+        return Response({
+            "disclaimer": DISCLAIMER,
+            "state": review.state if review else "",
+            "error": review.error if review else "",
+            "draft": (review.result or {}).get("draft") if review else None,
+            "based_on": (review.result or {}).get("based_on") if review else None,
+            "generated_at": review.reviewed_at if review else None,
+        })
+
+    @action(detail=True, methods=["post"], url_path="ai-template-draft/run",
+            throttle_classes=[AiAnalysisTriggerThrottle])
+    def ai_template_draft_run(self, request, pk=None):
+        """Ask the AI to draft the text. Runs in the background; poll the GET above."""
+        from .models import ReportAIReview
+        from .tasks import queue_odu_template_draft
+
+        submission = self._template_draft_paper(request, pk, writing=True)
+        existing = ReportAIReview.objects.filter(submission=submission).first()
+        if existing and existing.state == ReportAIReview.State.RUNNING:
+            return Response({"state": "running"}, status=status.HTTP_202_ACCEPTED)
+        queue_odu_template_draft(submission.id)
+        return Response({"state": "running"}, status=status.HTTP_202_ACCEPTED)
+
     @action(detail=True, methods=["get"], url_path="coverage")
     def coverage(self, request, pk=None):
         """For an ODU consolidated paper: the ministry plans it covers, will cover, is waiting on."""

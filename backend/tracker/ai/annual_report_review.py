@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from django.utils import timezone
+
 from .claude_client import ai_enabled, complete_json_with_error
 from .feature_registry import get_model_tier
 
@@ -285,7 +287,9 @@ def late_info(submission) -> dict:
     from datetime import date
 
     profile = profile_for(submission.form_type_code)
-    received = submission.received_at.date() if submission.received_at else None
+    # The lodging DATE is the date in Vanuatu, not in UTC: a paper lodged at 8am on 1 April is
+    # 9pm on 31 March in UTC, which wrongly counted as on time.
+    received = timezone.localtime(submission.received_at).date() if submission.received_at else None
     if not profile or not profile.deadline or not received:
         return {"deadline": None, "deadline_text": "", "days_late": 0, "late": False}
     deadline = date(received.year, *profile.deadline)

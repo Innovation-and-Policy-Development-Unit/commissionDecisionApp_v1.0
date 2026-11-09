@@ -77,4 +77,5 @@ FEATURE_MODEL_TIER: dict[str, ModelTier] = {
     "minute_intake_format": "sonnet",
     "odu_paper_draft": "sonnet",
     "annual_report_review": "sonnet",
+    "odu_template_draft": "sonnet",
 }

@@ -52,6 +52,7 @@ FEATURE_WORKLOAD_SUGGESTION  = "workload_suggestion"
 FEATURE_DG_BRIEF             = "dg_brief"
 FEATURE_CASE_CHAT            = "case_chat"
 FEATURE_REVIEW_QUESTIONS     = "review_questions"
+FEATURE_ODU_TEMPLATE_DRAFT   = "odu_template_draft"
 
 ALL_FEATURES = (
     FEATURE_SUBMISSION_BRIEF,
@@ -69,6 +70,7 @@ ALL_FEATURES = (
     FEATURE_DG_BRIEF,
     FEATURE_CASE_CHAT,
     FEATURE_REVIEW_QUESTIONS,
+    FEATURE_ODU_TEMPLATE_DRAFT,
 )
 
 _log = logging.getLogger("scdms.app")

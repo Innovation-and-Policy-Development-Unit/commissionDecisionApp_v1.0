@@ -25,6 +25,7 @@ import {
 import { ArrowRight, AlertTriangle, CalendarDays, Clock, CheckCircle2, FileText, RefreshCw, Info, ClipboardCheck, LayoutGrid, MessageSquare, FileSignature, Square, CheckSquare, Upload, File, Trash2, ExternalLink, Paperclip, PenLine, Pen, Pencil, Eye, EyeOff, Lock, X, History, Download } from 'lucide-react'
 import SecretariatBriefCard from '../../components/submissions/SecretariatBriefCard'
 import ConsolidationPanel, { CONSOLIDATED_CODES } from '../../components/submissions/ConsolidationPanel'
+import OduTemplateDraftPanel, { TEMPLATE_DRAFT_CODES } from '../../components/submissions/OduTemplateDraftPanel'
 import CommissionerAssistant, { CASE_ASSISTANT_ROLES } from '../../components/submissions/CommissionerAssistant'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
@@ -2378,6 +2379,21 @@ const stageDescriptions = {
     {submission && CONSOLIDATED_CODES.includes(submission.form_type_code) && (
       <div style={{ marginTop: '32px' }}>
         <ConsolidationPanel submissionId={id} />
+      </div>
+    )}
+
+    {/* ── ODU's own papers: AI first draft of the template text ─────────── */}
+    {submission && TEMPLATE_DRAFT_CODES.includes(submission.form_type_code)
+      && user && ODU_AUTHOR_ROLES.concat(['psc_admin', 'psc_secretary']).includes(user.role) && (
+      <div style={{ marginTop: '16px' }}>
+        <OduTemplateDraftPanel
+          submissionId={id}
+          canDraft={
+            ODU_AUTHOR_ROLES.concat(['psc_admin']).includes(user.role)
+            && ['draft', 'returned_for_clarification'].includes(submission.current_stage)
+          }
+          onUse={(key, text) => setDynamicForm(prev => ({ ...(prev || {}), [key]: text }))}
+        />
       </div>
     )}
 
