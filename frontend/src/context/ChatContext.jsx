@@ -156,13 +156,14 @@ export function ChatProvider({ children }) {
   }, [send, user])
 
   // Attachments always go via REST (WebSockets don't carry binary uploads).
-  const sendAttachments = useCallback(async (conversationId, { body = '', files = [], replyToId } = {}) => {
+  const sendAttachments = useCallback(async (conversationId, { body = '', files = [], replyToId, onProgress } = {}) => {
     const form = new FormData()
     if (body.trim()) form.append('body', body.trim())
     if (replyToId) form.append('reply_to', replyToId)
     files.forEach((f) => form.append('files', f))
     const { data } = await api.post(`/chat/conversations/${conversationId}/messages/`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => { if (e.total && onProgress) onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100))) },
     })
     setMessagesByConversation((prev) => {
       const existing = prev[conversationId] || []

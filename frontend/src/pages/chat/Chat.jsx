@@ -43,14 +43,15 @@ export default function Chat() {
     ? typingUserIds.some((id) => id !== user?.id)
     : false
 
-  const handleSend = ({ body, files, replyToId }) => {
-    if (!activeId) return
+  const handleSend = ({ body, files, replyToId, onProgress }) => {
+    if (!activeId) return undefined
     if (files.length > 0) {
-      sendAttachments(activeId, { body, files, replyToId })
-    } else {
-      sendMessage(activeId, body, replyToId)
+      // Returned so the composer can show progress and keep the files if the upload fails.
+      return sendAttachments(activeId, { body, files, replyToId, onProgress }).then((data) => { setReplyTo(null); return data })
     }
+    sendMessage(activeId, body, replyToId)
     setReplyTo(null)
+    return undefined
   }
 
   return (
@@ -83,7 +84,7 @@ export default function Chat() {
       </div>
 
       {/* Thread */}
-      <div className="hidden sm:flex flex-1 flex-col min-w-0">
+      <div data-chat-drop className="hidden sm:flex flex-1 flex-col min-w-0">
         {!activeConversation ? (
           <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
             {t('chat.select_conversation')}
