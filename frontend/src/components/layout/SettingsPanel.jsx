@@ -1,210 +1,223 @@
-import { useTheme } from '../../context/ThemeContext'
+import { useState } from 'react'
+import { Check, Monitor, Moon, RotateCcw, Search, Sun, X } from 'lucide-react'
 import clsx from 'clsx'
-import { X, Monitor } from 'lucide-react'
+import { useTheme } from '../../context/ThemeContext'
+import { FONTS, FONT_SIZES, PRESETS } from '../../context/appearancePresets'
 
-const colorPresets = [
-  { id: 'navy', label: 'Navy', hex: '#004276' },
-  { id: 'blue', label: 'Blue', hex: '#3b82f6' },
-  { id: 'green', label: 'Emerald', hex: '#10b981' },
-  { id: 'orange', label: 'Orange', hex: '#f97316' },
-  { id: 'red', label: 'Rose', hex: '#f43f5e' },
-  { id: 'corporate-blue', label: 'Corporate Blue', hex: '#006699' },
-]
+/** Appearance: theme, colour mode, density, corners, font and font size. "Just me" is saved to the
+ * user's account; "Everyone" (administrators only) sets the organisation default. */
 
 function Toggle({ checked, onChange, label }) {
   return (
     <label className="flex items-center justify-between cursor-pointer group">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors">{label}</span>
-      <div
-        onClick={onChange}
-        className={clsx(
-          'relative w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer',
-          checked ? 'bg-primary-500' : 'bg-slate-200 dark:bg-slate-600'
-        )}
+      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+      <button
+        type="button" role="switch" aria-checked={checked} onClick={onChange}
+        className={clsx('relative w-11 h-6 rounded-full transition-colors duration-200', checked ? 'bg-primary-500' : 'bg-slate-200 dark:bg-slate-600')}
       >
-        <div className={clsx(
+        <span className={clsx(
           'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 start-0.5',
-          checked && 'translate-x-5 rtl:-translate-x-5'
+          checked && 'translate-x-5 rtl:-translate-x-5',
         )} />
-      </div>
+      </button>
     </label>
   )
 }
 
-// variant: 'light' | 'dim' | 'dark'
-function ModeCard({ active, variant, label, onClick }) {
-  const bg     = variant === 'dark' ? 'bg-slate-900' : variant === 'dim' ? 'bg-[#1e293b]' : 'bg-slate-100'
-  const header = variant === 'dark' ? 'bg-slate-800' : variant === 'dim' ? 'bg-[#253347]' : 'bg-white'
-  const side   = variant === 'dark' ? 'bg-slate-800' : variant === 'dim' ? 'bg-[#253347]' : 'bg-white'
-  const row1   = variant === 'dark' ? 'bg-slate-700' : variant === 'dim' ? 'bg-[#334a65]' : 'bg-slate-200'
-  const dot    = variant === 'dark' ? 'bg-slate-600' : variant === 'dim' ? 'bg-slate-500'  : 'bg-slate-300'
+function Segmented({ value, options, onChange, label }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex rounded-xl bg-slate-100 dark:bg-slate-700/60 p-1 gap-1">
+      {options.map((o) => (
+        <button
+          key={o.id} type="button" role="radio" aria-checked={value === o.id} onClick={() => onChange(o.id)}
+          className={clsx(
+            'flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-sm transition-colors',
+            value === o.id
+              ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold shadow-sm'
+              : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white',
+          )}
+        >
+          {o.icon}{o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
+function SectionTitle({ children }) {
+  return <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">{children}</h4>
+}
+
+function PresetCard({ preset, active, onClick }) {
+  const [main, dark, light] = preset.swatch
   return (
     <button
-      onClick={onClick}
+      type="button" onClick={onClick} aria-pressed={active}
       className={clsx(
-        'flex-1 p-3 rounded-xl border-2 transition-all duration-150 cursor-pointer hover:shadow-card-md',
-        active
-          ? 'border-primary-500 shadow-glow'
-          : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+        'relative text-start rounded-xl border-2 p-2.5 transition-all',
+        active ? 'border-primary-500 shadow-glow' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500',
       )}
     >
-      {/* Mini preview */}
-      <div className={clsx('w-full h-14 rounded-lg mb-2 overflow-hidden flex flex-col', bg)}>
-        {/* Mini header */}
-        <div className={clsx('h-3 flex items-center px-1.5 gap-1', header)}>
-          <div className="w-6 h-1.5 rounded bg-primary-500" />
-          <div className="flex-1" />
-          <div className={clsx('w-1.5 h-1.5 rounded-full', dot)} />
-          <div className={clsx('w-1.5 h-1.5 rounded-full', dot)} />
-        </div>
-        {/* Mini content */}
-        <div className="flex flex-1 gap-1 p-1">
-          <div className={clsx('w-5 rounded', side)} />
-          <div className="flex-1 space-y-1">
-            <div className={clsx('h-2 rounded w-full', row1)} />
-            <div className={clsx('h-2 rounded w-3/4', row1)} />
-            <div className={clsx('h-2 rounded w-1/2', row1)} />
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{label}</span>
-        {active && (
-          <div className="w-4 h-4 bg-primary-500 rounded-full flex items-center justify-center">
-            <div className="w-1.5 h-1.5 bg-white rounded-full" />
-          </div>
-        )}
-      </div>
+      {active && (
+        <span className="absolute top-2 end-2 w-5 h-5 rounded-full bg-primary-500 text-white flex items-center justify-center"><Check size={12} /></span>
+      )}
+      <span className="block h-14 rounded-lg bg-slate-50 dark:bg-slate-900/60 p-2 mb-2">
+        <span className="flex gap-1.5 h-full">
+          <span className="flex flex-col gap-1 w-3">
+            <span className="h-1.5 rounded-sm" style={{ background: main }} />
+            <span className="h-1 rounded-sm bg-slate-200 dark:bg-slate-700" />
+            <span className="h-1 rounded-sm bg-slate-200 dark:bg-slate-700" />
+          </span>
+          <span className="flex-1 flex flex-col gap-1">
+            <span className="h-2 rounded-sm" style={{ background: main }} />
+            <span className="h-1.5 rounded-sm bg-slate-200 dark:bg-slate-700 w-3/4" />
+            <span className="flex gap-1 mt-auto">
+              <span className="h-2.5 flex-1 rounded-sm" style={{ background: dark }} />
+              <span className="h-2.5 flex-1 rounded-sm" style={{ background: main }} />
+              <span className="h-2.5 flex-1 rounded-sm" style={{ background: light }} />
+            </span>
+          </span>
+        </span>
+      </span>
+      <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">{preset.label}</span>
+      <span className="block text-xs text-slate-500 dark:text-slate-400">{preset.note}</span>
     </button>
   )
 }
 
 export default function SettingsPanel() {
   const {
-    theme, setTheme, isDark, toggleDark,
-    isRTL, toggleRTL,
-    sidebarCollapsed, toggleSidebar,
-    isHorizontal, toggleHorizontal,
-    colorPreset, setColorPreset,
-    settingsPanelOpen, closeSettingsPanel
+    appearance, userChoices, orgDefault, canSetOrg, setAppearance, resetAppearance,
+    isRTL, toggleRTL, sidebarCollapsed, toggleSidebar, isHorizontal, toggleHorizontal,
+    settingsPanelOpen, closeSettingsPanel,
   } = useTheme()
+  const [scope, setScope] = useState('me') // 'me' or 'org'
+  const [query, setQuery] = useState('')
 
   if (!settingsPanelOpen) return null
 
+  const editingOrg = scope === 'org' && canSetOrg
+  const shown = editingOrg ? orgDefault : appearance // what the cards show as selected
+  const set = (patch) => setAppearance(patch, editingOrg ? 'org' : 'me')
+  const presets = PRESETS.filter((p) => `${p.label} ${p.note}`.toLowerCase().includes(query.trim().toLowerCase()))
+  const personalised = Object.keys(userChoices || {}).length > 0
+
   return (
     <>
-      {/* Overlay */}
+      <div className="settings-overlay" onClick={closeSettingsPanel} />
       <div
-        className="settings-overlay"
-        onClick={closeSettingsPanel}
-      />
-
-      {/* Panel */}
-      <div className="fixed top-0 end-0 h-full w-80 bg-white dark:bg-slate-800 border-s border-slate-200 dark:border-slate-700 z-50 flex flex-col animate-slide-in-right rtl:animate-slide-in-left shadow-card-lg">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        role="dialog" aria-label="Appearance"
+        className="fixed top-0 end-0 h-full w-full sm:w-96 bg-white dark:bg-slate-800 border-s border-slate-200 dark:border-slate-700 z-50 flex flex-col animate-slide-in-right rtl:animate-slide-in-left shadow-card-lg"
+      >
+        <div className="flex items-start justify-between px-5 pt-4 pb-3">
           <div>
-            <h3 className="font-bold text-slate-800 dark:text-slate-200">Theme Settings</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Customize your dashboard appearance</p>
+            <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">Appearance</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Choose how the interface looks</p>
           </div>
-          <button
-            onClick={closeSettingsPanel}
-            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
-          >
+          <button onClick={closeSettingsPanel} aria-label="Close" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
             <X size={18} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {/* Color Mode */}
-          <div className="px-5 py-5 border-b border-slate-100 dark:border-slate-700">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Color Mode</h4>
-            <div className="flex gap-2">
-              <ModeCard variant="light" label="Light" active={theme === 'light'} onClick={() => setTheme('light')} />
-              <ModeCard variant="dim"   label="Dim"   active={theme === 'dim'}   onClick={() => setTheme('dim')}   />
-              <ModeCard variant="dark"  label="Dark"  active={theme === 'dark'}  onClick={() => setTheme('dark')}  />
-            </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-5 pb-5 space-y-5">
+          {canSetOrg && (
+            <Segmented
+              label="Who this applies to" value={scope} onChange={setScope}
+              options={[{ id: 'me', label: 'Just me' }, { id: 'org', label: 'Everyone' }]}
+            />
+          )}
+          {editingOrg && (
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              You are setting the organisation default. It applies to everyone who has not chosen their own look.
+            </p>
+          )}
+
+          <label className="relative block">
+            <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search themes…"
+              className="input ps-9 w-full text-sm"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            {presets.map((p) => (
+              <PresetCard key={p.id} preset={p} active={shown.preset === p.id} onClick={() => set({ preset: p.id })} />
+            ))}
+            {presets.length === 0 && <p className="col-span-2 text-sm text-slate-500">No theme matches “{query}”.</p>}
           </div>
 
-          {/* Color Presets */}
-          <div className="px-5 py-5 border-b border-slate-100 dark:border-slate-700">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Color Preset</h4>
-            <div className="flex flex-wrap gap-2">
-              {colorPresets.map(preset => (
+          <div>
+            <SectionTitle>Colour mode</SectionTitle>
+            <Segmented
+              label="Colour mode" value={shown.mode} onChange={(mode) => set({ mode })}
+              options={[
+                { id: 'light', label: 'Light', icon: <Sun size={14} /> },
+                { id: 'dark', label: 'Dark', icon: <Moon size={14} /> },
+                { id: 'system', label: 'System', icon: <Monitor size={14} /> },
+              ]}
+            />
+          </div>
+
+          <div>
+            <SectionTitle>Density</SectionTitle>
+            <Segmented
+              label="Density" value={shown.density} onChange={(density) => set({ density })}
+              options={[{ id: 'comfortable', label: 'Comfortable' }, { id: 'compact', label: 'Compact' }]}
+            />
+          </div>
+
+          <div>
+            <SectionTitle>Corners</SectionTitle>
+            <Segmented
+              label="Corners" value={shown.corners} onChange={(corners) => set({ corners })}
+              options={[{ id: 'sharp', label: 'Sharp' }, { id: 'default', label: 'Default' }, { id: 'round', label: 'Round' }]}
+            />
+          </div>
+
+          <div>
+            <SectionTitle>Font</SectionTitle>
+            <div className="grid grid-cols-2 gap-2">
+              {FONTS.map((f) => (
                 <button
-                  key={preset.id}
-                  onClick={() => setColorPreset(preset.id)}
-                  title={preset.label}
+                  key={f.id} type="button" aria-pressed={shown.font === f.id} onClick={() => set({ font: f.id })}
                   className={clsx(
-                    'flex flex-col items-center gap-1.5 p-2 w-14 rounded-xl transition-all duration-150',
-                    colorPreset === preset.id
-                      ? 'bg-slate-100 dark:bg-slate-700 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-800'
-                      : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                    'rounded-xl border-2 px-3 py-2 text-start transition-all',
+                    shown.font === f.id ? 'border-primary-500' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500',
                   )}
-                  style={colorPreset === preset.id ? { '--tw-ring-color': preset.hex } : {}}
                 >
-                  <div
-                    className="w-8 h-8 rounded-full shadow-sm"
-                    style={{ backgroundColor: preset.hex }}
-                  />
-                  <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400 text-center leading-tight">{preset.label}</span>
+                  <span className="block text-base text-slate-800 dark:text-slate-100" style={{ fontFamily: f.sample }}>Aa Bb 123</span>
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">{f.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Layout Options */}
-          <div className="px-5 py-5 border-b border-slate-100 dark:border-slate-700 space-y-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Layout</h4>
-            <Toggle
-              checked={sidebarCollapsed}
-              onChange={toggleSidebar}
-              label="Collapsed Sidebar"
-            />
-            <Toggle
-              checked={isHorizontal}
-              onChange={toggleHorizontal}
-              label="Horizontal Menu"
-            />
+          <div>
+            <SectionTitle>Font size</SectionTitle>
+            <Segmented label="Font size" value={shown.fontSize} onChange={(fontSize) => set({ fontSize })} options={FONT_SIZES} />
           </div>
 
-          {/* Locale Options */}
-          <div className="px-5 py-5 space-y-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Regional</h4>
-            <Toggle
-              checked={isRTL}
-              onChange={toggleRTL}
-              label="RTL Direction"
-            />
-          </div>
-
-          {/* Preview info */}
-          <div className="px-5 pb-5">
-            <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-xl border border-primary-100 dark:border-primary-800/30">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center shrink-0">
-                  <Monitor size={16} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Live Preview</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    All changes apply instantly across the entire dashboard.
-                  </p>
-                </div>
-              </div>
-            </div>
+          <div className="space-y-3 pt-1">
+            <SectionTitle>Layout on this device</SectionTitle>
+            <Toggle checked={sidebarCollapsed} onChange={toggleSidebar} label="Collapsed sidebar" />
+            <Toggle checked={isHorizontal} onChange={toggleHorizontal} label="Horizontal menu" />
+            <Toggle checked={isRTL} onChange={toggleRTL} label="Right-to-left direction" />
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-700">
-          <button
-            onClick={closeSettingsPanel}
-            className="w-full btn-gradient py-2.5 text-sm"
-          >
-            Apply & Close
-          </button>
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700">
+          {!editingOrg && (
+            <button
+              type="button" onClick={resetAppearance} disabled={!personalised}
+              className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-40"
+            >
+              <RotateCcw size={15} /> Reset to organisation default
+            </button>
+          )}
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+            {editingOrg ? 'Saved for the whole organisation.' : 'Your choice is saved to your account and follows you to other devices.'}
+          </p>
         </div>
       </div>
     </>

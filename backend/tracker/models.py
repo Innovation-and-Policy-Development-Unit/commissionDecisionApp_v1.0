@@ -1074,6 +1074,9 @@ class Profile(models.Model):
         related_name="psc_profile",
     )
     role = models.CharField(max_length=32, choices=Role.choices)
+    # The user's own Appearance choices (theme, colour mode, density, corners, font, font size).
+    # Empty = follow the organisation default. See appearance_views.
+    ui_preferences = models.JSONField(default=dict, blank=True)
     ministry = models.ForeignKey(Ministry, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles")
     department = models.ForeignKey(
         Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="profiles"

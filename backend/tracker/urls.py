@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .comment_views import CommentViewSet, activity_timeline, mention_suggest
 from .chat_views import ConversationViewSet, attachment_download, chat_users
+from .appearance_views import appearance, appearance_me, appearance_org
 from .smart_report_views import SmartReportViewSet
 from .report_template_views import ReportTemplateViewSet
 from .intelligence_views import (
@@ -238,6 +239,9 @@ urlpatterns = [
     path("reports/ai-smart-query/", ai_smart_report_view),
     path("mentions/suggest/", mention_suggest),
     path("chat/users/", chat_users),
+    path("appearance/", appearance),
+    path("appearance/me/", appearance_me),
+    path("appearance/org/", appearance_org),
     path("chat/attachments/<int:attachment_id>/", attachment_download),
     path("activity/", activity_timeline),
     path("intelligence/datasets/", intelligence_datasets),

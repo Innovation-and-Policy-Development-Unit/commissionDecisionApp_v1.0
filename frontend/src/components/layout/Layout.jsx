@@ -25,9 +25,13 @@ export default function Layout() {
     feedbackPanelOpen,
     closeFeedbackPanel,
     toggleFeedbackPanel,
-    feedbackEnabled
+    feedbackEnabled,
+    loadAppearance,
   } = useTheme()
   const navigate = useNavigate()
+
+  // Signed in: bring this account's Appearance choices and the organisation default.
+  useEffect(() => { loadAppearance() }, [loadAppearance])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
