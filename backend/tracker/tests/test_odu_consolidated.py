@@ -121,6 +121,55 @@ class ConsolidatedPaperTests(TestCase):
         plan = self._plan(self.ma, WorkflowStage.MANAGER_CHECKLIST_REVIEW, ref="SUB-NOTE-2")
         self.assertEqual(self._move(self.manager, plan, WorkflowStage.PENDING_SECRETARY_APPROVAL).status_code, 403)
 
+    # ── ODU only acknowledges receipt of Business and Corporate Plans ──
+    def test_the_manager_can_only_acknowledge_a_business_or_corporate_plan(self):
+        for code in ("BUSINESS-PLAN", "CORPORATE-PLAN"):
+            for role in (Role.ODU_MANAGER, Role.PSC_ADMIN):
+                self.assertEqual(
+                    iter_allowed_targets(role, WorkflowStage.MANAGER_CHECKLIST_REVIEW, form_type_code=code),
+                    [WorkflowStage.NOTED], (role, code),
+                )
+
+    def test_an_annual_report_is_still_reviewed_before_it_is_noted(self):
+        targets = iter_allowed_targets(Role.ODU_MANAGER, WorkflowStage.MANAGER_CHECKLIST_REVIEW, form_type_code="ANNUAL-REPORT")
+        self.assertIn(WorkflowStage.NOTED, targets)
+        self.assertGreater(len(targets), 1)  # not acknowledge-only: other routes remain open
+
+    def test_acknowledging_needs_no_principal_review_and_no_checklist(self):
+        # Assigned to a principal who never handed it back, documents not ticked: still acknowledged.
+        plan = self._plan(self.ma, WorkflowStage.MANAGER_CHECKLIST_REVIEW, code="CORPORATE-PLAN", ref="SUB-ACK-1")
+        res = self._move(self.manager, plan, WorkflowStage.NOTED)
+        self.assertEqual(res.status_code, 200, res.content)
+        plan.refresh_from_db()
+        self.assertEqual(plan.current_stage, WorkflowStage.NOTED)
+
+    def test_the_manager_cannot_return_a_plan_to_the_ministry(self):
+        plan = self._plan(self.ma, WorkflowStage.MANAGER_CHECKLIST_REVIEW, ref="SUB-ACK-2")
+        self.assertEqual(self._move(self.manager, plan, WorkflowStage.RETURNED_FOR_CLARIFICATION).status_code, 403)
+
+    # ── the receipt due date opens the paper ──
+    def test_the_paper_waits_for_its_own_receipt_due_date(self):
+        import datetime
+        from unittest import mock
+
+        self._plan(self.ma, WorkflowStage.NOTED, code="CORPORATE-PLAN", ref="SUB-DUE-1")
+        paper = self._paper("ODU-CORPORATE-PLANS")
+        year = timezone.localdate().year
+        with mock.patch.dict("os.environ", {"ODU_RECEIPT_DUE_CORPORATE_PLAN": "12-31"}):
+            gaps = consolidation_gaps(paper)
+            self.assertEqual(len(gaps), 1)
+            self.assertIn(f"31 December {year}", gaps[0])
+            self.assertFalse(coverage_payload(paper)["receipt_due_passed"])
+            with mock.patch("django.utils.timezone.localdate", return_value=datetime.date(year + 1, 1, 1)):
+                self.assertEqual(consolidation_gaps(paper), [])
+        with mock.patch.dict("os.environ", {"ODU_RECEIPT_DUE_CORPORATE_PLAN": "01-01"}):
+            self.assertEqual(consolidation_gaps(paper), [])  # passed long ago
+
+    def test_the_two_plan_types_have_different_due_dates(self):
+        from ..odu_consolidation import receipt_due_date
+        self.assertEqual(receipt_due_date("BUSINESS-PLAN", 2027).isoformat(), "2027-02-28")
+        self.assertIsNone(receipt_due_date("CORPORATE-PLAN", 2027))
+
     # ── coverage ──
     def test_noted_plans_are_ready_to_be_covered_and_unnoted_ones_hold_the_paper_up(self):
         paper = self._paper()

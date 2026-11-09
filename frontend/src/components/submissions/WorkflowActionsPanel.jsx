@@ -292,6 +292,17 @@ const STAGE_ACTIONS = {
 
   manager_checklist_review: [
     {
+      // Business and Corporate Plans: ODU only acknowledges receipt, and it ends there.
+      id: 'acknowledge_receipt',
+      label: 'Acknowledge receipt',
+      description: 'Record that ODU has received this plan — no review, no Secretary step',
+      icon: ClipboardCheck,
+      variant: 'primary',
+      transitionTo: 'noted',
+      requiresNote: false,
+      acknowledgeOnly: true,
+    },
+    {
       id: 'submit_to_secretary',
       label: 'Submit to Secretary',
       description: 'Checklist is satisfactory — forward to the Secretary',
@@ -542,8 +553,10 @@ export default function WorkflowActionsPanel({
   // that assignee has finished their work and handed it back via "Submit to
   // Manager" (sets ready_for_manager_at). Matches the backend gate in
   // views.py's transition() action.
+  const acknowledgeOnly = ['BUSINESS-PLAN', 'CORPORATE-PLAN'].includes(submission?.form_type_code)
   const awaitingAssignedReview = (
-    (stage === 'manager_checklist_review' || stage === 'under_assessment')
+    !acknowledgeOnly
+    && (stage === 'manager_checklist_review' || stage === 'under_assessment')
     && !!submission?.assigned_to
     && !submission?.ready_for_manager_at
   )
@@ -559,7 +572,7 @@ export default function WorkflowActionsPanel({
   const checklistTotalCount = mandatoryChecklistItems.length
 
   const statusItems = []
-  if (isHandoffStage && submission?.assigned_to) {
+  if (isHandoffStage && submission?.assigned_to && !acknowledgeOnly) {
     if (!submission?.ready_for_manager_at) {
       statusItems.push({
         Icon: Clock,
@@ -612,6 +625,7 @@ export default function WorkflowActionsPanel({
       // One "Submit" per kind of draft: ministry papers go to PSC, OPSC-internal
       // ones to the Secretary.
       const ministryOrigin = !submission?.is_internal && !submission?.secretary_only
+      if (action.acknowledgeOnly !== undefined && action.acknowledgeOnly !== acknowledgeOnly) return false
       if (action.ministryOnly && !ministryOrigin) return false
       if (action.internalOnly && ministryOrigin) return false
       return !!resolveTarget(action, allowed)

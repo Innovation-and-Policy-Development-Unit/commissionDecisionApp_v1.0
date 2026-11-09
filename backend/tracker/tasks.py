@@ -4500,6 +4500,36 @@ def queue_report_review(submission_id: int) -> None:
 queue_annual_report_review = queue_report_review  # original name, still imported by older callers
 
 
+@shared_task(bind=True, max_retries=4)
+def digest_plan_task(self, submission_id: int):
+    """AI summary of an acknowledged Business / Corporate Plan, for ODU's paper to the Commission."""
+    from .ai.annual_report_review import documents_waiting_for_text
+    from .ai.plan_digest import build_digest
+    from .models import ReportAIReview, Submission
+    from .odu_checklist_rules import ODU_ACKNOWLEDGE_ONLY_FORM_CODES
+
+    sub = Submission.objects.filter(pk=submission_id, form_type_code__in=ODU_ACKNOWLEDGE_ONLY_FORM_CODES).first()
+    if not sub:
+        return
+    if documents_waiting_for_text(sub) and self.request.retries < self.max_retries:
+        raise self.retry(countdown=90)
+    try:
+        digest, err = build_digest(sub)
+    except Exception as exc:
+        app_log.exception("PLAN_DIGEST_FAIL | submission=%s", submission_id)
+        digest, err = None, str(exc)
+    review, _ = ReportAIReview.objects.get_or_create(submission=sub)
+    review.plan_digest = digest or {"error": err or "The summary could not be produced."}
+    review.save(update_fields=["plan_digest"])
+
+
+def queue_plan_digest(submission_id: int) -> None:
+    try:
+        digest_plan_task.delay(submission_id)
+    except Exception as exc:
+        app_log.warning("PLAN_DIGEST_QUEUE_FAIL | %s | %s", submission_id, exc)
+
+
 # ── ODU's own papers: AI first draft of the template text ───────────────────────
 
 @shared_task(bind=True, max_retries=2)

@@ -2436,6 +2436,7 @@ const stageDescriptions = {
             ODU_AUTHOR_ROLES.concat(['psc_admin']).includes(user.role)
             && ['draft', 'returned_for_clarification'].includes(submission.current_stage)
           }
+          current={dynamicForm || {}}
           onUse={(key, text) => setDynamicForm(prev => ({ ...(prev || {}), [key]: text }))}
         />
       </div>

@@ -16,7 +16,7 @@ export const CONSOLIDATED_CODES = ['ODU-BUSINESS-PLANS', 'ODU-CORPORATE-PLANS', 
 const STATE = {
   covered: { label: 'Covered', color: 'success' },
   will_cover: { label: 'Will be covered', color: 'info' },
-  waiting: { label: 'Not noted yet', color: 'warning' },
+  waiting: { label: 'Receipt not acknowledged', color: 'warning' },
 }
 const REC = {
   accept: 'Looks complete',
@@ -61,7 +61,8 @@ export default function ConsolidationPanel({ submissionId }) {
       </div>
 
       <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-        {c.covered || 0} covered · {c.will_cover || 0} noted and will be covered when this paper goes up · {c.waiting || 0} not noted yet.
+        {c.covered || 0} covered · {c.will_cover || 0} acknowledged and will be covered when this paper goes up · {c.waiting || 0} not acknowledged yet.
+        {data.receipt_due_date ? ` Receipt due date: ${data.receipt_due_date}.` : ''}
         Every lodged {data.plan_label.toLowerCase()} must be covered, so the paper cannot go up while any is still with ODU or back with its ministry.
       </p>
 

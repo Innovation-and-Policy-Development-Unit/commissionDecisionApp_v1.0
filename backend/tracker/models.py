@@ -4777,6 +4777,10 @@ class ReportAIReview(models.Model):
     started_at = models.DateTimeField(null=True, blank=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # AI summary of what a Business / Corporate Plan says (see ai.plan_digest), written once ODU
+    # acknowledges receipt and used to draft ODU's paper to the Commission. Kept apart from
+    # ``result`` so a re-run of the first-pass review never wipes it.
+    plan_digest = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return f"AI review of {self.submission_id} ({self.state or 'not run'})"
