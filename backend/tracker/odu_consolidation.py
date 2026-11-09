@@ -1,14 +1,14 @@
 """ODU's consolidated papers: one paper to the Commission per type of ministry submission.
 
-Ministries lodge their Business Plan, Corporate Plan or Annual Report with ODU. For Business and
-Corporate Plans ODU only acknowledges receipt; an Annual Report is reviewed first. The Manager NOTES it, which ends that ministry submission at ODU. ODU then writes ONE
+Ministries lodge their Business Plan, Corporate Plan or Annual Report with ODU, which only
+acknowledges receipt. The Manager NOTES it, which ends that ministry submission at ODU. ODU then writes ONE
 paper (``ODU-BUSINESS-PLANS``, ``ODU-CORPORATE-PLANS`` or ``ODU-ANNUAL-REPORTS``) covering all
 the ones it has noted. The Commission notes that paper and may decide on particular ministries.
 
 Rules, as ODU set them out:
 
-* ODU waits until the receipt due date for that type of plan has passed (Business and Corporate
-  Plans each have their own), and until every lodged plan has had its receipt acknowledged.
+* ODU waits until the receipt due date for that type has passed (each type has its own), or for a yearly
+  type once every ministry has lodged, and until every lodged one has had its receipt acknowledged.
 * Every lodged plan is covered. A paper cannot go up while a lodged plan of its type is still
   with ODU or with the ministry for clarification.
 * No supplementary paper. A plan that arrives after the paper has gone up waits for the next
@@ -51,7 +51,7 @@ WAITING_STAGES = frozenset({
 # Receipt due dates, one per type of plan: ODU may send its paper to the Commission once the due
 # date has passed. "MM-DD" each year; override with the env vars below. A type with no date set has
 # no date gate (the Corporate Plan's date has not been fixed yet).
-_DEFAULT_RECEIPT_DUE = {"BUSINESS-PLAN": "02-28", "CORPORATE-PLAN": ""}
+_DEFAULT_RECEIPT_DUE = {"BUSINESS-PLAN": "02-28", "CORPORATE-PLAN": "", "ANNUAL-REPORT": "03-31"}
 
 
 def receipt_due_date(plan_type: str, year: int) -> date | None:
@@ -63,15 +63,43 @@ def receipt_due_date(plan_type: str, year: int) -> date | None:
         return None
 
 
+def not_lodged_ministries(paper) -> list[str]:
+    """Informational, for the two yearly papers: ministries with nothing lodged this year. (A
+    Corporate Plan covers five years, so a yearly "not lodged" list would mislead.)"""
+    from .models import Ministry
+
+    covers = covered_form_type(paper)
+    if covers not in ("BUSINESS-PLAN", "ANNUAL-REPORT"):
+        return []
+    year = (paper.received_at or paper.created_at).year
+    have = set(
+        Submission.objects.filter(
+            form_type_code=covers, is_test=False, received_at__year=year,
+        ).exclude(current_stage__in=[WorkflowStage.DRAFT, WorkflowStage.RECALLED])
+        .values_list("ministry_id", flat=True)
+    )
+    return list(
+        # OPSC's own ministry (the one that holds the OPSC department) never lodges with ODU.
+        Ministry.objects.exclude(id__in=have).exclude(departments__code="OPSC")
+        .order_by("name").values_list("name", flat=True)
+    )
+
+
 def _due_gap(paper, plural: str) -> tuple[date | None, str | None]:
-    """(due date, reason the paper cannot go up yet because the due date has not passed)."""
+    """(due date, reason the paper cannot go up yet).
+
+    The paper opens once the receipt due date has passed, or earlier for a yearly type when every
+    ministry has already lodged.
+    """
     covers = covered_form_type(paper)
     year = timezone.localtime(paper.received_at or paper.created_at).year
     due = receipt_due_date(covers, year)
-    if due and timezone.localdate() <= due:
+    if due and timezone.localdate() <= due and not (
+        covers in ("BUSINESS-PLAN", "ANNUAL-REPORT") and not not_lodged_ministries(paper)
+    ):
         return due, (
             f"the receipt due date for {plural.lower()} is {due.day} {due.strftime('%B %Y')}: "
-            "this paper can go up after that date."
+            "this paper can go up after that date, or once every ministry has lodged."
         )
     return due, None
 
@@ -171,8 +199,6 @@ def _row(sub, state: str) -> dict:
 
 def coverage_payload(paper) -> dict:
     """What the ODU screen shows: what the paper covers, will cover, is waiting on, and who has not lodged."""
-    from .models import Ministry
-
     covers = covered_form_type(paper)
     if not covers:
         return {}
@@ -181,22 +207,7 @@ def coverage_payload(paper) -> dict:
     rows_ready = [_row(s, "will_cover") for s in ready_to_cover(paper).order_by("ministry__name")]
     rows_waiting = [_row(s, "waiting") for s in waiting(paper).order_by("ministry__name")]
 
-    # Informational, for the two yearly papers: ministries with nothing lodged this year. (A
-    # Corporate Plan covers five years, so a yearly "not lodged" list would mislead.)
-    not_lodged: list[str] = []
-    if covers in ("BUSINESS-PLAN", "ANNUAL-REPORT"):
-        year = (paper.received_at or paper.created_at).year
-        have = set(
-            Submission.objects.filter(
-                form_type_code=covers, is_test=False, received_at__year=year,
-            ).exclude(current_stage__in=[WorkflowStage.DRAFT, WorkflowStage.RECALLED])
-            .values_list("ministry_id", flat=True)
-        )
-        not_lodged = list(
-            # OPSC's own ministry (the one that holds the OPSC department) never lodges with ODU.
-            Ministry.objects.exclude(id__in=have).exclude(departments__code="OPSC")
-            .order_by("name").values_list("name", flat=True)
-        )
+    not_lodged = not_lodged_ministries(paper)
     gaps = consolidation_gaps(paper)
     return {
         "plan_type": covers,

@@ -292,10 +292,10 @@ const STAGE_ACTIONS = {
 
   manager_checklist_review: [
     {
-      // Business and Corporate Plans: ODU only acknowledges receipt, and it ends there.
+      // Business Plans, Corporate Plans and Annual Reports: ODU only acknowledges receipt, and it ends there.
       id: 'acknowledge_receipt',
       label: 'Acknowledge receipt',
-      description: 'Record that ODU has received this plan — no review, no Secretary step',
+      description: 'Record that ODU has received this — no review, no Secretary step',
       icon: ClipboardCheck,
       variant: 'primary',
       transitionTo: 'noted',
@@ -553,7 +553,7 @@ export default function WorkflowActionsPanel({
   // that assignee has finished their work and handed it back via "Submit to
   // Manager" (sets ready_for_manager_at). Matches the backend gate in
   // views.py's transition() action.
-  const acknowledgeOnly = ['BUSINESS-PLAN', 'CORPORATE-PLAN'].includes(submission?.form_type_code)
+  const acknowledgeOnly = ['BUSINESS-PLAN', 'CORPORATE-PLAN', 'ANNUAL-REPORT'].includes(submission?.form_type_code)
   const awaitingAssignedReview = (
     !acknowledgeOnly
     && (stage === 'manager_checklist_review' || stage === 'under_assessment')
