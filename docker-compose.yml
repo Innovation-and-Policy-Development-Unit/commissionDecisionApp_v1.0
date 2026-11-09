@@ -193,6 +193,12 @@ services:
       - "${WEB_PORT:-8080}:80"
     volumes:
       - scdms_media:/var/scdms/media:ro
+    # Keep the access log (with request timing) on the host's journal so it survives a
+    # redeploy: read it with `sudo journalctl -t scdms-web --since "2 hours ago"`.
+    logging:
+      driver: journald
+      options:
+        tag: scdms-web
     depends_on:
       backend:
         condition: service_healthy
