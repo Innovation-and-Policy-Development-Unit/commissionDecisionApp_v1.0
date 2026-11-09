@@ -106,9 +106,10 @@ const PACKAGE_VALIDATE_ROLES = [
   'odu_manager', 'odu_principal', 'odu_senior',
   'compliance_manager', 'compliance_senior', 'compliance_principal',
 ]
-// ODU's own papers (the overseas travel report) list their required document and
+// ODU's own papers (the overseas travel report and the Organisation Performance Assessment
+// Feedback Report) list their required document and
 // take the file from ODU staff, who attach it themselves rather than tick a box.
-const ODU_OWN_PAPER_CODES = ['ODU-TRAVEL-REPORT']
+const ODU_OWN_PAPER_CODES = ['ODU-TRAVEL-REPORT', 'ODU-OPA-FEEDBACK-REPORT']
 const ODU_AUTHOR_ROLES = ['odu_manager', 'odu_principal', 'odu_senior']
 const CHECKLIST_EDIT_ROLES = [
   'ministry_hr', 'dept_admin', 'head_of_agency',

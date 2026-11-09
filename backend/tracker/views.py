@@ -1639,7 +1639,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             form_code = normalize_form_type_code(self.request.data.get("form_type_code") or "")
             if form_code not in ODU_INTERNAL_FORM_CODES:
                 raise ValidationError({
-                    "form_type_code": "ODU staff can only create the overseas travel report here; "
+                    "form_type_code": "ODU staff can only create the overseas travel report and the "
+                                      "Organisation Performance Assessment Feedback Report here; "
                                       "other ODU submission types are lodged by ministries."
                 })
             org = _resolve_opsc_submission_org(profile)
