@@ -172,3 +172,19 @@ class CaseAssistantTests(TestCase):
         # and a fresh question after clearing does not resurrect the old turns as history
         self._ask(self.comm, message="Again?")
         self.assertEqual(len(_client(self.comm).get(self.url).data["messages"]), 2)
+
+    def test_a_failed_outcome_run_does_not_leak_the_provider_error(self):
+        self.sub.ai_outcome_recommendation = ""
+        self.sub.ai_outcome_confidence = None
+        self.sub.ai_outcome_rationale = "AI error: Gemini API HTTP 404: models/x is not found"
+        self.sub.save()
+        r = _client(self.comm).get(f"/api/submissions/{self.sub.pk}/review-card/")
+        rec = r.data["recommendation"]
+        self.assertTrue(rec["failed"])
+        self.assertEqual(rec["rationale"], "")
+        self.assertNotIn("404", str(r.data))
+
+    def test_a_real_recommendation_is_not_marked_failed(self):
+        r = _client(self.comm).get(f"/api/submissions/{self.sub.pk}/review-card/")
+        self.assertFalse(r.data["recommendation"]["failed"])
+        self.assertEqual(r.data["recommendation"]["rationale"], "Meets the criteria.")

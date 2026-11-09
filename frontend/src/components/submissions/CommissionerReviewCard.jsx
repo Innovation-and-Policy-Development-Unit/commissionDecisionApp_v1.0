@@ -127,7 +127,9 @@ export default function CommissionerReviewCard({ submissionId, onAsk }) {
               <div className="flex flex-wrap items-center gap-2">
                 {action
                   ? <BaseBadge color={action.color}>{action.label}</BaseBadge>
-                  : <span className="text-sm text-slate-500">No clear recommendation recorded — re-run to refresh.</span>}
+                  : rec.failed
+                    ? <span className="text-sm text-amber-700 dark:text-amber-300">The review could not run just now. Click Re-run to try again.</span>
+                    : <span className="text-sm text-slate-500">No clear recommendation recorded — re-run to refresh.</span>}
                 {rec.confidence != null && action && (
                   <span className="text-xs text-slate-500">{rec.confidence}% confidence</span>
                 )}

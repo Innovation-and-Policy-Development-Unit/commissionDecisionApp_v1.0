@@ -1,14 +1,14 @@
 # AI features — Gemini + Whisper
 
-Server-side AI uses **Google Gemini** (Google AI Studio, free tier) for text/reasoning and
+Server-side AI uses **Google Gemini** (Google AI Studio, paid tier — see the note in `config/settings.py` on data terms) for text/reasoning and
 **OpenAI Whisper** for meeting audio transcription.
 
 ## Configuration
 
 ```env
 GEMINI_API_KEY=AIza...
-GEMINI_MODEL_HAIKU=gemini-flash-lite-latest
-GEMINI_MODEL_SONNET=gemini-flash-latest
+GEMINI_MODEL_HAIKU=gemini-3.5-flash-lite
+GEMINI_MODEL_SONNET=gemini-3.8-flash
 
 OPENAI_API_KEY=sk-...
 WHISPER_MODEL=whisper-1

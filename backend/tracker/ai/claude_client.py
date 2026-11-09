@@ -1,5 +1,5 @@
 """
-Google Gemini API wrapper for CDP/CMS AI features (Google AI Studio, free tier).
+Google Gemini API wrapper for CDP/CMS AI features (Google AI Studio, paid tier).
 
 Configure via:
   GEMINI_API_KEY
@@ -28,8 +28,8 @@ ModelTier = Literal["haiku", "sonnet"]
 # projects as of Aug 2026); the -latest aliases track whatever generation is
 # current so this doesn't need a code change every time Google cycles models.
 _CURRENT_DEFAULTS: dict[ModelTier, str] = {
-    "sonnet": "gemini-flash-latest",
-    "haiku": "gemini-flash-lite-latest",
+    "sonnet": "gemini-3.8-flash",
+    "haiku": "gemini-3.5-flash-lite",
 }
 
 

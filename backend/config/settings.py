@@ -542,7 +542,11 @@ VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '').strip()
 VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '').strip()
 VAPID_SUBJECT = os.getenv('VAPID_SUBJECT', 'mailto:admin@psc.gov.vu').strip()
 
-# ── AI / Gemini API (Google AI Studio, free tier) ────────────────────────────
+# ── AI / Gemini API (Google AI Studio, paid tier) ────────────────────────────
+# Keep billing attached to the project behind GEMINI_API_KEY: on Google's paid terms prompts
+# are not used to improve Google's products; on the unpaid tier they are, and may be read by
+# reviewers. Use real model IDs, not the *-latest aliases: Google removed those aliases in
+# Nov 2026 and every AI feature returned 404 until they were replaced.
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'whisper-1')
@@ -551,11 +555,12 @@ WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'whisper-1')
 QUARTO_BIN = os.getenv('QUARTO_BIN', 'quarto')
 QUARTO_RENDER_TIMEOUT = int(os.getenv('QUARTO_RENDER_TIMEOUT', '180'))
 # Fast tier: feedback, classification, extraction (see AI_Features_List.txt)
-# Rolling aliases (not pinned snapshots) so a future Google model-generation
-# cutover doesn't 404 like gemini-2.5-flash-lite did for new API keys.
-GEMINI_MODEL_HAIKU = os.getenv('GEMINI_MODEL_HAIKU', 'gemini-flash-lite-latest')
+# Google retires models: gemini-2.5-* and the *-latest aliases both stopped working. If AI
+# calls start failing with HTTP 404 "model not found", set these two in .env to a current
+# ID (list them with client.models.list()) and recreate backend, celery_worker, celery_beat.
+GEMINI_MODEL_HAIKU = os.getenv('GEMINI_MODEL_HAIKU', 'gemini-3.5-flash-lite')
 # Quality tier: executive briefs, minutes drafting, similarity, chatbots
-GEMINI_MODEL_SONNET = os.getenv('GEMINI_MODEL_SONNET', 'gemini-flash-latest')
+GEMINI_MODEL_SONNET = os.getenv('GEMINI_MODEL_SONNET', 'gemini-3.8-flash')
 # A3 — block draft→submitted when critical package gaps remain (set false to warn only)
 AI_PACKAGE_BLOCK_SUBMIT = os.getenv('AI_PACKAGE_BLOCK_SUBMIT', 'true').lower() in (
     '1', 'true', 'yes', 'on',
