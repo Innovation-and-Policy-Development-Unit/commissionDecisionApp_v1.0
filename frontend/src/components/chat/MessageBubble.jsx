@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CornerUpLeft, FileText, Pencil, Smile, Trash2 } from 'lucide-react'
 import MentionText from '../shared/MentionText'
+import EmojiPicker from './EmojiPicker'
+import Lightbox from './Lightbox'
+import { downloadAttachment, useAttachmentUrl } from './chatMedia'
 import { useConfirm } from '../../context/ConfirmContext'
 
 const QUICK_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏']
@@ -12,29 +15,49 @@ function messageTime(iso) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function AttachmentPreview({ attachment }) {
-  const isImage = (attachment.content_type || '').startsWith('image/')
-  if (isImage) {
-    return (
-      <a href={attachment.url} target="_blank" rel="noreferrer" className="block mt-1">
-        <img
-          src={attachment.url}
-          alt={attachment.original_name}
-          className="max-w-full max-h-48 rounded-lg border border-black/5 object-cover"
-        />
-      </a>
-    )
+function ImageThumb({ attachment, onOpen }) {
+  const { url, failed } = useAttachmentUrl(attachment, { thumb: true })
+  if (failed) {
+    return <span className="mt-1 block text-xs italic opacity-70">{attachment.original_name} could not be loaded</span>
   }
   return (
-    <a
-      href={attachment.url}
-      target="_blank"
-      rel="noreferrer"
-      className="mt-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-black/5 dark:bg-white/10 text-xs hover:bg-black/10 dark:hover:bg-white/20"
+    <button type="button" onClick={onOpen} className="block mt-1" aria-label={`Open ${attachment.original_name}`}>
+      {url
+        ? <img src={url} alt={attachment.original_name} className="max-w-full max-h-48 rounded-lg border border-black/5 object-cover" />
+        : <span className="block w-40 h-28 rounded-lg bg-black/10 animate-pulse" />}
+    </button>
+  )
+}
+
+function FileChip({ attachment }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => { setBusy(true); try { await downloadAttachment(attachment) } finally { setBusy(false) } }}
+      className="mt-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-black/5 dark:bg-white/10 text-xs hover:bg-black/10 dark:hover:bg-white/20 max-w-full"
     >
       <FileText size={14} className="shrink-0" />
       <span className="truncate">{attachment.original_name}</span>
-    </a>
+    </button>
+  )
+}
+
+function Attachments({ attachments }) {
+  const [open, setOpen] = useState(null)
+  const images = attachments.filter((a) => (a.content_type || '').startsWith('image/'))
+  const files = attachments.filter((a) => !(a.content_type || '').startsWith('image/'))
+  return (
+    <>
+      {images.length > 0 && (
+        <div className={images.length > 1 ? 'grid grid-cols-2 gap-1' : ''}>
+          {images.map((a, i) => <ImageThumb key={a.id} attachment={a} onOpen={() => setOpen(i)} />)}
+        </div>
+      )}
+      {files.map((a) => <FileChip key={a.id} attachment={a} />)}
+      {open != null && <Lightbox images={images} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
+    </>
   )
 }
 
@@ -42,6 +65,7 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, onDelet
   const confirm = useConfirm()
   const { t } = useTranslation()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editDraft, setEditDraft] = useState(message.body)
 
@@ -108,7 +132,7 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, onDelet
             ) : (
               <>
                 {message.body && <MentionText body={message.body} />}
-                {(message.attachments || []).map((a) => <AttachmentPreview key={a.id} attachment={a} />)}
+                {(message.attachments || []).length > 0 && <Attachments attachments={message.attachments} />}
               </>
             )}
             <p className={`mt-0.5 text-[10px] flex items-center gap-1 ${isOwn ? 'text-primary-100' : 'text-slate-400'}`}>
@@ -132,6 +156,13 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, onDelet
                     {e}
                   </button>
                 ))}
+                <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-label="More emoji"
+                  className="text-base leading-none px-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">+</button>
+                {moreOpen && (
+                  <div className="absolute bottom-full mb-1 right-0">
+                    <EmojiPicker onPick={(e) => { onReact(message.id, e); setPickerOpen(false); setMoreOpen(false) }} />
+                  </div>
+                )}
               </div>
             )}
           </div>

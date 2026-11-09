@@ -186,11 +186,12 @@ class ConversationViewSet(
         from .file_validation import FileValidationError, validate_upload
 
         MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024
+        sniffed = {}  # the file's real type, not what the browser claimed
         for f in files:
             if f.size > MAX_ATTACHMENT_SIZE:
                 raise ValidationError({"files": f"'{f.name}' exceeds the 25 MB limit."})
             try:
-                validate_upload(f, kind="document")
+                sniffed[id(f)] = validate_upload(f, kind="document")
             except FileValidationError as exc:
                 raise ValidationError({"files": str(exc)})
 
@@ -200,7 +201,7 @@ class ConversationViewSet(
         for f in files:
             MessageAttachment.objects.create(
                 message=message, file=f, original_name=f.name,
-                content_type=f.content_type or "", size=f.size,
+                content_type=sniffed.get(id(f)) or f.content_type or "", size=f.size,
             )
         Conversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
         notify_chat_mentions(message, conversation)
@@ -256,6 +257,9 @@ class ConversationViewSet(
         emoji = (request.data.get("emoji") or "").strip()
         if not emoji:
             raise ValidationError({"emoji": "Required."})
+        # A single emoji, not text: at most 16 characters, none of them plain ASCII letters/digits.
+        if len(emoji) > 16 or any(c.isascii() and c.isalnum() for c in emoji) or any(c.isspace() for c in emoji):
+            raise ValidationError({"emoji": "Pick an emoji."})
 
         existing = MessageReaction.objects.filter(message=message, user=request.user).first()
         if existing and existing.emoji == emoji:
@@ -379,9 +383,46 @@ def attachment_download(request, attachment_id):
     if not is_participant:
         raise PermissionDenied("You do not have access to this file.")
 
+    content_type = attachment.content_type or "application/octet-stream"
+    if request.query_params.get("thumb") and content_type in _THUMBNAILABLE:
+        thumb = _thumbnail(attachment)
+        if thumb is not None:
+            return FileResponse(thumb, as_attachment=False, content_type="image/jpeg")
+
     return FileResponse(
         attachment.file.open("rb"),
-        as_attachment=False,
+        as_attachment=bool(request.query_params.get("download")),
         filename=attachment.original_name,
-        content_type=attachment.content_type or "application/octet-stream",
+        content_type=content_type,
     )
+
+
+_THUMBNAILABLE = {"image/png", "image/jpeg", "image/webp"}  # GIFs are served as they are (animation)
+THUMB_MAX = 480
+
+
+def _thumbnail(attachment):
+    """A small JPEG of an image attachment, made once and kept beside the original."""
+    from django.core.files.base import ContentFile
+    from PIL import Image, ImageOps
+
+    storage = attachment.file.storage
+    name = f"{attachment.file.name}.thumb.jpg"
+    try:
+        if storage.exists(name):
+            return storage.open(name, "rb")
+        with attachment.file.open("rb") as fh:
+            img = ImageOps.exif_transpose(Image.open(fh))
+            img.thumbnail((THUMB_MAX, THUMB_MAX))
+            if img.mode not in ("RGB", "L"):
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                background.paste(img.convert("RGBA"), mask=img.convert("RGBA").split()[-1])
+                img = background
+            from io import BytesIO
+
+            buf = BytesIO()
+            img.convert("RGB").save(buf, "JPEG", quality=80)
+        storage.save(name, ContentFile(buf.getvalue()))
+        return storage.open(name, "rb")
+    except Exception:
+        return None  # fall back to the original

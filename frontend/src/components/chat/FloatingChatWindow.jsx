@@ -39,17 +39,17 @@ export default function FloatingChatWindow({ conversationId, minimized }) {
   if (!conversation) return null
   const displayName = conversation.display_name || (conversation.is_group ? t('chat.group_chat') : '')
 
-  const handleSend = ({ body, files, replyToId }) => {
+  const handleSend = ({ body, files, replyToId, onProgress }) => {
     if (files.length > 0) {
-      sendAttachments(conversationId, { body, files, replyToId })
-    } else {
-      sendMessage(conversationId, body, replyToId)
+      return sendAttachments(conversationId, { body, files, replyToId, onProgress }).then((data) => { setReplyTo(null); return data })
     }
+    sendMessage(conversationId, body, replyToId)
     setReplyTo(null)
+    return undefined
   }
 
   return (
-    <div className="w-72 sm:w-80 bg-white dark:bg-slate-800 rounded-t-xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
+    <div data-chat-drop className="w-72 sm:w-80 bg-white dark:bg-slate-800 rounded-t-xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden">
       {/* Header — always visible, doubles as the un-minimize control */}
       <button
         type="button"
