@@ -50,7 +50,10 @@ const HR_INTERNAL_FORM_CODES = ['SEO-PA-REPORT']
  * report (total trips, total cost, ...); the report itself is attached to it.
  * ODU's other submission types are lodged by ministries. */
 const ODU_AUTHOR_ROLES = ['odu_senior', 'odu_principal', 'odu_manager']
-const ODU_INTERNAL_FORM_CODES = ['ODU-TRAVEL-REPORT', 'ODU-OPA-FEEDBACK-REPORT']
+const ODU_INTERNAL_FORM_CODES = [
+  'ODU-TRAVEL-REPORT', 'ODU-OPA-FEEDBACK-REPORT',
+  'ODU-BUSINESS-PLANS', 'ODU-CORPORATE-PLANS', 'ODU-ANNUAL-REPORTS',
+]
 
 /** Roles allowed to log a new submission at all — kept in sync with the
  * `allowed` check below. Exported so list-page "New submission" buttons

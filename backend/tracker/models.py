@@ -2366,6 +2366,13 @@ class Submission(models.Model):
         default=False,
         help_text="True when this submission is a lightweight attachment reviewed alongside a parent submission.",
     )
+    consolidated_into = models.ForeignKey(
+        'self', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='consolidated_submissions',
+        help_text="The ODU paper that covers this ministry plan or report. ODU sends one paper "
+                  "to the Commission for all the Business Plans, all the Corporate Plans or all "
+                  "the Annual Reports it has noted; each of those ministry submissions points here.",
+    )
     is_internal = models.BooleanField(
         default=False,
         help_text="True when submitted by OPSC staff (CSU/VIPAM/Compliance) — PSC-staff-only visible.",
