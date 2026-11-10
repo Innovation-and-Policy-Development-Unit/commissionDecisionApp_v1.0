@@ -118,7 +118,11 @@ def plan_rows(paper) -> list[dict]:
         late = late_info(sub)
         review = ReportAIReview.objects.filter(submission=sub).first()
         res = (review.result or {}) if review and review.state == "done" else {}
-        digest = review.plan_digest if review and review.plan_digest and not review.plan_digest.get("error") else {}
+        digest = (
+            review.plan_digest
+            if review and review.plan_digest and not review.plan_digest.get("error") and not review.plan_digest.get("running")
+            else {}
+        )
         gaps = [labels.get(k, k) for k, v in (res.get("items") or {}).items() if v.get("status") == "not_found"]
         period = res.get("plan_period") if isinstance(res.get("plan_period"), dict) else None
         rows.append({
@@ -147,7 +151,7 @@ def ensure_digests(paper) -> None:
 
     for sub in list(covered(paper)) + list(ready_to_cover(paper)):
         review, _ = ReportAIReview.objects.get_or_create(submission=sub)
-        if review.plan_digest and not review.plan_digest.get("error"):
+        if review.plan_digest and not review.plan_digest.get("error") and not review.plan_digest.get("running"):
             continue
         digest, err = build_digest(sub)
         review.plan_digest = digest or {"error": err or "The summary could not be produced."}

@@ -3915,6 +3915,39 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         queue_odu_template_draft(submission.id)
         return Response({"state": "running"}, status=status.HTTP_202_ACCEPTED)
 
+    @action(detail=True, methods=["post"], url_path=r"coverage/(?P<plan_id>\d+)/summarise",
+            throttle_classes=[AiAnalysisTriggerThrottle])
+    def coverage_summarise(self, request, pk=None, plan_id=None):
+        """Make (or remake) the AI summary of one acknowledged plan this paper covers."""
+        from .models import ReportAIReview
+        from .odu_checklist_rules import ODU_CHECKLIST_ROLES, ODU_CONSOLIDATED_FORM_CODES
+        from .odu_consolidation import covered_form_type
+        from .tasks import queue_plan_digest
+
+        paper = self.get_object()
+        profile = _profile(request.user)
+        if paper.form_type_code not in ODU_CONSOLIDATED_FORM_CODES:
+            return Response({"detail": "This is not a consolidated ODU paper."}, status=status.HTTP_400_BAD_REQUEST)
+        if not (request.user.is_superuser or profile.role in ODU_CHECKLIST_ROLES or profile.role == Role.PSC_ADMIN):
+            raise PermissionDenied("Only ODU staff can ask for a plan summary.")
+        plan = Submission.objects.filter(
+            pk=plan_id, form_type_code=covered_form_type(paper), is_attachment=False, is_test=False,
+        ).first()
+        if not plan:
+            raise Http404
+        if plan.current_stage != WorkflowStage.NOTED:
+            return Response(
+                {"detail": "The summary is made once ODU has acknowledged receipt of the plan."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        existing = ReportAIReview.objects.filter(submission=plan).first()
+        from .ai.plan_digest import is_running
+
+        if existing and is_running(existing.plan_digest):
+            return Response({"state": "running"}, status=status.HTTP_202_ACCEPTED)
+        queue_plan_digest(plan.id)
+        return Response({"state": "running"}, status=status.HTTP_202_ACCEPTED)
+
     @action(detail=True, methods=["get"], url_path="coverage")
     def coverage(self, request, pk=None):
         """For an ODU consolidated paper: the ministry plans it covers, will cover, is waiting on."""

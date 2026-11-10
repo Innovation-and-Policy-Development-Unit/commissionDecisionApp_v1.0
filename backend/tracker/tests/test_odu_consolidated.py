@@ -1,5 +1,7 @@
 """ODU's consolidated papers: one paper per type covering every ministry plan or report ODU noted."""
 
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -147,6 +149,57 @@ class ConsolidatedPaperTests(TestCase):
     def test_the_manager_cannot_return_a_plan_to_the_ministry(self):
         plan = self._plan(self.ma, WorkflowStage.MANAGER_CHECKLIST_REVIEW, ref="SUB-ACK-2")
         self.assertEqual(self._move(self.manager, plan, WorkflowStage.RETURNED_FOR_CLARIFICATION).status_code, 403)
+
+    # ── the AI summary of each plan on the coverage screen ──
+    def _summary(self, plan, **digest):
+        from ..models import ReportAIReview
+
+        r, _ = ReportAIReview.objects.get_or_create(submission=plan)
+        r.plan_digest = digest
+        r.save()
+
+    def test_the_coverage_rows_carry_each_plans_summary_state(self):
+        done = self._plan(self.ma, WorkflowStage.NOTED, ref="SUB-SUM-1")
+        failed = self._plan(self.mb, WorkflowStage.NOTED, ref="SUB-SUM-2")
+        self._summary(done, headline="Grow rural health.", period="2026 to 2030", priorities=["Clinics"], truncated=True, parts_read=6)
+        self._summary(failed, error="The AI could not read the plan.")
+        paper = self._paper()
+        rows = {r["reference_number"]: r["digest"] for r in coverage_payload(paper)["rows"]}
+        self.assertEqual(rows["SUB-SUM-1"]["state"], "done")
+        self.assertEqual(rows["SUB-SUM-1"]["priorities"], ["Clinics"])
+        self.assertTrue(rows["SUB-SUM-1"]["truncated"])
+        self.assertEqual(rows["SUB-SUM-2"]["state"], "failed")
+
+    def test_a_plan_with_no_summary_reads_as_none_and_a_stale_running_marker_does_not_block(self):
+        from datetime import timedelta
+
+        plan = self._plan(self.ma, WorkflowStage.NOTED, ref="SUB-SUM-3")
+        paper = self._paper()
+        self.assertEqual(coverage_payload(paper)["rows"][0]["digest"]["state"], "none")
+        self._summary(plan, running=True, started_at=timezone.now().isoformat())
+        self.assertEqual(coverage_payload(paper)["rows"][0]["digest"]["state"], "running")
+        self._summary(plan, running=True, started_at=(timezone.now() - timedelta(hours=1)).isoformat())
+        self.assertEqual(coverage_payload(paper)["rows"][0]["digest"]["state"], "none")
+
+    def test_odu_can_ask_for_a_summary_and_it_is_marked_running(self):
+        plan = self._plan(self.ma, WorkflowStage.NOTED, ref="SUB-SUM-4")
+        paper = self._paper()
+        with patch("tracker.tasks.digest_plan_task.delay") as delay:
+            res = _client(self.principal).post(f"/api/submissions/{paper.id}/coverage/{plan.id}/summarise/")
+            again = _client(self.principal).post(f"/api/submissions/{paper.id}/coverage/{plan.id}/summarise/")
+        self.assertEqual((res.status_code, again.status_code), (202, 202))
+        delay.assert_called_once_with(plan.id)  # the second click saw it was already running
+        self.assertEqual(coverage_payload(paper)["rows"][0]["digest"]["state"], "running")
+
+    def test_a_summary_is_refused_before_acknowledgment_to_the_ministry_and_for_other_types(self):
+        waiting = self._plan(self.ma, WorkflowStage.MANAGER_CHECKLIST_REVIEW, ref="SUB-SUM-5")
+        noted = self._plan(self.mb, WorkflowStage.NOTED, ref="SUB-SUM-6")
+        paper = self._paper()
+        url = lambda p: f"/api/submissions/{paper.id}/coverage/{p.id}/summarise/"
+        self.assertEqual(_client(self.principal).post(url(waiting)).status_code, 400)
+        self.assertEqual(_client(self.hr_a).post(url(noted)).status_code, 404)  # a ministry cannot even see the paper
+        other_type = self._plan(self.ma, WorkflowStage.NOTED, code="CORPORATE-PLAN", ref="SUB-SUM-7")
+        self.assertEqual(_client(self.principal).post(url(other_type)).status_code, 404)
 
     # ── the receipt due date opens the paper ──
     def test_the_paper_waits_for_its_own_receipt_due_date(self):
