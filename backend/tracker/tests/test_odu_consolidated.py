@@ -1,5 +1,7 @@
 """ODU's consolidated papers: one paper per type covering every ministry plan or report ODU noted."""
 
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -147,6 +149,44 @@ class ConsolidatedPaperTests(TestCase):
     def test_the_manager_cannot_return_a_plan_to_the_ministry(self):
         plan = self._plan(self.ma, WorkflowStage.MANAGER_CHECKLIST_REVIEW, ref="SUB-ACK-2")
         self.assertEqual(self._move(self.manager, plan, WorkflowStage.RETURNED_FOR_CLARIFICATION).status_code, 403)
+
+    # ── the ministry is told ODU has received its plan ──
+    def test_acknowledging_a_plan_tells_the_ministry_in_the_app(self):
+        from ..models import Notification
+
+        plan = self._plan(self.ma, WorkflowStage.MANAGER_CHECKLIST_REVIEW, code="CORPORATE-PLAN", ref="SUB-TELL-1")
+        with patch("tracker.tasks.queue_transition_emails"), self.captureOnCommitCallbacks(execute=True):
+            res = self._move(self.manager, plan, WorkflowStage.NOTED)
+        self.assertEqual(res.status_code, 200, res.content)
+        note = Notification.objects.get(recipient=self.hr_a, submission=plan)
+        self.assertIn("ODU has received your Corporate Plan", note.title)
+        self.assertIn("consolidated paper", note.body)
+
+    def test_the_acknowledgement_email_uses_its_own_wording(self):
+        from ..email_notify import send_transition_emails
+        from ..email_templates import render_email_template
+
+        plan = self._plan(self.ma, WorkflowStage.NOTED, code="ANNUAL-REPORT", ref="SUB-TELL-2")
+        self.hr_a.email = "hr@example.org"
+        self.hr_a.save()
+        with patch("tracker.email_notify.send_templated_email") as send:
+            send_transition_emails(plan, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.NOTED, [self.hr_a])
+        kwargs = send.call_args.kwargs
+        self.assertEqual(kwargs["slug"], "submission_receipt_acknowledged")
+        self.assertEqual(kwargs["context"]["plan_label"], "Annual Report")
+        subject, text, _ = render_email_template("submission_receipt_acknowledged", kwargs["context"])
+        self.assertIn("ODU has received your Annual Report", subject)
+        self.assertIn("No further action is needed", text)
+
+    def test_other_papers_keep_the_generic_stage_email(self):
+        from ..email_notify import send_transition_emails
+
+        paper = self._plan(self.ma, WorkflowStage.NOTED, code="PSC 2-2", ref="SUB-TELL-3")
+        self.hr_a.email = "hr@example.org"
+        self.hr_a.save()
+        with patch("tracker.email_notify.send_templated_email") as send:
+            send_transition_emails(paper, WorkflowStage.MANAGER_CHECKLIST_REVIEW, WorkflowStage.NOTED, [self.hr_a])
+        self.assertEqual(send.call_args.kwargs["slug"], "submission_stage_changed")
 
     # ── the receipt due date opens the paper ──
     def test_the_paper_waits_for_its_own_receipt_due_date(self):

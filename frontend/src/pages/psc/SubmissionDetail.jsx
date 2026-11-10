@@ -1806,7 +1806,13 @@ const stageDescriptions = {
               alongside the files themselves, so the two don't duplicate. ── */}
           {effectiveTab === 'checklist' && (
           <>
-          {hasDynamicChecklist && showDynamicChecklist && (
+          {['BUSINESS-PLAN', 'CORPORATE-PLAN', 'ANNUAL-REPORT'].includes(submission?.form_type_code) && (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              ODU only acknowledges receipt of this submission, so there is no review checklist.
+            </p>
+          )}
+          {hasDynamicChecklist && showDynamicChecklist
+            && !['BUSINESS-PLAN', 'CORPORATE-PLAN', 'ANNUAL-REPORT'].includes(submission?.form_type_code) && (
             <SubmissionChecklistPanel submissionId={id} autofillEnabled={user?.ai_checklist_autofill_enabled !== false} />
           )}
 

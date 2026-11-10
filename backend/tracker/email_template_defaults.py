@@ -828,6 +828,23 @@ DEFAULT_EMAIL_TEMPLATES = [
         "body_html_template": "",
     },
     {
+        "slug": "submission_receipt_acknowledged",
+        "name": "ODU acknowledged receipt",
+        "category": "submission_workflow",
+        "description": "Tells the ministry that ODU has received its Business Plan, Corporate Plan or Annual Report.",
+        "placeholders": _ph("submission_reference, submission_title, submission_url, plan_label, acknowledged_on"),
+        "subject_template": "ODU has received your {{plan_label}}: {{submission_reference}}",
+        "body_text_template": (
+            "Dear {{firstname}},\n\n"
+            "The Organisation Development Unit acknowledges receipt of {{submission_title}} "
+            "({{submission_reference}}) on {{acknowledged_on}}.\n"
+            "No further action is needed from your ministry. It will be included in ODU's consolidated "
+            "paper to the Public Service Commission.\n\n"
+            "View submission: {{submission_url}}"
+        ),
+        "body_html_template": "",
+    },
+    {
         "slug": "submission_stage_changed",
         "name": "Submission stage changed (generic)",
         "category": "submission_workflow",
@@ -1173,6 +1190,13 @@ SAMPLE_EMAIL_CONTEXTS = {
         "submission_url": "http://localhost:8080/submissions/1",
         "new_stage": "Draft",
         "remarks": "Please attach the updated organisation chart and correct the position titles in section 3.",
+    },
+    "submission_receipt_acknowledged": {
+        "submission_reference": "PSC-2026-0042",
+        "submission_title": "Ministry of Health Business Plan 2026",
+        "submission_url": "http://localhost:8080/submissions/1",
+        "plan_label": "Business Plan",
+        "acknowledged_on": "10 November 2026",
     },
     "submission_stage_changed": {
         "submission_reference": "PSC-2026-0042",
