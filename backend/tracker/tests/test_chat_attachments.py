@@ -1,6 +1,7 @@
 """Chat attachments: real file type, thumbnails, downloads, and emoji reactions."""
 
 import io
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -82,6 +83,24 @@ class ChatAttachmentTests(TestCase):
         att = MessageAttachment.objects.get()
         for suffix in ("", "?thumb=1"):
             self.assertEqual(_client(self.outsider).get(f"/api/chat/attachments/{att.id}/{suffix}").status_code, 403)
+
+    def test_an_oversized_image_is_refused_with_a_plain_reason(self):
+        from .. import chat_views
+
+        with patch.object(chat_views, "MAX_IMAGE_PIXELS", 1000):
+            res = self._send([SimpleUploadedFile("huge.png", _png((100, 100)), "image/png")])
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("too large", str(res.data["files"]))
+
+    def test_a_file_that_only_pretends_to_be_a_readable_image_is_refused(self):
+        res = self._send([SimpleUploadedFile("broken.png", b"\x89PNG\r\n\x1a\n" + b"garbage" * 20, "image/png")])
+        self.assertEqual(res.status_code, 400)
+
+    def test_files_are_sent_with_nosniff(self):
+        self._send([SimpleUploadedFile("note.pdf", PDF, "application/pdf")])
+        att = MessageAttachment.objects.get()
+        res = _client(self.b).get(f"/api/chat/attachments/{att.id}/")
+        self.assertEqual(res["X-Content-Type-Options"], "nosniff")
 
     def _react(self, message_id, emoji, user=None):
         return _client(user or self.b).post(f"{self.url}{message_id}/react/", {"emoji": emoji}, format="json")

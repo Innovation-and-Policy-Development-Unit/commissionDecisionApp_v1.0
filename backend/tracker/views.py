@@ -1068,6 +1068,26 @@ def _dispatch_transition_notifications(
             f"Prepare the decision letter and serve it — the ministry is not told until you do."
         )
 
+    elif (
+        target == WorkflowStage.NOTED
+        and prev == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+        and submission.form_type_code in ODU_ACKNOWLEDGE_ONLY_FORM_CODES
+    ):
+        # ODU only acknowledges receipt of these: tell the ministry that it has arrived.
+        from .odu_consolidation import LABELS
+
+        _label = LABELS.get(submission.form_type_code, ("submission", ""))[0]
+        _people = {u.id: u for u in _hr_recipients_for_submission(submission)}
+        _creator = User.objects.filter(pk=submission.created_by_id, is_active=True).first()
+        if _creator:
+            _people.setdefault(_creator.id, _creator)
+        recipients = list(_people.values())
+        title = f"ODU has received your {_label}: {submission.reference_number}"
+        body = (
+            f"The Organisation Development Unit has acknowledged receipt of '{submission.title}'. "
+            "It will be included in ODU's consolidated paper to the Commission."
+        )
+
     elif target in (WorkflowStage.APPROVED, WorkflowStage.REJECTED):
         unit_to_role = {
             "odu": Role.ODU_MANAGER,
@@ -2821,7 +2841,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         from .ai.annual_report_review import REVIEWED_FORM_TYPES as _REVIEWED_FORM_TYPES
 
-        if target == WorkflowStage.SUBMITTED and submission.form_type_code in _REVIEWED_FORM_TYPES:
+        # ODU only acknowledges receipt of Business Plans, Corporate Plans and Annual Reports, so no
+        # first-pass review runs on submit (the plan summary is made when ODU acknowledges).
+        if (
+            target == WorkflowStage.SUBMITTED
+            and submission.form_type_code in _REVIEWED_FORM_TYPES
+            and submission.form_type_code not in ODU_ACKNOWLEDGE_ONLY_FORM_CODES
+        ):
             from .tasks import queue_report_review
 
             sid = submission.id

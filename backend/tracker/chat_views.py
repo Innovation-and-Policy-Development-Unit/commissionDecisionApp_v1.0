@@ -194,6 +194,10 @@ class ConversationViewSet(
                 sniffed[id(f)] = validate_upload(f, kind="document")
             except FileValidationError as exc:
                 raise ValidationError({"files": str(exc)})
+            if sniffed[id(f)].startswith("image/"):
+                problem = _image_problem(f)
+                if problem:
+                    raise ValidationError({"files": f"'{f.name}' {problem}"})
 
         message = Message.objects.create(
             conversation=conversation, sender=request.user, body=body, reply_to=reply_to,
@@ -387,18 +391,42 @@ def attachment_download(request, attachment_id):
     if request.query_params.get("thumb") and content_type in _THUMBNAILABLE:
         thumb = _thumbnail(attachment)
         if thumb is not None:
-            return FileResponse(thumb, as_attachment=False, content_type="image/jpeg")
+            response = FileResponse(thumb, as_attachment=False, content_type="image/jpeg")
+            response["X-Content-Type-Options"] = "nosniff"
+            return response
 
-    return FileResponse(
+    response = FileResponse(
         attachment.file.open("rb"),
         as_attachment=bool(request.query_params.get("download")),
         filename=attachment.original_name,
         content_type=content_type,
     )
+    # The browser must trust the type we sent, not guess from the bytes.
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 _THUMBNAILABLE = {"image/png", "image/jpeg", "image/webp"}  # GIFs are served as they are (animation)
 THUMB_MAX = 480
+# A decoded image costs about 3 bytes a pixel, so 40 megapixels is roughly 120 MB in one request.
+MAX_IMAGE_PIXELS = 40_000_000
+
+
+def _image_problem(uploaded) -> str:
+    """Why an uploaded image cannot be accepted, or '' if it is fine. Reads only the header."""
+    from PIL import Image
+
+    try:
+        uploaded.seek(0)
+        with Image.open(uploaded) as img:
+            width, height = img.size
+    except Exception:
+        return "could not be read as an image."
+    finally:
+        uploaded.seek(0)
+    if width * height > MAX_IMAGE_PIXELS:
+        return f"is too large ({width} x {height} pixels). Resize it to under {MAX_IMAGE_PIXELS // 1_000_000} megapixels and try again."
+    return ""
 
 
 def _thumbnail(attachment):
@@ -412,6 +440,10 @@ def _thumbnail(attachment):
         if storage.exists(name):
             return storage.open(name, "rb")
         with attachment.file.open("rb") as fh:
+            probe = Image.open(fh)
+            if probe.size[0] * probe.size[1] > MAX_IMAGE_PIXELS:
+                return None  # too big to decode safely: serve the original instead
+            fh.seek(0)
             img = ImageOps.exif_transpose(Image.open(fh))
             img.thumbnail((THUMB_MAX, THUMB_MAX))
             if img.mode not in ("RGB", "L"):

@@ -239,6 +239,15 @@ def send_transition_emails(
     slug = get_transition_email_slug(prev, target)
     if not slug:
         return
+    from .odu_checklist_rules import ODU_ACKNOWLEDGE_ONLY_FORM_CODES
+
+    acknowledged = (
+        prev == WorkflowStage.MANAGER_CHECKLIST_REVIEW
+        and target == WorkflowStage.NOTED
+        and submission.form_type_code in ODU_ACKNOWLEDGE_ONLY_FORM_CODES
+    )
+    if acknowledged:
+        slug = "submission_receipt_acknowledged"
     base_ctx = submission_email_context(submission)
     for user in users:
         email = (getattr(user, "email", None) or "").strip()
@@ -254,6 +263,13 @@ def send_transition_emails(
             ctx["decision_label"] = decision_label or (
                 "approved" if target == WorkflowStage.APPROVED else "rejected"
             )
+        if acknowledged:
+            from django.utils import timezone
+
+            from .odu_consolidation import LABELS
+
+            ctx["plan_label"] = LABELS.get(submission.form_type_code, ("submission", ""))[0]
+            ctx["acknowledged_on"] = timezone.localdate().strftime("%-d %B %Y")
         if slug == "submission_returned_to_hr":
             ctx["remarks"] = (remarks or "").strip() or "(No comment was provided.)"
         send_templated_email(slug=slug, to=[email], context=ctx)

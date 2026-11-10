@@ -113,6 +113,7 @@ SLUG_META: dict[str, tuple[str, str, str]] = {
     "submission_returned_to_hr": ("corner-down-left", "amber", "Returned for changes"),
     "submission_approved": ("check-circle", "success", "Submission approved"),
     "submission_rejected": ("x-circle", "danger", "Submission not approved"),
+    "submission_receipt_acknowledged": ("check-circle", "success", "ODU has received your submission"),
     "submission_stage_changed": ("refresh-cw", "indigo", "Submission status updated"),
     "submission_assigned_officer": ("user-check", "indigo", "A submission was allocated to you"),
     "submission_ready_for_manager": ("clipboard-check", "indigo", "Ready for your review"),
