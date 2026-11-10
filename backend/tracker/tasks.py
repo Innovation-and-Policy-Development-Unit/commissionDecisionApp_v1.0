@@ -4524,10 +4524,21 @@ def digest_plan_task(self, submission_id: int):
 
 
 def queue_plan_digest(submission_id: int) -> None:
+    from django.utils import timezone
+
+    from .models import ReportAIReview
+
     try:
+        # Mark it running first, so ODU's screen shows "summarising" and a second click is refused.
+        review, _ = ReportAIReview.objects.get_or_create(submission_id=submission_id)
+        review.plan_digest = {"running": True, "started_at": timezone.now().isoformat()}
+        review.save(update_fields=["plan_digest"])
         digest_plan_task.delay(submission_id)
     except Exception as exc:
         app_log.warning("PLAN_DIGEST_QUEUE_FAIL | %s | %s", submission_id, exc)
+        ReportAIReview.objects.filter(submission_id=submission_id).update(
+            plan_digest={"error": "The summary could not be started. Please try again."},
+        )
 
 
 # ── ODU's own papers: AI first draft of the template text ───────────────────────

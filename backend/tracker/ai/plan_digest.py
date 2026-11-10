@@ -44,6 +44,21 @@ SYSTEM_MERGE = (
 )
 
 
+RUNNING_STALE_MINUTES = 15
+
+
+def is_running(digest: dict | None) -> bool:
+    """A summary being made right now. A marker older than 15 minutes is a crashed job, not a running one."""
+    from datetime import timedelta
+
+    from django.utils.dateparse import parse_datetime
+
+    if not (digest or {}).get("running"):
+        return False
+    started = parse_datetime(digest.get("started_at") or "")
+    return bool(started and timezone.now() - started < timedelta(minutes=RUNNING_STALE_MINUTES))
+
+
 def _clean(data: Any) -> dict:
     if not isinstance(data, dict):
         return {}

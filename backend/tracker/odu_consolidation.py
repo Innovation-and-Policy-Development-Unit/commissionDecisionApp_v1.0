@@ -177,6 +177,30 @@ def _review_summary(sub) -> dict:
     return out
 
 
+def digest_payload(sub) -> dict:
+    """What ODU sees of the AI summary of one plan: its state, and the summary when there is one."""
+    review = ReportAIReview.objects.filter(submission=sub).first()
+    d = (review.plan_digest if review else None) or {}
+    from .ai.plan_digest import is_running
+
+    if is_running(d):
+        return {"state": "running"}
+    if d.get("running"):  # a marker left behind by a job that never finished
+        return {"state": "none"}
+    if d.get("error"):
+        return {"state": "failed", "error": d["error"]}
+    if not d:
+        return {"state": "none"}
+    return {
+        "state": "done",
+        "headline": d.get("headline", ""), "period": d.get("period", ""),
+        "priorities": d.get("priorities", []), "targets": d.get("targets", []),
+        "budget_staffing": d.get("budget_staffing", ""), "notable": d.get("notable", []),
+        "truncated": bool(d.get("truncated")), "parts_read": d.get("parts_read"),
+        "generated_at": d.get("generated_at"),
+    }
+
+
 def _row(sub, state: str) -> dict:
     from .ai.annual_report_review import late_info
 
@@ -194,6 +218,7 @@ def _row(sub, state: str) -> dict:
         "deadline_text": late["deadline_text"],
         "state": state,
         "ai_review": _review_summary(sub),
+        "digest": digest_payload(sub),
     }
 
 

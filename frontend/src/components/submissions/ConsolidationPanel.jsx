@@ -5,8 +5,9 @@
  * noted yet (these hold the paper back), and which ministries have not lodged.
  */
 import { useState, useEffect, useCallback } from 'react'
-import { Layers, RefreshCw, AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
+import { Layers, RefreshCw, AlertTriangle, CheckCircle2, Clock, ChevronDown, ChevronRight, Sparkles } from 'lucide-react'
 import api from '../../api/client'
+import { useToast } from '../../context/ToastContext'
 import BaseButton from '../shared/BaseButton'
 import BaseBadge from '../shared/BaseBadge'
 import BaseSpinner from '../shared/BaseSpinner'
@@ -24,7 +25,71 @@ const REC = {
   return_for_clarification: 'Material gaps',
 }
 
+const SUMMARY_NOTE = 'AI summary of what the ministry\'s own document says. Check it against the plan before you rely on it.'
+
+function List({ title, items }) {
+  if (!items?.length) return null
+  return (
+    <div>
+      <span className="font-semibold">{title}</span>
+      <ul className="ml-4 list-disc">{items.map((x, i) => <li key={i}>{x}</li>)}</ul>
+    </div>
+  )
+}
+
+/** The AI summary of one plan: a one-line headline in the table, the rest when opened. */
+function SummaryCell({ row, open, onToggle, onRegenerate, busy }) {
+  const d = row.digest || { state: 'none' }
+  const acknowledged = row.state !== 'waiting'
+  if (d.state === 'running') {
+    return <span className="inline-flex items-center gap-1 text-slate-500"><BaseSpinner size="sm" label="" /> Summarising…</span>
+  }
+  if (d.state === 'none' || d.state === 'failed') {
+    return (
+      <div className="text-xs text-slate-500">
+        {d.state === 'failed' ? <span className="text-amber-700 dark:text-amber-300">{d.error}</span>
+          : acknowledged ? 'No summary yet.' : 'Made when ODU acknowledges receipt.'}
+        {acknowledged && (
+          <button type="button" onClick={onRegenerate} disabled={busy} className="ml-2 underline text-primary-700 dark:text-primary-300">
+            {d.state === 'failed' ? 'Try again' : 'Summarise'}
+          </button>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div>
+      <button type="button" onClick={onToggle} className="flex items-start gap-1 text-left" aria-expanded={open}>
+        {open ? <ChevronDown size={14} className="mt-0.5 shrink-0" /> : <ChevronRight size={14} className="mt-0.5 shrink-0" />}
+        <span className="text-slate-700 dark:text-slate-200">{d.headline || 'Summary'}{d.period ? ` (${d.period})` : ''}</span>
+      </button>
+      {open && (
+        <div className="mt-2 ml-4 flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+          <p className="flex items-start gap-1 text-violet-700 dark:text-violet-300"><Sparkles size={12} className="mt-0.5 shrink-0" />{SUMMARY_NOTE}</p>
+          <List title="Priorities" items={d.priorities} />
+          <List title="Targets" items={d.targets} />
+          {d.budget_staffing && <div><span className="font-semibold">Budget / staffing: </span>{d.budget_staffing}</div>}
+          <List title="Notable" items={d.notable} />
+          {d.truncated && (
+            <p className="text-amber-700 dark:text-amber-300">
+              This is a long plan: only the first {d.parts_read} parts were read, so later sections are not in the summary.
+            </p>
+          )}
+          {acknowledged && (
+            <button type="button" onClick={onRegenerate} disabled={busy} className="self-start underline text-primary-700 dark:text-primary-300">
+              Summarise again
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ConsolidationPanel({ submissionId }) {
+  const toast = useToast()
+  const [open, setOpen] = useState({})
+  const [busyId, setBusyId] = useState(null)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -44,6 +109,31 @@ export default function ConsolidationPanel({ submissionId }) {
   }, [submissionId])
 
   useEffect(() => { load() }, [load])
+
+  // While a summary is being made, look again every few seconds so it appears by itself.
+  const summarising = (data?.rows || []).some(r => r.digest?.state === 'running')
+  useEffect(() => {
+    if (!summarising) return undefined
+    const id = setInterval(async () => {
+      try {
+        const res = await api.get(`/submissions/${submissionId}/coverage/`)
+        setData(res.data)
+      } catch { /* try again next time */ }
+    }, 4000)
+    return () => clearInterval(id)
+  }, [summarising, submissionId])
+
+  const regenerate = async (row) => {
+    setBusyId(row.id)
+    try {
+      await api.post(`/submissions/${submissionId}/coverage/${row.id}/summarise/`)
+      setData(prev => ({ ...prev, rows: prev.rows.map(r => (r.id === row.id ? { ...r, digest: { state: 'running' } } : r)) }))
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Could not start the summary.')
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   if (loading && !data) return <div className="card p-4"><BaseSpinner size="sm" label="Loading coverage" /></div>
   if (!data || !data.plan_label) return error ? <p className="text-sm text-slate-500">{error}</p> : null
@@ -84,7 +174,7 @@ export default function ConsolidationPanel({ submissionId }) {
               <tr className="text-left text-xs text-slate-500">
                 <th className="py-1 pr-3">Ministry</th><th className="py-1 pr-3">Reference</th>
                 <th className="py-1 pr-3">Status</th><th className="py-1 pr-3">Lodged</th>
-                <th className="py-1 pr-3">Timeliness</th><th className="py-1 pr-3">AI first-pass review</th>
+                <th className="py-1 pr-3">Timeliness</th><th className="py-1 pr-3">What the plan says (AI summary)</th>
               </tr>
             </thead>
             <tbody>
@@ -102,11 +192,16 @@ export default function ConsolidationPanel({ submissionId }) {
                       ? <span className="text-rose-700 dark:text-rose-300">Late: {r.days_late} day{r.days_late === 1 ? '' : 's'} after {r.deadline_text}</span>
                       : <span className="text-slate-500">{r.deadline_text ? 'On time' : '—'}</span>}
                   </td>
-                  <td className="py-1.5 pr-3 text-slate-600 dark:text-slate-300">
-                    {r.ai_review?.recommendation ? `${REC[r.ai_review.recommendation] || r.ai_review.recommendation}${r.ai_review.total ? ` (${r.ai_review.met}/${r.ai_review.total})` : ''}` : '—'}
-                    {r.ai_review?.plan_period?.found && (
-                      <span className={`block text-xs ${r.ai_review.plan_period.five_years ? 'text-slate-500' : 'text-amber-700 dark:text-amber-300'}`}>
-                        Period {r.ai_review.plan_period.start_year}–{r.ai_review.plan_period.end_year} ({r.ai_review.plan_period.years} yr)
+                  <td className="py-1.5 pr-3 text-slate-600 dark:text-slate-300 min-w-[16rem]">
+                    <SummaryCell
+                      row={r} open={!!open[r.id]} busy={busyId === r.id}
+                      onToggle={() => setOpen(o => ({ ...o, [r.id]: !o[r.id] }))}
+                      onRegenerate={() => regenerate(r)}
+                    />
+                    {r.ai_review?.recommendation && (
+                      <span className="block text-xs text-slate-500 mt-1">
+                        Earlier first-pass review: {REC[r.ai_review.recommendation] || r.ai_review.recommendation}
+                        {r.ai_review.total ? ` (${r.ai_review.met}/${r.ai_review.total})` : ''}
                       </span>
                     )}
                   </td>
