@@ -59,6 +59,8 @@ export function userIsCommissionDecisionOps(user) {
 
 export { COMMISSION_DECISION_VIEW_ROLES }
 
+const MINUTE_TAKER_ROLES = new Set(['csu_manager', 'compliance_manager'])
+
 /** Menu audience tags on nav items / groups */
 export function menuItemVisibleForUser(item, user) {
   // Capability-gated items: visible when the server-sent user flag is true
@@ -88,6 +90,17 @@ export function menuItemVisibleForUser(item, user) {
     // Operator-only tools (minute intake, decisions register) — excludes
     // view-only Commission members/Chairperson.
     return userIsSecretariatOperator(user) && !userIsComplianceStaff(user)
+  }
+  // Who takes the minutes: the secretariat operators, Manager CSU (who takes
+  // them in practice) and Manager Compliance (compliance business only — the
+  // server decides which sittings and which items).
+  if (audience === 'minute_taker') {
+    return userIsSecretariatOperator(user) || MINUTE_TAKER_ROLES.has(user.role)
+  }
+  // The minutes list: all OPSC staff, plus Manager Compliance for the drafts
+  // they help write.
+  if (audience === 'minutes_reader' || audience === 'commission_group') {
+    return (userIsOpscInternal(user) && !userIsComplianceStaff(user)) || user.role === 'compliance_manager'
   }
   if (audience === 'commission_decision') {
     return userIsCommissionDecisionOps(user) && !userIsComplianceStaff(user)

@@ -127,3 +127,100 @@ class MinuteIntakeDecisionTests(TestCase):
         block = minutes.content["agenda_items"][0]
         self.assertEqual(block["decision_type"], "deferred")
         self.assertEqual(block["decision"], "Deferred.")
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class ComplianceMinuteTakerIntakeTests(TestCase):
+    """Manager Compliance minutes the compliance items of a sitting, and only those."""
+
+    def setUp(self):
+        self.ministry = Ministry.objects.create(code="ZZ_CI", name="Compliance Intake Ministry")
+        self.form_cat = FormCategory.objects.create(code="psc_ci", name="PSC CI")
+        self.meeting = Meeting.objects.create(
+            title="PSC Meeting No. 14", date=timezone.now().date(),
+            time=datetime.time(9, 0), venue="Boardroom",
+            status=MeetingStatus.IN_PROGRESS, agenda_status=AgendaStatus.CIRCULATED,
+        )
+        self.csu = self._user("ci_csu_manager", Role.CSU_MANAGER)
+        self.compliance = self._user("ci_compliance_manager", Role.COMPLIANCE_MANAGER)
+        self.hr_item = self._item("An appointment", "appointment", RoutedUnit.HR, 1)
+        self.compliance_item = self._item("A discipline matter", "discipline_compliance", RoutedUnit.COMPLIANCE, 1)
+        ensure_intake_rows(self.meeting)
+        self.base = f"/api/meetings/{self.meeting.id}/minute-intake/"
+
+    def _user(self, username, role):
+        user = User.objects.create_user(username, password="x")
+        Profile.objects.create(user=user, role=role, ministry=self.ministry)
+        return user
+
+    def _item(self, title, category, unit, seq):
+        sub = Submission.objects.create(
+            title=title, ministry=self.ministry, form_category=self.form_cat,
+            current_stage=WorkflowStage.FORWARDED_TO_COMMISSION, received_at=timezone.now(),
+            created_by=self.csu, routed_unit=unit, scheduled_meeting=self.meeting,
+        )
+        return AgendaItem.objects.create(meeting=self.meeting, submission=sub, category=category, sequence=seq)
+
+    def _client(self, user):
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client
+
+    def _save(self, user, item, **fields):
+        return self._client(user).patch(
+            self.base, {"items": [{"agenda_item_id": item.id, **fields}]}, format="json",
+        )
+
+    def test_they_see_only_the_compliance_items(self):
+        data = self._client(self.compliance).get(self.base).json()
+        self.assertTrue(data["compliance_items_only"])
+        self.assertEqual([it["agenda_item_id"] for it in data["items"]], [self.compliance_item.id])
+        self.assertEqual(len(self._client(self.csu).get(self.base).json()["items"]), 2)
+
+    def test_they_can_minute_their_item_but_not_another(self):
+        self.assertEqual(self._save(self.compliance, self.compliance_item, decision_type="approved").status_code, 200)
+        self.assertEqual(self._save(self.compliance, self.hr_item, decision_type="approved").status_code, 403)
+        with mock.patch(FORMATTER) as formatter:
+            resp = self._client(self.compliance).post(f"{self.base}{self.hr_item.id}/format/")
+        self.assertEqual(resp.status_code, 403)
+        formatter.assert_not_called()
+
+    def test_a_sitting_without_compliance_business_is_closed_to_them(self):
+        self.compliance_item.delete()
+        self.assertEqual(self._client(self.compliance).get(self.base).status_code, 403)
+
+    def test_saving_one_item_leaves_the_other_takers_notes_alone(self):
+        self._save(self.compliance, self.compliance_item, discussion_notes="Compliance notes.")
+        self._save(self.csu, self.hr_item, discussion_notes="HR notes.")
+        row = MinuteAgendaIntake.objects.get(agenda_item=self.compliance_item)
+        self.assertEqual(row.discussion_notes, "Compliance notes.")
+
+    def test_their_apply_changes_only_their_blocks_of_an_existing_draft(self):
+        self._save(self.csu, self.hr_item, decision_type="approved")
+        minutes = apply_intake_to_minutes(self.meeting, self.csu)
+        blocks = minutes.content["agenda_items"]
+        for b in blocks:
+            if b["agenda_item_id"] == self.hr_item.id:
+                b["discussion"] = "Edited by Manager CSU in the draft."
+        minutes.content = {**minutes.content, "agenda_items": blocks}
+        minutes.save(update_fields=["content"])
+
+        self._save(self.compliance, self.compliance_item, decision_type="deferred")
+        resp = self._client(self.compliance).post(f"{self.base}apply-to-minutes/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        minutes.refresh_from_db()
+        stored = {b["agenda_item_id"]: b for b in minutes.content["agenda_items"]}
+        self.assertEqual(stored[self.hr_item.id]["discussion"], "Edited by Manager CSU in the draft.")
+        self.assertEqual(stored[self.compliance_item.id]["decision_type"], "deferred")
+
+    def test_they_can_reach_the_sitting_and_its_draft_from_the_lists(self):
+        # The menu links lead to these two lists; the pickers are built from them.
+        client = self._client(self.compliance)
+        meetings = client.get("/api/meetings/")
+        self.assertEqual(meetings.status_code, 200, meetings.content)
+        apply_intake_to_minutes(self.meeting, self.csu)
+        minutes = client.get(f"/api/minutes/?meeting={self.meeting.id}")
+        self.assertEqual(minutes.status_code, 200, minutes.content)
+        body = minutes.json()
+        rows = body["results"] if isinstance(body, dict) else body
+        self.assertEqual([m["meeting"] for m in rows], [self.meeting.id])

@@ -221,6 +221,10 @@ export default function MinuteIntake() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [expanded, setExpanded] = useState({})
+  // Items changed since the last save. Only these are sent: two people take
+  // minutes on a compliance sitting, and sending every row would overwrite
+  // whatever the other one has typed since this page loaded.
+  const [dirtyIds, setDirtyIds] = useState(() => new Set())
 
   // Split view: the right pane follows the agenda item being worked on.
   const [activeItemId, setActiveItemId] = useState(null)
@@ -298,6 +302,7 @@ export default function MinuteIntake() {
   }, [activeMeetingId, loadIntake])
 
   const updateItem = (agendaItemId, field, value) => {
+    setDirtyIds(prev => (prev.has(agendaItemId) ? prev : new Set(prev).add(agendaItemId)))
     setItems(prev => prev.map(it => (
       it.agenda_item_id === agendaItemId ? { ...it, [field]: value } : it
     )))
@@ -305,8 +310,9 @@ export default function MinuteIntake() {
 
   const patchDraft = useCallback(async () => {
     if (!activeMeetingId) return null
+    if (dirtyIds.size === 0) return payload
     const { data } = await api.patch(`/meetings/${activeMeetingId}/minute-intake/`, {
-      items: items.map(it => ({
+      items: items.filter(it => dirtyIds.has(it.agenda_item_id)).map(it => ({
         agenda_item_id: it.agenda_item_id,
         discussion_notes: it.discussion_notes ?? '',
         decision_type: it.decision_type ?? '',
@@ -316,8 +322,9 @@ export default function MinuteIntake() {
     })
     setPayload(data)
     setItems(normalizeFieldPayload(data, 'items'))
+    setDirtyIds(new Set())
     return data
-  }, [activeMeetingId, items])
+  }, [activeMeetingId, items, dirtyIds, payload])
 
   const saveDraft = async () => {
     if (!activeMeetingId) return
@@ -490,6 +497,12 @@ export default function MinuteIntake() {
       {/* Extra matters the Commission raises mid-sitting — the Secretary opens
           the window, Manager CSU adds them as they come. A new item appears in
           the list below once the intake rows are reloaded. */}
+      {payload?.compliance_items_only && (
+        <div className="mb-4 p-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/10 text-sm text-blue-800 dark:text-blue-200">
+          {t('minute_intake.compliance_only')}
+        </div>
+      )}
+
       {!notAllowed && activeMeetingId && (
         <div className="mb-4">
           <FlyingAgendaPanel
