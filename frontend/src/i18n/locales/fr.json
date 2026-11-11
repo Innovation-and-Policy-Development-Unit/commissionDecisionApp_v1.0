@@ -1167,7 +1167,18 @@
     "context_ministry": "Ministère",
     "context_stage": "Étape",
     "context_open_full": "Ouvrir la soumission complète",
-    "context_close": "Fermer"
+    "context_close": "Fermer",
+    "decision_type": "Décision",
+    "decision_select": "— Sélectionner —",
+    "decision_hint": "Choisissez l'issue, puis appuyez sur Formater (IA). Le paragraphe est rédigé à partir de la soumission ; les notes sont facultatives.",
+    "decision_option": {
+      "approved": "Approuvé",
+      "rejected": "Non approuvé",
+      "deferred": "Reporté",
+      "noted": "Pris note",
+      "returned": "Renvoyé",
+      "tabled": "Déposé"
+    }
   },
   "accessibility": {
     "skip_to_content": "Aller au contenu principal",

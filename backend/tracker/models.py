@@ -4435,6 +4435,17 @@ class MinutesComment(models.Model):
         return f"Comment by {self.author} on {self.minutes}"
 
 
+class MinuteIntakeDecision(models.TextChoices):
+    """The outcomes a minute taker can pick for an agenda item, so the common
+    ones never have to be typed. Same codes the minutes document uses."""
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Not approved"
+    DEFERRED = "deferred", "Deferred"
+    NOTED = "noted", "Noted"
+    RETURNED = "returned", "Returned"
+    TABLED = "tabled", "Tabled"
+
+
 class MinuteAgendaIntake(models.Model):
     """
     Per-agenda-item minute capture during/after a sitting.
@@ -4453,6 +4464,10 @@ class MinuteAgendaIntake(models.Model):
     discussion_notes = models.TextField(
         blank=True,
         help_text="Plain English discussion notes from the minute-taker.",
+    )
+    decision_type = models.CharField(
+        max_length=32, blank=True, choices=MinuteIntakeDecision.choices,
+        help_text="Outcome the minute-taker picked from the list (optional).",
     )
     decision_text = models.TextField(
         blank=True,

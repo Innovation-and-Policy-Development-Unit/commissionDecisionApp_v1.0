@@ -20,20 +20,20 @@ start to circulation without touching real business.
 | Contract | TRAIN-CSU-007 Contract extension, IT Systems Adviser | HR |
 | Other Matters | TRAIN-CSU-008 OPSC end-of-year office closure dates | CSU |
 
-## Day 1 — during the "sitting" (Manager CSU)
+## Part 1 — during the "sitting" (Manager CSU)
 
 1. Sign in and open **Minutes & Agenda → Minute intake**
    (`/secretariat/minute-intake/9`). Choose `TRAIN-CSU-MTG-001`.
-2. For each item, type discussion notes, the decision and the action officer.
-   Make up the discussion; try at least one each of approved, deferred and noted.
+2. For each item, choose the outcome in the **Decision** list. Notes and the action
+   officer are optional; add them on a couple of items.
 3. Use the AI formatting on one item, then on all items. Check the wording it produces.
 4. Apply the notes to the minutes. This creates the **draft minutes**.
 5. Open the draft (**Minutes & Agenda → Minutes**), fill in the opening and closing,
    save, and sign out.
 
-## Day 2 — review and hand on
+## Part 2 — review and hand on (a few hours later, or the next day)
 
-6. **Manager CSU:** reopen the draft, confirm yesterday's text is all there, edit it,
+6. **Manager CSU:** reopen the draft, confirm the text from Part 1 is all there, edit it,
    then **Submit for review**.
    *This sends an in-app notification to the Secretaries, the Chairperson and
    Manager Compliance — tell them beforehand that it is a practice.*
@@ -49,7 +49,7 @@ those steps email Commission members and move papers on.
 
 - Could you find every screen without help? Which one was hard to find?
 - Are the agenda items listed in the same order as the agenda?
-- Was any text lost between Day 1 and Day 2?
+- Was any text lost between Part 1 and Part 2?
 - Was the AI-formatted wording usable, or did it need heavy editing?
 - Manager Compliance: how did you reach the minutes, and could you do what you needed?
 - Anything that works differently from how minutes are handled today.

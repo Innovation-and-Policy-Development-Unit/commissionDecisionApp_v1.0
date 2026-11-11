@@ -19,6 +19,10 @@ const INTAKE_AGENDA_STATUSES = new Set(['circulated'])
 const CONVENED_MEETING_STATUSES = new Set(['in_progress', 'completed'])
 const CONTEXT_PANEL_PREF = 'minute_intake.context_panel'
 
+// Outcomes the minute taker can pick instead of typing them. Mirrors the
+// backend's MinuteIntakeDecision.
+const DECISION_OPTIONS = ['approved', 'rejected', 'deferred', 'noted', 'returned', 'tabled']
+
 function IntakeItemCard({
   item,
   expanded,
@@ -105,6 +109,22 @@ function IntakeItemCard({
               onChange={e => onChange(item.agenda_item_id, 'discussion_notes', e.target.value)}
               placeholder={t('minute_intake.discussion_placeholder')}
             />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">
+              {t('minute_intake.decision_type')}
+            </label>
+            <select
+              className="input text-sm bg-white"
+              value={item.decision_type || ''}
+              onChange={e => onChange(item.agenda_item_id, 'decision_type', e.target.value)}
+            >
+              <option value="">{t('minute_intake.decision_select')}</option>
+              {DECISION_OPTIONS.map(value => (
+                <option key={value} value={value}>{t(`minute_intake.decision_option.${value}`)}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('minute_intake.decision_hint')}</p>
           </div>
           <div>
             <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">
@@ -289,6 +309,7 @@ export default function MinuteIntake() {
       items: items.map(it => ({
         agenda_item_id: it.agenda_item_id,
         discussion_notes: it.discussion_notes ?? '',
+        decision_type: it.decision_type ?? '',
         decision_text: it.decision_text ?? '',
         action_officer: it.action_officer ?? '',
       })),

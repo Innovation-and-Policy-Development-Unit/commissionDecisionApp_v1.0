@@ -9,9 +9,11 @@ from .feature_registry import get_model_tier
 
 FORMAT_SYSTEM = (
     "You are a Vanuatu Public Service Commission Secretariat minute-writer. "
-    "The minute-taker has recorded plain English notes during the sitting. "
-    "Your job is to turn those notes into formal Commission minute wording only. "
-    "Do not invent facts, names, or outcomes that are not implied by the notes. "
+    "The minute-taker has recorded the outcome of each agenda item during the sitting, "
+    "sometimes with plain English notes and sometimes only by selecting the decision. "
+    "Your job is to turn that record into formal Commission minute wording. "
+    "Do not invent facts, names, or outcomes. Never attribute views, questions or remarks "
+    "to members unless the minute-taker's notes record them. "
     "Use formal English suitable for the official minutes register."
 )
 
@@ -26,7 +28,18 @@ def build_format_user_prompt(
     discussion_notes: str,
     decision_text: str,
     action_officer: str,
+    selected_decision: str = "",
+    selected_decision_label: str = "",
+    submission_summary: str = "",
 ) -> str:
+    if selected_decision:
+        decision_rule = (
+            f'The minute-taker selected the decision "{selected_decision_label or selected_decision}". '
+            f'That is the outcome: "decision_type" must be "{selected_decision}" and the "decision" '
+            "wording must state it. Use the decision notes only for conditions, dates or detail."
+        )
+    else:
+        decision_rule = "No decision was selected from the list; take the outcome from the decision notes."
     return f"""Meeting:
 {meeting_info}
 
@@ -36,12 +49,25 @@ Agenda item:
 - Title: {agenda_title}
 - Agenda description (from approved agenda): {agenda_description or "Not provided."}
 
-Minute-taker's raw notes (plain English — format only, do not add new substance):
+Summary of the submission before the Commission (from the paper itself):
+{submission_summary or "Not available."}
+
+Decision selected by the minute-taker: {selected_decision_label or "(none selected)"}
+
+Minute-taker's raw notes (plain English):
 Discussion notes:
 {discussion_notes or "(none)"}
 
 Decision notes:
 {decision_text or "(none)"}
+
+How to write this item:
+- {decision_rule}
+- "discussion": start from the submission summary to state what the Commission had before it
+  and what it was asked to decide. Then fold in the minute-taker's discussion notes, if any.
+- If there are no discussion notes, write only what the submission was about and that the
+  Commission considered it. Do not describe any debate, questions or views.
+- Do not add facts that are in neither the summary nor the notes.
 
 Action officer named: {action_officer or "(none)"}
 
@@ -70,6 +96,9 @@ def format_minute_intake_item(
     discussion_notes: str,
     decision_text: str,
     action_officer: str,
+    selected_decision: str = "",
+    selected_decision_label: str = "",
+    submission_summary: str = "",
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Returns (formatted dict, error_message)."""
     user = build_format_user_prompt(
@@ -81,6 +110,9 @@ def format_minute_intake_item(
         discussion_notes=discussion_notes,
         decision_text=decision_text,
         action_officer=action_officer,
+        selected_decision=selected_decision,
+        selected_decision_label=selected_decision_label,
+        submission_summary=submission_summary,
     )
     return complete_json_with_error(
         system=FORMAT_SYSTEM,
