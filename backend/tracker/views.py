@@ -9835,15 +9835,36 @@ class MeetingViewSet(viewsets.ModelViewSet):
         # flying agenda leans on that: saving the minutes is how the system
         # learns which items the Commission has already taken.
         Role.CSU_MANAGER,
+        # Manager Compliance takes the minutes of compliance business — only
+        # on a sitting that has some, and only those items (see _intake_scope).
+        Role.COMPLIANCE_MANAGER,
     }
 
-    def _minute_intake_permission(self, request):
+    def _minute_intake_permission(self, request, meeting=None):
         profile = _profile(request.user)
         if profile.role not in self._MINUTE_INTAKE_ROLES:
             raise PermissionDenied(
                 "Only Secretariat or Commissioners can use minute intake."
             )
+        if profile.role == Role.COMPLIANCE_MANAGER and meeting is not None:
+            from .minutes_review import meeting_has_compliance_business
+
+            if not meeting_has_compliance_business(meeting.id):
+                raise PermissionDenied("This sitting has no compliance business to minute.")
         return profile
+
+    @staticmethod
+    def _intake_scope(profile, meeting):
+        """Agenda item ids this minute taker may work on, or None for all."""
+        if profile.role != Role.COMPLIANCE_MANAGER:
+            return None
+        from .minutes_review import compliance_item_ids
+
+        return compliance_item_ids(meeting.id)
+
+    @staticmethod
+    def _scoped(rows, scope):
+        return rows if scope is None else [r for r in rows if r.agenda_item_id in scope]
 
     def _minute_intake_gate(self, meeting):
         from .minute_intake import meeting_allows_minute_intake
@@ -9867,24 +9888,30 @@ class MeetingViewSet(viewsets.ModelViewSet):
         from .models import MinuteAgendaIntake
 
         meeting = self.get_object()
-        self._minute_intake_permission(request)
+        profile = self._minute_intake_permission(request, meeting)
+        scope = self._intake_scope(profile, meeting)
         blocked = self._minute_intake_gate(meeting)
         if blocked is not None:
             return blocked
 
         if request.method == "GET":
-            rows = ensure_intake_rows(meeting)
+            rows = self._scoped(ensure_intake_rows(meeting), scope)
             return Response(
                 {
                     "meeting_id": meeting.id,
                     "agenda_status": meeting.agenda_status,
                     "allowed": meeting_allows_minute_intake(meeting),
+                    "compliance_items_only": scope is not None,
                     "items": MinuteAgendaIntakeSerializer(rows, many=True).data,
                 }
             )
 
         bulk = MinuteAgendaIntakeBulkSerializer(data=request.data)
         bulk.is_valid(raise_exception=True)
+        if scope is not None and any(
+            entry["agenda_item_id"] not in scope for entry in bulk.validated_data["items"]
+        ):
+            raise PermissionDenied("You can only minute the compliance items of this sitting.")
         for entry in bulk.validated_data["items"]:
             row = MinuteAgendaIntake.objects.filter(
                 meeting=meeting,
@@ -9920,12 +9947,13 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 "Flying agenda chase failed for meeting %s", meeting.pk
             )
 
-        rows = ensure_intake_rows(meeting)
+        rows = self._scoped(ensure_intake_rows(meeting), scope)
         return Response(
             {
                 "meeting_id": meeting.id,
                 "agenda_status": meeting.agenda_status,
                 "allowed": True,
+                "compliance_items_only": scope is not None,
                 "items": MinuteAgendaIntakeSerializer(rows, many=True).data,
             }
         )
@@ -9948,7 +9976,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
         from .models import MinuteAgendaIntake
 
         meeting = self.get_object()
-        self._minute_intake_permission(request)
+        profile = self._minute_intake_permission(request, meeting)
+        scope = self._intake_scope(profile, meeting)
         blocked = self._minute_intake_gate(meeting)
         if blocked is not None:
             return blocked
@@ -9961,6 +9990,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
             meeting=meeting,
             agenda_item_id=agenda_item_id,
         )
+        if scope is not None and row.agenda_item_id not in scope:
+            raise PermissionDenied("You can only minute the compliance items of this sitting.")
         if not row_has_input(row):
             return Response(
                 {"detail": "Select a decision or add notes before formatting."},
@@ -9992,7 +10023,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
         from django.db.models import Q
 
         meeting = self.get_object()
-        self._minute_intake_permission(request)
+        profile = self._minute_intake_permission(request, meeting)
+        scope = self._intake_scope(profile, meeting)
         blocked = self._minute_intake_gate(meeting)
         if blocked is not None:
             return blocked
@@ -10005,6 +10037,8 @@ class MeetingViewSet(viewsets.ModelViewSet):
                 Q(discussion_notes__gt="") | Q(decision_text__gt="") | Q(decision_type__gt=""),
             )
         )
+        if scope is not None:
+            rows = rows.filter(agenda_item_id__in=scope)
         if not rows.exists():
             return Response(
                 {"detail": "No items with a decision or notes to format."},
@@ -10041,13 +10075,15 @@ class MeetingViewSet(viewsets.ModelViewSet):
         from .minute_intake import apply_intake_to_minutes, ensure_intake_rows
 
         meeting = self.get_object()
-        self._minute_intake_permission(request)
+        profile = self._minute_intake_permission(request, meeting)
         blocked = self._minute_intake_gate(meeting)
         if blocked is not None:
             return blocked
 
         ensure_intake_rows(meeting)
-        minutes = apply_intake_to_minutes(meeting, request.user)
+        minutes = apply_intake_to_minutes(
+            meeting, request.user, only_item_ids=self._intake_scope(profile, meeting),
+        )
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="submit-to-chairman")
@@ -12655,6 +12691,8 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         profile = _profile(self.request.user)
+        if profile.role == Role.COMPLIANCE_MANAGER:
+            return self._compliance_taker_update(serializer)
         if profile.role not in _MINUTE_EDITOR_ROLES:
             raise PermissionDenied("Only the Secretary, Senior Admin Officer (minute-taker), Admin, Chairperson, or Commissioners can edit minutes.")
         incoming = serializer.validated_data.get("content")
@@ -12851,6 +12889,11 @@ class MinutesViewSet(viewsets.ModelViewSet):
             )
         if minutes.status != MinutesStatus.DRAFT:
             return Response({"detail": "Only draft minutes can be submitted for review."}, status=400)
+        if mr.compliance_confirmation_outstanding(minutes):
+            return Response(
+                {"detail": "Manager Compliance has to confirm the compliance items before these minutes can be submitted."},
+                status=400,
+            )
 
         now = timezone.now()
         minutes.status = MinutesStatus.PENDING_SECRETARIAT_REVIEW
@@ -12867,8 +12910,6 @@ class MinutesViewSet(viewsets.ModelViewSet):
         minutes.secretary_reviewed_at = None
         minutes.chairman_reviewed_by = None
         minutes.chairman_reviewed_at = None
-        minutes.compliance_reviewed_by = None
-        minutes.compliance_reviewed_at = None
         minutes.save()
 
         try:
@@ -12880,50 +12921,156 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
+    def _compliance_taker_update(self, serializer):
+        """Manager Compliance edits the compliance items of a draft — nothing
+        else in it, and nothing once it has left the minute takers."""
+        from . import minutes_review as mr
+        from .minutes_access import merge_compliance_edit
+
+        minutes = serializer.instance
+        if not mr.is_compliance_minute_taker(self.request.user, minutes.meeting_id):
+            raise PermissionDenied("This sitting has no compliance business for you to minute.")
+        if minutes.status != MinutesStatus.DRAFT:
+            raise PermissionDenied("These minutes are no longer a draft, so they cannot be edited.")
+        incoming = serializer.validated_data.get("content")
+        if incoming is None:
+            return
+        merged = merge_compliance_edit(minutes, incoming)
+        if merged != (minutes.content or {}) and minutes.compliance_reviewed_by_id:
+            # They changed their items after confirming them: the confirmation
+            # no longer describes the draft, so it has to be given again.
+            minutes.compliance_reviewed_by = None
+            minutes.compliance_reviewed_at = None
+        minutes.content = merged
+        minutes.save(update_fields=[
+            "content", "compliance_reviewed_by", "compliance_reviewed_at", "updated_at",
+        ])
+
+    @action(detail=True, methods=["post"], url_path="confirm-draft")
+    def confirm_draft(self, request, pk=None):
+        """Manager Compliance confirms the compliance items of the draft. On a
+        sitting that took compliance business the draft cannot be submitted to
+        the Secretary until they have."""
+        from . import minutes_review as mr
+
+        minutes = self.get_object()
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.COMPLIANCE_MANAGER, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only Manager Compliance can confirm the compliance items.")
+        if not mr.requires_compliance_review(minutes):
+            return Response({"detail": "This sitting took no compliance business."}, status=400)
+        if minutes.status != MinutesStatus.DRAFT:
+            return Response({"detail": "Only a draft can be confirmed."}, status=400)
+        if minutes.compliance_reviewed_by_id:
+            return Response({"detail": "The compliance items are already confirmed."}, status=400)
+
+        minutes.compliance_reviewed_by = request.user
+        minutes.compliance_reviewed_at = timezone.now()
+        minutes.save(update_fields=["compliance_reviewed_by", "compliance_reviewed_at", "updated_at"])
+        try:
+            from .email_notify import notify_minutes_draft_confirmed
+            notify_minutes_draft_confirmed(minutes)
+        except Exception:
+            import logging
+            logging.getLogger("scdms.app").exception("MINUTES_CONFIRM_NOTIFY_FAIL | minutes=%s", minutes.id)
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="return-to-drafters")
+    def return_to_drafters(self, request, pk=None):
+        """The Secretary or the Chairman sends the draft back to the minute
+        takers with a note. It starts again from the draft: every approval
+        and the compliance confirmation is cleared."""
+        from . import minutes_review as mr
+
+        minutes = self.get_object()
+        profile = _profile(self.request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.CHAIRPERSON, Role.PSC_ADMIN}:
+            raise PermissionDenied("Only the Secretary or the Chairman can return minutes.")
+        if minutes.status != MinutesStatus.PENDING_SECRETARIAT_REVIEW:
+            return Response({"detail": "Minutes are not pending review."}, status=400)
+        if profile.role != Role.PSC_ADMIN and profile.role not in mr.current_reviewers(minutes):
+            return Response({"detail": "These minutes are not with you for review at the moment."}, status=400)
+        note = (request.data.get("note") or "").strip()
+        if not note:
+            return Response({"detail": "Say what needs to change before returning the minutes."}, status=400)
+
+        now = timezone.now()
+        minutes.status = MinutesStatus.DRAFT
+        minutes.review_return_note = note
+        minutes.review_returned_by = request.user
+        minutes.review_returned_at = now
+        minutes.review_due_at = None
+        minutes.review_reminded_at = None
+        minutes.secretary_reviewed_by = None
+        minutes.secretary_reviewed_at = None
+        minutes.chairman_reviewed_by = None
+        minutes.chairman_reviewed_at = None
+        minutes.compliance_reviewed_by = None
+        minutes.compliance_reviewed_at = None
+        minutes.draft_review_due_at = mr.due_in_working_days(mr.draft_review_days(), start=now)
+        minutes.draft_review_reminded_at = None
+        minutes.save()
+        try:
+            from .email_notify import notify_minutes_returned_to_drafters
+            notify_minutes_returned_to_drafters(minutes)
+        except Exception:
+            import logging
+            logging.getLogger("scdms.app").exception("MINUTES_RETURN_NOTIFY_FAIL | minutes=%s", minutes.id)
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
     @action(detail=True, methods=["post"], url_path="secretariat-approve")
     def secretariat_approve(self, request, pk=None):
-        """Secretary, Chairman — and the Compliance Manager when the sitting
-        took compliance business — each approve independently. Once every
-        required approval is in, status advances to Reviewed and the
-        minute-taker is notified."""
+        """The Secretary approves, then the Chairman — one after the other by
+        default, or independently when the review mode is set to parallel.
+        Once both are in, status advances to Reviewed and the minute-taker is
+        notified. An Admin stands in for whoever's turn it is."""
         from . import minutes_review as mr
 
         minutes = self.get_object()
         profile = _profile(self.request.user)
         if minutes.status != MinutesStatus.PENDING_SECRETARIAT_REVIEW:
             return Response({"detail": "Minutes are not pending secretariat review."}, status=400)
-
-        compliance_required = mr.requires_compliance_review(minutes)
-        allowed = {Role.PSC_SECRETARY, Role.CHAIRPERSON, Role.PSC_ADMIN}
-        if compliance_required:
-            allowed.add(Role.COMPLIANCE_MANAGER)
-        if profile.role not in allowed:
+        if profile.role not in {Role.PSC_SECRETARY, Role.CHAIRPERSON, Role.PSC_ADMIN}:
             raise PermissionDenied("You are not a reviewer of these minutes.")
 
+        sequential = mr.review_is_sequential()
+        turn = mr.current_reviewers(minutes)
+        if profile.role == Role.PSC_ADMIN:
+            # One press, one approval when they go in order; both otherwise.
+            acting_as = turn
+        elif profile.role in turn:
+            acting_as = [profile.role]
+        elif profile.role in mr.pending_reviewers(minutes):
+            return Response(
+                {"detail": "The Secretary reviews these minutes first. They will come to you next."},
+                status=400,
+            )
+        else:
+            return Response({"detail": "You have already approved these minutes."}, status=400)
+
         now = timezone.now()
-        acted = False
-        if profile.role in {Role.PSC_SECRETARY, Role.PSC_ADMIN} and not minutes.secretary_reviewed_by:
+        if Role.PSC_SECRETARY in acting_as:
             minutes.secretary_reviewed_by = request.user
             minutes.secretary_reviewed_at = now
-            acted = True
-        if profile.role in {Role.CHAIRPERSON, Role.PSC_ADMIN} and not minutes.chairman_reviewed_by:
+        if Role.CHAIRPERSON in acting_as:
             minutes.chairman_reviewed_by = request.user
             minutes.chairman_reviewed_at = now
-            acted = True
-        if (
-            compliance_required
-            and profile.role in {Role.COMPLIANCE_MANAGER, Role.PSC_ADMIN}
-            and not minutes.compliance_reviewed_by
-        ):
-            minutes.compliance_reviewed_by = request.user
-            minutes.compliance_reviewed_at = now
-            acted = True
-        if not acted:
-            return Response({"detail": "You have already approved these minutes."}, status=400)
 
         if mr.secretariat_review_complete(minutes):
             minutes.status = MinutesStatus.REVIEWED
+        elif sequential:
+            # The next reviewer gets their own full window, and their own chase.
+            minutes.review_due_at = mr.due_in_working_days(mr.secretariat_review_days(), start=now)
+            minutes.review_reminded_at = None
         minutes.save()
+
+        if minutes.status != MinutesStatus.REVIEWED and sequential:
+            try:
+                from .email_notify import notify_minutes_submitted_for_review
+                notify_minutes_submitted_for_review(minutes)
+            except Exception:
+                import logging
+                logging.getLogger("scdms.app").exception("MINUTES_NEXT_REVIEWER_NOTIFY_FAIL | minutes=%s", minutes.id)
 
         if minutes.status == MinutesStatus.REVIEWED:
             try:

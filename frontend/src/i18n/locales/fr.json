@@ -1178,7 +1178,8 @@
       "noted": "Pris note",
       "returned": "Renvoyé",
       "tabled": "Déposé"
-    }
+    },
+    "compliance_only": "Vous rédigez le procès-verbal des points de conformité de cette séance. Les autres points sont rédigés par le Manager CSU."
   },
   "accessibility": {
     "skip_to_content": "Aller au contenu principal",
