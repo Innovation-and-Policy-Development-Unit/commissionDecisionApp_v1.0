@@ -13159,6 +13159,38 @@ class MinutesViewSet(viewsets.ModelViewSet):
 
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
+    @action(detail=True, methods=["get"], url_path="signed-document")
+    def signed_document(self, request, pk=None):
+        """Stream the scanned signed minutes to a signed-in user cleared to read them.
+
+        The scan is the full, unredacted minutes, so it is never served from
+        /media/ (nginx denies /media/minutes/ outright): the first scan of a
+        sitting has a predictable name and was downloadable by anyone with no
+        login. ``get_object`` applies the usual minutes visibility, and the
+        same full-clearance rule the serializer uses decides who gets the file
+        — unit staff who only see their own items in the minutes do not.
+        """
+        from django.http import FileResponse
+
+        from .minutes_access import redact_content
+
+        minutes = self.get_object()
+        _content, fully_cleared = redact_content(minutes, request.user)
+        if not fully_cleared:
+            raise PermissionDenied("You do not have access to the signed minutes scan.")
+        scan = minutes.signed_document
+        if not scan or not scan.storage.exists(scan.name):
+            raise Http404
+        import mimetypes
+
+        filename = os.path.basename(scan.name)
+        return FileResponse(
+            scan.open("rb"),
+            as_attachment=bool(request.query_params.get("download")),
+            filename=filename,
+            content_type=mimetypes.guess_type(filename)[0] or "application/octet-stream",
+        )
+
     @action(detail=True, methods=["get"], url_path="pdf")
     def pdf(self, request, pk=None):
         """Generate a PDF version of the minutes (locked items redacted per user)."""
