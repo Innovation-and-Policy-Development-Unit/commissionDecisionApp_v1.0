@@ -119,6 +119,27 @@ class MinutesWorkflowTests(TestCase):
         res = self._post(self.secretary, "circulate-to-commissioners")
         self.assertEqual(res.status_code, 400)
 
+    def test_signed_scan_can_be_reuploaded_and_keeps_signing_time(self):
+        self.minutes.status = MinutesStatus.AWAITING_SIGNATURE
+        self.minutes.save()
+        self.client.force_authenticate(user=self.taker)
+        url = f"/api/minutes/{self.minutes.id}/upload-signed/"
+
+        first = SimpleUploadedFile("wrong.pdf", b"%PDF-1.4 wrong scan", content_type="application/pdf")
+        res = self.client.post(url, {"signed_document": first}, format="multipart")
+        self.assertEqual(res.status_code, 200, res.data)
+        signed_at = res.data["signed_at"]
+
+        second = SimpleUploadedFile("right.pdf", b"%PDF-1.4 right scan", content_type="application/pdf")
+        res = self.client.post(url, {"signed_document": second}, format="multipart")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data["status"], MinutesStatus.SIGNED)
+        self.assertEqual(res.data["signed_at"], signed_at)
+
+        self.minutes.refresh_from_db()
+        with self.minutes.signed_document.open("rb") as fh:
+            self.assertEqual(fh.read(), b"%PDF-1.4 right scan")
+
     def test_only_senior_admin_officer_can_upload_signed(self):
         self.minutes.status = MinutesStatus.AWAITING_SIGNATURE
         self.minutes.save()

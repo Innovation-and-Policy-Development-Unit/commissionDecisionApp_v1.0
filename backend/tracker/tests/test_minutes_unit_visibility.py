@@ -123,6 +123,35 @@ class MinutesUnitVisibilityTests(TestCase):
         self.assertEqual(items[0]["discussion"], ODU_TEXT)
         self.assertEqual(items[1]["discussion"], HR_TEXT)
 
+    def test_signed_scan_is_served_only_through_the_api_to_cleared_users(self):
+        self.minutes.signed_document.save("scan.pdf", ContentFile(b"%PDF-1.4 signed scan"), save=True)
+        url = f"/api/minutes/{self.minutes.id}/signed-document/"
+
+        # The serializer hands out the authenticated endpoint, never /media/.
+        link = self._get_minutes(self.secretary)["signed_document"]
+        self.assertTrue(link.endswith(url), link)
+        self.assertNotIn("/media/", link)
+
+        self.client.force_authenticate(user=self.secretary)
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res["Content-Type"], "application/pdf")
+        self.assertEqual(b"".join(res.streaming_content), b"%PDF-1.4 signed scan")
+
+        # Unit staff see only their own items, so not the unredacted scan.
+        self.assertIsNone(self._get_minutes(self.odu_manager)["signed_document"])
+        self.client.force_authenticate(user=self.odu_manager)
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+        # No login, no file.
+        self.client.force_authenticate(user=None)
+        self.assertIn(self.client.get(url).status_code, (401, 403))
+
+    def test_signed_scan_endpoint_404_when_nothing_uploaded(self):
+        self.client.force_authenticate(user=self.secretary)
+        res = self.client.get(f"/api/minutes/{self.minutes.id}/signed-document/")
+        self.assertEqual(res.status_code, 404)
+
     def test_unitless_staff_see_structure_only(self):
         data = self._get_minutes(self.senior)
         for block in data["content"]["agenda_items"]:

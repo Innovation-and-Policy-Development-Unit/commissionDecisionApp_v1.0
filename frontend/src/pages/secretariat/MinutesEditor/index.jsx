@@ -468,8 +468,14 @@ export default function MinutesEditor() {
 
   // Upload the scanned, manually (wet-ink) signed minutes and mark them Signed.
   // Allocating decision tasks to managers is a separate, explicit Secretary step.
+  // On minutes that are already Signed this replaces the scan on record (a
+  // corrected or clearer copy); the original signing time is kept by the server.
   const uploadSignedMinutes = async (file) => {
     if (!file) return
+    const replacing = minutes.status === 'signed'
+    if (replacing && !window.confirm(
+      `Replace the signed minutes on record with "${file.name}"? The scan uploaded earlier will no longer be shown.`
+    )) return
     setSaving(true)
     setError('')
     setSuccess('')
@@ -480,7 +486,9 @@ export default function MinutesEditor() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setMinutes(res.data)
-      setSuccess('Signed minutes uploaded. The Secretary can now allocate decision tasks.')
+      setSuccess(replacing
+        ? 'Signed minutes replaced with the new scan.'
+        : 'Signed minutes uploaded. The Secretary can now allocate decision tasks.')
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to upload signed minutes.')
     } finally {
@@ -503,6 +511,21 @@ export default function MinutesEditor() {
       setError(err.response?.data?.detail || 'Failed to add comment.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // The signed scan is private: it is fetched with the user's session from the
+  // API (never a /media/ link) and opened in a new tab.
+  const viewSignedScan = async () => {
+    setError('')
+    setSuccess('')
+    try {
+      const res = await api.get(`/minutes/${minutes.id}/signed-document/`, { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      window.open(url, '_blank', 'noopener')
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch {
+      setError('The signed minutes scan could not be opened.')
     }
   }
 
@@ -830,6 +853,27 @@ export default function MinutesEditor() {
                       </button>
                     </>
                   )}
+                </>
+              )}
+              {minutes.status === 'signed' && minutes.signed_document && (
+                <button onClick={viewSignedScan} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2">
+                  <Download size={16} />
+                  View Signed Scan
+                </button>
+              )}
+              {minutes.status === 'signed' && SIGNED_UPLOAD_ROLES.has(user?.role) && (
+                <>
+                  <input
+                    ref={signedFileRef}
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    onChange={e => { uploadSignedMinutes(e.target.files?.[0]); e.target.value = '' }}
+                  />
+                  <button onClick={() => signedFileRef.current?.click()} disabled={saving} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
+                    <PenSquare size={16} />
+                    Re-upload Signed Minutes
+                  </button>
                 </>
               )}
               {minutes.status === 'signed' && ALLOCATE_TASKS_ROLES.has(user?.role) && (

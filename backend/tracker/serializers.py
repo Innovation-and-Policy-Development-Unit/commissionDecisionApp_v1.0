@@ -2931,6 +2931,12 @@ class MinutesSerializer(serializers.ModelSerializer):
             # The stored PDFs hold the full minutes; only fully-cleared users get them.
             data["pdf_version"] = None
             data["signed_document"] = None
+        elif instance.signed_document:
+            # Never the /media/ address: nginx denies /media/minutes/ and the
+            # scan is only streamed by the authenticated signed-document action.
+            request = self.context.get("request")
+            path = f"/api/minutes/{instance.id}/signed-document/"
+            data["signed_document"] = request.build_absolute_uri(path) if request else path
         return data
 
 
