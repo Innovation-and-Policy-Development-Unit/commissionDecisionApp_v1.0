@@ -12614,6 +12614,14 @@ _MINUTE_EDITOR_ROLES = {
     Role.CSU_MANAGER,
 }
 
+# Who may upload (and re-upload) the scanned, wet-ink signed minutes. The
+# Corporate Services Unit keeps the paper copy in practice, so its Manager and
+# Senior Officer do this alongside the Senior Admin Officer role.
+_SIGNED_SCAN_UPLOAD_ROLES = {
+    Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN, Role.CSU_MANAGER, Role.CSU_SENIOR,
+}
+
+
 
 class MinutesViewSet(viewsets.ModelViewSet):
     """CRUD for meeting minutes documents, plus AI generation actions.
@@ -12644,6 +12652,12 @@ class MinutesViewSet(viewsets.ModelViewSet):
         if user.is_superuser or user.is_staff:
             return qs
         profile = _profile(user)
+        if profile.role == Role.CSU_SENIOR:
+            # Uploads the signed scan, so the minutes must be reachable once
+            # they are out for signature — not the earlier drafts. Checked
+            # before the full-access roles, which this role is also in so the
+            # minutes it does reach are shown whole.
+            return qs.filter(status__in=[MinutesStatus.AWAITING_SIGNATURE, MinutesStatus.SIGNED])
         if profile.role in self._FULL_ACCESS_ROLES:
             return qs
         if profile.role in MINISTRY_SIDE_ROLES:
@@ -13130,9 +13144,10 @@ class MinutesViewSet(viewsets.ModelViewSet):
         """
         minutes = self.get_object()
         profile = _profile(self.request.user)
-        if profile.role not in {Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN}:
+        if profile.role not in _SIGNED_SCAN_UPLOAD_ROLES:
             raise PermissionDenied(
-                "Only the Senior Admin Officer can upload signed minutes and move them to the next steps."
+                "Only the Corporate Services Unit (Manager or Senior Officer), the Senior Admin "
+                "Officer or an Admin can upload signed minutes."
             )
         signed_file = request.FILES.get("signed_document") or request.FILES.get("file")
         if not signed_file:
