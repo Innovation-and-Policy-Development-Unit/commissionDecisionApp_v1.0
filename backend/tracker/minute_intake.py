@@ -11,6 +11,7 @@ from .models import (
     Meeting,
     MeetingStatus,
     MinuteAgendaIntake,
+    MinuteIntakeDecision,
     Minutes,
     MinutesStatus,
 )
@@ -54,6 +55,62 @@ def _agenda_title_description(item: AgendaItem) -> tuple[str, str]:
     if not description and sub and sub.notes:
         description = (sub.notes or "")[:2000]
     return title, description
+
+
+# How much of the paper's summary the formatter is given. Enough for a
+# paragraph on what the Commission had before it, not the whole paper.
+_SUBMISSION_SUMMARY_LIMIT = 3000
+
+
+def row_has_input(row: MinuteAgendaIntake) -> bool:
+    """True when the minute taker has given the formatter something to work
+    from: typed notes, or just an outcome picked from the list."""
+    return bool(
+        (row.discussion_notes or "").strip()
+        or (row.decision_text or "").strip()
+        or row.decision_type
+    )
+
+
+def decision_label(row: MinuteAgendaIntake) -> str:
+    if not row.decision_type:
+        return ""
+    return str(MinuteIntakeDecision(row.decision_type).label)
+
+
+def submission_summary(row: MinuteAgendaIntake) -> str:
+    """What the paper is about, so the minute can say what the Commission
+    considered without the minute taker retyping it. Flying items use the
+    brief the unit filed; everything else its executive summary, falling back
+    to the paper's own notes."""
+    item = row.agenda_item
+    brief = getattr(item, "flying_brief", None) if item.is_flying else None
+    if brief and (brief.background or "").strip():
+        text = brief.background
+    else:
+        sub = item.submission
+        text = (getattr(sub, "ai_brief_summary", "") or getattr(sub, "notes", "") or "") if sub else ""
+    return text.strip()[:_SUBMISSION_SUMMARY_LIMIT]
+
+
+def format_kwargs(row: MinuteAgendaIntake, meeting_info: str) -> dict:
+    """Everything format_minute_intake_item needs for one row."""
+    from .agenda_sections import agenda_section_label
+
+    sub = row.agenda_item.submission
+    return {
+        "meeting_info": meeting_info,
+        "agenda_title": row.agenda_title,
+        "agenda_description": row.agenda_description,
+        "submission_ref": getattr(sub, "reference_number", "") if sub else "",
+        "category_display": agenda_section_label(row.agenda_item.category or ""),
+        "discussion_notes": row.discussion_notes,
+        "decision_text": row.decision_text,
+        "action_officer": row.action_officer,
+        "selected_decision": row.decision_type,
+        "selected_decision_label": decision_label(row),
+        "submission_summary": submission_summary(row),
+    }
 
 
 def ensure_intake_rows(meeting: Meeting) -> list[MinuteAgendaIntake]:
@@ -109,8 +166,11 @@ def apply_intake_to_minutes(meeting: Meeting, user) -> Minutes:
             "submission_ref": ref,
             "title": row.agenda_title,
             "discussion": row.formatted_discussion or row.discussion_notes,
-            "decision": row.formatted_decision or row.decision_text,
-            "decision_type": row.formatted_decision_type or "",
+            # An outcome picked from the list stands on its own: an item that
+            # was never formatted still carries its decision into the minutes.
+            "decision": row.formatted_decision or row.decision_text
+            or (f"{decision_label(row)}." if row.decision_type else ""),
+            "decision_type": row.decision_type or row.formatted_decision_type or "",
             "action_items": row.formatted_action_items or [],
         }
         if row.action_officer and not entry["action_items"]:
@@ -153,7 +213,9 @@ def apply_intake_to_minutes(meeting: Meeting, user) -> Minutes:
 def store_formatted_result(row: MinuteAgendaIntake, data: dict) -> None:
     row.formatted_discussion = (data.get("discussion") or "").strip()
     row.formatted_decision = (data.get("decision") or "").strip()
-    row.formatted_decision_type = (data.get("decision_type") or "").strip()[:32]
+    # The minute taker's own pick is the record; the model only supplies the
+    # type when none was picked.
+    row.formatted_decision_type = row.decision_type or (data.get("decision_type") or "").strip()[:32]
     actions = data.get("action_items")
     row.formatted_action_items = actions if isinstance(actions, list) else []
     row.formatted_at = timezone.now()

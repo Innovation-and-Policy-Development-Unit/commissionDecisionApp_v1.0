@@ -21,6 +21,7 @@ from .models import (
     Meeting,
     MeetingBriefingPack,
     MinuteAgendaIntake,
+    MinuteIntakeDecision,
     MeetingTranscript,
     MeetingType,
     RecordingAudioSource,
@@ -2968,6 +2969,7 @@ class MinuteAgendaIntakeSerializer(serializers.ModelSerializer):
             "agenda_title",
             "agenda_description",
             "discussion_notes",
+            "decision_type",
             "decision_text",
             "action_officer",
             "formatted_discussion",
@@ -3000,6 +3002,9 @@ class MinuteAgendaIntakeSerializer(serializers.ModelSerializer):
 class MinuteAgendaIntakeWriteSerializer(serializers.Serializer):
     agenda_item_id = serializers.IntegerField()
     discussion_notes = serializers.CharField(required=False, allow_blank=True)
+    decision_type = serializers.ChoiceField(
+        choices=MinuteIntakeDecision.choices, required=False, allow_blank=True,
+    )
     decision_text = serializers.CharField(required=False, allow_blank=True)
     action_officer = serializers.CharField(required=False, allow_blank=True, max_length=255)
 

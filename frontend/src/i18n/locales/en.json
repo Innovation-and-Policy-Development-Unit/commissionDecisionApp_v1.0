@@ -1431,10 +1431,10 @@
     "formatted_badge": "Formatted",
     "agenda_title": "Agenda item",
     "agenda_description": "Agenda description",
-    "discussion_notes": "Discussion notes",
-    "discussion_placeholder": "Plain English notes from the sitting…",
-    "decision_text": "Decision notes",
-    "decision_placeholder": "Outcome, resolution, or deferral notes…",
+    "discussion_notes": "Discussion notes (optional)",
+    "discussion_placeholder": "Anything said in the room that the minutes should record…",
+    "decision_text": "Decision notes (optional)",
+    "decision_placeholder": "Conditions, dates or other detail…",
     "action_officer": "Action officer",
     "action_officer_placeholder": "Officer or unit for follow-up",
     "preview_title": "Formatted preview",
@@ -1461,7 +1461,18 @@
     "context_ministry": "Ministry",
     "context_stage": "Stage",
     "context_open_full": "Open full submission",
-    "context_close": "Close"
+    "context_close": "Close",
+    "decision_type": "Decision",
+    "decision_select": "— Select —",
+    "decision_hint": "Pick the outcome, then press Format with AI. The paragraph is drafted from the submission; notes are optional.",
+    "decision_option": {
+      "approved": "Approved",
+      "rejected": "Not approved",
+      "deferred": "Deferred",
+      "noted": "Noted",
+      "returned": "Returned",
+      "tabled": "Tabled"
+    }
   },
   "accessibility": {
     "skip_to_content": "Skip to main content",

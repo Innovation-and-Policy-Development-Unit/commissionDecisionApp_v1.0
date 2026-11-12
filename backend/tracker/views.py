@@ -9900,7 +9900,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             update_fields = ["updated_at"]
-            for field in ("discussion_notes", "decision_text", "action_officer"):
+            for field in ("discussion_notes", "decision_type", "decision_text", "action_officer"):
                 if field in entry:
                     setattr(row, field, entry[field])
                     update_fields.append(field)
@@ -9937,11 +9937,12 @@ class MeetingViewSet(viewsets.ModelViewSet):
     )
     def minute_intake_format_item(self, request, pk=None, agenda_item_id=None):
         """Claude-format one agenda item's raw notes."""
-        from .agenda_sections import agenda_section_label
         from .ai.minute_intake_format import format_minute_intake_item
         from .minute_intake import (
             ensure_intake_rows,
+            format_kwargs,
             meeting_info_block,
+            row_has_input,
             store_formatted_result,
         )
         from .models import MinuteAgendaIntake
@@ -9955,29 +9956,18 @@ class MeetingViewSet(viewsets.ModelViewSet):
         ensure_intake_rows(meeting)
         row = get_object_or_404(
             MinuteAgendaIntake.objects.select_related(
-                "agenda_item", "agenda_item__submission",
+                "agenda_item", "agenda_item__submission", "agenda_item__flying_brief",
             ),
             meeting=meeting,
             agenda_item_id=agenda_item_id,
         )
-        if not (row.discussion_notes or "").strip() and not (row.decision_text or "").strip():
+        if not row_has_input(row):
             return Response(
-                {"detail": "Add discussion or decision notes before formatting."},
+                {"detail": "Select a decision or add notes before formatting."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        sub = row.agenda_item.submission
-        ref = getattr(sub, "reference_number", "") if sub else ""
-        formatted, err = format_minute_intake_item(
-            meeting_info=meeting_info_block(meeting),
-            agenda_title=row.agenda_title,
-            agenda_description=row.agenda_description,
-            submission_ref=ref,
-            category_display=agenda_section_label(row.agenda_item.category or ""),
-            discussion_notes=row.discussion_notes,
-            decision_text=row.decision_text,
-            action_officer=row.action_officer,
-        )
+        formatted, err = format_minute_intake_item(**format_kwargs(row, meeting_info_block(meeting)))
         if err or not formatted:
             return Response(
                 {"detail": err or "Formatting failed."},
@@ -9990,11 +9980,12 @@ class MeetingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="minute-intake/format-all")
     def minute_intake_format_all(self, request, pk=None):
         """Claude-format all intake rows that have raw notes."""
-        from .agenda_sections import agenda_section_label
         from .ai.minute_intake_format import format_minute_intake_item
         from .minute_intake import (
             ensure_intake_rows,
+            format_kwargs,
             meeting_info_block,
+            row_has_input,
             store_formatted_result,
         )
         from .models import MinuteAgendaIntake
@@ -10009,14 +10000,14 @@ class MeetingViewSet(viewsets.ModelViewSet):
         ensure_intake_rows(meeting)
         rows = (
             MinuteAgendaIntake.objects.filter(meeting=meeting)
-            .select_related("agenda_item", "agenda_item__submission")
+            .select_related("agenda_item", "agenda_item__submission", "agenda_item__flying_brief")
             .filter(
-                Q(discussion_notes__gt="") | Q(decision_text__gt=""),
+                Q(discussion_notes__gt="") | Q(decision_text__gt="") | Q(decision_type__gt=""),
             )
         )
         if not rows.exists():
             return Response(
-                {"detail": "No items with discussion or decision notes to format."},
+                {"detail": "No items with a decision or notes to format."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -10024,20 +10015,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
         formatted_items = []
         errors = []
         for row in rows:
-            if not (row.discussion_notes or "").strip() and not (row.decision_text or "").strip():
+            if not row_has_input(row):
                 continue
-            sub = row.agenda_item.submission
-            ref = getattr(sub, "reference_number", "") if sub else ""
-            data, err = format_minute_intake_item(
-                meeting_info=info,
-                agenda_title=row.agenda_title,
-                agenda_description=row.agenda_description,
-                submission_ref=ref,
-                category_display=agenda_section_label(row.agenda_item.category or ""),
-                discussion_notes=row.discussion_notes,
-                decision_text=row.decision_text,
-                action_officer=row.action_officer,
-            )
+            data, err = format_minute_intake_item(**format_kwargs(row, info))
             if err or not data:
                 errors.append({"agenda_item_id": row.agenda_item_id, "error": err or "Failed"})
                 continue
