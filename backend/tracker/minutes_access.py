@@ -24,6 +24,10 @@ FULL_ACCESS_ROLES = frozenset({
     Role.PSC_COMMISSIONER,
     Role.SENIOR_ADMIN_OFFICER,
     Role.CSU_MANAGER,
+    # Uploads the signed scan (the whole, unredacted record) and must be able
+    # to check what was uploaded. The minutes queryset still limits this role
+    # to minutes that are out for signature or signed.
+    Role.CSU_SENIOR,
 })
 
 # Unit staff → submission routing key (Submission.routed_unit).

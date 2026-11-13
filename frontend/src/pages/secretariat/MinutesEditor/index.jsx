@@ -23,7 +23,8 @@ const MINUTES_STATUS = {
 }
 
 // Roles permitted to upload the scanned, manually-signed minutes. Mirrors the backend gate.
-const SIGNED_UPLOAD_ROLES = new Set(['senior_admin_officer', 'psc_admin'])
+// Mirrors _SIGNED_SCAN_UPLOAD_ROLES in the backend: CSU keeps the signed paper copy.
+const SIGNED_UPLOAD_ROLES = new Set(['senior_admin_officer', 'psc_admin', 'csu_manager', 'csu_senior'])
 const SEND_FOR_SIGNATURE_ROLES = new Set(['senior_admin_officer', 'psc_secretary', 'psc_admin'])
 // Manager CSU takes the minutes in practice; the Senior Admin Officer is the
 // role the SOP names. Both draft them and hand them on.
@@ -728,6 +729,38 @@ export default function MinutesEditor() {
           <ReadOnlySection label="Any Other Business" value={content.any_other_business} />
           <ReadOnlySection label="Closing" value={content.closing} />
           <ReadOnlySection label="Next Meeting Date" value={content.next_meeting_date} />
+
+          {minutes?.id && (minutes.status === 'awaiting_signature' || minutes.status === 'signed') && (
+            <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-slate-200 dark:border-slate-700 pt-6">
+              {minutes.status === 'awaiting_signature' && SIGNED_UPLOAD_ROLES.has(user?.role) && (
+                <button onClick={downloadPdf} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2">
+                  <Download size={16} />
+                  Download for Signature
+                </button>
+              )}
+              {minutes.status === 'signed' && minutes.signed_document && (
+                <button onClick={viewSignedScan} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2">
+                  <Download size={16} />
+                  View Signed Scan
+                </button>
+              )}
+              {SIGNED_UPLOAD_ROLES.has(user?.role) && (
+                <>
+                  <input
+                    ref={signedFileRef}
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    onChange={e => { uploadSignedMinutes(e.target.files?.[0]); e.target.value = '' }}
+                  />
+                  <button onClick={() => signedFileRef.current?.click()} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors disabled:opacity-60">
+                    <CheckCircle2 size={16} />
+                    {minutes.status === 'signed' ? 'Re-upload Signed Minutes' : 'Upload Signed Minutes'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
             {canEditMinutes ? (
