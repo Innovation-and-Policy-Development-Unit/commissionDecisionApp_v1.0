@@ -13053,8 +13053,10 @@ class MinutesViewSet(viewsets.ModelViewSet):
         confirm the right scan was uploaded before managers are notified."""
         minutes = self.get_object()
         profile = _profile(self.request.user)
-        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Secretary or Admin can allocate decision tasks.")
+        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN} and not rbac_user_has_permission(
+            request.user, "allocate_decision"
+        ):
+            raise PermissionDenied("Only the Secretary, Admin or a role with the allocate decision permission can allocate decision tasks.")
         if minutes.status != MinutesStatus.SIGNED:
             return Response({"detail": "Minutes must be signed before tasks can be allocated."}, status=400)
         if minutes.tasks_allocated_at:
