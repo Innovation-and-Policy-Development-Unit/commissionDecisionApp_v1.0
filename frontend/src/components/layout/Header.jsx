@@ -17,6 +17,7 @@ import BrandLogo from '../shared/BrandLogo'
 import LanguageSwitcher from '../shared/LanguageSwitcher'
 import LiveRegion from '../shared/LiveRegion'
 import DesktopNotificationSettings from '../notifications/DesktopNotificationSettings'
+import NotificationSoundSettings from '../notifications/NotificationSoundSettings'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useChat } from '../../context/ChatContext'
 import ChatDropdown from '../chat/ChatDropdown'
@@ -694,6 +695,7 @@ export default function Header({ onMenuClick }) {
               )}
             </div>
             <DesktopNotificationSettings compact />
+            <NotificationSoundSettings compact />
             <div
               className="max-h-72 overflow-y-auto custom-scrollbar"
               aria-live="polite"
