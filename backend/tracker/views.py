@@ -6465,7 +6465,16 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                         "Cannot allocate task: Commission minutes have not been signed yet. "
                         "Task allocation is only permitted after the Chairperson has signed the minutes."
                     )
-        task = serializer.save(created_by=self.request.user)
+        extra = {}
+        if not serializer.validated_data.get("decision_number"):
+            from .decision_allocation import decision_number_for, minutes_block_for
+
+            agenda_item = serializer.validated_data.get("agenda_item")
+            meeting = serializer.validated_data.get("meeting") or (agenda_item.meeting if agenda_item else None)
+            number = decision_number_for(minutes_block_for(agenda_item), meeting)
+            if number:
+                extra["decision_number"] = number
+        task = serializer.save(created_by=self.request.user, **extra)
         from .email_notify import notify_task_assigned, task_assignees
 
         notify_task_assigned(task, task_assignees(task))
@@ -9966,18 +9975,19 @@ class MeetingViewSet(viewsets.ModelViewSet):
 
         if request.method == "GET":
             rows = ensure_intake_rows(meeting)
-            return Response(
-                {
-                    "meeting_id": meeting.id,
-                    "agenda_status": meeting.agenda_status,
-                    "allowed": meeting_allows_minute_intake(meeting),
-                    "items": MinuteAgendaIntakeSerializer(rows, many=True).data,
-                }
-            )
+            return Response(self._minute_intake_payload(meeting, rows, meeting_allows_minute_intake(meeting)))
 
         bulk = MinuteAgendaIntakeBulkSerializer(data=request.data)
         bulk.is_valid(raise_exception=True)
-        for entry in bulk.validated_data["items"]:
+        if "attendance" in bulk.validated_data:
+            from .minute_attendance import clean_attendance
+
+            try:
+                meeting.minute_attendance = clean_attendance(bulk.validated_data["attendance"])
+            except ValueError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            meeting.save(update_fields=["minute_attendance", "updated_at"])
+        for entry in bulk.validated_data.get("items", []):
             row = MinuteAgendaIntake.objects.filter(
                 meeting=meeting,
                 agenda_item_id=entry["agenda_item_id"],
@@ -9992,7 +10002,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             update_fields = ["updated_at"]
-            for field in ("discussion_notes", "decision_text", "action_officer"):
+            for field in ("discussion_notes", "decision_text", "action_officer", "decision_number"):
                 if field in entry:
                     setattr(row, field, entry[field])
                     update_fields.append(field)
@@ -10013,14 +10023,24 @@ class MeetingViewSet(viewsets.ModelViewSet):
             )
 
         rows = ensure_intake_rows(meeting)
-        return Response(
-            {
-                "meeting_id": meeting.id,
-                "agenda_status": meeting.agenda_status,
-                "allowed": True,
-                "items": MinuteAgendaIntakeSerializer(rows, many=True).data,
-            }
-        )
+        return Response(self._minute_intake_payload(meeting, rows, True))
+
+    @staticmethod
+    def _minute_intake_payload(meeting, rows, allowed):
+        from .minute_attendance import get_attendance, quorum_info, secretariat_suggestions
+
+        attendance, saved = get_attendance(meeting)
+        return {
+            "meeting_id": meeting.id,
+            "agenda_status": meeting.agenda_status,
+            "allowed": allowed,
+            "items": MinuteAgendaIntakeSerializer(rows, many=True).data,
+            "attendance": attendance,
+            "attendance_saved": saved,
+            "attendance_quorum": quorum_info(attendance),
+            "attendance_suggestions": secretariat_suggestions(),
+            "meeting_number": meeting.psc_meeting_number,
+        }
 
     @action(
         detail=True,
@@ -13329,11 +13349,14 @@ class MinutesViewSet(viewsets.ModelViewSet):
                 except Exception:
                     pass
 
+        from .minute_attendance import attendance_for_print
+
         html = render_to_string("tracker/minutes_pdf.html", {
             "meeting": minutes.meeting,
             "minutes": minutes,
             "content": content,
             "agenda_items": agenda_items,
+            "attendance": attendance_for_print(content.get("attendance")),
             "status_label": minutes.get_status_display(),
             "signature_data_uri": signature_data_uri,
         })

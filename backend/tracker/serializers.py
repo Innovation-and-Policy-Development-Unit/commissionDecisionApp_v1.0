@@ -2265,6 +2265,7 @@ class MeetingSerializer(serializers.ModelSerializer):
             "id",
             "reference_number",
             "title",
+            "psc_meeting_number",
             "date",
             "time",
             "venue",
@@ -2972,6 +2973,7 @@ class MinuteAgendaIntakeSerializer(serializers.ModelSerializer):
             "discussion_notes",
             "decision_text",
             "action_officer",
+            "decision_number",
             "formatted_discussion",
             "formatted_decision",
             "formatted_decision_type",
@@ -3004,10 +3006,12 @@ class MinuteAgendaIntakeWriteSerializer(serializers.Serializer):
     discussion_notes = serializers.CharField(required=False, allow_blank=True)
     decision_text = serializers.CharField(required=False, allow_blank=True)
     action_officer = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    decision_number = serializers.CharField(required=False, allow_blank=True, max_length=64)
 
 
 class MinuteAgendaIntakeBulkSerializer(serializers.Serializer):
-    items = MinuteAgendaIntakeWriteSerializer(many=True)
+    items = MinuteAgendaIntakeWriteSerializer(many=True, required=False)
+    attendance = serializers.DictField(required=False)
 
 
 class FlyingMinuteSignatureSerializer(serializers.ModelSerializer):

@@ -100,7 +100,7 @@ function DecisionRegisterFields({ part, decisionNumber, setDecisionNumber, decis
       <div className="grid sm:grid-cols-2 gap-4">
         {extra && (
           <div>
-            <BaseInput label="Decision number" value={decisionNumber} onChange={e => setDecisionNumber(e.target.value)} placeholder="e.g. 02-28-2025" hint="Format: decision#-meeting#-year" />
+            <BaseInput label="Decision number" value={decisionNumber} onChange={e => setDecisionNumber(e.target.value)} placeholder={part === 'extra' ? 'e.g. 03(n)-23-2026' : 'e.g. 02-28-2025'} hint={part === 'extra' ? 'The Commission\'s number from the minutes (filled in automatically when recorded). Format: decision#-meeting#-year.' : 'Format: decision#-meeting#-year'} />
           </div>
         )}
         {core && (
@@ -1046,6 +1046,7 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
     setTitle(p.suggested_task_title || '')
     setDescription(p.description || '')
     setDecisionDetail(p.decision_detail || '')
+    setDecisionNumber(p.decision_number || '')
     setDecisionOutcome(p.decision_outcome || '')
     setActionUnit(p.action_unit || '')
     setMeetingReference(p.meeting_reference || '')

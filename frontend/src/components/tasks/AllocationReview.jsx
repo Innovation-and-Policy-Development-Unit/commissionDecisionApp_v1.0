@@ -33,6 +33,7 @@ function initialRow(item) {
 function SourceBadge({ s }) {
   if (!s) return <span className="text-[11px] text-amber-700 dark:text-amber-400">No suggestion — pick a manager</span>
   const ai = s.source === 'ai'
+  const named = s.source === 'minutes'
   const low = s.confidence < AUTO_ACCEPT_AT
   return (
     <span
@@ -44,7 +45,7 @@ function SourceBadge({ s }) {
       )}
     >
       {ai ? <Sparkles size={10} /> : <CheckCircle2 size={10} />}
-      {ai ? 'AI suggestion' : 'Routed by unit'} · {s.confidence}%{low ? ' · check' : ''}
+      {ai ? 'AI suggestion' : named ? 'Named in the minutes' : 'Routed by unit'} · {s.confidence}%{low ? ' · check' : ''}
     </span>
   )
 }

@@ -29,7 +29,8 @@ action them.
 For each decision choose:
 1. The manager best placed to action it, judged by the manager's unit/role and the
    subject of the decision (form type, ministry, decision text).
-2. Among managers of the same unit, prefer the one with fewer open tasks.
+2. If the minutes name an Action Officer, follow it unless it clearly names no unit.
+   Among managers of the same unit, prefer the one with fewer open tasks.
 3. action_unit: one of the allowed unit codes.
 4. due_days: realistic days to action it (7-180); urgent or time-bound decisions shorter.
 5. confidence 0-100 and a one-sentence reason a busy Secretary can verify at a glance.
@@ -99,7 +100,7 @@ def suggest_allocations(
     lines += ["", "Decisions to allocate:"]
     for i, it in enumerate(items):
         lines.append(
-            f'[{i}] title={it["title"]!r} | outcome={it["outcome"] or "—"} | '
+            f'[{i}] title={it["title"]!r} | action_officer={it.get("action_officer") or "—"} | outcome={it["outcome"] or "—"} | '
             f'form_type={it["form_type"] or "—"} | ministry={it["ministry"] or "—"}\n'
             f'    decision: {(it["decision"] or "")[:600]}'
         )

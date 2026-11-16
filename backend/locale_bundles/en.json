@@ -1434,6 +1434,8 @@
     "discussion_placeholder": "Plain English notes from the sitting…",
     "decision_text": "Decision notes",
     "decision_placeholder": "Outcome, resolution, or deferral notes…",
+    "decision_number": "Decision number",
+    "decision_number_placeholder": "As numbered by the Commission, e.g. 03(n)-23-2026",
     "action_officer": "Action officer",
     "action_officer_placeholder": "Officer or unit for follow-up",
     "preview_title": "Formatted preview",
