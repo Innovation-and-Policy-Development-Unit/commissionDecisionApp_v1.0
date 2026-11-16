@@ -111,6 +111,7 @@ def build_register_rows(qs) -> list[dict[str, Any]]:
             "task_id": t.id,
             "decision_number": t.decision_number or "",
             "title": t.title,
+            "submission_id": t.submission_id,
             "submission_ref": t.submission.reference_number if t.submission_id else "",
             "submission_title": t.submission.title if t.submission_id else "",
             "meeting_ref": t.meeting_reference or (t.meeting.title if t.meeting_id else ""),

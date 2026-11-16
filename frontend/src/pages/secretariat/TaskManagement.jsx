@@ -19,6 +19,7 @@ import BaseInput from '../../components/shared/BaseInput'
 import BaseSelect from '../../components/shared/BaseSelect'
 import BaseTextarea from '../../components/shared/BaseTextarea'
 import DecisionLetterPanel from '../../components/tasks/DecisionLetterPanel'
+import AllocationReview from '../../components/tasks/AllocationReview'
 import BaseCheckbox from '../../components/shared/BaseCheckbox'
 import { userCanWorkCommissionTask, userHasCommissionDecisionView } from '../../utils/opscAccess'
 import clsx from 'clsx'
@@ -88,40 +89,56 @@ function ImplStatusBadge({ value }) {
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${opt.cls}`}>{opt.label}</span>
 }
 
-function DecisionRegisterFields({ decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }) {
+function DecisionRegisterFields({ part, decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }) {
+  // part: 'core' = what the Commission decided + who acts; 'extra' = register
+  // bookkeeping; omitted = everything (edit modal).
+  const core = part !== 'extra'
+  const extra = part !== 'core'
   return (
-    <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-700">
-      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Decision Register</p>
+    <div className={clsx('space-y-4', !part && 'pt-2 border-t border-slate-100 dark:border-slate-700')}>
+      {!part && <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Decision Register</p>}
       <div className="grid sm:grid-cols-2 gap-4">
-        <div>
-          <BaseInput label="Decision number" value={decisionNumber} onChange={e => setDecisionNumber(e.target.value)} placeholder="e.g. 02-28-2025" hint="Format: decision#-meeting#-year" />
-        </div>
-        <BaseSelect
-          label="Decision outcome"
-          value={decisionOutcome}
-          options={DECISION_OUTCOME_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
-          placeholder={DECISION_OUTCOME_OPTIONS.find(o => !o.value)?.label ?? '— Select outcome —'}
-          onChange={(_, v) => setDecisionOutcome(v)}
-        />
-        <BaseSelect
-          label="Action unit"
-          value={actionUnit}
-          options={ACTION_UNIT_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
-          placeholder={ACTION_UNIT_OPTIONS.find(o => !o.value)?.label ?? '— Select unit —'}
-          onChange={(_, v) => setActionUnit(v)}
-        />
-        <BaseSelect
-          label="Implementation status"
-          value={implementationStatus}
-          options={IMPL_STATUS_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
-          onChange={(_, v) => setImplementationStatus(v)}
-        />
-        <div className="sm:col-span-2">
-          <BaseTextarea label="Decision detail" rows={3} value={decisionDetail} onChange={e => setDecisionDetail(e.target.value)} placeholder="Full text of what the Commission decided…" />
-        </div>
-        <div className="sm:col-span-2">
-          <BaseTextarea label="Way forward / next steps" rows={2} value={wayForward} onChange={e => setWayForward(e.target.value)} placeholder="Notes on next steps or follow-up actions…" />
-        </div>
+        {extra && (
+          <div>
+            <BaseInput label="Decision number" value={decisionNumber} onChange={e => setDecisionNumber(e.target.value)} placeholder="e.g. 02-28-2025" hint="Format: decision#-meeting#-year" />
+          </div>
+        )}
+        {core && (
+          <BaseSelect
+            label="Decision outcome"
+            value={decisionOutcome}
+            options={DECISION_OUTCOME_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+            placeholder={DECISION_OUTCOME_OPTIONS.find(o => !o.value)?.label ?? '— Select outcome —'}
+            onChange={(_, v) => setDecisionOutcome(v)}
+          />
+        )}
+        {core && (
+          <BaseSelect
+            label="Action unit"
+            value={actionUnit}
+            options={ACTION_UNIT_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+            placeholder={ACTION_UNIT_OPTIONS.find(o => !o.value)?.label ?? '— Select unit —'}
+            onChange={(_, v) => setActionUnit(v)}
+          />
+        )}
+        {extra && (
+          <BaseSelect
+            label="Implementation status"
+            value={implementationStatus}
+            options={IMPL_STATUS_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+            onChange={(_, v) => setImplementationStatus(v)}
+          />
+        )}
+        {core && (
+          <div className="sm:col-span-2">
+            <BaseTextarea label="Decision detail" rows={3} value={decisionDetail} onChange={e => setDecisionDetail(e.target.value)} placeholder="Full text of what the Commission decided…" />
+          </div>
+        )}
+        {extra && (
+          <div className="sm:col-span-2">
+            <BaseTextarea label="Way forward / next steps" rows={2} value={wayForward} onChange={e => setWayForward(e.target.value)} placeholder="Notes on next steps or follow-up actions…" />
+          </div>
+        )}
       </div>
     </div>
   )
@@ -610,8 +627,8 @@ function ReportView() {
                   <td className="px-3 py-2.5 font-mono text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.decision_number || '—'}</td>
                   <td className="px-3 py-2.5">
                     <p className="text-xs font-medium text-slate-800 dark:text-slate-200">{r.title}</p>
-                    {r.submission_ref && (
-                      <Link to={`/submissions/${r.submission_ref}`} className="text-[10px] font-mono text-primary-600 dark:text-primary-400 hover:underline">{r.submission_ref}</Link>
+                    {r.submission_id && (
+                      <Link to={`/submissions/${r.submission_id}`} className="text-[10px] font-mono text-primary-600 dark:text-primary-400 hover:underline">{r.submission_ref}</Link>
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{r.meeting_ref || '—'}</td>
@@ -654,6 +671,25 @@ function ReportView() {
   )
 }
 
+// ── View-submission button ───────────────────────────────────────────────────
+// Every task gets a way back to the paper that produced it: the linked
+// submission when there is one, otherwise the signed minutes of the sitting.
+
+function ViewSubmissionButton({ task, className }) {
+  const to = task.submission ? `/submissions/${task.submission}` : task.meeting ? '/secretariat/minutes' : null
+  if (!to) return null
+  const label = task.submission ? 'View submission' : 'View minutes'
+  return (
+    <Link
+      to={to}
+      title={task.submission ? `Open ${task.submission_reference_number || 'the submission'}` : 'Open the minutes of this sitting'}
+      className={clsx('inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20', className)}
+    >
+      <FileText size={12} />{label}
+    </Link>
+  )
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TaskManagement() {
@@ -670,6 +706,7 @@ export default function TaskManagement() {
   const [staffList, setStaffList] = useState([])
   const [createOpen, setCreateOpen] = useState(false)
   const [editTask, setEditTask] = useState(null)
+  const [pendingCount, setPendingCount] = useState(0)
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
@@ -683,7 +720,14 @@ export default function TaskManagement() {
   useEffect(() => { fetchTasks() }, [fetchTasks])
 
   useEffect(() => {
-    api.get('/commission-tasks/eligible-managers/').then(() => setCanAllocate(true)).catch(() => setCanAllocate(false))
+    api.get('/commission-tasks/eligible-managers/').then(() => {
+      setCanAllocate(true)
+      api.get('/commission-tasks/unallocated-decisions/').then(r => {
+        const n = Array.isArray(r.data) ? r.data.length : 0
+        setPendingCount(n)
+        if (n > 0) setTab(t => (t === 'tasks' ? 'allocation' : t))
+      }).catch(() => {})
+    }).catch(() => setCanAllocate(false))
     api.get('/commission-tasks/eligible-staff/').then(() => setCanPickStaff(true)).catch(() => setCanPickStaff(false))
   }, [])
 
@@ -748,6 +792,7 @@ export default function TaskManagement() {
       {/* Tab Switcher */}
       <div className="flex items-center gap-1 mb-4 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit">
         {[
+          ...(canAllocate ? [{ key: 'allocation', label: `Allocation review${pendingCount ? ` (${pendingCount})` : ''}`, icon: Sparkles }] : []),
           { key: 'tasks', label: 'Tasks', icon: ListChecks },
           { key: 'report', label: 'Report', icon: FileText },
         ].map(t => (
@@ -766,6 +811,8 @@ export default function TaskManagement() {
 
       {tab === 'report' ? (
         <ReportView />
+      ) : tab === 'allocation' && canAllocate ? (
+        <AllocationReview onAllocated={fetchTasks} onCount={setPendingCount} />
       ) : (
         <>
           <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3">
@@ -917,7 +964,8 @@ export default function TaskManagement() {
                         </td>
 
                         {/* Edit */}
-                        <td className="px-3 py-3 text-right">
+                        <td className="px-3 py-3 text-right whitespace-nowrap">
+                          <ViewSubmissionButton task={t} />
                           {canEditTask(t) ? (
                             <BaseButton variant="ghost" size="sm" onClick={() => setEditTask(t)}>Edit</BaseButton>
                           ) : isViewOnlyRow(t) ? (
@@ -1056,7 +1104,7 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
     <Modal
       open
       title="Allocate commission task"
-      subtitle="Record a decision and assign an OPSC Manager to action it."
+      subtitle="One-off allocation. Most decisions are handled faster in Allocation review."
       onClose={onClose}
       size="lg"
     >
@@ -1081,7 +1129,7 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
           </div>
         )}
 
-        <DecisionRegisterFields {...{ decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }} />
+        <DecisionRegisterFields part="core" {...{ decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }} />
 
         <div className="pt-2 border-t border-slate-100 dark:border-slate-700">
           <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-3">Assignment</p>
@@ -1107,14 +1155,19 @@ function CreateTaskModal({ submissionChoices, managers, onClose, onSaved }) {
           </div>
         </div>
 
-        <TaskMetadataFields {...{ meetingReference, setMeetingReference, meetingDate, setMeetingDate, minuteReference, setMinuteReference, decisionType, setDecisionType, successCriteria, setSuccessCriteria, legalReference, setLegalReference }} />
-
         <div className="pt-2 border-t border-slate-100 dark:border-slate-700 space-y-3">
-          <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Task</p>
           <BaseInput label="Task title" required value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Draft implementation memo" />
-          <BaseTextarea label="Description" rows={3} value={description} onChange={e => setDescription(e.target.value)} />
           <BaseInput label="Due date (optional)" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
         </div>
+
+        <details className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">More details (optional)</summary>
+          <div className="mt-3 space-y-4">
+            <DecisionRegisterFields part="extra" {...{ decisionNumber, setDecisionNumber, decisionOutcome, setDecisionOutcome, actionUnit, setActionUnit, implementationStatus, setImplementationStatus, wayForward, setWayForward, decisionDetail, setDecisionDetail }} />
+            <BaseTextarea label="Description" rows={3} value={description} onChange={e => setDescription(e.target.value)} />
+            <TaskMetadataFields {...{ meetingReference, setMeetingReference, meetingDate, setMeetingDate, minuteReference, setMinuteReference, decisionType, setDecisionType, successCriteria, setSuccessCriteria, legalReference, setLegalReference }} />
+          </div>
+        </details>
 
         <div className="flex justify-end gap-2 pt-2">
           <BaseButton variant="secondary" onClick={onClose}>Cancel</BaseButton>
@@ -1245,6 +1298,7 @@ function EditTaskModal({ task, staffList, mode, readOnly = false, onClose, onSav
       size="lg"
     >
       <form onSubmit={submit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+        <ViewSubmissionButton task={task} className="!px-0" />
         <fieldset disabled={readOnly} className="space-y-4 border-0 p-0 m-0 min-w-0">
         {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
 

@@ -6425,6 +6425,29 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
 
         return Response(pending_decision_allocations())
 
+    @action(detail=False, methods=["get", "post"], url_path="allocation-suggestions")
+    def allocation_suggestions(self, request):
+        """Allocation review data. GET = rule-based suggestions (fast, no AI).
+        POST = same, plus AI suggestions for decisions the rules cannot place
+        (explicit click: AI is never called on page load)."""
+        if not rbac_user_has_permission(request.user, "allocate_decision"):
+            raise PermissionDenied("You do not have permission to allocate commission tasks.")
+        from .decision_allocation import build_allocation_suggestions
+
+        return Response(build_allocation_suggestions(use_ai=request.method == "POST"))
+
+    @action(detail=False, methods=["post"], url_path="allocate-bulk")
+    def allocate_bulk(self, request):
+        """Create tasks for several pending decisions at once (accepted suggestions)."""
+        if not rbac_user_has_permission(request.user, "allocate_decision"):
+            raise PermissionDenied("You do not have permission to allocate commission tasks.")
+        rows = request.data.get("allocations")
+        if not isinstance(rows, list) or not rows:
+            return Response({"detail": "allocations list required."}, status=400)
+        from .decision_allocation import allocate_pending_items
+
+        return Response(allocate_pending_items([r for r in rows[:100] if isinstance(r, dict)], request.user))
+
     def perform_create(self, serializer):
         if not rbac_user_has_permission(self.request.user, "allocate_decision"):
             raise PermissionDenied("You do not have permission to allocate commission tasks.")
@@ -6721,7 +6744,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             from django.http import HttpResponse as CSVResponse
             response = CSVResponse(content_type="text/csv")
             response["Content-Disposition"] = "attachment; filename=commission_task_report.csv"
-            writer = csv.DictWriter(response, fieldnames=[
+            writer = csv.DictWriter(response, extrasaction="ignore", fieldnames=[
                 "task_id", "decision_number", "title", "submission_ref", "submission_title",
                 "meeting_ref", "decision_detail", "decision_outcome", "action_unit",
                 "implementation_status", "way_forward", "manager", "staff", "status",
