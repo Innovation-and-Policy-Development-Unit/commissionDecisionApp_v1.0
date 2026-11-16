@@ -423,6 +423,8 @@ class CommissionTaskSerializer(serializers.ModelSerializer):
             "assigned_staff_m2m",
             "due_date",
             "due_date_notified",
+            "completed_at",
+            "completed_by",
             "subtasks",
             "ai_subtask_drafts",
             "created_by",
@@ -492,7 +494,7 @@ class CommissionTaskUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CommissionTaskUpdate
-        fields = ("id", "body", "author_username", "created_at")
+        fields = ("id", "body", "kind", "author_username", "created_at")
 
 
 class CommissionTaskUpdateBodySerializer(serializers.Serializer):

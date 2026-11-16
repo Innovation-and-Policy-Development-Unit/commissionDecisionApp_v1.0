@@ -6456,6 +6456,15 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             )
 
     def perform_update(self, serializer):
+        from .task_progress import record_status_change
+
+        task = serializer.instance
+        old_status = task.status
+        self._save_task_update(serializer)
+        task.refresh_from_db()
+        record_status_change(task, old_status, self.request.user)
+
+    def _save_task_update(self, serializer):
         task = serializer.instance
         user = self.request.user
         old_manager_id = task.assigned_manager_id
@@ -6590,22 +6599,25 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             ser.is_valid(raise_exception=True)
             ser.save()
             self._maybe_close_cms_for_task(task)
-            self._sync_task_status_from_subtasks(task)
+            self._sync_task_status_from_subtasks(task, request.user)
             return Response(CommissionSubTaskSerializer(subtask).data)
 
         if request.method == "DELETE":
             subtask.delete()
-            self._sync_task_status_from_subtasks(task)
+            self._sync_task_status_from_subtasks(task, request.user)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
     @staticmethod
-    def _sync_task_status_from_subtasks(task):
+    def _sync_task_status_from_subtasks(task, actor=None):
         """A task with sub-tasks is complete iff every non-cancelled sub-task is
         completed — matches the "completing all sub-tasks completes the task"
         workflow. Reverts the parent out of 'completed' if a sub-task is reopened."""
+        from .task_progress import record_status_change
+
         subs = list(task.subtasks.exclude(status=CommissionTaskStatus.CANCELLED))
         if not subs:
             return
+        old_status = task.status
         all_done = all(s.status == CommissionTaskStatus.COMPLETED for s in subs)
         if all_done and task.status != CommissionTaskStatus.COMPLETED:
             task.status = CommissionTaskStatus.COMPLETED
@@ -6613,6 +6625,8 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         elif not all_done and task.status == CommissionTaskStatus.COMPLETED:
             task.status = CommissionTaskStatus.IN_PROGRESS
             task.save(update_fields=["status"])
+        if actor is not None:
+            record_status_change(task, old_status, actor)
 
     @action(detail=True, methods=["post"], url_path="reassign")
     def reassign(self, request, pk=None):
@@ -6872,6 +6886,13 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         obj = CommissionTaskUpdate.objects.create(task=task, author=request.user, body=body)
+        from .task_progress import notify_task_people
+
+        notify_task_people(
+            task, request.user,
+            title=f"New update on task: {task.title}",
+            body=f"{request.user.username}: {body[:300]}",
+        )
         return Response(CommissionTaskUpdateSerializer(obj).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="eligible-managers")

@@ -1693,7 +1693,8 @@ def notify_approaching_due_dates():
                 channel=Notification.Channel.IN_APP,
                 title=f"Task due soon: {task.title}",
                 body=(
-                    f"Task '{task.title}' (ref: {task.submission.reference_number}) "
+                    f"Task '{task.title}' (ref: "
+                    f"{task.submission.reference_number if task.submission_id else (task.decision_number or '—')}) "
                     f"is due on {task.due_date}. "
                     f"Only {NOTIFY_DAYS_BEFORE} days remaining."
                 ),

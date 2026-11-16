@@ -3210,6 +3210,13 @@ class CommissionTask(models.Model):
         help_text="True once the due-date reminder notification has been sent.",
     )
     due_date = models.DateField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="commission_tasks_completed",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -3533,6 +3540,11 @@ class CommissionTaskUpdate(models.Model):
         related_name="commission_task_updates_authored",
     )
     body = models.TextField()
+    kind = models.CharField(
+        max_length=16,
+        choices=[("comment", "Comment"), ("status", "Status change")],
+        default="comment",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
