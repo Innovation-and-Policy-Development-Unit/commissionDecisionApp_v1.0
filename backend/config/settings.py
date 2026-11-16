@@ -74,6 +74,7 @@ _MIDDLEWARE += [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    'tracker.middleware.AuthCookieMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     # django-axes: must come AFTER AuthenticationMiddleware
     'axes.middleware.AxesMiddleware',
@@ -209,7 +210,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'tracker.auth.APIKeyAuthentication',
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'tracker.auth.CookieJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
     'DEFAULT_THROTTLE_CLASSES': [
@@ -249,6 +250,11 @@ SPECTACULAR_SETTINGS = {
 }
 
 from datetime import timedelta
+
+# Login tokens for the web app travel in HttpOnly cookies (see
+# tracker.middleware.AuthCookieMiddleware), never in page JavaScript.
+AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'false' if DEBUG else 'true').lower() in ('1', 'true', 'yes')
+AUTH_COOKIE_SAMESITE = 'Lax'
 
 SIMPLE_JWT = {
     # Reduced from 120 min → 30 min for NCSS 2030 session security

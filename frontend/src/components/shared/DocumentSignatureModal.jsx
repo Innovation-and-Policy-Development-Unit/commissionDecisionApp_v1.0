@@ -91,9 +91,8 @@ export default function DocumentSignatureModal({ document: doc, submissionId, on
   const handleVerified = useCallback(async () => {
     setStep('loading')
     try {
-      const token = localStorage.getItem('psc_access')
       const resp  = await fetch(`/api/submissions/${submissionId}/documents/${doc.id}/`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'same-origin',
       })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const buf = await resp.arrayBuffer()

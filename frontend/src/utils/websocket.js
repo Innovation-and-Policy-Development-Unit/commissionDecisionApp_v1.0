@@ -1,7 +1,7 @@
 /** Builds a ws(s):// URL for a given API path, deriving the host from the
  * same VITE_API_BASE_URL env var (or the current page) that the REST client
  * uses, so dev/staging/prod all resolve to the right backend automatically. */
-export function buildWsUrl(path, token) {
+export function buildWsUrl(path) {
   const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
   let wsBase
   if (/^https?:\/\//.test(apiBase)) {
@@ -10,5 +10,6 @@ export function buildWsUrl(path, token) {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     wsBase = `${proto}//${window.location.host}`
   }
-  return `${wsBase}${path}?token=${encodeURIComponent(token)}`
+  // The browser sends the HttpOnly login cookie with the handshake.
+  return `${wsBase}${path}`
 }

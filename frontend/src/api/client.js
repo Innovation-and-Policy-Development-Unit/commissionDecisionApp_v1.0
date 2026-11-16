@@ -3,16 +3,60 @@ import axios from 'axios'
 /** Same-origin /api in Docker; full URL on Render static site (VITE_API_BASE_URL). */
 const apiBaseURL = import.meta.env.VITE_API_BASE_URL || '/api'
 
+// Login tokens live in HttpOnly cookies the browser sends by itself; page
+// JavaScript never sees them. The only thing kept in localStorage is a
+// non-secret marker saying "this browser has a session", used to decide
+// whether to ask the server who the user is.
+const SESSION_KEY = 'psc_session'
+const CSRF_COOKIE = 'scdms_csrf'
+
+// Tokens used to be stored here — remove any left over from older versions.
+try {
+  localStorage.removeItem('psc_access')
+  localStorage.removeItem('psc_refresh')
+} catch { /* storage unavailable */ }
+
+export function hasSession() {
+  try { return localStorage.getItem(SESSION_KEY) === '1' } catch { return false }
+}
+export function markSession() {
+  try { localStorage.setItem(SESSION_KEY, '1') } catch { /* ignore */ }
+}
+export function clearSessionMarker() {
+  try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+}
+
+function readCookie(name) {
+  const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
+  return m ? decodeURIComponent(m[1]) : null
+}
+
+/** Headers every API call carries: opt in to cookie auth, and prove the call
+ * comes from our own page (CSRF) on anything that changes data. */
+function withAuthHeaders(config) {
+  config.headers = config.headers || {}
+  config.headers['X-Auth-Mode'] = 'cookie'
+  const method = (config.method || 'get').toLowerCase()
+  if (!['get', 'head', 'options'].includes(method)) {
+    const csrf = readCookie(CSRF_COOKIE)
+    if (csrf) config.headers['X-CSRFToken'] = csrf
+  }
+  return config
+}
+
 const api = axios.create({
   baseURL: apiBaseURL,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 })
 
 /** Plain axios instance for refresh (avoids interceptor recursion). */
 const refreshClient = axios.create({
   baseURL: apiBaseURL,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 })
+refreshClient.interceptors.request.use(withAuthHeaders)
 
 let isRefreshing = false
 let refreshWaitQueue = []
@@ -22,8 +66,7 @@ let rateLimitedUntil = 0
 export function isRateLimited() { return Date.now() < rateLimitedUntil }
 
 function clearStoredTokens() {
-  localStorage.removeItem('psc_access')
-  localStorage.removeItem('psc_refresh')
+  clearSessionMarker()
   window.dispatchEvent(new CustomEvent('psc-auth:cleared'))
 }
 
@@ -38,12 +81,9 @@ function redirectToLogin() {
   }
 }
 
-function storeTokens(access, refresh) {
-  localStorage.setItem('psc_access', access)
-  if (refresh) {
-    localStorage.setItem('psc_refresh', refresh)
-  }
-  window.dispatchEvent(new CustomEvent('psc-auth:refreshed', { detail: { access, refresh } }))
+function storeTokens() {
+  markSession()
+  window.dispatchEvent(new CustomEvent('psc-auth:refreshed', { detail: { access: true } }))
 }
 
 function processRefreshQueue(error, access = null) {
@@ -80,26 +120,17 @@ function isLogoutRequest(config) {
 }
 
 async function refreshAccessToken() {
-  const refresh = localStorage.getItem('psc_refresh')
-  if (!refresh) {
-    throw new Error('No refresh token')
+  if (!hasSession()) {
+    throw new Error('No session')
   }
-  const { data } = await refreshClient.post('/auth/token/refresh/', { refresh })
-  const access = data?.access
-  if (!access) {
-    throw new Error('Refresh response missing access token')
-  }
-  storeTokens(access, data.refresh)
-  return access
+  // The refresh token is in an HttpOnly cookie; the server reads it and sets
+  // fresh cookies on the response.
+  await refreshClient.post('/auth/token/refresh/', {})
+  storeTokens()
+  return true
 }
 
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('psc_access')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
+api.interceptors.request.use(withAuthHeaders)
 
 api.interceptors.response.use(
   res => {
@@ -141,10 +172,9 @@ api.interceptors.response.use(
     ) {
       if (isRefreshing) {
         try {
-          const access = await new Promise((resolve, reject) => {
+          await new Promise((resolve, reject) => {
             refreshWaitQueue.push({ resolve, reject })
           })
-          originalRequest.headers.Authorization = `Bearer ${access}`
           return api(originalRequest)
         } catch (queueErr) {
           return Promise.reject(queueErr)
@@ -157,7 +187,6 @@ api.interceptors.response.use(
       try {
         const access = await refreshAccessToken()
         processRefreshQueue(null, access)
-        originalRequest.headers.Authorization = `Bearer ${access}`
         return api(originalRequest)
       } catch (refreshErr) {
         processRefreshQueue(refreshErr, null)

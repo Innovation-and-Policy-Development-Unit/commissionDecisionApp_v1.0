@@ -8779,30 +8779,45 @@ class LogoutView(APIView):
     """
     Blacklist the submitted refresh token so it cannot be reused after logout.
     Complies with NCSS 2030 session management requirements.
+
+    Open to anonymous callers on purpose: the refresh token is the credential,
+    and logout must still work (and clear the cookies) once the short-lived
+    access token has expired.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = [LenientJWTAuthentication]
 
     def post(self, request):
         from rest_framework_simplejwt.tokens import RefreshToken
         from rest_framework_simplejwt.exceptions import TokenError
 
+        from .auth import REFRESH_COOKIE
+
         refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            refresh_token = request.COOKIES.get(REFRESH_COOKIE)
+            if refresh_token:
+                # Credential came from a cookie, so require the CSRF token too.
+                from rest_framework.authentication import SessionAuthentication
+
+                SessionAuthentication().enforce_csrf(request)
         if not refresh_token:
             return Response({"detail": "refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()
-            _security_log.info(
-                "LOGOUT | username=%s | ip=%s",
-                request.user.username,
-                request.META.get("REMOTE_ADDR", "unknown"),
-            )
-            from .audit import log_action as _log
-            from .models import AuditLog as _AL
-            _log(request, _AL.Action.LOGOUT,
-                 resource_type="User", resource_id=request.user.id,
-                 resource_label=request.user.username,
-                 description=f"User logged out: {request.user.username}")
+            if request.user.is_authenticated:
+                _security_log.info(
+                    "LOGOUT | username=%s | ip=%s",
+                    request.user.username,
+                    request.META.get("REMOTE_ADDR", "unknown"),
+                )
+                from .audit import log_action as _log
+                from .models import AuditLog as _AL
+                _log(request, _AL.Action.LOGOUT,
+                     resource_type="User", resource_id=request.user.id,
+                     resource_label=request.user.username,
+                     description=f"User logged out: {request.user.username}")
         except TokenError:
             # Already expired/blacklisted — treat as success
             pass

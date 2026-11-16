@@ -144,10 +144,10 @@ export default function DocumentAnnotatorModal({ document: doc, submissionId, on
 
     const loadPdf = async () => {
       try {
-        const token = localStorage.getItem('psc_access')
-        // Use native fetch (not api client) so we can get a raw ArrayBuffer
+        // Use native fetch (not api client) so we can get a raw ArrayBuffer;
+        // the browser sends the HttpOnly login cookie itself.
         const resp = await fetch(`/api/submissions/${submissionId}/documents/${doc.id}/`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'same-origin',
         })
         if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`)
         const arrayBuffer = await resp.arrayBuffer()
