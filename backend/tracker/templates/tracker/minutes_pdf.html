@@ -125,8 +125,15 @@
     <tr><td>Meeting Reference:</td><td>{{ meeting.reference_number }}</td></tr>
     <tr><td>Title:</td><td>{{ meeting.title }}</td></tr>
     <tr><td>Date:</td><td>{{ meeting.date }}</td></tr>
+    {% if attendance.start_time %}<tr><td>Time:</td><td>{{ attendance.start_time }}</td></tr>{% endif %}
     <tr><td>Venue:</td><td>{{ meeting.venue }}</td></tr>
     <tr><td>Meeting Type:</td><td>{{ meeting.get_type_display }}</td></tr>
+    {% if attendance %}
+    <tr><td>Attendees:</td><td>{% for p in attendance.present %}{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% if p.note %} ({{ p.note }}){% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}{% for p in attendance.in_attendance %}<br>{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% endfor %}</td></tr>
+    <tr><td>Absent:</td><td>{% for p in attendance.absent %}{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>
+    <tr><td>Apologies:</td><td>{% for p in attendance.apologies %}{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>
+    {% if attendance.opening_prayer_by %}<tr><td>Opening Prayer:</td><td>{{ attendance.opening_prayer_by }}</td></tr>{% endif %}
+    {% endif %}
     {% if content.opening %}
     <tr><td>Opened:</td><td>{{ content.opening|truncatewords:30 }}</td></tr>
     {% endif %}

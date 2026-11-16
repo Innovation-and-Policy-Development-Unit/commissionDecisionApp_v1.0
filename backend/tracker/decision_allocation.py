@@ -17,11 +17,14 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from .action_officer import officer_text_for_block, parse_action_officer
+from .opsc_access import MANAGER_ROLE_TO_ROUTED_UNIT
 from .models import (
     AgendaItem,
     CommissionActionUnit,
     CommissionDecisionOutcome,
     CommissionTask,
+    Meeting,
     Minutes,
     Notification,
     Role,
@@ -122,6 +125,90 @@ def unit_manager_for(routed_unit: str) -> User | None:
     )
 
 
+def named_unit_manager(officer_units: list[str]) -> tuple[str, User] | tuple[None, None]:
+    """First unit named as Action Officer that has an active manager."""
+    for unit in officer_units:
+        manager = unit_manager_for(unit)
+        if manager is not None:
+            return unit, manager
+    return None, None
+
+
+def also_involved_note(officer_text: str, officer_units: list[str], chosen_unit: str) -> str:
+    """Task-description line for units the minutes name besides the one that owns the task."""
+    others = [u.upper() for u in officer_units if u != chosen_unit]
+    if not others:
+        return ""
+    return f'\n\nAlso named in the minutes ("{officer_text}"): {", ".join(others)}.'
+
+
+def _minutes_decision_numbers(meeting) -> list[str]:
+    """Decision numbers the Commission already wrote into this sitting's minutes."""
+    out = []
+    for minutes in Minutes.objects.filter(meeting_id=meeting.pk):
+        for block in (minutes.content or {}).get("agenda_items") or []:
+            if isinstance(block, dict) and (block.get("decision_number") or "").strip():
+                out.append(block["decision_number"].strip())
+    return out
+
+
+def minutes_block_for(agenda_item) -> dict | None:
+    """The minutes block (decision, decision_number, …) written for an agenda item."""
+    if agenda_item is None:
+        return None
+    for minutes in Minutes.objects.filter(meeting_id=agenda_item.meeting_id):
+        for block in (minutes.content or {}).get("agenda_items") or []:
+            if isinstance(block, dict) and block.get("agenda_item_id") == agenda_item.pk:
+                return block
+    return None
+
+
+def decision_number_for(block: dict | None, meeting) -> str:
+    """The decision number for a task: the Commission's own number from the
+    minutes when the minute-taker recorded one, else a generated fallback."""
+    real = ((block or {}).get("decision_number") or "").strip()[:64]
+    return real or next_decision_number(meeting)
+
+
+def next_decision_number(meeting) -> str:
+    """Fallback number for a decision whose minutes carry none, in the register's
+    format ``decision#-meeting#-year`` (e.g. ``07-23-2026``).
+
+    Only generated when the sitting has the Commission's own meeting number
+    (``Meeting.psc_meeting_number``) — the system's ``MTG-…`` reference is not
+    that number, so it is never used. Continues after the highest plain
+    number already used for the sitting, counting both existing tasks and
+    numbers written in the minutes, so it can never collide with a real
+    number. Returns "" when it cannot be generated (the field stays blank).
+    """
+    import re
+
+    if meeting is None:
+        return ""
+    meeting_no = (getattr(meeting, "psc_meeting_number", "") or "").strip()
+    if not meeting_no:
+        return ""
+    # ``date`` is a str on a Meeting built in memory and not yet reloaded.
+    year = int(str(meeting.date)[:4]) if meeting.date else timezone.now().year
+    suffix = f"-{meeting_no}-{year}"
+    pattern = re.compile(r"^(\d+)" + re.escape(suffix) + r"$")
+
+    with transaction.atomic():
+        # Serialise concurrent allocations for the same sitting.
+        type(meeting).objects.select_for_update().filter(pk=meeting.pk).first()
+        existing = list(
+            CommissionTask.objects.filter(
+                meeting_id=meeting.pk, decision_number__endswith=suffix
+            ).values_list("decision_number", flat=True)
+        )
+        used = [
+            int(hit.group(1))
+            for num in existing + _minutes_decision_numbers(meeting)
+            if (hit := pattern.match(num))
+        ]
+    return f"{(max(used) if used else 0) + 1:02d}{suffix}"
+
+
 def _secretariat_deciders() -> list[User]:
     return list(
         User.objects.filter(
@@ -169,7 +256,13 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
             # (checklists, unit dashboards) sees the same routing.
             submission.routed_unit = routed_unit
             submission.save(update_fields=["routed_unit"])
-        manager = unit_manager_for(routed_unit)
+        # The Commission's named Action Officer outranks the submission's routing.
+        officer_text = officer_text_for_block(block)
+        officer_units = parse_action_officer(officer_text)
+        target_unit, manager = named_unit_manager(officer_units)
+        if manager is None:
+            target_unit = routed_unit
+            manager = unit_manager_for(routed_unit)
         if manager is None:
             unallocated.append(
                 (title, f"no active manager for unit '{routed_unit or 'unrouted'}'")
@@ -177,13 +270,17 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
             continue
 
         task = CommissionTask.objects.create(
+            decision_number=decision_number_for(block, meeting),
             title=f"Action Commission decision — {title}"[:255],
-            description=(block.get("discussion") or "")[:2000],
+            description=(
+                (block.get("discussion") or "")[:1900]
+                + also_involved_note(officer_text, officer_units, target_unit)
+            ),
             decision_detail=decision_text,
             decision_outcome=_DECISION_TYPE_TO_OUTCOME.get(
                 (block.get("decision_type") or "").lower(), ""
             ),
-            action_unit=ROUTED_UNIT_TO_ACTION_UNIT.get(routed_unit, ""),
+            action_unit=ROUTED_UNIT_TO_ACTION_UNIT.get(target_unit, ""),
             meeting=meeting,
             meeting_reference=meeting.reference_number or "",
             meeting_date=meeting.date,
@@ -273,6 +370,7 @@ def pending_decision_allocations() -> list[dict]:
             submission = agenda_item.submission
             routed_unit = _effective_routed_unit(submission)
             title = block.get("title") or block.get("submission_ref") or f"Item {index}"
+            officer_text = officer_text_for_block(block)
             pending.append(
                 {
                     "agenda_item": agenda_item_id,
@@ -280,6 +378,7 @@ def pending_decision_allocations() -> list[dict]:
                     "meeting_reference": meeting.reference_number or "",
                     "meeting_date": meeting.date.isoformat() if meeting.date else None,
                     "minute_reference": f"Item {block.get('sequence') or index}",
+                    "decision_number": (block.get("decision_number") or "").strip()[:64],
                     "item_title": title,
                     "suggested_task_title": f"Action Commission decision — {title}"[:255],
                     "decision_detail": decision_text,
@@ -289,6 +388,8 @@ def pending_decision_allocations() -> list[dict]:
                     ),
                     "action_unit": ROUTED_UNIT_TO_ACTION_UNIT.get(routed_unit, ""),
                     "routed_unit": routed_unit,
+                    "officer_text": officer_text,
+                    "officer_units": parse_action_officer(officer_text),
                     "submission": submission.id if submission else None,
                     "submission_reference": (
                         submission.reference_number if submission else ""
@@ -481,6 +582,26 @@ def manager_candidates() -> list[dict]:
 
 
 def _rule_suggestion(item: dict, managers_by_id: dict[int, dict]) -> dict | None:
+    # 1. The Action Officer the Commission named in the minutes.
+    unit, named = named_unit_manager(item.get("officer_units") or [])
+    if named is not None and named.id in managers_by_id:
+        m = managers_by_id[named.id]
+        also = [u.upper() for u in item["officer_units"] if u != unit]
+        return {
+            "manager_id": m["id"],
+            "manager_username": m["username"],
+            "manager_name": m["name"],
+            "action_unit": ROUTED_UNIT_TO_ACTION_UNIT.get(unit) or item.get("action_unit") or "",
+            "due_days": 30,
+            "confidence": 98,
+            "source": "minutes",
+            "reason": (
+                f'The minutes name "{item["officer_text"]}" as Action Officer, so {m["name"]} '
+                f"({unit.upper()}) acts."
+                + (f" Also named: {', '.join(also)}." if also else "")
+            ),
+        }
+    # 2. The unit the submission was routed to.
     manager = unit_manager_for(item.get("routed_unit") or "")
     if manager is None or manager.id not in managers_by_id:
         return None
@@ -529,6 +650,7 @@ def build_allocation_suggestions(*, use_ai: bool) -> dict:
             payload.append({
                 "title": it["item_title"],
                 "decision": it["decision_detail"],
+                "action_officer": it["officer_text"],
                 "outcome": it["decision_outcome"],
                 "form_type": sub.form_type_code if sub else "",
                 "ministry": sub.ministry.name if sub and sub.ministry_id else "",
@@ -558,6 +680,13 @@ def build_allocation_suggestions(*, use_ai: bool) -> dict:
     }
 
 
+def _as_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def allocate_pending_items(allocations: list[dict], actor) -> dict:
     """Create tasks for pending decisions from the Secretariat's accepted
     suggestions. Decision text, meeting and submission always come from the
@@ -569,6 +698,10 @@ def allocate_pending_items(allocations: list[dict], actor) -> dict:
     managers_by_id = {m["id"]: m for m in manager_candidates()}
     pending = {it["agenda_item"]: it for it in pending_decision_allocations()}
     created, skipped = [], []
+
+    # Number decisions in minutes order, whatever order the client sent them.
+    order = {agenda_id: i for i, agenda_id in enumerate(pending)}
+    allocations = sorted(allocations, key=lambda r: order.get(_as_int(r.get("agenda_item")), len(order)))
 
     for row in allocations:
         try:
@@ -599,9 +732,14 @@ def allocate_pending_items(allocations: list[dict], actor) -> dict:
                 due = date.today() + timedelta(days=30)
 
         with transaction.atomic():
+            meeting = Meeting.objects.filter(pk=item["meeting"]).first()
             task = CommissionTask.objects.create(
+                decision_number=item["decision_number"] or next_decision_number(meeting),
                 title=item["suggested_task_title"],
-                description=item["description"],
+                description=item["description"][:1900] + also_involved_note(
+                    item["officer_text"], item["officer_units"],
+                    MANAGER_ROLE_TO_ROUTED_UNIT.get(managers_by_id[manager_id]["role"], ""),
+                ),
                 decision_detail=item["decision_detail"],
                 decision_outcome=item["decision_outcome"],
                 action_unit=action_unit,

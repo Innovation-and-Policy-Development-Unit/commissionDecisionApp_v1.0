@@ -617,6 +617,17 @@ class TranscriptionStatus(models.TextChoices):
 class Meeting(models.Model):
     reference_number = models.CharField(max_length=32, unique=True, editable=False)
     title = models.CharField(max_length=512)
+    psc_meeting_number = models.CharField(
+        max_length=16, blank=True,
+        help_text=(
+            "The Commission's own meeting number (e.g. 23 for PSC Meeting No. 23). "
+            "Not the system reference. Used to number decisions as decision#-meeting#-year."
+        ),
+    )
+    minute_attendance = models.JSONField(
+        default=dict, blank=True,
+        help_text="Who was present / absent / sent apologies, recorded in minute intake.",
+    )
     date = models.DateField()
     time = models.TimeField()
     venue = models.CharField(max_length=512)
@@ -4474,6 +4485,14 @@ class MinuteAgendaIntake(models.Model):
         max_length=255,
         blank=True,
         help_text="Officer or unit responsible for follow-up.",
+    )
+    decision_number = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=(
+            "The Commission's own decision number for this item, as it appears in the "
+            "minutes (e.g. 03(n)-23-2026). Typed by the minute-taker, never AI-generated."
+        ),
     )
     formatted_discussion = models.TextField(blank=True)
     formatted_decision = models.TextField(blank=True)

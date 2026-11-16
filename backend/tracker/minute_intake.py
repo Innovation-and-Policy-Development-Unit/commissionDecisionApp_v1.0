@@ -111,6 +111,8 @@ def apply_intake_to_minutes(meeting: Meeting, user) -> Minutes:
             "discussion": row.formatted_discussion or row.discussion_notes,
             "decision": row.formatted_decision or row.decision_text,
             "decision_type": row.formatted_decision_type or "",
+            "decision_number": row.decision_number,
+            "action_officer": row.action_officer,
             "action_items": row.formatted_action_items or [],
         }
         if row.action_officer and not entry["action_items"]:
@@ -129,6 +131,10 @@ def apply_intake_to_minutes(meeting: Meeting, user) -> Minutes:
     )
     content = dict(minutes_obj.content or {})
     content["agenda_items"] = agenda_items
+    # Attendance is only carried over once the minute-taker has saved it, so an
+    # untouched roster default never ends up in a legal record by accident.
+    if isinstance(meeting.minute_attendance, dict) and meeting.minute_attendance.get("members") is not None:
+        content["attendance"] = meeting.minute_attendance
     if not content.get("opening"):
         content["opening"] = ""
     if not content.get("confirmation_previous_minutes"):

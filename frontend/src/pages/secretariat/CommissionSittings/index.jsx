@@ -36,7 +36,7 @@ export default function CommissionSittings() {
   
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    title: '', date: new Date().toISOString().split('T')[0], time: '09:00', venue: VENUES[0], type: 'ordinary', notes: '', submissionDueDate: ''
+    title: '', psc_meeting_number: '', date: new Date().toISOString().split('T')[0], time: '09:00', venue: VENUES[0], type: 'ordinary', notes: '', submissionDueDate: ''
   })
 
   const filteredMeetings = useMemo(() => {
@@ -66,7 +66,7 @@ export default function CommissionSittings() {
       await api.post('/meetings/', payload)
       refresh()
       setIsModalOpen(false)
-      setForm({ title: '', date: new Date().toISOString().split('T')[0], time: '09:00', venue: VENUES[0], type: 'ordinary', notes: '', submissionDueDate: '' })
+      setForm({ title: '', psc_meeting_number: '', date: new Date().toISOString().split('T')[0], time: '09:00', venue: VENUES[0], type: 'ordinary', notes: '', submissionDueDate: '' })
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to schedule sitting.')
     } finally {
@@ -194,6 +194,22 @@ export default function CommissionSittings() {
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Time</label>
               <input type="time" className="input" required value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              PSC meeting number <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              className="input"
+              inputMode="numeric"
+              maxLength={16}
+              placeholder="e.g. 23"
+              value={form.psc_meeting_number}
+              onChange={e => setForm({ ...form, psc_meeting_number: e.target.value.trim() })}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              The Commission&apos;s own number for this meeting (PSC Meeting No. 23). Used to number decisions, e.g. 07-23-2026.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">

@@ -9,6 +9,7 @@ import clsx from 'clsx'
 import PageHeader from '../../components/shared/PageHeader'
 import FlyingAgendaPanel from '../../components/meeting/FlyingAgendaPanel'
 import SubmissionContextPanel from '../../components/minute-intake/SubmissionContextPanel'
+import AttendancePanel from '../../components/minute-intake/AttendancePanel'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
 import { normalizeListPayload, normalizeFieldPayload } from '../../utils/listPayload'
@@ -119,10 +120,22 @@ function IntakeItemCard({
           </div>
           <div>
             <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">
+              {t('minute_intake.decision_number')}
+            </label>
+            <input
+              className="input text-sm bg-white"
+              value={item.decision_number || ''}
+              onChange={e => onChange(item.agenda_item_id, 'decision_number', e.target.value)}
+              placeholder={t('minute_intake.decision_number_placeholder')}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">
               {t('minute_intake.action_officer')}
             </label>
             <input
               className="input text-sm bg-white"
+              list="action-officer-options"
               value={item.action_officer || ''}
               onChange={e => onChange(item.agenda_item_id, 'action_officer', e.target.value)}
               placeholder={t('minute_intake.action_officer_placeholder')}
@@ -182,6 +195,15 @@ function IntakeItemCard({
   )
 }
 
+// Recognised by the allocator: it routes the decision to the unit named here.
+function ActionOfficerOptions() {
+  return (
+    <datalist id="action-officer-options">
+      {['Manager CSU', 'Manager HRM', 'Manager CIU', 'Manager VIPAM', 'Manager ODU', 'Secretary'].map(o => <option key={o} value={o} />)}
+    </datalist>
+  )
+}
+
 export default function MinuteIntake() {
   const { t } = useTranslation()
   const { meetingId: meetingIdParam } = useParams()
@@ -201,6 +223,10 @@ export default function MinuteIntake() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [expanded, setExpanded] = useState({})
+  const [attendance, setAttendance] = useState(null)
+  // The roster default is only sent once the minute-taker has touched it (or it was saved
+  // before), so merely saving notes never records an unreviewed attendance.
+  const [attendanceDirty, setAttendanceDirty] = useState(false)
 
   // Split view: the right pane follows the agenda item being worked on.
   const [activeItemId, setActiveItemId] = useState(null)
@@ -253,6 +279,8 @@ export default function MinuteIntake() {
       const { data } = await api.get(`/meetings/${id}/minute-intake/`)
       setPayload(data)
       setItems(normalizeFieldPayload(data, 'items'))
+      setAttendance(data.attendance || null)
+      setAttendanceDirty(false)
       const exp = {}
       for (const it of data.items || []) {
         exp[it.agenda_item_id] = true
@@ -286,17 +314,21 @@ export default function MinuteIntake() {
   const patchDraft = useCallback(async () => {
     if (!activeMeetingId) return null
     const { data } = await api.patch(`/meetings/${activeMeetingId}/minute-intake/`, {
+      ...(attendance && (attendanceDirty || payload?.attendance_saved) ? { attendance } : {}),
       items: items.map(it => ({
         agenda_item_id: it.agenda_item_id,
         discussion_notes: it.discussion_notes ?? '',
         decision_text: it.decision_text ?? '',
         action_officer: it.action_officer ?? '',
+        decision_number: it.decision_number ?? '',
       })),
     })
     setPayload(data)
     setItems(normalizeFieldPayload(data, 'items'))
+    setAttendance(data.attendance || null)
+    setAttendanceDirty(false)
     return data
-  }, [activeMeetingId, items])
+  }, [activeMeetingId, items, attendance, attendanceDirty, payload])
 
   const saveDraft = async () => {
     if (!activeMeetingId) return
@@ -523,6 +555,17 @@ export default function MinuteIntake() {
       ) : (
         <div className="flex flex-col xl:flex-row gap-6 items-start">
           <div className="flex-1 min-w-0 w-full space-y-4">
+            <ActionOfficerOptions />
+            {attendance && (
+              <AttendancePanel
+                attendance={attendance}
+                saved={!!payload?.attendance_saved}
+                serverQuorum={payload?.attendance_quorum}
+                suggestions={payload?.attendance_suggestions || []}
+                disabled={notAllowed}
+                onChange={a => { setAttendance(a); setAttendanceDirty(true) }}
+              />
+            )}
             {items.map(item => (
               <IntakeItemCard
                 key={item.agenda_item_id}

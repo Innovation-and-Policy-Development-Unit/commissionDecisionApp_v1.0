@@ -48,6 +48,7 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
   const openEdit = () => {
     setEditForm({
       title: sitting.title || '',
+      psc_meeting_number: sitting.psc_meeting_number || '',
       date: sitting.date || '',
       time: (sitting.time || '09:00').slice(0, 5),
       venue: sitting.venue || VENUES[0],
@@ -406,6 +407,19 @@ export default function SittingDetailDrawer({ sitting, isOpen, onClose, getCapac
               required
               value={editForm.title}
               onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              PSC meeting number <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              className="input"
+              inputMode="numeric"
+              maxLength={16}
+              placeholder="e.g. 23"
+              value={editForm.psc_meeting_number}
+              onChange={e => setEditForm(f => ({ ...f, psc_meeting_number: e.target.value.trim() }))}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
