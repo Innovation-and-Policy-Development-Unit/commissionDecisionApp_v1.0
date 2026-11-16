@@ -9,6 +9,7 @@ import {
   showDesktopNotification,
 } from '../utils/browserNotifications'
 import { isTabVisible } from './useVisibilityAwareInterval'
+import { installNotificationSoundUnlock, playNotificationChime } from '../utils/notificationSound'
 
 const POLL_MS = 45_000
 
@@ -37,6 +38,9 @@ export function useNotifications({ enabled = true } = {}) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const seenDesktopRef = useRef(new Set())
+  // Ids already heard or seen. The first load only fills it, so opening the app
+  // with old unread items stays silent; later arrivals chime once per batch.
+  const knownIdsRef = useRef(null)
   const mountedRef = useRef(true)
 
   const notifyDesktop = useCallback(
@@ -71,7 +75,13 @@ export function useNotifications({ enabled = true } = {}) {
       if (mountedRef.current) {
         setNotifications(list)
         setError(false)
-        notifyDesktop(list.filter((n) => !n.read))
+        const unread = list.filter((n) => !n.read)
+        const known = knownIdsRef.current
+        if (known) {
+          if (unread.some((n) => !known.has(n.id))) playNotificationChime()
+        }
+        knownIdsRef.current = new Set([...(known || []), ...list.map((n) => n.id)])
+        notifyDesktop(unread)
       }
     } catch {
       if (mountedRef.current) setError(true)
@@ -79,6 +89,10 @@ export function useNotifications({ enabled = true } = {}) {
       if (mountedRef.current) setLoading(false)
     }
   }, [enabled, notifyDesktop])
+
+  useEffect(() => {
+    installNotificationSoundUnlock()
+  }, [])
 
   useEffect(() => {
     mountedRef.current = true

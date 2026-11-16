@@ -31,6 +31,7 @@ import PushNotificationToggle from '../../components/pwa/PushNotificationToggle'
 import api from '../../api/client'
 import { resolveMediaUrl } from '../../utils/mediaUrl'
 import DesktopNotificationSettings from '../../components/notifications/DesktopNotificationSettings'
+import NotificationSoundSettings from '../../components/notifications/NotificationSoundSettings'
 import {
   getInactivityLockMinutes,
   setInactivityLockMinutes,
@@ -685,8 +686,9 @@ export default function Account() {
             </div>
           </div>
 
-          <div className="card p-6">
+          <div className="card p-6 space-y-6">
             <DesktopNotificationSettings />
+            <NotificationSoundSettings />
           </div>
 
           {/* Change Password */}
