@@ -6756,6 +6756,39 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("You cannot access this report.")
         return report
 
+    @action(detail=False, methods=["get"], url_path="implementation-report")
+    def implementation_report(self, request):
+        """Decision implementation report for the Secretary to table at a sitting.
+        ?since=YYYY-MM-DD (default: the last sitting) &output=pdf for the print copy.
+        Limited to the tasks the caller may already see."""
+        from datetime import datetime as _dt
+
+        from django.http import HttpResponse
+
+        from .reports.decision_implementation import (
+            build_decision_implementation_report,
+            render_decision_implementation_pdf,
+        )
+
+        since = None
+        raw = request.query_params.get("since")
+        if raw:
+            try:
+                since = _dt.strptime(raw, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"detail": "since must be YYYY-MM-DD."}, status=400)
+        report = build_decision_implementation_report(self.get_queryset(), since=since)
+        if request.query_params.get("output") == "pdf":
+            pdf = render_decision_implementation_pdf(
+                report, request.user.get_full_name() or request.user.username,
+            )
+            resp = HttpResponse(pdf, content_type="application/pdf")
+            resp["Content-Disposition"] = (
+                f'attachment; filename="decision_implementation_report_{report["as_of"]}.pdf"'
+            )
+            return resp
+        return Response(report)
+
     @action(detail=False, methods=["post"], url_path="register-report")
     def create_register_report_legacy(self, request):
         """Backward-compatible alias (older frontends POST here and hit 405 on detail routes)."""
