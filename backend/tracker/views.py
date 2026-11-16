@@ -6456,6 +6456,15 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             )
 
     def perform_update(self, serializer):
+        from .task_progress import record_status_change
+
+        task = serializer.instance
+        old_status = task.status
+        self._save_task_update(serializer)
+        task.refresh_from_db()
+        record_status_change(task, old_status, self.request.user)
+
+    def _save_task_update(self, serializer):
         task = serializer.instance
         user = self.request.user
         old_manager_id = task.assigned_manager_id
@@ -6590,22 +6599,25 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             ser.is_valid(raise_exception=True)
             ser.save()
             self._maybe_close_cms_for_task(task)
-            self._sync_task_status_from_subtasks(task)
+            self._sync_task_status_from_subtasks(task, request.user)
             return Response(CommissionSubTaskSerializer(subtask).data)
 
         if request.method == "DELETE":
             subtask.delete()
-            self._sync_task_status_from_subtasks(task)
+            self._sync_task_status_from_subtasks(task, request.user)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
     @staticmethod
-    def _sync_task_status_from_subtasks(task):
+    def _sync_task_status_from_subtasks(task, actor=None):
         """A task with sub-tasks is complete iff every non-cancelled sub-task is
         completed — matches the "completing all sub-tasks completes the task"
         workflow. Reverts the parent out of 'completed' if a sub-task is reopened."""
+        from .task_progress import record_status_change
+
         subs = list(task.subtasks.exclude(status=CommissionTaskStatus.CANCELLED))
         if not subs:
             return
+        old_status = task.status
         all_done = all(s.status == CommissionTaskStatus.COMPLETED for s in subs)
         if all_done and task.status != CommissionTaskStatus.COMPLETED:
             task.status = CommissionTaskStatus.COMPLETED
@@ -6613,6 +6625,8 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
         elif not all_done and task.status == CommissionTaskStatus.COMPLETED:
             task.status = CommissionTaskStatus.IN_PROGRESS
             task.save(update_fields=["status"])
+        if actor is not None:
+            record_status_change(task, old_status, actor)
 
     @action(detail=True, methods=["post"], url_path="reassign")
     def reassign(self, request, pk=None):
@@ -6741,6 +6755,39 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             if not rbac_user_has_permission(request.user, "export_reports"):
                 raise PermissionDenied("You cannot access this report.")
         return report
+
+    @action(detail=False, methods=["get"], url_path="implementation-report")
+    def implementation_report(self, request):
+        """Decision implementation report for the Secretary to table at a sitting.
+        ?since=YYYY-MM-DD (default: the last sitting) &output=pdf for the print copy.
+        Limited to the tasks the caller may already see."""
+        from datetime import datetime as _dt
+
+        from django.http import HttpResponse
+
+        from .reports.decision_implementation import (
+            build_decision_implementation_report,
+            render_decision_implementation_pdf,
+        )
+
+        since = None
+        raw = request.query_params.get("since")
+        if raw:
+            try:
+                since = _dt.strptime(raw, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"detail": "since must be YYYY-MM-DD."}, status=400)
+        report = build_decision_implementation_report(self.get_queryset(), since=since)
+        if request.query_params.get("output") == "pdf":
+            pdf = render_decision_implementation_pdf(
+                report, request.user.get_full_name() or request.user.username,
+            )
+            resp = HttpResponse(pdf, content_type="application/pdf")
+            resp["Content-Disposition"] = (
+                f'attachment; filename="decision_implementation_report_{report["as_of"]}.pdf"'
+            )
+            return resp
+        return Response(report)
 
     @action(detail=False, methods=["post"], url_path="register-report")
     def create_register_report_legacy(self, request):
@@ -6872,6 +6919,13 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         obj = CommissionTaskUpdate.objects.create(task=task, author=request.user, body=body)
+        from .task_progress import notify_task_people
+
+        notify_task_people(
+            task, request.user,
+            title=f"New update on task: {task.title}",
+            body=f"{request.user.username}: {body[:300]}",
+        )
         return Response(CommissionTaskUpdateSerializer(obj).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="eligible-managers")
@@ -13053,8 +13107,10 @@ class MinutesViewSet(viewsets.ModelViewSet):
         confirm the right scan was uploaded before managers are notified."""
         minutes = self.get_object()
         profile = _profile(self.request.user)
-        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the Secretary or Admin can allocate decision tasks.")
+        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN} and not rbac_user_has_permission(
+            request.user, "allocate_decision"
+        ):
+            raise PermissionDenied("Only the Secretary, Admin or a role with the allocate decision permission can allocate decision tasks.")
         if minutes.status != MinutesStatus.SIGNED:
             return Response({"detail": "Minutes must be signed before tasks can be allocated."}, status=400)
         if minutes.tasks_allocated_at:

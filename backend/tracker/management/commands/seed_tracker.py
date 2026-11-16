@@ -856,7 +856,7 @@ class Command(BaseCommand):
             "works only on tasks allocated to CSU."
         ), [
             "view_dashboard", "view_submissions", "transition_workflow", "create_submission",
-            "assign_task", "update_implementation",
+            "assign_task", "update_implementation", "allocate_decision",
             "view_commission_minutes", "view_commission_tasks",
             "view_reports", "view_audit_trail",
         ]),

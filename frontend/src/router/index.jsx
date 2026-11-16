@@ -62,6 +62,7 @@ const SittingWorkspace = lazy(() => import('../pages/secretariat/SittingWorkspac
 const Decisions = lazy(() => import('../pages/secretariat/Decisions'))
 const Notifications = lazy(() => import('../pages/secretariat/Notifications'))
 const TaskManagement = lazy(() => import('../pages/secretariat/TaskManagement'))
+const DecisionImplementationReport = lazy(() => import('../pages/secretariat/DecisionImplementationReport'))
 const MinutesIndex = lazy(() => import('../pages/secretariat/MinutesIndex'))
 const MinuteIntake = lazy(() => import('../pages/secretariat/MinuteIntake'))
 const DeferredAgenda = lazy(() => import('../pages/secretariat/DeferredAgenda'))
@@ -178,6 +179,7 @@ export default function AppRouter() {
           <Route path="/secretariat/decisions" element={<S><Decisions /></S>} />
           <Route path="/secretariat/deferred-agenda" element={<S><DeferredAgenda /></S>} />
           <Route path="/secretariat/tasks" element={<S><TaskManagement /></S>} />
+          <Route path="/secretariat/implementation-report" element={<S><DecisionImplementationReport /></S>} />
           <Route path="/secretariat/notifications" element={<S><Notifications /></S>} />
 
           <Route path="/guide/hr-manager" element={<Navigate to="/wiki/hr-manager-guide" replace />} />

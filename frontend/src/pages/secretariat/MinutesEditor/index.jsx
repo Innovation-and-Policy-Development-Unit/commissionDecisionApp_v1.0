@@ -35,7 +35,7 @@ const SECRETARIAT_APPROVE_ROLES = new Set(['psc_secretary', 'chairperson', 'psc_
 const COMPLIANCE_APPROVE_ROLE = 'compliance_manager'
 const CIRCULATE_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'csu_manager', 'psc_admin'])
 const COMMISSIONER_COMMENT_ROLES = new Set(['psc_commissioner', 'chairperson', 'psc_secretary', 'psc_admin'])
-const ALLOCATE_TASKS_ROLES = new Set(['psc_secretary', 'psc_admin'])
+const ALLOCATE_TASKS_ROLES = new Set(['psc_secretary', 'psc_admin', 'csu_manager'])
 
 function formatDateTime(iso) {
   if (!iso) return ''
