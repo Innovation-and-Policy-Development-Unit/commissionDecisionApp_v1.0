@@ -71,8 +71,8 @@ export default function TOTPSetup() {
         code
       })
       
-      if (data.access) {
-        setTokens(data.access, data.refresh)
+      if (data.session_started) {
+        setTokens()
         await refreshMe()
         sessionStorage.removeItem('psc_setup_username')
         const from = location.state?.from?.pathname || '/'

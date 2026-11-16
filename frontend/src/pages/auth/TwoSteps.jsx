@@ -88,7 +88,7 @@ export default function TwoSteps() {
     setError('')
     try {
       const { data } = await api.post('/auth/totp/verify/', { username, code })
-      setTokens(data.access, data.refresh)
+      setTokens()
       sessionStorage.removeItem('psc_2fa_user')
       await refreshMe()
       navigate('/', { replace: true })

@@ -1,6 +1,6 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
+from .auth_views import CookieTokenRefreshView
 
 from .comment_views import CommentViewSet, activity_timeline, mention_suggest
 from .chat_views import ConversationViewSet, attachment_download, chat_users
@@ -222,7 +222,7 @@ router.register(r"document-versions",  DocumentVersionViewSet,     basename="doc
 urlpatterns = [
     path("", include(router.urls)),
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/token/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("me/", me_view),
     path("me/change-password/", change_password_view),

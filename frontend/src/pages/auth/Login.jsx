@@ -156,7 +156,7 @@ export default function Login() {
     setLoading(true)
     try {
       const { data } = await api.post('/auth/totp/verify/', { username, code: otp })
-      setTokens(data.access, data.refresh)
+      setTokens()
       const me = await refreshMe()
       if (me?.must_change_password) {
         setShowPasswordChange(true)
@@ -177,7 +177,7 @@ export default function Login() {
     setLoading(true)
     try {
       const { data } = await api.post('/auth/email-otp/verify/', { username: username.trim(), code: emailOtp })
-      setTokens(data.access, data.refresh)
+      setTokens()
       const me = await refreshMe()
       if (me?.must_change_password) {
         setShowPasswordChange(true)

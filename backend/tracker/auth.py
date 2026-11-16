@@ -4,8 +4,35 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from .models import APIKey
 
+ACCESS_COOKIE = "scdms_access"
+REFRESH_COOKIE = "scdms_refresh"
+CSRF_READABLE_COOKIE = "scdms_csrf"  # page-readable copy of the CSRF token
 
-class LenientJWTAuthentication(JWTAuthentication):
+
+class CookieJWTAuthentication(JWTAuthentication):
+    """JWT auth that accepts the token from an ``Authorization: Bearer`` header
+    (API clients) or, failing that, from the HttpOnly access cookie set at login
+    (the web app). Cookie-based requests get the same CSRF check Django's session
+    auth uses, so a cross-site page cannot ride the cookie."""
+
+    def authenticate(self, request, enforce_csrf=True):
+        header = self.get_header(request)
+        from_cookie = False
+        if header is not None:
+            raw = self.get_raw_token(header)
+        else:
+            raw = request.COOKIES.get(ACCESS_COOKIE)
+            from_cookie = True
+        if not raw:
+            return None
+        validated = self.get_validated_token(raw)
+        user = self.get_user(validated)
+        if from_cookie and enforce_csrf:
+            authentication.SessionAuthentication().enforce_csrf(request)
+        return user, validated
+
+
+class LenientJWTAuthentication(CookieJWTAuthentication):
     """JWTAuthentication that treats an invalid/expired/blacklisted Bearer
     token the same as no token at all (returns None) instead of raising.
 
@@ -21,7 +48,9 @@ class LenientJWTAuthentication(JWTAuthentication):
     def authenticate(self, request):
         try:
             return super().authenticate(request)
-        except (InvalidToken, TokenError):
+        except (InvalidToken, TokenError, exceptions.PermissionDenied):
+            # PermissionDenied = failed CSRF check on cookie credentials: treat
+            # the request as anonymous rather than failing the login step.
             return None
 
 

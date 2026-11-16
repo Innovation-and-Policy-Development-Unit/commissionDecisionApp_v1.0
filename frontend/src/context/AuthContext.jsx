@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import api from '../api/client'
+import api, { hasSession, markSession, clearSessionMarker } from '../api/client'
 import { normalizeUserMedia } from '../utils/mediaUrl'
 import {
   getInactivityLockMs, INACTIVITY_LOCK_SETTINGS_EVENT,
@@ -11,10 +11,10 @@ const AuthContext = createContext(null)
 const ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'click']
 
 export function AuthProvider({ children }) {
-  const [accessToken, setAccessToken] = useState(() => localStorage.getItem('psc_access'))
+  const [accessToken, setAccessToken] = useState(() => (hasSession() ? 'cookie' : null))
   const [user, setUser] = useState(null)
   /** False while validating an existing stored token against /me/ */
-  const [authReady, setAuthReady] = useState(() => !localStorage.getItem('psc_access'))
+  const [authReady, setAuthReady] = useState(() => !hasSession())
   const [isLocked, setIsLocked] = useState(false)
   const [pin, setPin] = useState('')
 
@@ -32,8 +32,10 @@ export function AuthProvider({ children }) {
     if (!state) return
     if (isLockStateExpired(state.lockedAt)) {
       clearLockState()
-      localStorage.removeItem('psc_access')
-      localStorage.removeItem('psc_refresh')
+      // End the session on the server too (cookies are HttpOnly, so the page
+      // can't just delete them).
+      api.post('/auth/logout/', {}).catch(() => {})
+      clearSessionMarker()
       return
     }
     setIsLocked(true)
@@ -42,12 +44,10 @@ export function AuthProvider({ children }) {
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(async (reason = 'manual') => {
-    const refresh = localStorage.getItem('psc_refresh')
-    if (refresh) {
-      try { await api.post('/auth/logout/', { refresh }) } catch { }
+    if (hasSession()) {
+      try { await api.post('/auth/logout/', {}) } catch { }
     }
-    localStorage.removeItem('psc_access')
-    localStorage.removeItem('psc_refresh')
+    clearSessionMarker()
     setAccessToken(null)
     setUser(null)
     setAuthReady(true)
@@ -77,9 +77,8 @@ export function AuthProvider({ children }) {
     const stored = state.username
     try {
       const { data } = await api.post('/auth/session-pin/verify/', { username: stored, pin: pinCode })
-      setAccessToken(data.access)
-      localStorage.setItem('psc_access', data.access)
-      localStorage.setItem('psc_refresh', data.refresh)
+      markSession()
+      setAccessToken('cookie')
       setIsLocked(false)
       setPin('')
       try {
@@ -161,8 +160,7 @@ export function AuthProvider({ children }) {
 
   // ── /me/ refresh ──────────────────────────────────────────────────────────
   const refreshMe = useCallback(async () => {
-    const token = localStorage.getItem('psc_access')
-    if (!token) {
+    if (!hasSession()) {
       setUser(null)
       setAuthReady(true)
       return null
@@ -176,8 +174,7 @@ export function AuthProvider({ children }) {
     } catch {
       /* Any /me/ failure means no usable session — clear tokens so dashboard stays gated. */
       setUser(null)
-      localStorage.removeItem('psc_access')
-      localStorage.removeItem('psc_refresh')
+      clearSessionMarker()
       setAccessToken(null)
       return null
     } finally {
@@ -187,13 +184,12 @@ export function AuthProvider({ children }) {
 
   // Hydrate session on mount when a JWT is already in storage (page refresh).
   useEffect(() => {
-    const token = localStorage.getItem('psc_access')
-    if (!token) {
+    if (!hasSession()) {
       setUser(null)
       setAuthReady(true)
       return
     }
-    setAccessToken(token)
+    setAccessToken('cookie')
     refreshMe()
   }, [refreshMe])
 
@@ -207,9 +203,8 @@ export function AuthProvider({ children }) {
       setPin('')
     }
     const onRefreshed = (e) => {
-      const access = e.detail?.access
-      if (access) {
-        setAccessToken(access)
+      if (e.detail?.access) {
+        setAccessToken('cookie')
         refreshMe()
       }
     }
@@ -222,10 +217,11 @@ export function AuthProvider({ children }) {
   }, [refreshMe])
 
   // ── Login ─────────────────────────────────────────────────────────────────
-  const setTokens = useCallback((access, refresh) => {
-    localStorage.setItem('psc_access', access)
-    localStorage.setItem('psc_refresh', refresh)
-    setAccessToken(access)
+  // The server has already put the tokens in HttpOnly cookies; this only
+  // records that the browser now has a session. Arguments are ignored.
+  const setTokens = useCallback(() => {
+    markSession()
+    setAccessToken('cookie')
   }, [])
 
   const login = useCallback(async (username, password) => {
@@ -235,7 +231,7 @@ export function AuthProvider({ children }) {
       return data  // Let the UI handle 2FA, emailed code, PIN, or forced password-change step
     }
 
-    setTokens(data.access, data.refresh)
+    setTokens()
     const me = await refreshMe()
     return { ...data, must_change_password: Boolean(me?.must_change_password) }
   }, [setTokens, refreshMe])

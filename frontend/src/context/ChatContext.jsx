@@ -1,7 +1,7 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react'
-import api from '../api/client'
+import api, { hasSession } from '../api/client'
 import { useAuth } from './AuthContext'
 import { getDesktopNotificationsEnabled, showDesktopNotification } from '../utils/browserNotifications'
 import { isTabVisible } from '../hooks/useVisibilityAwareInterval'
@@ -390,9 +390,8 @@ export function ChatProvider({ children }) {
 
     function connect() {
       if (cancelled) return
-      const token = localStorage.getItem('psc_access')
-      if (!token) return
-      const ws = new WebSocket(buildWsUrl('/ws/chat/', token))
+      if (!hasSession()) return
+      const ws = new WebSocket(buildWsUrl('/ws/chat/'))
       wsRef.current = ws
 
       ws.onopen = () => {

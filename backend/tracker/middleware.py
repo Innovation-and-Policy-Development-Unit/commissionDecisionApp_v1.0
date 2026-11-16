@@ -81,11 +81,16 @@ class ForcePasswordChangeMiddleware:
             return self.get_response(request)
 
         user = getattr(request, "user", None)
-        if (not user or not user.is_authenticated) and request.META.get("HTTP_AUTHORIZATION", "").startswith("Bearer "):
+        if (not user or not user.is_authenticated) and (
+            request.META.get("HTTP_AUTHORIZATION", "").startswith("Bearer ")
+            or request.COOKIES.get("scdms_access")
+        ):
             try:
-                from rest_framework_simplejwt.authentication import JWTAuthentication
+                from .auth import CookieJWTAuthentication
 
-                auth_result = JWTAuthentication().authenticate(request)
+                # CSRF is enforced later by DRF; this lookup only decides whether
+                # the forced-password-change gate applies.
+                auth_result = CookieJWTAuthentication().authenticate(request, enforce_csrf=False)
                 if auth_result:
                     user, _ = auth_result
                     request.user = user
@@ -132,3 +137,103 @@ class ForcePasswordChangeMiddleware:
             status=403,
         )
 
+
+
+class AuthCookieMiddleware:
+    """Keeps login tokens out of page JavaScript.
+
+    For browser requests that send ``X-Auth-Mode: cookie``, any ``access`` /
+    ``refresh`` tokens in a successful JSON response are moved into HttpOnly
+    cookies and removed from the body; logout (and a rejected refresh) clears
+    them. Other clients, and requests without the header, are untouched.
+    Must sit after CsrfViewMiddleware so the CSRF cookie is issued with them.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        path = request.path or ""
+        if request.META.get("HTTP_X_AUTH_MODE") != "cookie" or not path.startswith("/api/"):
+            return response
+        if getattr(response, "streaming", False):
+            return response
+
+        if path.rstrip("/").endswith("/auth/logout"):
+            self._clear(response)
+            return response
+        if path.rstrip("/").endswith("/auth/token/refresh") and response.status_code in (400, 401):
+            self._clear(response)
+            return response
+
+        if not (200 <= response.status_code < 300) or "application/json" not in response.get("Content-Type", ""):
+            return response
+        import json
+
+        try:
+            data = json.loads(response.content)
+        except ValueError:
+            return response
+        if not isinstance(data, dict) or "access" not in data:
+            return response
+
+        from django.middleware.csrf import get_token
+
+        self._set(response, data.pop("access"), data.pop("refresh", None))
+        data["session_started"] = True
+        # Django's own csrftoken cookie is HttpOnly, so also hand the page a
+        # readable copy of the (non-secret) CSRF token to send as X-CSRFToken.
+        # Calling get_token also makes CsrfViewMiddleware issue the real cookie.
+        self._set_csrf(response, get_token(request))
+        response.content = json.dumps(data).encode()
+        response["Content-Length"] = str(len(response.content))
+        return response
+
+    @staticmethod
+    def _cookie_args():
+        from django.conf import settings
+
+        return {
+            "secure": settings.AUTH_COOKIE_SECURE,
+            "httponly": True,
+            "samesite": settings.AUTH_COOKIE_SAMESITE,
+        }
+
+    def _set(self, response, access, refresh):
+        from django.conf import settings
+
+        from .auth import ACCESS_COOKIE, REFRESH_COOKIE
+
+        sj = settings.SIMPLE_JWT
+        response.set_cookie(
+            ACCESS_COOKIE, access, max_age=int(sj["ACCESS_TOKEN_LIFETIME"].total_seconds()),
+            path="/", **self._cookie_args(),
+        )
+        if refresh:
+            response.set_cookie(
+                REFRESH_COOKIE, refresh, max_age=int(sj["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+                path="/api/auth/", **self._cookie_args(),
+            )
+
+    def _set_csrf(self, response, token):
+        from django.conf import settings
+
+        from .auth import CSRF_READABLE_COOKIE
+
+        response.set_cookie(
+            CSRF_READABLE_COOKIE, token,
+            max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+            path="/", secure=settings.AUTH_COOKIE_SECURE, httponly=False,
+            samesite=settings.AUTH_COOKIE_SAMESITE,
+        )
+
+    @staticmethod
+    def _clear(response):
+        from django.conf import settings
+
+        from .auth import ACCESS_COOKIE, CSRF_READABLE_COOKIE, REFRESH_COOKIE
+
+        response.delete_cookie(CSRF_READABLE_COOKIE, path="/", samesite=settings.AUTH_COOKIE_SAMESITE)
+        response.delete_cookie(ACCESS_COOKIE, path="/", samesite=settings.AUTH_COOKIE_SAMESITE)
+        response.delete_cookie(REFRESH_COOKIE, path="/api/auth/", samesite=settings.AUTH_COOKIE_SAMESITE)

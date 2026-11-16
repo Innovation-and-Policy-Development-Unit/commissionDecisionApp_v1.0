@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { buildWsUrl } from '../utils/websocket'
+import { hasSession } from '../api/client'
 
 const PING_MS = 30_000
 const RECONNECT_BASE_MS = 1_000
@@ -33,9 +34,8 @@ export function useSubmissionPresence(submissionId) {
 
     function connect() {
       if (cancelled) return
-      const token = localStorage.getItem('psc_access')
-      if (!token) return
-      const ws = new WebSocket(buildWsUrl(`/ws/submissions/${submissionId}/presence/`, token))
+      if (!hasSession()) return
+      const ws = new WebSocket(buildWsUrl(`/ws/submissions/${submissionId}/presence/`))
       wsRef.current = ws
 
       ws.onopen = () => {

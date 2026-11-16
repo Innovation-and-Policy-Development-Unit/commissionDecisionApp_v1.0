@@ -2617,9 +2617,8 @@ export function BackupTab() {
   }
 
   const downloadBackup = filename => {
-    const token = localStorage.getItem('psc_access')
     fetch(`/api/backup/download/?filename=${encodeURIComponent(filename)}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'same-origin',
     })
       .then(res => {
         if (!res.ok) throw new Error('Download failed')
