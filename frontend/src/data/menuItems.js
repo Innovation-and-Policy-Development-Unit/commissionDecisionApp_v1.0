@@ -66,7 +66,7 @@ const menuItems = [
         icon: Gavel,
         children: [
           { label: 'Decisions',               labelKey: 'nav.decisions',     icon: Gavel,    path: '/secretariat/decisions',     audience: 'secretariat_operator' },
-          { label: 'Minutes decision tasks',  labelKey: 'nav.minutes_tasks', icon: ListTodo, path: '/secretariat/tasks',         audience: 'commission_decision' },
+          { label: 'Decision tasks',          labelKey: 'nav.minutes_tasks', icon: ListTodo, path: '/secretariat/tasks',         audience: 'commission_decision' },
           { label: 'Decision implementation report', labelKey: 'nav.implementation_report', icon: FileText, path: '/secretariat/implementation-report', audience: 'commission_decision' },
           { label: 'Notifications',           labelKey: 'nav.notifications', icon: Bell,     path: '/secretariat/notifications', audience: 'secretariat' },
         ],

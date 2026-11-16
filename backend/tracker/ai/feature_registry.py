@@ -70,6 +70,7 @@ FEATURE_MODEL_TIER: dict[str, ModelTier] = {
     "agenda_blurb": "haiku",
     "bilingual_ministry_comms": "haiku",
     "implementation_subtask_draft": "haiku",
+    "task_allocation": "haiku",
     "staff_knowledge_rag": "sonnet",
     "submission_nl_search": "sonnet",
     "annotation_assist": "sonnet",

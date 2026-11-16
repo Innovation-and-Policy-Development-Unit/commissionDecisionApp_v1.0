@@ -14,7 +14,7 @@ import logging
 
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import (
@@ -29,6 +29,8 @@ from .models import (
 )
 
 logger = logging.getLogger("scdms.app")
+
+_OPEN_STATUSES = ("open", "in_progress")
 
 ROUTED_UNIT_TO_MANAGER_ROLE: dict[str, str] = {
     "odu": Role.ODU_MANAGER,
@@ -105,9 +107,17 @@ def unit_manager_for(routed_unit: str) -> User | None:
     role = ROUTED_UNIT_TO_MANAGER_ROLE.get(routed_unit or "")
     if not role:
         return None
+    # Least-loaded active manager first (ties → lowest id), so a unit with two
+    # managers shares decisions instead of always piling onto the first.
     return (
         User.objects.filter(is_active=True, psc_profile__role=role)
-        .order_by("id")
+        .annotate(
+            open_tasks=Count(
+                "managed_commission_tasks",
+                filter=Q(managed_commission_tasks__status__in=_OPEN_STATUSES),
+            )
+        )
+        .order_by("open_tasks", "id")
         .first()
     )
 
@@ -278,6 +288,7 @@ def pending_decision_allocations() -> list[dict]:
                         (block.get("decision_type") or "").lower(), ""
                     ),
                     "action_unit": ROUTED_UNIT_TO_ACTION_UNIT.get(routed_unit, ""),
+                    "routed_unit": routed_unit,
                     "submission": submission.id if submission else None,
                     "submission_reference": (
                         submission.reference_number if submission else ""
@@ -438,3 +449,178 @@ def advance_submissions_for_signed_minutes(minutes: Minutes, actor) -> dict:
 
     logger.info("DECISION_STAGE_ADVANCE | minutes=%s | advanced=%d", minutes.id, advanced)
     return {"advanced": advanced}
+
+
+# ── Allocation review: rule + AI suggestions, one-click bulk allocation ──────
+
+def manager_candidates() -> list[dict]:
+    """Active users who can own a Commission task, with their open-task load."""
+    from .opsc_access import COMMISSION_TASK_MANAGER_ROLES
+
+    qs = (
+        User.objects.filter(is_active=True, psc_profile__role__in=COMMISSION_TASK_MANAGER_ROLES)
+        .select_related("psc_profile")
+        .annotate(
+            open_tasks=Count(
+                "managed_commission_tasks",
+                filter=Q(managed_commission_tasks__status__in=_OPEN_STATUSES),
+            )
+        )
+        .order_by("username")
+    )
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "name": u.get_full_name() or u.username,
+            "role": u.psc_profile.role,
+            "open_tasks": u.open_tasks,
+        }
+        for u in qs
+    ]
+
+
+def _rule_suggestion(item: dict, managers_by_id: dict[int, dict]) -> dict | None:
+    manager = unit_manager_for(item.get("routed_unit") or "")
+    if manager is None or manager.id not in managers_by_id:
+        return None
+    m = managers_by_id[manager.id]
+    return {
+        "manager_id": m["id"],
+        "manager_username": m["username"],
+        "manager_name": m["name"],
+        "action_unit": item.get("action_unit") or "",
+        "due_days": 30,
+        "confidence": 95,
+        "source": "rule",
+        "reason": f"Submission is routed to the {item['routed_unit'].upper()} unit; {m['name']} is its manager.",
+    }
+
+
+def build_allocation_suggestions(*, use_ai: bool) -> dict:
+    """Pending decisions with a suggested manager each.
+
+    Rules (routed unit → unit manager) always run. With ``use_ai`` the
+    decisions the rules could not place go to the AI allocator in one call.
+    """
+    from .ai.reliability import FEATURE_TASK_ALLOCATION, log_ai_call, timed_call
+    from .ai.task_allocation import suggest_allocations
+    from .models import AIGenerationLog, Submission
+
+    managers = manager_candidates()
+    managers_by_id = {m["id"]: m for m in managers}
+    items = pending_decision_allocations()
+
+    for it in items:
+        it["suggestion"] = _rule_suggestion(it, managers_by_id)
+
+    ai_error = None
+    unresolved = [it for it in items if it["suggestion"] is None]
+    if use_ai and unresolved:
+        subs = {
+            s.id: s
+            for s in Submission.objects.filter(
+                id__in=[it["submission"] for it in unresolved if it["submission"]]
+            ).select_related("ministry")
+        }
+        payload = []
+        for it in unresolved:
+            sub = subs.get(it["submission"])
+            payload.append({
+                "title": it["item_title"],
+                "decision": it["decision_detail"],
+                "outcome": it["decision_outcome"],
+                "form_type": sub.form_type_code if sub else "",
+                "ministry": sub.ministry.name if sub and sub.ministry_id else "",
+            })
+        with timed_call() as elapsed:
+            result, ai_error = suggest_allocations(payload, managers)
+        log_ai_call(
+            feature=FEATURE_TASK_ALLOCATION,
+            status=AIGenerationLog.Status.FAILED if ai_error else AIGenerationLog.Status.SUCCESS,
+            error_detail=ai_error or "",
+            latency_ms=elapsed(),
+        )
+        for idx, sug in (result or {}).items():
+            m = managers_by_id[sug["manager_id"]]
+            unresolved[idx]["suggestion"] = {
+                **sug,
+                "manager_username": m["username"],
+                "manager_name": m["name"],
+                "source": "ai",
+            }
+
+    return {
+        "items": items,
+        "managers": managers,
+        "ai_error": ai_error,
+        "ai_ran": bool(use_ai and unresolved),
+    }
+
+
+def allocate_pending_items(allocations: list[dict], actor) -> dict:
+    """Create tasks for pending decisions from the Secretariat's accepted
+    suggestions. Decision text, meeting and submission always come from the
+    signed minutes (never from the request), so a client cannot alter them."""
+    from datetime import date, timedelta
+
+    from .email_notify import notify_task_assigned, task_assignees
+
+    managers_by_id = {m["id"]: m for m in manager_candidates()}
+    pending = {it["agenda_item"]: it for it in pending_decision_allocations()}
+    created, skipped = [], []
+
+    for row in allocations:
+        try:
+            agenda_item_id = int(row.get("agenda_item"))
+            manager_id = int(row.get("assigned_manager"))
+        except (TypeError, ValueError):
+            skipped.append({"agenda_item": row.get("agenda_item"), "reason": "Invalid request row."})
+            continue
+        item = pending.get(agenda_item_id)
+        if item is None:
+            skipped.append({"agenda_item": agenda_item_id, "reason": "Already allocated or not in signed minutes."})
+            continue
+        if manager_id not in managers_by_id:
+            skipped.append({"agenda_item": agenda_item_id, "reason": "Not an eligible manager."})
+            continue
+
+        action_unit = str(row.get("action_unit") or item.get("action_unit") or "")
+        if action_unit not in {c.value for c in CommissionActionUnit}:
+            action_unit = ""
+        try:
+            due = date.fromisoformat(str(row["due_date"])) if row.get("due_date") else None
+        except ValueError:
+            due = None
+        if due is None:
+            try:
+                due = date.today() + timedelta(days=max(1, min(365, int(row.get("due_days") or 30))))
+            except (TypeError, ValueError):
+                due = date.today() + timedelta(days=30)
+
+        with transaction.atomic():
+            task = CommissionTask.objects.create(
+                title=item["suggested_task_title"],
+                description=item["description"],
+                decision_detail=item["decision_detail"],
+                decision_outcome=item["decision_outcome"],
+                action_unit=action_unit,
+                meeting_id=item["meeting"],
+                meeting_reference=item["meeting_reference"],
+                meeting_date=date.fromisoformat(item["meeting_date"]) if item["meeting_date"] else None,
+                minute_reference=item["minute_reference"],
+                submission_id=item["submission"],
+                agenda_item_id=agenda_item_id,
+                assigned_manager_id=manager_id,
+                due_date=due,
+                created_by=actor,
+            )
+            if task.submission_id:
+                advance_to_decision_entered_assigned(
+                    task.submission, actor,
+                    remarks="Decision allocated to unit manager by the Secretariat (allocation review).",
+                )
+        notify_task_assigned(task, task_assignees(task))
+        created.append(task.id)
+
+    return {"created": created, "skipped": skipped}

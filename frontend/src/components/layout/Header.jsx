@@ -88,7 +88,7 @@ const ALL_QUICK_ACTIONS = [
   {
     id: 'tasks',
     label: 'Tasks',
-    sublabel: 'Minutes decision tasks',
+    sublabel: 'Decision tasks',
     icon: ListTodo,
     path: '/secretariat/tasks',
     kbd: 'G T',
