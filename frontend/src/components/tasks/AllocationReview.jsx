@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, FileText, Loader, Sparkles, Wand2 } from 'lucide-react'
+import { CheckCircle2, FileText, Loader, PauseCircle, Sparkles, Wand2 } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
@@ -56,7 +56,7 @@ function SourceBadge({ s }) {
  * Secretariat reviews, adjusts and allocates in bulk — one click per decision
  * instead of the full Allocate-task form.
  */
-export default function AllocationReview({ onAllocated, onCount }) {
+export default function AllocationReview({ onAllocated, onCount, canHold = false }) {
   const toast = useToast()
   const [data, setData] = useState(null)
   const [rows, setRows] = useState({})
@@ -64,10 +64,13 @@ export default function AllocationReview({ onAllocated, onCount }) {
   const [aiBusy, setAiBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [holdingId, setHoldingId] = useState(null)
+  const [holdReason, setHoldReason] = useState('')
+  const [holdBusy, setHoldBusy] = useState(false)
 
   const apply = useCallback((res, keepEdits) => {
     setData(res)
-    onCount?.(res.items.length)
+    onCount?.(res.items.filter(i => !i.held).length)
     setRows(prev => {
       const next = {}
       for (const it of res.items) {
@@ -86,7 +89,9 @@ export default function AllocationReview({ onAllocated, onCount }) {
       .finally(() => setLoading(false))
   }, [apply])
 
-  const items = data?.items ?? []
+  const allItems = data?.items ?? []
+  const items = allItems.filter(it => !it.held)
+  const heldItems = allItems.filter(it => it.held)
   const managerOptions = useMemo(
     () => (data?.managers ?? []).map(m => ({ value: String(m.id), label: `${m.name} (${m.open_tasks} open)` })),
     [data],
@@ -95,6 +100,33 @@ export default function AllocationReview({ onAllocated, onCount }) {
   const selected = items.filter(it => rows[it.agenda_item]?.include && rows[it.agenda_item]?.manager)
 
   const patch = (id, p) => setRows(r => ({ ...r, [id]: { ...r[id], ...p } }))
+
+  const reload = async () => {
+    const fresh = await api.get('/commission-tasks/allocation-suggestions/')
+    apply(fresh.data, true)
+  }
+
+  const placeHold = async it => {
+    if (!holdReason.trim()) return
+    setHoldBusy(true); setErr('')
+    try {
+      await api.post(`/minutes/${it.minutes}/hold-decision/`, { agenda_item_id: it.agenda_item, reason: holdReason.trim() })
+      setHoldingId(null); setHoldReason('')
+      await reload()
+    } catch (e) {
+      setErr(formatApiError(e, 'Could not hold this decision.'))
+    } finally { setHoldBusy(false) }
+  }
+
+  const releaseHold = async it => {
+    setHoldBusy(true); setErr('')
+    try {
+      await api.post(`/minutes/${it.minutes}/release-decision/`, { agenda_item_id: it.agenda_item })
+      await reload()
+    } catch (e) {
+      setErr(formatApiError(e, 'Could not release this decision.'))
+    } finally { setHoldBusy(false) }
+  }
 
   const runAi = async () => {
     setAiBusy(true); setErr('')
@@ -133,7 +165,7 @@ export default function AllocationReview({ onAllocated, onCount }) {
     return <div className="card flex items-center justify-center gap-2 py-16 text-slate-500 text-sm"><Loader size={18} className="animate-spin" /> Loading…</div>
   }
 
-  if (items.length === 0) {
+  if (allItems.length === 0) {
     return (
       <div className="card text-center py-16 text-slate-500 text-sm">
         <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500" />
@@ -147,7 +179,10 @@ export default function AllocationReview({ onAllocated, onCount }) {
     <div className="space-y-3">
       <div className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1 text-sm text-slate-600 dark:text-slate-300">
-          <p className="font-semibold text-slate-800 dark:text-slate-100">{items.length} decision{items.length === 1 ? '' : 's'} waiting for a manager</p>
+          <p className="font-semibold text-slate-800 dark:text-slate-100">
+            {items.length} decision{items.length === 1 ? '' : 's'} waiting for a manager
+            {heldItems.length > 0 && <span className="font-normal text-slate-500"> · {heldItems.length} on hold</span>}
+          </p>
           <p className="text-xs text-slate-500">
             Suggestions are pre-ticked when confident. Check them, change anything that looks wrong, then allocate.
           </p>
@@ -194,7 +229,24 @@ export default function AllocationReview({ onAllocated, onCount }) {
                     </Link>
                   )}
                   <SourceBadge s={it.suggestion} />
+                  {!it.minutes_signed && (
+                    <span title="The Secretary allowed these decisions to be actioned before the minutes are signed." className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                      Minutes not yet signed
+                    </span>
+                  )}
+                  {canHold && (
+                    <button type="button" onClick={() => { setHoldingId(holdingId === it.agenda_item ? null : it.agenda_item); setHoldReason('') }}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300 hover:underline">
+                      <PauseCircle size={12} />Hold
+                    </button>
+                  )}
                 </div>
+                {holdingId === it.agenda_item && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <input className="input text-sm flex-1 min-w-[12rem]" placeholder="Why hold this decision? (required)" value={holdReason} onChange={e => setHoldReason(e.target.value)} />
+                    <BaseButton variant="outline" size="sm" onClick={() => placeHold(it)} disabled={!holdReason.trim()} loading={holdBusy} loadingLabel="Holding">Hold decision</BaseButton>
+                  </div>
+                )}
                 {it.suggestion?.reason && <p className="mt-1 text-[11px] text-slate-500">{it.suggestion.reason}</p>}
               </div>
             </div>
@@ -218,6 +270,36 @@ export default function AllocationReview({ onAllocated, onCount }) {
           </div>
         )
       })}
+
+      {heldItems.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <PauseCircle size={14} /> On hold — not actioned until released
+          </p>
+          {heldItems.map(it => (
+            <div key={it.agenda_item} className="card p-4 border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-900/10">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{it.item_title}</p>
+              <p className="text-[11px] text-slate-500">
+                {it.meeting_reference} · {it.minute_reference}{it.submission_reference ? ` · ${it.submission_reference}` : ''}
+              </p>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400 line-clamp-2">{it.decision_detail}</p>
+              <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">Reason: {it.hold_reason || '—'}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                {it.submission && (
+                  <Link to={`/submissions/${it.submission}`} className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 dark:text-primary-300 hover:underline">
+                    <FileText size={12} />View submission
+                  </Link>
+                )}
+                {it.hold_source === 'submission' ? (
+                  <span className="text-xs text-slate-500">Held on the submission — release it from the submission page.</span>
+                ) : canHold ? (
+                  <BaseButton variant="outline" size="sm" onClick={() => releaseHold(it)} loading={holdBusy} loadingLabel="Releasing">Release hold</BaseButton>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

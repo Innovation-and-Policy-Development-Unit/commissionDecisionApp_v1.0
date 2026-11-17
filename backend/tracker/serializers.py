@@ -73,6 +73,7 @@ from .models import (
     KnowledgeArticle,
 )
 from .rbac import (
+    rbac_user_has_permission,
     rbac_can_access_admin_panel,
     rbac_user_can_manage_roles,
     rbac_user_can_manage_translations,
@@ -2837,6 +2838,8 @@ class MinutesSerializer(serializers.ModelSerializer):
     review_state = serializers.SerializerMethodField()
     returned_by_name = serializers.SerializerMethodField()
     tasks_allocated_by_name = serializers.SerializerMethodField()
+    unsigned_actioning_allowed_by_name = serializers.SerializerMethodField()
+    held_decisions = serializers.SerializerMethodField()
     comments = MinutesCommentSerializer(many=True, read_only=True)
 
     class Meta:
@@ -2856,6 +2859,8 @@ class MinutesSerializer(serializers.ModelSerializer):
             "commissioner_circulated_at", "commissioner_review_due_at",
             "returned_by", "returned_by_name", "returned_at",
             "tasks_allocated_by", "tasks_allocated_by_name", "tasks_allocated_at",
+            "unsigned_actioning_allowed_by_name", "unsigned_actioning_allowed_at", "unsigned_actioning_note",
+            "held_decisions",
             "comments",
             "created_by", "created_by_name",
             "created_at", "updated_at",
@@ -2872,7 +2877,31 @@ class MinutesSerializer(serializers.ModelSerializer):
             "commissioner_circulated_at", "commissioner_review_due_at",
             "returned_by", "returned_at",
             "tasks_allocated_by", "tasks_allocated_at",
+            "unsigned_actioning_allowed_at", "unsigned_actioning_note",
         )
+
+    def get_unsigned_actioning_allowed_by_name(self, obj):
+        return obj.unsigned_actioning_allowed_by.username if obj.unsigned_actioning_allowed_by else None
+
+    def get_held_decisions(self, obj):
+        """Active holds. Reasons can be sensitive, so only those who decide
+        about actioning see them."""
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is None or not getattr(user, "is_authenticated", False):
+            return []
+        role = getattr(getattr(user, "psc_profile", None), "role", None)
+        if not (user.is_superuser or role in {"psc_secretary", "psc_admin"} or rbac_user_has_permission(user, "allocate_decision")):
+            return []
+        return [
+            {
+                "agenda_item_id": h.agenda_item_id,
+                "reason": h.reason,
+                "held_by_name": h.held_by.username,
+                "held_at": h.held_at,
+            }
+            for h in obj.decision_holds.filter(released_at__isnull=True).select_related("held_by")
+        ]
 
     def get_submitted_for_review_by_name(self, obj):
         return obj.submitted_for_review_by.username if obj.submitted_for_review_by else None

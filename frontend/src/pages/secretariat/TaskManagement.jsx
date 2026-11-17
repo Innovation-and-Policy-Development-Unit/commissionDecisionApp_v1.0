@@ -812,7 +812,7 @@ export default function TaskManagement() {
       {tab === 'report' ? (
         <ReportView />
       ) : tab === 'allocation' && canAllocate ? (
-        <AllocationReview onAllocated={fetchTasks} onCount={setPendingCount} />
+        <AllocationReview onAllocated={fetchTasks} onCount={setPendingCount} canHold={['psc_secretary', 'psc_admin'].includes(user?.role)} />
       ) : (
         <>
           <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3">
