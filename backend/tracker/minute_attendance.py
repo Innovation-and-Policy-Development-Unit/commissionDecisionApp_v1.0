@@ -50,6 +50,8 @@ def default_attendance(meeting) -> dict[str, Any]:
     return {
         "start_time": meeting.time.strftime("%H:%M") if getattr(meeting.time, "strftime", None) else str(meeting.time or "")[:5],
         "opening_prayer_by": "",
+        "closing_prayer_by": "",
+        "end_time": "",
         "members": members,
         "in_attendance": [],
     }
@@ -122,6 +124,8 @@ def clean_attendance(data: Any) -> dict[str, Any]:
     return {
         "start_time": _time(data.get("start_time"), "Start time"),
         "opening_prayer_by": _text(data.get("opening_prayer_by"), 150),
+        "closing_prayer_by": _text(data.get("closing_prayer_by"), 150),
+        "end_time": _time(data.get("end_time"), "End time"),
         "members": members,
         "in_attendance": others,
     }
@@ -155,6 +159,8 @@ def attendance_for_print(attendance: dict[str, Any] | None) -> dict[str, Any] | 
     return {
         "start_time": attendance.get("start_time", ""),
         "opening_prayer_by": attendance.get("opening_prayer_by", ""),
+        "closing_prayer_by": attendance.get("closing_prayer_by", ""),
+        "end_time": attendance.get("end_time", ""),
         "present": [label(m) for m in members if m["status"] == "present"],
         "absent": [label(m) for m in members if m["status"] == "absent"],
         "apologies": [label(m) for m in members if m["status"] == "apology"],

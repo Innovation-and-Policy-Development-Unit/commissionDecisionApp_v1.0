@@ -351,18 +351,25 @@ class MinuteAttendanceTests(AllocationBase):
     def test_minutes_header_renders_attendance_and_still_renders_without(self):
         from django.template.loader import render_to_string
         from tracker.minute_attendance import attendance_for_print
+        from tracker.minutes_pdf import build_context
         minutes = Minutes.objects.get(meeting=self.meeting)
-        ctx = {"meeting": self.meeting, "minutes": minutes, "content": {}, "agenda_items": [],
-               "status_label": "Draft", "signature_data_uri": None}
-        plain = render_to_string("tracker/minutes_pdf.html", {**ctx, "attendance": None})
-        self.assertNotIn("Apologies:", plain)
+        # No attendance recorded: the header table still prints, with empty Absent/Apologies lines.
+        plain = render_to_string("tracker/minutes_pdf.html", build_context(minutes, {}, status_label="Draft", signature_data_uri=None))
+        self.assertIn("Apologies:", plain)
+        self.assertNotIn("Fred V", plain)
         att = attendance_for_print({
             "start_time": "09:36", "opening_prayer_by": "Commissioner Edward",
             "members": [{"name": "Meto Nganga", "role": "Chairman", "status": "present", "arrived": "", "left": ""},
                         {"name": "Fred V", "role": "Commissioner", "status": "apology"}],
             "in_attendance": [{"name": "Stephane Bong", "role": "Acting Secretary - PSC"}],
         })
-        html = render_to_string("tracker/minutes_pdf.html", {**ctx, "attendance": att})
+        html = render_to_string("tracker/minutes_pdf.html", build_context(
+            minutes, {"attendance": {
+                "start_time": "09:36", "opening_prayer_by": "Commissioner Edward",
+                "members": [{"name": "Meto Nganga", "role": "Chairman", "status": "present"},
+                            {"name": "Fred V", "role": "Commissioner", "status": "apology"}],
+                "in_attendance": [{"name": "Stephane Bong", "role": "Acting Secretary - PSC"}]}},
+            status_label="Draft", signature_data_uri=None))
         for needle in ("09:36", "Meto Nganga, Chairman", "Stephane Bong, Acting Secretary - PSC", "Apologies:", "Fred V", "Commissioner Edward"):
             self.assertIn(needle, html)
 
