@@ -2860,7 +2860,7 @@ class MinutesSerializer(serializers.ModelSerializer):
             "returned_by", "returned_by_name", "returned_at",
             "tasks_allocated_by", "tasks_allocated_by_name", "tasks_allocated_at",
             "unsigned_actioning_allowed_by_name", "unsigned_actioning_allowed_at", "unsigned_actioning_note",
-            "held_decisions",
+            "held_decisions", "signature_check",
             "comments",
             "created_by", "created_by_name",
             "created_at", "updated_at",
@@ -2877,7 +2877,7 @@ class MinutesSerializer(serializers.ModelSerializer):
             "commissioner_circulated_at", "commissioner_review_due_at",
             "returned_by", "returned_at",
             "tasks_allocated_by", "tasks_allocated_at",
-            "unsigned_actioning_allowed_at", "unsigned_actioning_note",
+            "unsigned_actioning_allowed_at", "unsigned_actioning_note", "signature_check",
         )
 
     def get_unsigned_actioning_allowed_by_name(self, obj):
@@ -2959,10 +2959,15 @@ class MinutesSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         content, fully_cleared = redact_content(instance, self._request_user())
         data["content"] = content
+        # The same rows and signature table the PDF prints, for the on-screen view.
+        from .minutes_pdf import print_layout
+
+        data["print_layout"] = print_layout(instance, content)
         if not fully_cleared:
             # The stored PDFs hold the full minutes; only fully-cleared users get them.
             data["pdf_version"] = None
             data["signed_document"] = None
+            data["signature_check"] = {}
         elif instance.signed_document:
             # Never the /media/ address: nginx denies /media/minutes/ and the
             # scan is only streamed by the authenticated signed-document action.

@@ -54,6 +54,7 @@ FEATURE_CASE_CHAT            = "case_chat"
 FEATURE_REVIEW_QUESTIONS     = "review_questions"
 FEATURE_ODU_TEMPLATE_DRAFT   = "odu_template_draft"
 FEATURE_TASK_ALLOCATION      = "task_allocation"
+FEATURE_MINUTES_SIGNATURES   = "minutes_signatures"
 
 ALL_FEATURES = (
     FEATURE_SUBMISSION_BRIEF,
@@ -73,6 +74,7 @@ ALL_FEATURES = (
     FEATURE_REVIEW_QUESTIONS,
     FEATURE_ODU_TEMPLATE_DRAFT,
     FEATURE_TASK_ALLOCATION,
+    FEATURE_MINUTES_SIGNATURES,
 )
 
 _log = logging.getLogger("scdms.app")

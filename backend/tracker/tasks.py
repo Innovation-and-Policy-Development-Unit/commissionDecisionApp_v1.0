@@ -12,6 +12,20 @@ log = logging.getLogger("scdms.security")
 app_log = logging.getLogger("scdms.app")
 
 
+@shared_task(bind=True, max_retries=2)
+def check_minutes_signatures(self, minutes_id):
+    """Read the signature pages of the uploaded signed minutes (advisory)."""
+    from .ai.minutes_signature_check import run_signature_check
+    from .models import Minutes
+
+    ok, err, retryable = run_signature_check(minutes_id)
+    if not ok and retryable and self.request.retries < self.max_retries:
+        raise self.retry(countdown=30 * (2 ** self.request.retries))
+    if not ok and retryable:
+        Minutes.objects.filter(pk=minutes_id).update(
+            signature_check={"status": "failed", "note": (err or "The AI service did not answer.")[:300]})
+
+
 @shared_task
 def send_web_push_notification(notification_id):
     """Deliver a web-push for an important Notification to the recipient's

@@ -13415,6 +13415,8 @@ class MinutesViewSet(viewsets.ModelViewSet):
             minutes.signed_at = timezone.now()
         minutes.save()
 
+        self._queue_signature_check(minutes)
+
         # Decisions were actioned before the signature: Commission members are
         # told the signed minutes are on record now that the scan has arrived.
         if not was_signed and minutes.unsigned_actioning_allowed_at and minutes.tasks_allocated_at:
@@ -13425,6 +13427,70 @@ class MinutesViewSet(viewsets.ModelViewSet):
                 import logging
                 logging.getLogger("scdms.app").exception("LATE_SIGN_NOTIFY_FAIL | minutes=%s", minutes.id)
 
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @staticmethod
+    def _queue_signature_check(minutes):
+        """Start the advisory check of who signed; the page shows 'checking' until it lands."""
+        from django.db import transaction
+
+        from .ai.claude_client import ai_enabled
+
+        if not ai_enabled():
+            minutes.signature_check = {"status": "unavailable", "note": "AI is not configured."}
+            minutes.save(update_fields=["signature_check", "updated_at"])
+            return
+        minutes.signature_check = {"status": "pending", "queued_at": timezone.now().isoformat()}
+        minutes.save(update_fields=["signature_check", "updated_at"])
+
+        def _queue():
+            try:
+                from .tasks import check_minutes_signatures
+
+                check_minutes_signatures.delay(minutes.pk)
+            except Exception:  # Celery unavailable — say so instead of 'checking' forever
+                import logging
+
+                logging.getLogger("scdms.app").exception("MINUTES_SIGNATURE_QUEUE_FAIL | minutes=%s", minutes.pk)
+                type(minutes).objects.filter(pk=minutes.pk).update(
+                    signature_check={"status": "failed", "note": "The check could not be started."})
+
+        transaction.on_commit(_queue)
+
+    @action(detail=True, methods=["post"], url_path="recheck-signatures")
+    def recheck_signatures(self, request, pk=None):
+        """Run the signature check again (e.g. after the sitting's attendance was corrected)."""
+        profile = _profile(request.user)
+        if profile.role not in _SIGNED_SCAN_UPLOAD_ROLES | {Role.PSC_SECRETARY, Role.PSC_ADMIN} and not request.user.is_superuser:
+            raise PermissionDenied("You cannot re-run the signature check.")
+        minutes = self.get_object()
+        if not minutes.signed_document:
+            return Response({"detail": "There is no signed scan to check."}, status=400)
+        self._queue_signature_check(minutes)
+        minutes.refresh_from_db()
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="confirm-signature")
+    def confirm_signature(self, request, pk=None):
+        """The Secretary confirms (or withdraws confirmation of) one signer after looking at the scan."""
+        from .ai.minutes_signature_check import summarise
+
+        self._require_secretary_or_admin(request)
+        minutes = self.get_object()
+        check = dict(minutes.signature_check or {})
+        rows = check.get("rows") or []
+        row = next((r for r in rows if r.get("id") == request.data.get("row_id")), None)
+        if row is None:
+            return Response({"detail": "That signer is not in the check."}, status=400)
+        if request.data.get("confirmed", True):
+            row["confirmed_by"] = request.user.username
+            row["confirmed_at"] = timezone.now().isoformat()
+        else:
+            row["confirmed_by"] = ""
+            row["confirmed_at"] = ""
+        check["summary"] = summarise(rows)
+        minutes.signature_check = check
+        minutes.save(update_fields=["signature_check", "updated_at"])
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], url_path="signed-document")
