@@ -32,7 +32,7 @@ export default function AttendancePanel({ attendance, saved, serverQuorum, sugge
   const [otherName, setOtherName] = useState('')
   const [otherRole, setOtherRole] = useState('')
 
-  const att = attendance || { members: [], in_attendance: [], start_time: '', opening_prayer_by: '' }
+  const att = attendance || { members: [], in_attendance: [], start_time: '', end_time: '', opening_prayer_by: '', closing_prayer_by: '' }
   const members = att.members || []
   const others = att.in_attendance || []
   const q = quorumFor(att, serverQuorum)
@@ -106,6 +106,16 @@ export default function AttendancePanel({ attendance, saved, serverQuorum, sugge
               <datalist id="attendance-present-names">
                 {presentNames.map(n => <option key={n} value={n} />)}
               </datalist>
+            </div>
+            <div>
+              <label className={LABEL}>Time the meeting ended</label>
+              <input type="time" className="input text-sm bg-white" value={att.end_time || ''} disabled={disabled}
+                onChange={e => set({ end_time: e.target.value })} />
+            </div>
+            <div>
+              <label className={LABEL}>Closing prayer by</label>
+              <input className="input text-sm bg-white" list="attendance-present-names" value={att.closing_prayer_by || ''} disabled={disabled}
+                placeholder="Choose or type a name" onChange={e => set({ closing_prayer_by: e.target.value })} />
             </div>
           </div>
 

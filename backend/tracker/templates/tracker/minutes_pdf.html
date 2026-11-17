@@ -1,228 +1,193 @@
-<!DOCTYPE html>
+{% comment %}
+Minutes PDF, laid out like the Commission's own signed minutes (see
+tracker/minutes_pdf.py): portrait letterhead + meeting details page, landscape
+Discussions & Decisions table, landscape closing page with the signature table.
+{% endcomment %}<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <title>Minutes — {{ meeting.reference_number }}</title>
   <style>
-    @page {
-      size: A4;
-      margin: 2.5cm 2cm;
-      @bottom-center {
-        content: "Page " counter(page) " of " counter(pages);
-        font-size: 9px;
-        color: #888;
-      }
+    @page portrait {
+      size: A4 portrait;
+      margin: 1.6cm 1.8cm 1.8cm 1.8cm;
+      @bottom-right { content: counter(page) " of " counter(pages); font: bold 9pt "Carlito", "Calibri", sans-serif; color: #222; }
+      {% if unsigned %}@top-right { content: "DRAFT — {{ status_label }}"; font: 8pt "Carlito", "Calibri", sans-serif; color: #999; }{% endif %}
     }
-    body {
-      font-family: "Carlito", "Calibri", sans-serif;
-      font-size: 12pt;
-      line-height: 1.6;
-      color: #000;
+    @page landscape {
+      size: A4 landscape;
+      margin: 1.4cm 1.6cm 1.6cm 1.6cm;
+      @bottom-right { content: counter(page) " of " counter(pages); font: bold 9pt "Carlito", "Calibri", sans-serif; color: #222; }
+      {% if unsigned %}@top-right { content: "DRAFT — {{ status_label }}"; font: 8pt "Carlito", "Calibri", sans-serif; color: #999; }{% endif %}
     }
-    .header {
-      text-align: center;
-      border-bottom: 2px solid #000;
-      padding-bottom: 12px;
-      margin-bottom: 24px;
-    }
-    .header h1 {
-      font-size: 18pt;
-      margin: 0 0 4px 0;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .header .badge {
-      display: inline-block;
-      border: 1px solid #000;
-      padding: 2px 12px;
-      font-size: 10pt;
-      font-weight: bold;
-      text-transform: uppercase;
-      margin-top: 4px;
-    }
-    .meta {
-      margin-bottom: 20px;
-    }
-    .meta table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .meta td {
-      padding: 2px 8px;
-      font-size: 11pt;
-      vertical-align: top;
-    }
-    .meta td:first-child {
-      font-weight: bold;
-      width: 160px;
-    }
-    .section {
-      margin-bottom: 16px;
-    }
-    .section h2 {
-      font-size: 13pt;
-      font-weight: bold;
-      text-transform: uppercase;
-      border-bottom: 1px solid #ccc;
-      padding-bottom: 4px;
-      margin-bottom: 8px;
-    }
-    .section p {
-      margin: 0 0 8px 0;
-    }
-    .agenda-item {
-      margin-bottom: 12px;
-      padding: 8px;
-      border: 1px solid #ddd;
-    }
-    .agenda-item h3 {
-      font-size: 11pt;
-      margin: 0 0 4px 0;
-    }
-    .agenda-item .decision {
-      font-weight: bold;
-      margin-top: 4px;
-    }
-    .decision-badge {
-      display: inline-block;
-      border: 1px solid #000;
-      padding: 1px 8px;
-      font-size: 9pt;
-      font-weight: bold;
-      text-transform: uppercase;
-    }
-    .action-items {
-      margin-top: 6px;
-      font-size: 10pt;
-    }
-    .action-items ol {
-      margin: 4px 0 0 16px;
-      padding: 0;
-    }
-    .signature-block {
-      margin-top: 40px;
-      text-align: center;
-    }
-    .signature-line {
-      margin-top: 60px;
-      border-top: 1px solid #000;
-      width: 250px;
-      display: inline-block;
-    }
+    .portrait { page: portrait; }
+    .landscape { page: landscape; }
+    body { font-family: "Carlito", "Calibri", sans-serif; font-size: 11pt; line-height: 1.3; color: #000; margin: 0; }
+
+    /* Letterhead */
+    table.letterhead { width: 100%; border-collapse: collapse; border-bottom: 2px solid #4a8f3a; margin-bottom: 20px; }
+    table.letterhead td { text-align: center; vertical-align: top; font-size: 10.5pt; line-height: 1.35; padding: 0 4px 12px 4px; }
+    table.letterhead td.side { width: 38%; }
+    table.letterhead td.mid { width: 24%; }
+    table.letterhead img { height: 2.9cm; }
+    table.letterhead p { margin: 0 0 9px 0; }
+
+    h1.title { font-size: 20pt; font-weight: bold; margin: 18px 0 8px 0; }
+    h2.u { font-size: 13pt; font-weight: bold; text-decoration: underline; margin: 22px 0 8px 0; color: #1f3a5f; }
+
+    /* Meeting details table */
+    table.details { width: 100%; border-collapse: collapse; }
+    table.details td { border: 1px solid #333; padding: 5px 8px; vertical-align: middle; font-size: 11pt; }
+    table.details td.label { font-weight: bold; width: 19%; vertical-align: top; }
+    table.details td.strong { font-weight: bold; }
+    table.details ul { margin: 0; padding-left: 18px; list-style: square; }
+    table.details li { margin: 1px 0; }
+    table.details tr.empty td { height: 20px; }
+
+    /* Discussions & Decisions table */
+    table.decisions { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    table.decisions thead { display: table-header-group; }
+    table.decisions th { background: #2f6f26; color: #fff; text-align: left; font-weight: bold; padding: 6px 8px; font-size: 11pt; border: 1px solid #2f6f26; }
+    table.decisions tr { break-inside: auto; page-break-inside: auto; }
+    table.decisions td { border: 1px solid #333; padding: 6px 8px; vertical-align: top; font-size: 10.5pt; overflow-wrap: break-word; orphans: 1; widows: 1; }
+    table.decisions td p { orphans: 1; widows: 1; }
+    table.decisions col.c1 { width: 21%; } table.decisions col.c2 { width: 11%; }
+    table.decisions col.c3 { width: 34%; } table.decisions col.c4 { width: 34%; }
+    td .agenda { font-weight: bold; }
+    td .ref { font-size: 9pt; color: #555; margin-top: 3px; }
+    td p { margin: 0 0 7px 0; }
+    td .officer { font-weight: bold; margin-top: 8px; }
+    td .note { font-style: italic; color: #555; }
+    td ol.actions { margin: 6px 0 0 0; padding-left: 16px; font-size: 9.5pt; }
+
+    /* Closing page */
+    table.closing { width: 100%; border-collapse: collapse; page-break-inside: avoid; margin-top: 6px; }
+    table.closing td { border: 1px solid #333; padding: 4px 8px; font-size: 11pt; vertical-align: middle; }
+    table.closing td.label { font-weight: bold; width: 20%; }
+    table.closing tr.head td { font-weight: bold; }
+    table.closing tr.sign td { height: 50px; }
+    table.closing tr.spacer td { height: 8px; }
+    table.closing img.sig { height: 44px; }
+    .next { margin-top: 12px; font-size: 11pt; }
+    .closing-text { margin-top: 0; font-size: 11pt; }
+    .closing-text p { margin: 0 0 6px 0; }
+    sup { font-size: 7pt; line-height: 0; }
   </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>Republic of Vanuatu</h1>
-  <h1>Public Service Commission</h1>
-  <h2 style="font-size:14pt; margin-top:8px;">MINUTES OF COMMISSION SITTING</h2>
-  <div class="badge">{{ status_label }}</div>
+<div class="portrait">
+  <table class="letterhead">
+    <tr>
+      <td class="side">
+        <p>GOUVERNMENT DE LA<br>REPUBLIQUE DE VANUATU</p>
+        <p>SECRETARIAT DU<br>COMMISSION DE LA<br>FONCTION PUBLIQUE</p>
+        <p>Sac Postal Privé 9087, Port Vila, Vanuatu</p>
+        <p>T: +678 33360<br>E: opsc@vanuatu.gov.vu<br>W: psc.gov.vu</p>
+      </td>
+      <td class="mid">{% if emblem_data_uri %}<img src="{{ emblem_data_uri }}" alt="Republic of Vanuatu emblem">{% endif %}</td>
+      <td class="side">
+        <p>GOVERNMENT OF THE<br>REPUBLIC OF VANUATU</p>
+        <p>PUBLIC SERVICE<br>COMMISSION<br>SECRETARIAT</p>
+        <p>Private Mail Bag 9087, Port Vila, Vanuatu</p>
+        <p>T: +678 33360<br>E: opsc@vanuatu.gov.vu<br>W: psc.gov.vu</p>
+      </td>
+    </tr>
+  </table>
+
+  <h1 class="title">Meeting Minutes</h1>
+
+  <table class="details">
+    <tr><td class="label">Meeting Name:</td><td colspan="5" class="strong">{{ meeting_name_html }}</td></tr>
+    <tr>
+      <td class="label"></td>
+      <td class="strong">{{ date_long_html }}</td>
+      <td class="strong" style="text-align:center;">Time:</td>
+      <td>{{ time_text }}</td>
+      <td class="strong" style="text-align:center;">Venue:</td>
+      <td>{{ meeting.venue }}</td>
+    </tr>
+    <tr>
+      <td class="label">Attendees:</td>
+      <td colspan="5">
+        {% if attendance %}
+        <ul>
+          {% for p in attendance.present %}<li>{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% if p.note %} ({{ p.note }}){% endif %}</li>{% endfor %}
+          {% for p in attendance.in_attendance %}<li>{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}</li>{% endfor %}
+        </ul>
+        {% endif %}
+      </td>
+    </tr>
+    <tr class="empty"><td class="label">Absent:</td><td colspan="5">{% for p in attendance.absent %}{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}</td></tr>
+    <tr class="empty"><td class="label">Apologies:</td><td colspan="5">{% for p in attendance.apologies %}{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}</td></tr>
+    <tr><td class="label">Opening Prayer</td><td colspan="5">{{ attendance.opening_prayer_by }}</td></tr>
+  </table>
+
+  <h2 class="u">Agenda</h2>
+  <p>For a list of the agenda items, refer to column 1 of the table below.</p>
 </div>
 
-<div class="meta">
-  <table>
-    <tr><td>Meeting Reference:</td><td>{{ meeting.reference_number }}</td></tr>
-    <tr><td>Title:</td><td>{{ meeting.title }}</td></tr>
-    <tr><td>Date:</td><td>{{ meeting.date }}</td></tr>
-    {% if attendance.start_time %}<tr><td>Time:</td><td>{{ attendance.start_time }}</td></tr>{% endif %}
-    <tr><td>Venue:</td><td>{{ meeting.venue }}</td></tr>
-    <tr><td>Meeting Type:</td><td>{{ meeting.get_type_display }}</td></tr>
-    {% if attendance %}
-    <tr><td>Attendees:</td><td>{% for p in attendance.present %}{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% if p.note %} ({{ p.note }}){% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}{% for p in attendance.in_attendance %}<br>{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% endfor %}</td></tr>
-    <tr><td>Absent:</td><td>{% for p in attendance.absent %}{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>
-    <tr><td>Apologies:</td><td>{% for p in attendance.apologies %}{{ p.name }}{% if p.role %}, {{ p.role }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>
-    {% if attendance.opening_prayer_by %}<tr><td>Opening Prayer:</td><td>{{ attendance.opening_prayer_by }}</td></tr>{% endif %}
-    {% endif %}
-    {% if content.opening %}
-    <tr><td>Opened:</td><td>{{ content.opening|truncatewords:30 }}</td></tr>
-    {% endif %}
+<div class="landscape">
+  <h2 class="u" style="margin-top:0;">Discussions &amp; Decisions</h2>
+  <table class="decisions">
+    <colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup>
+    <thead>
+      <tr><th>Agenda</th><th>Decision No:</th><th>Discussion of Recommendation (s)</th><th>Decision</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>
+          <div class="agenda">{{ r.agenda }}</div>
+          {% if r.ref %}<div class="ref">{{ r.ref }}</div>{% endif %}
+        </td>
+        <td>{{ r.decision_number }}</td>
+        <td>{% if r.note %}<span class="note">{{ r.note }}</span>{% elif r.discussion %}{{ r.discussion|linebreaks }}{% endif %}</td>
+        <td>
+          {% if r.decision %}{{ r.decision|linebreaks }}{% endif %}
+          {% if r.action_items %}
+          <ol class="actions">
+            {% for a in r.action_items %}<li>{{ a.action }}{% if a.responsible %} — <em>{{ a.responsible }}</em>{% endif %}{% if a.deadline %} (Due: {{ a.deadline }}){% endif %}</li>{% endfor %}
+          </ol>
+          {% endif %}
+          {% if r.officer %}<div class="officer">Action Officer: {{ r.officer }}</div>{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4"><em>No agenda items recorded.</em></td></tr>
+      {% endfor %}
+    </tbody>
   </table>
 </div>
 
-{% if content.opening %}
-<div class="section">
-  <h2>1. Opening</h2>
-  <p>{{ content.opening|linebreaks }}</p>
-</div>
-{% endif %}
-
-{% if content.confirmation_previous_minutes %}
-<div class="section">
-  <h2>2. Confirmation of Previous Minutes</h2>
-  <p>{{ content.confirmation_previous_minutes|linebreaks }}</p>
-</div>
-{% endif %}
-
-{% if agenda_items %}
-<div class="section">
-  <h2>3. Items Considered</h2>
-  {% for item in agenda_items %}
-  <div class="agenda-item">
-    <h3>Item {{ forloop.counter }}: {{ item.submission_ref }} — {{ item.title }}</h3>
-    {% if item.restricted %}
-    <p><em>This agenda item relates to another OPSC unit and has been omitted from this copy.</em></p>
-    {% endif %}
-    {% if item.discussion %}
-    <p><strong>Discussion:</strong> {{ item.discussion|linebreaks }}</p>
-    {% endif %}
-    {% if item.decision %}
-    <p class="decision">
-      <strong>Decision:</strong> {{ item.decision }}
-      {% if item.decision_type %}
-      <span class="decision-badge">{{ item.decision_type|upper }}</span>
-      {% endif %}
-    </p>
-    {% endif %}
-    {% if item.action_items %}
-    <div class="action-items">
-      <strong>Action Items:</strong>
-      <ol>
-      {% for action in item.action_items %}
-        <li>{{ action.action }} — <em>{{ action.responsible }}</em>{% if action.deadline %} (Due: {{ action.deadline }}){% endif %}</li>
-      {% endfor %}
-      </ol>
-    </div>
-    {% endif %}
+<div class="landscape" style="page-break-before: always;">
+  {% if closing or next_meeting_date %}
+  <div class="closing-text">
+    {% if closing %}<p>{{ closing|linebreaksbr }}</p>{% endif %}
+    {% if next_meeting_date %}<p><strong>Next meeting:</strong> {{ next_meeting_date }}</p>{% endif %}
   </div>
-  {% endfor %}
-</div>
-{% endif %}
-
-{% if content.any_other_business %}
-<div class="section">
-  <h2>4. Any Other Business</h2>
-  <p>{{ content.any_other_business|linebreaks }}</p>
-</div>
-{% endif %}
-
-{% if content.closing %}
-<div class="section">
-  <h2>5. Closing</h2>
-  <p>{{ content.closing|linebreaks }}</p>
-</div>
-{% endif %}
-
-{% if content.next_meeting_date %}
-<div class="section">
-  <h2>6. Next Meeting</h2>
-  <p>{{ content.next_meeting_date }}</p>
-</div>
-{% endif %}
-
-<div class="signature-block">
-  {% if minutes.signed_by %}
-  {% if signature_data_uri %}
-  <img src="{{ signature_data_uri }}" alt="Signature" style="height:50px; margin-bottom:4px;" />
-  {% else %}
-  <div class="signature-line"></div>
   {% endif %}
-  <p><strong>{{ minutes.signed_by.get_full_name|default:minutes.signed_by.username }}</strong></p>
-  <p>Chairperson / Secretary</p>
-  <p>Date: {{ minutes.signed_at|date:"d F Y" }}</p>
-  {% else %}
-  <p style="color:#999; font-style:italic;">This document has not yet been signed.</p>
-  {% endif %}
+
+  <table class="closing">
+    <tr><td class="label">Closing Prayer</td><td colspan="3">{{ attendance.closing_prayer_by }}</td></tr>
+    <tr><td class="label">Meeting end time:</td><td colspan="3">{{ end_time_text }}</td></tr>
+    <tr class="spacer"><td colspan="4"></td></tr>
+    <tr class="head"><td colspan="4">Minutes checked by:</td></tr>
+    <tr class="head"><td>Position Title</td><td>Name</td><td>Signature</td><td>Date</td></tr>
+    <tr class="sign"><td>{{ signers.secretary.position }}</td><td>{{ signers.secretary.name }}</td><td></td><td></td></tr>
+    <tr class="spacer"><td colspan="4"></td></tr>
+    <tr class="head"><td colspan="4">Verified as true meeting minutes by:</td></tr>
+    <tr class="head"><td>Member</td><td>Name</td><td>Signature</td><td>Date</td></tr>
+    <tr class="sign">
+      <td>Chairman</td>
+      <td>{{ signers.chairman.name }}</td>
+      <td>{% if signature_data_uri and minutes.signed_by %}<img class="sig" src="{{ signature_data_uri }}" alt="Signature">{% endif %}</td>
+      <td>{% if minutes.signed_by %}{{ minutes.signed_at|date:"d/m/Y" }}{% endif %}</td>
+    </tr>
+    {% for m in signers.members %}
+    <tr class="sign"><td>Member</td><td>{{ m.name }}</td><td></td><td></td></tr>
+    {% endfor %}
+  </table>
 </div>
 
 </body>

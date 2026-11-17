@@ -13471,7 +13471,6 @@ class MinutesViewSet(viewsets.ModelViewSet):
         from .minutes_access import redact_content
 
         content, _fully_cleared = redact_content(minutes, request.user)
-        agenda_items = content.get("agenda_items", [])
 
         # Embed signature as base64 data URI if signed and image exists
         signature_data_uri = None
@@ -13488,17 +13487,13 @@ class MinutesViewSet(viewsets.ModelViewSet):
                 except Exception:
                     pass
 
-        from .minute_attendance import attendance_for_print
+        from .minutes_pdf import build_context
 
-        html = render_to_string("tracker/minutes_pdf.html", {
-            "meeting": minutes.meeting,
-            "minutes": minutes,
-            "content": content,
-            "agenda_items": agenda_items,
-            "attendance": attendance_for_print(content.get("attendance")),
-            "status_label": minutes.get_status_display(),
-            "signature_data_uri": signature_data_uri,
-        })
+        html = render_to_string("tracker/minutes_pdf.html", build_context(
+            minutes, content,
+            status_label=minutes.get_status_display(),
+            signature_data_uri=signature_data_uri,
+        ))
 
         buf = BytesIO()
         HTML(string=html).write_pdf(buf)
