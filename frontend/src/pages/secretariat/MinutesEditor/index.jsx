@@ -135,6 +135,24 @@ function SectionEditor({ label, value, onChange, placeholder }) {
   )
 }
 
+// Progress for the signed-scan upload: a 7 MB scan can take minutes on a slow
+// connection and refreshing the page cancels it, so say so while it runs.
+function UploadProgress({ pct }) {
+  if (pct === null) return null
+  const finishing = pct >= 100
+  return (
+    <div role="status" aria-live="polite" className="basis-full w-full mt-4 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/10 p-3">
+      <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+        {finishing ? 'Upload finished — saving the signed minutes…' : `Uploading signed minutes… ${pct}%`}
+      </p>
+      <div className="mt-2 h-2 w-full rounded-full bg-emerald-100 dark:bg-emerald-900/30 overflow-hidden">
+        <div className="h-full bg-emerald-600 transition-all duration-300" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">Please keep this page open until it finishes. Refreshing or leaving the page cancels the upload.</p>
+    </div>
+  )
+}
+
 function AgendaItemEditor({ item, index, onChange, hold, canHold, onHold, onRelease }) {
   const [expanded, setExpanded] = useState(true)
 
@@ -455,6 +473,15 @@ export default function MinutesEditor() {
   }
 
   const signedFileRef = useRef(null)
+  const [uploadPct, setUploadPct] = useState(null) // null = not uploading
+
+  // Ask the browser to confirm before the page is closed or refreshed mid-upload.
+  useEffect(() => {
+    if (uploadPct === null) return undefined
+    const warn = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [uploadPct === null])
 
   // ── Secretary: hold single decisions, allow actioning before the signature ──
   const canHold = !!minutes?.id && HOLD_ROLES.has(user?.role) && minutes.status !== 'draft'
@@ -540,6 +567,7 @@ export default function MinutesEditor() {
       `Replace the signed minutes on record with "${file.name}"? The scan uploaded earlier will no longer be shown.`
     )) return
     setSaving(true)
+    setUploadPct(0)
     setError('')
     setSuccess('')
     try {
@@ -547,15 +575,20 @@ export default function MinutesEditor() {
       form.append('signed_document', file)
       const res = await api.post(`/minutes/${minutes.id}/upload-signed/`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (ev) => {
+          const total = ev.total || file.size
+          if (total) setUploadPct(Math.min(100, Math.round((ev.loaded / total) * 100)))
+        },
       })
       setMinutes(res.data)
       setSuccess(replacing
         ? 'Signed minutes replaced with the new scan.'
         : 'Signed minutes uploaded. The Secretary can now allocate decision tasks.')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to upload signed minutes.')
+      setError(err.response?.data?.detail || 'Failed to upload signed minutes. Check your connection and try again.')
     } finally {
       setSaving(false)
+      setUploadPct(null)
     }
   }
 
@@ -858,10 +891,11 @@ export default function MinutesEditor() {
                   />
                   <button onClick={() => signedFileRef.current?.click()} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors disabled:opacity-60">
                     <CheckCircle2 size={16} />
-                    {minutes.status === 'signed' ? 'Re-upload Signed Minutes' : 'Upload Signed Minutes'}
+                    {uploadPct !== null ? `Uploading… ${uploadPct}%` : minutes.status === 'signed' ? 'Re-upload Signed Minutes' : 'Upload Signed Minutes'}
                   </button>
                 </>
               )}
+              <UploadProgress pct={uploadPct} />
             </div>
           )}
 
@@ -931,6 +965,7 @@ export default function MinutesEditor() {
         </div>
       </div>
 
+      <UploadProgress pct={uploadPct} />
       <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
         <div className="flex items-center gap-3">
           <button
@@ -993,7 +1028,7 @@ export default function MinutesEditor() {
                       />
                       <button onClick={() => signedFileRef.current?.click()} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60">
                         <CheckCircle2 size={16} />
-                        Upload Signed Minutes
+                        {uploadPct !== null ? `Uploading… ${uploadPct}%` : 'Upload Signed Minutes'}
                       </button>
                     </>
                   )}
@@ -1016,7 +1051,7 @@ export default function MinutesEditor() {
                   />
                   <button onClick={() => signedFileRef.current?.click()} disabled={saving} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
                     <PenSquare size={16} />
-                    Re-upload Signed Minutes
+                    {uploadPct !== null ? `Uploading… ${uploadPct}%` : 'Re-upload Signed Minutes'}
                   </button>
                 </>
               )}
