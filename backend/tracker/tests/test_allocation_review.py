@@ -365,3 +365,168 @@ class MinuteAttendanceTests(AllocationBase):
         html = render_to_string("tracker/minutes_pdf.html", {**ctx, "attendance": att})
         for needle in ("09:36", "Meto Nganga, Chairman", "Stephane Bong, Acting Secretary - PSC", "Apologies:", "Fred V", "Commissioner Edward"):
             self.assertIn(needle, html)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class HoldAndUnsignedActioningTests(AllocationBase):
+    """Secretary can hold single decisions and allow actioning of unsigned minutes."""
+
+    def setUp(self):
+        super().setUp()
+        self.minutes = Minutes.objects.get(meeting=self.meeting)
+        self.minutes.status = MinutesStatus.AWAITING_SIGNATURE
+        self.minutes.save()
+        self.base = f"/api/minutes/{self.minutes.id}"
+
+    def _allow(self, note="Chairman travelling; decisions are urgent."):
+        return self.client.post(f"{self.base}/allow-unsigned-actioning/", {"note": note}, format="json")
+
+    def _hold(self, item, reason="Awaiting legal advice."):
+        return self.client.post(f"{self.base}/hold-decision/", {"agenda_item_id": item.id, "reason": reason}, format="json")
+
+    # ── unsigned actioning ──────────────────────────────────────────────────
+    def test_unsigned_minutes_cannot_be_actioned_until_secretary_allows(self):
+        self.assertEqual(self.client.get("/api/commission-tasks/allocation-suggestions/").data["items"], [])
+        res = self.client.post(f"{self.base}/allocate-tasks/")
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(self._allow().status_code, 200)
+        items = self.client.get("/api/commission-tasks/allocation-suggestions/").data["items"]
+        self.assertEqual(len(items), 2)
+        self.assertTrue(all(not i["minutes_signed"] for i in items))
+
+    def test_allow_requires_reason_secretary_role_and_unsigned_non_draft_minutes(self):
+        self.assertEqual(self._allow(note="  ").status_code, 400)
+        self.client.force_authenticate(user=self.odu)
+        self.assertEqual(self._allow().status_code, 403)
+        self.client.force_authenticate(user=self.secretary)
+        self.minutes.status = MinutesStatus.DRAFT
+        self.minutes.save()
+        self.assertEqual(self._allow().status_code, 400)
+        self.minutes.status = MinutesStatus.SIGNED
+        self.minutes.save()
+        self.assertEqual(self._allow().status_code, 400)
+
+    def test_allocate_tasks_works_on_unsigned_minutes_without_telling_commission_it_is_signed(self):
+        self._allow()
+        with mock.patch("tracker.email_notify.notify_minutes_signed") as signed, \
+             mock.patch("tracker.decision_allocation.queue_post_signing_automation"):
+            res = self.client.post(f"{self.base}/allocate-tasks/")
+        self.assertEqual(res.status_code, 200, res.data)
+        signed.assert_not_called()
+        self.assertEqual(CommissionTask.objects.filter(meeting=self.meeting).count(), 1)  # only the routed item has a manager
+
+    def test_late_signed_upload_notifies_once_and_does_not_reallocate(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self._allow()
+        with mock.patch("tracker.decision_allocation.queue_post_signing_automation"):
+            self.client.post(f"{self.base}/allocate-tasks/")
+        before = CommissionTask.objects.count()
+        csu_user = User.objects.create_user(username="ar_csu_up", password="pass")
+        Profile.objects.create(user=csu_user, role=Role.CSU_MANAGER)
+        self.client.force_authenticate(user=csu_user)
+        with mock.patch("tracker.email_notify.notify_minutes_signed") as signed:
+            res = self.client.post(f"{self.base}/upload-signed/", {
+                "signed_document": SimpleUploadedFile("s.pdf", b"%PDF-1.4 x", content_type="application/pdf")})
+        self.assertEqual(res.status_code, 200, res.data)
+        signed.assert_called_once()
+        self.assertEqual(CommissionTask.objects.count(), before)
+
+    def test_revoke_only_before_tasks_exist(self):
+        self._allow()
+        self.assertEqual(self.client.post(f"{self.base}/revoke-unsigned-actioning/").status_code, 200)
+        self.minutes.refresh_from_db()
+        self.assertIsNone(self.minutes.unsigned_actioning_allowed_at)
+        self._allow()
+        with mock.patch("tracker.decision_allocation.queue_post_signing_automation"):
+            self.client.post(f"{self.base}/allocate-tasks/")
+        self.assertEqual(self.client.post(f"{self.base}/revoke-unsigned-actioning/").status_code, 400)
+
+    def test_manual_create_gate_follows_the_override(self):
+        Submission.objects.filter(pk=self.routed.submission_id).update(scheduled_meeting=self.meeting)
+        payload = {"assigned_manager": self.odu.id, "title": "Manual", "submission": self.routed.submission_id}
+        self.assertEqual(self.client.post("/api/commission-tasks/", payload, format="json").status_code, 403)
+        self._allow()
+        self.assertEqual(self.client.post("/api/commission-tasks/", payload, format="json").status_code, 201)
+
+    # ── holds ──────────────────────────────────────────────────────────────
+    def test_held_decision_is_shown_but_never_suggested_or_allocated(self):
+        self._allow()
+        self.assertEqual(self._hold(self.routed).status_code, 200)
+        data = self.client.get("/api/commission-tasks/allocation-suggestions/").data
+        row = self._by_item(data)[self.routed.id]
+        self.assertTrue(row["held"])
+        self.assertEqual(row["hold_reason"], "Awaiting legal advice.")
+        self.assertIsNone(row["suggestion"])
+        res = self.client.post("/api/commission-tasks/allocate-bulk/", {"allocations": [
+            {"agenda_item": self.routed.id, "assigned_manager": self.odu.id}]}, format="json")
+        self.assertEqual(res.data["created"], [])
+        self.assertIn("On hold", res.data["skipped"][0]["reason"])
+        manual = self.client.post("/api/commission-tasks/", {"assigned_manager": self.odu.id, "title": "x", "agenda_item": self.routed.id}, format="json")
+        self.assertEqual(manual.status_code, 403)
+        self.assertNotIn(self.routed.id, [p["agenda_item"] for p in self.client.get("/api/commission-tasks/unallocated-decisions/").data])
+
+    def test_ai_never_sees_held_decisions(self):
+        self._allow()
+        self._hold(self.unrouted)
+        with mock.patch("tracker.ai.task_allocation.suggest_allocations", return_value=({}, None)) as ai:
+            self.client.post("/api/commission-tasks/allocation-suggestions/")
+        ai.assert_not_called()  # the only unresolved item is the held one
+
+    def test_allocate_tasks_skips_held_and_leaves_its_submission_untouched(self):
+        self._allow()
+        self._hold(self.routed)
+        stage_before = Submission.objects.get(pk=self.routed.submission_id).current_stage
+        with mock.patch("tracker.decision_allocation.queue_post_signing_automation"):
+            self.client.post(f"{self.base}/allocate-tasks/")
+        self.assertFalse(CommissionTask.objects.filter(agenda_item=self.routed).exists())
+        self.assertEqual(Submission.objects.get(pk=self.routed.submission_id).current_stage, stage_before)
+
+    def test_release_returns_the_decision_to_allocation_review(self):
+        self._allow()
+        self._hold(self.routed)
+        res = self.client.post(f"{self.base}/release-decision/", {"agenda_item_id": self.routed.id}, format="json")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data["held_decisions"], [])
+        row = self._by_item(self.client.get("/api/commission-tasks/allocation-suggestions/").data)[self.routed.id]
+        self.assertFalse(row["held"])
+        self.assertEqual(row["suggestion"]["manager_id"], self.odu.id)
+        self.assertEqual(self.client.post(f"{self.base}/release-decision/", {"agenda_item_id": self.routed.id}, format="json").status_code, 400)
+
+    def test_release_after_allocation_ran_actions_just_that_item(self):
+        self._allow()
+        self._hold(self.routed)
+        with mock.patch("tracker.decision_allocation.queue_post_signing_automation") as q:
+            self.client.post(f"{self.base}/allocate-tasks/")
+            q.reset_mock()
+            self.client.post(f"{self.base}/release-decision/", {"agenda_item_id": self.routed.id}, format="json")
+        self.assertEqual(q.call_args.kwargs["only"], {self.routed.id})
+
+    def test_hold_rules(self):
+        self.assertEqual(self._hold(self.routed, reason=" ").status_code, 400)
+        self.assertEqual(self._hold(self.routed).status_code, 200)
+        self.assertEqual(self._hold(self.routed).status_code, 400)  # already held
+        self.assertEqual(self.client.post(f"{self.base}/hold-decision/", {"agenda_item_id": 999999, "reason": "x"}, format="json").status_code, 400)
+        self.client.force_authenticate(user=self.odu)
+        self.assertEqual(self._hold(self.unrouted).status_code, 403)
+        self.client.force_authenticate(user=self.secretary)
+        self._allow()
+        CommissionTask.objects.create(title="t", assigned_manager=self.csu, created_by=self.secretary, agenda_item=self.unrouted)
+        self.assertEqual(self._hold(self.unrouted).status_code, 400)  # already actioned
+
+    def test_hold_reasons_only_visible_to_deciders(self):
+        self._hold(self.routed)
+        self.assertEqual(len(self.client.get(f"{self.base}/").data["held_decisions"]), 1)
+        self.client.force_authenticate(user=self.odu)
+        res = self.client.get(f"{self.base}/")
+        self.assertEqual(res.data.get("held_decisions", []), [])
+
+    def test_existing_submission_level_hold_also_stops_actioning(self):
+        """A paper the Secretary already holds from the submission page is not actioned either."""
+        self._allow()
+        Submission.objects.filter(pk=self.routed.submission_id).update(
+            decision_hold_active=True, decision_hold_reason="Ministry asked us to wait.")
+        row = self._by_item(self.client.get("/api/commission-tasks/allocation-suggestions/").data)[self.routed.id]
+        self.assertEqual((row["held"], row["hold_source"], row["hold_reason"]), (True, "submission", "Ministry asked us to wait."))
+        res = self.client.post("/api/commission-tasks/allocate-bulk/", {"allocations": [
+            {"agenda_item": self.routed.id, "assigned_manager": self.odu.id}]}, format="json")
+        self.assertEqual(res.data["created"], [])

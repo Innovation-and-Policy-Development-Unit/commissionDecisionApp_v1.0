@@ -6423,7 +6423,7 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You do not have permission to allocate commission tasks.")
         from .decision_allocation import pending_decision_allocations
 
-        return Response(pending_decision_allocations())
+        return Response([p for p in pending_decision_allocations() if not p["held"]])
 
     @action(detail=False, methods=["get", "post"], url_path="allocation-suggestions")
     def allocation_suggestions(self, request):
@@ -6460,11 +6460,20 @@ class CommissionTaskViewSet(viewsets.ModelViewSet):
             meeting = getattr(sub, "scheduled_meeting", None)
             if meeting:
                 minutes = getattr(meeting, "minutes", None)
-                if not minutes or minutes.status != "signed":
+                from .decision_allocation import can_action_minutes
+
+                if not minutes or not can_action_minutes(minutes):
                     raise PermissionDenied(
                         "Cannot allocate task: Commission minutes have not been signed yet. "
-                        "Task allocation is only permitted after the Chairperson has signed the minutes."
+                        "Task allocation is only permitted after the Chairperson has signed the minutes, "
+                        "or the Secretary has authorised actioning before signing."
                     )
+        held_item = serializer.validated_data.get("agenda_item")
+        if held_item is not None:
+            from .decision_allocation import active_holds
+
+            if held_item.pk in active_holds([held_item.pk]):
+                raise PermissionDenied("The Secretary has this decision on hold. Release it before allocating.")
         extra = {}
         if not serializer.validated_data.get("decision_number"):
             from .decision_allocation import decision_number_for, minutes_block_for
@@ -13169,8 +13178,13 @@ class MinutesViewSet(viewsets.ModelViewSet):
             request.user, "allocate_decision"
         ):
             raise PermissionDenied("Only the Secretary, Admin or a role with the allocate decision permission can allocate decision tasks.")
-        if minutes.status != MinutesStatus.SIGNED:
-            return Response({"detail": "Minutes must be signed before tasks can be allocated."}, status=400)
+        from .decision_allocation import can_action_minutes
+
+        if not can_action_minutes(minutes):
+            return Response(
+                {"detail": "Minutes must be signed, or the Secretary must authorise actioning before signing, before tasks can be allocated."},
+                status=400,
+            )
         if minutes.tasks_allocated_at:
             return Response({"detail": "Decision tasks have already been allocated for these minutes."}, status=400)
 
@@ -13211,11 +13225,125 @@ class MinutesViewSet(viewsets.ModelViewSet):
             _log.exception("POST_SIGN_AUTOMATION_FAIL | minutes=%s", minutes.id)
 
         # Notify Commission members the signed minutes are now the official record.
+        # Not while the minutes are unsigned: they are told when the scan is uploaded.
+        if minutes.status == MinutesStatus.SIGNED:
+            try:
+                from .email_notify import notify_minutes_signed
+                notify_minutes_signed(minutes)
+            except Exception:
+                _log.exception("POST_SIGN_NOTIFY_FAIL | minutes=%s", minutes.id)
+
+    # ── Secretary controls: hold a decision, action before the signature ────
+
+    @staticmethod
+    def _require_secretary_or_admin(request):
+        profile = _profile(request.user)
+        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN} and not request.user.is_superuser:
+            raise PermissionDenied("Only the Secretary or an Admin can do this.")
+
+    @action(detail=True, methods=["post"], url_path="allow-unsigned-actioning")
+    def allow_unsigned_actioning(self, request, pk=None):
+        """Authorise decisions in these (not yet signed) minutes to be actioned.
+        The signed scan can be uploaded afterwards."""
+        self._require_secretary_or_admin(request)
+        minutes = self.get_object()
+        note = (request.data.get("note") or "").strip()
+        if not note:
+            return Response({"detail": "Give a reason for actioning before the minutes are signed."}, status=400)
+        if minutes.status == MinutesStatus.SIGNED:
+            return Response({"detail": "These minutes are already signed."}, status=400)
+        if minutes.status == MinutesStatus.DRAFT:
+            return Response({"detail": "Draft minutes cannot be actioned. Submit them for review first."}, status=400)
+        if minutes.unsigned_actioning_allowed_at:
+            return Response({"detail": "Actioning before signing is already allowed."}, status=400)
+        minutes.unsigned_actioning_allowed_by = request.user
+        minutes.unsigned_actioning_allowed_at = timezone.now()
+        minutes.unsigned_actioning_note = note[:2000]
+        minutes.save(update_fields=["unsigned_actioning_allowed_by", "unsigned_actioning_allowed_at", "unsigned_actioning_note", "updated_at"])
+        import logging
+        logging.getLogger("scdms.app").info(
+            "MINUTES_UNSIGNED_ACTIONING_ALLOWED | minutes=%s actor=%s", minutes.id, request.user.username
+        )
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="revoke-unsigned-actioning")
+    def revoke_unsigned_actioning(self, request, pk=None):
+        self._require_secretary_or_admin(request)
+        minutes = self.get_object()
+        if not minutes.unsigned_actioning_allowed_at:
+            return Response({"detail": "Actioning before signing is not allowed on these minutes."}, status=400)
+        if minutes.tasks_allocated_at:
+            return Response({"detail": "Tasks have already been allocated, so this can no longer be withdrawn."}, status=400)
+        if CommissionTask.objects.filter(meeting=minutes.meeting).exists():
+            return Response({"detail": "Tasks already exist for this sitting, so this can no longer be withdrawn."}, status=400)
+        minutes.unsigned_actioning_allowed_by = None
+        minutes.unsigned_actioning_allowed_at = None
+        minutes.unsigned_actioning_note = ""
+        minutes.save(update_fields=["unsigned_actioning_allowed_by", "unsigned_actioning_allowed_at", "unsigned_actioning_note", "updated_at"])
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="hold-decision")
+    def hold_decision_actioning(self, request, pk=None):
+        """Keep one decision from being actioned until the Secretary releases it."""
+        from .models import DecisionActioningHold
+
+        self._require_secretary_or_admin(request)
+        minutes = self.get_object()
+        reason = (request.data.get("reason") or "").strip()
         try:
-            from .email_notify import notify_minutes_signed
-            notify_minutes_signed(minutes)
-        except Exception:
-            _log.exception("POST_SIGN_NOTIFY_FAIL | minutes=%s", minutes.id)
+            agenda_item_id = int(request.data.get("agenda_item_id"))
+        except (TypeError, ValueError):
+            return Response({"detail": "agenda_item_id required."}, status=400)
+        if not reason:
+            return Response({"detail": "Give a reason for holding this decision."}, status=400)
+        blocks = (minutes.content or {}).get("agenda_items") or []
+        if not any(isinstance(b, dict) and b.get("agenda_item_id") == agenda_item_id for b in blocks):
+            return Response({"detail": "That decision is not in these minutes."}, status=400)
+        if CommissionTask.objects.filter(agenda_item_id=agenda_item_id).exists():
+            return Response({"detail": "A task already exists for this decision, so it can no longer be held."}, status=400)
+        if DecisionActioningHold.objects.filter(agenda_item_id=agenda_item_id, released_at__isnull=True).exists():
+            return Response({"detail": "This decision is already on hold."}, status=400)
+        DecisionActioningHold.objects.create(
+            agenda_item_id=agenda_item_id, minutes=minutes, reason=reason[:2000], held_by=request.user,
+        )
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="release-decision")
+    def release_decision_actioning(self, request, pk=None):
+        """Release a held decision. If tasks were already allocated for this sitting,
+        the decision is also recorded and its outcome letter queued now; it then
+        appears in Allocation review for a manager."""
+        from .decision_allocation import (
+            advance_submissions_for_signed_minutes,
+            can_action_minutes,
+            queue_post_signing_automation,
+        )
+        from .models import DecisionActioningHold
+
+        self._require_secretary_or_admin(request)
+        minutes = self.get_object()
+        try:
+            agenda_item_id = int(request.data.get("agenda_item_id"))
+        except (TypeError, ValueError):
+            return Response({"detail": "agenda_item_id required."}, status=400)
+        hold = DecisionActioningHold.objects.filter(
+            agenda_item_id=agenda_item_id, minutes=minutes, released_at__isnull=True,
+        ).first()
+        if hold is None:
+            return Response({"detail": "This decision is not on hold."}, status=400)
+        hold.released_by = request.user
+        hold.released_at = timezone.now()
+        hold.save(update_fields=["released_by", "released_at"])
+        if minutes.tasks_allocated_at and can_action_minutes(minutes):
+            import logging
+            try:
+                advance_submissions_for_signed_minutes(minutes, request.user, only={agenda_item_id})
+                queue_post_signing_automation(minutes, only={agenda_item_id})
+            except Exception:
+                logging.getLogger("scdms.app").exception(
+                    "RELEASE_HOLD_AUTOMATION_FAIL | minutes=%s item=%s", minutes.id, agenda_item_id
+                )
+        return Response(MinutesSerializer(minutes, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="mark-for-signature")
     def mark_for_signature(self, request, pk=None):
@@ -13280,11 +13408,22 @@ class MinutesViewSet(viewsets.ModelViewSet):
             signed_file,
             save=False,
         )
+        was_signed = minutes.status == MinutesStatus.SIGNED
         minutes.status = MinutesStatus.SIGNED
         minutes.signed_uploaded_by = request.user
         if not minutes.signed_at:
             minutes.signed_at = timezone.now()
         minutes.save()
+
+        # Decisions were actioned before the signature: Commission members are
+        # told the signed minutes are on record now that the scan has arrived.
+        if not was_signed and minutes.unsigned_actioning_allowed_at and minutes.tasks_allocated_at:
+            try:
+                from .email_notify import notify_minutes_signed
+                notify_minutes_signed(minutes)
+            except Exception:
+                import logging
+                logging.getLogger("scdms.app").exception("LATE_SIGN_NOTIFY_FAIL | minutes=%s", minutes.id)
 
         return Response(MinutesSerializer(minutes, context={"request": request}).data)
 

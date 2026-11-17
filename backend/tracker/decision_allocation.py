@@ -125,6 +125,43 @@ def unit_manager_for(routed_unit: str) -> User | None:
     )
 
 
+def can_action_minutes(minutes) -> bool:
+    """Signed minutes can always be actioned. Unsigned minutes can be actioned
+    once the Secretary has authorised it (the signed scan then follows later)."""
+    return minutes.status == "signed" or minutes.unsigned_actioning_allowed_at is not None
+
+
+def basis_text(minutes) -> str:
+    """How to describe the minutes in remarks and notices."""
+    if minutes.status == "signed":
+        return "signed minutes"
+    return "minutes not yet signed (actioning authorised by the Secretary)"
+
+
+def active_holds(agenda_item_ids=None) -> dict[int, dict]:
+    """Decisions the Secretary is holding, keyed by agenda item id.
+
+    Two kinds count as a hold: one placed here on a decision in the minutes
+    (``source="decision"``), and the older hold on the decided paper itself
+    (``source="submission"``, set from the submission page, which also stops its
+    letter being served). Either way the decision is not actioned meanwhile.
+    """
+    from .models import DecisionActioningHold
+
+    qs = DecisionActioningHold.objects.filter(released_at__isnull=True)
+    items = AgendaItem.objects.filter(submission__decision_hold_active=True).select_related("submission")
+    if agenda_item_ids is not None:
+        ids = list(agenda_item_ids)
+        qs = qs.filter(agenda_item_id__in=ids)
+        items = items.filter(id__in=ids)
+    out = {
+        i.id: {"reason": i.submission.decision_hold_reason, "source": "submission"}
+        for i in items
+    }
+    out.update({h.agenda_item_id: {"reason": h.reason, "source": "decision"} for h in qs})
+    return out
+
+
 def named_unit_manager(officer_units: list[str]) -> tuple[str, User] | tuple[None, None]:
     """First unit named as Action Officer that has an active manager."""
     for unit in officer_units:
@@ -234,8 +271,9 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
         CommissionTask.objects.filter(agenda_item_id__in=agenda_ids)
         .values_list("agenda_item_id", flat=True)
     )
+    holds = active_holds(agenda_ids)
 
-    created, unallocated = [], []
+    created, unallocated, held = [], [], []
     for index, block in enumerate(blocks, start=1):
         decision_text = (block.get("decision") or "").strip()
         agenda_item_id = block.get("agenda_item_id")
@@ -247,6 +285,9 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
             continue
         if agenda_item_id in already_allocated:
             continue  # re-sign of edited minutes — task already exists
+        if agenda_item_id in holds:
+            held.append(title)  # the Secretary is holding this decision
+            continue
 
         agenda_item = agenda_items[agenda_item_id]
         submission = agenda_item.submission
@@ -294,7 +335,7 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
         if submission is not None:
             advance_to_decision_entered_assigned(
                 submission, actor,
-                remarks=f"Decision allocated to unit manager following signed minutes of {meeting.reference_number}.",
+                remarks=f"Decision allocated to unit manager following the {basis_text(minutes)} of {meeting.reference_number}.",
             )
         Notification.objects.create(
             recipient=manager,
@@ -303,7 +344,7 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
             title=f"Commission decision allocated to your unit — {meeting.reference_number}",
             body=(
                 f'The Commission\'s decision on "{title}" has been allocated to your unit '
-                f"following the signing of the minutes of {meeting.reference_number}. "
+                f"following the {basis_text(minutes)} of {meeting.reference_number}. "
                 f"Open the task register to assign an officer."
             ),
             link="/secretariat/tasks",
@@ -325,6 +366,8 @@ def allocate_decision_tasks(minutes: Minutes, actor) -> dict:
             )
 
     stats = {"created": len(created), "unallocated": len(unallocated)}
+    if held:
+        stats["held"] = len(held)  # only reported when the Secretary is holding something
     logger.info(
         "DECISION_AUTO_ALLOCATE | Meeting %s | actor=%s | %s",
         meeting.reference_number, getattr(actor, "username", "?"), stats,
@@ -341,7 +384,9 @@ def pending_decision_allocations() -> list[dict]:
     Secretariat never retypes what the signed minutes already contain.
     """
     pending: list[dict] = []
-    for minutes in Minutes.objects.filter(status="signed").select_related("meeting"):
+    for minutes in Minutes.objects.filter(
+        Q(status="signed") | Q(unsigned_actioning_allowed_at__isnull=False)
+    ).select_related("meeting"):
         meeting = minutes.meeting
         blocks = [
             b
@@ -357,6 +402,7 @@ def pending_decision_allocations() -> list[dict]:
             CommissionTask.objects.filter(agenda_item_id__in=agenda_ids)
             .values_list("agenda_item_id", flat=True)
         )
+        holds = active_holds(agenda_ids)
 
         for index, block in enumerate(blocks, start=1):
             decision_text = (block.get("decision") or "").strip()
@@ -374,6 +420,11 @@ def pending_decision_allocations() -> list[dict]:
             pending.append(
                 {
                     "agenda_item": agenda_item_id,
+                    "minutes": minutes.id,
+                    "minutes_signed": minutes.status == "signed",
+                    "held": agenda_item_id in holds,
+                    "hold_reason": holds[agenda_item_id]["reason"] if agenda_item_id in holds else "",
+                    "hold_source": holds[agenda_item_id]["source"] if agenda_item_id in holds else "",
                     "meeting": meeting.id,
                     "meeting_reference": meeting.reference_number or "",
                     "meeting_date": meeting.date.isoformat() if meeting.date else None,
@@ -399,22 +450,29 @@ def pending_decision_allocations() -> list[dict]:
     return pending
 
 
-def queue_post_signing_automation(minutes: Minutes) -> None:
-    """C-automation on sign: AI decision extraction + outcome letter drafts."""
+def queue_post_signing_automation(minutes: Minutes, only: set | None = None) -> None:
+    """C-automation on sign: AI decision extraction + outcome letter drafts.
+
+    Decisions the Secretary is holding are skipped. ``only`` limits it to the
+    given agenda items (used when a held decision is released)."""
     from .tasks import extract_decisions_from_minutes, queue_outcome_letter
 
-    try:
-        extract_decisions_from_minutes.delay(minutes.meeting_id)
-    except Exception as exc:  # Celery unavailable — non-fatal
-        logger.warning("POST_SIGN_EXTRACT_SKIP | %s", exc)
+    if only is None:
+        try:
+            extract_decisions_from_minutes.delay(minutes.meeting_id)
+        except Exception as exc:  # Celery unavailable — non-fatal
+            logger.warning("POST_SIGN_EXTRACT_SKIP | %s", exc)
 
     content = minutes.content or {}
+    holds = active_holds()
     for block in content.get("agenda_items") or []:
         if not isinstance(block, dict):
             continue
         decision_type = (block.get("decision_type") or "").lower()
         agenda_item_id = block.get("agenda_item_id")
         if decision_type not in {"approved", "rejected"} or not agenda_item_id:
+            continue
+        if agenda_item_id in holds or (only is not None and agenda_item_id not in only):
             continue
         agenda_item = (
             AgendaItem.objects.filter(id=agenda_item_id).select_related("submission").first()
@@ -452,7 +510,7 @@ _CONCLUDING_STAGES = frozenset({
 })
 
 
-def advance_submissions_for_signed_minutes(minutes: Minutes, actor) -> dict:
+def advance_submissions_for_signed_minutes(minutes: Minutes, actor, only: set | None = None) -> dict:
     """Move each decided submission from its Commission stage to the recorded
     outcome — a single hop mirroring the old per-submission decision action.
 
@@ -471,10 +529,14 @@ def advance_submissions_for_signed_minutes(minutes: Minutes, actor) -> dict:
     content = minutes.content or {}
     blocks = [b for b in (content.get("agenda_items") or []) if isinstance(b, dict)]
     advanced = 0
+    holds = active_holds()
     for block in blocks:
         agenda_item_id = block.get("agenda_item_id")
         target = _DECISION_TYPE_TO_STAGE.get((block.get("decision_type") or "").lower())
         if not agenda_item_id or not target:
+            continue
+        # A decision on hold stays exactly as it was until the Secretary releases it.
+        if agenda_item_id in holds or (only is not None and agenda_item_id not in only):
             continue
         agenda_item = (
             AgendaItem.objects.filter(id=agenda_item_id).select_related("submission").first()
@@ -522,7 +584,7 @@ def advance_submissions_for_signed_minutes(minutes: Minutes, actor) -> dict:
                     actor=actor,
                     previous_stage=prev,
                     new_stage=target,
-                    remarks=remarks or "Recorded from the signed minutes.",
+                    remarks=remarks or f"Recorded from the {basis_text(minutes)}.",
                     content_hash=proof_hash,
                     proof_payload=proof_payload,
                 )
@@ -539,7 +601,7 @@ def advance_submissions_for_signed_minutes(minutes: Minutes, actor) -> dict:
                             actor=actor,
                             previous_stage=child_prev,
                             new_stage=target,
-                            remarks=f"Auto-cascaded from parent {submission.reference_number} (signed minutes).",
+                            remarks=f"Auto-cascaded from parent {submission.reference_number} ({basis_text(minutes)}).",
                         )
             advanced += 1
         except Exception:
@@ -633,10 +695,11 @@ def build_allocation_suggestions(*, use_ai: bool) -> dict:
     items = pending_decision_allocations()
 
     for it in items:
-        it["suggestion"] = _rule_suggestion(it, managers_by_id)
+        # A held decision is shown but never suggested or allocated.
+        it["suggestion"] = None if it["held"] else _rule_suggestion(it, managers_by_id)
 
     ai_error = None
-    unresolved = [it for it in items if it["suggestion"] is None]
+    unresolved = [it for it in items if it["suggestion"] is None and not it["held"]]
     if use_ai and unresolved:
         subs = {
             s.id: s
@@ -712,7 +775,10 @@ def allocate_pending_items(allocations: list[dict], actor) -> dict:
             continue
         item = pending.get(agenda_item_id)
         if item is None:
-            skipped.append({"agenda_item": agenda_item_id, "reason": "Already allocated or not in signed minutes."})
+            skipped.append({"agenda_item": agenda_item_id, "reason": "Already allocated, or not in minutes that can be actioned."})
+            continue
+        if item["held"]:
+            skipped.append({"agenda_item": agenda_item_id, "reason": "On hold — release it first."})
             continue
         if manager_id not in managers_by_id:
             skipped.append({"agenda_item": agenda_item_id, "reason": "Not an eligible manager."})

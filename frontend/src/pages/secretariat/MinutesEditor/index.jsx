@@ -36,6 +36,8 @@ const COMPLIANCE_APPROVE_ROLE = 'compliance_manager'
 const CIRCULATE_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'csu_manager', 'psc_admin'])
 const COMMISSIONER_COMMENT_ROLES = new Set(['psc_commissioner', 'chairperson', 'psc_secretary', 'psc_admin'])
 const ALLOCATE_TASKS_ROLES = new Set(['psc_secretary', 'psc_admin', 'csu_manager'])
+// Only these can hold a decision or allow actioning before the minutes are signed.
+const HOLD_ROLES = new Set(['psc_secretary', 'psc_admin'])
 
 function formatDateTime(iso) {
   if (!iso) return ''
@@ -133,7 +135,7 @@ function SectionEditor({ label, value, onChange, placeholder }) {
   )
 }
 
-function AgendaItemEditor({ item, index, onChange }) {
+function AgendaItemEditor({ item, index, onChange, hold, canHold, onHold, onRelease }) {
   const [expanded, setExpanded] = useState(true)
 
   return (
@@ -150,6 +152,11 @@ function AgendaItemEditor({ item, index, onChange }) {
               {item.submission_ref || `Item ${index + 1}`}
             </span>
             {item.title && <span className="text-xs text-slate-500 ml-1">— {item.title}</span>}
+            {hold && (
+              <span title={hold.reason} className="ml-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                On hold
+              </span>
+            )}
           </div>
           <span className={clsx(
             'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full',
@@ -163,7 +170,21 @@ function AgendaItemEditor({ item, index, onChange }) {
             {item.decision_type || 'Pending'}
           </span>
         </button>
+        {canHold && item.agenda_item_id ? (
+          <button
+            type="button"
+            onClick={() => (hold ? onRelease(item) : onHold(item))}
+            className="shrink-0 mr-3 text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700"
+          >
+            {hold ? 'Release hold' : 'Hold actioning'}
+          </button>
+        ) : null}
       </div>
+      {hold && (
+        <p className="px-4 py-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/10 border-t border-amber-200 dark:border-amber-800">
+          Held by {hold.held_by_name}: {hold.reason}. No task is allocated and the paper is not advanced until it is released.
+        </p>
+      )}
       {expanded && (
         <div className="p-4 space-y-3 border-t border-slate-100 dark:border-slate-700">
           <div className="grid grid-cols-2 gap-3">
@@ -435,6 +456,47 @@ export default function MinutesEditor() {
 
   const signedFileRef = useRef(null)
 
+  // ── Secretary: hold single decisions, allow actioning before the signature ──
+  const canHold = !!minutes?.id && HOLD_ROLES.has(user?.role) && minutes.status !== 'draft'
+  const heldById = Object.fromEntries((minutes?.held_decisions || []).map(h => [h.agenda_item_id, h]))
+  const [unsignedNote, setUnsignedNote] = useState('')
+  const [unsignedOpen, setUnsignedOpen] = useState(false)
+
+  const secretaryCall = async (path, body, okMessage) => {
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      const res = await api.post(`/minutes/${minutes.id}/${path}/`, body)
+      setMinutes(res.data)
+      setSuccess(okMessage)
+      return true
+    } catch (err) {
+      setError(err.response?.data?.detail || 'That did not work.')
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const holdDecision = async (item) => {
+    const reason = window.prompt('Why is this decision being held? It will not be actioned until you release it.')
+    if (!reason || !reason.trim()) return
+    await secretaryCall('hold-decision', { agenda_item_id: item.agenda_item_id, reason: reason.trim() }, 'Decision put on hold.')
+  }
+
+  const releaseDecision = async (item) => {
+    await secretaryCall('release-decision', { agenda_item_id: item.agenda_item_id }, 'Hold released. The decision now appears in Allocation review.')
+  }
+
+  const allowUnsigned = async () => {
+    if (!unsignedNote.trim()) return
+    if (await secretaryCall('allow-unsigned-actioning', { note: unsignedNote.trim() }, 'Decisions can now be actioned before the minutes are signed.')) {
+      setUnsignedOpen(false)
+      setUnsignedNote('')
+    }
+  }
+
   const changeStatus = async (action) => {
     setSaving(true)
     setError('')
@@ -646,6 +708,47 @@ export default function MinutesEditor() {
         </div>
       )}
 
+      {minutes?.id && minutes.status !== 'signed' && minutes.unsigned_actioning_allowed_at && (
+        <div className="card card-compact mb-6 border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-900/10 text-sm">
+          <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">Decisions can be actioned before these minutes are signed</p>
+          <p className="text-slate-600 dark:text-slate-400">
+            Allowed by {minutes.unsigned_actioning_allowed_by_name} on {formatDateTime(minutes.unsigned_actioning_allowed_at)}: {minutes.unsigned_actioning_note}
+          </p>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Upload the signed copy when it is ready.</p>
+          {HOLD_ROLES.has(user?.role) && !minutes.tasks_allocated_at && (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => secretaryCall('revoke-unsigned-actioning', {}, 'Actioning before signing withdrawn.')}
+              className="mt-2 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:underline disabled:opacity-60"
+            >
+              Withdraw this permission
+            </button>
+          )}
+        </div>
+      )}
+
+      {minutes?.id && HOLD_ROLES.has(user?.role) && !['draft', 'signed'].includes(minutes.status) && !minutes.unsigned_actioning_allowed_at && (
+        <div className="card card-compact mb-6 text-sm">
+          {!unsignedOpen ? (
+            <button type="button" onClick={() => setUnsignedOpen(true)} className="font-semibold text-primary-700 dark:text-primary-300 hover:underline">
+              Allow decisions to be actioned before the minutes are signed…
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-slate-600 dark:text-slate-300">
+                Managers will be given their decision tasks from these unsigned minutes. Upload the signed copy later. Decisions you have put on hold are not actioned.
+              </p>
+              <textarea className="input text-sm w-full" rows={2} value={unsignedNote} onChange={e => setUnsignedNote(e.target.value)} placeholder="Reason (required), e.g. Chairman travelling; decisions are urgent" />
+              <div className="flex gap-2">
+                <button type="button" disabled={saving || !unsignedNote.trim()} onClick={allowUnsigned} className="btn-primary px-4 py-2 text-sm disabled:opacity-60">Allow actioning</button>
+                <button type="button" onClick={() => setUnsignedOpen(false)} className="btn-secondary px-4 py-2 text-sm">Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {minutes?.id && (minutes.status === 'circulated_to_commissioners' || minutes.status === 'returned') && (
         <div className="card card-compact mb-6 border-cyan-200 dark:border-cyan-800 bg-cyan-50/50 dark:bg-cyan-900/10 text-sm">
           <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">
@@ -798,7 +901,15 @@ export default function MinutesEditor() {
               {item.restricted ? (
                 <RestrictedAgendaItem item={item} index={idx} />
               ) : (
-                <AgendaItemEditor item={item} index={idx} onChange={handleAgendaChange} />
+                <AgendaItemEditor
+                  item={item}
+                  index={idx}
+                  onChange={handleAgendaChange}
+                  hold={heldById[item.agenda_item_id]}
+                  canHold={canHold}
+                  onHold={holdDecision}
+                  onRelease={releaseDecision}
+                />
               )}
             </div>
           ))}
@@ -909,7 +1020,7 @@ export default function MinutesEditor() {
                   </button>
                 </>
               )}
-              {minutes.status === 'signed' && ALLOCATE_TASKS_ROLES.has(user?.role) && (
+              {(minutes.status === 'signed' || minutes.unsigned_actioning_allowed_at) && ALLOCATE_TASKS_ROLES.has(user?.role) && (
                 minutes.tasks_allocated_at ? (
                   <span className="text-sm text-emerald-600 dark:text-emerald-400 font-semibold inline-flex items-center gap-2">
                     <CheckCircle2 size={16} />

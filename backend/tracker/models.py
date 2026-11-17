@@ -4426,6 +4426,15 @@ class Minutes(models.Model):
         on_delete=models.SET_NULL, related_name="allocated_minutes_tasks",
     )
     tasks_allocated_at = models.DateTimeField(null=True, blank=True)
+    # ── Actioning before the signature: the Secretary may authorise decisions
+    # to be actioned from minutes that are not yet signed; the signed scan is
+    # uploaded later. Recorded so it is always clear who allowed it and why.
+    unsigned_actioning_allowed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="unsigned_actioning_minutes",
+    )
+    unsigned_actioning_allowed_at = models.DateTimeField(null=True, blank=True)
+    unsigned_actioning_note = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
         related_name="created_minutes",
@@ -4456,6 +4465,44 @@ class MinutesComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author} on {self.minutes}"
+
+
+class DecisionActioningHold(models.Model):
+    """The Secretary's hold on a single Commission decision: while a hold is
+    active (``released_at`` empty) the decision gets no task, its submission is
+    not advanced and no outcome letter is drafted. One row per hold, so the
+    history of holds and releases is kept."""
+
+    agenda_item = models.ForeignKey(
+        AgendaItem, on_delete=models.CASCADE, related_name="actioning_holds",
+    )
+    minutes = models.ForeignKey(
+        "Minutes", on_delete=models.CASCADE, related_name="decision_holds",
+    )
+    reason = models.TextField()
+    held_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="agenda_holds_placed",
+    )
+    held_at = models.DateTimeField(auto_now_add=True)
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="agenda_holds_released",
+    )
+    released_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-held_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["agenda_item"],
+                condition=models.Q(released_at__isnull=True),
+                name="uniq_active_decision_hold_per_agenda_item",
+            ),
+        ]
+
+    def __str__(self):
+        state = "active" if self.released_at is None else "released"
+        return f"Hold ({state}) on agenda item {self.agenda_item_id}"
 
 
 class MinuteAgendaIntake(models.Model):
