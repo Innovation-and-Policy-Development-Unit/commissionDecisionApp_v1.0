@@ -48,7 +48,7 @@ export default function MinutesSignatureTable({ minutes, onUpdated, canConfirm, 
     return () => clearInterval(id)
   }, [status, minutes?.id, onUpdated])
 
-  if (!minutes?.id || !minutes.signed_document || !status) return null
+  if (!minutes?.id || !minutes.signed_document) return null
 
   const post = async (path, body = {}) => {
     setBusy(true); setErr('')
@@ -58,6 +58,22 @@ export default function MinutesSignatureTable({ minutes, onUpdated, canConfirm, 
     } catch (e) {
       setErr(e.response?.data?.detail || 'That did not work.')
     } finally { setBusy(false) }
+  }
+
+  // A scan uploaded before the check existed has no result yet: offer to run it.
+  if (!status) {
+    if (!canRecheck) return null
+    return (
+      <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 bg-slate-50 dark:bg-slate-800/50">
+        <ScanSearch size={16} className="text-slate-500" />
+        <p className="flex-1 text-sm text-slate-600 dark:text-slate-300">The signatures on this scan have not been checked.</p>
+        <button type="button" disabled={busy} onClick={() => post('recheck-signatures')}
+          className="btn-secondary px-4 py-2 text-sm inline-flex items-center gap-2 disabled:opacity-60">
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}Check who signed
+        </button>
+        {err && <p className="basis-full text-sm text-red-600 dark:text-red-400">{err}</p>}
+      </div>
+    )
   }
 
   const rows = check.rows || []
