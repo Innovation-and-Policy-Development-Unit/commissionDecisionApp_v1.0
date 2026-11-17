@@ -4435,6 +4435,9 @@ class Minutes(models.Model):
     )
     unsigned_actioning_allowed_at = models.DateTimeField(null=True, blank=True)
     unsigned_actioning_note = models.TextField(blank=True)
+    # AI hint about who appears to have signed the uploaded scan (see
+    # ai/minutes_signature_check.py): status, per-signer rows, header/footer checks.
+    signature_check = models.JSONField(default=dict, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
         related_name="created_minutes",

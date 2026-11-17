@@ -146,6 +146,26 @@ def _signers(attendance: dict | None) -> dict:
     return {"secretary": secretary, "chairman": chairman, "members": members}
 
 
+def print_layout(minutes, content: dict) -> dict:
+    """JSON for the on-screen view: exactly what the PDF prints, so they cannot drift."""
+    meeting = minutes.meeting
+    attendance = attendance_for_print((content or {}).get("attendance"))
+    start = (attendance or {}).get("start_time") or meeting.time
+    end = (attendance or {}).get("end_time")
+    return {
+        "meeting_name": meeting_name(meeting),
+        "date_long": long_date(meeting.date),
+        "time_text": time_ampm(start),
+        "end_time_text": time_ampm(end) if end else "",
+        "venue": meeting.venue,
+        "attendance": attendance,
+        "rows": _rows(content or {}),
+        "signers": _signers(attendance),
+        "closing": ((content or {}).get("closing") or "").strip(),
+        "next_meeting_date": ((content or {}).get("next_meeting_date") or "").strip(),
+    }
+
+
 def build_context(minutes, content: dict, *, status_label: str, signature_data_uri) -> dict:
     meeting = minutes.meeting
     attendance = attendance_for_print(content.get("attendance"))

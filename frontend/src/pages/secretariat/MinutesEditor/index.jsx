@@ -7,6 +7,11 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '../../../components/shared/PageHeader'
+import Modal from '../../../components/shared/Modal'
+import BaseButton from '../../../components/shared/BaseButton'
+import MinutesSignatureTable from '../../../components/minutes/MinutesSignatureTable'
+import MinutesPrintedView from '../../../components/minutes/MinutesPrintedView'
+import { useConfirm } from '../../../context/ConfirmContext'
 import api from '../../../api/client'
 import { useAuth } from '../../../context/AuthContext'
 import { userCanEditMinutes } from '../../../utils/minutesAccess'
@@ -213,6 +218,17 @@ function AgendaItemEditor({ item, index, onChange, hold, canHold, onHold, onRele
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Title</label>
               <input className="input text-sm" value={item.title || ''} onChange={e => onChange(index, 'title', e.target.value)} placeholder="Submission title" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Decision no.</label>
+              <input className="input text-sm" value={item.decision_number || ''} onChange={e => onChange(index, 'decision_number', e.target.value)} placeholder="e.g. 03(n)-23-2026" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Action officer</label>
+              <input className="input text-sm" list="minutes-action-officers" value={item.action_officer || ''} onChange={e => onChange(index, 'action_officer', e.target.value)} placeholder="e.g. Manager HRM" />
+              <datalist id="minutes-action-officers">
+                {['Manager CSU', 'Manager HRM', 'Manager CIU', 'Manager VIPAM', 'Manager ODU', 'Secretary'].map(o => <option key={o} value={o} />)}
+              </datalist>
             </div>
           </div>
           <div>
@@ -472,6 +488,7 @@ export default function MinutesEditor() {
     }
   }
 
+  const confirm = useConfirm()
   const signedFileRef = useRef(null)
   const [uploadPct, setUploadPct] = useState(null) // null = not uploading
 
@@ -506,14 +523,26 @@ export default function MinutesEditor() {
     }
   }
 
-  const holdDecision = async (item) => {
-    const reason = window.prompt('Why is this decision being held? It will not be actioned until you release it.')
-    if (!reason || !reason.trim()) return
-    await secretaryCall('hold-decision', { agenda_item_id: item.agenda_item_id, reason: reason.trim() }, 'Decision put on hold.')
+  // Hold and release open a dialog in the page rather than the browser's own prompt.
+  const [holdDialog, setHoldDialog] = useState(null)    // { item, reason }
+  const [releaseDialog, setReleaseDialog] = useState(null) // { item }
+
+  const holdDecision = (item) => setHoldDialog({ item, reason: '' })
+  const releaseDecision = (item) => setReleaseDialog({ item })
+
+  const confirmHold = async () => {
+    const { item, reason } = holdDialog
+    if (!reason.trim()) return
+    if (await secretaryCall('hold-decision', { agenda_item_id: item.agenda_item_id, reason: reason.trim() }, 'Decision put on hold.')) {
+      setHoldDialog(null)
+    }
   }
 
-  const releaseDecision = async (item) => {
-    await secretaryCall('release-decision', { agenda_item_id: item.agenda_item_id }, 'Hold released. The decision now appears in Allocation review.')
+  const confirmRelease = async () => {
+    const { item } = releaseDialog
+    if (await secretaryCall('release-decision', { agenda_item_id: item.agenda_item_id }, 'Hold released. The decision now appears in Allocation review.')) {
+      setReleaseDialog(null)
+    }
   }
 
   const allowUnsigned = async () => {
@@ -525,6 +554,13 @@ export default function MinutesEditor() {
   }
 
   const changeStatus = async (action) => {
+    const missing = minutes?.signature_check?.status === 'done' ? (minutes.signature_check.summary?.missing || []) : []
+    if (action === 'allocate_tasks' && missing.length > 0 && !(await confirm({
+      title: 'Some signatures were not seen',
+      message: `The check of the signed scan did not see a signature for: ${missing.join(', ')}. Allocate the decision tasks anyway?`,
+      confirmLabel: 'Allocate anyway',
+      variant: 'warning',
+    }))) return
     setSaving(true)
     setError('')
     setSuccess('')
@@ -563,9 +599,12 @@ export default function MinutesEditor() {
   const uploadSignedMinutes = async (file) => {
     if (!file) return
     const replacing = minutes.status === 'signed'
-    if (replacing && !window.confirm(
-      `Replace the signed minutes on record with "${file.name}"? The scan uploaded earlier will no longer be shown.`
-    )) return
+    if (replacing && !(await confirm({
+      title: 'Replace the signed minutes?',
+      message: `Replace the signed minutes on record with "${file.name}"? The scan uploaded earlier will no longer be shown.`,
+      confirmLabel: 'Replace',
+      variant: 'warning',
+    }))) return
     setSaving(true)
     setUploadPct(0)
     setError('')
@@ -741,6 +780,63 @@ export default function MinutesEditor() {
         </div>
       )}
 
+      <Modal
+        open={!!holdDialog}
+        onClose={() => setHoldDialog(null)}
+        size="md"
+        title="Hold this decision?"
+        subtitle="It will not be actioned until you release it."
+        footer={(
+          <>
+            <BaseButton variant="secondary" onClick={() => setHoldDialog(null)}>Cancel</BaseButton>
+            <BaseButton variant="primary" onClick={confirmHold} disabled={!holdDialog?.reason.trim()} loading={saving} loadingLabel="Holding">Hold decision</BaseButton>
+          </>
+        )}
+      >
+        {holdDialog && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              <span className="font-semibold">{holdDialog.item.submission_ref || holdDialog.item.title || 'This decision'}</span>
+              {holdDialog.item.title && holdDialog.item.submission_ref ? ` — ${holdDialog.item.title}` : ''}
+            </p>
+            <p className="text-xs text-slate-500">No task is allocated, no manager is told, the paper is not advanced and no outcome letter is drafted while it is on hold.</p>
+            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest" htmlFor="hold-reason">Reason (required)</label>
+            <textarea
+              id="hold-reason"
+              className="input text-sm w-full"
+              rows={3}
+              autoFocus
+              value={holdDialog.reason}
+              onChange={e => setHoldDialog(d => ({ ...d, reason: e.target.value }))}
+              placeholder="e.g. Awaiting legal advice"
+            />
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!releaseDialog}
+        onClose={() => setReleaseDialog(null)}
+        size="sm"
+        title="Release this hold?"
+        footer={(
+          <>
+            <BaseButton variant="secondary" onClick={() => setReleaseDialog(null)}>Cancel</BaseButton>
+            <BaseButton variant="primary" onClick={confirmRelease} loading={saving} loadingLabel="Releasing">Release hold</BaseButton>
+          </>
+        )}
+      >
+        {releaseDialog && (
+          <div className="space-y-2">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              <span className="font-semibold">{releaseDialog.item.submission_ref || releaseDialog.item.title || 'This decision'}</span>
+              {heldById[releaseDialog.item.agenda_item_id] ? ` was held: ${heldById[releaseDialog.item.agenda_item_id].reason}` : ''}
+            </p>
+            <p className="text-xs text-slate-500">After release the decision can be actioned and appears in Allocation review.</p>
+          </div>
+        )}
+      </Modal>
+
       {minutes?.id && minutes.status !== 'signed' && minutes.unsigned_actioning_allowed_at && (
         <div className="card card-compact mb-6 border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-900/10 text-sm">
           <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">Decisions can be actioned before these minutes are signed</p>
@@ -842,11 +938,15 @@ export default function MinutesEditor() {
       {viewMode && (
         <div className="space-y-4">
           <AgendaAdoptionStatus minutes={minutes} canEdit={canEditMinutes} busy={saving} onToggle={toggleAgendaAdopted} />
-          <ReadOnlySection label="Opening" value={content.opening} />
           <PreviousMinutesHint previousMeeting={previousMeeting} editable={false} hasText={Boolean(content.confirmation_previous_minutes)} />
-          <ReadOnlySection label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} />
+          {minutes?.print_layout && (
+            <MinutesPrintedView layout={minutes.print_layout} showSigningTable={minutes.status !== 'signed'} />
+          )}
 
-          <div className="mb-4">
+          {!minutes?.print_layout && <ReadOnlySection label="Opening" value={content.opening} />}
+          {!minutes?.print_layout && <ReadOnlySection label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} />}
+
+          <div className={clsx('mb-4', minutes?.print_layout && 'hidden')}>
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Agenda Items</label>
             {(content.agenda_items || []).length === 0 && (
               <p className="text-sm text-slate-400">No agenda items recorded yet.</p>
@@ -862,9 +962,9 @@ export default function MinutesEditor() {
             ))}
           </div>
 
-          <ReadOnlySection label="Any Other Business" value={content.any_other_business} />
-          <ReadOnlySection label="Closing" value={content.closing} />
-          <ReadOnlySection label="Next Meeting Date" value={content.next_meeting_date} />
+          {!minutes?.print_layout && <ReadOnlySection label="Any Other Business" value={content.any_other_business} />}
+          {!minutes?.print_layout && <ReadOnlySection label="Closing" value={content.closing} />}
+          {!minutes?.print_layout && <ReadOnlySection label="Next Meeting Date" value={content.next_meeting_date} />}
 
           {minutes?.id && (minutes.status === 'awaiting_signature' || minutes.status === 'signed') && (
             <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-slate-200 dark:border-slate-700 pt-6">
@@ -898,6 +998,13 @@ export default function MinutesEditor() {
               <UploadProgress pct={uploadPct} />
             </div>
           )}
+
+          <MinutesSignatureTable
+            minutes={minutes}
+            onUpdated={setMinutes}
+            canConfirm={HOLD_ROLES.has(user?.role)}
+            canRecheck={SIGNED_UPLOAD_ROLES.has(user?.role) || HOLD_ROLES.has(user?.role)}
+          />
 
           <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
             {canEditMinutes ? (
@@ -965,6 +1072,12 @@ export default function MinutesEditor() {
         </div>
       </div>
 
+      <MinutesSignatureTable
+        minutes={minutes}
+        onUpdated={setMinutes}
+        canConfirm={HOLD_ROLES.has(user?.role)}
+        canRecheck={SIGNED_UPLOAD_ROLES.has(user?.role) || HOLD_ROLES.has(user?.role)}
+      />
       <UploadProgress pct={uploadPct} />
       <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
         <div className="flex items-center gap-3">
