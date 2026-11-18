@@ -58,6 +58,7 @@ from ...models import (
 MINISTRY_CODE = "TRN"
 CURRENT_REF = "TRAIN-MTG-001"
 PREVIOUS_REF = "TRAIN-MTG-000"
+SIGNING_REF = "TRAIN-MTG-002"
 
 # (ref, title, section hints, form code, summary, quality, documents[(name, description, pages)])
 SUBMISSIONS = [
@@ -132,6 +133,39 @@ PREVIOUS_MINUTES = {
 }
 
 
+SIGNING_MINUTES = {
+    "opening": "The Chairperson opened the practice sitting at 9:00 am and welcomed all members.",
+    "confirmation_previous_minutes": "Minutes of the earlier practice sitting were confirmed without amendment.",
+    "agenda_items": [
+        {
+            "submission_ref": "TRAIN-2026-S01",
+            "title": "[TRAINING] Appointment of Principal Analyst — Training Ministry",
+            "discussion": "The Commission considered the panel's selection report and the Director-General's paper approval.",
+            "decision": "Approved as submitted.",
+            "decision_type": "approved",
+            "action_items": [{"action": "Notify the ministry of the decision",
+                              "responsible": "Secretary", "deadline": "within 5 working days"}],
+        },
+        {
+            "submission_ref": "TRAIN-2026-S02",
+            "title": "[TRAINING] Revised acting allowance rates — Training Ministry",
+            "discussion": "The Commission asked for costings against the current budget.",
+            "decision": "Deferred to the next sitting.",
+            "decision_type": "deferred",
+        },
+        {
+            "submission_ref": "TRAIN-2026-S03",
+            "title": "[TRAINING] Quarterly staffing report — Training Ministry",
+            "discussion": "The Commission noted the report.",
+            "decision": "Noted.",
+            "decision_type": "noted",
+        },
+    ],
+    "any_other_business": "None raised.",
+    "closing": "The practice sitting closed at 11:00 am.",
+}
+
+
 def _pdf(title, text, pages):
     """A small real PDF so the document viewer has something to open."""
     from weasyprint import HTML
@@ -155,6 +189,11 @@ class Command(BaseCommand):
             help="Where the training agenda starts. 'circulated' (default): already endorsed and "
                  "circulated. 'draft': the Secretary submits it to the Chairperson and the Chairperson "
                  "endorses it live, which sends the real agenda-circulated email to Commission members.")
+        parser.add_argument(
+            "--signing-sitting", action="store_true",
+            help="Also create TRAIN-MTG-002: a completed practice sitting whose reviewed minutes are "
+                 "awaiting signature, for the Manager CSU 'download for signature / upload signed "
+                 "scan' session.")
         parser.add_argument("--date", default="",
                             help="Sitting date, YYYY-MM-DD (default: one week from today).")
         parser.add_argument("--created-by", default="",
@@ -163,7 +202,7 @@ class Command(BaseCommand):
     # ── cleanup ──────────────────────────────────────────────────────────────
 
     def _cleanup(self):
-        refs = [CURRENT_REF, PREVIOUS_REF]
+        refs = [CURRENT_REF, PREVIOUS_REF, SIGNING_REF]
         files = [d.file.name for d in SubmissionDocument.all_objects.filter(
             submission__ministry__code=MINISTRY_CODE) if d.file]
         with transaction.atomic():
@@ -189,7 +228,7 @@ class Command(BaseCommand):
         if options["cleanup"]:
             return self._cleanup()
 
-        if Meeting._base_manager.filter(reference_number__in=[CURRENT_REF, PREVIOUS_REF]).exists():
+        if Meeting._base_manager.filter(reference_number__in=[CURRENT_REF, PREVIOUS_REF, SIGNING_REF]).exists():
             raise CommandError("Training data already exists. Run with --cleanup first to rebuild it.")
 
         try:
@@ -233,6 +272,18 @@ class Command(BaseCommand):
                 to_meeting=current, deferral_type=DeferralType.TO_NEXT_MEETING,
                 reason="Ministry to confirm the officer's qualifications.", deferred_by=creator,
             )
+
+            if options["signing_sitting"]:
+                signing = Meeting.objects.create(
+                    reference_number=SIGNING_REF,
+                    title="TRAINING SITTING — minutes awaiting signature (practice only)",
+                    date=now.date() - timedelta(days=7), time="09:00", venue="OPSC Boardroom",
+                    status=MeetingStatus.COMPLETED, agenda_status=AgendaStatus.CIRCULATED,
+                )
+                Minutes.objects.create(
+                    meeting=signing, status=MinutesStatus.AWAITING_SIGNATURE,
+                    content=SIGNING_MINUTES, created_by=creator,
+                )
 
             minutes = Minutes.objects.create(
                 meeting=previous, status=MinutesStatus.CIRCULATED_TO_COMMISSIONERS,

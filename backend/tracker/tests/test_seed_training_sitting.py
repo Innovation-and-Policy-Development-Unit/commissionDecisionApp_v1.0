@@ -90,3 +90,22 @@ class SeedTrainingSittingDraftStageTests(TestCase):
     def test_bad_date_is_rejected(self):
         with self.assertRaises(Exception):
             call_command("seed_training_sitting", "--date", "20/11/2026", stdout=StringIO())
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class SeedTrainingSigningSittingTests(TestCase):
+    def setUp(self):
+        admin = User.objects.create_user("trn_admin3", password="x")
+        Profile.objects.create(user=admin, role=Role.PSC_ADMIN)
+
+    def test_signing_sitting_has_minutes_awaiting_signature_and_cleans_up(self):
+        call_command("seed_training_sitting", "--signing-sitting", stdout=StringIO())
+        minutes = Minutes.objects.get(meeting__reference_number="TRAIN-MTG-002")
+        self.assertEqual(minutes.status, "awaiting_signature")
+        self.assertEqual(len(minutes.content["agenda_items"]), 3)
+        call_command("seed_training_sitting", "--cleanup", stdout=StringIO())
+        self.assertFalse(Meeting.objects.filter(reference_number="TRAIN-MTG-002").exists())
+
+    def test_default_run_does_not_create_signing_sitting(self):
+        call_command("seed_training_sitting", stdout=StringIO())
+        self.assertFalse(Meeting.objects.filter(reference_number="TRAIN-MTG-002").exists())
