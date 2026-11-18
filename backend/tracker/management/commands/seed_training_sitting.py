@@ -19,10 +19,14 @@ Nothing here touches real data or real people:
     stubbed while seeding, and the agenda-circulated email is never sent).
 
 Usage:
-    python manage.py seed_training_sitting              # create
+    python manage.py seed_training_sitting              # create (agenda already circulated)
+    python manage.py seed_training_sitting --stage draft --date 2026-11-20
+                                                        # agenda starts as a draft: Secretary submits,
+                                                        # Chairperson endorses live (sends real emails)
     python manage.py seed_training_sitting --cleanup    # remove all of it
 """
 
+import datetime
 from datetime import timedelta
 from unittest import mock
 
@@ -146,6 +150,13 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--cleanup", action="store_true", help="Remove all training data and exit.")
+        parser.add_argument(
+            "--stage", choices=["circulated", "draft"], default="circulated",
+            help="Where the training agenda starts. 'circulated' (default): already endorsed and "
+                 "circulated. 'draft': the Secretary submits it to the Chairperson and the Chairperson "
+                 "endorses it live, which sends the real agenda-circulated email to Commission members.")
+        parser.add_argument("--date", default="",
+                            help="Sitting date, YYYY-MM-DD (default: one week from today).")
         parser.add_argument("--created-by", default="",
                             help="Username recorded as creator (default: first PSC Admin / Senior Admin Officer).")
 
@@ -181,6 +192,12 @@ class Command(BaseCommand):
         if Meeting._base_manager.filter(reference_number__in=[CURRENT_REF, PREVIOUS_REF]).exists():
             raise CommandError("Training data already exists. Run with --cleanup first to rebuild it.")
 
+        try:
+            sitting_date = (datetime.date.fromisoformat(options["date"]) if options["date"]
+                            else timezone.now().date() + timedelta(days=7))
+        except ValueError:
+            raise CommandError("--date must be YYYY-MM-DD.")
+        draft = options["stage"] == "draft"
         creator = self._creator(options["created_by"])
         chair = User.objects.filter(psc_profile__role=Role.CHAIRPERSON, is_active=True).first()
         now = timezone.now()
@@ -197,9 +214,11 @@ class Command(BaseCommand):
             )
             current = Meeting.objects.create(
                 reference_number=CURRENT_REF, title="TRAINING SITTING — practice only, not real",
-                date=now.date() + timedelta(days=7), time="09:00", venue="OPSC Boardroom",
-                status=MeetingStatus.SCHEDULED, agenda_status=AgendaStatus.CIRCULATED, min_items=4,
-                agenda_approved_by=chair, agenda_approved_at=now - timedelta(days=1),
+                date=sitting_date, time="09:00", venue="OPSC Boardroom",
+                status=MeetingStatus.SCHEDULED,
+                agenda_status=AgendaStatus.DRAFT if draft else AgendaStatus.CIRCULATED, min_items=4,
+                agenda_approved_by=None if draft else chair,
+                agenda_approved_at=None if draft else now - timedelta(days=1),
                 notes="Practice sitting for Commissioner training. Delete after use.",
             )
 
@@ -227,7 +246,8 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(self.style.SUCCESS(
-            f"Created {CURRENT_REF} (agenda circulated, {len(items)} items) and {PREVIOUS_REF} "
+            f"Created {CURRENT_REF} (agenda {options['stage']}, {len(items)} items, sitting {sitting_date}) "
+            f"and {PREVIOUS_REF} "
             f"(minutes circulated to Commissioners, due {minutes.commissioner_review_due_at:%d %b %Y}). "
             "No emails or AI calls were made. Other Matters is deliberately left empty."))
 
