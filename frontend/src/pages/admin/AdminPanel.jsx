@@ -2590,6 +2590,10 @@ export function BackupTab() {
   }
 
   const mega = cloudStatus.mega ?? { connected: false }
+  const cloudTargets = [
+    cloudStatus.connected && cloudStatus.status === 'connected' ? 'Google Drive' : null,
+    mega.connected && mega.status === 'connected' ? 'MEGA' : null,
+  ].filter(Boolean)
 
   const connectMega = async e => {
     e.preventDefault()
@@ -3079,16 +3083,16 @@ export function BackupTab() {
                   >
                     <Download size={13} /> Download
                   </button>
-                  {((cloudStatus.connected && cloudStatus.status === 'connected') || (mega.connected && mega.status === 'connected')) && (
+                  {cloudTargets.length > 0 && (
                     <button
                       type="button"
                       onClick={() => pushToCloud(b.filename)}
                       disabled={pushingFile === b.filename}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-200 dark:border-sky-700/40 text-xs font-medium text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors disabled:opacity-50"
-                      title="Push to Google Drive"
+                      title={`Push to ${cloudTargets.join(' and ')}`}
                     >
                       {pushingFile === b.filename ? <RefreshCw size={13} className="animate-spin" /> : <UploadCloud size={13} />}
-                      Drive
+                      {cloudTargets.length === 1 ? cloudTargets[0] : 'Cloud'}
                     </button>
                   )}
                   <button
