@@ -33,7 +33,7 @@ class SeedTrainingSittingTests(TestCase):
         users_before = User.objects.count()
         self._run()
 
-        meeting = Meeting.objects.get(reference_number="TRAIN-MTG-001")
+        meeting = Meeting.objects.get(reference_number="TRAIN-MTG-099")
         self.assertEqual(meeting.agenda_status, "circulated")
         self.assertEqual(AgendaItem.objects.filter(meeting=meeting).count(), 4)
         subs = Submission.objects.filter(ministry__code="TRN")
@@ -78,7 +78,7 @@ class SeedTrainingSittingDraftStageTests(TestCase):
 
     def test_draft_stage_leaves_agenda_unendorsed_and_uses_given_date(self):
         call_command("seed_training_sitting", "--stage", "draft", "--date", "2026-11-20", stdout=StringIO())
-        meeting = Meeting.objects.get(reference_number="TRAIN-MTG-001")
+        meeting = Meeting.objects.get(reference_number="TRAIN-MTG-099")
         self.assertEqual(meeting.agenda_status, "draft")
         self.assertIsNone(meeting.agenda_approved_by)
         self.assertIsNone(meeting.agenda_approved_at)
