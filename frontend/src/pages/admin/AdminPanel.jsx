@@ -2497,6 +2497,9 @@ export function BackupTab() {
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [pushingFile, setPushingFile] = useState(null)
+  const [megaEmail, setMegaEmail] = useState('')
+  const [megaPassword, setMegaPassword] = useState('')
+  const [megaBusy, setMegaBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [backingUp, setBackingUp] = useState(false)
   const [scheduleLoading, setScheduleLoading] = useState(false)
@@ -2586,11 +2589,48 @@ export function BackupTab() {
     }
   }
 
+  const mega = cloudStatus.mega ?? { connected: false }
+
+  const connectMega = async e => {
+    e.preventDefault()
+    setMegaBusy(true)
+    try {
+      await api.post('/backup/cloud/mega/connect/', { email: megaEmail, password: megaPassword })
+      toast.success('Connected to MEGA.')
+      setMegaPassword('')
+      await fetchAll()
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'Could not connect to MEGA.')
+    } finally {
+      setMegaBusy(false)
+    }
+  }
+
+  const disconnectMega = async () => {
+    const ok = await confirm({
+      title: 'Disconnect MEGA?',
+      message: `Backups will stop pushing to "${mega.connected_email}". The files already in MEGA stay there.`,
+      confirmLabel: 'Disconnect',
+      variant: 'danger',
+    })
+    if (!ok) return
+    setMegaBusy(true)
+    try {
+      await api.post('/backup/cloud/mega/disconnect/')
+      toast.success('Disconnected from MEGA.')
+      await fetchAll()
+    } catch (err) {
+      toast.error(err.response?.data?.detail ?? 'Disconnect failed.')
+    } finally {
+      setMegaBusy(false)
+    }
+  }
+
   const pushToCloud = async filename => {
     setPushingFile(filename)
     try {
       await api.post('/backup/cloud/push/', { filename })
-      toast.success(`Push to Google Drive queued for ${filename}.`)
+      toast.success(`Cloud push queued for ${filename}.`)
     } catch (err) {
       toast.error(err.response?.data?.detail ?? 'Push failed.')
     } finally {
@@ -2820,6 +2860,72 @@ export function BackupTab() {
         </div>
       </div>
 
+      {/* ── Cloud backup destination (MEGA) ── */}
+      <div className="card p-5 space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Cloud size={18} className="text-red-500" />
+          <h3 className="font-semibold text-slate-800 dark:text-slate-200">Cloud Backup — MEGA</h3>
+        </div>
+        {!mega.connected ? (
+          <form onSubmit={connectMega} className="space-y-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Every backup, manual or scheduled, is copied to a &quot;SCDMS Backups&quot; folder in a MEGA account,
+              end-to-end encrypted by MEGA. Use a dedicated account for backups with two-factor authentication
+              turned off. The password is stored encrypted and is never shown again.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input
+                type="email" required autoComplete="off" value={megaEmail}
+                onChange={e => setMegaEmail(e.target.value)}
+                placeholder="MEGA account email" className="input text-sm"
+              />
+              <input
+                type="password" required autoComplete="new-password" value={megaPassword}
+                onChange={e => setMegaPassword(e.target.value)}
+                placeholder="MEGA account password" className="input text-sm"
+              />
+            </div>
+            <button type="submit" disabled={megaBusy} className="btn-gradient py-2 px-4 text-sm inline-flex items-center gap-2 disabled:opacity-60">
+              {megaBusy ? <RefreshCw size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+              Connect MEGA
+            </button>
+          </form>
+        ) : (
+          <>
+            {mega.status === 'needs_reconnect' && (
+              <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-700/40 dark:bg-amber-900/10">
+                <AlertTriangle size={15} className="text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  MEGA rejected the saved login — {mega.last_push_error || 'the last push failed to authenticate.'} Disconnect and connect again with the current password.
+                </p>
+              </div>
+            )}
+            {mega.status === 'connected' && mega.last_push_error && (
+              <div className="flex items-start gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700/40 dark:bg-slate-800/40">
+                <AlertTriangle size={15} className="text-slate-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Most recent push attempt failed — {mega.last_push_error} It will retry automatically
+                  (a scheduled catch-up runs daily at noon for anything still unsynced).
+                </p>
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm text-slate-700 dark:text-slate-300">
+                  Connected as <span className="font-medium">{mega.connected_email}</span>
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {mega.last_pushed_at ? `Last pushed ${new Date(mega.last_pushed_at).toLocaleString()}` : 'No backup pushed yet.'}
+                </p>
+              </div>
+              <button type="button" onClick={disconnectMega} disabled={megaBusy} className="btn-outline py-1.5 px-4 text-xs disabled:opacity-60 flex-shrink-0">
+                {megaBusy ? 'Working…' : 'Disconnect'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* ── Cloud backup destination (Google Drive) ── */}
       <div className="card p-5 space-y-3">
         <div className="flex items-center gap-2 mb-1">
@@ -2961,7 +3067,7 @@ export function BackupTab() {
                   </p>
                   {b.cloud_pushed_at && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1">
-                      <Check size={12} /> Synced to Google Drive · {new Date(b.cloud_pushed_at).toLocaleString()}
+                      <Check size={12} /> Synced to cloud · {new Date(b.cloud_pushed_at).toLocaleString()}
                     </p>
                   )}
                 </div>
@@ -2973,7 +3079,7 @@ export function BackupTab() {
                   >
                     <Download size={13} /> Download
                   </button>
-                  {cloudStatus.connected && cloudStatus.status === 'connected' && (
+                  {((cloudStatus.connected && cloudStatus.status === 'connected') || (mega.connected && mega.status === 'connected')) && (
                     <button
                       type="button"
                       onClick={() => pushToCloud(b.filename)}

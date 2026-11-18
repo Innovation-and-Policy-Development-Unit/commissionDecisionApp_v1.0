@@ -62,7 +62,7 @@ class CloudBackupEndpointTests(TestCase):
     def test_status_when_nothing_connected(self):
         res = self.client.get("/api/backup/cloud/status/")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data, {"connected": False})
+        self.assertFalse(res.data["connected"])
 
     def test_status_when_connected(self):
         CloudBackupConnection.objects.create(
