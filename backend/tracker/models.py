@@ -1479,6 +1479,10 @@ class CloudBackupConnection(models.Model):
 
     class Provider(models.TextChoices):
         GOOGLE_DRIVE = "google_drive", "Google Drive"
+        # Email + password (MEGA has no OAuth for third-party apps). The
+        # password is stored encrypted in refresh_token_encrypted;
+        # access_token_encrypted is unused for this provider.
+        MEGA = "mega", "MEGA"
 
     class Status(models.TextChoices):
         CONNECTED = "connected", "Connected"

@@ -20,6 +20,7 @@ RUN groupadd -r scdms --gid=1001 && \
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget ca-certificates \
+    megatools \
     procps \
     tesseract-ocr \
     libmagic1 \

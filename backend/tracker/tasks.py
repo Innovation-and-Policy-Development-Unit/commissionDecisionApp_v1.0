@@ -527,11 +527,79 @@ def push_backup_to_cloud(self, filename):
 
 
 def queue_push_backup_to_cloud(filename):
+    """Queue a push to every connected provider (each task no-ops if its own is not connected)."""
+    for task in (push_backup_to_cloud, push_backup_to_mega):
+        try:
+            task.delay(filename)
+        except Exception as exc:
+            app_log.warning("BACKUP_CLOUD_PUSH_QUEUE_FALLBACK | file=%s | task=%s | %s", filename, task.name, exc)
+            task(filename)
+
+
+@shared_task(bind=True, max_retries=4)
+def push_backup_to_mega(self, filename):
+    """Upload one backup file to the connected MEGA account (megatools).
+
+    Same behaviour as the Google Drive push: no-op when MEGA is not connected,
+    a rejected password flips the connection to needs_reconnect, a network
+    failure is retried with backoff (and picked up again at noon by
+    retry_pending_cloud_backups), and the retention window is mirrored."""
+    from . import mega_backup
+    from .audit import log_action as _log
+    from .crypto_utils import decrypt
+    from .models import AuditLog as _AL, CloudBackupConnection
+
+    conn = CloudBackupConnection.objects.filter(
+        provider=CloudBackupConnection.Provider.MEGA,
+        status=CloudBackupConnection.Status.CONNECTED,
+    ).first()
+    if not conn:
+        return
+
+    filepath = os.path.join(os.getenv("BACKUP_DIR", "/var/backups/scdms"), filename)
+    if not os.path.isfile(filepath):
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | provider=mega | reason=missing on disk", filename)
+        return
+
     try:
-        push_backup_to_cloud.delay(filename)
+        password = decrypt(conn.refresh_token_encrypted)
+        mega_backup.upload_backup_file(conn.connected_email, password, filepath)
+        conn.last_pushed_at = timezone.now()
+        conn.last_push_error = ""
+        conn.save(update_fields=["last_pushed_at", "last_push_error"])
+        log.info("BACKUP_CLOUD_PUSH | file=%s | provider=mega | account=%s", filename, conn.connected_email)
+        _log(None, _AL.Action.BACKUP, resource_type="CloudBackupPush", resource_label=filename,
+             description=f"Backup pushed to {conn.get_provider_display()} ({conn.connected_email}): {filename}")
+        try:
+            from .models import SystemSetting
+            retention_days = 30
+            setting = SystemSetting.objects.filter(key="BACKUP_RETENTION_DAYS").first()
+            if setting:
+                retention_days = int(setting.value)
+            removed = mega_backup.delete_old_backups(conn.connected_email, password, retention_days)
+            if removed:
+                log.info("BACKUP_CLOUD_PRUNE | provider=mega | removed=%d | older_than_days=%d", removed, retention_days)
+        except Exception as exc:
+            log.warning("BACKUP_CLOUD_PRUNE_FAILED | provider=mega | %s", exc)
+    except mega_backup.MegaAuthError as exc:
+        conn.status = CloudBackupConnection.Status.NEEDS_RECONNECT
+        conn.last_push_error = str(exc)
+        conn.save(update_fields=["status", "last_push_error"])
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | provider=mega | reason=auth: %s", filename, exc)
+        _log(None, _AL.Action.BACKUP, resource_type="CloudBackupPush", resource_label=filename,
+             description=f"Backup push to {conn.get_provider_display()} failed — connection needs to be redone: {exc}")
+    except mega_backup.MegaNetworkError as exc:
+        conn.last_push_error = str(exc)
+        conn.save(update_fields=["last_push_error"])
+        if self.request.retries < self.max_retries:
+            log.warning("BACKUP_CLOUD_PUSH_RETRY | file=%s | provider=mega | attempt=%d/%d | %s",
+                        filename, self.request.retries + 1, self.max_retries, exc)
+            self.retry(exc=exc, countdown=min(60 * (2 ** self.request.retries), 900))
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | provider=mega | network, retries exhausted: %s", filename, exc)
     except Exception as exc:
-        app_log.warning("BACKUP_CLOUD_PUSH_QUEUE_FALLBACK | file=%s | %s", filename, exc)
-        push_backup_to_cloud(filename)
+        conn.last_push_error = str(exc)
+        conn.save(update_fields=["last_push_error"])
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | provider=mega | %s", filename, exc)
 
 
 @shared_task
@@ -549,7 +617,6 @@ def retry_pending_cloud_backups():
     from .models import AuditLog as _AL, CloudBackupConnection
 
     conn = CloudBackupConnection.objects.filter(
-        provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
         status=CloudBackupConnection.Status.CONNECTED,
     ).first()
     if not conn:
@@ -619,12 +686,33 @@ def delete_backup_from_cloud(filename):
         log.warning("BACKUP_CLOUD_DELETE_FAILED | file=%s | %s", filename, exc)
 
 
-def queue_delete_backup_from_cloud(filename):
+@shared_task
+def delete_backup_from_mega(filename):
+    """Delete one backup from the connected MEGA account's SCDMS Backups folder, if present."""
+    from . import mega_backup
+    from .crypto_utils import decrypt
+    from .models import CloudBackupConnection
+
+    conn = CloudBackupConnection.objects.filter(
+        provider=CloudBackupConnection.Provider.MEGA,
+        status=CloudBackupConnection.Status.CONNECTED,
+    ).first()
+    if not conn:
+        return
     try:
-        delete_backup_from_cloud.delay(filename)
+        removed = mega_backup.delete_backup_file(conn.connected_email, decrypt(conn.refresh_token_encrypted), filename)
+        log.info("BACKUP_CLOUD_DELETE | file=%s | provider=mega | removed=%s", filename, removed)
     except Exception as exc:
-        app_log.warning("BACKUP_CLOUD_DELETE_QUEUE_FALLBACK | file=%s | %s", filename, exc)
-        delete_backup_from_cloud(filename)
+        log.warning("BACKUP_CLOUD_DELETE_FAILED | file=%s | provider=mega | %s", filename, exc)
+
+
+def queue_delete_backup_from_cloud(filename):
+    for task in (delete_backup_from_cloud, delete_backup_from_mega):
+        try:
+            task.delay(filename)
+        except Exception as exc:
+            app_log.warning("BACKUP_CLOUD_DELETE_QUEUE_FALLBACK | file=%s | task=%s | %s", filename, task.name, exc)
+            task(filename)
 
 
 SYSTEM_INSTRUCTION = """You are a highly efficient "Executive Secretary" and "Triage Officer" for a high-level Commission Board in Vanuatu. You are an expert in both Bislama and English.

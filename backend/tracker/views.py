@@ -11905,19 +11905,26 @@ class BackupViewSet(viewsets.ViewSet):
         """GET /backup/cloud/status/ — current connection state for the admin UI."""
         from .models import CloudBackupConnection
 
-        conn = CloudBackupConnection.objects.filter(
+        def _state(conn):
+            if not conn or conn.status == CloudBackupConnection.Status.DISCONNECTED:
+                return {"connected": False}
+            return {
+                "connected": True,
+                "status": conn.status,
+                "connected_email": conn.connected_email,
+                "connected_at": conn.connected_at.isoformat(),
+                "last_pushed_at": conn.last_pushed_at.isoformat() if conn.last_pushed_at else None,
+                "last_push_error": conn.last_push_error,
+            }
+
+        google = CloudBackupConnection.objects.filter(
             provider=CloudBackupConnection.Provider.GOOGLE_DRIVE
         ).first()
-        if not conn or conn.status == CloudBackupConnection.Status.DISCONNECTED:
-            return Response({"connected": False})
-        return Response({
-            "connected": True,
-            "status": conn.status,
-            "connected_email": conn.connected_email,
-            "connected_at": conn.connected_at.isoformat(),
-            "last_pushed_at": conn.last_pushed_at.isoformat() if conn.last_pushed_at else None,
-            "last_push_error": conn.last_push_error,
-        })
+        mega = CloudBackupConnection.objects.filter(
+            provider=CloudBackupConnection.Provider.MEGA
+        ).first()
+        # Top level stays the Google Drive state (existing UI); MEGA rides alongside.
+        return Response({**_state(google), "mega": _state(mega)})
 
     @action(detail=False, methods=["get"], url_path="cloud/connect")
     def cloud_connect(self, request):
@@ -12034,15 +12041,90 @@ class BackupViewSet(viewsets.ViewSet):
         if not _os.path.isfile(filepath):
             return Response({"detail": "File not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        conn = CloudBackupConnection.objects.filter(
-            provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
-            status=CloudBackupConnection.Status.CONNECTED,
-        ).first()
-        if not conn:
+        conns = list(CloudBackupConnection.objects.filter(status=CloudBackupConnection.Status.CONNECTED))
+        if not conns:
             return Response({"detail": "No cloud backup destination connected."}, status=status.HTTP_400_BAD_REQUEST)
 
         queue_push_backup_to_cloud(filename)
-        return Response({"detail": f"Push to {conn.get_provider_display()} queued."})
+        names = " and ".join(c.get_provider_display() for c in conns)
+        return Response({"detail": f"Push to {names} queued."})
+
+    @action(detail=False, methods=["post"], url_path="cloud/mega/connect")
+    def mega_connect(self, request):
+        """POST /backup/cloud/mega/connect/  body: {email, password} — verify the
+        MEGA login, then store the account with the password encrypted at rest.
+        Replaces any previous MEGA connection. Two-factor MEGA accounts are not
+        supported by megatools: use a dedicated account for backups."""
+        from django.core.exceptions import ImproperlyConfigured, ValidationError
+        from django.core.validators import validate_email
+
+        from . import mega_backup
+        from .audit import log_action as _log
+        from .crypto_utils import encrypt
+        from .models import AuditLog as _AL, CloudBackupConnection
+
+        email = (request.data.get("email") or "").strip().lower()
+        password = request.data.get("password") or ""
+        try:
+            validate_email(email)
+        except ValidationError:
+            return Response({"detail": "Enter the MEGA account's email address."}, status=status.HTTP_400_BAD_REQUEST)
+        if not password:
+            return Response({"detail": "Enter the MEGA account's password."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            mega_backup.verify_login(email, password)
+            secret = encrypt(password)
+        except ImproperlyConfigured as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except mega_backup.MegaAuthError:
+            return Response(
+                {"detail": "MEGA rejected that email or password. If the account has two-factor "
+                           "authentication on, turn it off or use a dedicated backup account."},
+                status=status.HTTP_400_BAD_REQUEST)
+        except mega_backup.MegaNetworkError:
+            return Response({"detail": "Could not reach MEGA from the server. Try again shortly."},
+                            status=status.HTTP_502_BAD_GATEWAY)
+        except mega_backup.MegaError as exc:
+            return Response({"detail": f"MEGA check failed: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+        conn, _created = CloudBackupConnection.objects.update_or_create(
+            provider=CloudBackupConnection.Provider.MEGA,
+            defaults={
+                "status": CloudBackupConnection.Status.CONNECTED,
+                "connected_email": email,
+                "access_token_encrypted": "",
+                "refresh_token_encrypted": secret,
+                "token_expires_at": None,
+                "connected_by": request.user,
+                "last_push_error": "",
+            },
+        )
+        _security_log.info("BACKUP_CLOUD_CONNECTED | provider=mega | account=%s | user=%s",
+                           email, request.user.username)
+        _log(request, _AL.Action.SETTINGS, resource_type="CloudBackupConnection", resource_label=email,
+             description=f"Connected cloud backup destination: MEGA ({email})")
+        return Response({"detail": "Connected.", "connected_email": email})
+
+    @action(detail=False, methods=["post"], url_path="cloud/mega/disconnect")
+    def mega_disconnect(self, request):
+        """POST /backup/cloud/mega/disconnect/ — forget the stored MEGA login."""
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL, CloudBackupConnection
+
+        conn = CloudBackupConnection.objects.filter(provider=CloudBackupConnection.Provider.MEGA).first()
+        if not conn or conn.status == CloudBackupConnection.Status.DISCONNECTED:
+            return Response({"detail": "Nothing connected."}, status=status.HTTP_400_BAD_REQUEST)
+        email = conn.connected_email
+        conn.status = CloudBackupConnection.Status.DISCONNECTED
+        conn.access_token_encrypted = ""
+        conn.refresh_token_encrypted = ""
+        conn.save(update_fields=["status", "access_token_encrypted", "refresh_token_encrypted"])
+        _security_log.info("BACKUP_CLOUD_DISCONNECTED | provider=mega | account=%s | user=%s",
+                           email, request.user.username)
+        _log(request, _AL.Action.SETTINGS, resource_type="CloudBackupConnection", resource_label=email,
+             description=f"Disconnected cloud backup destination: MEGA ({email})")
+        return Response({"detail": "Disconnected."})
 
 
 # ── Security Feature ViewSets (NCSS 2030 / ISO 27001) ────────────────────────
