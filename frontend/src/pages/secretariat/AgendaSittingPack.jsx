@@ -117,6 +117,16 @@ export default function AgendaSittingPack() {
     return () => clearInterval(id)
   }, [meetingId, hasPendingBlurbs])
 
+  // Outcomes recorded live in the room (when the sitting has them switched on).
+  const liveOutcomes = !!meeting?.show_live_outcomes
+  useEffect(() => {
+    if (!meetingId || !liveOutcomes) return undefined
+    const id = setInterval(() => {
+      api.get(`/agenda-items/?meeting=${meetingId}`).then((r) => setItems(normalizeListPayload(r.data))).catch(() => {})
+    }, 4000)
+    return () => clearInterval(id)
+  }, [meetingId, liveOutcomes])
+
   useEffect(() => {
     if (!meetingId) return undefined
     startSession()
@@ -272,6 +282,19 @@ export default function AgendaSittingPack() {
                         <div className="min-w-0 flex-1">
                           <span className={clsx('block truncate text-slate-800 dark:text-slate-100', selected ? 'font-semibold' : 'font-normal')}>{item.submission_reference}</span>
                           <span className="text-sm block line-clamp-2 text-slate-600 dark:text-slate-300">{item.submission_title}</span>
+                          {item.live_outcome ? (
+                            <span
+                              className={clsx(
+                                'inline-block mt-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold',
+                                item.live_outcome === 'approved' && 'bg-emerald-600 text-white',
+                                item.live_outcome === 'not_approved' && 'bg-rose-600 text-white',
+                                item.live_outcome === 'deferred' && 'bg-amber-400 text-slate-900',
+                                item.live_outcome === 'noted' && 'bg-slate-700 text-white',
+                              )}
+                            >
+                              {item.live_outcome_label}
+                            </span>
+                          ) : null}
                           {item.agenda_blurb ? (
                             <span className="text-[10px] block mt-1 line-clamp-2 opacity-80 text-slate-500">{item.agenda_blurb}</span>
                           ) : blurbPending ? (

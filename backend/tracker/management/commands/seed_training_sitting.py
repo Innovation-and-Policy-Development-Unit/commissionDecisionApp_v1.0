@@ -257,6 +257,7 @@ class Command(BaseCommand):
                 reference_number=CURRENT_REF, title="TRAINING SITTING — practice only, not real",
                 date=sitting_date, time="09:00", venue="OPSC Boardroom",
                 psc_meeting_number="99", status=MeetingStatus.SCHEDULED,
+                show_live_outcomes=True,
                 agenda_status=AgendaStatus.DRAFT if draft else AgendaStatus.CIRCULATED, min_items=4,
                 agenda_approved_by=None if draft else chair,
                 agenda_approved_at=None if draft else now - timedelta(days=1),
