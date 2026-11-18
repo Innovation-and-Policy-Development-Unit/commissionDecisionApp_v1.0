@@ -56,7 +56,9 @@ from ...models import (
 )
 
 MINISTRY_CODE = "TRN"
-CURRENT_REF = "TRAIN-MTG-001"
+# The agenda heading takes its number from the trailing digits of the reference ("PSC MEETING NO. 99").
+CURRENT_REF = "TRAIN-MTG-099"
+LEGACY_CURRENT_REF = "TRAIN-MTG-001"  # used before 2026-11-19; still removed by --cleanup
 PREVIOUS_REF = "TRAIN-MTG-000"
 SIGNING_REF = "TRAIN-MTG-002"
 
@@ -202,7 +204,7 @@ class Command(BaseCommand):
     # ── cleanup ──────────────────────────────────────────────────────────────
 
     def _cleanup(self):
-        refs = [CURRENT_REF, PREVIOUS_REF, SIGNING_REF]
+        refs = [CURRENT_REF, LEGACY_CURRENT_REF, PREVIOUS_REF, SIGNING_REF]
         files = [d.file.name for d in SubmissionDocument.all_objects.filter(
             submission__ministry__code=MINISTRY_CODE) if d.file]
         with transaction.atomic():
@@ -228,7 +230,7 @@ class Command(BaseCommand):
         if options["cleanup"]:
             return self._cleanup()
 
-        if Meeting._base_manager.filter(reference_number__in=[CURRENT_REF, PREVIOUS_REF, SIGNING_REF]).exists():
+        if Meeting._base_manager.filter(reference_number__in=[CURRENT_REF, LEGACY_CURRENT_REF, PREVIOUS_REF, SIGNING_REF]).exists():
             raise CommandError("Training data already exists. Run with --cleanup first to rebuild it.")
 
         try:
