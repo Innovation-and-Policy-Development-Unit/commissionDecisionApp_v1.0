@@ -143,7 +143,7 @@ It creates a sitting named "TRAINING SITTING — practice only, not real" with a
 |---|------|----------|
 | 1 | Fictional ministry restructure, with proposal letter and before/after chart | Opening documents, reading the brief |
 | 2 | Fictional senior appointment, with signed DG approval letter | Seeing the paper DG approval |
-| 3 | Fictional leave-policy amendment, 12-page PDF | Long document reading |
+| 3 | Fictional contract-staff request, 12-page PDF | Long document reading |
 | 4 | Fictional acting appointment, deferred from a previous practice sitting | Deferred agenda view and its history |
 | — | Other Matters left empty | Exercise C |
 

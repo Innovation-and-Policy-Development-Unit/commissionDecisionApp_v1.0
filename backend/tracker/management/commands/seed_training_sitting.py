@@ -87,13 +87,13 @@ SUBMISSIONS = [
     ),
     (
         "TRAIN-2026-003",
-        "[TRAINING] Amendment to the Training Ministry leave policy",
-        ("policy", "other"), "PSC 5-1",
-        "The Training Ministry proposes amending its annual leave policy to align with the General Orders. "
-        "The 12-page draft policy is attached. Main changes: carry-over limits, a cap on leave in advance, "
-        "and a revised approval chain.",
+        "[TRAINING] Request to employ contract staff — Training Ministry",
+        ("contract",), "PSC 3-7",
+        "The Training Ministry requests approval to employ two contract staff for the 2027 statistics "
+        "programme. The 12-page draft contract terms are attached. Main points: a 12-month term, the "
+        "salary scale used, and a review clause after six months.",
         68,
-        [("Draft leave policy amendment.pdf", "Draft policy, 12 pages", 12)],
+        [("Draft contract terms.pdf", "Draft contract terms, 12 pages", 12)],
     ),
     (
         "TRAIN-2026-004",
@@ -254,7 +254,7 @@ class Command(BaseCommand):
             current = Meeting.objects.create(
                 reference_number=CURRENT_REF, title="TRAINING SITTING — practice only, not real",
                 date=sitting_date, time="09:00", venue="OPSC Boardroom",
-                status=MeetingStatus.SCHEDULED,
+                psc_meeting_number="99", status=MeetingStatus.SCHEDULED,
                 agenda_status=AgendaStatus.DRAFT if draft else AgendaStatus.CIRCULATED, min_items=4,
                 agenda_approved_by=None if draft else chair,
                 agenda_approved_at=None if draft else now - timedelta(days=1),
