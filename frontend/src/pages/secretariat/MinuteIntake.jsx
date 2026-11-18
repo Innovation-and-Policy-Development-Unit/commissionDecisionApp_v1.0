@@ -19,9 +19,17 @@ const INTAKE_AGENDA_STATUSES = new Set(['circulated'])
 // there's nothing to take notes on until the sitting has actually begun.
 const CONVENED_MEETING_STATUSES = new Set(['in_progress', 'completed'])
 const CONTEXT_PANEL_PREF = 'minute_intake.context_panel'
+const LIVE_OUTCOMES = [
+  { value: 'approved', label: 'Approved', on: 'bg-emerald-600 text-white border-emerald-600' },
+  { value: 'not_approved', label: 'Not approved', on: 'bg-rose-600 text-white border-rose-600' },
+  { value: 'deferred', label: 'Deferred', on: 'bg-amber-500 text-slate-900 border-amber-500' },
+  { value: 'noted', label: 'Noted', on: 'bg-slate-700 text-white border-slate-700' },
+]
 
 function IntakeItemCard({
   item,
+  liveOutcomes,
+  onOutcome,
   expanded,
   onToggle,
   onChange,
@@ -107,6 +115,34 @@ function IntakeItemCard({
               placeholder={t('minute_intake.discussion_placeholder')}
             />
           </div>
+          {liveOutcomes && (
+            <div>
+              <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">
+                Outcome announced in the room
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {LIVE_OUTCOMES.map(o => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => onOutcome(item.agenda_item_id, item.live_outcome === o.value ? '' : o.value)}
+                    aria-pressed={item.live_outcome === o.value}
+                    className={clsx(
+                      'px-4 py-2 rounded-lg border text-sm font-semibold transition-colors',
+                      item.live_outcome === o.value
+                        ? o.on
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700',
+                    )}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Commissioners see this in their Sitting Pack straight away. Press again to clear. The minutes remain the record.
+              </p>
+            </div>
+          )}
           <div>
             <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">
               {t('minute_intake.decision_text')}
@@ -309,6 +345,21 @@ export default function MinuteIntake() {
     setItems(prev => prev.map(it => (
       it.agenda_item_id === agendaItemId ? { ...it, [field]: value } : it
     )))
+  }
+
+  const setOutcome = async (agendaItemId, outcome) => {
+    try {
+      const { data } = await api.post(`/meetings/${activeMeetingId}/live-outcome/`, {
+        agenda_item_id: agendaItemId, outcome,
+      })
+      setItems(prev => prev.map(it => (
+        it.agenda_item_id === agendaItemId
+          ? { ...it, live_outcome: data.live_outcome, decision_text: data.decision_text ?? it.decision_text }
+          : it
+      )))
+    } catch (err) {
+      setError(formatApiError(err, 'Could not record the outcome.'))
+    }
   }
 
   const patchDraft = useCallback(async () => {
@@ -570,6 +621,8 @@ export default function MinuteIntake() {
               <IntakeItemCard
                 key={item.agenda_item_id}
                 item={item}
+                liveOutcomes={!!payload?.show_live_outcomes && !notAllowed}
+                onOutcome={setOutcome}
                 expanded={expanded[item.agenda_item_id] !== false}
                 onToggle={() => setExpanded(prev => ({
                   ...prev,

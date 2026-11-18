@@ -2159,6 +2159,22 @@ class AgendaItemSerializer(serializers.ModelSerializer):
     lodged_from_paper    = serializers.BooleanField(source="submission.lodged_from_paper", read_only=True)
     responsible_unit     = serializers.CharField(source="submission.routed_unit", read_only=True)
     flying_brief         = serializers.SerializerMethodField()
+    live_outcome         = serializers.SerializerMethodField()
+    live_outcome_label   = serializers.SerializerMethodField()
+    live_outcome_at      = serializers.SerializerMethodField()
+
+    # The outcome only reaches the Sitting Pack when the meeting has live
+    # outcomes switched on, so real sittings behave exactly as before.
+    def get_live_outcome(self, obj):
+        return obj.live_outcome if obj.meeting.show_live_outcomes else ""
+
+    def get_live_outcome_label(self, obj):
+        return obj.get_live_outcome_display() if obj.meeting.show_live_outcomes and obj.live_outcome else ""
+
+    def get_live_outcome_at(self, obj):
+        if not obj.meeting.show_live_outcomes or not obj.live_outcome_at:
+            return None
+        return obj.live_outcome_at.isoformat()
 
     def get_flying_brief(self, obj):
         if not obj.is_flying:
@@ -2202,6 +2218,7 @@ class AgendaItemSerializer(serializers.ModelSerializer):
             "matters_arising_agenda_no", "matters_arising_meeting_ref",
             "agenda_blurb", "agenda_blurb_processed", "lodged_from_paper",
             "is_flying", "raised_by_label", "responsible_unit", "flying_brief",
+            "live_outcome", "live_outcome_label", "live_outcome_at",
         )
         read_only_fields = (
             "agenda_blurb", "agenda_blurb_processed", "form_type_code",
@@ -2279,6 +2296,7 @@ class MeetingSerializer(serializers.ModelSerializer):
             "max_items",
             "min_items",
             "agenda_status",
+            "show_live_outcomes",
             "agenda_approved_by",
             "agenda_approved_by_name",
             "agenda_approved_at",
@@ -2991,11 +3009,13 @@ class MinuteAgendaIntakeSerializer(serializers.ModelSerializer):
         from .agenda_sections import agenda_section_label
         return agenda_section_label(obj.agenda_item.category or "")
     has_formatted = serializers.SerializerMethodField()
+    live_outcome = serializers.CharField(source="agenda_item.live_outcome", read_only=True)
 
     class Meta:
         model = MinuteAgendaIntake
         fields = (
             "id",
+            "live_outcome",
             "agenda_item_id",
             "sequence",
             "category",

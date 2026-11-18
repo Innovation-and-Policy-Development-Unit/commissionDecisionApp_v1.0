@@ -624,6 +624,14 @@ class Meeting(models.Model):
             "Not the system reference. Used to number decisions as decision#-meeting#-year."
         ),
     )
+    show_live_outcomes = models.BooleanField(
+        default=False,
+        help_text=(
+            "When on, the minute taker can record each item's outcome in the room and "
+            "Commissioners see it in the Sitting Pack as it happens. Off for real sittings "
+            "unless the Secretariat turns it on; on for the training sitting."
+        ),
+    )
     minute_attendance = models.JSONField(
         default=dict, blank=True,
         help_text="Who was present / absent / sent apologies, recorded in minute intake.",
@@ -808,6 +816,21 @@ class AgendaItem(models.Model):
         max_length=150, blank=True,
         help_text="Flying items only — the commissioner who raised the matter, as typed by Manager CSU.",
     )
+
+    class LiveOutcome(models.TextChoices):
+        APPROVED = "approved", "Approved"
+        NOT_APPROVED = "not_approved", "Not approved"
+        DEFERRED = "deferred", "Deferred"
+        NOTED = "noted", "Noted"
+
+    live_outcome = models.CharField(
+        max_length=16, blank=True, default="", choices=LiveOutcome.choices,
+        help_text="Outcome announced in the room, recorded live by the minute taker. Subject to the signed minutes.",
+    )
+    live_outcome_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+    )
+    live_outcome_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["is_flying", "category", "sequence", "added_at"]

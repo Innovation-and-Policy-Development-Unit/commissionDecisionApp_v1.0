@@ -9970,6 +9970,68 @@ class MeetingViewSet(viewsets.ModelViewSet):
             )
         return None
 
+    _LIVE_OUTCOME_ROLES = {
+        Role.CSU_MANAGER, Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN,
+    }
+    _LIVE_OUTCOME_TEXT = {
+        "approved": "Approved.",
+        "not_approved": "Not approved.",
+        "deferred": "Deferred to the next sitting.",
+        "noted": "Noted.",
+    }
+
+    @action(detail=True, methods=["post"], url_path="live-outcome")
+    def live_outcome(self, request, pk=None):
+        """Record (or clear, with outcome "") what the Commission decided on one
+        agenda item, live, for the Commissioners' Sitting Pack to show.
+
+        Only while the meeting has show_live_outcomes on and the sitting has
+        begun. It is a convenience view of the room, not the decision of record:
+        the minutes still are, and task allocation still comes from signed minutes."""
+        from .models import AgendaItem, MinuteAgendaIntake
+
+        meeting = self.get_object()
+        profile = _profile(request.user)
+        if profile.role not in self._LIVE_OUTCOME_ROLES:
+            raise PermissionDenied("Only the minute taker, Secretary or an Admin can record outcomes.")
+        if not meeting.show_live_outcomes:
+            return Response({"detail": "Live outcomes are not switched on for this sitting."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        blocked = self._minute_intake_gate(meeting)
+        if blocked is not None:
+            return blocked
+
+        outcome = (request.data.get("outcome") or "").strip()
+        if outcome and outcome not in AgendaItem.LiveOutcome.values:
+            return Response({"detail": "Unknown outcome."}, status=status.HTTP_400_BAD_REQUEST)
+        item = AgendaItem.objects.filter(pk=request.data.get("agenda_item_id"), meeting=meeting).first()
+        if not item:
+            return Response({"detail": "That item is not on this sitting's agenda."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        item.live_outcome = outcome
+        item.live_outcome_by = request.user if outcome else None
+        item.live_outcome_at = timezone.now() if outcome else None
+        item.save(update_fields=["live_outcome", "live_outcome_by", "live_outcome_at"])
+
+        # Save the minute taker typing it twice: fill the decision line only if empty.
+        if outcome:
+            from .minute_intake import ensure_intake_rows
+
+            ensure_intake_rows(meeting)  # rows are created on first use of minute intake
+            row = MinuteAgendaIntake.objects.filter(meeting=meeting, agenda_item=item).first()
+            if row and not (row.decision_text or "").strip():
+                row.decision_text = self._LIVE_OUTCOME_TEXT[outcome]
+                row.save(update_fields=["decision_text", "updated_at"])
+
+        return Response({
+            "agenda_item_id": item.id,
+            "live_outcome": item.live_outcome,
+            "live_outcome_label": item.get_live_outcome_display() if outcome else "",
+            "decision_text": (MinuteAgendaIntake.objects.filter(meeting=meeting, agenda_item=item)
+                              .values_list("decision_text", flat=True).first() or ""),
+        })
+
     @action(detail=True, methods=["get", "patch"], url_path="minute-intake")
     def minute_intake(self, request, pk=None):
         """Load or save per-agenda minute-taker notes (pre-format)."""
@@ -10042,6 +10104,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
         return {
             "meeting_id": meeting.id,
             "agenda_status": meeting.agenda_status,
+            "show_live_outcomes": meeting.show_live_outcomes,
             "allowed": allowed,
             "items": MinuteAgendaIntakeSerializer(rows, many=True).data,
             "attendance": attendance,
