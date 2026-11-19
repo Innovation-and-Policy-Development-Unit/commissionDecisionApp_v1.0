@@ -4704,3 +4704,19 @@ def queue_odu_template_draft(submission_id: int) -> None:
         draft_odu_template_task.delay(submission_id)
     except Exception as exc:
         app_log.warning("ODU_TEMPLATE_DRAFT_QUEUE_FAIL | %s | %s", submission_id, exc)
+
+
+@shared_task
+def run_scheduled_security_scan():
+    """Weekly full security scan (pip-audit and Bandit), scheduled in migration 0318.
+
+    Recorded like an administrator's scan, with no triggering user. A failed
+    scan is stored with its error message and shows as failed in the Security
+    module; it never raises, so one bad week does not stop the schedule."""
+    from .security_scan import run_security_scan
+
+    try:
+        scan = run_security_scan("full")
+        log.info("SECURITY_SCAN_SCHEDULED | scan=%s | status=%s", scan.id, scan.status)
+    except Exception as exc:  # noqa: BLE001
+        log.error("SECURITY_SCAN_SCHEDULED | failed: %s", exc)
