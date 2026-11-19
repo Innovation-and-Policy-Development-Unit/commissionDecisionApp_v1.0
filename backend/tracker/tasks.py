@@ -4553,6 +4553,56 @@ def remind_overdue_minute_reviews():
     return chased
 
 
+@shared_task
+def remind_commissioners_to_review_minutes():
+    """Daily chase of Commissioners who have not read the circulated minutes.
+
+    Runs each morning while minutes are out for comment. A Commissioner who has
+    commented or confirmed "no comments" is left alone. The first day after
+    circulation is skipped (the circulation notice just went out), and each
+    person is chased at most once a day. After the deadline the reminder
+    changes tone and the Secretary and Chairperson are told once who is still
+    outstanding. Nothing here blocks signing.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .email_notify import notify_commissioners_minutes_reminder, notify_secretary_commissioners_overdue
+    from .minutes_commissioner_review import outstanding_reviews
+    from .models import Minutes, MinutesStatus
+
+    now = timezone.now()
+    reminded = 0
+    for minutes in Minutes.objects.filter(
+        status=MinutesStatus.CIRCULATED_TO_COMMISSIONERS,
+    ).select_related("meeting"):
+        if minutes.commissioner_circulated_at and now - minutes.commissioner_circulated_at < timedelta(hours=20):
+            continue
+        overdue = bool(minutes.commissioner_review_due_at and minutes.commissioner_review_due_at < now)
+        pending = [
+            r for r in outstanding_reviews(minutes)
+            if r.last_reminded_at is None or now - r.last_reminded_at >= timedelta(hours=20)
+        ]
+        if pending:
+            notify_commissioners_minutes_reminder(minutes, [r.user for r in pending], overdue=overdue)
+            for r in pending:
+                r.last_reminded_at = now
+                r.save(update_fields=["last_reminded_at"])
+            reminded += len(pending)
+        if overdue and minutes.commissioner_overdue_notified_at is None:
+            still = outstanding_reviews(minutes)
+            if still:
+                notify_secretary_commissioners_overdue(
+                    minutes, [(r.user.get_full_name() or r.user.username) for r in still],
+                )
+                minutes.commissioner_overdue_notified_at = now
+                minutes.save(update_fields=["commissioner_overdue_notified_at", "updated_at"])
+
+    app_log.info("MINUTES_COMMISSIONER_CHASE | %d reminder(s)", reminded)
+    return reminded
+
+
 @shared_task(bind=True, max_retries=4)
 def review_annual_report_task(self, submission_id: int):
     """AI first-pass review of a submitted Annual Report, Business Plan or Corporate Plan.

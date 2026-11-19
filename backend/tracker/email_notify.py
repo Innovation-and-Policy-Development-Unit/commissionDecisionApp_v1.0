@@ -1387,6 +1387,46 @@ def notify_minutes_circulated_to_commissioners(minutes) -> None:
     )
 
 
+def notify_commissioners_minutes_reminder(minutes, users, *, overdue: bool = False) -> None:
+    """Chase Commissioners who have not yet read the circulated minutes.
+
+    In-app with web push and an email, because a Commissioner who has not
+    opened the minutes is by definition not looking at the app."""
+    from .models import Notification
+
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    if overdue:
+        title = f"Overdue: please review the draft minutes — {ref}".strip()
+        body = ("The time to review the draft minutes has passed and we have no response from you yet. "
+                "Please open them and either comment or confirm you have read them with no comments.")
+    else:
+        title = f"Reminder: please review the draft minutes — {ref}".strip()
+        body = ("The draft minutes are waiting for your review. Please open them and either comment "
+                "or confirm you have read them with no comments.")
+    for user in users:
+        Notification.objects.create(
+            recipient=user, channel=Notification.Channel.BOTH, push=True,
+            title=title, body=body, link="/secretariat/minutes",
+        )
+
+
+def notify_secretary_commissioners_overdue(minutes, names: list[str]) -> None:
+    """Tell the Secretary and Chairperson who is still outstanding after the deadline."""
+    from .models import Role
+
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    recipients = list(
+        User.objects.filter(
+            is_active=True, psc_profile__role__in=[Role.PSC_SECRETARY, Role.CHAIRPERSON],
+        ).select_related("psc_profile")
+    )
+    _notify_users(
+        recipients,
+        title=f"Minutes review overdue — {ref}".strip(),
+        body="The Commissioners' review period has ended. No response yet from: " + ", ".join(names) + ".",
+    )
+
+
 def notify_minutes_returned(minutes) -> None:
     """Tell the Secretary that Commissioner review is done and minutes are
     back with the Secretariat."""

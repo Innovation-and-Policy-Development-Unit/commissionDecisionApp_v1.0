@@ -12849,6 +12849,7 @@ _MINUTE_EDITOR_ROLES = {
 # Senior Officer do this alongside the Senior Admin Officer role.
 _SIGNED_SCAN_UPLOAD_ROLES = {
     Role.SENIOR_ADMIN_OFFICER, Role.PSC_ADMIN, Role.CSU_MANAGER, Role.CSU_SENIOR,
+    Role.PSC_SECRETARY,  # the Secretary takes and signs off the minutes, so uploads the scan too
 }
 
 
@@ -13223,6 +13224,9 @@ class MinutesViewSet(viewsets.ModelViewSet):
         )
         minutes.save()
 
+        from .minutes_commissioner_review import ensure_reviews
+        ensure_reviews(minutes)
+
         try:
             from .email_notify import notify_minutes_circulated_to_commissioners
             notify_minutes_circulated_to_commissioners(minutes)
@@ -13247,7 +13251,74 @@ class MinutesViewSet(viewsets.ModelViewSet):
         if not body:
             return Response({"detail": "Comment body is required."}, status=400)
         comment = MinutesComment.objects.create(minutes=minutes, author=request.user, body=body)
+        if profile.role == Role.PSC_COMMISSIONER:
+            from .minutes_commissioner_review import mark_opened
+            mark_opened(minutes, request.user)
         return Response(MinutesCommentSerializer(comment).data, status=201)
+
+    _TRACKER_VIEW_ROLES = {
+        Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
+        Role.CHAIRPERSON, Role.CSU_MANAGER,
+    }
+    _TRACKER_REMIND_ROLES = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
+
+    @action(detail=True, methods=["get"], url_path="review-tracker")
+    def review_tracker(self, request, pk=None):
+        """Which Commissioners have read the circulated minutes. The Secretariat sees
+        everyone; a Commissioner sees only their own line."""
+        from . import minutes_commissioner_review as mcr
+
+        minutes = self.get_object()
+        profile = _profile(request.user)
+        payload = mcr.tracker_payload(minutes)
+        if profile.role in self._TRACKER_VIEW_ROLES or request.user.is_superuser:
+            return Response(payload)
+        if profile.role == Role.PSC_COMMISSIONER:
+            payload["rows"] = [r for r in payload["rows"] if r["user_id"] == request.user.id]
+            return Response(payload)
+        raise PermissionDenied("You cannot see who has reviewed the minutes.")
+
+    @action(detail=True, methods=["post"], url_path="review-opened")
+    def review_opened(self, request, pk=None):
+        """A Commissioner opened the circulated minutes (recorded once)."""
+        from .minutes_commissioner_review import mark_opened
+
+        minutes = self.get_object()
+        if _profile(request.user).role == Role.PSC_COMMISSIONER:
+            mark_opened(minutes, request.user)
+        return Response(status=204)
+
+    @action(detail=True, methods=["post"], url_path="confirm-read")
+    def confirm_read(self, request, pk=None):
+        """A Commissioner confirms they have read the minutes and have no comments."""
+        from .minutes_commissioner_review import confirm_no_comments
+
+        minutes = self.get_object()
+        if _profile(request.user).role != Role.PSC_COMMISSIONER:
+            raise PermissionDenied("Only Commissioners confirm they have read the minutes.")
+        if minutes.status != MinutesStatus.CIRCULATED_TO_COMMISSIONERS:
+            return Response({"detail": "These minutes are not out for review."}, status=400)
+        confirm_no_comments(minutes, request.user)
+        return Response({"detail": "Recorded: you have read the minutes and have no comments."})
+
+    @action(detail=True, methods=["post"], url_path="remind-commissioners")
+    def remind_commissioners(self, request, pk=None):
+        """The Secretary reminds the Commissioners who have not yet responded, now."""
+        from .email_notify import notify_commissioners_minutes_reminder
+        from .minutes_commissioner_review import outstanding_reviews
+
+        minutes = self.get_object()
+        if _profile(request.user).role not in self._TRACKER_REMIND_ROLES and not request.user.is_superuser:
+            raise PermissionDenied("Only the Secretary, Senior Admin Officer or an Admin can send reminders.")
+        if minutes.status != MinutesStatus.CIRCULATED_TO_COMMISSIONERS:
+            return Response({"detail": "These minutes are not out for review."}, status=400)
+        pending = outstanding_reviews(minutes)
+        now = timezone.now()
+        notify_commissioners_minutes_reminder(minutes, [r.user for r in pending])
+        for r in pending:
+            r.last_reminded_at = now
+            r.save(update_fields=["last_reminded_at"])
+        return Response({"reminded": len(pending)})
 
     @action(detail=True, methods=["post"], url_path="return-to-secretariat")
     def return_to_secretariat(self, request, pk=None):
@@ -13497,8 +13568,8 @@ class MinutesViewSet(viewsets.ModelViewSet):
         profile = _profile(self.request.user)
         if profile.role not in _SIGNED_SCAN_UPLOAD_ROLES:
             raise PermissionDenied(
-                "Only the Corporate Services Unit (Manager or Senior Officer), the Senior Admin "
-                "Officer or an Admin can upload signed minutes."
+                "Only the Secretary, the Corporate Services Unit (Manager or Senior Officer), the "
+                "Senior Admin Officer or an Admin can upload signed minutes."
             )
         signed_file = request.FILES.get("signed_document") or request.FILES.get("file")
         if not signed_file:
