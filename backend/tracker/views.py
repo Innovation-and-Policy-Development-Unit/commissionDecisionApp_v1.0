@@ -11742,8 +11742,9 @@ class BackupViewSet(viewsets.ViewSet):
         try:
             from .models import CloudBackupConnection
             from .tasks import queue_delete_backup_from_cloud
+            # Any connected destination (Google Drive or MEGA): this used to check
+            # Google Drive only, so a delete here left the MEGA copy behind.
             if CloudBackupConnection.objects.filter(
-                provider=CloudBackupConnection.Provider.GOOGLE_DRIVE,
                 status=CloudBackupConnection.Status.CONNECTED,
             ).exists():
                 queue_delete_backup_from_cloud(filename)
@@ -11987,7 +11988,8 @@ class BackupViewSet(viewsets.ViewSet):
             provider=CloudBackupConnection.Provider.MEGA
         ).first()
         # Top level stays the Google Drive state (existing UI); MEGA rides alongside.
-        return Response({**_state(google), "mega": _state(mega)})
+        return Response({**_state(google), "mega": _state(mega),
+                         "google_configured": bool(_os.getenv("GOOGLE_CLIENT_ID"))})
 
     @action(detail=False, methods=["get"], url_path="cloud/connect")
     def cloud_connect(self, request):
