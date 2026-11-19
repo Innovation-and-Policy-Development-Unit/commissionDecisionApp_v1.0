@@ -290,6 +290,14 @@ class AgendaSection(models.Model):
             "Stages: pending_manager_approval, pending_second_approval."
         ),
     )
+    agenda_heading = models.CharField(
+        max_length=200, blank=True, default="",
+        help_text=(
+            "Heading printed on the agenda above this section's items. Sections that sit next to each "
+            "other and share the same heading are listed together under it (for example Resignation and "
+            "Medical claim under one heading). Leave blank to use the section's own label."
+        ),
+    )
     group = models.CharField(
         max_length=100,
         blank=True,
@@ -823,6 +831,15 @@ class AgendaItem(models.Model):
         DEFERRED = "deferred", "Deferred"
         NOTED = "noted", "Noted"
 
+    agenda_no = models.PositiveIntegerField(
+        null=True, blank=True, db_index=True,
+        help_text=(
+            "The item's number on the printed agenda: Adoption of Agenda is 1, the minutes 2, Matters "
+            "Arising 3, and submissions run on from 4. Renumbered automatically while the agenda is being "
+            "built; fixed once it is circulated, so references in minutes and Matters Arising stay true. "
+            "Empty for Preliminaries and Matters Arising items, which sit under items 2 and 3."
+        ),
+    )
     live_outcome = models.CharField(
         max_length=16, blank=True, default="", choices=LiveOutcome.choices,
         help_text="Outcome announced in the room, recorded live by the minute taker. Subject to the signed minutes.",

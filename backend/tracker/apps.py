@@ -8,6 +8,8 @@ class TrackerConfig(AppConfig):
     name = "tracker"
 
     def ready(self):
+        from . import agenda_signals  # noqa: F401  (registers the agenda numbering receivers)
+
         """
         Start the background backup scheduler.
 

@@ -766,117 +766,18 @@ def _format_time(meeting) -> str:
 
 
 def _render_agenda_pdf(meeting, lang: str = "en") -> bytes | None:
-    """Agenda PDF structured the same way the Secretariat curated it on
-    screen — Preliminaries, Matters Arising (grouped/lettered by prior
-    meeting), then each active section in order with sequentially numbered
-    items — rather than a flat table, so what Commission members receive by
-    email/download matches what was actually endorsed. Labelled in the
-    recipient's preferred language (`lang`: en/fr/bi); submission titles,
-    ministry names and admin-configured section labels are entered content
-    and are not translated."""
-    import html as _html
+    """The agenda PDF, in the layout of the Commission's own agenda, from the same document the Agenda
+    page shows (see agenda_document.py). The document is in English, as the Commission's agendas are, so
+    `lang` no longer changes it; the argument is kept so existing callers still work."""
     import logging
 
     try:
-        from io import BytesIO
+        from .agenda_document import render_agenda_pdf
 
-        from weasyprint import HTML
-
-        from .agenda_sections import active_agenda_sections
-
-        s = _agenda_pdf_strings(lang)
-        _e = _html.escape
-
-        items = list(
-            meeting.agenda_items.select_related("submission", "submission__ministry")
-            .order_by("sequence", "id")
-        )
-        by_category: dict[str, list] = {}
-        for item in items:
-            by_category.setdefault(item.category or "other", []).append(item)
-
-        def item_line(item, number=None) -> str:
-            sub = item.submission
-            title = _e((getattr(sub, "title", "") or "") if sub else "")
-            ministry = _e(sub.ministry.name) if sub and sub.ministry_id else ""
-            prefix = f"<strong>{number}.</strong> " if number is not None else ""
-            ministry_suffix = f" — {ministry}" if ministry else ""
-            return f"<p style=\"margin:0 0 6px 0;\">{prefix}{title}{ministry_suffix}</p>"
-
-        section_html = []
-
-        # 1. Preliminaries & Endorsements
-        prelim_items = by_category.get("preliminaries", [])
-        prelim_rows = "".join(
-            f"<p style=\"margin:0 0 4px 18px;\">{_sub_letter(i)}. {_e(getattr(it.submission, 'title', '') or '')}</p>"
-            for i, it in enumerate(prelim_items)
-        )
-        section_html.append(
-            f"<h3 style=\"margin:16px 0 8px 0;font-size:13px;\">{_e(s['doc_section_preliminaries'])}</h3>"
-            f"<p style=\"margin:0 0 4px 0;\"><strong>{_e(s['doc_adoption_of_agenda'])}</strong> "
-            f"{_e(s['doc_adoption_of_agenda_detail']).replace('{{number}}', _e(_meeting_no(meeting))).replace('{{date}}', _e(_format_meeting_date(meeting)))}</p>"
-            f"<p style=\"margin:0 0 4px 0;\"><strong>{_e(s['doc_confirmation_of_endorsement'])}</strong></p>"
-            f"{prelim_rows}"
-            f"<p style=\"margin:8px 0 0 0;\">{_e(s['doc_secretary_report'])}</p>"
-        )
-
-        # 2. Matters Arising — grouped by previous-meeting reference, lettered
-        # globally across the whole list (matches the on-screen grouping).
-        ma_items = by_category.get("matters_arising", [])
-        ma_html = []
-        current_ref = object()  # sentinel never equal to a real ref/None
-        for idx, item in enumerate(ma_items):
-            ref = item.matters_arising_meeting_ref or None
-            if ref != current_ref:
-                label = _e(ref) if ref else _e(s["doc_previous_meetings"])
-                ma_html.append(f"<p style=\"margin:10px 0 2px 0;font-weight:600;\">{label}</p>")
-                current_ref = ref
-            sub = item.submission
-            no_prefix = f"<strong>{_e(item.matters_arising_agenda_no)}:</strong> " if item.matters_arising_agenda_no else ""
-            ma_html.append(
-                f"<p style=\"margin:0 0 4px 18px;\">{_sub_letter(idx)}. {no_prefix}{_e(getattr(sub, 'title', '') or '')}</p>"
-            )
-        section_html.append(
-            f"<h3 style=\"margin:16px 0 8px 0;font-size:13px;\">{_e(s['doc_section_matters_arising'])}</h3>"
-            + ("".join(ma_html) if ma_html else f"<p style=\"margin:0;color:#64748b;\">{_e(s['doc_no_matters_arising'])}</p>")
-        )
-
-        # 3+ variable sections, in admin-configured display order.
-        counter = 3
-        for section in active_agenda_sections():
-            if section.code in ("preliminaries", "matters_arising"):
-                continue
-            cat_items = by_category.get(section.code, [])
-            if not cat_items:
-                continue
-            rows = []
-            for item in cat_items:
-                rows.append(item_line(item, counter))
-                counter += 1
-            section_html.append(
-                f"<h3 style=\"margin:16px 0 8px 0;font-size:13px;\">{_e(section.label)}</h3>" + "".join(rows)
-            )
-
-        body = "".join(section_html) or f"<p>{_e(s['doc_no_items'])}</p>"
-        heading = _e(s["doc_heading"]).replace("{{number}}", _e(_meeting_no(meeting)))
-        meta = (
-            f"<p style=\"margin:2px 0;\">{_e(s['doc_date_label'])} {_e(_format_meeting_date(meeting))}</p>"
-            f"<p style=\"margin:2px 0;\">{_e(s['doc_location_label'])} {_e(meeting.venue or '')}</p>"
-            f"<p style=\"margin:2px 0;\">{_e(s['doc_time_label'])} {_e(_format_time(meeting))}</p>"
-        )
-        doc = (
-            "<html><body style=\"font-family:Arial,sans-serif;font-size:12px;color:#1e293b;\">"
-            f"<h2 style=\"margin:0 0 8px 0;text-transform:uppercase;\">{heading}</h2>"
-            f"{meta}"
-            f"{body}"
-            "</body></html>"
-        )
-        buf = BytesIO()
-        HTML(string=doc).write_pdf(buf)
-        return buf.getvalue()
+        return render_agenda_pdf(meeting)
     except Exception:
         logging.getLogger("scdms.app").warning(
-            "Agenda PDF render failed for meeting %s", getattr(meeting, "id", None)
+            "Agenda PDF render failed for meeting %s", getattr(meeting, "id", None), exc_info=True
         )
         return None
 

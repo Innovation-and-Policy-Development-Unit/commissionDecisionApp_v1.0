@@ -9,7 +9,7 @@ import api from '../../api/client'
  * exactly as filed on the submission, previewed inline (PDF/image) with a
  * download fallback for other formats. No edit affordances by design.
  */
-export default function SittingPackPapersPanel({ submissionId, itemLabel }) {
+export default function SittingPackPapersPanel({ submissionId, itemLabel, agendaNo }) {
   const { t } = useTranslation()
   const [documents, setDocuments] = useState([])
   const [docsLoading, setDocsLoading] = useState(false)
@@ -17,6 +17,7 @@ export default function SittingPackPapersPanel({ submissionId, itemLabel }) {
   const [docUrl, setDocUrl] = useState('')
   const [docType, setDocType] = useState('')
   const [docLoading, setDocLoading] = useState(false)
+  const [combining, setCombining] = useState(false)
 
   // Load the document list whenever the agenda item changes.
   useEffect(() => {
@@ -69,6 +70,26 @@ export default function SittingPackPapersPanel({ submissionId, itemLabel }) {
   const isPdf = docType.includes('pdf')
   const isImage = docType.startsWith('image/')
 
+  // Every PDF and image filed on the submission, joined in order, so the whole item can be read or kept as one file.
+  const downloadCombined = async () => {
+    setCombining(true)
+    try {
+      const r = await api.get(`/submissions/${submissionId}/documents-combined/`, {
+        responseType: 'blob', params: agendaNo ? { agenda_no: agendaNo } : undefined,
+      })
+      const cd = r.headers['content-disposition'] || ''
+      const m = cd.match(/filename="([^"]+)"/)
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = m ? m[1] : 'agenda-item.pdf'
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setCombining(false)
+    }
+  }
+
   const downloadActive = () => {
     if (!docUrl || !activeDoc) return
     const a = document.createElement('a')
@@ -85,6 +106,17 @@ export default function SittingPackPapersPanel({ submissionId, itemLabel }) {
           <span className="font-semibold text-slate-800 dark:text-slate-100">{t('sitting_pack.papers_panel')}</span>
           {documents.length > 0 && (
             <span className="text-xs text-slate-400">{documents.length}</span>
+          )}
+          {documents.length > 0 && (
+            <button
+              type="button"
+              onClick={downloadCombined}
+              disabled={combining}
+              className="ml-auto btn-outline btn-sm inline-flex items-center gap-1.5 disabled:opacity-60"
+              title="Download every PDF and image on this item as one PDF"
+            >
+              {combining ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} All as one PDF
+            </button>
           )}
         </div>
         {itemLabel && <span className="block mt-1 truncate text-xs text-slate-500" title={itemLabel}>{itemLabel}</span>}

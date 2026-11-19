@@ -33,29 +33,6 @@ import {
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import AgendaReadinessChip, { computeReadiness } from '../../components/shared/AgendaReadinessChip'
 
-// Sub-item letters a, b, c … z, aa, ab …
-function subLetter(idx) {
-  const letters = 'abcdefghijklmnopqrstuvwxyz'
-  if (idx < 26) return letters[idx]
-  return letters[Math.floor(idx / 26) - 1] + letters[idx % 26]
-}
-
-function formatMeetingDate(meeting) {
-  if (!meeting) return ''
-  const d = new Date(meeting.date + 'T00:00')
-  const day  = d.toLocaleDateString('en-GB', { weekday: 'long' }).toUpperCase()
-  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
-  return `${day} ${date}`
-}
-
-function ordinalDate(meeting) {
-  if (!meeting) return ''
-  const d = new Date(meeting.date + 'T00:00')
-  const n = d.getDate()
-  const suffix = ['th','st','nd','rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : Math.min(n % 10, 3)] || 'th'
-  return `${n}${suffix} ${d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}`
-}
-
 function formatTime(timeStr) {
   if (!timeStr) return ''
   const [h, m] = timeStr.split(':')
@@ -63,13 +40,6 @@ function formatTime(timeStr) {
   const ampm = hour >= 12 ? 'PM' : 'AM'
   const h12  = hour % 12 || 12
   return `${h12}.${m} ${ampm}`
-}
-
-// Build meeting number from reference_number e.g. "MTG-2025-012" → "12"
-function meetingNo(meeting) {
-  if (!meeting) return ''
-  const m = meeting.reference_number?.match(/(\d+)$/)
-  return m ? String(parseInt(m[1])) : meeting.reference_number
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -91,6 +61,8 @@ export default function Agenda() {
   const [meetings, setMeetings]         = useState([])
   const [selectedId, setSelectedId]     = useState('')
   const [items, setItems]               = useState([])
+  const [agendaDoc, setAgendaDoc]       = useState(null)
+  const [showDetails, setShowDetails]   = useState(false)
   const [loading, setLoading]           = useState(true)
   const [modalOpen, setModalOpen]       = useState(false)
   const [editingItem, setEditingItem]   = useState(null)   // item being category-edited inline
@@ -228,6 +200,17 @@ export default function Agenda() {
     return () => observer.disconnect()
   }, [searchQuery])
 
+  // The document layout (title lines, numbering, headings, Matters Arising wording) comes from the
+  // server, the same data the PDF is built from, so the page and the PDF always read the same.
+  useEffect(() => {
+    if (!selectedId) { setAgendaDoc(null); return undefined }
+    let cancelled = false
+    api.get(`/meetings/${selectedId}/agenda-document/`)
+      .then(r => { if (!cancelled) setAgendaDoc(r.data) })
+      .catch(() => { if (!cancelled) setAgendaDoc(null) })
+    return () => { cancelled = true }
+  }, [selectedId, items])
+
   const selectedMeeting = useMemo(
     () => meetings.find(m => String(m.id) === String(selectedId)),
     [meetings, selectedId],
@@ -248,42 +231,6 @@ export default function Agenda() {
     }
     return map
   }, [items])
-
-  // Preliminaries items, lettered once up front — a live search filter only
-  // ever hides rows below, it never renumbers the official document lettering.
-  const preliminariesItems = useMemo(
-    () => (grouped['preliminaries'] || []).map((item, idx) => ({ ...item, subLetter: subLetter(idx) })),
-    [grouped],
-  )
-
-  // Group matters arising by meeting reference
-  const groupedMattersArising = useMemo(() => {
-    const maItems = grouped['matters_arising'] || []
-    const groups = []
-    let currentGroup = null
-
-    maItems.forEach((item, i) => {
-      const ref = item.matters_arising_meeting_ref || 'Previous Meetings'
-      if (!currentGroup || currentGroup.ref !== ref) {
-        currentGroup = { ref, items: [] }
-        groups.push(currentGroup)
-      }
-      currentGroup.items.push({ ...item, subLetter: subLetter(i) })
-    })
-    return groups
-  }, [grouped])
-
-  // Compute sequential agenda numbers (Item 3+ across categories 3-15)
-  const numberedItems = useMemo(() => {
-    let counter = 3
-    const result = {}
-    for (const cat of CATEGORY_ORDER) {
-      if (cat === 'preliminaries' || cat === 'matters_arising') continue
-      const catItems = grouped[cat] || []
-      result[cat] = catItems.map(item => ({ ...item, agendaNo: counter++ }))
-    }
-    return result
-  }, [grouped, CATEGORY_ORDER])
 
   // ── Search / filter ──────────────────────────────────────────────────────
   // A scanning aid only — numbering above is always computed off the full
@@ -474,6 +421,36 @@ export default function Agenda() {
   const role = user?.role || ''
   const isAdminUser = Boolean(user?.is_superuser || user?.is_staff)
   const isSecretaryOrAdmin = isAdminUser
+
+  const itemsById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items])
+  // Rows of the document, hiding a heading when the search leaves nothing under it.
+  const docRows = useMemo(() => {
+    const rows = agendaDoc?.rows || []
+    const out = []
+    rows.forEach((row, idx) => {
+      if (row.kind === 'heading') {
+        let visible = false
+        for (let j = idx + 1; j < rows.length && rows[j].kind !== 'heading'; j++) {
+          const it = rows[j].item_id ? itemsById[rows[j].item_id] : null
+          if (it && matchesSearch(it)) { visible = true; break }
+        }
+        if (visible) out.push(row)
+      } else if ((row.kind === 'item' && row.item_id) || row.kind === 'matter') {
+        const it = itemsById[row.item_id]
+        if (it && matchesSearch(it)) out.push(row)
+      } else if (row.kind === 'matter_group') {
+        let visible = false
+        for (let j = idx + 1; j < rows.length && rows[j].kind === 'matter'; j++) {
+          const it = itemsById[rows[j].item_id]
+          if (it && matchesSearch(it)) { visible = true; break }
+        }
+        if (visible) out.push(row)
+      } else {
+        out.push(row)
+      }
+    })
+    return out
+  }, [agendaDoc, itemsById, searchQuery])
     || ['psc_secretary', 'senior_admin_officer', 'psc_admin'].includes(role)
   // Stage-B agenda chain: Senior Admin Officer and Secretary can both build/
   // edit the agenda's content (canManageAgenda below); only the Secretary
@@ -576,6 +553,14 @@ export default function Agenda() {
                   <FileDown size={15} /> {t('agenda.download_pdf')}
                 </button>
                 )}
+                <button
+                  onClick={() => setShowDetails(v => !v)}
+                  className="btn-outline flex items-center gap-2 px-4 py-2"
+                  title="Show or hide the AI summary and reference under each item"
+                  aria-pressed={showDetails}
+                >
+                  <Eye size={15} /> {showDetails ? 'Hide summaries' : 'Show summaries'}
+                </button>
                 {/* Add Item lives at the top level (not behind Advanced) since it's
                     the only path for Matters Arising carry-overs, which come up
                     at every meeting, not just as an exception. */}
@@ -823,153 +808,105 @@ export default function Agenda() {
       {selectedMeeting ? (
         <div ref={printRef} className="print:m-0">
 
-          {/* Agenda document — styled to match PSC template */}
-          <div className="bg-white dark:bg-slate-900 print:bg-white rounded-xl border border-slate-200 dark:border-slate-700 print:border print:border-slate-400 overflow-hidden">
-
-            {/* ── Document header ── */}
-            <div className="border-b-2 border-slate-300 dark:border-slate-600 print:border-slate-800">
-              <div className="px-8 py-6 text-left">
-                <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 print:text-black uppercase tracking-wide leading-snug">
-                  {t('agenda.doc_heading', { number: meetingNo(selectedMeeting) })}
-                </h1>
-                <div className="mt-2 space-y-0.5 text-sm font-semibold text-slate-700 dark:text-slate-300 print:text-black">
-                  <p><span className="inline-block w-20">{t('agenda.doc_date_label')}</span> {formatMeetingDate(selectedMeeting)}</p>
-                  <p><span className="inline-block w-20">{t('agenda.doc_location_label')}</span> {selectedMeeting.venue}</p>
-                  <p><span className="inline-block w-20">{t('agenda.doc_time_label')}</span> {formatTime(selectedMeeting.time)}</p>
-                </div>
-              </div>
+          {/* Agenda document: one bordered table in the Commission's own layout */}
+          <style>{`@media print { @page { size: Letter; margin: 22mm 25mm; } .agenda-doc { font-size: 11.5pt; } }`}</style>
+          <div
+            className="agenda-doc bg-white dark:bg-slate-900 print:bg-white border border-black dark:border-slate-500 overflow-hidden text-slate-900 dark:text-slate-100 print:text-black"
+            style={{ fontFamily: "'Century Gothic', 'TeX Gyre Adventor', 'URW Gothic', 'Avant Garde', sans-serif" }}
+          >
+            {/* ── Title ── */}
+            <div className="border-b border-black dark:border-slate-500 px-4 py-3 text-center font-bold text-sm leading-snug">
+              {(agendaDoc?.title_lines || []).map((line, i) => <div key={i}>{line}</div>)}
             </div>
 
-            {/* ── 1. Preliminaries & Endorsements ── */}
-            <AgendaSection label={t('agenda.doc_section_preliminaries')} isNumbered id="agenda-section-preliminaries" />
-            <div className="px-8 py-3 space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="text-sm text-slate-400 print:text-black mt-1">•</span>
-                <p className="text-sm text-slate-800 dark:text-slate-200 print:text-black">
-                  <strong>{t('agenda.doc_adoption_of_agenda')}</strong>{' '}
-                  {t('agenda.doc_adoption_of_agenda_detail', { number: meetingNo(selectedMeeting), date: formatMeetingDate(selectedMeeting) })}
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-sm text-slate-400 print:text-black mt-1">•</span>
-                <div className="flex-1">
-                  <p className="text-sm text-slate-800 dark:text-slate-200 print:text-black">
-                    <strong>{t('agenda.doc_confirmation_of_endorsement')}</strong>
-                  </p>
-                  <ul className="mt-1 ml-4 space-y-1">
-                    {preliminariesItems.filter(matchesSearch).length > 0 ? (
-                      preliminariesItems.filter(matchesSearch).map((item) => (
-                        <li key={item.id} className="flex items-start gap-3 group">
-                          <span className="text-sm text-slate-400 print:text-black leading-tight">o</span>
-                          <p className="text-sm text-slate-700 dark:text-slate-400 print:text-black">
-                            <span className="mr-2">{item.subLetter}.</span>
-                            {item.submission_title}
-                          </p>
-                          {!readOnly && (
-                            <button onClick={() => handleRemove(item.id)} className="opacity-0 group-hover:opacity-100 p-0.5 text-red-400 print:hidden">
-                              <X size={10} />
-                            </button>
-                          )}
-                        </li>
-                      ))
-                    ) : (
-                      <li className="text-xs text-slate-400 italic print:hidden ml-6">{t('agenda.doc_add_previous_minutes_hint')}</li>
-                    )}
-                  </ul>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-sm text-slate-400 print:text-black mt-1">•</span>
-                <p className="text-sm text-slate-800 dark:text-slate-200 print:text-black">
-                  {t('agenda.doc_secretary_report')}
-                </p>
-              </div>
-            </div>
-
-            {/* ── 2. Matters Arising ── */}
-            <AgendaSection label={t('agenda.doc_section_matters_arising')} isNumbered id="agenda-section-matters_arising" />
-            {groupedMattersArising.length === 0 ? (
-              <div className="px-8 py-3 print:hidden">
-                <p className="text-xs text-slate-400 italic">{t('agenda.doc_no_matters_arising')}</p>
-              </div>
-            ) : (
-              <div className="space-y-4 py-2">
-                {groupedMattersArising.map((group) => {
-                  const visibleItems = group.items.filter(matchesSearch)
-                  if (visibleItems.length === 0) return null
-                  return (
-                    <div key={group.ref}>
-                      <div className="px-8 py-1">
-                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 print:text-black">
-                          {group.ref}
-                        </p>
-                      </div>
-                      {visibleItems.map((item, idx) => (
-                        <MattersArisingRow
-                          key={item.id}
-                          item={item}
-                          isCompleted={readOnly}
-                          canDefer={isSecretaryOrAdmin}
-                          onRemove={handleRemove}
-                          onMoveUp={() => handleMove(item, 'up')}
-                          onMoveDown={() => handleMove(item, 'down')}
-                          onPushToNext={() => handlePushToNext(item)}
-                          isFirst={idx === 0}
-                          isLastInCat={idx === visibleItems.length - 1}
-                        />
-                      ))}
+            {docRows.map((row, idx) => {
+              if (row.kind === 'heading') {
+                return (
+                  <div key={`h${idx}`}>
+                    {row.codes.map(code => <span key={code} id={`agenda-section-${code}`} style={{ scrollMarginTop: 'var(--agenda-scroll-offset, 9rem)' }} />)}
+                    <AgendaSection label={row.text} />
+                  </div>
+                )
+              }
+              if (row.kind === 'matter_group') {
+                return (
+                  <div key={`g${idx}`} className="px-4 py-1.5 border-b border-black dark:border-slate-500 text-sm font-bold">{row.text}</div>
+                )
+              }
+              if (row.kind === 'matter') {
+                const item = itemsById[row.item_id]
+                if (!item) return null
+                return (
+                  <MattersArisingRow
+                    key={`m${row.item_id}`}
+                    item={item}
+                    text={row.text}
+                    isCompleted={readOnly}
+                    canDefer={isSecretaryOrAdmin}
+                    onRemove={handleRemove}
+                    onMoveUp={() => handleMove(item, 'up')}
+                    onMoveDown={() => handleMove(item, 'down')}
+                    onPushToNext={() => handlePushToNext(item)}
+                    isFirst={false}
+                    isLastInCat={false}
+                  />
+                )
+              }
+              // numbered rows
+              if (row.no && !row.item_id) {
+                return (
+                  <div key={`n${row.no}`} id={row.no === 3 ? 'agenda-section-matters_arising' : row.no === 2 ? 'agenda-section-preliminaries' : undefined}
+                       style={{ scrollMarginTop: 'var(--agenda-scroll-offset, 9rem)' }}
+                       className="px-4 py-2 border-b border-black dark:border-slate-500 text-sm">
+                    <div className={`flex gap-3 ${row.bold ? 'font-bold' : ''}`}>
+                      <span className="w-6 shrink-0">{row.no}.</span>
+                      <span>{row.text}</span>
                     </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* ── 3-15 Variable sections ── */}
-            {CATEGORY_ORDER.slice(2).map(cat => {
-              const allCatItems = numberedItems[cat] || []
-              const catItems = allCatItems.filter(matchesSearch)
-              if (catItems.length === 0) return null
-              // Sub-group by submission type (e.g. all Voluntary Resignations
-              // together) — only show the sub-headers when the category
-              // actually mixes more than one type.
-              const distinctTypes = new Set(catItems.map(it => it.form_type_code || ''))
-              const showTypeHeaders = distinctTypes.size > 1
-              return (
-                <div key={cat}>
-                  <AgendaSection label={categoryLabel(cat)} id={`agenda-section-${cat}`} />
-                  {catItems.map((item, idx) => {
-                    const isNewTypeGroup = showTypeHeaders &&
-                      (idx === 0 || item.form_type_code !== catItems[idx - 1].form_type_code)
-                    return (
-                      <Fragment key={item.id}>
-                        {isNewTypeGroup && (
-                          <div className="px-8 pt-2 pb-1">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 print:text-black">
-                              {item.form_type_display || t('agenda.doc_other_type')}
-                            </p>
-                          </div>
+                    {(row.lines || []).map((line, i) => <div key={i} className="pl-9 font-bold">{line}</div>)}
+                    {(row.sub_items || []).map(sub => (
+                      <div key={sub.item_id} className="pl-9 flex items-start gap-2 group">
+                        <span>{sub.text}</span>
+                        {!readOnly && (
+                          <button onClick={() => handleRemove(sub.item_id)} className="opacity-0 group-hover:opacity-100 p-0.5 text-red-400 print:hidden"><X size={10} /></button>
                         )}
-                        <StandardRow
-                          item={item}
-                          isCompleted={readOnly}
-                          canDefer={isSecretaryOrAdmin}
-                          categories={CATEGORIES}
-                          editingItem={editingItem}
-                          setEditingItem={setEditingItem}
-                          onRemove={handleRemove}
-                          onCategoryUpdate={handleCategoryUpdate}
-                          onMoveUp={() => handleMove(item, 'up')}
-                          onMoveDown={() => handleMove(item, 'down')}
-                          onPushToNext={() => handlePushToNext(item)}
-                          isFirst={idx === 0}
-                          isLastInCat={idx === catItems.length - 1}
-                        />
-                      </Fragment>
-                    )
-                  })}
-                </div>
+                      </div>
+                    ))}
+                    {row.no === 2 && !(row.sub_items || []).length && !readOnly && (
+                      <div className="pl-9 text-xs text-slate-400 italic print:hidden">{t('agenda.doc_add_previous_minutes_hint')}</div>
+                    )}
+                  </div>
+                )
+              }
+              const item = itemsById[row.item_id]
+              if (!item) return null
+              return (
+                <StandardRow
+                  key={`i${row.item_id}`}
+                  item={{ ...item, agendaNo: row.no }}
+                  showDetails={showDetails}
+                  isCompleted={readOnly}
+                  canDefer={isSecretaryOrAdmin}
+                  categories={CATEGORIES}
+                  editingItem={editingItem}
+                  setEditingItem={setEditingItem}
+                  onRemove={handleRemove}
+                  onCategoryUpdate={handleCategoryUpdate}
+                  onMoveUp={() => handleMove(item, 'up')}
+                  onMoveDown={() => handleMove(item, 'down')}
+                  onPushToNext={() => handlePushToNext(item)}
+                  isFirst={false}
+                  isLastInCat={false}
+                />
               )
             })}
+
+            {agendaDoc?.signatory?.name && (
+              <div className="px-4 py-6 text-sm leading-snug border-t border-black dark:border-slate-500">
+                <div>{agendaDoc.signatory.name}</div>
+                <div>{agendaDoc.signatory.title}</div>
+                <div>{agendaDoc.signatory.office}</div>
+              </div>
+            )}
 
             {/* Empty state */}
             {totalItems === 0 && (
@@ -1334,80 +1271,67 @@ function CirculationStatusPanel({ status, open, onToggle }) {
   )
 }
 
-function AgendaSection({ label, isNumbered, id }) {
+function AgendaSection({ label, id }) {
   return (
     <div
       id={id}
       style={id ? { scrollMarginTop: 'var(--agenda-scroll-offset, 9rem)' } : undefined}
-      className={`px-8 py-2 ${isNumbered ? 'pt-3' : 'pt-4'} border-t border-slate-200 dark:border-slate-700 print:border-slate-400 bg-slate-50 dark:bg-slate-800/40 print:bg-transparent`}
+      className="px-4 py-2 border-b border-black dark:border-slate-500"
     >
-      <p className="text-sm font-bold text-slate-700 dark:text-slate-300 print:text-black">
-        {label}
-      </p>
+      <p className="text-sm font-bold uppercase">{label}</p>
     </div>
   )
 }
 
-function MattersArisingRow({ item, isCompleted, canDefer, onRemove, onMoveUp, onMoveDown, onPushToNext, isFirst, isLastInCat }) {
+function RowControls({ item, isCompleted, canDefer, onRemove, onMoveUp, onMoveDown, onPushToNext, onTag, isFirst, isLastInCat }) {
+  const { t } = useTranslation()
+  if (isCompleted) return null
+  return (
+    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity print:hidden shrink-0">
+      <button onClick={onMoveUp}   disabled={isFirst}     className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-20"><ChevronUp   size={13} /></button>
+      <button onClick={onMoveDown} disabled={isLastInCat} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-20"><ChevronDown size={13} /></button>
+      {onTag && (
+        <button onClick={onTag} className="p-1 rounded text-slate-400 hover:text-primary-500" title={t('agenda.doc_change_category')}><Tag size={12} /></button>
+      )}
+      {canDefer && (
+        <button onClick={onPushToNext} title={t('agenda.doc_defer_to_next')} className="p-1 rounded text-slate-400 hover:text-amber-500"><ChevronsRight size={13} /></button>
+      )}
+      <button onClick={() => onRemove(item.id)} className="p-1 rounded text-slate-400 hover:text-red-500"><X size={13} /></button>
+    </div>
+  )
+}
+
+function MattersArisingRow({ item, text, isCompleted, canDefer, onRemove, onMoveUp, onMoveDown, onPushToNext, isFirst, isLastInCat }) {
   const { t } = useTranslation()
   return (
-    <div className="px-8 py-1.5 flex items-start gap-4 group">
-      <span className="text-sm font-medium text-slate-400 print:text-black shrink-0 w-8 text-right">•</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-800 dark:text-slate-200 print:text-black">
-          <span className="font-medium mr-2">{item.subLetter}.</span>
-          {item.matters_arising_agenda_no && (
-            <span className="font-semibold">{item.matters_arising_agenda_no}: </span>
-          )}
-          <Link
-            to={`/submissions/${item.submission}`}
-            className="hover:underline hover:text-primary-600 dark:hover:text-primary-400 print:no-underline print:text-black"
-            title={t('agenda.doc_open_submission')}
-          >
-            {item.submission_title}
-          </Link>
-          {item.lodged_from_paper && (
-            <span className="ml-2 align-middle rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 print:hidden">
-              {t('agenda.lodged_from_paper')}
-            </span>
-          )}
-          {item.submission_ministry && (
-            <span className="text-slate-500 dark:text-slate-400"> — {item.submission_ministry}</span>
-          )}
-        </p>
-      </div>
-      {/* Screen-only controls */}
-      {!isCompleted && (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity print:hidden shrink-0">
-          <button onClick={onMoveUp}   disabled={isFirst}     className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-20"><ChevronUp   size={13} /></button>
-          <button onClick={onMoveDown} disabled={isLastInCat} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-20"><ChevronDown size={13} /></button>
-          {canDefer && (
-            <button onClick={onPushToNext} title={t('agenda.doc_defer_to_next')} className="p-1 rounded text-slate-400 hover:text-amber-500">
-              <ChevronsRight size={13} />
-            </button>
-          )}
-          <button onClick={() => onRemove(item.id)} className="p-1 rounded text-slate-400 hover:text-red-500"><X size={13} /></button>
-        </div>
-      )}
+    <div className="px-4 py-1.5 border-b border-black dark:border-slate-500 flex items-start gap-3 group">
+      <p className="flex-1 min-w-0 text-sm font-bold">
+        <Link
+          to={`/submissions/${item.submission}`}
+          className="hover:underline print:no-underline print:text-black"
+          title={t('agenda.doc_open_submission')}
+        >
+          {text}
+        </Link>
+      </p>
+      <RowControls item={item} isCompleted={isCompleted} canDefer={canDefer} onRemove={onRemove} onMoveUp={onMoveUp} onMoveDown={onMoveDown} onPushToNext={onPushToNext} isFirst={isFirst} isLastInCat={isLastInCat} />
     </div>
   )
 }
 
-function StandardRow({ item, isCompleted, canDefer, categories, editingItem, setEditingItem, onRemove, onCategoryUpdate, onMoveUp, onMoveDown, onPushToNext, isFirst, isLastInCat }) {
+function StandardRow({ item, showDetails, isCompleted, canDefer, categories, editingItem, setEditingItem, onRemove, onCategoryUpdate, onMoveUp, onMoveDown, onPushToNext, isFirst, isLastInCat }) {
   const { t } = useTranslation()
   const isEditing = editingItem === item.id
   const [pendingCat, setPendingCat] = useState(item.category)
 
   return (
-    <div className="px-8 py-2.5 border-t border-slate-100 dark:border-slate-800 print:border-slate-300 flex items-start gap-4 group">
-      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 print:text-black shrink-0 w-8">
-        {item.agendaNo}.
-      </span>
+    <div className="px-4 py-2 border-b border-black dark:border-slate-500 flex items-start gap-3 group">
+      <span className="text-sm w-6 shrink-0">{item.agendaNo}.</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-800 dark:text-slate-200 print:text-black leading-snug">
+        <p className="text-sm leading-snug">
           <Link
             to={`/submissions/${item.submission}`}
-            className="hover:underline hover:text-primary-600 dark:hover:text-primary-400 print:no-underline print:text-black"
+            className="hover:underline print:no-underline print:text-black"
             title={t('agenda.doc_open_submission')}
           >
             {item.submission_title}
@@ -1417,82 +1341,39 @@ function StandardRow({ item, isCompleted, canDefer, categories, editingItem, set
               {t('agenda.lodged_from_paper')}
             </span>
           )}
-          {item.submission_ministry && (
-            <span className="text-slate-500 dark:text-slate-400"> — {item.submission_ministry}</span>
-          )}
         </p>
-        {item.agenda_blurb && (
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed print:text-black">
-            {item.agenda_blurb}
-          </p>
+        {showDetails && (
+          <div className="print:hidden">
+            {item.agenda_blurb && (
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">{item.agenda_blurb}</p>
+            )}
+            {!item.agenda_blurb_processed && !item.agenda_blurb && (
+              <AiTextSkeleton className="mt-1.5" lines={3} statusLabel={t('agenda.doc_generating_summary')} />
+            )}
+            {item.agenda_blurb && (
+              <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1">{t('agenda.doc_draft_verify')}</p>
+            )}
+            <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.submission_reference}</p>
+          </div>
         )}
-        {!item.agenda_blurb_processed && !item.agenda_blurb && (
-          <AiTextSkeleton
-            className="mt-1.5 print:hidden"
-            lines={3}
-            statusLabel={t('agenda.doc_generating_summary')}
-          />
-        )}
-        {item.agenda_blurb && (
-          <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1 print:hidden">{t('agenda.doc_draft_verify')}</p>
-        )}
-        <p className="text-[11px] text-slate-400 font-mono mt-0.5 print:hidden">{item.submission_reference}</p>
 
         {/* Inline category editor */}
         {isEditing && (
           <div className="flex items-center gap-2 mt-2 print:hidden">
-            <select
-              className="input text-xs py-1"
-              value={pendingCat}
-              onChange={e => setPendingCat(e.target.value)}
-              autoFocus
-            >
-              {categories.map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
+            <select className="input text-xs py-1" value={pendingCat} onChange={e => setPendingCat(e.target.value)} autoFocus>
+              {categories.map(c => (<option key={c.value} value={c.value}>{c.label}</option>))}
             </select>
-            <button
-              onClick={() => onCategoryUpdate(item, pendingCat)}
-              className="p-1.5 rounded-md bg-primary-600 text-white hover:bg-primary-700"
-            >
-              <Check size={12} />
-            </button>
-            <button
-              onClick={() => setEditingItem(null)}
-              className="p-1.5 rounded-md text-slate-400 hover:text-slate-600"
-            >
-              <X size={12} />
-            </button>
+            <button onClick={() => onCategoryUpdate(item, pendingCat)} className="p-1.5 rounded-md bg-primary-600 text-white hover:bg-primary-700"><Check size={12} /></button>
+            <button onClick={() => setEditingItem(null)} className="p-1.5 rounded-md text-slate-400 hover:text-slate-600"><X size={12} /></button>
           </div>
         )}
       </div>
-
-      {/* Screen-only controls */}
-      {!isCompleted && (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity print:hidden shrink-0">
-          <button onClick={onMoveUp}   disabled={isFirst}     className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-20"><ChevronUp   size={13} /></button>
-          <button onClick={onMoveDown} disabled={isLastInCat} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-20"><ChevronDown size={13} /></button>
-          <button
-            onClick={() => { setEditingItem(isEditing ? null : item.id); setPendingCat(item.category) }}
-            className="p-1 rounded text-slate-400 hover:text-primary-500"
-            title={t('agenda.doc_change_category')}
-          >
-            <Tag size={12} />
-          </button>
-          {canDefer && (
-            <button
-              onClick={onPushToNext}
-              title={t('agenda.doc_defer_to_next')}
-              className="p-1 rounded text-slate-400 hover:text-amber-500"
-            >
-              <ChevronsRight size={13} />
-            </button>
-          )}
-          <button onClick={() => onRemove(item.id)} className="p-1 rounded text-slate-400 hover:text-red-500">
-            <X size={13} />
-          </button>
-        </div>
-      )}
+      <RowControls
+        item={item} isCompleted={isCompleted} canDefer={canDefer} onRemove={onRemove}
+        onMoveUp={onMoveUp} onMoveDown={onMoveDown} onPushToNext={onPushToNext}
+        onTag={() => { setEditingItem(isEditing ? null : item.id); setPendingCat(item.category) }}
+        isFirst={isFirst} isLastInCat={isLastInCat}
+      />
     </div>
   )
 }
