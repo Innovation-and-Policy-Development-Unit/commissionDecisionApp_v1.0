@@ -588,6 +588,7 @@ class AgendaSectionSerializer(serializers.ModelSerializer):
             "code",
             "label",
             "group",
+            "agenda_heading",
             "approval_chain",
             "display_order",
             "is_special",
@@ -2159,9 +2160,25 @@ class AgendaItemSerializer(serializers.ModelSerializer):
     lodged_from_paper    = serializers.BooleanField(source="submission.lodged_from_paper", read_only=True)
     responsible_unit     = serializers.CharField(source="submission.routed_unit", read_only=True)
     flying_brief         = serializers.SerializerMethodField()
+    matters_arising_label        = serializers.SerializerMethodField()
+    matters_arising_agenda_label = serializers.SerializerMethodField()
     live_outcome         = serializers.SerializerMethodField()
     live_outcome_label   = serializers.SerializerMethodField()
     live_outcome_at      = serializers.SerializerMethodField()
+
+    def _arising(self, obj):
+        cache = self.context.setdefault("_arising_cache", {})
+        if obj.pk not in cache:
+            from .agenda_document import derive_matters_arising
+
+            cache[obj.pk] = derive_matters_arising(obj) if obj.category == "matters_arising" else ("", "")
+        return cache[obj.pk]
+
+    def get_matters_arising_label(self, obj):
+        return self._arising(obj)[0]
+
+    def get_matters_arising_agenda_label(self, obj):
+        return self._arising(obj)[1]
 
     # The outcome only reaches the Sitting Pack when the meeting has live
     # outcomes switched on, so real sittings behave exactly as before.
@@ -2219,10 +2236,11 @@ class AgendaItemSerializer(serializers.ModelSerializer):
             "agenda_blurb", "agenda_blurb_processed", "lodged_from_paper",
             "is_flying", "raised_by_label", "responsible_unit", "flying_brief",
             "live_outcome", "live_outcome_label", "live_outcome_at",
+            "agenda_no", "matters_arising_label", "matters_arising_agenda_label",
         )
         read_only_fields = (
             "agenda_blurb", "agenda_blurb_processed", "form_type_code",
-            "is_flying", "raised_by_label",
+            "is_flying", "raised_by_label", "agenda_no",
         )
 
 

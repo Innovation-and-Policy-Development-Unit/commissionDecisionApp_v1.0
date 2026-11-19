@@ -34,6 +34,7 @@ const EMPTY_FORM = {
   code: '',
   label: '',
   group: '',
+  agenda_heading: '',
   is_special: false,
   is_active: true,
   receiver_roles: [],
@@ -125,6 +126,7 @@ export default function AgendaSectionsAdmin() {
       code: row.code,
       label: row.label,
       group: row.group || '',
+      agenda_heading: row.agenda_heading || '',
       is_special: row.is_special,
       is_active: row.is_active,
       receiver_roles: row.receiver_roles || [],
@@ -159,6 +161,7 @@ export default function AgendaSectionsAdmin() {
       const payload = {
         label: form.label.trim(),
         group: form.group.trim(),
+        agenda_heading: form.agenda_heading.trim(),
         is_special: form.is_special,
         is_active: form.is_active,
         receiver_roles: form.receiver_roles || [],
@@ -385,6 +388,13 @@ export default function AgendaSectionsAdmin() {
                 Sections with the same group appear together under an <code>&lt;optgroup&gt;</code> heading. Leave blank to appear ungrouped.
               </p>
             </div>
+            <BaseInput
+              label="Agenda heading"
+              placeholder="e.g. ALLOWANCES / LEAVE / SEVERANCE / ARREARS / CLAIM"
+              value={form.agenda_heading}
+              onChange={e => setForm(f => ({ ...f, agenda_heading: e.target.value }))}
+              hint="The heading printed on the agenda above this section's items. Neighbouring sections with the same heading are listed together under it. Blank uses the label."
+            />
             <div>
               <BaseSelect
                 label="Linked digitized form"

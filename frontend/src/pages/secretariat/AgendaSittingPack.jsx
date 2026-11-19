@@ -55,7 +55,7 @@ export default function AgendaSittingPack() {
   const selectedRow = useMemo(() => rows.find((r) => r.type === 'item' && r.id === selectedItemId), [rows, selectedItemId])
   const selectedSubmissionId = selectedRow?.item?.submission ?? null
   const selectedLabel = selectedRow?.item
-    ? `${selectedRow.displayNo}. ${selectedRow.item.submission_reference} — ${selectedRow.item.submission_title}`
+    ? `Agenda ${String(selectedRow.displayNo).padStart(2, '0')} - ${selectedRow.item.submission_title}`
     : ''
 
   const loadData = useCallback(async () => {
@@ -336,7 +336,7 @@ export default function AgendaSittingPack() {
           </div>
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {rightTab === 'papers' ? (
-              <SittingPackPapersPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} />
+              <SittingPackPapersPanel submissionId={selectedSubmissionId} itemLabel={selectedLabel} agendaNo={selectedRow?.item?.agenda_no} />
             ) : rightTab === 'notes' && canUseNotes ? (
               selectedSubmissionId && <PrivateNotePanel submissionId={selectedSubmissionId} />
             ) : rightTab === 'brief' && canViewBrief ? (

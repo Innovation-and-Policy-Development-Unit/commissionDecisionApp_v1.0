@@ -4214,6 +4214,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         target_meeting = compute_scheduled_meeting(submission, exclude_meeting=source_meeting)
         if not target_meeting or (source_meeting and target_meeting.id == source_meeting.id):
             return
+        from .agenda_document import ensure_agenda_numbers, meeting_label
+
+        if source_meeting:
+            ensure_agenda_numbers(source_meeting)
+            if source_item:
+                source_item.refresh_from_db(fields=["agenda_no"])
         next_seq = (
             AgendaItem.objects.filter(
                 meeting=target_meeting, category=AgendaCategory.MATTERS_ARISING,
@@ -4225,8 +4231,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             defaults={
                 "category": AgendaCategory.MATTERS_ARISING,
                 "sequence": next_seq,
+                # Keep the system reference: the agenda works out the printed wording from it.
                 "matters_arising_meeting_ref": source_meeting.reference_number if source_meeting else "",
-                "matters_arising_agenda_no": str(source_item.sequence) if source_item else "",
+                "matters_arising_agenda_no": (
+                    f"Agenda {source_item.agenda_no:02d}" if source_item and source_item.agenda_no else ""
+                ),
             },
         )
         submission.scheduled_meeting = target_meeting
@@ -5233,6 +5242,37 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         drafts = DeadlineReminderDraft.objects.filter(submission=submission).order_by("-drafted_at")
         return Response(DeadlineReminderDraftSerializer(drafts, many=True).data)
+
+    @action(detail=True, methods=["get"], url_path="documents-combined")
+    def documents_combined(self, request, pk=None):
+        """All of a submission's documents as one PDF, in the order they were filed: a cover page, then
+        every PDF and image, with a bookmark for each. Word and Excel files cannot be merged, so they are
+        listed on a closing page and stay available one by one. Same visibility rules as the documents list."""
+        import re
+
+        from .combined_pdf import build_combined_pdf
+
+        submission = self.get_object()
+        profile = _profile(request.user)
+        docs = SubmissionDocument.objects.filter(submission=submission).order_by("id")
+        if profile.role in _MINISTRY_SIDE_ROLES:
+            docs = docs.exclude(required_document__opsc_supplied=True)
+        agenda_no = request.query_params.get("agenda_no")
+        pdf, skipped = build_combined_pdf(submission, list(docs), agenda_no=agenda_no)
+        from .audit import log_action as _log
+        from .models import AuditLog as _AL
+
+        _log(request, _AL.Action.DOWNLOAD, resource_type="Submission", resource_id=submission.id,
+             resource_label=submission.reference_number,
+             description=f"Combined documents PDF downloaded for {submission.reference_number}"
+                         + (f" ({len(skipped)} not merged)" if skipped else ""))
+        from django.http import HttpResponse
+
+        name = f"Agenda {int(agenda_no):02d} - " if agenda_no and str(agenda_no).isdigit() else ""
+        safe = re.sub(r'[\\/:*?"<>|]+', " ", f"{name}{submission.title}")[:110].strip()
+        resp = HttpResponse(pdf, content_type="application/pdf")
+        resp["Content-Disposition"] = f'attachment; filename="{safe}.pdf"'
+        return resp
 
     @action(detail=True, methods=["get", "delete"], url_path="documents/(?P<doc_id>[0-9]+)")
     def document_detail(self, request, pk=None, doc_id=None):
@@ -10275,6 +10315,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
                     "before submitting to the Chairperson: " + ", ".join(test_refs)
                 ),
             }, status=400)
+        from .agenda_document import renumber_agenda
+
+        renumber_agenda(meeting)  # final numbering before it goes to the Chairperson
         meeting.agenda_status = AgendaStatus.WITH_CHAIRMAN
         meeting.save(update_fields=["agenda_status"])
         return Response({"detail": "Agenda submitted to the Chairperson for endorsement."})
@@ -10304,6 +10347,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
                     "members. Remove before endorsing: " + ", ".join(test_refs)
                 ),
             }, status=400)
+        from .agenda_document import renumber_agenda
+
+        renumber_agenda(meeting)  # last renumber; from here the numbers are fixed
         meeting.agenda_status = AgendaStatus.CIRCULATED
         meeting.agenda_approved_by = request.user
         meeting.agenda_approved_at = timezone.now()
@@ -10525,6 +10571,18 @@ class MeetingViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Could not generate the agenda PDF."}, status=500)
         filename = f"agenda_{(meeting.reference_number or 'meeting')}.pdf".replace("/", "-")
         return FileResponse(BytesIO(pdf), as_attachment=True, filename=filename, content_type="application/pdf")
+
+    @action(detail=True, methods=["get"], url_path="agenda-document")
+    def agenda_document(self, request, pk=None):
+        """The agenda as one structured document (title lines, numbered rows, headings, Matters Arising,
+        signatory). The Agenda page renders its layout from this, and the PDF is built from the same data."""
+        from .agenda_document import build_agenda_document
+        from .opsc_access import agenda_content_visible_to
+
+        meeting = self.get_object()
+        if not agenda_content_visible_to(request.user, meeting.agenda_status):
+            raise PermissionDenied("This agenda has not been circulated to you yet.")
+        return Response(build_agenda_document(meeting))
 
     @action(detail=True, methods=["get", "post"], url_path="other-matters")
     def other_matters(self, request, pk=None):
@@ -10968,7 +11026,11 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
         from_meeting = item.meeting
         item.meeting  = next_meeting
         item.sequence = new_seq
-        item.save(update_fields=["meeting", "sequence"])
+        item.agenda_no = None  # the number belonged to the sitting it left
+        item.save(update_fields=["meeting", "sequence", "agenda_no"])
+        from .agenda_document import renumber_agenda
+
+        renumber_agenda(from_meeting)  # close the gap on the sitting it left
 
         from .deferral_tracking import record_deferral
         from .models import DeferralType
@@ -11031,6 +11093,11 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
                     return Response({"detail": str(exc)}, status=400)
             AgendaItem.objects.filter(id=row_id).update(**fields)
             updated.append({"id": row_id, **fields})
+
+        from .agenda_document import renumber_agenda
+
+        for m in Meeting.objects.filter(agenda_items__id__in=[u["id"] for u in updated]).distinct():
+            renumber_agenda(m)
 
         return Response({"detail": f"{len(updated)} agenda items reordered.", "items": updated})
 

@@ -35,7 +35,7 @@ export function buildSittingPackRows(
 ) {
   const grouped = groupByCategory(items)
   const rows = []
-  let agendaNo = 3
+  let agendaNo = 4 // only a fallback: items normally carry the server's agenda_no
   const labelFor = (value) => categoryLabel(value, sections)
 
   for (const cat of categoryOrder) {
@@ -52,7 +52,7 @@ export function buildSittingPackRows(
           type: 'item',
           id: item.id,
           item,
-          displayNo: letter,
+          displayNo: item.matters_arising_agenda_label ? item.matters_arising_agenda_label.replace(/^Agenda\s*/i, '') : letter,
           category: cat,
         })
       })
@@ -77,7 +77,7 @@ export function buildSittingPackRows(
           type: 'item',
           id: item.id,
           item,
-          displayNo: String(agendaNo++),
+          displayNo: item.agenda_no ? String(item.agenda_no) : String(agendaNo++),
           category: cat,
         })
       })
