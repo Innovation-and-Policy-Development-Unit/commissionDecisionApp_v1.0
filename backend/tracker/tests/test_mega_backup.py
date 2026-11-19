@@ -170,3 +170,37 @@ class MegaPushTaskTests(TestCase):
         conn.refresh_from_db()
         self.assertEqual(conn.status, "needs_reconnect")
         self.assertIn("bad pw", conn.last_push_error)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
+class DeleteBackupAlsoDeletesMegaCopyTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username="del_admin", password="pass")
+        Profile.objects.create(user=self.admin, role=Role.PSC_ADMIN)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+        self.tmp = tempfile.mkdtemp()
+        self.name = "scdms_backup_20260101_020000.zip"
+        with open(os.path.join(self.tmp, self.name), "wb") as fh:
+            fh.write(b"zip")
+        p = mock.patch("tracker.views._BACKUP_DIR", self.tmp)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_mega_only_connection_still_queues_the_cloud_delete(self):
+        CloudBackupConnection.objects.create(provider="mega", status="connected", connected_email="a@b.co")
+        with mock.patch("tracker.tasks.queue_delete_backup_from_cloud") as q:
+            res = self.client.post("/api/backup/delete-file/", {"filename": self.name}, format="json")
+        self.assertEqual(res.status_code, 200)
+        q.assert_called_once_with(self.name)
+
+    def test_nothing_connected_queues_nothing(self):
+        with mock.patch("tracker.tasks.queue_delete_backup_from_cloud") as q:
+            self.client.post("/api/backup/delete-file/", {"filename": self.name}, format="json")
+        q.assert_not_called()
+
+    def test_status_says_whether_google_is_configured(self):
+        with mock.patch.dict(os.environ, {"GOOGLE_CLIENT_ID": ""}):
+            self.assertFalse(self.client.get("/api/backup/cloud/status/").data["google_configured"])
+        with mock.patch.dict(os.environ, {"GOOGLE_CLIENT_ID": "abc"}):
+            self.assertTrue(self.client.get("/api/backup/cloud/status/").data["google_configured"])

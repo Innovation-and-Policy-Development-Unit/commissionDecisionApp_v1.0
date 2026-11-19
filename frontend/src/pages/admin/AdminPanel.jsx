@@ -2943,10 +2943,15 @@ export function BackupTab() {
               Google Drive automatically. Tied to whichever admin connects it; if they leave, the next
               admin can reconnect their own account here with no setup needed.
             </p>
+            {cloudStatus.google_configured === false && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Google Drive is not set up on this server (no Google client ID is configured), so it cannot be connected. Use MEGA above.
+              </p>
+            )}
             <button
               type="button"
               onClick={connectGoogleDrive}
-              disabled={connecting}
+              disabled={connecting || cloudStatus.google_configured === false}
               className="btn-gradient py-2 px-4 text-sm inline-flex items-center gap-2 disabled:opacity-60"
             >
               {connecting ? <RefreshCw size={14} className="animate-spin" /> : <UploadCloud size={14} />}
