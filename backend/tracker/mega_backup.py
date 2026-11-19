@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 
 BACKUP_FOLDER = "/Root/SCDMS Backups"
 MEGATOOLS = os.getenv("MEGATOOLS_BIN", "megatools")
-_TS_RE = re.compile(r"^scdms_backup_(\d{8})_(\d{6})\.(zip|json)$")
+_TS_RE = re.compile(r"^scdms_backup_(\d{8})_(\d{6})\.(zip|json)(\.enc)?$")
 
 
 class MegaError(RuntimeError):
