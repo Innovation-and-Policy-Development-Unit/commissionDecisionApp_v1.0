@@ -36,6 +36,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /usr/local /usr/local
 
+# The copy above merges the builder's upgraded pip into the base image's older one and leaves the old
+# pip-*.dist-info behind, so vulnerability scans report the old version (a false positive). Keep only
+# the metadata that matches the pip actually installed.
+RUN python -c "import glob,shutil,pip; keep='pip-%s.dist-info' % pip.__version__; [shutil.rmtree(d) for d in glob.glob('/usr/local/lib/python3.12/site-packages/pip-*.dist-info') if not d.endswith(keep)]"
+
 # Verify Quarto can discover the Python (Jupyter) kernel used by Smart Reports.
 # Non-fatal: a failure here only means Python-executed reports need attention.
 RUN quarto check jupyter || echo "WARN: 'quarto check jupyter' failed — Smart Report rendering may need attention"
