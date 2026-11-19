@@ -28,7 +28,7 @@ import {
   Plus, X, RefreshCw, Printer, Check, Tag, Search,
   ChevronUp, ChevronDown, AlertCircle, ClipboardList,
   Send, ThumbsUp, ChevronsRight, Tablet, LayoutGrid, StickyNote,
-  FileDown, Users, Eye, Mail,
+  FileDown, Users, Eye, Mail, MapPin, Clock,
 } from 'lucide-react'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import AgendaReadinessChip, { computeReadiness } from '../../components/shared/AgendaReadinessChip'
@@ -610,9 +610,9 @@ export default function Agenda() {
         />
 
         {/* Meeting selector */}
-        <div className="card p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="card p-4 mb-4 flex flex-col lg:flex-row gap-4 lg:items-center">
           <div>
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">{t('agenda.select_meeting')}</label>
+            <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">{t('agenda.select_meeting')}</label>
             <select
               className="input sm:w-96"
               value={selectedId}
@@ -631,18 +631,18 @@ export default function Agenda() {
             </select>
           </div>
           {selectedMeeting && (
-            <div className="flex items-center gap-3 sm:ml-4 flex-wrap">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                📍 {selectedMeeting.venue}
+            <div className="flex items-center gap-x-4 gap-y-2 flex-wrap rounded-lg bg-slate-50 dark:bg-slate-900/40 px-3 py-2 lg:ml-2">
+              <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                <MapPin size={13} className="text-primary-500" /> {selectedMeeting.venue}
               </span>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                🕘 {formatTime(selectedMeeting.time)}
+              <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                <Clock size={13} className="text-primary-500" /> {formatTime(selectedMeeting.time)}
               </span>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                selectedMeeting.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                selectedMeeting.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                'bg-slate-100 text-slate-600'
-              }`}>
+              <span className={
+                selectedMeeting.status === 'completed' ? 'badge-success' :
+                selectedMeeting.status === 'in_progress' ? 'badge-info' :
+                'badge-secondary'
+              }>
                 {selectedMeeting.status === 'completed' ? t('agenda.status_completed') :
                  selectedMeeting.status === 'in_progress' ? t('agenda.status_in_progress') :
                  t('agenda.status_scheduled')}
@@ -651,7 +651,7 @@ export default function Agenda() {
                 <span className={`text-xs font-medium ${
                   isOverCapacity ? 'text-red-600 dark:text-red-400' :
                   isNearCapacity ? 'text-orange-600 dark:text-orange-400' :
-                  'text-slate-500 dark:text-slate-400'
+                  'text-slate-600 dark:text-slate-300'
                 }`}>
                   {t('agenda.items_count', { count: totalItems, max: maxItems })}
                 </span>
@@ -670,7 +670,7 @@ export default function Agenda() {
             </div>
           )}
           <div className="flex-1" />
-          <button onClick={() => fetchItems(selectedId)} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-primary-500 transition-colors">
+          <button onClick={() => fetchItems(selectedId)} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors self-start lg:self-auto">
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
@@ -930,14 +930,29 @@ export default function Agenda() {
         title={t('agenda.add_modal_title')}
         onClose={() => setModalOpen(false)}
         size="md"
+        footer={
+          <>
+            <button type="button" className="btn-outline px-5 py-2" onClick={() => setModalOpen(false)}>
+              {t('agenda.cancel')}
+            </button>
+            <button
+              type="submit"
+              form="agenda-add-item-form"
+              disabled={saving || !form.submission_id}
+              className="btn-primary px-5 py-2 disabled:opacity-50"
+            >
+              {saving ? t('agenda.add_modal_submitting') : t('agenda.add_modal_submit')}
+            </button>
+          </>
+        }
       >
-          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-1 mb-3">
+          <p className="text-xs text-primary-800 dark:text-primary-200 bg-primary-50 dark:bg-primary-900/20 rounded-lg px-3 py-2 mb-4">
             {t('agenda.add_modal_workspace_hint')}
           </p>
-          <form onSubmit={handleAdd} className="space-y-4">
+          <form id="agenda-add-item-form" onSubmit={handleAdd} className="space-y-5">
             {/* Submission — pick first so we can auto-fill category */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                 {t('agenda.add_modal_submission_label')} <span className="text-red-500">*</span>
               </label>
               <select
@@ -980,7 +995,7 @@ export default function Agenda() {
 
             {/* Category — auto-populated from form type, still editable for override */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                 {t('agenda.add_modal_section_label')} <span className="text-red-500">*</span>
               </label>
               <select
@@ -1002,9 +1017,9 @@ export default function Agenda() {
 
             {/* Matters Arising extra fields */}
             {form.category === 'matters_arising' && (
-              <>
+              <div className="rounded-lg border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                     {t('agenda.add_modal_prev_ref_label')}
                   </label>
                   <input
@@ -1015,7 +1030,7 @@ export default function Agenda() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                     {t('agenda.add_modal_prev_no_label')}
                   </label>
                   <input
@@ -1025,25 +1040,8 @@ export default function Agenda() {
                     onChange={e => setForm(f => ({ ...f, matters_arising_agenda_no: e.target.value }))}
                   />
                 </div>
-              </>
+              </div>
             )}
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="submit"
-                disabled={saving || !form.submission_id}
-                className="btn-primary px-6 py-2.5 disabled:opacity-50"
-              >
-                {saving ? t('agenda.add_modal_submitting') : t('agenda.add_modal_submit')}
-              </button>
-              <button
-                type="button"
-                className="btn-outline px-6 py-2.5"
-                onClick={() => setModalOpen(false)}
-              >
-                {t('agenda.cancel')}
-              </button>
-            </div>
           </form>
       </Modal>
 
