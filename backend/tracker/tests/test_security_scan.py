@@ -12,6 +12,8 @@ from tracker.models import Profile, Role, SecurityScan
 def _fake_run(dep_vulns=0, issues=(), fail_dep=False):
     def run(cmd, **kw):
         if "pip_audit" in cmd:
+            # pip-audit 2.10 exits with a usage error on unknown flags such as -q.
+            assert "-q" not in cmd, "pip-audit must not be given -q"
             if fail_dep:
                 return mock.Mock(returncode=1, stdout="", stderr="could not reach the vulnerability database")
             return mock.Mock(returncode=0, stderr="", stdout=json.dumps(
