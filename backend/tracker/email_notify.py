@@ -1383,10 +1383,11 @@ def notify_flying_item_incomplete(item) -> None:
 
 
 def notify_minutes_submitted_for_review(minutes) -> None:
-    """Tell everyone who has to approve these minutes that they are waiting.
+    """Tell whoever's turn it is to approve these minutes that they are waiting.
 
-    That is the Secretary and the Chairperson, plus the Compliance Manager
-    when the sitting took compliance business. Best-effort, in-app only.
+    One after the other that is the Secretary first, then — called again once
+    the Secretary has approved — the Chairperson. At the same time, it is both.
+    Best-effort, in-app only.
     """
     from . import minutes_review as mr
 
@@ -1394,16 +1395,67 @@ def notify_minutes_submitted_for_review(minutes) -> None:
     days = mr.secretariat_review_days()
     reviewers = list(
         User.objects.filter(
-            is_active=True, psc_profile__role__in=mr.pending_reviewers(minutes),
+            is_active=True, psc_profile__role__in=mr.current_reviewers(minutes),
         ).select_related("psc_profile")
     )
     _notify_users(
         reviewers,
+        link=f"/secretariat/meetings/{minutes.meeting_id}/minutes",
         title=f"Minutes awaiting your review — {ref}".strip(),
         body=(
             "Draft minutes have been submitted and need your review and approval "
             f"within {days} working day{'s' if days != 1 else ''}."
         ),
+    )
+
+
+def _minute_takers(minutes) -> list[User]:
+    """Who owns the draft: whoever built it (falling back to the minute-taker
+    roles when that account is gone), plus the Compliance Manager when the
+    sitting took compliance business."""
+    from . import minutes_review as mr
+    from .models import Role
+
+    if minutes.created_by_id and minutes.created_by.is_active:
+        takers = {minutes.created_by_id: minutes.created_by}
+    else:
+        takers = {
+            u.id: u for u in User.objects.filter(
+                is_active=True, psc_profile__role__in=list(mr.MINUTE_TAKER_ROLES),
+            )
+        }
+    if minutes.submitted_for_review_by_id and minutes.submitted_for_review_by.is_active:
+        takers[minutes.submitted_for_review_by_id] = minutes.submitted_for_review_by
+    if mr.requires_compliance_review(minutes):
+        for u in User.objects.filter(is_active=True, psc_profile__role=Role.COMPLIANCE_MANAGER):
+            takers[u.id] = u
+    return list(takers.values())
+
+
+def notify_minutes_draft_confirmed(minutes) -> None:
+    """Tell the other minute takers the Compliance Manager is done with the draft."""
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    others = [u for u in _minute_takers(minutes) if u.id != minutes.compliance_reviewed_by_id]
+    _notify_users(
+        others,
+        title=f"Compliance items confirmed — {ref}".strip(),
+        body="Manager Compliance has confirmed the compliance items. The draft minutes can be submitted for review.",
+        link=f"/secretariat/meetings/{minutes.meeting_id}/minutes",
+    )
+
+
+def notify_minutes_returned_to_drafters(minutes) -> None:
+    """Tell the minute takers a reviewer has sent the draft back, with the note."""
+    ref = minutes.meeting.reference_number if minutes.meeting else ""
+    who = ""
+    if minutes.review_returned_by:
+        who = minutes.review_returned_by.get_full_name() or minutes.review_returned_by.username
+    note = (minutes.review_return_note or "").strip()
+    _notify_users(
+        _minute_takers(minutes),
+        title=f"Draft minutes returned — {ref}".strip(),
+        body=(f"{who} returned the draft minutes: " if who else "The draft minutes were returned: ") + note[:400],
+        link=f"/secretariat/meetings/{minutes.meeting_id}/minutes",
     )
 
 
@@ -1414,13 +1466,7 @@ def notify_minutes_draft_review_due(minutes, *, overdue: bool) -> None:
     ref = minutes.meeting.reference_number if minutes.meeting else ""
     # Whoever drafted these minutes owns the read-back; fall back to the role
     # when that account is gone or deactivated.
-    if minutes.created_by_id and minutes.created_by.is_active:
-        takers = [minutes.created_by]
-    else:
-        takers = list(
-            User.objects.filter(is_active=True, psc_profile__role__in=list(mr.MINUTE_TAKER_ROLES))
-            .select_related("psc_profile")
-        )
+    takers = _minute_takers(minutes)
     _notify_users(
         takers,
         title=(
@@ -1443,7 +1489,7 @@ def notify_minutes_review_overdue(minutes) -> None:
     from .models import Role
 
     ref = minutes.meeting.reference_number if minutes.meeting else ""
-    waiting = mr.pending_reviewers(minutes)
+    waiting = mr.current_reviewers(minutes)
     if not waiting:
         return
     recipients = list(

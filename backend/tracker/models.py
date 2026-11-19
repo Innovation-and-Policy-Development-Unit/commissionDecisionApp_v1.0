@@ -4377,11 +4377,11 @@ class Minutes(models.Model):
         on_delete=models.SET_NULL, related_name="chairman_reviewed_minutes",
     )
     chairman_reviewed_at = models.DateTimeField(null=True, blank=True)
-    # ── Compliance business: the Compliance Manager reviews it too ─────────
-    # Only required when the sitting actually took compliance matters (see
-    # minutes_review.requires_compliance_review) — otherwise the Compliance
-    # Manager is not a reviewer of these minutes at all and the Secretary and
-    # Chairman alone carry them.
+    # ── Compliance business: the Compliance Manager is a minute taker ──────
+    # On a sitting that took compliance matters (see
+    # minutes_review.requires_compliance_review) the Compliance Manager minutes
+    # those items, and confirms the draft here before it can go to the
+    # Secretary. On any other sitting they have no part in the minutes.
     compliance_reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="compliance_reviewed_minutes",
@@ -4390,6 +4390,15 @@ class Minutes(models.Model):
     # ── Commissioner circulation (pre-signature), 2 working day SLA ───────
     commissioner_circulated_at = models.DateTimeField(null=True, blank=True)
     commissioner_review_due_at = models.DateTimeField(null=True, blank=True)
+    # ── Sent back by the Secretary or Chairman during their review ─────────
+    # The draft returns to the minute takers with a note saying what to fix.
+    # Kept after resubmission as the record of the last return.
+    review_return_note = models.TextField(blank=True)
+    review_returned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="minutes_returned_in_review",
+    )
+    review_returned_at = models.DateTimeField(null=True, blank=True)
     returned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="returned_minutes",

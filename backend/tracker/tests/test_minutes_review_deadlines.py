@@ -145,61 +145,221 @@ class DraftReadBackTests(_Base):
         self.assertIsNone(self.minutes.draft_review_reminded_at)
 
 
-class ComplianceReviewTests(_Base):
-    def test_no_compliance_business_means_two_reviewers(self):
+class ComplianceMinuteTakerTests(_Base):
+    """On compliance business the Compliance Manager is a minute taker: they
+    confirm the draft before it leaves, and are not one of its approvers."""
+
+    def test_no_compliance_business_means_no_confirmation_is_needed(self):
         self._agenda_item("An appointment")
         self.assertFalse(mr.requires_compliance_review(self.minutes))
-
-        self._post(self.taker, "submit-for-review")
-        self._post(self.secretary, "secretariat-approve")
-        res = self._post(self.chairman, "secretariat-approve")
-        self.assertEqual(res.data["status"], MinutesStatus.REVIEWED)
-
-    def test_a_compliance_section_item_brings_the_compliance_manager_in(self):
-        self._agenda_item("A discipline matter", category="discipline_compliance")
-        self.assertTrue(mr.requires_compliance_review(self.minutes))
-
-        self._post(self.taker, "submit-for-review")
-        self._post(self.secretary, "secretariat-approve")
-        res = self._post(self.chairman, "secretariat-approve")
-        self.assertEqual(
-            res.data["status"], MinutesStatus.PENDING_SECRETARIAT_REVIEW,
-            "the Compliance Manager has not approved yet",
-        )
-        self.assertEqual(res.data["review_state"]["pending_reviewers"], [Role.COMPLIANCE_MANAGER])
-
-        res = self._post(self.compliance, "secretariat-approve")
-        self.assertEqual(res.status_code, 200, res.data)
-        self.assertEqual(res.data["status"], MinutesStatus.REVIEWED)
-        self.assertIsNotNone(res.data["compliance_reviewed_at"])
+        self.assertEqual(self._post(self.taker, "submit-for-review").status_code, 200)
 
     def test_a_compliance_submission_in_another_section_still_counts(self):
         # A compliance matter placed under Other Matters is still compliance
-        # business and still needs the Compliance Manager's eye.
+        # business and still the Compliance Manager's to minute.
         self._agenda_item("Compliance matter filed elsewhere", category="other",
                           routed_unit=RoutedUnit.COMPLIANCE)
         self.assertTrue(mr.requires_compliance_review(self.minutes))
 
-    def test_the_compliance_manager_is_not_a_reviewer_without_compliance_business(self):
-        # Not 403: a sitting with no compliance business is not theirs to see at
-        # all until it is signed, so the minutes are simply not there for them.
+    def test_the_draft_cannot_be_submitted_until_compliance_confirms(self):
+        self._agenda_item("A discipline matter", category="discipline_compliance")
+        res = self._post(self.taker, "submit-for-review")
+        self.assertEqual(res.status_code, 400, res.data)
+
+        res = self._post(self.compliance, "confirm-draft")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertTrue(res.data["review_state"]["compliance_confirmed"])
+        self.assertTrue(
+            Notification.objects.filter(recipient=self.taker, title__startswith="Compliance items confirmed").exists()
+        )
+
+        res = self._post(self.taker, "submit-for-review")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data["status"], MinutesStatus.PENDING_SECRETARIAT_REVIEW)
+
+    def test_only_the_compliance_manager_confirms(self):
+        self._agenda_item("A discipline matter", category="discipline_compliance")
+        self.assertEqual(self._post(self.taker, "confirm-draft").status_code, 403)
+
+    def test_there_is_nothing_to_confirm_without_compliance_business(self):
+        # Not 400: a sitting with no compliance business is not theirs to see
+        # at all until it is signed, so the minutes are simply not there.
+        self._agenda_item("An appointment")
+        self.assertEqual(self._post(self.compliance, "confirm-draft").status_code, 404)
+
+    def test_the_compliance_manager_is_not_an_approver(self):
+        self._agenda_item("A discipline matter", category="discipline_compliance")
+        self._post(self.compliance, "confirm-draft")
+        self._post(self.taker, "submit-for-review")
+        self.assertEqual(self._post(self.compliance, "secretariat-approve").status_code, 403)
+        self._post(self.secretary, "secretariat-approve")
+        res = self._post(self.chairman, "secretariat-approve")
+        self.assertEqual(res.data["status"], MinutesStatus.REVIEWED)
+
+    def _content(self, hr_item, compliance_item):
+        return {
+            "opening": "Opened at 9.",
+            "agenda_items": [
+                {"agenda_item_id": hr_item.id, "title": "Appointment", "discussion": "HR text", "decision": "Approved."},
+                {"agenda_item_id": compliance_item.id, "title": "Discipline", "discussion": "Old", "decision": "Noted."},
+            ],
+        }
+
+    def _patch(self, user, content):
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client.patch(f"/api/minutes/{self.minutes.id}/", {"content": content}, format="json")
+
+    def test_the_compliance_manager_reads_the_whole_draft_but_edits_only_their_items(self):
+        hr_item = self._agenda_item("An appointment")
+        compliance_item = self._agenda_item("A discipline matter", category="discipline_compliance",
+                                            routed_unit=RoutedUnit.COMPLIANCE)
+        self.minutes.content = self._content(hr_item, compliance_item)
+        self.minutes.save(update_fields=["content"])
+
+        client = APIClient()
+        client.force_authenticate(user=self.compliance)
+        data = client.get(f"/api/minutes/{self.minutes.id}/").data
+        blocks = {b["agenda_item_id"]: b for b in data["content"]["agenda_items"]}
+        self.assertEqual(blocks[hr_item.id]["discussion"], "HR text", "they read the whole draft")
+        self.assertTrue(blocks[hr_item.id].get("locked"))
+        self.assertFalse(blocks[compliance_item.id].get("locked"))
+        self.assertTrue(data["review_state"]["can_edit_compliance_items"])
+
+        edited = self._content(hr_item, compliance_item)
+        edited["opening"] = "Tampered"
+        edited["agenda_items"][0]["discussion"] = "Tampered"
+        edited["agenda_items"][1]["discussion"] = "Members agreed a warning is enough."
+        res = self._patch(self.compliance, edited)
+        self.assertEqual(res.status_code, 200, res.data)
+
+        self.minutes.refresh_from_db()
+        stored = {b["agenda_item_id"]: b for b in self.minutes.content["agenda_items"]}
+        self.assertEqual(stored[compliance_item.id]["discussion"], "Members agreed a warning is enough.")
+        self.assertEqual(stored[hr_item.id]["discussion"], "HR text")
+        self.assertNotIn("locked", stored[hr_item.id])
+        self.assertEqual(self.minutes.content["opening"], "Opened at 9.")
+        self.assertEqual(self.minutes.status, MinutesStatus.DRAFT)
+
+    def test_editing_their_items_after_confirming_needs_a_fresh_confirmation(self):
+        hr_item = self._agenda_item("An appointment")
+        compliance_item = self._agenda_item("A discipline matter", category="discipline_compliance")
+        self.minutes.content = self._content(hr_item, compliance_item)
+        self.minutes.save(update_fields=["content"])
+        self._post(self.compliance, "confirm-draft")
+
+        edited = self._content(hr_item, compliance_item)
+        edited["agenda_items"][1]["decision"] = "Written warning."
+        self._patch(self.compliance, edited)
+        self.minutes.refresh_from_db()
+        self.assertIsNone(self.minutes.compliance_reviewed_by)
+
+    def test_the_compliance_manager_cannot_edit_once_the_draft_has_left(self):
+        hr_item = self._agenda_item("An appointment")
+        compliance_item = self._agenda_item("A discipline matter", category="discipline_compliance")
+        self.minutes.content = self._content(hr_item, compliance_item)
+        self.minutes.save(update_fields=["content"])
+        self._post(self.compliance, "confirm-draft")
+        self._post(self.taker, "submit-for-review")
+        res = self._patch(self.compliance, self._content(hr_item, compliance_item))
+        self.assertEqual(res.status_code, 403, res.data)
+
+
+class SequentialReviewTests(_Base):
+    """Secretary first, then the Chairman; either can send the draft back."""
+
+    def setUp(self):
+        super().setUp()
         self._agenda_item("An appointment")
         self._post(self.taker, "submit-for-review")
-        res = self._post(self.compliance, "secretariat-approve")
-        self.assertEqual(res.status_code, 404, res.data)
+        Notification.objects.all().delete()
 
-    def test_resubmitting_clears_a_previous_compliance_approval(self):
-        self._agenda_item("A discipline matter", category="discipline_compliance")
-        self._post(self.taker, "submit-for-review")
-        self._post(self.compliance, "secretariat-approve")
+    def test_only_the_secretary_is_asked_first(self):
+        Notification.objects.all().delete()
         self.minutes.refresh_from_db()
         self.minutes.status = MinutesStatus.DRAFT
         self.minutes.save(update_fields=["status"])
+        res = self._post(self.taker, "submit-for-review")
+        self.assertEqual(res.data["review_state"]["current_reviewers"], [Role.PSC_SECRETARY])
+        self.assertTrue(Notification.objects.filter(recipient=self.secretary).exists())
+        self.assertFalse(Notification.objects.filter(recipient=self.chairman).exists())
 
-        self._post(self.taker, "submit-for-review")
+    def test_the_chairman_cannot_approve_before_the_secretary(self):
+        res = self._post(self.chairman, "secretariat-approve")
+        self.assertEqual(res.status_code, 400, res.data)
+        self.minutes.refresh_from_db()
+        self.assertIsNone(self.minutes.chairman_reviewed_by)
+
+    def test_the_secretarys_approval_hands_it_to_the_chairman_with_a_fresh_window(self):
+        self.minutes.refresh_from_db()
+        self.minutes.review_due_at = timezone.now() - datetime.timedelta(days=3)
+        self.minutes.review_reminded_at = timezone.now()
+        self.minutes.save(update_fields=["review_due_at", "review_reminded_at"])
+
+        res = self._post(self.secretary, "secretariat-approve")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data["status"], MinutesStatus.PENDING_SECRETARIAT_REVIEW)
+        self.assertEqual(res.data["review_state"]["current_reviewers"], [Role.CHAIRPERSON])
+        self.assertTrue(Notification.objects.filter(recipient=self.chairman).exists())
+        self.minutes.refresh_from_db()
+        self.assertGreater(self.minutes.review_due_at, timezone.now())
+        self.assertIsNone(self.minutes.review_reminded_at)
+
+        res = self._post(self.chairman, "secretariat-approve")
+        self.assertEqual(res.data["status"], MinutesStatus.REVIEWED)
+
+    def test_in_parallel_mode_the_chairman_may_go_first(self):
+        SystemSetting.objects.update_or_create(key=mr.SETTING_REVIEW_MODE, defaults={"value": "parallel"})
+        res = self._post(self.chairman, "secretariat-approve")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data["status"], MinutesStatus.PENDING_SECRETARIAT_REVIEW)
+        res = self._post(self.secretary, "secretariat-approve")
+        self.assertEqual(res.data["status"], MinutesStatus.REVIEWED)
+
+    def test_the_review_order_is_seeded_as_sequential(self):
+        self.assertEqual(SystemSetting.get_val(mr.SETTING_REVIEW_MODE), "sequential")
+
+    def test_returning_needs_a_note(self):
+        res = self._post(self.secretary, "return-to-drafters", {"note": "  "})
+        self.assertEqual(res.status_code, 400, res.data)
+
+    def test_the_secretary_can_return_the_draft_with_a_note(self):
+        res = self._post(self.secretary, "return-to-drafters", {"note": "Item 3: wrong officer named."})
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data["status"], MinutesStatus.DRAFT)
+        self.assertEqual(res.data["review_return_note"], "Item 3: wrong officer named.")
+        self.assertEqual(res.data["review_returned_by_name"], self.secretary.username)
+        self.assertIsNotNone(res.data["draft_review_due_at"])
+        note = Notification.objects.filter(recipient=self.taker, title__startswith="Draft minutes returned").first()
+        self.assertIsNotNone(note)
+        self.assertIn("wrong officer", note.body)
+
+    def test_the_chairman_returning_clears_the_secretarys_approval(self):
+        self._post(self.secretary, "secretariat-approve")
+        res = self._post(self.chairman, "return-to-drafters", {"note": "Decision wording on item 2."})
+        self.assertEqual(res.status_code, 200, res.data)
+        self.minutes.refresh_from_db()
+        self.assertEqual(self.minutes.status, MinutesStatus.DRAFT)
+        self.assertIsNone(self.minutes.secretary_reviewed_by)
+
+    def test_the_chairman_cannot_return_while_it_is_with_the_secretary(self):
+        res = self._post(self.chairman, "return-to-drafters", {"note": "Too early."})
+        self.assertEqual(res.status_code, 400, res.data)
+
+    def test_a_minute_taker_cannot_return_their_own_draft(self):
+        self.assertEqual(self._post(self.taker, "return-to-drafters", {"note": "x"}).status_code, 403)
+
+    def test_returning_a_compliance_sitting_asks_compliance_to_confirm_again(self):
+        self.minutes.refresh_from_db()
+        self._agenda_item("A discipline matter", category="discipline_compliance")
+        self.minutes.compliance_reviewed_by = self.compliance
+        self.minutes.compliance_reviewed_at = timezone.now()
+        self.minutes.save(update_fields=["compliance_reviewed_by", "compliance_reviewed_at"])
+        self._post(self.secretary, "return-to-drafters", {"note": "Fix item 1."})
         self.minutes.refresh_from_db()
         self.assertIsNone(self.minutes.compliance_reviewed_by)
-        self.assertIsNone(self.minutes.compliance_reviewed_at)
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.compliance, title__startswith="Draft minutes returned").exists())
 
 
 class OverdueChaseTests(_Base):
@@ -230,11 +390,11 @@ class OverdueChaseTests(_Base):
         self.minutes.save(update_fields=["review_due_at"])
 
         self.assertEqual(remind_overdue_minute_reviews(), 1)
-        for user in (self.secretary, self.chairman):
-            self.assertEqual(
-                Notification.objects.filter(recipient=user, title__startswith="Minutes review overdue").count(),
-                1, user.username,
-            )
+        # It is with the Secretary; the Chairman's turn has not come yet.
+        self.assertEqual(
+            Notification.objects.filter(recipient=self.secretary, title__startswith="Minutes review overdue").count(), 1,
+        )
+        self.assertFalse(Notification.objects.filter(recipient=self.chairman).exists())
         self.assertEqual(remind_overdue_minute_reviews(), 0)
 
     def test_a_reviewer_who_has_approved_is_not_chased(self):

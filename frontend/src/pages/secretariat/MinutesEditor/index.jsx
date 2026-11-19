@@ -28,10 +28,15 @@ const SEND_FOR_SIGNATURE_ROLES = new Set(['senior_admin_officer', 'psc_secretary
 // Manager CSU takes the minutes in practice; the Senior Admin Officer is the
 // role the SOP names. Both draft them and hand them on.
 const SUBMIT_REVIEW_ROLES = new Set(['senior_admin_officer', 'csu_manager', 'psc_secretary', 'psc_admin'])
-// Manager Compliance only reviews a sitting that took compliance business —
-// the backend decides that and reports it as review_state.compliance_required.
+// The Secretary approves, then the Chairman (or both at once when the review
+// mode is parallel) — the backend reports whose turn it is as
+// review_state.current_reviewers. Either can send the draft back with a note.
 const SECRETARIAT_APPROVE_ROLES = new Set(['psc_secretary', 'chairperson', 'psc_admin'])
-const COMPLIANCE_APPROVE_ROLE = 'compliance_manager'
+// Manager Compliance is a minute taker of a sitting that took compliance
+// business: they edit their own items of the draft and confirm them before it
+// can be submitted. The backend reports this as review_state.compliance_*.
+const COMPLIANCE_TAKER_ROLE = 'compliance_manager'
+const ROLE_LABELS = { psc_secretary: 'the Secretary', chairperson: 'the Chairman' }
 const CIRCULATE_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'csu_manager', 'psc_admin'])
 const COMMISSIONER_COMMENT_ROLES = new Set(['psc_commissioner', 'chairperson', 'psc_secretary', 'psc_admin'])
 const ALLOCATE_TASKS_ROLES = new Set(['psc_secretary', 'psc_admin'])
@@ -326,12 +331,26 @@ export default function MinutesEditor() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const canEditMinutes = userCanEditMinutes(user)
   // Non-editors (OPSC viewers of endorsed minutes) always get the read-only view.
-  const viewMode = !canEditMinutes || searchParams.get('mode') === 'view'
+  // `minutes` is declared below; these are derived after it loads.
 
   const [meeting, setMeeting] = useState(null)
   const [minutes, setMinutes] = useState(null)
+  const [returnOpen, setReturnOpen] = useState(false)
+  const [returnNote, setReturnNote] = useState('')
+  // Manager Compliance edits only the compliance items, and only while it is a draft.
+  const complianceItemsOnly = Boolean(minutes?.review_state?.compliance_items_only)
+  const canEditMinutes = userCanEditMinutes(user) || Boolean(minutes?.review_state?.can_edit_compliance_items)
+  const viewMode = !canEditMinutes || searchParams.get('mode') === 'view'
+  const isAdminRole = user?.role === 'psc_admin'
+  const myTurnToReview = minutes?.status === 'pending_secretariat_review'
+    && SECRETARIAT_APPROVE_ROLES.has(user?.role)
+    && (isAdminRole || (minutes.review_state?.current_reviewers || []).includes(user?.role))
+  // Only the compliance items are theirs to change; the rest reads as text.
+  const Section = complianceItemsOnly ? ReadOnlySection : SectionEditor
+  const complianceOutstanding = Boolean(
+    minutes?.review_state?.compliance_required && !minutes?.review_state?.compliance_confirmed,
+  )
   const [previousMeeting, setPreviousMeeting] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -434,7 +453,7 @@ export default function MinutesEditor() {
 
   const signedFileRef = useRef(null)
 
-  const changeStatus = async (action) => {
+  const changeStatus = async (action, body = {}) => {
     setSaving(true)
     setError('')
     setSuccess('')
@@ -442,17 +461,23 @@ export default function MinutesEditor() {
       const methodMap = {
         submit_review: 'submit-for-review',
         approve: 'secretariat-approve',
+        confirm_draft: 'confirm-draft',
+        return_to_drafters: 'return-to-drafters',
         circulate: 'circulate-to-commissioners',
         return: 'return-to-secretariat',
         send_for_signature: 'mark-for-signature',
         allocate_tasks: 'allocate-tasks',
       }
       const method = methodMap[action] || 'submit-for-review'
-      const res = await api.post(`/minutes/${minutes.id}/${method}/`, {})
+      const res = await api.post(`/minutes/${minutes.id}/${method}/`, body)
       setMinutes(res.data)
+      if (res.data.content && typeof res.data.content === 'object') setContent(res.data.content)
+      if (action === 'return_to_drafters') { setReturnOpen(false); setReturnNote('') }
       const messages = {
-        submit_review: 'Minutes submitted to the Secretary and Chairman for review.',
+        submit_review: 'Minutes submitted for review.',
         approve: 'Your approval has been recorded.',
+        confirm_draft: 'Compliance items confirmed. The draft can now be submitted for review.',
+        return_to_drafters: 'Minutes returned to the minute takers.',
         circulate: 'Minutes circulated to Commissioners for comment.',
         return: 'Minutes returned to the Secretariat.',
         send_for_signature: 'Minutes sent for signature — print and obtain signatures at the next sitting.',
@@ -578,6 +603,30 @@ export default function MinutesEditor() {
         </div>
       )}
 
+      {minutes?.id && minutes.status === 'draft' && minutes.review_return_note && (
+        <div className="card card-compact mb-6 border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10 text-sm">
+          <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">
+            Returned by {minutes.review_returned_by_name || 'a reviewer'} on {formatDateTime(minutes.review_returned_at)}
+          </p>
+          <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{minutes.review_return_note}</p>
+        </div>
+      )}
+
+      {minutes?.id && minutes.status === 'draft' && minutes.review_state?.compliance_required && (
+        <div className="card card-compact mb-6 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10 text-sm">
+          <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">Compliance business on this agenda</p>
+          <p className="text-slate-600 dark:text-slate-400">
+            {complianceItemsOnly
+              ? 'You can edit the compliance items. The rest of the draft is shown for reading only.'
+              : 'Manager Compliance takes the minutes of the compliance items and confirms them before the draft can be submitted.'}
+            {' '}
+            {minutes.compliance_reviewed_by_name
+              ? `✓ Confirmed by ${minutes.compliance_reviewed_by_name} ${formatDateTime(minutes.compliance_reviewed_at)}.`
+              : 'Not yet confirmed.'}
+          </p>
+        </div>
+      )}
+
       {/* The minute taker reads their own draft back before it goes anywhere.
           The window was never shown, so a draft could sit untouched. */}
       {minutes?.id && minutes.status === 'draft' && minutes.draft_review_due_at && (
@@ -602,7 +651,9 @@ export default function MinutesEditor() {
       {minutes?.id && minutes.status === 'pending_secretariat_review' && (
         <div className="card card-compact mb-6 border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10 text-sm">
           <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">
-            Awaiting review{minutes.review_state?.compliance_required ? ' — compliance business on this agenda' : ''}
+            {(minutes.review_state?.current_reviewers || []).length > 0
+              ? `With ${(minutes.review_state.current_reviewers).map(r => ROLE_LABELS[r] || r).join(' and ')} for review`
+              : 'Awaiting review'}
           </p>
           <p className="text-slate-600 dark:text-slate-400">
             Due {formatDateTime(minutes.review_due_at)}
@@ -611,13 +662,9 @@ export default function MinutesEditor() {
           <p className="mt-2 text-slate-600 dark:text-slate-400">
             Secretary: {minutes.secretary_reviewed_by_name ? `✓ approved ${formatDateTime(minutes.secretary_reviewed_at)}` : 'awaiting approval'}
             {' · '}
-            Chairman: {minutes.chairman_reviewed_by_name ? `✓ approved ${formatDateTime(minutes.chairman_reviewed_at)}` : 'awaiting approval'}
-            {minutes.review_state?.compliance_required && (
-              <>
-                {' · '}
-                Manager Compliance: {minutes.compliance_reviewed_by_name ? `✓ approved ${formatDateTime(minutes.compliance_reviewed_at)}` : 'awaiting approval'}
-              </>
-            )}
+            Chairman: {minutes.chairman_reviewed_by_name
+              ? `✓ approved ${formatDateTime(minutes.chairman_reviewed_at)}`
+              : (minutes.review_state?.sequential && !minutes.secretary_reviewed_by_name ? 'after the Secretary' : 'awaiting approval')}
           </p>
         </div>
       )}
@@ -730,10 +777,10 @@ export default function MinutesEditor() {
       {!viewMode && (
       <>
       <div className="space-y-4">
-        <AgendaAdoptionStatus minutes={minutes} canEdit={canEditMinutes} busy={saving} onToggle={toggleAgendaAdopted} />
-        <SectionEditor label="Opening" value={content.opening} placeholder="e.g. The meeting opened at 9:30 AM with a prayer led by..." onChange={v => setContent(prev => ({ ...prev, opening: v }))} />
-        <PreviousMinutesHint previousMeeting={previousMeeting} editable hasText={Boolean(content.confirmation_previous_minutes)} onUseSuggested={useSuggestedPreviousMinutesText} />
-        <SectionEditor label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} placeholder="e.g. The minutes of the previous sitting were confirmed as a true record..." onChange={v => setContent(prev => ({ ...prev, confirmation_previous_minutes: v }))} />
+        <AgendaAdoptionStatus minutes={minutes} canEdit={canEditMinutes && !complianceItemsOnly} busy={saving} onToggle={toggleAgendaAdopted} />
+        <Section label="Opening" value={content.opening} placeholder="e.g. The meeting opened at 9:30 AM with a prayer led by..." onChange={v => setContent(prev => ({ ...prev, opening: v }))} />
+        <PreviousMinutesHint previousMeeting={previousMeeting} editable={!complianceItemsOnly} hasText={Boolean(content.confirmation_previous_minutes)} onUseSuggested={useSuggestedPreviousMinutesText} />
+        <Section label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} placeholder="e.g. The minutes of the previous sitting were confirmed as a true record..." onChange={v => setContent(prev => ({ ...prev, confirmation_previous_minutes: v }))} />
 
         <div className="mb-4">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Agenda Items</label>
@@ -741,28 +788,57 @@ export default function MinutesEditor() {
             <div key={idx} className="mb-3">
               {item.restricted ? (
                 <RestrictedAgendaItem item={item} index={idx} />
+              ) : item.locked ? (
+                <ReadOnlyAgendaItem item={item} index={idx} />
               ) : (
                 <AgendaItemEditor item={item} index={idx} onChange={handleAgendaChange} />
               )}
             </div>
           ))}
-          <button
+          {!complianceItemsOnly && <button
             type="button"
             onClick={() => setContent(prev => ({ ...prev, agenda_items: [...(prev.agenda_items || []), { sequence: (prev.agenda_items?.length || 0) + 1, submission_ref: '', title: '', discussion: '', decision: '', decision_type: '', action_items: [] }] }))}
             className="flex items-center gap-1.5 text-sm font-bold text-primary-600 hover:text-primary-700 transition-colors"
           >
             <Plus size={14} /> Add Agenda Item
-          </button>
+          </button>}
         </div>
 
-        <SectionEditor label="Any Other Business" value={content.any_other_business} placeholder="e.g. The Commission noted the update on..." onChange={v => setContent(prev => ({ ...prev, any_other_business: v }))} />
-        <SectionEditor label="Closing" value={content.closing} placeholder="e.g. There being no further business, the meeting closed at..." onChange={v => setContent(prev => ({ ...prev, closing: v }))} />
+        <Section label="Any Other Business" value={content.any_other_business} placeholder="e.g. The Commission noted the update on..." onChange={v => setContent(prev => ({ ...prev, any_other_business: v }))} />
+        <Section label="Closing" value={content.closing} placeholder="e.g. There being no further business, the meeting closed at..." onChange={v => setContent(prev => ({ ...prev, closing: v }))} />
 
         <div className="mb-4">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Next Meeting Date</label>
-          <input className="input" type="text" value={content.next_meeting_date || ''} placeholder="e.g. TBC, or a specific date" onChange={e => setContent(prev => ({ ...prev, next_meeting_date: e.target.value }))} />
+          <input className="input" type="text" disabled={complianceItemsOnly} value={content.next_meeting_date || ''} placeholder="e.g. TBC, or a specific date" onChange={e => setContent(prev => ({ ...prev, next_meeting_date: e.target.value }))} />
         </div>
       </div>
+
+      {returnOpen && myTurnToReview && (
+        <div className="mt-6 card card-compact border-slate-300 dark:border-slate-700">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+            What needs to change?
+          </label>
+          <textarea
+            className="input min-h-[80px] resize-y text-sm"
+            value={returnNote}
+            onChange={e => setReturnNote(e.target.value)}
+            placeholder="e.g. Item 3: the officer's name is wrong. Item 5: decision should read Deferred."
+          />
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            The draft goes back to the minute takers with this note, and every approval so far is cleared.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={() => changeStatus('return_to_drafters', { note: returnNote })}
+              disabled={saving || !returnNote.trim()}
+              className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
+            >
+              Return to minute takers
+            </button>
+            <button onClick={() => setReturnOpen(false)} className="btn-secondary px-4 py-2 text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
         <div className="flex items-center gap-3">
@@ -776,20 +852,33 @@ export default function MinutesEditor() {
           </button>
           {minutes?.id && (
             <>
+              {minutes.status === 'draft' && complianceOutstanding && (user?.role === COMPLIANCE_TAKER_ROLE || isAdminRole) && (
+                <button onClick={() => changeStatus('confirm_draft')} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors disabled:opacity-60">
+                  <CheckCircle2 size={16} />
+                  Confirm Compliance Items
+                </button>
+              )}
               {minutes.status === 'draft' && SUBMIT_REVIEW_ROLES.has(user?.role) && (
-                <button onClick={() => changeStatus('submit_review')} disabled={saving} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
+                <button
+                  onClick={() => changeStatus('submit_review')}
+                  disabled={saving || complianceOutstanding}
+                  title={complianceOutstanding ? 'Manager Compliance has to confirm the compliance items first.' : undefined}
+                  className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60"
+                >
                   <CheckCircle2 size={16} />
                   Submit for Review
                 </button>
               )}
-              {minutes.status === 'pending_secretariat_review' && (
-                SECRETARIAT_APPROVE_ROLES.has(user?.role)
-                || (user?.role === COMPLIANCE_APPROVE_ROLE && minutes.review_state?.compliance_required)
-              ) && (
-                <button onClick={() => changeStatus('approve')} disabled={saving} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-orange-500/20 disabled:opacity-60">
-                  <CheckCircle2 size={16} />
-                  Approve
-                </button>
+              {myTurnToReview && (
+                <>
+                  <button onClick={() => changeStatus('approve')} disabled={saving} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-orange-500/20 disabled:opacity-60">
+                    <CheckCircle2 size={16} />
+                    Approve
+                  </button>
+                  <button onClick={() => setReturnOpen(open => !open)} disabled={saving} className="btn-secondary px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
+                    Return with Comments
+                  </button>
+                </>
               )}
               {minutes.status === 'reviewed' && CIRCULATE_ROLES.has(user?.role) && (
                 <button onClick={() => changeStatus('circulate')} disabled={saving} className="bg-cyan-600 hover:bg-cyan-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-cyan-500/20 disabled:opacity-60">

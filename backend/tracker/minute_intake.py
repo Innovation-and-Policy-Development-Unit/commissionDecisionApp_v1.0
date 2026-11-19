@@ -148,8 +148,13 @@ def meeting_info_block(meeting: Meeting) -> str:
     )
 
 
-def apply_intake_to_minutes(meeting: Meeting, user) -> Minutes:
-    """Merge formatted intake rows into Minutes.content.agenda_items."""
+def apply_intake_to_minutes(meeting: Meeting, user, only_item_ids=None) -> Minutes:
+    """Merge formatted intake rows into Minutes.content.agenda_items.
+
+    ``only_item_ids`` limits the merge to those agenda items and leaves every
+    other block of an existing draft exactly as it is — the Compliance Manager
+    applies their own items without rebuilding what Manager CSU has written.
+    """
     rows = (
         MinuteAgendaIntake.objects.filter(meeting=meeting)
         .select_related("agenda_item", "agenda_item__submission")
@@ -188,6 +193,15 @@ def apply_intake_to_minutes(meeting: Meeting, user) -> Minutes:
         },
     )
     content = dict(minutes_obj.content or {})
+    existing = content.get("agenda_items") or []
+    if only_item_ids is not None and existing:
+        fresh = {b["agenda_item_id"]: b for b in agenda_items if b["agenda_item_id"] in only_item_ids}
+        merged = [
+            fresh.pop(b.get("agenda_item_id"), b) if isinstance(b, dict) else b
+            for b in existing
+        ]
+        # Items of theirs the draft did not hold yet go on the end.
+        agenda_items = merged + list(fresh.values())
     content["agenda_items"] = agenda_items
     if not content.get("opening"):
         content["opening"] = ""

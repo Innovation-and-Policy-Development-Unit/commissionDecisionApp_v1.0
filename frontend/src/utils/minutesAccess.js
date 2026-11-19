@@ -8,6 +8,8 @@ const MINUTES_EDIT_ROLES = new Set([
   'psc_admin',
   'chairperson',
   'psc_commissioner',
+  // Manager CSU takes the minutes in practice, so they draft and edit them.
+  'csu_manager',
 ])
 
 export function userCanEditMinutes(user) {

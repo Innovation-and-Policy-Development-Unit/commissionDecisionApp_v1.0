@@ -59,6 +59,41 @@ def user_has_full_minutes_access(user) -> bool:
     return _profile_role(user) in FULL_ACCESS_ROLES
 
 
+def user_reads_whole_minutes(minutes: Minutes, user) -> bool:
+    """Full-access roles, plus the Compliance Manager on a sitting whose
+    compliance business they minuted — they were in the room for all of it."""
+    if user_has_full_minutes_access(user):
+        return True
+    from .minutes_review import is_compliance_minute_taker
+
+    return is_compliance_minute_taker(user, minutes.meeting_id)
+
+
+def merge_compliance_edit(minutes: Minutes, incoming: dict) -> dict:
+    """What the Compliance Manager's save changes: their own items only.
+
+    Everything else in the stored draft — the other agenda items, the opening,
+    the closing — stays exactly as it is, whatever the request carried.
+    """
+    from .minutes_review import compliance_item_ids
+
+    stored = dict(minutes.content or {})
+    if not isinstance(incoming, dict):
+        return stored
+    theirs = compliance_item_ids(minutes.meeting_id)
+    sent = {
+        b.get("agenda_item_id"): b
+        for b in (incoming.get("agenda_items") or [])
+        if isinstance(b, dict) and b.get("agenda_item_id") in theirs
+    }
+    stored["agenda_items"] = [
+        {k: v for k, v in sent[b["agenda_item_id"]].items() if k != "locked"}
+        if isinstance(b, dict) and b.get("agenda_item_id") in sent else b
+        for b in (stored.get("agenda_items") or [])
+    ]
+    return stored
+
+
 def block_key(block: dict) -> str | None:
     """Stable identity of an agenda block (used to merge edits safely)."""
     if not isinstance(block, dict):
@@ -108,7 +143,7 @@ def redact_content(minutes: Minutes, user) -> tuple[dict, bool]:
     """
     content = minutes.content or {}
     items = content.get("agenda_items") or []
-    if not items or user_has_full_minutes_access(user):
+    if not items or user_reads_whole_minutes(minutes, user):
         return content, True
 
     unit_map = _routed_units_by_agenda_item(content)

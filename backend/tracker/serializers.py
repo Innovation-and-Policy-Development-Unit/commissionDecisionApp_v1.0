@@ -22,6 +22,7 @@ from .models import (
     MeetingBriefingPack,
     MinuteAgendaIntake,
     MinuteIntakeDecision,
+    MinutesStatus,
     MeetingTranscript,
     MeetingType,
     RecordingAudioSource,
@@ -2833,6 +2834,7 @@ class MinutesSerializer(serializers.ModelSerializer):
     chairman_reviewed_by_name = serializers.SerializerMethodField()
     compliance_reviewed_by_name = serializers.SerializerMethodField()
     review_state = serializers.SerializerMethodField()
+    review_returned_by_name = serializers.SerializerMethodField()
     returned_by_name = serializers.SerializerMethodField()
     tasks_allocated_by_name = serializers.SerializerMethodField()
     comments = MinutesCommentSerializer(many=True, read_only=True)
@@ -2852,6 +2854,7 @@ class MinutesSerializer(serializers.ModelSerializer):
             "compliance_reviewed_by", "compliance_reviewed_by_name", "compliance_reviewed_at",
             "draft_review_due_at", "review_state",
             "commissioner_circulated_at", "commissioner_review_due_at",
+            "review_return_note", "review_returned_by", "review_returned_by_name", "review_returned_at",
             "returned_by", "returned_by_name", "returned_at",
             "tasks_allocated_by", "tasks_allocated_by_name", "tasks_allocated_at",
             "comments",
@@ -2868,9 +2871,13 @@ class MinutesSerializer(serializers.ModelSerializer):
             "compliance_reviewed_by", "compliance_reviewed_at",
             "draft_review_due_at",
             "commissioner_circulated_at", "commissioner_review_due_at",
+            "review_return_note", "review_returned_by", "review_returned_at",
             "returned_by", "returned_at",
             "tasks_allocated_by", "tasks_allocated_at",
         )
+
+    def get_review_returned_by_name(self, obj):
+        return obj.review_returned_by.username if obj.review_returned_by else None
 
     def get_submitted_for_review_by_name(self, obj):
         return obj.submitted_for_review_by.username if obj.submitted_for_review_by else None
@@ -2889,9 +2896,19 @@ class MinutesSerializer(serializers.ModelSerializer):
         UI can say what it is waiting on without re-deriving the rules."""
         from . import minutes_review as mr
 
+        compliance_required = mr.requires_compliance_review(obj)
+        user = self._request_user()
+        role = getattr(getattr(user, "psc_profile", None), "role", None)
+        # The Compliance Manager edits their own items of a draft, nothing else.
+        compliance_taker = compliance_required and role == Role.COMPLIANCE_MANAGER
         return {
-            "compliance_required": mr.requires_compliance_review(obj),
+            "compliance_required": compliance_required,
+            "compliance_confirmed": bool(obj.compliance_reviewed_by_id),
+            "sequential": mr.review_is_sequential(),
             "pending_reviewers": mr.pending_reviewers(obj),
+            "current_reviewers": mr.current_reviewers(obj),
+            "compliance_items_only": compliance_taker,
+            "can_edit_compliance_items": compliance_taker and obj.status == MinutesStatus.DRAFT,
             "draft_review_days": mr.draft_review_days(),
             "secretariat_review_days": mr.secretariat_review_days(),
             "commissioner_review_days": mr.commissioner_review_days(),
@@ -2927,6 +2944,16 @@ class MinutesSerializer(serializers.ModelSerializer):
 
         data = super().to_representation(instance)
         content, fully_cleared = redact_content(instance, self._request_user())
+        if (data.get("review_state") or {}).get("compliance_items_only"):
+            # Mark what is not theirs, so the editor shows it read-only.
+            from .minutes_review import compliance_item_ids
+
+            theirs = compliance_item_ids(instance.meeting_id)
+            content = dict(content)
+            content["agenda_items"] = [
+                b if not isinstance(b, dict) or b.get("agenda_item_id") in theirs else {**b, "locked": True}
+                for b in (content.get("agenda_items") or [])
+            ]
         data["content"] = content
         if not fully_cleared:
             # The stored PDFs hold the full minutes; only fully-cleared users get them.

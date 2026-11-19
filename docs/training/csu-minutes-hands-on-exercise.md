@@ -69,20 +69,42 @@ Notes are optional. Add them on two items so you can see the difference:
 
 - Sign in and open the draft again from **Minutes & Agenda → Minutes**.
 - Check that everything from Part 1 is still there.
-- Correct one sentence and save.
+- Correct one sentence and press **Save Draft**.
 
-**7. Submit for review**
+**7. Wait for Manager Compliance**
 
-- Before you press it, tell the Secretary, the Chairperson and Manager Compliance
-  that a practice notification is coming.
-- Submit the minutes for review.
+This sitting has a compliance item, so Manager Compliance takes the minutes for it
+(see her part below). **Submit for Review** stays greyed out until she has pressed
+**Confirm Compliance Items**. The blue box at the top of the draft shows whether she has.
 
-**8. Circulate**
+**8. Submit for review**
 
-- Wait until the Secretary, the Chairperson and Manager Compliance have each approved.
-- Circulate the minutes to Commissioners.
+- Press **Submit for Review**. The draft goes to the Secretary first, then to the Chairman.
+- If either of them presses **Return with Comments**, the draft comes back to you with a
+  red box saying what to change. Fix it, ask Manager Compliance to confirm again, and
+  submit again.
+
+**9. Circulate**
+
+- Once the Secretary and then the Chairman have approved, press
+  **Circulate to Commissioners**.
 
 **Stop here.** Do not send for signature or upload signed minutes.
+
+---
+
+## Manager Compliance — your part (about 10 minutes)
+
+You take the minutes for the compliance item only: *Disciplinary matter — Senior Clerk*.
+
+1. Open **Minutes & Agenda → Minute intake** and choose `TRAIN-CSU-MTG-001`.
+   You will see only the compliance item.
+2. Choose **Approved** in the **Decision** list, add a short discussion note, press
+   **Save draft**, then **Format with AI**.
+3. Press **Apply to minutes**. Only your item in the draft changes.
+4. In the draft (**Minutes & Agenda → Minutes**) you can read everything but edit only
+   your item. Correct a word and press **Save Draft**.
+5. Press **Confirm Compliance Items**. Manager CSU can now submit the draft.
 
 ---
 
@@ -90,6 +112,7 @@ Notes are optional. Add them on two items so you can see the difference:
 
 1. Was any step hard to find or confusing?
 2. Were the agenda items in the same order as the agenda?
+   Could both of you work on the same sitting without losing each other's notes?
 3. Was anything missing in Part 2 that you typed in Part 1?
 4. Were the AI paragraphs good enough to use, or did you rewrite most of them?
 5. Did you need to type anything the system could have filled in for you?

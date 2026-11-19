@@ -1472,7 +1472,8 @@
       "noted": "Noted",
       "returned": "Returned",
       "tabled": "Tabled"
-    }
+    },
+    "compliance_only": "You are taking the minutes for the compliance items of this sitting. The other items are taken by Manager CSU."
   },
   "accessibility": {
     "skip_to_content": "Skip to main content",

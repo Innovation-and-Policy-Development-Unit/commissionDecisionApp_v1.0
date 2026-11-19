@@ -33,14 +33,17 @@ start to circulation without touching real business.
 
 ## Part 2 — review and hand on (a few hours later, or the next day)
 
-6. **Manager CSU:** reopen the draft, confirm the text from Part 1 is all there, edit it,
-   then **Submit for review**.
-   *This sends an in-app notification to the Secretaries, the Chairperson and
-   Manager Compliance — tell them beforehand that it is a practice.*
-7. **Manager Compliance:** find the practice minutes, read them and approve.
-8. **Secretary:** approve. **Chairperson:** approve (an admin can approve on the
-   Chairperson's behalf for this test).
-9. **Manager CSU:** once all approvals are in, **Circulate to Commissioners**.
+6. **Manager Compliance:** opens minute intake (she sees only the compliance item),
+   records it, applies it to the draft, then presses **Confirm Compliance Items**.
+7. **Manager CSU:** reopens the draft, confirms the text from Part 1 is all there, edits
+   it, then **Submit for Review**. The button stays disabled until step 6 is done.
+   *This notifies the Secretaries in-app — tell them beforehand that it is a practice.*
+8. **Secretary:** try **Return with Comments** once, so the draft comes back to the
+   minute takers with a note; they fix, re-confirm and resubmit. Then **Approve**.
+9. **Chairperson:** approves after the Secretary (an admin can approve on the
+   Chairperson's behalf for this test). The Chairperson is only notified once the
+   Secretary has approved.
+10. **Manager CSU:** once both approvals are in, **Circulate to Commissioners**.
 
 **Stop here.** Do not send for signature, upload signed minutes or allocate tasks:
 those steps email Commission members and move papers on.
