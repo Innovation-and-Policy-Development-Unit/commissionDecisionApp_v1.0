@@ -416,7 +416,7 @@ def push_backup_to_cloud(self, filename):
     outbound path is unreliable overnight — see scdms-cloudflare-tunnel-
     flakiness) is retried with backoff instead, since it's neither an auth
     problem nor permanent."""
-    from . import google_drive_backup
+    from . import backup_crypto, google_drive_backup
     from .audit import log_action as _log
     from .crypto_utils import decrypt, encrypt
     from .models import AuditLog as _AL, CloudBackupConnection
@@ -443,9 +443,9 @@ def push_backup_to_cloud(self, filename):
             conn.refresh_token_encrypted = encrypt(refreshed["refresh_token"])
             conn.token_expires_at = timezone.now() + timezone.timedelta(seconds=refreshed["expires_in"])
 
-        with open(filepath, "rb") as f:
-            content = f.read()
-        google_drive_backup.upload_backup_file(access_token, filename, content)
+        # The backup is encrypted here, so the cloud account only ever holds ciphertext.
+        content, upload_name = backup_crypto.encrypt_for_cloud(filepath, filename)
+        google_drive_backup.upload_backup_file(access_token, upload_name, content)
 
         conn.last_pushed_at = timezone.now()
         conn.last_push_error = ""
@@ -471,6 +471,11 @@ def push_backup_to_cloud(self, filename):
                 log.info("BACKUP_CLOUD_PRUNE | removed=%d | older_than_days=%d", removed, retention_days)
         except Exception as exc:
             log.warning("BACKUP_CLOUD_PRUNE_FAILED | %s", exc)
+    except backup_crypto.BackupEncryptionNotConfigured as exc:
+        # Fail closed: never upload a plain backup because a key is missing. Not an auth problem, no retry.
+        conn.last_push_error = str(exc)
+        conn.save(update_fields=["last_push_error"])
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | reason=no encryption key", filename)
     except google_drive_backup.GoogleDriveAuthError as exc:
         conn.status = CloudBackupConnection.Status.NEEDS_RECONNECT
         conn.last_push_error = str(exc)
@@ -544,7 +549,7 @@ def push_backup_to_mega(self, filename):
     a rejected password flips the connection to needs_reconnect, a network
     failure is retried with backoff (and picked up again at noon by
     retry_pending_cloud_backups), and the retention window is mirrored."""
-    from . import mega_backup
+    from . import backup_crypto, mega_backup
     from .audit import log_action as _log
     from .crypto_utils import decrypt
     from .models import AuditLog as _AL, CloudBackupConnection
@@ -563,7 +568,9 @@ def push_backup_to_mega(self, filename):
 
     try:
         password = decrypt(conn.refresh_token_encrypted)
-        mega_backup.upload_backup_file(conn.connected_email, password, filepath)
+        # Encrypted here as well: MEGA also encrypts, but the file then never depends on the provider.
+        with backup_crypto.encrypted_tempfile(filepath, filename) as (enc_path, _upload_name):
+            mega_backup.upload_backup_file(conn.connected_email, password, enc_path)
         conn.last_pushed_at = timezone.now()
         conn.last_push_error = ""
         conn.save(update_fields=["last_pushed_at", "last_push_error"])
@@ -581,6 +588,10 @@ def push_backup_to_mega(self, filename):
                 log.info("BACKUP_CLOUD_PRUNE | provider=mega | removed=%d | older_than_days=%d", removed, retention_days)
         except Exception as exc:
             log.warning("BACKUP_CLOUD_PRUNE_FAILED | provider=mega | %s", exc)
+    except backup_crypto.BackupEncryptionNotConfigured as exc:
+        conn.last_push_error = str(exc)
+        conn.save(update_fields=["last_push_error"])
+        log.error("BACKUP_CLOUD_PUSH_FAILED | file=%s | provider=mega | reason=no encryption key", filename)
     except mega_backup.MegaAuthError as exc:
         conn.status = CloudBackupConnection.Status.NEEDS_RECONNECT
         conn.last_push_error = str(exc)
@@ -678,7 +689,8 @@ def delete_backup_from_cloud(filename):
             conn.token_expires_at = timezone.now() + timezone.timedelta(seconds=refreshed["expires_in"])
             conn.save(update_fields=["access_token_encrypted", "refresh_token_encrypted", "token_expires_at"])
 
-        removed = google_drive_backup.delete_backup_file(access_token, filename)
+        removed = any([google_drive_backup.delete_backup_file(access_token, name)
+                       for name in (filename, filename + ".enc")])
         log.info("BACKUP_CLOUD_DELETE | file=%s | removed=%s", filename, removed)
     except Exception as exc:
         # Best-effort — a failed cloud-side cleanup shouldn't be treated as
@@ -700,7 +712,9 @@ def delete_backup_from_mega(filename):
     if not conn:
         return
     try:
-        removed = mega_backup.delete_backup_file(conn.connected_email, decrypt(conn.refresh_token_encrypted), filename)
+        pw = decrypt(conn.refresh_token_encrypted)
+        removed = any([mega_backup.delete_backup_file(conn.connected_email, pw, name)
+                       for name in (filename, filename + ".enc")])
         log.info("BACKUP_CLOUD_DELETE | file=%s | provider=mega | removed=%s", filename, removed)
     except Exception as exc:
         log.warning("BACKUP_CLOUD_DELETE_FAILED | file=%s | provider=mega | %s", filename, exc)

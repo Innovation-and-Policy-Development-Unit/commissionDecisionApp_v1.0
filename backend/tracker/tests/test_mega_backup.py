@@ -126,7 +126,9 @@ class MegaEndpointTests(TestCase):
 
 class MegaPushTaskTests(TestCase):
     def setUp(self):
-        p = mock.patch.dict(os.environ, {"BACKUP_CLOUD_ENCRYPTION_KEY": _KEY})
+        # Cloud pushes now refuse to run without a backup encryption key (see test_backup_crypto).
+        p = mock.patch.dict(os.environ, {"BACKUP_CLOUD_ENCRYPTION_KEY": _KEY,
+                                         "BACKUP_ENCRYPTION_KEY": Fernet.generate_key().decode()})
         p.start()
         self.addCleanup(p.stop)
         self.tmp = tempfile.mkdtemp()
