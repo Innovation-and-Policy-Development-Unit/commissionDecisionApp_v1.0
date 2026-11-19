@@ -4427,6 +4427,7 @@ class Minutes(models.Model):
     # Chase state, so the daily sweep tells someone once rather than every day.
     draft_review_reminded_at = models.DateTimeField(null=True, blank=True)
     review_reminded_at = models.DateTimeField(null=True, blank=True)
+    commissioner_overdue_notified_at = models.DateTimeField(null=True, blank=True)
     # ── Secretariat dual review: Secretary + Chairman, 1 working day SLA ──
     submitted_for_review_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
@@ -4512,6 +4513,33 @@ class MinutesComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author} on {self.minutes}"
+
+
+class MinutesCommissionerReview(models.Model):
+    """One Commissioner's read-through of one circulated set of minutes.
+
+    A row is made for every active Commissioner when the minutes are
+    circulated. It records when the Commissioner first opened them and
+    whether they confirmed "read, no comments"; a posted comment counts as a
+    response too. The Secretary watches these to see who has not read the
+    draft, and the daily reminder only goes to Commissioners with no response.
+    """
+
+    minutes = models.ForeignKey(Minutes, on_delete=models.CASCADE, related_name="commissioner_reviews")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="minutes_reviews")
+    opened_at = models.DateTimeField(null=True, blank=True)
+    confirmed_no_comments_at = models.DateTimeField(null=True, blank=True)
+    last_reminded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["user__username"]
+        constraints = [
+            models.UniqueConstraint(fields=["minutes", "user"], name="uniq_minutes_commissioner_review"),
+        ]
+
+    def __str__(self):
+        return f"Review of {self.minutes_id} by {self.user_id}"
 
 
 class DecisionActioningHold(models.Model):

@@ -11,6 +11,7 @@ import Modal from '../../../components/shared/Modal'
 import BaseButton from '../../../components/shared/BaseButton'
 import MinutesSignatureTable from '../../../components/minutes/MinutesSignatureTable'
 import MinutesPrintedView from '../../../components/minutes/MinutesPrintedView'
+import MinutesReviewTracker from '../../../components/minutes/MinutesReviewTracker'
 import { useConfirm } from '../../../context/ConfirmContext'
 import api from '../../../api/client'
 import { useAuth } from '../../../context/AuthContext'
@@ -29,7 +30,7 @@ const MINUTES_STATUS = {
 
 // Roles permitted to upload the scanned, manually-signed minutes. Mirrors the backend gate.
 // Mirrors _SIGNED_SCAN_UPLOAD_ROLES in the backend: CSU keeps the signed paper copy.
-const SIGNED_UPLOAD_ROLES = new Set(['senior_admin_officer', 'psc_admin', 'csu_manager', 'csu_senior'])
+const SIGNED_UPLOAD_ROLES = new Set(['senior_admin_officer', 'psc_admin', 'csu_manager', 'csu_senior', 'psc_secretary'])
 const SEND_FOR_SIGNATURE_ROLES = new Set(['senior_admin_officer', 'psc_secretary', 'psc_admin'])
 // Manager CSU takes the minutes in practice; the Senior Admin Officer is the
 // role the SOP names. Both draft them and hand them on.
@@ -889,6 +890,7 @@ export default function MinutesEditor() {
               {workingDays(minutes.review_state?.commissioner_review_days)}
             </p>
           )}
+          <MinutesReviewTracker minutes={minutes} role={user?.role} commentCount={(minutes.comments || []).length} />
           <div className="mt-3 space-y-2">
             {(minutes.comments || []).length === 0 && (
               <p className="text-slate-500 dark:text-slate-400 italic">No comments yet.</p>
