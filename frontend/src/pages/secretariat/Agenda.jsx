@@ -809,13 +809,12 @@ export default function Agenda() {
         <div ref={printRef} className="print:m-0">
 
           {/* Agenda document: one bordered table in the Commission's own layout */}
-          <style>{`@media print { @page { size: Letter; margin: 22mm 25mm; } .agenda-doc { font-size: 11.5pt; } }`}</style>
+          <style>{`@media print { @page { size: Letter; margin: 22mm 25mm; } .agenda-doc { font-size: 11.5pt; font-family: 'Century Gothic', 'TeX Gyre Adventor', 'URW Gothic', 'Avant Garde', sans-serif; } }`}</style>
           <div
-            className="agenda-doc bg-white dark:bg-slate-900 print:bg-white border border-black dark:border-slate-500 overflow-hidden text-slate-900 dark:text-slate-100 print:text-black"
-            style={{ fontFamily: "'Century Gothic', 'TeX Gyre Adventor', 'URW Gothic', 'Avant Garde', sans-serif" }}
+            className="agenda-doc card overflow-hidden text-slate-900 dark:text-slate-100 print:rounded-none print:shadow-none print:border-black print:bg-white print:text-black"
           >
             {/* ── Title ── */}
-            <div className="border-b border-black dark:border-slate-500 px-4 py-3 text-center font-bold text-sm leading-snug">
+            <div className="border-b border-primary-100 dark:border-slate-700 bg-primary-50 dark:bg-primary-900/20 text-primary-800 dark:text-primary-200 px-4 py-4 text-center font-bold text-sm leading-snug tracking-wide print:bg-transparent print:text-black print:border-black print:py-3">
               {(agendaDoc?.title_lines || []).map((line, i) => <div key={i}>{line}</div>)}
             </div>
 
@@ -830,7 +829,7 @@ export default function Agenda() {
               }
               if (row.kind === 'matter_group') {
                 return (
-                  <div key={`g${idx}`} className="px-4 py-1.5 border-b border-black dark:border-slate-500 text-sm font-bold">{row.text}</div>
+                  <div key={`g${idx}`} className="px-4 py-2 border-b border-slate-100 dark:border-slate-700 print:border-black text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/70 dark:bg-slate-900/30 print:bg-transparent print:text-black print:font-bold print:py-1.5">{row.text}</div>
                 )
               }
               if (row.kind === 'matter') {
@@ -857,12 +856,12 @@ export default function Agenda() {
                 return (
                   <div key={`n${row.no}`} id={row.no === 3 ? 'agenda-section-matters_arising' : row.no === 2 ? 'agenda-section-preliminaries' : undefined}
                        style={{ scrollMarginTop: 'var(--agenda-scroll-offset, 9rem)' }}
-                       className="px-4 py-2 border-b border-black dark:border-slate-500 text-sm">
-                    <div className={`flex gap-3 ${row.bold ? 'font-bold' : ''}`}>
-                      <span className="w-6 shrink-0">{row.no}.</span>
+                       className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 print:border-black text-sm print:py-2">
+                    <div className={`flex gap-3 ${row.bold ? 'font-semibold' : ''}`}>
+                      <NumBadge n={row.no} />
                       <span>{row.text}</span>
                     </div>
-                    {(row.lines || []).map((line, i) => <div key={i} className="pl-9 font-bold">{line}</div>)}
+                    {(row.lines || []).map((line, i) => <div key={i} className="pl-9 font-semibold">{line}</div>)}
                     {(row.sub_items || []).map(sub => (
                       <div key={sub.item_id} className="pl-9 flex items-start gap-2 group">
                         <span>{sub.text}</span>
@@ -901,7 +900,7 @@ export default function Agenda() {
             })}
 
             {agendaDoc?.signatory?.name && (
-              <div className="px-4 py-6 text-sm leading-snug border-t border-black dark:border-slate-500">
+              <div className="px-4 py-6 text-sm leading-snug border-t border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300 print:border-black print:text-black">
                 <div>{agendaDoc.signatory.name}</div>
                 <div>{agendaDoc.signatory.title}</div>
                 <div>{agendaDoc.signatory.office}</div>
@@ -1271,14 +1270,23 @@ function CirculationStatusPanel({ status, open, onToggle }) {
   )
 }
 
+/** Item number: a soft round badge on screen, plain "4." text in print. */
+function NumBadge({ n }) {
+  return (
+    <span className="shrink-0 w-6 h-6 -mt-0.5 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-200 text-xs font-semibold inline-flex items-center justify-center print:w-6 print:h-auto print:mt-0 print:rounded-none print:bg-transparent print:text-black print:text-sm print:font-normal print:justify-start">
+      {n}<span className="hidden print:inline">.</span>
+    </span>
+  )
+}
+
 function AgendaSection({ label, id }) {
   return (
     <div
       id={id}
       style={id ? { scrollMarginTop: 'var(--agenda-scroll-offset, 9rem)' } : undefined}
-      className="px-4 py-2 border-b border-black dark:border-slate-500"
+      className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 print:border-black bg-slate-50 dark:bg-slate-900/40 print:bg-transparent print:py-2"
     >
-      <p className="text-sm font-bold uppercase">{label}</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-primary-700 dark:text-primary-300 print:text-sm print:text-black print:tracking-normal">{label}</p>
     </div>
   )
 }
@@ -1304,11 +1312,11 @@ function RowControls({ item, isCompleted, canDefer, onRemove, onMoveUp, onMoveDo
 function MattersArisingRow({ item, text, isCompleted, canDefer, onRemove, onMoveUp, onMoveDown, onPushToNext, isFirst, isLastInCat }) {
   const { t } = useTranslation()
   return (
-    <div className="px-4 py-1.5 border-b border-black dark:border-slate-500 flex items-start gap-3 group">
-      <p className="flex-1 min-w-0 text-sm font-bold">
+    <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 print:border-black flex items-start gap-3 group hover:bg-slate-50 dark:hover:bg-slate-900/30 print:py-1.5">
+      <p className="flex-1 min-w-0 text-sm font-semibold print:font-bold">
         <Link
           to={`/submissions/${item.submission}`}
-          className="hover:underline print:no-underline print:text-black"
+          className="hover:text-primary-600 dark:hover:text-primary-300 hover:underline print:no-underline print:text-black"
           title={t('agenda.doc_open_submission')}
         >
           {text}
@@ -1325,13 +1333,13 @@ function StandardRow({ item, showDetails, isCompleted, canDefer, categories, edi
   const [pendingCat, setPendingCat] = useState(item.category)
 
   return (
-    <div className="px-4 py-2 border-b border-black dark:border-slate-500 flex items-start gap-3 group">
-      <span className="text-sm w-6 shrink-0">{item.agendaNo}.</span>
+    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 print:border-black flex items-start gap-3 group hover:bg-slate-50 dark:hover:bg-slate-900/30 print:py-2">
+      <NumBadge n={item.agendaNo} />
       <div className="flex-1 min-w-0">
         <p className="text-sm leading-snug">
           <Link
             to={`/submissions/${item.submission}`}
-            className="hover:underline print:no-underline print:text-black"
+            className="font-medium hover:text-primary-600 dark:hover:text-primary-300 hover:underline print:font-normal print:no-underline print:text-black"
             title={t('agenda.doc_open_submission')}
           >
             {item.submission_title}
