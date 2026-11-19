@@ -43,7 +43,7 @@ def run_security_scan(scan_type: str = "full", *, request=None, user=None) -> Se
     if scan_type in ("dependency", "full"):
         try:
             proc = subprocess.run(
-                [sys.executable, "-m", "pip_audit", "--format=json", "-q"],
+                [sys.executable, "-m", "pip_audit", "--format=json"],  # no -q: pip-audit 2.10 rejects it
                 capture_output=True, text=True, timeout=120,
             )
             raw = proc.stdout.strip()
