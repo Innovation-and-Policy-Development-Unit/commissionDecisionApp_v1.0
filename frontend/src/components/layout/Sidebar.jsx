@@ -6,7 +6,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import clsx from 'clsx'
 import { ChevronDown } from 'lucide-react'
-import { getAllPaths, flattenItems, getVisibleMenuForUser, translateLabel } from '../../data/menuItems'
+import { getAllPaths, flattenItems, getVisibleMenuForUser, translateLabel, entryIsActive } from '../../data/menuItems'
 import BrandLogo from '../shared/BrandLogo'
 
 
@@ -71,7 +71,7 @@ function CollapsedGroupItem({ group }) {
         aria-label={onlyLabel}
         className={({ isActive }) => clsx(
           'flex flex-col items-center gap-0.5 px-1 py-2.5 rounded-lg font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
-          isActive
+          entryIsActive(onlyItem, location.pathname, isActive)
             ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100'
         )}
@@ -151,7 +151,7 @@ function CollapsedGroupItem({ group }) {
                 onClick={() => setDropdownOpen(false)}
                 className={({ isActive }) => clsx(
                   'flex items-center gap-2.5 px-3 py-2 mx-1.5 rounded-md text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
-                  isActive
+                  entryIsActive(entry, location.pathname, isActive)
                     ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200'
                 )}
@@ -197,7 +197,7 @@ function NavItem({ item, itemKey, openKey, setOpenKey }) {
         end={item.end}
         className={({ isActive }) => clsx(
           'flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
-          isActive
+          entryIsActive(item, location.pathname, isActive)
             ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100'
         )}
@@ -254,7 +254,7 @@ function NavItem({ item, itemKey, openKey, setOpenKey }) {
                 end={child.end}
                 className={({ isActive }) => clsx(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
-                  isActive
+                  entryIsActive(child, location.pathname, isActive)
                     ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200'
                 )}

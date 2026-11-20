@@ -3,6 +3,7 @@ import { RefreshCw, CheckCircle2, AlertTriangle, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
+import FlagTabs from '../../components/intelligence/FlagTabs'
 import BaseSelect from '../../components/shared/BaseSelect'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseBadge from '../../components/shared/BaseBadge'
@@ -86,6 +87,8 @@ export default function IntegrityFlagsPage() {
           </div>
         }
       />
+
+      <FlagTabs />
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-200">

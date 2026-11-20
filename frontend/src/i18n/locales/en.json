@@ -102,7 +102,7 @@
     "backup_restore": "Backup & Restore",
     "account": "Account",
     "logout": "Logout",
-    "wiki": "OPSC Wiki",
+    "wiki": "Knowledge Base",
     "intelligence": "SCDMS Intelligence",
     "dashboards": "Dashboards",
     "reports_alerts": "Reports & Alerts",
@@ -110,13 +110,19 @@
     "alert_rules": "Alert Rules",
     "automations": "Automations",
     "report_templates": "Report Templates",
-    "knowledge_base": "Knowledge Base",
+    "knowledge_base": "Manage articles",
     "sub_meetings": "Meetings",
     "sub_minutes_agenda": "Minutes & Agenda",
     "sub_outcomes": "Outcomes",
     "sub_access_control": "Access Control",
     "sub_content": "Content",
-    "sub_system": "System"
+    "sub_system": "System",
+    "implementation": "Implementation",
+    "statistics_reports": "Statistics reports",
+    "report_builder": "Report builder",
+    "flags": "Flags",
+    "explorer": "Explorer",
+    "saved_dashboards": "Saved dashboards"
   },
   "breadcrumb": {
     "dashboard": "Dashboard",
@@ -148,7 +154,10 @@
     "feedback": "User Feedback",
     "backup_restore": "Backup & Restore",
     "account": "Account Settings",
-    "error_404": "404 — Page not found"
+    "error_404": "404 — Page not found",
+    "implementation_report": "Report to Secretary",
+    "implementation_performance": "Performance",
+    "integrity_flags": "Integrity"
   },
   "header": {
     "search_placeholder": "Search submissions, tasks…",

@@ -4,7 +4,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 import { ChevronDown, X } from 'lucide-react'
-import { getAllPaths, flattenItems, getVisibleMenuForUser, translateLabel } from '../../data/menuItems'
+import { getAllPaths, flattenItems, getVisibleMenuForUser, translateLabel, entryIsActive } from '../../data/menuItems'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import BrandLogo from '../shared/BrandLogo'
@@ -58,7 +58,7 @@ function HorizGroupItem({ group }) {
         end={onlyItem.end}
         className={({ isActive }) => clsx(
           'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
-          isActive
+          entryIsActive(onlyItem, location.pathname, isActive)
             ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100'
         )}
@@ -120,7 +120,7 @@ function HorizGroupItem({ group }) {
                 onClick={() => setOpen(false)}
                 className={({ isActive }) => clsx(
                   'flex items-center gap-2.5 px-3 py-2 mx-1.5 rounded-md text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
-                  isActive
+                  entryIsActive(entry, location.pathname, isActive)
                     ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200'
                 )}

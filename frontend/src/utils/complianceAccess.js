@@ -92,6 +92,15 @@ export function menuItemVisibleForUser(item, user) {
   if (audience === 'commission_decision') {
     return userIsCommissionDecisionOps(user) && !userIsComplianceStaff(user)
   }
+  if (audience === 'implementation') {
+    // The implementation area (tasks, the report the Secretary tables, the
+    // performance dashboard). Unit managers and post-decision staff work the
+    // tasks; the Secretary and senior admin officers table the report — and
+    // COMMISSION_DECISION_VIEW_ROLES does not include them, so they need the
+    // secretariat arm of this test to reach their own report.
+    if (userIsComplianceStaff(user)) return false
+    return userIsCommissionDecisionOps(user) || userIsSecretariatStaff(user)
+  }
   if (audience === 'opsc_internal') {
     // All OPSC staff (endorsed minutes etc.); compliance keeps its own menu.
     return userIsOpscInternal(user) && !userIsComplianceStaff(user)

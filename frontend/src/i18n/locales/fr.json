@@ -93,7 +93,15 @@
     "sub_outcomes": "Résultats",
     "sub_access_control": "Contrôle d'accès",
     "sub_content": "Contenu",
-    "sub_system": "Système"
+    "sub_system": "Système",
+    "implementation": "Mise en œuvre",
+    "statistics_reports": "Rapports statistiques",
+    "report_builder": "Générateur de rapports",
+    "flags": "Signalements",
+    "explorer": "Explorateur",
+    "saved_dashboards": "Tableaux de bord enregistrés",
+    "wiki": "Base de connaissances",
+    "knowledge_base": "Gérer les articles"
   },
   "breadcrumb": {
     "dashboard": "Tableau de bord",
@@ -124,7 +132,10 @@
     "feedback": "Retours utilisateurs",
     "backup_restore": "Sauvegarde et restauration",
     "account": "Paramètres du compte",
-    "error_404": "404 — Page introuvable"
+    "error_404": "404 — Page introuvable",
+    "implementation_report": "Rapport au Secrétaire",
+    "implementation_performance": "Performance",
+    "integrity_flags": "Intégrité"
   },
   "header": {
     "search_placeholder": "Rechercher des soumissions, des tâches…",
