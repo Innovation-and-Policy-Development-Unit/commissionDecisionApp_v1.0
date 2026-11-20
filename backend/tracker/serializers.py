@@ -83,6 +83,17 @@ from .rbac import (
 )
 
 
+
+def _agenda_meeting_label(meeting) -> str:
+    """'PSC Meeting No. 99 of Friday 20th November 2026' — the agenda's own title."""
+    from .agenda_document import meeting_label
+
+    try:
+        return meeting_label(meeting)
+    except Exception:
+        return meeting.reference_number or ""
+
+
 class KnowledgeCategorySerializer(serializers.ModelSerializer):
     article_count = serializers.SerializerMethodField()
 
@@ -979,6 +990,7 @@ class SubmissionDetailSerializer(serializers.ModelSerializer):
         return {
             "agenda_item_id": item.id,
             "meeting_reference": meeting.reference_number,
+            "meeting_label": _agenda_meeting_label(meeting),
             "meeting_date": meeting.date,
             "agenda_status": meeting.agenda_status,
             "section_label": agenda_section_label(item.category or ""),

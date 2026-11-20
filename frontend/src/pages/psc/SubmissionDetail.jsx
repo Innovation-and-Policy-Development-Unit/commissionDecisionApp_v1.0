@@ -1233,7 +1233,7 @@ const stageDescriptions = {
         <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-2 text-xs">
           <CalendarDays size={13} className="text-slate-400 shrink-0" />
           <span className="font-semibold text-slate-900 dark:text-slate-100">
-            {submission.agenda_placement.meeting_reference}
+            {submission.agenda_placement.meeting_label || submission.agenda_placement.meeting_reference}
           </span>
           <span className="text-slate-400">·</span>
           <span className="text-slate-700 dark:text-slate-300">{submission.agenda_placement.label}</span>
