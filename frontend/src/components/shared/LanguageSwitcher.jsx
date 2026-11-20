@@ -2,12 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Globe, Check } from 'lucide-react'
 import { SUPPORTED_LANGUAGES, changeLanguage, getLanguageMeta } from '../../i18n'
+import clsx from 'clsx'
 import BaseButton from './BaseButton'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 
-/** Top-bar language switcher (Tailwind dropdown). */
-export default function LanguageSwitcher({ compact = false }) {
+/**
+ * Language switcher. `inline` renders the choices as a list for the settings
+ * panel; the default is the top-bar dropdown. Both share the same persistence,
+ * so the choice still reaches the user's profile either way.
+ */
+export default function LanguageSwitcher({ compact = false, inline = false }) {
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
 
@@ -34,6 +39,36 @@ export default function LanguageSwitcher({ compact = false }) {
     document.addEventListener('keydown', onEsc)
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc) }
   }, [open])
+
+  if (inline) {
+    return (
+      <ul className="space-y-1" aria-label={t('language.label')}>
+        {SUPPORTED_LANGUAGES.map(lang => {
+          const isActive = lang.code === currentCode
+          return (
+            <li key={lang.code}>
+              <button
+                type="button"
+                lang={lang.htmlLang}
+                aria-current={isActive ? 'true' : undefined}
+                onClick={() => selectLanguage(lang.code)}
+                className={clsx(
+                  'w-full flex items-center gap-2.5 rounded-xl border-2 px-3 py-2 text-start text-sm transition-all',
+                  isActive
+                    ? 'border-primary-500 text-slate-900 dark:text-slate-50'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500',
+                )}
+              >
+                <span className="text-[10px] font-bold tracking-wide uppercase w-6 opacity-70">{lang.short}</span>
+                <span className="flex-1">{lang.nativeLabel}</span>
+                {isActive && <Check size={15} className="text-primary-500" aria-hidden="true" />}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    )
+  }
 
   return (
     <div className="relative" ref={ref}>

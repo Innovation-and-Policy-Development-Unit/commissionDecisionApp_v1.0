@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Check, Monitor, Moon, RotateCcw, Search, Sun, X } from 'lucide-react'
+import { Check, Keyboard, Monitor, Moon, RotateCcw, Search, Sun, X } from 'lucide-react'
 import clsx from 'clsx'
 import { useTheme } from '../../context/ThemeContext'
 import { FONTS, FONT_SIZES, PRESETS } from '../../context/appearancePresets'
+import LanguageSwitcher from '../shared/LanguageSwitcher'
 
 /** Appearance: theme, colour mode, density, corners, font and font size. "Just me" is saved to the
  * user's account; "Everyone" (administrators only) sets the organisation default. */
@@ -106,13 +107,13 @@ export default function SettingsPanel() {
     <>
       <div className="settings-overlay" onClick={closeSettingsPanel} />
       <div
-        role="dialog" aria-label="Appearance"
+        role="dialog" aria-label="Preferences"
         className="fixed top-0 end-0 h-full w-full sm:w-96 bg-white dark:bg-slate-800 border-s border-slate-200 dark:border-slate-700 z-50 flex flex-col animate-slide-in-right rtl:animate-slide-in-left shadow-card-lg"
       >
         <div className="flex items-start justify-between px-5 pt-4 pb-3">
           <div>
-            <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">Appearance</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Choose how the interface looks</p>
+            <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">Preferences</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">How the interface looks, and the language it speaks</p>
           </div>
           <button onClick={closeSettingsPanel} aria-label="Close" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
             <X size={18} />
@@ -145,6 +146,11 @@ export default function SettingsPanel() {
               <PresetCard key={p.id} preset={p} active={shown.preset === p.id} onClick={() => set({ preset: p.id })} />
             ))}
             {presets.length === 0 && <p className="col-span-2 text-sm text-slate-500">No theme matches “{query}”.</p>}
+          </div>
+
+          <div>
+            <SectionTitle>Language</SectionTitle>
+            <LanguageSwitcher inline />
           </div>
 
           <div>
@@ -203,6 +209,22 @@ export default function SettingsPanel() {
             <Toggle checked={sidebarCollapsed} onChange={toggleSidebar} label="Collapsed sidebar" />
             <Toggle checked={isHorizontal} onChange={toggleHorizontal} label="Horizontal menu" />
             <Toggle checked={isRTL} onChange={toggleRTL} label="Right-to-left direction" />
+          </div>
+
+          <div className="pt-1">
+            <SectionTitle>Help</SectionTitle>
+            <button
+              type="button"
+              onClick={() => {
+                closeSettingsPanel()
+                document.dispatchEvent(new CustomEvent('psc:shortcuts:open'))
+              }}
+              className="w-full flex items-center gap-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 px-3 py-2 text-start text-sm text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500"
+            >
+              <Keyboard size={16} className="text-slate-500 dark:text-slate-400" aria-hidden="true" />
+              <span className="flex-1">Keyboard shortcuts</span>
+              <kbd className="rounded border border-slate-300 dark:border-slate-600 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">?</kbd>
+            </button>
           </div>
         </div>
 

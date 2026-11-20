@@ -11,10 +11,9 @@ import {
   User, LogOut, Lock, CreditCard, HelpCircle, Shield, X,
   CheckCircle2, AlertCircle, Info, ChevronRight, MessageSquare,
   Plus, LayoutDashboard, FileText, Gavel, Headphones, BarChart3,
-  CalendarDays, ListTodo, Zap, Keyboard, RefreshCw, MessageCircle,
+  CalendarDays, ListTodo, Zap, RefreshCw, MessageCircle,
 } from 'lucide-react'
 import BrandLogo from '../shared/BrandLogo'
-import LanguageSwitcher from '../shared/LanguageSwitcher'
 import LiveRegion from '../shared/LiveRegion'
 import DesktopNotificationSettings from '../notifications/DesktopNotificationSettings'
 import NotificationSoundSettings from '../notifications/NotificationSoundSettings'
@@ -612,19 +611,9 @@ export default function Header({ onMenuClick }) {
         <RefreshCw size={20} aria-hidden="true" />
       </button>
 
-      {/* Keyboard shortcuts hint button */}
-      <button
-        type="button"
-        onClick={() => document.dispatchEvent(new CustomEvent('psc:shortcuts:open'))}
-        aria-label="Keyboard shortcuts (?)"
-        title="Keyboard shortcuts (?)"
-        className="hidden sm:flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-      >
-        <Keyboard size={18} aria-hidden="true" />
-      </button>
-
-      {/* Language switcher */}
-      <LanguageSwitcher />
+      {/* Keyboard shortcuts (? key) and the language switcher moved into the
+          settings panel: nine icons between the breadcrumb and the avatar left
+          no room for the ones people use every day. */}
 
       {/* Theme toggle: light ↔ dark */}
       <button
