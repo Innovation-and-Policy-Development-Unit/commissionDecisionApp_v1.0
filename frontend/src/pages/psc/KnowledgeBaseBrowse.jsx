@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Search, BookOpen, Folder, ChevronRight, Lock } from 'lucide-react'
 import api from '../../api/client'
@@ -8,6 +9,7 @@ import BaseBadge from '../../components/shared/BaseBadge'
 import BaseButton from '../../components/shared/BaseButton'
 
 export default function KnowledgeBaseBrowse() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [categories, setCategories] = useState([])
   const [articles, setArticles] = useState([])
@@ -45,7 +47,7 @@ export default function KnowledgeBaseBrowse() {
   if (unavailable) {
     return (
       <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
-        <PageHeader title="OPSC Wiki & Knowledge Base" subtitle="Policies, circulars, and role-based user guides (HR Manager, Unit Manager, Secretary)." />
+        <PageHeader title={t('page.knowledge_base_title')} subtitle={t('page.knowledge_base_sub')} />
         <div className="text-center px-6 py-12 text-slate-500">
           <BookOpen size={48} className="mx-auto opacity-30" />
           <span className="block text-base font-semibold mt-4 text-slate-700 dark:text-slate-200">Knowledge Base Coming Soon</span>
@@ -57,7 +59,7 @@ export default function KnowledgeBaseBrowse() {
 
   return (
     <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
-      <PageHeader title="OPSC Wiki & Knowledge Base" subtitle="Policies, circulars, and role-based user guides (HR Manager, Unit Manager, Secretary)." />
+      <PageHeader title={t('page.knowledge_base_title')} subtitle={t('page.knowledge_base_sub')} />
 
       <div className="card p-6">
         <BaseInput hideLabel label="Search" placeholder="Search for policies, circulars, or help guides..."

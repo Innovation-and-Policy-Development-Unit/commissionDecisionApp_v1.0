@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import SharedModal from '../../components/shared/Modal'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Edit2, Plus, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Edit2, Plus, Trash2, X, Building2 } from 'lucide-react'
 import api from '../../api/client'
+import EmptyState from '../../components/shared/EmptyState'
+import { Skeleton } from '../../components/shared/Skeleton'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
@@ -449,9 +451,12 @@ export default function MinistriesDepartments() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr><td colSpan={5} className="py-8 text-center text-slate-400">Loading…</td></tr>
-              ) : (
+              {loading && Array.from({ length: 5 }, (_, i) => (
+                <tr key={`sk-min-${i}`} aria-hidden="true">
+                  <td colSpan={5} className="py-3"><Skeleton className="h-4 w-full" /></td>
+                </tr>
+              ))}
+              {!loading && (
                 ministries.map(m => (
                   <tr key={m.id} className={selectedMin.has(m.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}>
                     <td>
@@ -567,15 +572,19 @@ export default function MinistriesDepartments() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400">
-                    Loading…
-                  </td>
-                </tr>
+                Array.from({ length: 4 }, (_, i) => (
+                  <tr key={`sk-dep-${i}`} aria-hidden="true">
+                    <td colSpan={5} className="py-3"><Skeleton className="h-4 w-full" /></td>
+                  </tr>
+                ))
               ) : filteredDepartments.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400">
-                    No departments for this ministry.
+                  <td colSpan={5}>
+                    <EmptyState
+                      icon={Building2}
+                      title="No departments yet"
+                      description="Add the departments and units that sit under this ministry so submissions can be routed to them."
+                    />
                   </td>
                 </tr>
               ) : (
@@ -684,9 +693,19 @@ export default function MinistriesDepartments() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="py-8 text-center text-slate-400">Loading…</td></tr>
+                Array.from({ length: 4 }, (_, i) => (
+                  <tr key={`sk-unit-${i}`} aria-hidden="true">
+                    <td colSpan={7} className="py-3"><Skeleton className="h-4 w-full" /></td>
+                  </tr>
+                ))
               ) : units.length === 0 ? (
-                <tr><td colSpan={7} className="py-8 text-center text-slate-400">No units defined yet.</td></tr>
+                <tr><td colSpan={7}>
+                  <EmptyState
+                    icon={Building2}
+                    title="No units defined yet"
+                    description="OPSC units handle submissions once they are routed. Add the first unit to enable routing."
+                  />
+                </td></tr>
               ) : (
                 units.map(u => (
                   <tr key={u.id} className={selectedUnit.has(u.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}>

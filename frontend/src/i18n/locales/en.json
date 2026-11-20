@@ -1490,5 +1490,21 @@
     "collapse": "Collapse",
     "current_page": "current page",
     "unread_count": "{{count}} unread"
+  },
+  "page": {
+    "knowledge_base_title": "Knowledge Base",
+    "knowledge_base_sub": "Policies, circulars, and role-based user guides (HR Manager, Unit Manager, Secretary).",
+    "pending_decisions_title": "Pending Decisions",
+    "pending_decisions_sub": "Submissions at Commission stage awaiting a decision",
+    "ministry_performance_title": "Ministry Performance",
+    "ministry_performance_sub": "Submission volumes, active cases, and compliance overview by ministry",
+    "integrity_flags_title": "Integrity Flags",
+    "integrity_flags_sub": "Submissions caught by the daily workflow-integrity sweep in a state that shouldn't be reachable",
+    "implementation_performance_title": "Implementation performance",
+    "implementation_performance_sub": "Does anything happen after we decide? Decisions implemented within target, by ministry, over time.",
+    "implementation_report_title": "Decision Implementation Report",
+    "implementation_report_sub": "Open decisions and those completed since the last sitting, for the Secretary to table.",
+    "statistics_reports_title": "Statistics reports",
+    "statistics_reports_sub": "Generate the Commission's statistics report for any period — annual, quarterly, monthly, or a custom range."
   }
 }

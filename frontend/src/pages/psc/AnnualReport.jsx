@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   FileDown, RefreshCw, AlertCircle, BookOpen, Gavel, Inbox, Target, Loader2, CalendarRange, Trash2,
 } from 'lucide-react'
@@ -36,6 +37,7 @@ const ALL_KEYS = SECTIONS.map(s => s.key)
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export default function AnnualReport() {
+  const { t } = useTranslation()
   const confirm = useConfirm()
   const [periodType, setPeriodType] = useState('annual')
   const [year, setYear] = useState(currentYear() - 1)
@@ -152,8 +154,8 @@ export default function AnnualReport() {
   return (
     <div>
       <PageHeader
-        title="Reports"
-        subtitle="Generate the Commission's statistics report for any period — annual, quarterly, monthly, or a custom range."
+        title={t('page.statistics_reports_title')}
+        subtitle={t('page.statistics_reports_sub')}
         action={
           <button
             type="button"

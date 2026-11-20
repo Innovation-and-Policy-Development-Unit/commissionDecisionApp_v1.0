@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RefreshCw, AlertCircle, Building2, TrendingUp, TrendingDown } from 'lucide-react'
 import api from '../../api/client'
+import EmptyState from '../../components/shared/EmptyState'
+import { SkeletonRow } from '../../components/shared/Skeleton'
 import PageHeader from '../../components/shared/PageHeader'
 
 function Bar({ value, max, color = 'bg-primary-500' }) {
@@ -16,6 +19,7 @@ function Bar({ value, max, color = 'bg-primary-500' }) {
 }
 
 export default function MinistryPerformance() {
+  const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -51,8 +55,8 @@ export default function MinistryPerformance() {
   return (
     <div>
       <PageHeader
-        title="Ministry Performance"
-        subtitle="Submission volumes, active cases, and compliance overview by ministry"
+        title={t('page.ministry_performance_title')}
+        subtitle={t('page.ministry_performance_sub')}
         action={
           <button
             type="button"
@@ -110,12 +114,13 @@ export default function MinistryPerformance() {
 
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-sm text-slate-400">Loading…</div>
+          <div className="py-2">{Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={6} />)}</div>
         ) : ministries.length === 0 ? (
-          <div className="p-12 text-center">
-            <Building2 size={32} className="mx-auto mb-3 text-slate-300" />
-            <p className="text-sm text-slate-500">No ministry data available.</p>
-          </div>
+          <EmptyState
+            icon={Building2}
+            title="No ministry figures for this period"
+            description="Pick a longer period, or wait until submissions have been logged against a ministry."
+          />
         ) : (
           <table className="table w-full">
             <thead>

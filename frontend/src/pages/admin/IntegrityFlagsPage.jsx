@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { RefreshCw, CheckCircle2, AlertTriangle, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import api from '../../api/client'
@@ -23,6 +24,7 @@ const SHOW_OPTIONS = [
 ]
 
 export default function IntegrityFlagsPage() {
+  const { t } = useTranslation()
   const toast = useToast()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -63,8 +65,8 @@ export default function IntegrityFlagsPage() {
   return (
     <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
       <PageHeader
-        title="Integrity Flags"
-        subtitle="Submissions caught by the daily workflow-integrity sweep in a state that shouldn't be reachable"
+        title={t('page.integrity_flags_title')}
+        subtitle={t('page.integrity_flags_sub')}
         action={
           <div className="flex items-center gap-2">
             <BaseSelect

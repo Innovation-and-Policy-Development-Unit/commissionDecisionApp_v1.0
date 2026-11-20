@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import SharedModal from '../../components/shared/Modal'
 import { useNavigate } from 'react-router-dom'
-import { GripVertical, Edit2, Plus, Trash2, X, ArrowDown } from 'lucide-react'
+import { GripVertical, Edit2, Plus, Trash2, X, ArrowDown, ListChecks } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import EmptyState from '../../components/shared/EmptyState'
+import { SkeletonRow } from '../../components/shared/Skeleton'
 import { useConfirm } from '../../context/ConfirmContext'
 import { userCanAccessAdminPanel } from '../../utils/adminAccess'
 import { invalidateAgendaSectionsCache } from '../../hooks/useAgendaSections'
@@ -279,9 +281,13 @@ export default function AgendaSectionsAdmin() {
         </p>
 
         {loading ? (
-          <p className="p-8 text-sm text-slate-500 text-center">Loading…</p>
+          <div className="py-2">{Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={3} />)}</div>
         ) : rows.length === 0 ? (
-          <p className="p-8 text-sm text-slate-500 text-center">No agenda sections defined.</p>
+          <EmptyState
+            icon={ListChecks}
+            title="No agenda sections yet"
+            description="Agenda sections are the headings a sitting's agenda is built from. Add the first one to start."
+          />
         ) : (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {rows.map(row => (
