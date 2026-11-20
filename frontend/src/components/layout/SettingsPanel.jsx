@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Keyboard, Monitor, Moon, RotateCcw, Search, Sun, X } from 'lucide-react'
 import clsx from 'clsx'
 import { useTheme } from '../../context/ThemeContext'
@@ -92,6 +93,7 @@ export default function SettingsPanel() {
     isRTL, toggleRTL, sidebarCollapsed, toggleSidebar, isHorizontal, toggleHorizontal,
     settingsPanelOpen, closeSettingsPanel,
   } = useTheme()
+  const { t } = useTranslation()
   const [scope, setScope] = useState('me') // 'me' or 'org'
   const [query, setQuery] = useState('')
 
@@ -107,15 +109,15 @@ export default function SettingsPanel() {
     <>
       <div className="settings-overlay" onClick={closeSettingsPanel} />
       <div
-        role="dialog" aria-label="Preferences"
+        role="dialog" aria-label={t('prefs.title')}
         className="fixed top-0 end-0 h-full w-full sm:w-96 bg-white dark:bg-slate-800 border-s border-slate-200 dark:border-slate-700 z-50 flex flex-col animate-slide-in-right rtl:animate-slide-in-left shadow-card-lg"
       >
         <div className="flex items-start justify-between px-5 pt-4 pb-3">
           <div>
-            <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">Preferences</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">How the interface looks, and the language it speaks</p>
+            <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">{t('prefs.title')}</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{t('prefs.subtitle')}</p>
           </div>
-          <button onClick={closeSettingsPanel} aria-label="Close" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
+          <button onClick={closeSettingsPanel} aria-label={t('common.close')} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
             <X size={18} />
           </button>
         </div>
@@ -123,20 +125,20 @@ export default function SettingsPanel() {
         <div className="flex-1 overflow-y-auto custom-scrollbar px-5 pb-5 space-y-5">
           {canSetOrg && (
             <Segmented
-              label="Who this applies to" value={scope} onChange={setScope}
-              options={[{ id: 'me', label: 'Just me' }, { id: 'org', label: 'Everyone' }]}
+              label={t('prefs.scope')} value={scope} onChange={setScope}
+              options={[{ id: 'me', label: t('prefs.scope_me') }, { id: 'org', label: t('prefs.scope_org') }]}
             />
           )}
           {editingOrg && (
             <p className="text-xs text-amber-700 dark:text-amber-300">
-              You are setting the organisation default. It applies to everyone who has not chosen their own look.
+              {t('prefs.org_warning')}
             </p>
           )}
 
           <label className="relative block">
             <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
-              type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search themes…"
+              type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('prefs.search_themes')}
               className="input ps-9 w-full text-sm"
             />
           </label>
@@ -149,40 +151,40 @@ export default function SettingsPanel() {
           </div>
 
           <div>
-            <SectionTitle>Language</SectionTitle>
+            <SectionTitle>{t('prefs.language')}</SectionTitle>
             <LanguageSwitcher inline />
           </div>
 
           <div>
-            <SectionTitle>Colour mode</SectionTitle>
+            <SectionTitle>{t('prefs.colour_mode')}</SectionTitle>
             <Segmented
-              label="Colour mode" value={shown.mode} onChange={(mode) => set({ mode })}
+              label={t('prefs.colour_mode')} value={shown.mode} onChange={(mode) => set({ mode })}
               options={[
-                { id: 'light', label: 'Light', icon: <Sun size={14} /> },
-                { id: 'dark', label: 'Dark', icon: <Moon size={14} /> },
-                { id: 'system', label: 'System', icon: <Monitor size={14} /> },
+                { id: 'light', label: t('prefs.light'), icon: <Sun size={14} /> },
+                { id: 'dark', label: t('prefs.dark'), icon: <Moon size={14} /> },
+                { id: 'system', label: t('prefs.system'), icon: <Monitor size={14} /> },
               ]}
             />
           </div>
 
           <div>
-            <SectionTitle>Density</SectionTitle>
+            <SectionTitle>{t('prefs.density')}</SectionTitle>
             <Segmented
-              label="Density" value={shown.density} onChange={(density) => set({ density })}
-              options={[{ id: 'comfortable', label: 'Comfortable' }, { id: 'compact', label: 'Compact' }]}
+              label={t('prefs.density')} value={shown.density} onChange={(density) => set({ density })}
+              options={[{ id: 'comfortable', label: t('prefs.comfortable') }, { id: 'compact', label: t('prefs.compact') }]}
             />
           </div>
 
           <div>
-            <SectionTitle>Corners</SectionTitle>
+            <SectionTitle>{t('prefs.corners')}</SectionTitle>
             <Segmented
-              label="Corners" value={shown.corners} onChange={(corners) => set({ corners })}
-              options={[{ id: 'sharp', label: 'Sharp' }, { id: 'default', label: 'Default' }, { id: 'round', label: 'Round' }]}
+              label={t('prefs.corners')} value={shown.corners} onChange={(corners) => set({ corners })}
+              options={[{ id: 'sharp', label: t('prefs.sharp') }, { id: 'default', label: t('prefs.default') }, { id: 'round', label: t('prefs.round') }]}
             />
           </div>
 
           <div>
-            <SectionTitle>Font</SectionTitle>
+            <SectionTitle>{t('prefs.font')}</SectionTitle>
             <div className="grid grid-cols-2 gap-2">
               {FONTS.map((f) => (
                 <button
@@ -200,19 +202,19 @@ export default function SettingsPanel() {
           </div>
 
           <div>
-            <SectionTitle>Font size</SectionTitle>
-            <Segmented label="Font size" value={shown.fontSize} onChange={(fontSize) => set({ fontSize })} options={FONT_SIZES} />
+            <SectionTitle>{t('prefs.font_size')}</SectionTitle>
+            <Segmented label={t('prefs.font_size')} value={shown.fontSize} onChange={(fontSize) => set({ fontSize })} options={FONT_SIZES} />
           </div>
 
           <div className="space-y-3 pt-1">
-            <SectionTitle>Layout on this device</SectionTitle>
-            <Toggle checked={sidebarCollapsed} onChange={toggleSidebar} label="Collapsed sidebar" />
-            <Toggle checked={isHorizontal} onChange={toggleHorizontal} label="Horizontal menu" />
-            <Toggle checked={isRTL} onChange={toggleRTL} label="Right-to-left direction" />
+            <SectionTitle>{t('prefs.layout')}</SectionTitle>
+            <Toggle checked={sidebarCollapsed} onChange={toggleSidebar} label={t('prefs.collapsed_sidebar')} />
+            <Toggle checked={isHorizontal} onChange={toggleHorizontal} label={t('prefs.horizontal_menu')} />
+            <Toggle checked={isRTL} onChange={toggleRTL} label={t('prefs.rtl')} />
           </div>
 
           <div className="pt-1">
-            <SectionTitle>Help</SectionTitle>
+            <SectionTitle>{t('prefs.help')}</SectionTitle>
             <button
               type="button"
               onClick={() => {
@@ -222,7 +224,7 @@ export default function SettingsPanel() {
               className="w-full flex items-center gap-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 px-3 py-2 text-start text-sm text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500"
             >
               <Keyboard size={16} className="text-slate-500 dark:text-slate-400" aria-hidden="true" />
-              <span className="flex-1">Keyboard shortcuts</span>
+              <span className="flex-1">{t('prefs.keyboard_shortcuts')}</span>
               <kbd className="rounded border border-slate-300 dark:border-slate-600 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">?</kbd>
             </button>
           </div>
@@ -234,11 +236,11 @@ export default function SettingsPanel() {
               type="button" onClick={resetAppearance} disabled={!personalised}
               className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white disabled:opacity-40"
             >
-              <RotateCcw size={15} /> Reset to organisation default
+              <RotateCcw size={15} /> {t('prefs.reset')}
             </button>
           )}
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-            {editingOrg ? 'Saved for the whole organisation.' : 'Your choice is saved to your account and follows you to other devices.'}
+            {editingOrg ? t('prefs.saved_org') : t('prefs.saved_me')}
           </p>
         </div>
       </div>

@@ -193,7 +193,7 @@ export default function AdminEmailTemplatesPage() {
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Mail size={22} className="text-primary-500" />
             Email templates
           </h1>

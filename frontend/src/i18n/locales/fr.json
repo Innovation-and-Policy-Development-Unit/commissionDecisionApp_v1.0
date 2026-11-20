@@ -101,7 +101,9 @@
     "explorer": "Explorateur",
     "saved_dashboards": "Tableaux de bord enregistrés",
     "wiki": "Base de connaissances",
-    "knowledge_base": "Gérer les articles"
+    "knowledge_base": "Gérer les articles",
+    "awaiting_decision": "En attente de décision",
+    "my_notes": "Mes notes"
   },
   "breadcrumb": {
     "dashboard": "Tableau de bord",
@@ -1212,5 +1214,37 @@
     "implementation_report_sub": "Décisions ouvertes et celles achevées depuis la dernière séance, à présenter par le Secrétaire.",
     "statistics_reports_title": "Rapports statistiques",
     "statistics_reports_sub": "Générer le rapport statistique de la Commission pour toute période — annuelle, trimestrielle, mensuelle ou personnalisée."
+  },
+  "prefs": {
+    "title": "Préférences",
+    "subtitle": "L'apparence de l'interface et la langue qu'elle parle",
+    "scope": "À qui cela s’applique",
+    "scope_me": "Moi seulement",
+    "scope_org": "Tout le monde",
+    "org_warning": "Vous définissez le réglage par défaut de l'organisation. Il s'applique à toute personne n'ayant pas choisi son propre affichage.",
+    "search_themes": "Rechercher un thème…",
+    "language": "Langue",
+    "colour_mode": "Mode de couleur",
+    "light": "Clair",
+    "dark": "Sombre",
+    "system": "Système",
+    "density": "Densité",
+    "comfortable": "Confortable",
+    "compact": "Compact",
+    "corners": "Coins",
+    "sharp": "Nets",
+    "default": "Par défaut",
+    "round": "Arrondis",
+    "font": "Police",
+    "font_size": "Taille de police",
+    "layout": "Disposition sur cet appareil",
+    "collapsed_sidebar": "Barre latérale réduite",
+    "horizontal_menu": "Menu horizontal",
+    "rtl": "Sens de droite à gauche",
+    "help": "Aide",
+    "keyboard_shortcuts": "Raccourcis clavier",
+    "reset": "Rétablir le réglage de l'organisation",
+    "saved_org": "Enregistré pour toute l'organisation.",
+    "saved_me": "Votre choix est enregistré sur votre compte et vous suit sur vos autres appareils."
   }
 }

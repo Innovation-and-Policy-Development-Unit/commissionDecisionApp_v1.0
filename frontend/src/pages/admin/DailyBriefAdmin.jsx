@@ -239,7 +239,7 @@ export default function DailyBriefAdmin() {
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Daily Brief</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Daily Brief</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Morning email digests for staff and managers — tasks, submissions, and meetings.
           </p>

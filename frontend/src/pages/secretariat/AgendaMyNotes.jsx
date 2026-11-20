@@ -3,6 +3,8 @@ import { useSearchParams, Link } from 'react-router-dom'
 import { ArrowLeft, Paperclip, Printer, StickyNote } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
+import EmptyState from '../../components/shared/EmptyState'
+import { SkeletonRow } from '../../components/shared/Skeleton'
 import PrivateNotePanel from '../../components/submissions/PrivateNotePanel'
 import { useToast } from '../../context/ToastContext'
 
@@ -80,18 +82,26 @@ export default function AgendaMyNotes() {
       />
 
       {data === undefined && (
-        <p className="text-sm text-slate-500 dark:text-slate-400 italic py-10 text-center">Loading…</p>
+        <div className="card overflow-hidden py-2">
+          {Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} cols={3} />)}
+        </div>
       )}
       {data === null && (
-        <div className="flex flex-col items-center justify-center py-16 text-slate-400 print:hidden">
-          <StickyNote size={32} className="mb-3 opacity-40" />
-          <p className="text-sm">Open this from the Agenda page to see your notes for that sitting.</p>
+        <div className="print:hidden">
+          <EmptyState
+            icon={StickyNote}
+            title="No sitting chosen"
+            description="Your notes are kept per sitting. Open a sitting's agenda and come back, or use the link below."
+            action={<Link to="/secretariat/agenda" className="btn-primary">Go to the Agenda</Link>}
+          />
         </div>
       )}
       {data && data.items.length === 0 && (
-        <p className="text-sm text-slate-500 dark:text-slate-400 italic py-10 text-center">
-          No agenda items yet for this sitting.
-        </p>
+        <EmptyState
+          icon={StickyNote}
+          title="No agenda items yet for this sitting"
+          description="Once items are added to the agenda they appear here, each with room for your own notes."
+        />
       )}
       {data && data.items.length > 0 && (
         <div className="space-y-4">

@@ -105,7 +105,7 @@
     "wiki": "Knowledge Base",
     "intelligence": "SCDMS Intelligence",
     "dashboards": "Dashboards",
-    "reports_alerts": "Reports & Alerts",
+    "reports_alerts": "Reports & alerts",
     "flag_monitor": "Flag Monitor",
     "alert_rules": "Alert Rules",
     "automations": "Automations",
@@ -122,7 +122,9 @@
     "report_builder": "Report builder",
     "flags": "Flags",
     "explorer": "Explorer",
-    "saved_dashboards": "Saved dashboards"
+    "saved_dashboards": "Saved dashboards",
+    "awaiting_decision": "Awaiting decision",
+    "my_notes": "My notes"
   },
   "breadcrumb": {
     "dashboard": "Dashboard",
@@ -1506,5 +1508,37 @@
     "implementation_report_sub": "Open decisions and those completed since the last sitting, for the Secretary to table.",
     "statistics_reports_title": "Statistics reports",
     "statistics_reports_sub": "Generate the Commission's statistics report for any period — annual, quarterly, monthly, or a custom range."
+  },
+  "prefs": {
+    "title": "Preferences",
+    "subtitle": "How the interface looks, and the language it speaks",
+    "scope": "Who this applies to",
+    "scope_me": "Just me",
+    "scope_org": "Everyone",
+    "org_warning": "You are setting the organisation default. It applies to everyone who has not chosen their own look.",
+    "search_themes": "Search themes…",
+    "language": "Language",
+    "colour_mode": "Colour mode",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "density": "Density",
+    "comfortable": "Comfortable",
+    "compact": "Compact",
+    "corners": "Corners",
+    "sharp": "Sharp",
+    "default": "Default",
+    "round": "Round",
+    "font": "Font",
+    "font_size": "Font size",
+    "layout": "Layout on this device",
+    "collapsed_sidebar": "Collapsed sidebar",
+    "horizontal_menu": "Horizontal menu",
+    "rtl": "Right-to-left direction",
+    "help": "Help",
+    "keyboard_shortcuts": "Keyboard shortcuts",
+    "reset": "Reset to organisation default",
+    "saved_org": "Saved for the whole organisation.",
+    "saved_me": "Your choice is saved to your account and follows you to other devices."
   }
 }
