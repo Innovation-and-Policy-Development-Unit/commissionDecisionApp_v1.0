@@ -131,7 +131,7 @@ export default function PSCForm37Fields({ form37, setForm37, showOpscSection = f
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+    <div className="card overflow-hidden">
 
       {/* ── Stepper header ── */}
       <div className="px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-700">

@@ -39,7 +39,7 @@ export default class ErrorBoundary extends Component {
             <div className="mt-6 flex gap-3 justify-center">
               <button
                 onClick={() => window.location.reload()}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="btn-primary"
               >
                 <RotateCcw className="h-4 w-4" aria-hidden="true" />
                 Reload Page

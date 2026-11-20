@@ -1301,7 +1301,7 @@ const stageDescriptions = {
               variant="primary"
               onClick={() => setPolicyDrawerOpen(true)}
               icon={<span aria-hidden="true">🛡</span>}
-              className="!fixed !bottom-24 !right-6 !z-[68] !rounded-full !bg-indigo-600 hover:!bg-indigo-700 dark:!bg-indigo-500"
+              className="!fixed !bottom-24 !right-6 !z-[68] !rounded-full"
             >
               AI policy scan
             </BaseButton>

@@ -140,7 +140,7 @@ function AuditTrailPanel() {
   return (
     <div className="space-y-4">
       {/* Filter bar */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+      <div className="card card-compact">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <input
             className="input text-sm col-span-2 md:col-span-1"
@@ -184,7 +184,7 @@ function AuditTrailPanel() {
       </div>
 
       {/* Table */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-40 text-slate-400 text-sm gap-2">
             <RefreshCw size={15} className="animate-spin" /> Loading audit log…
@@ -321,7 +321,7 @@ function ActiveSessionsPanel() {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="card overflow-hidden">
         {loading && !data ? (
           <div className="flex items-center justify-center h-40 text-slate-400 text-sm gap-2">
             <RefreshCw size={15} className="animate-spin" /> Loading sessions…
@@ -386,7 +386,7 @@ function ActiveSessionsPanel() {
 
 function StatCard({ label, value, colorClass, icon: Icon }) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3">
+    <div className="card card-compact flex items-center gap-3">
       <div className={`p-2.5 rounded-lg ${colorClass}`}><Icon size={18} /></div>
       <div>
         <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{value ?? '—'}</p>
@@ -435,7 +435,7 @@ function VulnScanPanel() {
   return (
     <div className="space-y-5">
       {/* Controls */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex flex-wrap items-center gap-3">
+      <div className="card card-compact flex flex-wrap items-center gap-3">
         <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Scan type:</label>
         <select value={scanType} onChange={e => setScanType(e.target.value)} className="input text-sm w-44">
           <option value="full">Full Scan</option>
@@ -443,7 +443,7 @@ function VulnScanPanel() {
           <option value="sast">SAST only</option>
         </select>
         <button onClick={runScan} disabled={running}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium disabled:opacity-60 transition-colors">
+          className="btn-primary">
           {running ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
           {running ? 'Scanning…' : 'Run Scan'}
         </button>
@@ -471,7 +471,7 @@ function VulnScanPanel() {
       )}
 
       {!loading && !scan && (
-        <div className="flex flex-col items-center justify-center h-48 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 text-sm gap-3">
+        <div className="flex flex-col items-center justify-center h-48 card text-slate-400 text-sm gap-3">
           <ShieldCheck size={32} className="opacity-30" />
           <p>No scans have been run yet.</p>
           <p className="text-xs">Click <strong>Run Scan</strong> to start the first security audit.</p>
@@ -511,7 +511,7 @@ function VulnScanPanel() {
 
           {/* Dependency vulnerabilities */}
           {section === 'deps' && (
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="card overflow-hidden">
               {depVulns.length === 0 ? (
                 <div className="flex items-center gap-3 p-6 text-green-600 dark:text-green-400">
                   <CheckCircle2 size={20} />
@@ -548,7 +548,7 @@ function VulnScanPanel() {
 
           {/* SAST findings */}
           {section === 'sast' && (
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="card overflow-hidden">
               {sastIssues.length === 0 ? (
                 <div className="flex items-center gap-3 p-6 text-green-600 dark:text-green-400">
                   <CheckCircle2 size={20} />
@@ -690,7 +690,7 @@ function IncidentResponsePanel() {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex flex-wrap items-center gap-3">
+      <div className="card card-compact flex flex-wrap items-center gap-3">
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="input text-sm w-44">
           <option value="">All statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
@@ -800,7 +800,7 @@ function IncidentResponsePanel() {
             </div>
             <div className="flex gap-2 pt-1">
               <button type="submit" disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium disabled:opacity-60 transition-colors">
+                className="btn-primary">
                 {saving ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
                 Save Changes
               </button>
@@ -819,7 +819,7 @@ function IncidentResponsePanel() {
           <RefreshCw size={15} className="animate-spin" /> Loading incidents…
         </div>
       ) : incidents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 text-sm gap-2">
+        <div className="flex flex-col items-center justify-center h-48 card text-slate-400 text-sm gap-2">
           <ShieldCheck size={28} className="opacity-30" />
           <p>No incidents reported.</p>
         </div>
@@ -827,7 +827,7 @@ function IncidentResponsePanel() {
         <div className="space-y-3">
           {incidents.map(inc => (
             <div key={inc.id}
-              className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+              className="card card-compact hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -880,8 +880,8 @@ function IncidentResponsePanel() {
 
 const STATUS_ICON = {
   pass: <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />,
-  warn: <AlertCircle size={16} className="text-amber-500  shrink-0" />,
-  fail: <AlertTriangle size={16} className="text-red-500    shrink-0" />,
+  warn: <AlertCircle size={16} className="text-amber-500 shrink-0" />,
+  fail: <AlertTriangle size={16} className="text-red-500 shrink-0" />,
 }
 
 const STATUS_ROW = {
