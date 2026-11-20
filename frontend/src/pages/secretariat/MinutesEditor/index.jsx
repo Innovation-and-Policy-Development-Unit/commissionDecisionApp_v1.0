@@ -69,7 +69,7 @@ function AgendaAdoptionStatus({ minutes, canEdit, busy, onToggle }) {
   return (
     <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3">
       <div>
-        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Adoption of Agenda</label>
+        <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Adoption of Agenda</label>
         {adopted ? (
           <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
             <CheckCircle2 size={14} />
@@ -129,8 +129,8 @@ function PreviousMinutesHint({ previousMeeting, editable, hasText, onUseSuggeste
 
 function SectionEditor({ label, value, onChange, placeholder }) {
   return (
-    <div className="mb-4">
-      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{label}</label>
+    <div className="card card-compact">
+      <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">{label}</label>
       <textarea
         className="input min-h-[80px] resize-y"
         value={value || ''}
@@ -163,16 +163,16 @@ function AgendaItemEditor({ item, index, onChange, hold, canHold, onHold, onRele
   const [expanded, setExpanded] = useState(true)
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
-      <div className="w-full flex items-center bg-slate-50 dark:bg-slate-800/50">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+      <div className="w-full flex items-center bg-primary-50/70 dark:bg-primary-900/20">
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex-1 flex items-center justify-between px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          className="flex-1 flex items-center justify-between px-4 py-3 hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors"
         >
           <div className="flex items-center gap-2">
             {expanded ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
-            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+            <span className="text-sm font-semibold text-primary-800 dark:text-primary-200">
               {item.submission_ref || `Item ${index + 1}`}
             </span>
             {item.title && <span className="text-xs text-slate-500 ml-1">— {item.title}</span>}
@@ -183,13 +183,13 @@ function AgendaItemEditor({ item, index, onChange, hold, canHold, onHold, onRele
             )}
           </div>
           <span className={clsx(
-            'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full',
-            item.decision_type === 'approved' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300',
-            item.decision_type === 'rejected' && 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300',
-            item.decision_type === 'deferred' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
-            item.decision_type === 'returned' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300',
-            item.decision_type === 'tabled' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300',
-            !item.decision_type && 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+            'text-[10px] uppercase',
+            item.decision_type === 'approved' && 'badge-success',
+            item.decision_type === 'rejected' && 'badge-danger',
+            item.decision_type === 'deferred' && 'badge-warning',
+            item.decision_type === 'returned' && 'badge-info',
+            item.decision_type === 'tabled' && 'badge-primary',
+            !item.decision_type && 'badge-secondary',
           )}>
             {item.decision_type || 'Pending'}
           </span>
@@ -213,19 +213,19 @@ function AgendaItemEditor({ item, index, onChange, hold, canHold, onHold, onRele
         <div className="p-4 space-y-3 border-t border-slate-100 dark:border-slate-700">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ref</label>
+              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Ref</label>
               <input className="input text-sm" value={item.submission_ref || ''} onChange={e => onChange(index, 'submission_ref', e.target.value)} placeholder="e.g. PSC/01/2026" />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Title</label>
+              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Title</label>
               <input className="input text-sm" value={item.title || ''} onChange={e => onChange(index, 'title', e.target.value)} placeholder="Submission title" />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Decision no.</label>
+              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Decision no.</label>
               <input className="input text-sm" value={item.decision_number || ''} onChange={e => onChange(index, 'decision_number', e.target.value)} placeholder="e.g. 03(n)-23-2026" />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Action officer</label>
+              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Action officer</label>
               <input className="input text-sm" list="minutes-action-officers" value={item.action_officer || ''} onChange={e => onChange(index, 'action_officer', e.target.value)} placeholder="e.g. Manager HRM" />
               <datalist id="minutes-action-officers">
                 {['Manager CSU', 'Manager HRM', 'Manager CIU', 'Manager VIPAM', 'Manager ODU', 'Secretary'].map(o => <option key={o} value={o} />)}
@@ -233,15 +233,15 @@ function AgendaItemEditor({ item, index, onChange, hold, canHold, onHold, onRele
             </div>
           </div>
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Discussion</label>
+            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Discussion</label>
             <textarea className="input min-h-[60px] resize-y text-sm" value={item.discussion || ''} onChange={e => onChange(index, 'discussion', e.target.value)} placeholder="Summary of discussion..." />
           </div>
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Decision</label>
+            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Decision</label>
             <textarea className="input min-h-[40px] resize-y text-sm" value={item.decision || ''} onChange={e => onChange(index, 'decision', e.target.value)} placeholder="Formal resolution wording..." />
           </div>
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Decision Type</label>
+            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Decision Type</label>
             <select className="input text-sm" value={item.decision_type || ''} onChange={e => onChange(index, 'decision_type', e.target.value)}>
               <option value="">— Select —</option>
               <option value="approved">Approved</option>
@@ -252,7 +252,7 @@ function AgendaItemEditor({ item, index, onChange, hold, canHold, onHold, onRele
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Action Items</label>
+            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Action Items</label>
             {(item.action_items || []).map((ai, aiIdx) => (
               <div key={aiIdx} className="flex items-start gap-2 mb-2">
                 <input className="input text-sm flex-1" value={ai.action || ''} onChange={e => {
@@ -312,7 +312,7 @@ function ReadOnlySection({ label, value }) {
   if (!value) return null
   return (
     <div className="mb-4">
-      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{label}</label>
+      <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">{label}</label>
       <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{value}</p>
     </div>
   )
@@ -345,19 +345,19 @@ function ReadOnlyAgendaItem({ item, index }) {
       <div className="p-4 space-y-3 border-t border-slate-100 dark:border-slate-700">
         {item.discussion && (
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Discussion</label>
+            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Discussion</label>
             <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{item.discussion}</p>
           </div>
         )}
         {item.decision && (
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Decision</label>
+            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Decision</label>
             <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{item.decision}</p>
           </div>
         )}
         {(item.action_items || []).length > 0 && (
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Action Items</label>
+            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Action Items</label>
             <ol className="list-decimal ml-5 space-y-1">
               {item.action_items.map((ai, aiIdx) => (
                 <li key={aiIdx} className="text-sm text-slate-700 dark:text-slate-300">
@@ -949,7 +949,7 @@ export default function MinutesEditor() {
           {!minutes?.print_layout && <ReadOnlySection label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} />}
 
           <div className={clsx('mb-4', minutes?.print_layout && 'hidden')}>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Agenda Items</label>
+            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Agenda Items</label>
             {(content.agenda_items || []).length === 0 && (
               <p className="text-sm text-slate-400">No agenda items recorded yet.</p>
             )}
@@ -1008,7 +1008,7 @@ export default function MinutesEditor() {
             canRecheck={SIGNED_UPLOAD_ROLES.has(user?.role) || HOLD_ROLES.has(user?.role)}
           />
 
-          <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
+          <div className="mt-6 card card-compact flex flex-wrap items-center justify-between gap-3">
             {canEditMinutes ? (
               <button
                 type="button"
@@ -1037,8 +1037,8 @@ export default function MinutesEditor() {
         <PreviousMinutesHint previousMeeting={previousMeeting} editable hasText={Boolean(content.confirmation_previous_minutes)} onUseSuggested={useSuggestedPreviousMinutesText} />
         <SectionEditor label="Confirmation of Previous Minutes" value={content.confirmation_previous_minutes} placeholder="e.g. The minutes of the previous sitting were confirmed as a true record..." onChange={v => setContent(prev => ({ ...prev, confirmation_previous_minutes: v }))} />
 
-        <div className="mb-4">
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Agenda Items</label>
+        <div className="card card-compact">
+          <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Agenda Items</label>
           {(content.agenda_items || []).map((item, idx) => (
             <div key={idx} className="mb-3">
               {item.restricted ? (
@@ -1059,7 +1059,7 @@ export default function MinutesEditor() {
           <button
             type="button"
             onClick={() => setContent(prev => ({ ...prev, agenda_items: [...(prev.agenda_items || []), { sequence: (prev.agenda_items?.length || 0) + 1, submission_ref: '', title: '', discussion: '', decision: '', decision_type: '', action_items: [] }] }))}
-            className="flex items-center gap-1.5 text-sm font-bold text-primary-600 hover:text-primary-700 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-700 transition-colors"
           >
             <Plus size={14} /> Add Agenda Item
           </button>
@@ -1068,8 +1068,8 @@ export default function MinutesEditor() {
         <SectionEditor label="Any Other Business" value={content.any_other_business} placeholder="e.g. The Commission noted the update on..." onChange={v => setContent(prev => ({ ...prev, any_other_business: v }))} />
         <SectionEditor label="Closing" value={content.closing} placeholder="e.g. There being no further business, the meeting closed at..." onChange={v => setContent(prev => ({ ...prev, closing: v }))} />
 
-        <div className="mb-4">
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Next Meeting Date</label>
+        <div className="card card-compact">
+          <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Next Meeting Date</label>
           <input className="input" type="text" value={content.next_meeting_date || ''} placeholder="e.g. TBC, or a specific date" onChange={e => setContent(prev => ({ ...prev, next_meeting_date: e.target.value }))} />
         </div>
       </div>
@@ -1081,12 +1081,12 @@ export default function MinutesEditor() {
         canRecheck={SIGNED_UPLOAD_ROLES.has(user?.role) || HOLD_ROLES.has(user?.role)}
       />
       <UploadProgress pct={uploadPct} />
-      <div className="mt-8 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-6">
-        <div className="flex items-center gap-3">
+      <div className="mt-6 card card-compact flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={saveMinutes}
             disabled={saving}
-            className="btn-gradient px-6 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60 shadow-lg shadow-primary-500/20"
+            className="btn-primary px-6 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             {saving ? 'Saving...' : minutes?.id ? 'Save Draft' : 'Create Draft'}
@@ -1103,25 +1103,25 @@ export default function MinutesEditor() {
                 SECRETARIAT_APPROVE_ROLES.has(user?.role)
                 || (user?.role === COMPLIANCE_APPROVE_ROLE && minutes.review_state?.compliance_required)
               ) && (
-                <button onClick={() => changeStatus('approve')} disabled={saving} className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-orange-500/20 disabled:opacity-60">
+                <button onClick={() => changeStatus('approve')} disabled={saving} className="btn-outline !border-primary-300 dark:!border-primary-700 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
                   <CheckCircle2 size={16} />
                   Approve
                 </button>
               )}
               {minutes.status === 'reviewed' && CIRCULATE_ROLES.has(user?.role) && (
-                <button onClick={() => changeStatus('circulate')} disabled={saving} className="bg-cyan-600 hover:bg-cyan-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-cyan-500/20 disabled:opacity-60">
+                <button onClick={() => changeStatus('circulate')} disabled={saving} className="btn-outline !border-primary-300 dark:!border-primary-700 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
                   <CheckCircle2 size={16} />
                   Circulate to Commissioners
                 </button>
               )}
               {minutes.status === 'circulated_to_commissioners' && COMMISSIONER_COMMENT_ROLES.has(user?.role) && (
-                <button onClick={() => changeStatus('return')} disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-teal-500/20 disabled:opacity-60">
+                <button onClick={() => changeStatus('return')} disabled={saving} className="btn-outline !border-primary-300 dark:!border-primary-700 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
                   <CheckCircle2 size={16} />
                   Return to Secretariat
                 </button>
               )}
               {minutes.status === 'returned' && SEND_FOR_SIGNATURE_ROLES.has(user?.role) && (
-                <button onClick={() => changeStatus('send_for_signature')} disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-violet-500/20 disabled:opacity-60">
+                <button onClick={() => changeStatus('send_for_signature')} disabled={saving} className="btn-outline !border-primary-300 dark:!border-primary-700 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
                   <PenSquare size={16} />
                   Send for Signature
                 </button>
@@ -1141,7 +1141,7 @@ export default function MinutesEditor() {
                         className="hidden"
                         onChange={e => { uploadSignedMinutes(e.target.files?.[0]); e.target.value = '' }}
                       />
-                      <button onClick={() => signedFileRef.current?.click()} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60">
+                      <button onClick={() => signedFileRef.current?.click()} disabled={saving} className="btn-outline !border-primary-300 dark:!border-primary-700 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
                         <CheckCircle2 size={16} />
                         {uploadPct !== null ? `Uploading… ${uploadPct}%` : 'Upload Signed Minutes'}
                       </button>
@@ -1177,7 +1177,7 @@ export default function MinutesEditor() {
                     Decision tasks allocated {formatDateTime(minutes.tasks_allocated_at)}
                   </span>
                 ) : (
-                  <button onClick={() => changeStatus('allocate_tasks')} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 text-sm font-bold rounded-xl inline-flex items-center gap-2 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60">
+                  <button onClick={() => changeStatus('allocate_tasks')} disabled={saving} className="btn-outline !border-primary-300 dark:!border-primary-700 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 px-5 py-2.5 text-sm inline-flex items-center gap-2 disabled:opacity-60">
                     <CheckCircle2 size={16} />
                     Allocate Decision Tasks to Managers
                   </button>
