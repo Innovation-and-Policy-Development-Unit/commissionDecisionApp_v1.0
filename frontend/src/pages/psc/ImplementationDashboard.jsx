@@ -13,6 +13,7 @@ import useChartColors from '../../hooks/useChartColors'
 import ChartCard from '../../components/shared/ChartCard'
 import StatCard from '../../components/shared/StatCard'
 import PageHeader from '../../components/shared/PageHeader'
+import ImplementationTabs from '../../components/implementation/ImplementationTabs'
 import { useAuth } from '../../context/AuthContext'
 
 // Mirrors implementation_report_generate_view's ALLOWED set in views.py — only
@@ -128,7 +129,7 @@ export default function ImplementationDashboard() {
   return (
     <div>
       <PageHeader
-        title="Implementation Dashboard"
+        title="Implementation performance"
         subtitle="Does anything happen after we decide? Decisions implemented within target, by ministry, over time."
         action={
           <div className="flex gap-2 items-center">
@@ -151,6 +152,8 @@ export default function ImplementationDashboard() {
           </div>
         }
       />
+
+      <ImplementationTabs />
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">

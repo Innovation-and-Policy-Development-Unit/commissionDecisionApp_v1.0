@@ -14,6 +14,7 @@ import { rulesApi } from '../../api/rules'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
 import PageHeader from '../../components/shared/PageHeader'
+import FlagTabs from '../../components/intelligence/FlagTabs'
 
 const LEVELS = [
   { key: 'critical', label: 'Critical', Icon: AlertOctagon, cls: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300', dot: 'bg-red-500' },
@@ -107,6 +108,8 @@ export default function FlagMonitor() {
           </div>
         }
       />
+
+      <FlagTabs />
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

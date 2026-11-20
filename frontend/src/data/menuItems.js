@@ -1,9 +1,9 @@
 import {
-  LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, ListTodo, PenLine,
+  LayoutDashboard, FileText, BarChart3, Gavel, CalendarDays, Calendar, ScrollText, Bell, PenLine,
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Mail, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, CalendarCheck, AlertCircle, Tablet, Trash2,
-  ListChecks, Flag, SlidersHorizontal, Zap,
+  ListChecks, Flag, SlidersHorizontal, Zap, Compass,
 } from 'lucide-react'
 import {
   userCanAccessAdminPanel,
@@ -66,8 +66,10 @@ const menuItems = [
         icon: Gavel,
         children: [
           { label: 'Decisions',               labelKey: 'nav.decisions',     icon: Gavel,    path: '/secretariat/decisions',     audience: 'secretariat_operator' },
-          { label: 'Decision tasks',          labelKey: 'nav.minutes_tasks', icon: ListTodo, path: '/secretariat/tasks',         audience: 'commission_decision' },
-          { label: 'Decision implementation report', labelKey: 'nav.implementation_report', icon: FileText, path: '/secretariat/implementation-report', audience: 'commission_decision' },
+          // Tasks, the Secretary's report and the performance dashboard are one
+          // job behind three routes; the page itself carries tabs between them.
+          { label: 'Implementation',          labelKey: 'nav.implementation', icon: ListChecks, path: '/secretariat/tasks', audience: 'implementation',
+            siblingPaths: ['/secretariat/implementation-report', '/implementation'] },
           { label: 'Notifications',           labelKey: 'nav.notifications', icon: Bell,     path: '/secretariat/notifications', audience: 'secretariat' },
         ],
       },
@@ -93,8 +95,7 @@ const menuItems = [
       { label: 'Commission Calendar',   labelKey: 'nav.calendar',              icon: CalendarCheck,   path: '/calendar',             visibility: 'ops' },
       { label: 'Pending Decisions',     labelKey: 'nav.pending_decisions',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
       { label: 'Ministry Performance',  labelKey: 'nav.ministry_performance',  icon: Building2,       path: '/ministry-performance', visibility: 'ops' },
-      { label: 'Implementation',        labelKey: 'nav.implementation_dashboard', icon: ListChecks,   path: '/implementation',       visibility: 'ops' },
-      { label: 'Reports',               labelKey: 'nav.annual_report',         icon: BookOpen,        path: '/annual-report',        roles: ['psc_secretary', 'psc_admin', 'senior_admin_officer'] },
+      { label: 'Statistics reports',    labelKey: 'nav.statistics_reports',    icon: BookOpen,        path: '/annual-report',        roles: ['psc_secretary', 'psc_admin', 'senior_admin_officer'] },
     ],
   },
   {
@@ -103,11 +104,13 @@ const menuItems = [
     groupIcon: Sparkles,
     audience: 'exclude_compliance',
     items: [
-      { label: 'Flag Monitor',     labelKey: 'nav.flag_monitor',      icon: Flag,          path: '/intelligence/flags' },
+      { label: 'Flags',            labelKey: 'nav.flags',             icon: Flag,          path: '/intelligence/flags', siblingPaths: ['/integrity-flags'] },
+      { label: 'Explorer',         labelKey: 'nav.explorer',          icon: Compass,       path: '/intelligence' },
+      { label: 'Saved dashboards', labelKey: 'nav.saved_dashboards',  icon: LayoutDashboard, path: '/intelligence/dashboards' },
       { label: 'Alert Rules',      labelKey: 'nav.alert_rules',       icon: SlidersHorizontal, path: '/intelligence/rules', roles: ['psc_manager'] },
       { label: 'Automations',      labelKey: 'nav.automations',       icon: Zap,           path: '/intelligence/automations', roles: ['psc_manager'] },
-      { label: 'Analytics',        labelKey: 'nav.analytics',         icon: FileText,      path: '/reports', roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'csu_manager'] },
-      { label: 'OPSC Wiki',         labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
+      { label: 'Report builder',   labelKey: 'nav.report_builder',    icon: FileText,      path: '/reports', roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'csu_manager'] },
+      { label: 'Knowledge Base',    labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
     ],
   },
   {
@@ -133,7 +136,7 @@ const menuItems = [
         labelKey: 'nav.sub_content',
         icon: BookOpen,
         children: [
-          { label: 'Knowledge Base',  labelKey: 'nav.knowledge_base',  icon: BookOpen,  path: '/admin/knowledge-base',  visibility: 'admin' },
+          { label: 'Manage articles', labelKey: 'nav.knowledge_base',  icon: BookOpen,  path: '/admin/knowledge-base',  visibility: 'admin' },
           { label: 'Email templates', labelKey: 'nav.email_templates', icon: Mail,      path: '/admin/email-templates', visibility: 'roles' },
           { label: 'Letter templates', labelKey: 'nav.letter_templates', icon: FileText, path: '/admin/letter-templates', visibility: 'roles' },
           { label: 'Daily Brief',     labelKey: 'nav.daily_brief',     icon: Calendar,  path: '/admin/daily-brief',     visibility: 'roles' },
@@ -149,7 +152,6 @@ const menuItems = [
           { label: 'System Config',   labelKey: 'nav.system_config', icon: Settings,  path: '/admin/system-config', visibility: 'roles' },
           { label: 'Audit Trail',     labelKey: 'nav.audit_trail',   icon: History,   path: '/audit-trail',         visibility: 'audit' },
           { label: 'AI Reliability',  labelKey: 'nav.ai_reliability',icon: Zap,       path: '/ai-reliability',      visibility: 'roles' },
-          { label: 'Integrity Flags', labelKey: 'nav.integrity_flags',icon: Flag,     path: '/integrity-flags',     visibility: 'roles' },
           { label: 'Backup & Restore',labelKey: 'nav.backup_restore',icon: HardDrive, path: '/admin/backup-restore',visibility: 'roles' },
           { label: 'Trash Bin',       labelKey: 'nav.trash_bin',     icon: Trash2,    path: '/admin/trash',         visibility: 'roles' },
         ],
@@ -178,6 +180,17 @@ const markExactMatchItems = (items) => items.forEach((it) => {
   if (it.children) markExactMatchItems(it.children)
 })
 menuItems.forEach((group) => markExactMatchItems(group.items))
+
+/**
+ * A menu entry stays highlighted while the user is on one of its `siblingPaths`
+ * — sibling routes that belong to the same area and are reached by tabs on the
+ * page rather than by their own menu entry.
+ */
+export function entryIsActive(entry, pathname, isActive) {
+  if (isActive) return true
+  if (!entry?.siblingPaths) return false
+  return entry.siblingPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+}
 
 export function translateLabel(entry, t) {
   if (!entry) return ''

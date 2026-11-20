@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import PageHeader from '../../components/shared/PageHeader'
+import ImplementationTabs from '../../components/implementation/ImplementationTabs'
 import Modal from '../../components/shared/Modal'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -788,6 +789,8 @@ export default function TaskManagement() {
           ) : null
         }
       />
+
+      <ImplementationTabs />
 
       {/* Tab Switcher */}
       <div className="flex items-center gap-1 mb-4 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit">

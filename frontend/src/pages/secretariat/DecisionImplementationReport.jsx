@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import PageHeader from '../../components/shared/PageHeader'
+import ImplementationTabs from '../../components/implementation/ImplementationTabs'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { Download, Printer, RefreshCw } from 'lucide-react'
@@ -66,6 +67,8 @@ export default function DecisionImplementationReport() {
         title="Decision Implementation Report"
         subtitle="Open decisions and those completed since the last sitting, for the Secretary to table."
       />
+
+      <ImplementationTabs />
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs text-slate-500">
