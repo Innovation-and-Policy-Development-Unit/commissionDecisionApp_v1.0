@@ -195,7 +195,7 @@ export default function AgendaSittingPack() {
                     key={m.id}
                     type="button"
                     onClick={() => navigate(`/secretariat/agenda/sitting-pack?meeting=${m.id}`)}
-                    className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-4 hover:border-primary-400 hover:shadow transition-all"
+                    className="w-full text-left card px-4 py-4 hover:border-primary-400 hover:shadow transition-all"
                   >
                     <span className="font-semibold block text-slate-800 dark:text-slate-100">{m.reference_number} — {m.title}</span>
                     <span className="text-sm text-slate-500">{formatMeetingHeader(m)}</span>
