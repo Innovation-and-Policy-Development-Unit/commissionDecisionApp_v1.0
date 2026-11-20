@@ -104,7 +104,7 @@ export const SHORTCUT_DEFS = [
   { keys: ['g', 'd'],  description: 'Go to Dashboard' },
   { keys: ['g', 's'],  description: 'Go to Submissions' },
   { keys: ['g', 'a'],  description: 'Go to Staff Assistant' },
-  { keys: ['g', 'r'],  description: 'Go to Reports' },
+  { keys: ['g', 'r'],  description: 'Go to Report builder' },
   { keys: ['g', 'm'],  description: 'Go to Meeting Room' },
   { keys: ['g', 't'],  description: 'Go to Tasks' },
   { keys: ['g', 'n'],  description: 'Go to Notifications' },

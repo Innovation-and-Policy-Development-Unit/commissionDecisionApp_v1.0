@@ -644,7 +644,8 @@
     "radar_quality": "Quality",
     "radar_volume": "Volume",
     "seed_banner_title": "No submissions yet",
-    "seed_banner_hint": "Submissions lodged by ministries will appear here."
+    "seed_banner_hint": "Submissions lodged by ministries will appear here.",
+    "no_decisions_yet": "No decisions recorded yet"
   },
   "inbox_brief": {
     "morning_title": "Your morning briefing",
