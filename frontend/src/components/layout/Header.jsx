@@ -101,6 +101,21 @@ const ALL_QUICK_ACTIONS = [
  * Each entry is a pair of i18n keys [groupKey, leafKey]; either may be a literal
  * string if no translation exists.
  */
+/**
+ * i18next returns the key itself when it is missing, so a typo or an unseeded
+ * key used to show up on screen as "nav.group_intelligence". Fall back to a
+ * readable form of the last segment instead, and never render a raw key.
+ */
+function makeTranslateCrumb(t) {
+  return (key) => {
+    if (!key.includes('.')) return key
+    const value = t(key)
+    if (value !== key) return value
+    const leaf = key.split('.').pop().replace(/_/g, ' ')
+    return leaf.charAt(0).toUpperCase() + leaf.slice(1)
+  }
+}
+
 const BREADCRUMB_MAP = {
   '/':                              ['app.title',             'breadcrumb.dashboard'],
   '/submissions':                   ['nav.group_submissions', 'breadcrumb.submissions'],
@@ -121,6 +136,12 @@ const BREADCRUMB_MAP = {
   '/implementation':                ['nav.group_commission',  'nav.implementation', 'breadcrumb.implementation_performance'],
   '/intelligence/flags':            ['nav.group_intelligence', 'nav.flags'],
   '/integrity-flags':               ['nav.group_intelligence', 'nav.flags', 'breadcrumb.integrity_flags'],
+  '/intelligence':                  ['nav.group_intelligence', 'nav.explorer'],
+  '/intelligence/dashboards':       ['nav.group_intelligence', 'nav.saved_dashboards'],
+  '/intelligence/reports':          ['nav.group_intelligence', 'nav.reports_alerts'],
+  '/intelligence/rules':            ['nav.group_intelligence', 'nav.alert_rules'],
+  '/intelligence/automations':      ['nav.group_intelligence', 'nav.automations'],
+  '/wiki':                          ['nav.group_intelligence', 'nav.wiki'],
   '/secretariat/notifications':     ['nav.group_commission',  'breadcrumb.notifications'],
   '/admin/roles-permissions':       ['nav.group_admin',       'breadcrumb.roles_permissions'],
   '/admin/ministries-departments':  ['nav.group_admin',       'breadcrumb.ministries_departments'],
@@ -194,8 +215,9 @@ export default function Header({ onMenuClick }) {
   const navigate = useNavigate()
 
   const breadcrumbs = useMemo(() => {
+    const translateCrumb = makeTranslateCrumb(t)
     const mapped = BREADCRUMB_MAP[location.pathname]
-    if (mapped) return mapped.map(key => t(key))
+    if (mapped) return mapped.map(translateCrumb)
     if (location.pathname.startsWith('/submissions/')) {
       return [t('nav.group_submissions'), t('breadcrumb.submission_detail')]
     }

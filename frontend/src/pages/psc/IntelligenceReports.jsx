@@ -169,7 +169,7 @@ export default function IntelligenceReports() {
   return (
     <div className="max-w-screen-lg mx-auto space-y-4 pb-10">
       <PageHeader
-        title={t('intelligence.reports_title', { defaultValue: 'Reports & Alerts' })}
+        title={t('intelligence.reports_title', { defaultValue: 'Reports & alerts' })}
         subtitle={t('intelligence.reports_subtitle', { defaultValue: 'Schedule emailed reports, or get alerted when a metric crosses a threshold.' })}
         action={
           <div className="flex items-center gap-2">

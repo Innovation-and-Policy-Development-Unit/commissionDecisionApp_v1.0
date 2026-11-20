@@ -123,7 +123,7 @@ function DashboardList() {
   return (
     <div className="max-w-screen-xl mx-auto space-y-4 pb-10">
       <PageHeader
-        title={t('intelligence.dashboards', { defaultValue: 'Dashboards' })}
+        title={t('intelligence.dashboards', { defaultValue: 'Saved dashboards' })}
         subtitle={t('intelligence.dashboards_subtitle', { defaultValue: 'Composed boards of live Intelligence charts.' })}
         action={<Link to="/intelligence" className="btn-outline flex items-center gap-2 px-3 py-2 text-sm"><Compass size={15} /> {t('intelligence.open_explorer', { defaultValue: 'Explorer' })}</Link>}
       />

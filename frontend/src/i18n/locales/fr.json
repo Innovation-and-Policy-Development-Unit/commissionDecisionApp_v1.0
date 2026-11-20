@@ -105,7 +105,8 @@
     "awaiting_decision": "En attente de décision",
     "my_notes": "Mes notes",
     "group_intelligence": "Veille",
-    "group_operations": "Opérations"
+    "group_operations": "Opérations",
+    "daily_brief": "Note quotidienne"
   },
   "breadcrumb": {
     "dashboard": "Tableau de bord",
@@ -472,7 +473,7 @@
     "cancel": "Annuler"
   },
   "intelligence": {
-    "title": "SCDMS Intelligence",
+    "title": "Explorateur",
     "subtitle": "Explorez les données en direct — posez une question ou construisez un graphique.",
     "ask_placeholder": "Posez une question, ex. « soumissions par ministère cette année »",
     "ask": "Demander",
@@ -524,7 +525,11 @@
     "link_copied": "Lien copié dans le presse-papiers",
     "link_copy_failed": "Impossible de copier le lien",
     "query_failed": "Impossible d'exécuter la requête.",
-    "ask_failed": "Impossible d'interpréter la question."
+    "ask_failed": "Impossible d'interpréter la question.",
+    "dashboards": "Tableaux de bord enregistrés",
+    "dashboards_subtitle": "Tableaux composés de graphiques Intelligence en direct.",
+    "reports_title": "Rapports et alertes",
+    "reports_subtitle": "Planifiez des rapports par courriel, ou soyez alerté quand une mesure franchit un seuil."
   },
   "dashboard": {
     "activity_overview": "Aperçu de l'activité des soumissions",
