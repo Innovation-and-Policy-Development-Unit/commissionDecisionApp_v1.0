@@ -94,11 +94,11 @@ export default function DecisionImplementationReport() {
       {data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <StatCard label="Decisions listed" value={s.total} icon={ListTodo} color="blue" />
-            <StatCard label="Not started" value={s.open} icon={Circle} color="purple" />
-            <StatCard label="In progress" value={s.in_progress} icon={Loader} color="cyan" />
-            <StatCard label="Completed since last sitting" value={s.completed_since} icon={CheckCircle2} color="emerald" />
-            <StatCard label="Overdue" value={s.overdue} icon={AlertTriangle} color={s.overdue > 0 ? 'red' : 'emerald'} />
+            <StatCard variant="quiet" label="Decisions listed" value={s.total} icon={ListTodo} color="blue" />
+            <StatCard variant="quiet" label="Not started" value={s.open} icon={Circle} color="slate" />
+            <StatCard variant="quiet" label="In progress" value={s.in_progress} icon={Loader} color="amber" />
+            <StatCard variant="quiet" label="Completed since last sitting" value={s.completed_since} icon={CheckCircle2} color="emerald" />
+            <StatCard variant="quiet" label="Overdue" value={s.overdue} icon={AlertTriangle} color={s.overdue > 0 ? 'red' : 'slate'} />
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">

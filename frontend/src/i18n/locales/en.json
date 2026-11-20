@@ -124,7 +124,9 @@
     "explorer": "Explorer",
     "saved_dashboards": "Saved dashboards",
     "awaiting_decision": "Awaiting decision",
-    "my_notes": "My notes"
+    "my_notes": "My notes",
+    "group_intelligence": "Intelligence",
+    "group_operations": "Operations"
   },
   "breadcrumb": {
     "dashboard": "Dashboard",

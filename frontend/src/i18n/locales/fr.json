@@ -103,7 +103,9 @@
     "wiki": "Base de connaissances",
     "knowledge_base": "Gérer les articles",
     "awaiting_decision": "En attente de décision",
-    "my_notes": "Mes notes"
+    "my_notes": "Mes notes",
+    "group_intelligence": "Veille",
+    "group_operations": "Opérations"
   },
   "breadcrumb": {
     "dashboard": "Tableau de bord",

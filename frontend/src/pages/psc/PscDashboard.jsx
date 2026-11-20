@@ -192,7 +192,7 @@ export default function PscDashboard() {
 
         {/* Right column — the one derived figure, with its progress bar */}
         <div className="flex flex-col gap-4">
-          <div className="card card-compact flex-1">
+          <div className="card card-compact">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('dashboard.completion_rate')}</p>
             </div>

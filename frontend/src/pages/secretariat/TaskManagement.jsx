@@ -797,7 +797,9 @@ export default function TaskManagement() {
         {[
           ...(canAllocate ? [{ key: 'allocation', label: `Allocation review${pendingCount ? ` (${pendingCount})` : ''}`, icon: Sparkles }] : []),
           { key: 'tasks', label: 'Tasks', icon: ListChecks },
-          { key: 'report', label: 'Report', icon: FileText },
+          // "AI report", not "Report": the section tabs above carry a
+          // "Report to Secretary", which is a different document entirely.
+          { key: 'report', label: 'AI report', icon: FileText },
         ].map(t => (
           <BaseButton
             key={t.key}
