@@ -168,6 +168,24 @@ class AgendaApprovalChainTests(TestCase):
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.agenda_approved_by_id, self.chair.id)
 
+    @patch("tracker.email_notify.notify_agenda_submitted_to_chairman")
+    def test_submitting_notifies_the_chairman(self, mock_notify):
+        self.client.force_authenticate(user=self.secretary)
+        with self.captureOnCommitCallbacks(execute=True):
+            res = self.client.post(f"/api/meetings/{self.meeting.id}/submit-to-chairman/")
+        self.assertEqual(res.status_code, 200)
+        mock_notify.assert_called_once()
+        self.assertEqual(mock_notify.call_args[0][0].id, self.meeting.id)
+
+    def test_chairman_gets_in_app_notification_on_submit(self):
+        from tracker.models import Notification
+
+        self.client.force_authenticate(user=self.secretary)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(f"/api/meetings/{self.meeting.id}/submit-to-chairman/")
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.chair, title__startswith="Agenda awaiting your endorsement").exists())
+
     def test_sao_cannot_submit_to_chairman(self):
         # SAO can still edit the agenda's content, but only the Secretary
         # may advance its status.

@@ -867,6 +867,29 @@ def notify_agenda_circulated(meeting) -> None:
     )
 
 
+def notify_agenda_submitted_to_chairman(meeting) -> None:
+    """Tell the Chairperson an agenda is waiting for endorsement. In-app + push
+    plus a templated email in their preferred language. Best-effort."""
+    from .models import Notification, Role
+
+    base = get_frontend_base_url()
+    when = _format_meeting_date(meeting)
+    for user in _active_users_with_roles([Role.CHAIRPERSON]):
+        Notification.objects.create(
+            recipient=user, channel=Notification.Channel.IN_APP, push=True,
+            title=f"Agenda awaiting your endorsement \u2014 {meeting.reference_number or ''}".strip(),
+            body=f"The Secretary has submitted the agenda for the sitting on {when} for your endorsement.",
+            link="/secretariat/agenda",
+        )
+        email = (user.email or "").strip()
+        if email:
+            ctx = merge_recipient_context(
+                user, meeting_reference=meeting.reference_number or "",
+                meeting_date=when, agenda_url=f"{base}/secretariat/agenda",
+            )
+            send_templated_email(slug="agenda_submitted_to_chairman", to=[email], context=ctx)
+
+
 def notify_agenda_amended(meeting, other_matter) -> None:
     """Tell already-circulated Commission members that a new item was added
     under Other Matters after circulation but before the sitting begins
