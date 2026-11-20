@@ -18,7 +18,7 @@ export function useImplementationTabs() {
   const worksDecisions = isSecretariat || userIsCommissionDecisionOps(user)
 
   return [
-    worksDecisions && { to: '/secretariat/tasks', label: 'Tasks', icon: ListTodo },
+    worksDecisions && { to: '/secretariat/tasks', label: 'Register', icon: ListTodo },
     worksDecisions && { to: '/secretariat/implementation-report', label: 'Report to Secretary', icon: FileText },
     isSecretariat && { to: '/implementation', label: 'Performance', icon: TrendingUp },
   ].filter(Boolean)
