@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import PageHeader from '../../components/shared/PageHeader'
+import EmptyState from '../../components/shared/EmptyState'
+import { SkeletonRow } from '../../components/shared/Skeleton'
 import ImplementationTabs from '../../components/implementation/ImplementationTabs'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
-import { Download, Printer, RefreshCw } from 'lucide-react'
+import { Download, Printer, RefreshCw, CheckCircle2 } from 'lucide-react'
 import clsx from 'clsx'
 
 const STATUS_CLS = {
@@ -22,6 +25,7 @@ function Kpi({ label, value, danger }) {
 }
 
 export default function DecisionImplementationReport() {
+  const { t } = useTranslation()
   const toast = useToast()
   const [data, setData] = useState(null)
   const [since, setSince] = useState('')
@@ -64,8 +68,8 @@ export default function DecisionImplementationReport() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Decision Implementation Report"
-        subtitle="Open decisions and those completed since the last sitting, for the Secretary to table."
+        title={t('page.implementation_report_title')}
+        subtitle={t('page.implementation_report_sub')}
       />
 
       <ImplementationTabs />
@@ -89,7 +93,11 @@ export default function DecisionImplementationReport() {
         </button>
       </div>
 
-      {loading && !data && <p className="text-sm text-slate-500">Loading…</p>}
+      {loading && !data && (
+        <div className="card overflow-hidden py-2">
+          {Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={5} />)}
+        </div>
+      )}
 
       {data && (
         <>
@@ -135,8 +143,12 @@ export default function DecisionImplementationReport() {
               </thead>
               <tbody>
                 {data.decisions.length === 0 && (
-                  <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">
-                    No open decisions and none completed since the last sitting.
+                  <tr><td colSpan={7}>
+                    <EmptyState
+                      icon={CheckCircle2}
+                      title="Nothing to table"
+                      description="Every decision is closed, and none was completed since the date above."
+                    />
                   </td></tr>
                 )}
                 {data.decisions.map(d => (

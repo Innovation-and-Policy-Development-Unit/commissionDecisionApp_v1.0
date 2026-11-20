@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Gavel, AlertCircle, Clock, ExternalLink, RefreshCw } from 'lucide-react'
 import api from '../../api/client'
+import EmptyState from '../../components/shared/EmptyState'
+import { SkeletonRow } from '../../components/shared/Skeleton'
 import PageHeader from '../../components/shared/PageHeader'
 import { STAGE_LABELS, stageBadgeClass } from '../../constants/stages'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
@@ -31,6 +34,7 @@ function daysSince(dateStr) {
 }
 
 export default function PendingDecisions() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { agendaSectionLabel } = useAgendaSections()
   const [data, setData] = useState(null)
@@ -60,8 +64,8 @@ export default function PendingDecisions() {
   return (
     <div>
       <PageHeader
-        title="Pending Decisions"
-        subtitle="Submissions at Commission stage awaiting a decision"
+        title={t('page.pending_decisions_title')}
+        subtitle={t('page.pending_decisions_sub')}
         action={
           <button
             type="button"
@@ -112,12 +116,13 @@ export default function PendingDecisions() {
 
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-sm text-slate-400">Loading…</div>
+          <div className="py-2">{Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={6} />)}</div>
         ) : filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <Gavel size={32} className="mx-auto mb-3 text-slate-300" />
-            <p className="text-sm text-slate-500">No submissions pending at Commission stage.</p>
-          </div>
+          <EmptyState
+            icon={Gavel}
+            title="Nothing waiting on the Commission"
+            description="Submissions appear here once they reach Commission stage and before a decision is recorded against them."
+          />
         ) : (
           <table className="table w-full">
             <thead>

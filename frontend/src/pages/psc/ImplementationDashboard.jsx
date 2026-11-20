@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -13,6 +14,8 @@ import useChartColors from '../../hooks/useChartColors'
 import ChartCard from '../../components/shared/ChartCard'
 import StatCard from '../../components/shared/StatCard'
 import PageHeader from '../../components/shared/PageHeader'
+import EmptyState from '../../components/shared/EmptyState'
+import { SkeletonRow } from '../../components/shared/Skeleton'
 import ImplementationTabs from '../../components/implementation/ImplementationTabs'
 import { useAuth } from '../../context/AuthContext'
 
@@ -40,6 +43,7 @@ function pctClass(pct) {
 }
 
 export default function ImplementationDashboard() {
+  const { t } = useTranslation()
   const { user } = useAuth()
   const canGenerateReport = REPORT_GENERATE_ROLES.has(user?.role)
   const C = useChartColors()
@@ -129,8 +133,8 @@ export default function ImplementationDashboard() {
   return (
     <div>
       <PageHeader
-        title="Implementation performance"
-        subtitle="Does anything happen after we decide? Decisions implemented within target, by ministry, over time."
+        title={t('page.implementation_performance_title')}
+        subtitle={t('page.implementation_performance_sub')}
         action={
           <div className="flex gap-2 items-center">
             <select
@@ -244,9 +248,13 @@ export default function ImplementationDashboard() {
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Worst-first by % implemented within target</p>
         </div>
         {loading ? (
-          <div className="p-12 text-center text-sm text-slate-400">Loading…</div>
+          <div className="py-2">{Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={5} />)}</div>
         ) : ministries.length === 0 ? (
-          <div className="p-12 text-center text-sm text-slate-500">No approved decisions in this period.</div>
+          <EmptyState
+            icon={ClipboardCheck}
+            title="No approved decisions in this period"
+            description="Widen the period above, or wait until the Commission has approved decisions that carry an implementation target."
+          />
         ) : (
           <div className="table-wrapper">
             <table className="table w-full">

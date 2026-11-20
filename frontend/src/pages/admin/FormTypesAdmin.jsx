@@ -2,11 +2,13 @@ import { useEffect, useState, useMemo } from 'react'
 import SharedModal from '../../components/shared/Modal'
 import PageHeader from '../../components/shared/PageHeader'
 import api from '../../api/client'
+import EmptyState from '../../components/shared/EmptyState'
+import { Skeleton } from '../../components/shared/Skeleton'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import { useNavigate } from 'react-router-dom'
-import { PlusCircle, Pencil, Trash2, RefreshCw, CheckCircle2, XCircle, Wrench, X, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { PlusCircle, Pencil, Trash2, RefreshCw, CheckCircle2, XCircle, Wrench, X, ChevronLeft, ChevronRight, Search, ClipboardList } from 'lucide-react'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseInput from '../../components/shared/BaseInput'
@@ -281,13 +283,25 @@ export default function FormTypesAdmin() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={8} className="py-10 text-center text-slate-400">Loading…</td></tr>
+                Array.from({ length: 5 }, (_, i) => (
+                  <tr key={`sk-${i}`} aria-hidden="true">
+                    <td colSpan={8} className="py-3"><Skeleton className="h-4 w-full" /></td>
+                  </tr>
+                ))
               )}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={8} className="py-10 text-center text-slate-400">No form types yet. Click "Add Form Type" to get started.</td></tr>
+                <tr><td colSpan={8}>
+                  <EmptyState
+                    icon={ClipboardList}
+                    title="No form types yet"
+                    description={'A form type is a PSC form ministries can lodge. Use "Add Form Type" to create the first one.'}
+                  />
+                </td></tr>
               )}
               {!loading && filtered.length === 0 && rows.length > 0 && (
-                <tr><td colSpan={8} className="py-10 text-center text-slate-400">No form types match your search.</td></tr>
+                <tr><td colSpan={8}>
+                  <EmptyState icon={Search} title="No form types match your search" />
+                </td></tr>
               )}
               {!loading && paged.map(row => (
                 <tr key={row.id} className={selected.has(row.id) ? 'bg-primary-50/50 dark:bg-primary-900/10' : ''}>

@@ -1196,5 +1196,21 @@
     "collapse": "Réduire",
     "current_page": "page actuelle",
     "unread_count": "{{count}} non lus"
+  },
+  "page": {
+    "knowledge_base_title": "Base de connaissances",
+    "knowledge_base_sub": "Politiques, circulaires et guides d'utilisation par rôle (Responsable RH, Chef d'unité, Secrétaire).",
+    "pending_decisions_title": "Décisions en attente",
+    "pending_decisions_sub": "Dossiers au stade de la Commission en attente d'une décision",
+    "ministry_performance_title": "Performance des ministères",
+    "ministry_performance_sub": "Volumes de dossiers, dossiers actifs et conformité par ministère",
+    "integrity_flags_title": "Signalements d'intégrité",
+    "integrity_flags_sub": "Dossiers détectés par le contrôle quotidien d'intégrité dans un état qui ne devrait pas être possible",
+    "implementation_performance_title": "Performance de mise en œuvre",
+    "implementation_performance_sub": "Que se passe-t-il après la décision ? Décisions mises en œuvre dans les délais, par ministère, dans le temps.",
+    "implementation_report_title": "Rapport de mise en œuvre des décisions",
+    "implementation_report_sub": "Décisions ouvertes et celles achevées depuis la dernière séance, à présenter par le Secrétaire.",
+    "statistics_reports_title": "Rapports statistiques",
+    "statistics_reports_sub": "Générer le rapport statistique de la Commission pour toute période — annuelle, trimestrielle, mensuelle ou personnalisée."
   }
 }

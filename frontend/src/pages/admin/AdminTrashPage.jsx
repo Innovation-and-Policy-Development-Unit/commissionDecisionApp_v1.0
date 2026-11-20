@@ -3,6 +3,8 @@ import { Trash2, RotateCcw, RefreshCw, AlertCircle, FileText, File } from 'lucid
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import EmptyState from '../../components/shared/EmptyState'
+import { SkeletonRow } from '../../components/shared/Skeleton'
 import { useConfirm } from '../../context/ConfirmContext'
 
 const fmt = (iso) =>
@@ -144,9 +146,13 @@ export default function AdminTrashPage() {
           {submissions.length > 0 && <span className="text-xs text-slate-400">{submissions.length}</span>}
         </div>
         {loading ? (
-          <div className="p-10 text-center text-sm text-slate-400">Loading…</div>
+          <div className="py-2">{Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} cols={4} />)}</div>
         ) : submissions.length === 0 ? (
-          <div className="p-10 text-center text-sm text-slate-500">The trash bin is empty.</div>
+          <EmptyState
+            icon={Trash2}
+            title="No deleted submissions"
+            description="Submissions deleted by an administrator wait here before they are purged, so they can still be restored."
+          />
         ) : (
           <div className="table-wrapper">
             <table className="table w-full">
@@ -213,9 +219,13 @@ export default function AdminTrashPage() {
           {documents.length > 0 && <span className="text-xs text-slate-400">{documents.length}</span>}
         </div>
         {loading ? (
-          <div className="p-10 text-center text-sm text-slate-400">Loading…</div>
+          <div className="py-2">{Array.from({ length: 4 }, (_, i) => <SkeletonRow key={i} cols={4} />)}</div>
         ) : documents.length === 0 ? (
-          <div className="p-10 text-center text-sm text-slate-500">No archived documents.</div>
+          <EmptyState
+            icon={FileText}
+            title="No archived documents"
+            description="Documents removed from a submission are kept here so they can be restored or purged."
+          />
         ) : (
           <div className="table-wrapper">
             <table className="table w-full">
