@@ -13,11 +13,23 @@ const solidColors = {
   blue: 'bg-blue-700',
 }
 
-function renderStatIcon(Icon) {
+// `variant="quiet"`: a normal card with a tinted icon chip, for rows of five or
+// more figures where five solid colour blocks shout over the table beneath them.
+const quietColors = {
+  purple: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+  cyan: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
+  emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+  amber: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  red: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  blue: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  slate: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+}
+
+function renderStatIcon(Icon, className = 'text-white') {
   if (!Icon) return null
   if (React.isValidElement(Icon)) return Icon
   const Component = Icon
-  return <Component size={20} fontSize={20} className="text-white" />
+  return <Component size={20} fontSize={20} className={className} />
 }
 
 export default function StatCard({
@@ -31,11 +43,37 @@ export default function StatCard({
   suffix = '',
   prefix = '',
   onClick,
+  variant = 'solid',
 }) {
   const heading = title || label
   const isPositive = change >= 0
   const solidColor = solidColors[color] || solidColors.purple
   const iconNode = renderStatIcon(Icon)
+
+  if (variant === 'quiet') {
+    const chip = quietColors[color] || quietColors.slate
+    return (
+      <div
+        className={clsx('card p-4', onClick && 'cursor-pointer hover:border-primary-300 dark:hover:border-primary-700')}
+        onClick={onClick}
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onKeyDown={onClick ? e => e.key === 'Enter' && onClick() : undefined}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 leading-snug">{heading}</p>
+          {Icon && (
+            <span className={clsx('shrink-0 w-8 h-8 rounded-lg flex items-center justify-center', chip)}>
+              {renderStatIcon(Icon, '')}
+            </span>
+          )}
+        </div>
+        <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+          {prefix}{value}{suffix}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div
