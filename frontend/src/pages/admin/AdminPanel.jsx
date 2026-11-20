@@ -3280,7 +3280,7 @@ export default function AdminPanel() {
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Administration</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Administration</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage users, roles, and permission definitions. Use the sidebar for API keys, system configuration, security, and backups.</p>
         </div>
         <button type="button" onClick={fetchAll} disabled={loadingData} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50">

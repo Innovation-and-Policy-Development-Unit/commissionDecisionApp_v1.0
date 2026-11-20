@@ -40,7 +40,6 @@ export default function Error404() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-sm mx-auto mb-8">
           {[
             { label: 'Dashboard', path: '/' },
-            { label: 'Analytics', path: '/analytics' },
             { label: 'eCommerce', path: '/ecommerce' },
             { label: 'Calendar', path: '/apps/calendar' },
             { label: 'Blog', path: '/pages/blog' },

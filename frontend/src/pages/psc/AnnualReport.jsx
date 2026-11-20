@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
+import { Skeleton } from '../../components/shared/Skeleton'
 import StatCard from '../../components/shared/StatCard'
 import { useConfirm } from '../../context/ConfirmContext'
 
@@ -287,7 +288,9 @@ export default function AnnualReport() {
             <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-1">Monthly intake</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Submissions received per month</p>
             {loading ? (
-              <div className="p-8 text-center text-sm text-slate-400">Loading…</div>
+              <div className="space-y-2 py-2">
+                {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-3 w-full" />)}
+              </div>
             ) : (
               <div className="space-y-1.5">
                 {(d?.intake?.monthly ?? []).map(m => (

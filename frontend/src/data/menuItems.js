@@ -3,7 +3,7 @@ import {
   Shield, ShieldAlert, Building2, Lock, Settings, HardDrive, MessageSquare, ClipboardList,
   Mail, BookOpen, Languages, Sparkles,
   TrendingUp, Users, History, CalendarCheck, AlertCircle, Tablet, Trash2,
-  ListChecks, Flag, SlidersHorizontal, Zap, Compass,
+  ListChecks, Flag, SlidersHorizontal, Zap, Compass, BellRing, NotebookPen,
 } from 'lucide-react'
 import {
   userCanAccessAdminPanel,
@@ -57,6 +57,7 @@ const menuItems = [
           { label: 'Agenda',        labelKey: 'nav.agenda',        icon: ScrollText, path: '/secretariat/agenda',        audience: 'opsc_internal' },
           { label: 'Minutes',       labelKey: 'nav.minutes',       icon: FileText,   path: '/secretariat/minutes',       audience: 'opsc_internal' },
           { label: 'Minute intake', labelKey: 'nav.minute_intake', icon: PenLine,    path: '/secretariat/minute-intake', audience: 'secretariat_operator' },
+          { label: 'My notes',      labelKey: 'nav.my_notes',      icon: NotebookPen, path: '/secretariat/agenda/my-notes', audience: 'opsc_internal' },
           { label: 'Deferred agenda', labelKey: 'nav.deferred_agenda', icon: History, path: '/secretariat/deferred-agenda', audience: 'opsc_internal' },
         ],
       },
@@ -91,9 +92,8 @@ const menuItems = [
     audience: 'secretariat',
     opsAccess: true,
     items: [
-      { label: 'Executive Dashboard',   labelKey: 'nav.executive_dashboard',   icon: LayoutDashboard, path: '/executive-dashboard',  visibility: 'ops' },
       { label: 'Commission Calendar',   labelKey: 'nav.calendar',              icon: CalendarCheck,   path: '/calendar',             visibility: 'ops' },
-      { label: 'Pending Decisions',     labelKey: 'nav.pending_decisions',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
+      { label: 'Awaiting decision',     labelKey: 'nav.awaiting_decision',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
       { label: 'Ministry Performance',  labelKey: 'nav.ministry_performance',  icon: Building2,       path: '/ministry-performance', visibility: 'ops' },
       { label: 'Statistics reports',    labelKey: 'nav.statistics_reports',    icon: BookOpen,        path: '/annual-report',        roles: ['psc_secretary', 'psc_admin', 'senior_admin_officer'] },
     ],
@@ -107,6 +107,7 @@ const menuItems = [
       { label: 'Flags',            labelKey: 'nav.flags',             icon: Flag,          path: '/intelligence/flags', siblingPaths: ['/integrity-flags'] },
       { label: 'Explorer',         labelKey: 'nav.explorer',          icon: Compass,       path: '/intelligence' },
       { label: 'Saved dashboards', labelKey: 'nav.saved_dashboards',  icon: LayoutDashboard, path: '/intelligence/dashboards' },
+      { label: 'Reports & alerts', labelKey: 'nav.reports_alerts',    icon: BellRing,      path: '/intelligence/reports' },
       { label: 'Alert Rules',      labelKey: 'nav.alert_rules',       icon: SlidersHorizontal, path: '/intelligence/rules', roles: ['psc_manager'] },
       { label: 'Automations',      labelKey: 'nav.automations',       icon: Zap,           path: '/intelligence/automations', roles: ['psc_manager'] },
       { label: 'Report builder',   labelKey: 'nav.report_builder',    icon: FileText,      path: '/reports', roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'csu_manager'] },
@@ -136,7 +137,6 @@ const menuItems = [
         labelKey: 'nav.sub_content',
         icon: BookOpen,
         children: [
-          { label: 'Manage articles', labelKey: 'nav.knowledge_base',  icon: BookOpen,  path: '/admin/knowledge-base',  visibility: 'admin' },
           { label: 'Email templates', labelKey: 'nav.email_templates', icon: Mail,      path: '/admin/email-templates', visibility: 'roles' },
           { label: 'Letter templates', labelKey: 'nav.letter_templates', icon: FileText, path: '/admin/letter-templates', visibility: 'roles' },
           { label: 'Daily Brief',     labelKey: 'nav.daily_brief',     icon: Calendar,  path: '/admin/daily-brief',     visibility: 'roles' },

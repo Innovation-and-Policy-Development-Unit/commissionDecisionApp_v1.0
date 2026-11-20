@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { userCanAccessAdminPanel } from '../../utils/adminAccess'
 import { useNavigate } from 'react-router-dom'
-import { Search, BookOpen, Folder, ChevronRight, Lock } from 'lucide-react'
+import { Search, BookOpen, Folder, ChevronRight, Lock, Pencil } from 'lucide-react'
 import api from '../../api/client'
 import PageHeader from '../../components/shared/PageHeader'
 import BaseInput from '../../components/shared/BaseInput'
@@ -11,6 +14,7 @@ import BaseButton from '../../components/shared/BaseButton'
 export default function KnowledgeBaseBrowse() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [categories, setCategories] = useState([])
   const [articles, setArticles] = useState([])
   const [search, setSearch] = useState('')
@@ -44,6 +48,14 @@ export default function KnowledgeBaseBrowse() {
 
   const articleItem = 'flex items-center justify-between px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50'
 
+  // The article editor used to be a separate Administration menu entry for the
+  // same articles; it belongs next to the articles themselves.
+  const manageAction = userCanAccessAdminPanel(user) ? (
+    <Link to="/admin/knowledge-base" className="btn-outline px-3 py-2 text-sm inline-flex items-center gap-2">
+      <Pencil size={14} aria-hidden="true" /> Manage articles
+    </Link>
+  ) : null
+
   if (unavailable) {
     return (
       <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
@@ -59,7 +71,7 @@ export default function KnowledgeBaseBrowse() {
 
   return (
     <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
-      <PageHeader title={t('page.knowledge_base_title')} subtitle={t('page.knowledge_base_sub')} />
+      <PageHeader title={t('page.knowledge_base_title')} subtitle={t('page.knowledge_base_sub')} action={manageAction} />
 
       <div className="card p-6">
         <BaseInput hideLabel label="Search" placeholder="Search for policies, circulars, or help guides..."

@@ -427,7 +427,7 @@ function DashboardDetail({ id }) {
               <button onClick={saveName} className="p-1.5 rounded-md bg-primary-600 text-white"><Check size={14} /></button>
             </span>
           ) : (
-            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 truncate flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 truncate flex items-center gap-2">
               {board.name}
               {canEdit && <button onClick={() => { setNameDraft(board.name); setEditingName(true) }} className="text-slate-300 hover:text-primary-500"><Pencil size={14} /></button>}
               {!board.is_owner && <span className="text-xs font-normal text-slate-400 flex items-center gap-1"><Lock size={11} /> {board.owner_name}</span>}

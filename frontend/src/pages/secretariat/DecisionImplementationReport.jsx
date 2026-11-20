@@ -4,24 +4,16 @@ import PageHeader from '../../components/shared/PageHeader'
 import EmptyState from '../../components/shared/EmptyState'
 import { SkeletonRow } from '../../components/shared/Skeleton'
 import ImplementationTabs from '../../components/implementation/ImplementationTabs'
+import StatCard from '../../components/shared/StatCard'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
-import { Download, Printer, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { Download, Printer, RefreshCw, CheckCircle2, ListTodo, Circle, Loader, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 
 const STATUS_CLS = {
   open: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
   in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
   completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-}
-
-function Kpi({ label, value, danger }) {
-  return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center">
-      <div className={clsx('text-2xl font-bold', danger && value > 0 ? 'text-red-600' : 'text-slate-900 dark:text-white')}>{value}</div>
-      <div className="text-xs text-slate-500 mt-1">{label}</div>
-    </div>
-  )
 }
 
 export default function DecisionImplementationReport() {
@@ -102,11 +94,11 @@ export default function DecisionImplementationReport() {
       {data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Kpi label="Decisions listed" value={s.total} />
-            <Kpi label="Not started" value={s.open} />
-            <Kpi label="In progress" value={s.in_progress} />
-            <Kpi label="Completed since last sitting" value={s.completed_since} />
-            <Kpi label="Overdue" value={s.overdue} danger />
+            <StatCard label="Decisions listed" value={s.total} icon={ListTodo} color="blue" />
+            <StatCard label="Not started" value={s.open} icon={Circle} color="purple" />
+            <StatCard label="In progress" value={s.in_progress} icon={Loader} color="cyan" />
+            <StatCard label="Completed since last sitting" value={s.completed_since} icon={CheckCircle2} color="emerald" />
+            <StatCard label="Overdue" value={s.overdue} icon={AlertTriangle} color={s.overdue > 0 ? 'red' : 'emerald'} />
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">

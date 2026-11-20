@@ -133,16 +133,31 @@ export default function PscDashboard() {
           {/* Inline stats row */}
           <div className="grid grid-cols-4 gap-4 mb-5 pb-4 border-b border-slate-100 dark:border-slate-700">
             {[
-              { label: t('dashboard.submissions_total'),  value: show(total),        color: 'text-slate-800 dark:text-slate-100' },
-              { label: t('dashboard.active_cases'),       value: show(activeCount),  color: 'text-sky-600 dark:text-sky-400' },
+              { label: t('dashboard.submissions_total'),  value: show(total),        color: 'text-slate-800 dark:text-slate-100', filter: 'all' },
+              { label: t('dashboard.active_cases'),       value: show(activeCount),  color: 'text-sky-600 dark:text-sky-400',     filter: 'active' },
               { label: t('dashboard.stat_decisions'),     value: show(decidedCount), color: 'text-emerald-600 dark:text-emerald-400' },
-              { label: t('dashboard.overdue_21'),         value: show(overdue),      color: 'text-amber-600 dark:text-amber-400' },
-            ].map(({ label, value, color }) => (
-              <div key={label}>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{label}</p>
-                <p className={`text-2xl font-bold ${color}`}>{value}</p>
-              </div>
-            ))}
+              { label: t('dashboard.overdue_21'),         value: show(overdue),      color: 'text-amber-600 dark:text-amber-400', filter: 'overdue' },
+            ].map(({ label, value, color, filter }) => {
+              const figure = (
+                <>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{label}</p>
+                  <p className={`text-2xl font-bold ${color}`}>{value}</p>
+                </>
+              )
+              // Drilling into the filtered list is what the retired Executive
+              // Dashboard was for; the figures carry it now.
+              return filter ? (
+                <Link
+                  key={label}
+                  to={`/submissions?filter=${filter}`}
+                  className="text-start rounded-lg -m-1 p-1 hover:bg-slate-50 dark:hover:bg-slate-700/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                >
+                  {figure}
+                </Link>
+              ) : (
+                <div key={label}>{figure}</div>
+              )
+            })}
           </div>
 
           {/* Area chart */}
@@ -229,10 +244,10 @@ export default function PscDashboard() {
             </div>
             <div className="space-y-4">
               {[
+                // "Submitted this month" and "this week" used to sit here too,
+                // but the 12-week chart above already shows intake over time.
                 { label: t('dashboard.metric_processing_time'), value: stats ? `${stats.ai_brief_processing_rate}%` : '—' },
                 { label: t('dashboard.metric_compliance'),      value: stats ? `${stats.sla_compliance_pct}%` : '—' },
-                { label: t('dashboard.metric_decisions_month'), value: stats ? stats.submitted_this_month : '—' },
-                { label: t('dashboard.metric_sitting_items'),   value: stats ? stats.submitted_this_week : '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5 flex-1">
