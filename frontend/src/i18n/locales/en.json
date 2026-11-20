@@ -126,7 +126,8 @@
     "awaiting_decision": "Awaiting decision",
     "my_notes": "My notes",
     "group_intelligence": "Intelligence",
-    "group_operations": "Operations"
+    "group_operations": "Operations",
+    "daily_brief": "Daily Brief"
   },
   "breadcrumb": {
     "dashboard": "Dashboard",
@@ -530,7 +531,7 @@
     "cancel": "Cancel"
   },
   "intelligence": {
-    "title": "SCDMS Intelligence",
+    "title": "Explorer",
     "subtitle": "Explore live submission data — ask a question or build a chart.",
     "ask_placeholder": "Ask a question, e.g. 'submissions by ministry this year'",
     "ask": "Ask",
@@ -592,7 +593,9 @@
     "link_copied": "Link copied to clipboard",
     "link_copy_failed": "Could not copy the link",
     "query_failed": "Could not run the query.",
-    "ask_failed": "Could not interpret the question."
+    "ask_failed": "Could not interpret the question.",
+    "dashboards": "Saved dashboards",
+    "reports_title": "Reports & alerts"
   },
   "dashboard": {
     "activity_overview": "Submission Activity Overview",
