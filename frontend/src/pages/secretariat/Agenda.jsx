@@ -13,6 +13,7 @@
  *   [Signature block]
  */
 import { useEffect, useState, useMemo, useRef, Fragment } from 'react'
+import FlyingAgendaPanel from '../../components/meeting/FlyingAgendaPanel'
 import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
 import AiTextSkeleton from '../../components/shared/AiTextSkeleton'
@@ -695,6 +696,13 @@ export default function Agenda() {
             circulationStatusOpen={circulationStatusOpen}
             onToggleCirculationStatus={() => setCirculationStatusOpen(o => !o)}
           />
+        )}
+        {/* The Secretary opens the flying agenda here, once the agenda is
+            circulated — Manager CSU then adds the matters from Minute Intake. */}
+        {selectedMeeting && (isAdminUser || ['psc_secretary', 'psc_admin'].includes(role)) && agendaStatus === 'circulated' && !isCompleted && (
+          <div className="mt-4">
+            <FlyingAgendaPanel key={selectedId} meetingId={selectedId} />
+          </div>
         )}
       </div>
 
