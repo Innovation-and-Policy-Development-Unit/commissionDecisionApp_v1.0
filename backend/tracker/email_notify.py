@@ -1240,7 +1240,12 @@ def _flying_item_context(item) -> tuple[str, str, str]:
 
     meeting = item.meeting
     agenda_label = f"{agenda_section_label(item.category)} — Item {item.sequence}"
-    meeting_label = f"{meeting.reference_number} on {_format_meeting_date(meeting)}"
+    from .agenda_document import meeting_label as agenda_meeting_label
+
+    try:
+        meeting_label = agenda_meeting_label(meeting)
+    except Exception:
+        meeting_label = f"{meeting.reference_number} on {_format_meeting_date(meeting)}"
     return agenda_label, meeting_label, f"/submissions/{item.submission_id}"
 
 
@@ -1254,8 +1259,9 @@ def notify_flying_item_added(item) -> None:
         return
     agenda_label, meeting_label, link = _flying_item_context(item)
     raised = f" raised by {item.raised_by_label}" if item.raised_by_label else ""
+    managers = _active_users_with_roles([role])
     _notify_users(
-        _active_users_with_roles([role]),
+        managers,
         title=f"Flying agenda item for your unit: {item.submission.title}",
         body=(
             f"A matter{raised} was added to the endorsed agenda of {meeting_label} as "
@@ -1264,6 +1270,17 @@ def notify_flying_item_added(item) -> None:
         ),
         link=link,
     )
+    # Email as well: the Manager may not be logged in when a matter is raised.
+    base = get_frontend_base_url()
+    for user in managers:
+        email = (user.email or "").strip()
+        if not email:
+            continue
+        ctx = merge_recipient_context(
+            user, item_title=item.submission.title, meeting_label=meeting_label,
+            agenda_label=agenda_label, raised_by=raised, submission_url=f"{base}{link}",
+        )
+        send_templated_email(slug="flying_agenda_item_added", to=[email], context=ctx)
 
 
 def notify_flying_item_approaching(item, items_ahead: int) -> None:

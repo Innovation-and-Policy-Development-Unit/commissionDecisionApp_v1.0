@@ -279,6 +279,31 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "flying_agenda_item_added",
+        "name": "Flying agenda item added for your unit",
+        "category": "submission_workflow",
+        "description": "Sent to the responsible unit's Manager when a matter raised at a sitting is added to their unit.",
+        "placeholders": _ph("item_title, meeting_label, agenda_label, raised_by, submission_url"),
+        "subject_template": "Flying agenda item for your unit — {{item_title}}",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "A matter{{raised_by}} was added to the endorsed agenda of {{meeting_label}} as {{agenda_label}}:\n"
+            "{{item_title}}\n\n"
+            "File the brief (subject, background, recommendation) before the Commission works down the agenda to it:\n"
+            "{{submission_url}}\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">A matter{{raised_by}} was added to the endorsed agenda of "
+            "<strong>{{meeting_label}}</strong> as {{agenda_label}}:</p>"
+            "<p style=\"margin:0 0 16px 0;font-weight:600;\">{{item_title}}</p>"
+            "<p style=\"margin:0 0 16px 0;\">File the brief (subject, background, recommendation) before the Commission works down the agenda to it.</p>"
+            "<p style=\"margin:0;\">"
+            "<a href=\"{{submission_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">File the brief</a>"
+            "</p>"
+        ),
+    },
+    {
         "slug": "agenda_circulated",
         "name": "Agenda circulated to Commission members",
         "category": "submission_workflow",
@@ -1049,6 +1074,13 @@ SAMPLE_EMAIL_CONTEXTS = {
         "meeting_reference": "PSC-MTG-2026-014",
         "meeting_date": "30 June 2026",
         "agenda_url": "http://localhost:8080/secretariat/agenda",
+    },
+    "flying_agenda_item_added": {
+        "item_title": "Review of overseas travel policy",
+        "meeting_label": "PSC Meeting No. 99 of Friday 20th November 2026",
+        "agenda_label": "Other Matters — Item 1",
+        "raised_by": " raised by Commissioner Willie",
+        "submission_url": "http://localhost:8080/submissions/1",
     },
     "agenda_circulated": {
         "meeting_reference": "PSC-MTG-2026-014",

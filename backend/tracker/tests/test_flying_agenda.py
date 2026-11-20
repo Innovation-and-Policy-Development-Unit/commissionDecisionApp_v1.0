@@ -160,6 +160,17 @@ class AddItemTests(_Base):
         )
         self.assertEqual(res.status_code, 403, res.data)
 
+    def test_unit_manager_is_emailed_as_well_as_notified(self):
+        from django.core import mail
+
+        self.odu_manager.email = "odu.manager@example.test"
+        self.odu_manager.save(update_fields=["email"])
+        res = self._add_item()  # the helper runs the on-commit notification itself
+        self.assertEqual(res.status_code, 201, res.data)
+        sent = [m for m in mail.outbox if "odu.manager@example.test" in m.to]
+        self.assertEqual(len(sent), 1, [m.subject for m in sent])
+        self.assertIn("Urgent staffing matter", sent[0].subject)
+
     def test_adding_creates_the_shell_submission_on_the_agenda(self):
         res = self._add_item()
         self.assertEqual(res.status_code, 201, res.data)
@@ -360,6 +371,7 @@ class AgendaPlacementTests(_Base):
         self.assertTrue(placement["is_flying"])
         self.assertEqual(placement["raised_by"], "Commissioner Tari")
         self.assertIn("Item", placement["label"])
+        self.assertIn("PSC Meeting No.", placement["meeting_label"])
 
     def test_no_placement_when_the_submission_is_not_on_an_agenda(self):
         sub = Submission.objects.create(

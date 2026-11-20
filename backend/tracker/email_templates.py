@@ -93,6 +93,7 @@ SLUG_META: dict[str, tuple[str, str, str]] = {
     "account_locked_admin": ("shield-alert", "danger", "Security alert: account lockout"),
     "account_unlocked_user": ("unlock", "success", "Your account is unlocked"),
     "agenda_submitted_to_chairman": ("megaphone", "indigo", "Agenda awaiting endorsement"),
+    "flying_agenda_item_added": ("megaphone", "amber", "Flying agenda item for your unit"),
     "agenda_circulated": ("megaphone", "indigo", "Agenda circulated"),
     "agenda_circulated_fr": ("megaphone", "indigo", "Ordre du jour diffusé"),
     "agenda_circulated_bi": ("megaphone", "indigo", "Adjenda i sekulet"),

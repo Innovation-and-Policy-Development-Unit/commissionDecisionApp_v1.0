@@ -100,7 +100,7 @@ export default function FlyingBriefPanel({ placement, routedUnit }) {
 
       <p className="text-xs text-slate-500 dark:text-slate-400">
         {placement.raised_by ? `${placement.raised_by} raised this ` : 'This matter was raised '}
-        during {placement.meeting_reference}, and it sits at {placement.label}.
+        during {placement.meeting_label || placement.meeting_reference}, and it sits at {placement.label}.
         {' '}
         {routedUnit ? `${routedUnitLabel(routedUnit)} briefs the Commission on it` : 'The responsible unit briefs the Commission on it'}
         {' '}— file all three parts before the Commission reaches the item.
