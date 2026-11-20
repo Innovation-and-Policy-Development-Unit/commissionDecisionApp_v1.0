@@ -255,6 +255,30 @@ DEFAULT_EMAIL_TEMPLATES = [
         ),
     },
     {
+        "slug": "agenda_submitted_to_chairman",
+        "name": "Agenda submitted to the Chairperson",
+        "category": "submission_workflow",
+        "description": "Sent to the Chairperson when the Secretary submits an agenda for endorsement.",
+        "placeholders": _ph("meeting_reference, meeting_date, agenda_url"),
+        "subject_template": "Agenda awaiting your endorsement — {{meeting_reference}} ({{meeting_date}})",
+        "body_text_template": (
+            "{{greeting}}\n\n"
+            "The Secretary has submitted the agenda for the Commission sitting on {{meeting_date}} "
+            "({{meeting_reference}}) for your endorsement.\n\n"
+            "Review and endorse it here:\n{{agenda_url}}\n\n"
+            "Endorsing the agenda circulates it to all Commission members.\n"
+        ),
+        "body_html_template": (
+            "<p style=\"margin:0 0 12px 0;\">{{greeting}}</p>"
+            "<p style=\"margin:0 0 14px 0;\">The Secretary has submitted the agenda for the Commission sitting on "
+            "<strong>{{meeting_date}}</strong> ({{meeting_reference}}) for your endorsement.</p>"
+            "<p style=\"margin:0 0 16px 0;\">"
+            "<a href=\"{{agenda_url}}\" style=\"display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:999px;font-weight:600;padding-left:22px;padding-right:22px;\">Review the agenda</a>"
+            "</p>"
+            "<p style=\"margin:0;color:#64748b;font-size:13px;\">Endorsing the agenda circulates it to all Commission members.</p>"
+        ),
+    },
+    {
         "slug": "agenda_circulated",
         "name": "Agenda circulated to Commission members",
         "category": "submission_workflow",
@@ -1020,6 +1044,11 @@ SAMPLE_EMAIL_CONTEXTS = {
         "unlocked_time": "19 Aug 2026, 15:10",
         "unlocked_by": "Admin",
         "login_url": "http://localhost:8080/auth/login",
+    },
+    "agenda_submitted_to_chairman": {
+        "meeting_reference": "PSC-MTG-2026-014",
+        "meeting_date": "30 June 2026",
+        "agenda_url": "http://localhost:8080/secretariat/agenda",
     },
     "agenda_circulated": {
         "meeting_reference": "PSC-MTG-2026-014",

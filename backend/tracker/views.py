@@ -10320,6 +10320,14 @@ class MeetingViewSet(viewsets.ModelViewSet):
         renumber_agenda(meeting)  # final numbering before it goes to the Chairperson
         meeting.agenda_status = AgendaStatus.WITH_CHAIRMAN
         meeting.save(update_fields=["agenda_status"])
+
+        def _notify_chairman():
+            try:
+                from .email_notify import notify_agenda_submitted_to_chairman
+                notify_agenda_submitted_to_chairman(meeting)
+            except Exception:
+                _security_log.exception("AGENDA_SUBMIT_NOTIFY_FAIL | meeting=%s", meeting.id)
+        transaction.on_commit(_notify_chairman)
         return Response({"detail": "Agenda submitted to the Chairperson for endorsement."})
 
     @action(detail=True, methods=["post"], url_path="approve-agenda")
