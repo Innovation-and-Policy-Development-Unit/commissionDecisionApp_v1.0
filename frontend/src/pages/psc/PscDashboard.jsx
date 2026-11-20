@@ -11,7 +11,7 @@ import useChartColors from '../../hooks/useChartColors'
 import { stageLabel } from '../../constants/stages'
 import { normalizeListPayload } from '../../utils/listPayload'
 import InboxBriefCard from '../../components/dashboard/InboxBriefCard'
-import { TrendingUp, TrendingDown, FileText, Activity, ArrowRight } from 'lucide-react'
+import { FileText, Activity, ArrowRight } from 'lucide-react'
 import EmptyState from '../../components/shared/EmptyState'
 
 const DECIDED_STAGES = new Set([
@@ -19,64 +19,6 @@ const DECIDED_STAGES = new Set([
   'decision_entered_assigned','under_implementation','implementation_report',
 ])
 
-// ── Tiny helpers ──────────────────────────────────────────────────────────────
-
-function TrendBadge({ value, inversed = false }) {
-  if (value == null || Number.isNaN(value)) return null
-  const up = value >= 0
-  const positive = inversed ? !up : up
-  return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${positive ? 'text-emerald-500' : 'text-red-500'}`}>
-      {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-      {up ? '+' : ''}{value}%
-    </span>
-  )
-}
-
-function Sparkline({ data, color, type = 'area', gradId }) {
-  if (type === 'bar') {
-    return (
-      <ResponsiveContainer width="100%" height={52}>
-        <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-          <Bar dataKey="v" fill={color} radius={[2, 2, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    )
-  }
-  return (
-    <ResponsiveContainer width="100%" height={52}>
-      <AreaChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-            <stop offset="95%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill={`url(#${gradId})`} dot={false} />
-      </AreaChart>
-    </ResponsiveContainer>
-  )
-}
-
-function StatCard({ title, value, unit = '', trend, trendInversed = false, sub, sparkData, sparkType = 'area', color, gradId }) {
-  return (
-    <div className="card card-compact flex flex-col gap-2">
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-snug">{title}</p>
-        <TrendBadge value={trend} inversed={trendInversed} />
-      </div>
-      <p className="text-3xl font-bold text-slate-900 dark:text-slate-50 leading-none">
-        {value}<span className="text-base font-medium text-slate-500 dark:text-slate-400 ml-1">{unit}</span>
-      </p>
-      {sparkData && (
-        <div className="-mx-1">
-          <Sparkline data={sparkData} color={color} type={sparkType} gradId={gradId} />
-        </div>
-      )}
-      <p className="text-xs text-slate-500 dark:text-slate-400">{sub}</p>
-    </div>
-  )
-}
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
@@ -159,8 +101,6 @@ export default function PscDashboard() {
 
   const ministryMax = ministryData.reduce((m, r) => Math.max(m, r.c), 1)
 
-  const spkSubmissions = weekly.map(w => ({ v: w.received }))
-
   return (
     <div className="space-y-4">
       {/* Visually hidden — the page otherwise jumps straight to h2 widget
@@ -193,10 +133,10 @@ export default function PscDashboard() {
           {/* Inline stats row */}
           <div className="grid grid-cols-4 gap-4 mb-5 pb-4 border-b border-slate-100 dark:border-slate-700">
             {[
-              { label: t('dashboard.submissions_total'),  value: show(total),                color: 'text-slate-800 dark:text-slate-100' },
-              { label: t('dashboard.completion_rate'),    value: useLiveTotals ? `${completionRate}%` : '—', color: 'text-emerald-600 dark:text-emerald-400' },
-              { label: t('dashboard.active_cases'),       value: show(activeCount),          color: 'text-sky-600 dark:text-sky-400' },
-              { label: t('dashboard.overdue_21'),         value: show(overdue),              color: 'text-amber-600 dark:text-amber-400' },
+              { label: t('dashboard.submissions_total'),  value: show(total),        color: 'text-slate-800 dark:text-slate-100' },
+              { label: t('dashboard.active_cases'),       value: show(activeCount),  color: 'text-sky-600 dark:text-sky-400' },
+              { label: t('dashboard.stat_decisions'),     value: show(decidedCount), color: 'text-emerald-600 dark:text-emerald-400' },
+              { label: t('dashboard.overdue_21'),         value: show(overdue),      color: 'text-amber-600 dark:text-amber-400' },
             ].map(({ label, value, color }) => (
               <div key={label}>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{label}</p>
@@ -235,73 +175,23 @@ export default function PscDashboard() {
           </div>
         </div>
 
-        {/* Right stacked mini cards */}
+        {/* Right column — the one derived figure, with its progress bar */}
         <div className="flex flex-col gap-4">
-          {/* Completion rate */}
           <div className="card card-compact flex-1">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('dashboard.completion_rate')}</p>
             </div>
             <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 mt-1">{useLiveTotals ? completionRate : '—'}<span className="text-lg text-slate-500 dark:text-slate-400">%</span></p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3">{t('dashboard.completion_rate_sub')}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3">
+              {useLiveTotals && total > 0 && decidedCount === 0
+                ? t('dashboard.no_decisions_yet')
+                : t('dashboard.completion_rate_sub')}
+            </p>
             <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={useLiveTotals && total > 0 ? Math.round((decidedCount / total) * 100) : 0} aria-label={t('dashboard.completion_rate')}>
               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${useLiveTotals && total > 0 ? (decidedCount / total) * 100 : 0}%`, backgroundColor: colors.emerald }} />
             </div>
           </div>
-
-          {/* Total cases with bar sparkline */}
-          <div className="card card-compact flex-1">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('dashboard.all_submissions')}</p>
-            </div>
-            <p className="text-4xl font-bold text-slate-900 dark:text-slate-50 mt-1">{show(total)}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-3">{t('dashboard.all_submissions_sub')}</p>
-            <div className="h-16">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={spkSubmissions} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                  <Bar dataKey="v" fill={colors.violet || '#8b5cf6'} radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
         </div>
-      </div>
-
-      {/* ── Section 2: 4 stat cards ───────────────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard
-          title={t('dashboard.stat_total_submissions')}
-          value={show(total)}
-          sub={stats ? t('dashboard.stat_total_submissions_sub', { count: stats.submitted_this_week }) : ''}
-          sparkData={spkSubmissions}
-          sparkType="area"
-          color={colors.primary}
-          gradId="spk1"
-        />
-        <StatCard
-          title={t('dashboard.active_cases')}
-          value={show(activeCount)}
-          sub={t('dashboard.stat_active_sub', { count: overdue })}
-          sparkType="area"
-          color={colors.cyan}
-          gradId="spk2"
-        />
-        <StatCard
-          title={t('dashboard.stat_decisions')}
-          value={show(decidedCount)}
-          sub={t('dashboard.stat_decisions_sub')}
-          sparkType="area"
-          color={colors.emerald}
-          gradId="spk3"
-        />
-        <StatCard
-          title={t('dashboard.overdue_21')}
-          value={show(overdue)}
-          sub={t('dashboard.stat_overdue_sub')}
-          sparkType="bar"
-          color={colors.amber}
-          gradId="spk4"
-        />
       </div>
 
       {/* ── Section 3: Stage breakdown + Key metrics ─────────────────────── */}

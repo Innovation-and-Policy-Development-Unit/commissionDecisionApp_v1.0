@@ -54,8 +54,8 @@ const ALL_QUICK_ACTIONS = [
   },
   {
     id: 'reports',
-    label: 'Reports',
-    sublabel: 'Analytics and export',
+    label: 'Report builder',
+    sublabel: 'Build, save and export reports',
     icon: BarChart3,
     path: '/reports',
     kbd: 'G R',
