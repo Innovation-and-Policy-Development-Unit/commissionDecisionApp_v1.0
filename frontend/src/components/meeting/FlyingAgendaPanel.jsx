@@ -1,7 +1,8 @@
 /**
  * FlyingAgendaPanel — the extra matters commissioners raise during a sitting.
  *
- * Lives on the Minute Intake page because that is where the people involved
+ * Shown on the Agenda page (the Secretary opens the window there) and on the
+ * Minute Intake page, where the people involved
  * already are: the Secretary (who opens and closes the window) and Manager CSU
  * (who takes the minutes and adds the matters). The responsible unit's Manager
  * never sees this panel — they get a notification and file their brief on the
