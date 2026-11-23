@@ -192,7 +192,13 @@ export default function Header({ onMenuClick }) {
     loading: notifLoading,
     error: notifError,
     markRead,
+    markUnread,
     markAllRead,
+    filter: notifFilter,
+    setFilter: setNotifFilter,
+    hasMore: notifHasMore,
+    loadMore: loadMoreNotifications,
+    loadingMore: notifLoadingMore,
     refresh: refreshNotifications,
   } = useNotifications({ enabled: !!user })
   const [notifOpen, setNotifOpen] = useState(false)
@@ -712,6 +718,25 @@ export default function Header({ onMenuClick }) {
             </div>
             <DesktopNotificationSettings compact />
             <NotificationSoundSettings compact />
+            <div role="tablist" aria-label={t('header.notifications')} className="flex gap-1 px-3 py-2 border-b border-slate-100 dark:border-slate-700">
+              {[['all', 'notifications.filter_all'], ['unread', 'notifications.filter_unread']].map(([value, key]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={notifFilter === value}
+                  onClick={() => setNotifFilter(value)}
+                  className={clsx(
+                    'px-3 py-1 rounded-full text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                    notifFilter === value
+                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300'
+                      : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700',
+                  )}
+                >
+                  {t(key)}
+                </button>
+              ))}
+            </div>
             <div
               className="max-h-72 overflow-y-auto custom-scrollbar"
               aria-live="polite"
@@ -729,16 +754,16 @@ export default function Header({ onMenuClick }) {
               )}
               {!notifLoading && !notifError && notifications.length === 0 && (
                 <p className="px-4 py-6 text-sm text-slate-400 text-center" role="status">
-                  {t('notifications.empty')}
+                  {notifFilter === 'unread' ? t('notifications.empty_unread') : t('notifications.empty')}
                 </p>
               )}
               {notifications.map(notif => (
+                <div key={notif.id} className="relative group">
                 <button
-                  key={notif.id}
                   type="button"
                   onClick={() => handleNotificationNavigate(notif.id, notif.path)}
                   className={clsx(
-                    'flex w-full items-start gap-3 px-4 py-3 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors text-start focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-700/30',
+                    'flex w-full items-start gap-3 ps-4 pe-10 py-3 border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors text-start focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-700/30',
                     !notif.read && 'bg-primary-50/30 dark:bg-primary-900/10'
                   )}
                 >
@@ -752,11 +777,34 @@ export default function Header({ onMenuClick }) {
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{notif.message}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{notif.time}</p>
                   </div>
-                  {!notif.read && (
-                    <span className="w-2 h-2 bg-primary-500 rounded-full mt-1 shrink-0" aria-hidden="true" />
-                  )}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => (notif.read ? markUnread(notif.id) : markRead(notif.id))}
+                  aria-label={notif.read ? t('notifications.mark_unread') : t('notifications.mark_read')}
+                  title={notif.read ? t('notifications.mark_unread') : t('notifications.mark_read')}
+                  className="absolute end-2 top-3 p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                >
+                  <span
+                    className={clsx(
+                      'block w-2.5 h-2.5 rounded-full',
+                      notif.read ? 'border border-slate-400' : 'bg-primary-500',
+                    )}
+                    aria-hidden="true"
+                  />
+                </button>
+                </div>
               ))}
+              {notifHasMore && (
+                <button
+                  type="button"
+                  onClick={loadMoreNotifications}
+                  disabled={notifLoadingMore}
+                  className="w-full text-center text-xs text-primary-600 dark:text-primary-400 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/30 disabled:opacity-60"
+                >
+                  {t('notifications.load_more')}
+                </button>
+              )}
             </div>
             <div className="p-3 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-2">
               {unreadCount > 0 && (

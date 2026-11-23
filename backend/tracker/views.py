@@ -12738,12 +12738,29 @@ class NotificationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        qs = Notification.objects.filter(recipient=self.request.user)
+        # The bell's "Unread" tab and category filter. Only applied to the list, so
+        # mark_read / mark_all_read keep acting on everything.
+        if self.action == "list":
+            params = self.request.query_params
+            if params.get("unread") in {"1", "true", "True"}:
+                qs = qs.filter(is_read=False)
+            category = (params.get("category") or "").strip()
+            if category:
+                qs = qs.filter(category=category)
+        return qs
 
     @action(detail=True, methods=["post"])
     def mark_read(self, request, pk=None):
         notification = self.get_object()
         notification.is_read = True
+        notification.save(update_fields=["is_read"])
+        return Response({"status": "ok"})
+
+    @action(detail=True, methods=["post"])
+    def mark_unread(self, request, pk=None):
+        notification = self.get_object()
+        notification.is_read = False
         notification.save(update_fields=["is_read"])
         return Response({"status": "ok"})
 

@@ -4200,10 +4200,30 @@ class Notification(models.Model):
         default=False,
         help_text="Send a mobile/desktop web-push for this notification (important events only).",
     )
+    category = models.CharField(
+        max_length=24, blank=True, default="", db_index=True,
+        help_text="What it is about (minutes, agenda, approval, ...). Filled from the title when blank.",
+    )
+    severity = models.CharField(
+        max_length=10, blank=True, default="info",
+        help_text="info, success, warning or error: drives the icon in the bell.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [models.Index(fields=["recipient", "is_read", "-created_at"], name="notif_recip_read_idx")]
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and (not self.category or self.severity in ("", None)):
+            from .notification_meta import classify
+
+            category, severity = classify(self.title)
+            if not self.category:
+                self.category = category
+            if self.severity in ("", None) or (self.severity == "info" and severity != "info"):
+                self.severity = severity
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Notification for {self.recipient.username}: {self.title}"
