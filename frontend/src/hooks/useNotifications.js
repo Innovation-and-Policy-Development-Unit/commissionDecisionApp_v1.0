@@ -22,7 +22,9 @@ function mapApiRow(row) {
         : '/submissions')
   return {
     id: row.id,
-    type: inferNotificationType(row.title),
+    // Server-stored severity wins; the title guess only covers rows from before it existed.
+    type: row.severity && row.severity !== 'info' ? row.severity : inferNotificationType(row.title),
+    category: row.category || '',
     title: row.title,
     message: row.body,
     time: formatNotificationTime(row.created_at),
@@ -37,6 +39,11 @@ export function useNotifications({ enabled = true } = {}) {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
+  const [filter, setFilter] = useState('all') // 'all' | 'unread'
+  const [serverUnread, setServerUnread] = useState(null)
+  const [nextPage, setNextPage] = useState(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const filterRef = useRef('all')
   const seenDesktopRef = useRef(new Set())
   // Ids already heard or seen. The first load only fills it, so opening the app
   // with old unread items stays silent; later arrivals chime once per batch.
@@ -70,10 +77,21 @@ export function useNotifications({ enabled = true } = {}) {
     if (!enabled) return
     setLoading(true)
     try {
-      const { data } = await api.get('/notifications/')
+      const params = filterRef.current === 'unread' ? { unread: 1 } : {}
+      const [{ data }, countRes] = await Promise.all([
+        api.get('/notifications/', { params }),
+        api.get('/notifications/unread_count/').catch(() => null),
+      ])
       const list = (Array.isArray(data) ? data : data?.results ?? []).map(mapApiRow)
       if (mountedRef.current) {
-        setNotifications(list)
+        // Keep older pages the user already loaded: the poll only refreshes page one.
+        setNotifications((prev) => {
+          const fresh = new Set(list.map((n) => n.id))
+          const older = prev.filter((n) => !fresh.has(n.id) && list.length && n.createdAt < list[list.length - 1].createdAt)
+          return [...list, ...older]
+        })
+        setNextPage((cur) => (cur && cur > 2 ? cur : (data?.next ? 2 : null)))
+        if (countRes?.data) setServerUnread(countRes.data.unread_count)
         setError(false)
         const unread = list.filter((n) => !n.read)
         const known = knownIdsRef.current
@@ -123,6 +141,7 @@ export function useNotifications({ enabled = true } = {}) {
 
   const markRead = useCallback(async (id) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+    setServerUnread((c) => (c == null ? c : Math.max(0, c - 1)))
     try {
       await api.post(`/notifications/${id}/mark_read/`)
     } catch {
@@ -132,6 +151,7 @@ export function useNotifications({ enabled = true } = {}) {
 
   const markAllRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    setServerUnread(0)
     try {
       await api.post('/notifications/mark_all_read/')
     } catch {
@@ -139,9 +159,56 @@ export function useNotifications({ enabled = true } = {}) {
     }
   }, [fetchNotifications])
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const markUnread = useCallback(async (id) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: false } : n)))
+    setServerUnread((c) => (c == null ? c : c + 1))
+    try {
+      await api.post(`/notifications/${id}/mark_unread/`)
+    } catch {
+      fetchNotifications()
+    }
+  }, [fetchNotifications])
+
+  const changeFilter = useCallback((value) => {
+    filterRef.current = value
+    setFilter(value)
+    setNextPage(null)
+    setNotifications([])
+    fetchNotifications()
+  }, [fetchNotifications])
+
+  const loadMore = useCallback(async () => {
+    if (!nextPage || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const params = { page: nextPage, ...(filterRef.current === 'unread' ? { unread: 1 } : {}) }
+      const { data } = await api.get('/notifications/', { params })
+      const more = (data?.results ?? []).map(mapApiRow)
+      if (mountedRef.current) {
+        setNotifications((prev) => {
+          const have = new Set(prev.map((n) => n.id))
+          return [...prev, ...more.filter((n) => !have.has(n.id))]
+        })
+        setNextPage(data?.next ? nextPage + 1 : null)
+        knownIdsRef.current = new Set([...(knownIdsRef.current || []), ...more.map((n) => n.id)])
+      }
+    } catch {
+      /* the button stays; the user can try again */
+    } finally {
+      if (mountedRef.current) setLoadingMore(false)
+    }
+  }, [nextPage, loadingMore])
+
+  // The server count covers every page; the loaded list alone undercounts past 50.
+  const unreadCount = serverUnread ?? notifications.filter((n) => !n.read).length
 
   return {
+    filter,
+    setFilter: changeFilter,
+    hasMore: !!nextPage,
+    loadMore,
+    loadingMore,
+    markUnread,
     notifications,
     unreadCount,
     loading,

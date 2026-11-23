@@ -1186,7 +1186,10 @@ def notify_decision_unserved(submission, days: int) -> None:
     "decided and not sent".
     """
     from .models import Role
+    from .notification_meta import is_practice_submission
 
+    if is_practice_submission(submission):
+        return
     unit_role = {
         "odu": Role.ODU_MANAGER,
         "hr": Role.HR_UNIT_MANAGER,
@@ -1212,13 +1215,20 @@ def notify_decision_unserved(submission, days: int) -> None:
             f"about the outcome."
         ),
         link=f"/submissions/{submission.id}",
+        chaser=True,
     )
 
 
-def _notify_users(users, *, title: str, body: str, link: str = "/secretariat/minutes") -> None:
+def _notify_users(users, *, title: str, body: str, link: str = "/secretariat/minutes",
+                  chaser: bool = False) -> None:
+    """In-app + push notice to each user. ``chaser=True`` marks an automated "you are late"
+    reminder: it is not repeated to the same person for the same title within a few days."""
     from .models import Notification
+    from .notification_meta import sent_recently
 
     for user in users:
+        if chaser and sent_recently(user, title):
+            continue
         Notification.objects.create(
             recipient=user, channel=Notification.Channel.IN_APP, push=True,
             title=title, body=body, link=link,
@@ -1351,8 +1361,11 @@ def notify_minutes_submitted_for_review(minutes) -> None:
 def notify_minutes_draft_review_due(minutes, *, overdue: bool) -> None:
     """Chase the minute taker over their own read-back of the draft."""
     from . import minutes_review as mr
+    from .notification_meta import is_practice_reference
 
     ref = minutes.meeting.reference_number if minutes.meeting else ""
+    if is_practice_reference(ref):
+        return  # practice sitting: no chasers
     # Whoever drafted these minutes owns the read-back; fall back to the role
     # when that account is gone or deactivated.
     if minutes.created_by_id and minutes.created_by.is_active:
@@ -1375,6 +1388,7 @@ def notify_minutes_draft_review_due(minutes, *, overdue: bool) -> None:
             "The draft minutes are built. Read them back and submit them for review."
         ),
         link=f"/secretariat/meetings/{minutes.meeting_id}/minutes",
+        chaser=True,
     )
 
 
@@ -1382,8 +1396,11 @@ def notify_minutes_review_overdue(minutes) -> None:
     """Tell the outstanding reviewers, and the Secretary, that they are late."""
     from . import minutes_review as mr
     from .models import Role
+    from .notification_meta import is_practice_reference
 
     ref = minutes.meeting.reference_number if minutes.meeting else ""
+    if is_practice_reference(ref):
+        return
     waiting = mr.pending_reviewers(minutes)
     if not waiting:
         return
@@ -1396,6 +1413,7 @@ def notify_minutes_review_overdue(minutes) -> None:
         recipients,
         title=f"Minutes review overdue — {ref}".strip(),
         body="These minutes are past their review window and still need approval.",
+        chaser=True,
     )
 
 
@@ -1433,8 +1451,11 @@ def notify_commissioners_minutes_reminder(minutes, users, *, overdue: bool = Fal
     In-app with web push and an email, because a Commissioner who has not
     opened the minutes is by definition not looking at the app."""
     from .models import Notification
+    from .notification_meta import is_practice_reference, sent_recently
 
     ref = minutes.meeting.reference_number if minutes.meeting else ""
+    if is_practice_reference(ref):
+        return
     if overdue:
         title = f"Overdue: please review the draft minutes — {ref}".strip()
         body = ("The time to review the draft minutes has passed and we have no response from you yet. "
@@ -1444,6 +1465,8 @@ def notify_commissioners_minutes_reminder(minutes, users, *, overdue: bool = Fal
         body = ("The draft minutes are waiting for your review. Please open them and either comment "
                 "or confirm you have read them with no comments.")
     for user in users:
+        if sent_recently(user, title):
+            continue
         Notification.objects.create(
             recipient=user, channel=Notification.Channel.BOTH, push=True,
             title=title, body=body, link="/secretariat/minutes",
@@ -1453,8 +1476,11 @@ def notify_commissioners_minutes_reminder(minutes, users, *, overdue: bool = Fal
 def notify_secretary_commissioners_overdue(minutes, names: list[str]) -> None:
     """Tell the Secretary and Chairperson who is still outstanding after the deadline."""
     from .models import Role
+    from .notification_meta import is_practice_reference
 
     ref = minutes.meeting.reference_number if minutes.meeting else ""
+    if is_practice_reference(ref):
+        return
     recipients = list(
         User.objects.filter(
             is_active=True, psc_profile__role__in=[Role.PSC_SECRETARY, Role.CHAIRPERSON],
@@ -1464,6 +1490,7 @@ def notify_secretary_commissioners_overdue(minutes, names: list[str]) -> None:
         recipients,
         title=f"Minutes review overdue — {ref}".strip(),
         body="The Commissioners' review period has ended. No response yet from: " + ", ".join(names) + ".",
+        chaser=True,
     )
 
 

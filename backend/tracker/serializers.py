@@ -2775,9 +2775,11 @@ class NotificationSerializer(serializers.ModelSerializer):
             "link",
             "is_read",
             "emailed",
+            "category",
+            "severity",
             "created_at",
         )
-        read_only_fields = ("id", "created_at")
+        read_only_fields = ("id", "created_at", "category", "severity")
 
 
 class SecurityIncidentSerializer(serializers.ModelSerializer):
