@@ -17,6 +17,7 @@ class Role(models.TextChoices):
     RECEPTIONIST           = "receptionist",           "Receptionist"
     PSC_OFFICER            = "psc_officer",            "PSC Officer"
     PSC_SECRETARY          = "psc_secretary",          "PSC Secretary"
+    DEPUTY_SECRETARY       = "deputy_secretary",       "Deputy Secretary"
     SENIOR_ADMIN_OFFICER   = "senior_admin_officer",   "Senior Administration Officer"
     PSC_COMMISSIONER       = "psc_commissioner",       "PSC Commissioner"
     CHAIRPERSON            = "chairperson",            "Chairman"

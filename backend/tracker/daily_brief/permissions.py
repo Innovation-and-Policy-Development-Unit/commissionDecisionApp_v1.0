@@ -11,7 +11,7 @@ from tracker.rbac import rbac_can_access_admin_panel, rbac_user_can_manage_roles
 # Officer, Commissioner, Chairperson) that weren't named for this feature.
 INBOX_BRIEF_ROLES = {
     Role.PSC_ADMIN,
-    Role.PSC_SECRETARY,
+    Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
     Role.SECRETARY_OPSC,
     Role.PSC_MANAGER,
     Role.VIPAM_MANAGER,

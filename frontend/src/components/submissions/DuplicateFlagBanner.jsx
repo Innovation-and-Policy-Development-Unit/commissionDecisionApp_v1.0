@@ -15,7 +15,7 @@ import BaseButton from '../shared/BaseButton'
 import { STAGE_LABELS } from '../../constants/stages'
 
 export const DUPLICATE_FLAG_ROLES = [
-  'psc_secretary', 'senior_admin_officer', 'psc_admin',
+  'psc_secretary', 'deputy_secretary', 'senior_admin_officer', 'psc_admin',
   'odu_manager', 'hr_unit_manager', 'vipam_manager', 'compliance_manager', 'ipdu_manager',
 ]
 

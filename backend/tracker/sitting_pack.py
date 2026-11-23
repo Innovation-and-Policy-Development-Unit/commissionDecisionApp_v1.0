@@ -11,7 +11,7 @@ from .models import Role, SittingPackSession
 SITTING_PACK_ROLES = frozenset({
     Role.PSC_COMMISSIONER,
     Role.CHAIRPERSON,
-    Role.PSC_SECRETARY,
+    Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
     Role.SENIOR_ADMIN_OFFICER,
     Role.PSC_ADMIN,
     Role.PSC_MANAGER,

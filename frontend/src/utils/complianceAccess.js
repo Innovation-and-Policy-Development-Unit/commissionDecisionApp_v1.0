@@ -27,6 +27,7 @@ export function userHasComplianceAccess(user) {
 const SECRETARIAT_ROLES = new Set([
   'psc_admin',
   'psc_secretary',
+  'deputy_secretary',
   'senior_admin_officer',
   'psc_commissioner',
   'chairperson',

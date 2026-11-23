@@ -455,7 +455,7 @@ def _submission_queryset_for(user, *, with_events=True):
     if role in {
         Role.RECEPTIONIST,
         Role.PSC_OFFICER,
-        Role.PSC_SECRETARY,
+        Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
         Role.PSC_COMMISSIONER,
         Role.CHAIRPERSON,
         Role.PSC_ADMIN,
@@ -3919,7 +3919,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
     # ── AI first draft of the text of ODU's own papers ─────────────────────────
     _TEMPLATE_DRAFT_READ_ROLES = {
-        Role.ODU_SENIOR, Role.ODU_PRINCIPAL, Role.ODU_MANAGER, Role.PSC_ADMIN, Role.PSC_SECRETARY,
+        Role.ODU_SENIOR, Role.ODU_PRINCIPAL, Role.ODU_MANAGER, Role.PSC_ADMIN, Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
     }
 
     def _template_draft_paper(self, request, pk, *, writing: bool):
@@ -5577,7 +5577,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ministry's services."""
         profile = _profile(request.user)
         secretariat = {
-            Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
+            Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
             Role.PSC_OFFICER, Role.PSC_MANAGER, Role.PSC_COMMISSIONER, Role.CHAIRPERSON,
         }
         if profile.role in secretariat or request.user.is_staff:
@@ -6084,7 +6084,7 @@ class MinistryViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
         profile = _profile(user)
         # PSC staff see everything. Ministry/Dept staff see only their own.
         psc_roles = {
-            Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY,
+            Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
             Role.PSC_MANAGER, Role.CHAIRPERSON, Role.PSC_COMMISSIONER,
             Role.SENIOR_ADMIN_OFFICER, Role.PRINCIPAL_OFFICER, Role.SENIOR_OFFICER,
             Role.VIPAM_MANAGER, Role.HR_UNIT_MANAGER, Role.ODU_MANAGER, Role.COMPLIANCE_MANAGER
@@ -6142,7 +6142,7 @@ class DepartmentViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
         else:
             profile = _profile(user)
             psc_roles = {
-                Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY,
+                Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
                 Role.PSC_MANAGER, Role.CHAIRPERSON, Role.PSC_COMMISSIONER,
                 Role.SENIOR_ADMIN_OFFICER, Role.PRINCIPAL_OFFICER, Role.SENIOR_OFFICER,
                 Role.VIPAM_MANAGER, Role.HR_UNIT_MANAGER, Role.ODU_MANAGER, Role.COMPLIANCE_MANAGER
@@ -6215,7 +6215,7 @@ class UnitViewSet(CachedReferenceViewSetMixin, viewsets.ModelViewSet):
         if not (user.is_superuser or user.is_staff):
             profile = _profile(user)
             psc_roles = {
-                Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY,
+                Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
                 Role.PSC_MANAGER, Role.CHAIRPERSON, Role.PSC_COMMISSIONER,
                 Role.SENIOR_ADMIN_OFFICER, Role.PRINCIPAL_OFFICER, Role.SENIOR_OFFICER,
                 Role.VIPAM_MANAGER, Role.HR_UNIT_MANAGER, Role.ODU_MANAGER, Role.COMPLIANCE_MANAGER,
@@ -7485,7 +7485,7 @@ def global_search_view(request):
 
     # ── Ministries (PSC staff only) ────────────────────────────────────────
     if profile.role in {
-        Role.PSC_OFFICER, Role.PSC_SECRETARY, Role.PSC_ADMIN,
+        Role.PSC_OFFICER, Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN,
         Role.PSC_COMMISSIONER, Role.PSC_MANAGER,
     }:
         mins = Ministry.objects.filter(
@@ -7891,7 +7891,7 @@ class DecisionLetterViewSet(viewsets.ModelViewSet):
                 qs = qs.filter(
                     models.Q(department__isnull=True) | models.Q(department_id=profile.department_id)
                 )
-        elif profile and profile.role in {Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
+        elif profile and profile.role in {Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.SENIOR_ADMIN_OFFICER}:
             # The Secretary signs every decision letter and the Secretariat records its
             # hand-over, whether or not the Secretary is allocated the underlying task.
             # (Without this the letter 404'd for them: they do not see the task register.)
@@ -10395,8 +10395,9 @@ class MeetingViewSet(viewsets.ModelViewSet):
         """
         meeting = self.get_object()
         profile = _profile(request.user)
-        if profile.role not in {Role.PSC_SECRETARY, Role.PSC_ADMIN}:
-            raise PermissionDenied("Only the PSC Secretary can submit the agenda to the Chairperson.")
+        if profile.role not in {Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN}:
+            raise PermissionDenied(
+                "Only the PSC Secretary or Deputy Secretary can submit the agenda to the Chairperson.")
         test_refs = self._test_items_on_agenda(meeting)
         if test_refs:
             return Response({
@@ -10590,7 +10591,7 @@ class MeetingViewSet(viewsets.ModelViewSet):
         meeting = self.get_object()
         profile = _profile(request.user)
         if profile.role not in {
-            Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.CHAIRPERSON, Role.PSC_ADMIN,
+            Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.CHAIRPERSON, Role.PSC_ADMIN,
         }:
             raise PermissionDenied("You do not have access to agenda circulation status.")
 
@@ -13372,7 +13373,7 @@ class MinutesViewSet(viewsets.ModelViewSet):
         return Response(MinutesCommentSerializer(comment).data, status=201)
 
     _TRACKER_VIEW_ROLES = {
-        Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
+        Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
         Role.CHAIRPERSON, Role.CSU_MANAGER,
     }
     _TRACKER_REMIND_ROLES = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
@@ -14983,7 +14984,7 @@ def dashboard_stats_view(request):
     sla_pct = round((1 - overdue / pending_active) * 100) if pending_active else 100
 
     ministry_breakdown = []
-    if request.user.is_staff or profile.role in {Role.PSC_SECRETARY, Role.PSC_OFFICER, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}:
+    if request.user.is_staff or profile.role in {Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_OFFICER, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}:
         ministry_breakdown = [
             {"ministry": m, "count": c}
             for m, c in qs.values("ministry__name").annotate(n=Count("id")).order_by("-n")[:10].values_list("ministry__name", "n")
@@ -15616,7 +15617,7 @@ def pending_decisions_view(request):
     """Submissions currently at Commission stage awaiting a decision."""
     from django.db.models import Count
     profile = _profile(request.user)
-    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_OFFICER,
+    ALLOWED = {Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_OFFICER,
                Role.PSC_COMMISSIONER, Role.CHAIRPERSON}
     if profile.role not in ALLOWED and not request.user.is_staff:
         raise PermissionDenied("PSC staff and commissioners only.")
@@ -15667,7 +15668,7 @@ def ministry_performance_view(request):
     """Per-ministry submission stats for the Secretary's oversight view."""
     from django.db.models import Count, Q
     profile = _profile(request.user)
-    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_OFFICER}
+    ALLOWED = {Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_OFFICER}
     if profile.role not in ALLOWED and not request.user.is_staff:
         raise PermissionDenied("PSC staff only.")
 
@@ -15815,7 +15816,7 @@ def analytics_trends_view(request):
 # ── Implementation Dashboard ───────────────────────────────────────────────────
 
 _IMPL_DASHBOARD_OPS_ROLES = {
-    Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
+    Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
     Role.PSC_OFFICER, Role.PSC_MANAGER, Role.PSC_COMMISSIONER, Role.CHAIRPERSON,
 }
 _IMPL_DASHBOARD_MINISTRY_ROLES = {
@@ -16194,7 +16195,7 @@ def trash_empty_view(request):
 
 # ── Annual Report (statistics chapter) ─────────────────────────────────────────
 
-_ANNUAL_REPORT_ROLES = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
+_ANNUAL_REPORT_ROLES = {Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
 
 
 def _assert_annual_report_access(request):
@@ -16402,7 +16403,7 @@ def annual_report_delete_view(request, pk):
 # ── Workload Views ─────────────────────────────────────────────────────────────
 
 _WORKLOAD_VIEWER_ROLES = {
-    Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_MANAGER,
+    Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER, Role.PSC_MANAGER,
     Role.VIPAM_MANAGER, Role.HR_UNIT_MANAGER, Role.ODU_MANAGER,
     Role.COMPLIANCE_MANAGER, Role.CSU_MANAGER,
 }
@@ -16428,7 +16429,7 @@ def workload_officers_view(request):
     from django.contrib.auth.models import User as AuthUser
     from django.db.models import Count
     profile = _profile(request.user)
-    ALLOWED = {Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
+    ALLOWED = {Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER}
     if profile.role not in ALLOWED and not request.user.is_staff:
         raise PermissionDenied("PSC staff only.")
 
@@ -16877,7 +16878,7 @@ class DocumentVersionViewSet(
     permission_classes = [permissions.IsAuthenticated]
 
     _STAFF_ROLES = {
-        Role.PSC_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
+        Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_ADMIN, Role.SENIOR_ADMIN_OFFICER,
         Role.PSC_OFFICER, Role.PSC_MANAGER,
     }
 
@@ -16931,7 +16932,7 @@ CHECKLIST_VIEW_STAGES  = frozenset({
     WorkflowStage.IMPLEMENTATION_REPORT,
 })
 CHECKLIST_VIEW_ROLES   = CHECKLIST_EDIT_ROLES | frozenset({
-    Role.PSC_OFFICER, Role.PSC_SECRETARY,
+    Role.PSC_OFFICER, Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
     Role.SENIOR_ADMIN_OFFICER, Role.PSC_MANAGER,
     # Commissioners need to review assessment work when voting in Commission Sitting
     Role.PSC_COMMISSIONER, Role.CHAIRPERSON,

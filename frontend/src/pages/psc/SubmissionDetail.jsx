@@ -137,7 +137,7 @@ const DYNAMIC_CHECKLIST_EDIT_ROLES = [
 ]
 const DYNAMIC_CHECKLIST_VIEW_ROLES = [
   ...DYNAMIC_CHECKLIST_EDIT_ROLES,
-  'psc_officer', 'psc_secretary', 'senior_admin_officer', 'psc_manager',
+  'psc_officer', 'psc_secretary', 'deputy_secretary', 'senior_admin_officer', 'psc_manager',
   // Commissioners need to review assessment work when voting during Commission Sitting
   'psc_commissioner', 'chairperson',
 ]

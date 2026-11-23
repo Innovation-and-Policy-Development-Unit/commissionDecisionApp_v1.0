@@ -18,7 +18,7 @@ from .models import AgendaItem, Minutes, Role
 # see every unit's agenda items rather than the redacted view their own unit
 # would otherwise get.
 FULL_ACCESS_ROLES = frozenset({
-    Role.PSC_SECRETARY,
+    Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
     Role.PSC_ADMIN,
     Role.CHAIRPERSON,
     Role.PSC_COMMISSIONER,

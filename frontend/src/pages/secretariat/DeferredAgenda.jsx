@@ -15,7 +15,7 @@ const TYPE_STYLE = {
   on_hold:         'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
 }
 
-const SECRETARIAT_ROLES = new Set(['psc_secretary', 'senior_admin_officer', 'psc_admin'])
+const SECRETARIAT_ROLES = new Set(['psc_secretary', 'deputy_secretary', 'senior_admin_officer', 'psc_admin'])
 
 export default function DeferredAgenda() {
   const { user } = useAuth()

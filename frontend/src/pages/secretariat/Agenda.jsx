@@ -92,7 +92,7 @@ export default function Agenda() {
     try {
       const r = await api.get('/meetings/')
       let data = normalizeListPayload(r.data)
-      if (!canManageAgenda) {
+      if (!canManageAgenda && role !== 'deputy_secretary') {
         // Non-managers only ever see an agenda once it's reached their own
         // visibility stage: the Chairperson from with_chairman onward (their
         // own endorsement stage), everyone else — plain Commissioners,
@@ -456,7 +456,8 @@ export default function Agenda() {
   // Stage-B agenda chain: Senior Admin Officer and Secretary can both build/
   // edit the agenda's content (canManageAgenda below); only the Secretary
   // submits it to the Chairman, who then endorses it.
-  const isSecretary        = ['psc_secretary', 'psc_admin'].includes(role) || isAdminUser
+  // The Deputy Secretary may send the draft to the Chairman, but cannot edit it (readOnly below).
+  const isSecretary        = ['psc_secretary', 'deputy_secretary', 'psc_admin'].includes(role) || isAdminUser
   const isChairperson      = ['chairperson', 'psc_admin'].includes(role) || isAdminUser
   const canSittingPack = isAdminUser || [
     'psc_commissioner', 'chairperson', 'psc_secretary',

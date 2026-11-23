@@ -27,7 +27,7 @@ class DeadlineReminderDraftViewSet(
     def get_queryset(self):
         profile = _profile(self.request.user)
         if profile.role not in {
-            Role.PSC_SECRETARY,
+            Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
             Role.PSC_ADMIN,
             Role.PSC_OFFICER,
             Role.SENIOR_ADMIN_OFFICER,
