@@ -27,6 +27,7 @@ import SecretariatBriefCard from '../../components/submissions/SecretariatBriefC
 import ConsolidationPanel, { CONSOLIDATED_CODES } from '../../components/submissions/ConsolidationPanel'
 import OduTemplateDraftPanel, { TEMPLATE_DRAFT_CODES } from '../../components/submissions/OduTemplateDraftPanel'
 import CommissionerAssistant, { CASE_ASSISTANT_ROLES } from '../../components/submissions/CommissionerAssistant'
+import DuplicateFlagBanner, { DUPLICATE_FLAG_ROLES } from '../../components/submissions/DuplicateFlagBanner'
 import { AiDuplicatePanel, AiRiskPanel, AiOutcomePanel, AiNoaPanel, AiLetterPanel, StructuredLetterPanel } from '../../components/submissions/AiAnalysisPanels'
 import ChecklistPanel from '../../components/submissions/ChecklistPanel'
 import DocumentFactsPanel from '../../components/submissions/DocumentFactsPanel'
@@ -2139,6 +2140,10 @@ const stageDescriptions = {
               }
             }}
           />
+
+          {DUPLICATE_FLAG_ROLES.includes(user?.role) && submission?.current_stage && (
+            <DuplicateFlagBanner submissionId={id} stage={submission.current_stage} />
+          )}
 
           <WorkflowActionsPanel
             submission={submission}

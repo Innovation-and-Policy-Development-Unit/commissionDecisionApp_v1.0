@@ -2375,6 +2375,13 @@ class Submission(models.Model):
     ai_duplicate_similar_cases = models.JSONField(null=True, blank=True)
     ai_duplicate_recommendation = models.TextField(blank=True)
     ai_duplicate_generated_at = models.DateTimeField(null=True, blank=True)
+    # The Secretary (or the unit Manager) looked at the flag and judged it a genuine
+    # separate submission. Quietens the banner; the AI result itself is kept.
+    ai_duplicate_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    ai_duplicate_reviewed_at = models.DateTimeField(null=True, blank=True)
 
     # ── B2 Risk Assessment ──────────────────────────────────────────────────
     ai_risk_processed     = models.BooleanField(default=False, db_index=True)

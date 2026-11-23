@@ -121,6 +121,7 @@ from .views import (
     submission_bulk_action_view,
     trigger_ai_duplicate,
     get_ai_duplicate,
+    review_ai_duplicate,
     trigger_ai_risk,
     get_ai_risk,
     trigger_ai_outcome,
@@ -306,6 +307,7 @@ urlpatterns = [
     # AI triggers + result getters
     path("submissions/<int:pk>/trigger-ai-duplicate/", trigger_ai_duplicate,   name="trigger-ai-duplicate"),
     path("submissions/<int:pk>/ai-duplicate/",         get_ai_duplicate,       name="get-ai-duplicate"),
+    path("submissions/<int:pk>/ai-duplicate/review/",  review_ai_duplicate,    name="review-ai-duplicate"),
     path("submissions/<int:pk>/trigger-ai-risk/",      trigger_ai_risk,        name="trigger-ai-risk"),
     path("submissions/<int:pk>/ai-risk/",              get_ai_risk,            name="get-ai-risk"),
     path("submissions/<int:pk>/trigger-ai-outcome/",   trigger_ai_outcome,     name="trigger-ai-outcome"),

@@ -2997,28 +2997,99 @@ def detect_submission_duplicates(self, submission_id: int, force: bool = False):
             raise self.retry(countdown=30 * (2 ** self.request.retries))
         log_ai_call(feature=FEATURE_DUPLICATE_DETECTION, submission_id=submission_id,
                     status=AIGenerationLog.Status.FAILED, error_detail=detail, attempt=attempt)
-        _fail(f"AI error: {detail}")
+        _fail_keeping_shortlist(f"AI error: {detail}")
 
     # Always terminate polling with a recorded state — a silent return here
     # (missing API key, unexpected exception) would otherwise leave the
     # frontend polling ai-duplicate/ forever with no feedback.
+    from .duplicate_check import UNCLEAR, shortlist
+
+    # Rules pick the earlier papers worth comparing; the AI only judges those. Nothing
+    # to compare means nothing to flag, and no AI call is made.
+    try:
+        picked = shortlist(submission)
+    except Exception as exc:
+        app_log.exception("A4_DUPLICATE | Sub %s | shortlist failed", submission_id)
+        _fail(f"Duplicate check failed: {exc}")
+        return
+
+    def _case_rows(ai_cases):
+        """Join the AI's verdicts to the shortlist details (id, title, stage, why matched)."""
+        by_ref = {c.get("reference"): c for c in ai_cases or []}
+        rows = []
+        for item in picked:
+            other = item["submission"]
+            verdict = by_ref.get(other.reference_number, {})
+            rows.append({
+                "reference": other.reference_number,
+                "submission_id": other.id,
+                "title": other.title,
+                "stage": other.current_stage,
+                "submitted_on": other.created_at.date().isoformat() if other.created_at else "",
+                "matched_on": item["matched_on"],
+                "verdict": verdict.get("verdict", UNCLEAR),
+                "similarity_reason": verdict.get("similarity_reason", ""),
+                "overlap": verdict.get("overlap", ""),
+            })
+        return rows
+
+    def _tell_secretary():
+        """One in-app notice when the check finds something worth a look."""
+        from django.contrib.auth.models import User
+        from .duplicate_check import flag_level
+        from .models import Notification, Role, WorkflowStage
+
+        if flag_level(submission) != "warn" or submission.current_stage != WorkflowStage.RECEIVED_BY_PSC:
+            return
+        title = f"Possible repeat submission: {submission.reference_number}"
+        if Notification.objects.filter(submission=submission, title=title).exists():
+            return
+        for user in User.objects.filter(
+            psc_profile__role__in=[Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER], is_active=True,
+        ):
+            Notification.objects.create(
+                recipient=user, submission=submission, channel=Notification.Channel.BOTH,
+                title=title,
+                body=(f"'{submission.title}' may repeat an earlier submission for the same officer. "
+                      f"Open it to compare before forwarding."),
+            )
+
+    def _store(is_dup, confidence, rows, recommendation):
+        submission.ai_duplicate_processed = True
+        submission.ai_duplicate_is_duplicate = is_dup
+        submission.ai_duplicate_confidence = confidence
+        submission.ai_duplicate_similar_cases = rows
+        submission.ai_duplicate_recommendation = recommendation
+        submission.ai_duplicate_generated_at = timezone.now()
+        submission.save(update_fields=[
+            "ai_duplicate_processed", "ai_duplicate_is_duplicate",
+            "ai_duplicate_confidence", "ai_duplicate_similar_cases",
+            "ai_duplicate_recommendation", "ai_duplicate_generated_at", "updated_at",
+        ])
+        _tell_secretary()
+
+    if not picked:
+        _store(False, 0, [], "No earlier papers about the same officer were found.")
+        return
+
+    def _fail_keeping_shortlist(msg):
+        # The AI could not judge, but the earlier papers are still worth the Secretary's eye.
+        _store(None, None, _case_rows([]), f"AI check unavailable ({msg}). Please compare these earlier papers yourself.")
+
     if not ai_enabled():
-        _fail("AI is not configured (GEMINI_API_KEY missing).")
+        _fail_keeping_shortlist("AI is not configured")
         return
 
     try:
-        # Build context for candidate similar submissions (same ministry, similar form type)
-        candidates = Submission.objects.filter(
-            ministry=submission.ministry,
-        ).exclude(pk=submission_id).order_by("-created_at")[:20]
-
         submission_ctx = _build_submission_context(submission)
         existing_ctx = "\n\n---\n\n".join(
-            _build_submission_context(c) for c in candidates
-        ) or "No existing submissions found."
-
+            _build_submission_context(item["submission"]) for item in picked
+        )
         with timed_call() as elapsed:
-            data, err = detect_duplicates(submission_ctx, existing_ctx)
+            data, err = detect_duplicates(
+                submission_ctx, existing_ctx,
+                allowed_refs={item["submission"].reference_number for item in picked},
+            )
     except Exception as exc:
         app_log.exception("A4_DUPLICATE | Sub %s | unexpected failure", submission_id)
         _retry_or_fail(str(exc))
@@ -3034,20 +3105,11 @@ def detect_submission_duplicates(self, submission_id: int, force: bool = False):
                 status=AIGenerationLog.Status.SUCCESS, latency_ms=elapsed(),
                 attempt=self.request.retries + 1)
 
-    submission.ai_duplicate_processed = True
-    submission.ai_duplicate_is_duplicate = data.get("is_duplicate", False)
-    submission.ai_duplicate_confidence = data.get("confidence", 0)
-    submission.ai_duplicate_similar_cases = data.get("similar_cases", [])
-    submission.ai_duplicate_recommendation = data.get("recommendation", "")
-    submission.ai_duplicate_generated_at = timezone.now()
-    submission.save(update_fields=[
-        "ai_duplicate_processed", "ai_duplicate_is_duplicate",
-        "ai_duplicate_confidence", "ai_duplicate_similar_cases",
-        "ai_duplicate_recommendation", "ai_duplicate_generated_at", "updated_at",
-    ])
-    app_log.info("A4_DUPLICATE | Sub %s | is_duplicate=%s confidence=%s",
+    _store(data.get("is_duplicate", False), data.get("confidence", 0),
+           _case_rows(data.get("similar_cases")), data.get("recommendation", ""))
+    app_log.info("A4_DUPLICATE | Sub %s | is_duplicate=%s confidence=%s cases=%s",
                  submission_id, submission.ai_duplicate_is_duplicate,
-                 submission.ai_duplicate_confidence)
+                 submission.ai_duplicate_confidence, len(picked))
 
 
 def queue_duplicate_detection(submission_id: int, force: bool = False) -> None:

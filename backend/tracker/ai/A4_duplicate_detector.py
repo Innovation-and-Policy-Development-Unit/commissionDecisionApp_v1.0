@@ -1,6 +1,10 @@
 """
 A4 — Duplicate Submission Detector.
-Detects semantic similarity between a new submission and existing ones.
+
+Given a new ministry paper and a short list of earlier papers about the same officer (built by
+``duplicate_check.shortlist``), say for each earlier paper whether it looks like the same
+claim sent twice or a genuinely separate matter. A repeat is often genuine (an allowance for a
+different period, for example), so the answer is advice to the Secretary, never a block.
 """
 
 from __future__ import annotations
@@ -8,63 +12,79 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from ..duplicate_check import DIFFERENT_MATTER, DIFFERENT_PERIOD, SAME_CLAIM, UNCLEAR, VERDICTS
 from .claude_client import ai_enabled, complete_json_with_error
 from .feature_registry import FEATURE_MODEL_TIER
 
 logger = logging.getLogger("scdms.app")
 
-SYSTEM = """You are a PSC senior reviewer checking for duplicate cases at the
-Public Service Commission of Vanuatu (OPSC).
+SYSTEM = """You are a senior reviewer at the Public Service Commission of Vanuatu (OPSC).
 
-Your task is to assess whether a new submission is a duplicate or near-duplicate
-of existing submissions in the system.
+A ministry has just submitted a NEW paper. Below it are EARLIER papers from the same ministry,
+of the same form type, that appear to concern the same officer. Decide, for each earlier paper,
+whether the new paper is the same claim sent twice, or a genuinely separate matter.
 
-Consider semantic similarity: same officer, same allegation type, same ministry
-action, same timeframe, or substantially identical subject matter — even if
-worded differently.
+Repeats are often genuine: for example an acting or extra-responsibility allowance for work
+done in a different period, or a second allowance for a different role. Compare the periods
+and dates, amounts, positions or posts, the reason given and the documents listed. Do not
+treat a similar title or the same officer alone as a duplicate.
+
+Verdict per earlier paper:
+- "same_claim": the same matter and the same period or facts: probably submitted twice.
+- "different_period": the same kind of claim but for a clearly different period or occasion.
+- "different_matter": the same officer but a different subject or post.
+- "unclear": not enough information in the two papers to tell.
 
 Output valid JSON only:
 {
-  "is_duplicate": false,
   "confidence": 0,
-  "similar_cases": [
-    {"reference": "PSC-2025-0001", "similarity_reason": "Same officer, same misconduct allegation"}
+  "cases": [
+    {"reference": "SUB-2026-0001", "verdict": "different_period",
+     "reason": "Acting allowance for Mar-May 2026; this paper covers Jun-Aug 2026.",
+     "overlap": "No overlap in dates."}
   ],
-  "recommendation": "Proceed as new submission — no significant overlap found."
+  "recommendation": "One or two sentences for the Secretary."
 }
 
 Rules:
-- confidence: 0–100 (100 = certain duplicate)
-- is_duplicate: true only when confidence >= 70
-- similar_cases: list up to 5 most similar cases with reasons
-- If no similar cases, return empty list and is_duplicate: false"""
+- Use only references that appear in the EARLIER papers. Never invent one.
+- confidence: 0-100, how sure you are that the NEW paper repeats an earlier one.
+- reason: one sentence naming the facts you compared (dates, amounts, post). Be specific.
+- overlap: say if the dates or amounts overlap, otherwise "".
+- If the papers do not state periods or dates, say so and use "unclear" rather than guessing."""
 
 
-def _sanitize_result(data: dict[str, Any]) -> dict[str, Any]:
+def _sanitize_result(data: dict[str, Any], allowed_refs: set[str] | None = None) -> dict[str, Any]:
     try:
         confidence = max(0, min(100, int(data.get("confidence", 0))))
     except (TypeError, ValueError):
         confidence = 0
 
-    similar = data.get("similar_cases", [])
-    if not isinstance(similar, list):
-        similar = []
-    sanitized_similar = []
-    for item in similar[:5]:
-        if isinstance(item, dict):
-            sanitized_similar.append({
-                "reference": str(item.get("reference", ""))[:50],
-                "similarity_reason": str(item.get("similarity_reason", ""))[:500],
-            })
+    cases = data.get("cases", data.get("similar_cases", []))
+    if not isinstance(cases, list):
+        cases = []
+    cleaned = []
+    for item in cases:
+        if not isinstance(item, dict):
+            continue
+        ref = str(item.get("reference", "")).strip()[:50]
+        if allowed_refs is not None and ref not in allowed_refs:
+            continue  # never keep a reference the model made up
+        verdict = str(item.get("verdict", UNCLEAR)).strip().lower()
+        if verdict not in VERDICTS:
+            verdict = UNCLEAR
+        cleaned.append({
+            "reference": ref,
+            "verdict": verdict,
+            "similarity_reason": str(item.get("reason", item.get("similarity_reason", ""))).strip()[:500],
+            "overlap": str(item.get("overlap", "")).strip()[:300],
+        })
 
-    is_dup = bool(data.get("is_duplicate", False))
-    if confidence < 70:
-        is_dup = False
-
+    is_dup = any(c["verdict"] == SAME_CLAIM for c in cleaned) and confidence >= 60
     return {
         "is_duplicate": is_dup,
         "confidence": confidence,
-        "similar_cases": sanitized_similar,
+        "similar_cases": cleaned[:6],
         "recommendation": str(data.get("recommendation", "")).strip()[:2000],
     }
 
@@ -72,6 +92,7 @@ def _sanitize_result(data: dict[str, Any]) -> dict[str, Any]:
 def detect_duplicates(
     submission_context: str,
     existing_cases_context: str,
+    allowed_refs: set[str] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Return (result_dict, error_message)."""
     if not ai_enabled():
@@ -79,8 +100,8 @@ def detect_duplicates(
 
     tier = FEATURE_MODEL_TIER.get("A4_duplicate_detector", "sonnet")
     user_prompt = (
-        f"New submission to check:\n\n{submission_context}\n\n"
-        f"Existing submissions in the same ministry (last 50):\n\n{existing_cases_context or 'None'}"
+        f"NEW paper:\n\n{submission_context}\n\n"
+        f"EARLIER papers about the same officer:\n\n{existing_cases_context or 'None'}"
     )
     data, err = complete_json_with_error(
         system=SYSTEM,
@@ -91,4 +112,4 @@ def detect_duplicates(
     if not data or not isinstance(data, dict):
         return None, err or "Empty AI response."
 
-    return _sanitize_result(data), None
+    return _sanitize_result(data, allowed_refs), None
