@@ -62,6 +62,7 @@ STAGE_INFO = {
     WorkflowStage.DG_APPROVED: {"milestone": 0, "paused": False, "label": "Submitted"},
     WorkflowStage.PENDING_MANAGER_APPROVAL: {"milestone": 0, "paused": False, "label": "Submitted"},
     WorkflowStage.PENDING_PRINCIPAL_REVIEW: {"milestone": 0, "paused": False, "label": "Submitted"},
+    WorkflowStage.PENDING_SENIOR_REVIEW: {"milestone": 0, "paused": False, "label": "Submitted"},
     WorkflowStage.PENDING_SECOND_APPROVAL: {"milestone": 0, "paused": False, "label": "Submitted"},
     WorkflowStage.SUBMITTED: {"milestone": 0, "paused": False, "label": "Submitted"},
     WorkflowStage.RESUBMITTED: {"milestone": 0, "paused": False, "label": "Resubmitted"},

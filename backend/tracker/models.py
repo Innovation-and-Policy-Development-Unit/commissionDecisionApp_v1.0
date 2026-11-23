@@ -65,6 +65,7 @@ class WorkflowStage(models.TextChoices):
     DG_APPROVED                = "dg_approved",                "Endorsed by DG"
     PENDING_MANAGER_APPROVAL   = "pending_manager_approval",   "Pending Manager Approval"
     PENDING_PRINCIPAL_REVIEW   = "pending_principal_review",   "Pending Principal Review"
+    PENDING_SENIOR_REVIEW      = "pending_senior_review",      "Pending Senior Review"
     PENDING_SECOND_APPROVAL    = "pending_second_approval",    "Pending Second Approval"
     SUBMITTED                  = "submitted",                  "Submitted to PSC"
     # ── PSC intake ─────────────────────────────────────────────────────────

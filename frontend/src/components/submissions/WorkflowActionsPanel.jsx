@@ -63,6 +63,17 @@ const STAGE_ACTIONS = {
       transitionTo: 'pending_principal_review',
       requiresNote: false,
     },
+    // VIPAM only: a Principal or Manager may also ask a Senior Officer to review their
+    // draft. The Senior only sends it back with comments.
+    {
+      id: 'submit_to_senior',
+      label: 'Ask a Senior to review',
+      description: 'Send to a VIPAM Senior Officer for review (comments only) before the next step',
+      icon: Send,
+      variant: 'outline',
+      transitionTo: 'pending_senior_review',
+      requiresNote: false,
+    },
     // A unit Manager's own draft goes to the Secretary Approval Gate — the Manager is
     // the approver, so there is no one above them in the unit to sign it off. They may
     // first send it down to the Principal for comments (Submit to Principal above).
@@ -160,6 +171,23 @@ const STAGE_ACTIONS = {
     },
   ],
 
+  // VIPAM: a Senior Officer asked to review a Principal's or Manager's paper. Like the
+  // Principal's review above, the only action is to send it back with comments.
+  pending_senior_review: [
+    {
+      id: 'return_to_author',
+      label: 'Return to author',
+      description: 'Send back to the drafter with your comments, noting whether it needs '
+        + 'changes or is ready to go on',
+      icon: RotateCcw,
+      variant: 'primary',
+      transitionTo: 'returned_for_clarification',
+      requiresNote: true,
+      notePlaceholder: 'Your comments, e.g. changes needed, or "ready to submit"…',
+      noteLabel: 'Feedback',
+    },
+  ],
+
   // The DG approves by emailed link, or by signing in and using Endorse here.
   pending_dg_endorsement: [
     {
@@ -228,6 +256,15 @@ const STAGE_ACTIONS = {
       transitionTo: 'pending_secretary_approval',
       requiresNote: false,
       internalOnly: true,
+    },
+    {
+      id: 'resubmit_to_senior',
+      label: 'Resubmit to a Senior',
+      description: 'Re-send to a VIPAM Senior Officer for review after addressing their comments',
+      icon: Send,
+      variant: 'outline',
+      transitionTo: 'pending_senior_review',
+      requiresNote: false,
     },
     {
       id: 'resubmit_to_principal',
