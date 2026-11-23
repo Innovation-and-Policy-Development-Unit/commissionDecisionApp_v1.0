@@ -96,14 +96,14 @@ def recall_deadline(submission):
 
 
 def release(submission, actor=None) -> bool:
-    """Route a waiting submission to its OPSC unit now and tell the unit.
+    """Send a waiting submission on from the recall window now (to the Secretary, who forwards it to its unit) and tell them.
     Returns True if it moved."""
     from . import views
     from .models import WorkflowStage
 
     if submission.current_stage != WorkflowStage.SUBMITTED:
         return False
-    views.SubmissionViewSet()._auto_advance_submitted_to_checklist_review(submission)
+    views.SubmissionViewSet()._route_submitted_paper(submission)
     submission.refresh_from_db()
     if submission.current_stage == WorkflowStage.SUBMITTED:
         return False

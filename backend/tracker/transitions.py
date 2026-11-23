@@ -318,8 +318,16 @@ _STAGE_GRAPH = {
         WorkflowStage.RECALLED,
     ],
     WorkflowStage.SUBMITTED: [
+        WorkflowStage.RECEIVED_BY_PSC,
         WorkflowStage.MANAGER_CHECKLIST_REVIEW,
         WorkflowStage.RECALLED,
+    ],
+    # A ministry paper reaches the Secretary first (the system moves it here when the
+    # recall window closes). Only the Secretary forwards it to the responsible unit
+    # Manager for checklist review and recommendation, or sends it back to the ministry.
+    WorkflowStage.RECEIVED_BY_PSC: [
+        WorkflowStage.MANAGER_CHECKLIST_REVIEW,
+        WorkflowStage.RETURNED_FOR_CLARIFICATION,
     ],
     WorkflowStage.RETURNED_FOR_CLARIFICATION: [
         WorkflowStage.SUBMITTED,
@@ -483,6 +491,9 @@ _MINISTRY_DG_ALLOWED = {
     (WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.RECALLED),
     (WorkflowStage.DG_APPROVED,            WorkflowStage.RECALLED),
 }
+
+# Who handles a ministry paper while it is with the Secretary (RECEIVED_BY_PSC).
+SECRETARY_DESK_ROLES = frozenset({Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER})
 
 # Terminal stages — submissions that have reached a final state.
 _TERMINAL_STAGES = {
@@ -897,6 +908,12 @@ def assert_transition_allowed(
     if target_stage == WorkflowStage.RECALLED and role != Role.PSC_ADMIN:
         raise PermissionDenied(
             "Only Ministry HR, Department Admin, or Head of Agency can recall a submission."
+        )
+
+    # ── Secretary's desk: only the Secretary (or SAO) acts on a paper here ───
+    if current_stage == WorkflowStage.RECEIVED_BY_PSC and role not in SECRETARY_DESK_ROLES | {Role.PSC_ADMIN}:
+        raise PermissionDenied(
+            "This paper is with the Secretary, who forwards it to the responsible unit Manager."
         )
 
     # ── Validate graph edge ──────────────────────────────────────────────────

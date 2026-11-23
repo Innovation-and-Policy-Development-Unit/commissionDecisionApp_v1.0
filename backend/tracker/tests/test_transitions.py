@@ -679,14 +679,14 @@ class DgEndorseActionTests(TestCase):
         resp = self.client.post(f"/api/submissions/{self.submission.id}/endorse/")
         self.assertEqual(resp.status_code, 200)
 
-    def test_endorse_auto_routes_to_manager_checklist_review(self):
-        # ORG-3.1 routes to ODU (intake_routing.py) — ensure endorse() reaches
-        # the same auto-advance transition() gets after every transition.
+    def test_endorse_sends_the_paper_to_the_secretary(self):
+        # A ministry paper goes to the Secretary first; she forwards it to the unit
+        # Manager (ORG-3.1 -> ODU, see intake_routing.py), so no unit is set yet.
         resp = self.client.post(f"/api/submissions/{self.submission.id}/endorse/")
         self.assertEqual(resp.status_code, 200)
         self.submission.refresh_from_db()
-        self.assertEqual(self.submission.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
-        self.assertEqual(self.submission.routed_unit, "odu")
+        self.assertEqual(self.submission.current_stage, WorkflowStage.RECEIVED_BY_PSC)
+        self.assertFalse(self.submission.routed_unit)
 
     def test_endorse_stamps_dg_endorsed_by(self):
         resp = self.client.post(f"/api/submissions/{self.submission.id}/endorse/")
@@ -695,16 +695,13 @@ class DgEndorseActionTests(TestCase):
         self.assertEqual(self.submission.dg_endorsed_by_id, self.dg.id)
         self.assertIsNotNone(self.submission.dg_endorsed_at)
 
-    def test_endorse_notifies_routed_units_manager_not_psc_officer(self):
-        # endorse() used to dispatch the "needs your checklist review"
-        # notification BEFORE auto-routing set submission.routed_unit, so
-        # _resolve_receiver_roles() always fell back to Role.PSC_OFFICER.
-        # Masked for ORG-3.1 by an AgendaSection.receiver_roles override —
-        # PSC 2-2 (agenda_category="other", no override) exposes it directly.
+    def test_endorse_notifies_the_secretary_not_the_unit_or_officer(self):
         odu_manager = User.objects.create_user("odu_mgr_endorse", password="x")
         Profile.objects.create(user=odu_manager, role=Role.ODU_MANAGER)
         psc_officer = User.objects.create_user("psc_officer_endorse", password="x")
         Profile.objects.create(user=psc_officer, role=Role.PSC_OFFICER)
+        secretary = User.objects.create_user("secretary_endorse", password="x")
+        Profile.objects.create(user=secretary, role=Role.PSC_SECRETARY)
 
         self.submission.form_type_code = "PSC 2-2"
         self.submission.save(update_fields=["form_type_code"])
@@ -715,5 +712,6 @@ class DgEndorseActionTests(TestCase):
         recipient_ids = set(
             Notification.objects.filter(submission=self.submission).values_list("recipient_id", flat=True)
         )
-        self.assertIn(odu_manager.id, recipient_ids)
+        self.assertIn(secretary.id, recipient_ids)
+        self.assertNotIn(odu_manager.id, recipient_ids)
         self.assertNotIn(psc_officer.id, recipient_ids)
