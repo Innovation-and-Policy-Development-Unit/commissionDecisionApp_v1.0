@@ -36,12 +36,22 @@ VERDICTS = (SAME_CLAIM, DIFFERENT_PERIOD, DIFFERENT_MATTER, UNCLEAR)
 _PERSON_HINTS = (
     "officer", "employee", "candidate", "recommended", "nominee", "applicant",
     "staff", "person", "incumbent", "appointee", "traveller", "traveler",
+    "acting", "subject", "eligible", "claimant",
 )
 _NOT_A_PERSON = (
     "department", "ministry", "position", "title", "unit", "school", "supervisor", "head",
     "director", "agency", "organi", "approving", "recommending", "witness", "signed",
 )
-_EXPLICIT_KEYS = {"officer_name", "candidate_name", "recommended_name", "employee_name", "full_name"}
+_EXPLICIT_KEYS = {
+    "officer_name", "candidate_name", "recommended_name", "employee_name", "full_name",
+    "subject_employee", "acting_officer",
+}
+# Words that mean a name from a letter is an organisation or a body, not the officer.
+_ORG_WORDS = {
+    "ministry", "department", "commission", "government", "office", "unit", "division",
+    "republic", "vanuatu", "psc", "opsc", "board", "council", "committee", "authority",
+    "services", "service", "corporation", "agency", "school", "hospital", "province",
+}
 _TITLES = {"mr", "mrs", "ms", "miss", "dr", "hon", "rev", "sir", "pastor", "chief", "mx"}
 
 
@@ -79,9 +89,48 @@ def _names_match(a: frozenset, b: frozenset) -> bool:
     if not a or not b:
         return False
     if a == b:
-        return True
+        return len(a) >= 2   # a single shared word (a surname alone) is too loose
     small, big = (a, b) if len(a) <= len(b) else (b, a)
     return len(small) >= 2 and small <= big
+
+
+def _signer_stoplist(submission) -> list[frozenset]:
+    """Names that appear on every paper (the DG who signs, HR who lodges, the Secretary, the
+    Chairperson) and so say nothing about which officer a letter is about."""
+    from django.contrib.auth.models import User
+
+    from .models import Role
+
+    people = set()
+    roles = [
+        Role.PSC_SECRETARY, Role.SENIOR_ADMIN_OFFICER, Role.CHAIRPERSON, Role.PSC_COMMISSIONER,
+        Role.HEAD_OF_AGENCY, Role.MINISTRY_HR, Role.DEPT_ADMIN,
+    ]
+    for user in User.objects.filter(psc_profile__role__in=roles).only("first_name", "last_name"):
+        people.add(_name_tokens(user.get_full_name()))
+    if submission.created_by_id:
+        people.add(_name_tokens(submission.created_by.get_full_name()))
+    people.add(_name_tokens(submission.dg_approval_name))
+    return [p for p in people if p]
+
+
+def document_names(submission, stoplist) -> list[frozenset]:
+    """Person names the OCR found in the paper's uploaded letters, minus the signers and any
+    organisation. Only used when the form itself names no officer (e.g. a scanned paper)."""
+    found = []
+    for doc in submission.documents.all():
+        facts = doc.extracted_facts if isinstance(doc.extracted_facts, dict) else {}
+        for raw in facts.get("names") or []:
+            if not isinstance(raw, str) or len(raw) > 80:
+                continue
+            tokens = _name_tokens(raw)
+            if len(tokens) < 2 or tokens & _ORG_WORDS:
+                continue
+            if any(_names_match(tokens, sig) for sig in stoplist):
+                continue
+            if tokens not in found:
+                found.append(tokens)
+    return found
 
 
 def shortlist(submission) -> list[dict]:
@@ -91,7 +140,13 @@ def shortlist(submission) -> list[dict]:
     if not submission.ministry_id or not submission.form_type_code:
         return []
 
+    stoplist = None
     names = officer_names(submission)
+    from_letter = False
+    if not names:
+        stoplist = _signer_stoplist(submission)
+        names = document_names(submission, stoplist)
+        from_letter = bool(names)
     email = (submission.applicant_email or "").strip().lower()
     has_person = bool(names or email)
     days = LOOKBACK_DAYS_WITH_OFFICER if has_person else LOOKBACK_DAYS_NO_OFFICER
@@ -105,6 +160,7 @@ def shortlist(submission) -> list[dict]:
         .exclude(pk=submission.pk)
         .exclude(current_stage__in=[WorkflowStage.DRAFT, WorkflowStage.RECALLED])
         .select_related("dynamic_form_response")
+        .prefetch_related("documents")
         .order_by("-created_at")[:200]
     )
 
@@ -115,8 +171,14 @@ def shortlist(submission) -> list[dict]:
             matched.append("same officer email")
         if names:
             cand_names = officer_names(cand)
+            via_letter = from_letter
+            if not cand_names:
+                # An older paper with no digitized form (e.g. scanned): read its letters.
+                stoplist = stoplist if stoplist is not None else _signer_stoplist(submission)
+                cand_names = document_names(cand, stoplist)
+                via_letter = True
             if any(_names_match(n, c) for n in names for c in cand_names):
-                matched.append("same officer name")
+                matched.append("same officer name" + (" (in the letter)" if via_letter else ""))
         if has_person:
             if not matched:
                 continue
@@ -126,6 +188,39 @@ def shortlist(submission) -> list[dict]:
         if len(out) >= (MAX_CASES if has_person else MAX_CASES_NO_OFFICER):
             break
     return out
+
+
+# Letters that most often carry the officer, the period and the post.
+_LETTER_TYPES = ("dg_endorsement", "correspondence", "appointment_letter", "other", "unclassified")
+_LETTER_CHARS = 1500
+_MAX_LETTERS = 3
+
+
+def comparison_context(submission) -> str:
+    """The paper as the AI should read it: the form, plus what its uploaded letters say.
+
+    A signed cover letter often states the officer, post and period that the form leaves out
+    (or that a scanned paper has no form for), so a short extract of the first few letters
+    is appended to the usual summary.
+    """
+    from .tasks import _build_submission_context
+
+    text = _build_submission_context(submission)
+    docs = [d for d in submission.documents.all() if (d.extracted_text or "").strip()]
+    docs.sort(key=lambda d: _LETTER_TYPES.index(d.document_type) if d.document_type in _LETTER_TYPES else 99)
+    letters = []
+    for doc in docs[:_MAX_LETTERS]:
+        facts = doc.extracted_facts if isinstance(doc.extracted_facts, dict) else {}
+        bits = []
+        for key in ("names", "positions", "dates"):
+            vals = [str(v) for v in (facts.get(key) or [])[:6]]
+            if vals:
+                bits.append(f"{key}: {'; '.join(vals)}")
+        body = " ".join(doc.extracted_text.split())[:_LETTER_CHARS]
+        letters.append(f"  - {doc.original_name}" + (f" ({' | '.join(bits)})" if bits else "") + f"\n    {body}")
+    if letters:
+        text += "\nLetters and documents (extract):\n" + "\n".join(letters)
+    return text
 
 
 def flag_level(submission) -> str:

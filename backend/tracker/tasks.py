@@ -3081,9 +3081,11 @@ def detect_submission_duplicates(self, submission_id: int, force: bool = False):
         return
 
     try:
-        submission_ctx = _build_submission_context(submission)
+        from .duplicate_check import comparison_context
+
+        submission_ctx = comparison_context(submission)
         existing_ctx = "\n\n---\n\n".join(
-            _build_submission_context(item["submission"]) for item in picked
+            comparison_context(item["submission"]) for item in picked
         )
         with timed_call() as elapsed:
             data, err = detect_duplicates(
