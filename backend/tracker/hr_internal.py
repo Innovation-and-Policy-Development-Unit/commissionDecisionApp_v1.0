@@ -50,9 +50,16 @@ ODU_UNIT_AUTHOR_ROLES = frozenset({
 # draft the text of: the three consolidated papers and the Performance Assessment Feedback Report.
 ODU_TEMPLATE_DRAFT_FORM_CODES = ODU_CONSOLIDATED_FORM_CODES | frozenset({ODU_OPA_FEEDBACK_REPORT_CODE})
 
+# VIPAM's own paper to the Commission on an Internship, Training or Education matter (the
+# digitised "VIPAM Submission Paper"). Written by VIPAM staff, with the PSC form that applies
+# (5-1 Training Registration, 5-2 Development Programs Application) attached as its required
+# document, and walked up the ladder to the Secretary.
+VIPAM_SUBMISSION_PAPER_CODE = "VIPAM-SUBMISSION-PAPER"
+VIPAM_INTERNAL_FORM_CODES = frozenset({VIPAM_SUBMISSION_PAPER_CODE})
+
 # Internal papers whose required documents are listed and enforced before the author
 # sends the paper up the ladder (ministry papers have their own submit gate).
-INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS = ODU_INTERNAL_FORM_CODES
+INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS = ODU_INTERNAL_FORM_CODES | VIPAM_INTERNAL_FORM_CODES
 
 # Everyone who authors an OPSC-internal paper of their own and climbs the ladder:
 # HR (the SEO report), VIPAM and ODU, alongside Compliance (which lists its own roles).

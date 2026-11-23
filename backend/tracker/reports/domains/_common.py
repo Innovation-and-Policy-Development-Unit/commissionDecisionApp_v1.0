@@ -25,6 +25,7 @@ PRE_LODGE_STAGES = frozenset({
     WorkflowStage.DG_APPROVED,
     WorkflowStage.PENDING_MANAGER_APPROVAL,
     WorkflowStage.PENDING_PRINCIPAL_REVIEW,
+    WorkflowStage.PENDING_SENIOR_REVIEW,
     WorkflowStage.PENDING_SECOND_APPROVAL,
 })
 # First event into either of these means the matter was lodged with the PSC.

@@ -126,6 +126,29 @@ _COMPLIANCE_MANAGER_REVIEW_REQUEST_ALLOWED = {
     (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_PRINCIPAL_REVIEW),
 }
 
+# VIPAM only: a Principal or a Manager who has drafted a paper may also ask a Senior
+# Officer to review it, and the Senior reviews as the Principal does for a Senior's
+# paper: they only send it back with comments. (A Senior's own paper still goes to the
+# Principal; the other units' ladders are unchanged.)
+_VIPAM_AUTHOR_ROLES = frozenset({Role.VIPAM_MANAGER, Role.VIPAM_PRINCIPAL, Role.VIPAM_SENIOR})
+_VIPAM_SENIOR_REVIEW_REQUEST_ALLOWED = {
+    (WorkflowStage.DRAFT, WorkflowStage.PENDING_SENIOR_REVIEW),
+    (WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.PENDING_SENIOR_REVIEW),
+}
+_VIPAM_SENIOR_REVIEW_ALLOWED = {
+    (WorkflowStage.PENDING_SENIOR_REVIEW, WorkflowStage.RETURNED_FOR_CLARIFICATION),
+}
+
+def _vipam_extra_pairs(role):
+    """The review steps only VIPAM staff have, on top of the shared ladder."""
+    pairs = set()
+    if role in (Role.VIPAM_MANAGER, Role.VIPAM_PRINCIPAL):
+        pairs |= _VIPAM_SENIOR_REVIEW_REQUEST_ALLOWED
+    if role == Role.VIPAM_SENIOR:
+        pairs |= _VIPAM_SENIOR_REVIEW_ALLOWED
+    return pairs
+
+
 # ---------------------------------------------------------------------------
 # Draft-only content-edit gate
 # ---------------------------------------------------------------------------
@@ -209,6 +232,7 @@ _INTERNAL_STAGE_GRAPH = {
         WorkflowStage.SUBMITTED,
         WorkflowStage.PENDING_MANAGER_APPROVAL,   # chain step 1
         WorkflowStage.PENDING_PRINCIPAL_REVIEW,   # Compliance Senior: submit to Principal first
+        WorkflowStage.PENDING_SENIOR_REVIEW,      # VIPAM Principal/Manager: ask a Senior to review
         WorkflowStage.PENDING_SECRETARY_APPROVAL, # Compliance Manager: submit own draft straight to Secretary
     ],
     # A Compliance Senior's draft must clear Principal review before it can
@@ -220,9 +244,13 @@ _INTERNAL_STAGE_GRAPH = {
     WorkflowStage.PENDING_PRINCIPAL_REVIEW: [
         WorkflowStage.RETURNED_FOR_CLARIFICATION,   # Principal sends back with comments
     ],
+    WorkflowStage.PENDING_SENIOR_REVIEW: [
+        WorkflowStage.RETURNED_FOR_CLARIFICATION,   # Senior sends back with comments (VIPAM)
+    ],
     WorkflowStage.RETURNED_FOR_CLARIFICATION: [
         WorkflowStage.DRAFT,
         WorkflowStage.PENDING_PRINCIPAL_REVIEW,     # Senior resubmits to Principal
+        WorkflowStage.PENDING_SENIOR_REVIEW,        # VIPAM Principal/Manager resubmit to a Senior
         WorkflowStage.PENDING_MANAGER_APPROVAL,     # Senior submits to Manager after Principal's review
         WorkflowStage.PENDING_SECRETARY_APPROVAL,   # Compliance Manager: resubmit straight to Secretary
     ],
@@ -719,6 +747,8 @@ def assert_transition_allowed(
         if role in _COMPLIANCE_SUBMITTER_ROLES:
             if (current_stage, target_stage) in _COMPLIANCE_CREATOR_ALLOWED:
                 return
+            if role in _VIPAM_AUTHOR_ROLES and (current_stage, target_stage) in _vipam_extra_pairs(role):
+                return
             if _AUTHOR_TIER[role] == "manager":
                 if (current_stage, target_stage) in _COMPLIANCE_MANAGER_DIRECT_SUBMIT_ALLOWED:
                     return
@@ -1023,6 +1053,8 @@ def iter_allowed_targets(
             else:
                 pairs |= _COMPLIANCE_SENIOR_TO_PRINCIPAL_ALLOWED
                 pairs |= _COMPLIANCE_SENIOR_SUBMIT_TO_MANAGER_ALLOWED
+            if role in _VIPAM_AUTHOR_ROLES:
+                pairs |= _vipam_extra_pairs(role)
             return [t.value for (s, t) in pairs if s == current_stage]
         if role in INTERNAL_SUBMITTER_ROLES:
             if current_stage == WorkflowStage.DRAFT:

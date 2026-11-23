@@ -411,7 +411,16 @@ def _submission_queryset_for(user, *, with_events=True):
         # Principal assigned them, plus the OPSC-internal papers they drafted
         # themselves (nobody has assigned those to anyone yet, so without the
         # second clause a Senior's own draft 404'd on them).
-        return qs.filter(models.Q(assigned_to=user) | models.Q(is_internal=True, created_by=user))
+        mine = models.Q(assigned_to=user) | models.Q(is_internal=True, created_by=user)
+        if role == Role.VIPAM_SENIOR:
+            # A VIPAM Principal or Manager can ask any Senior to review their paper
+            # (WorkflowStage.PENDING_SENIOR_REVIEW), so a Senior must be able to open the
+            # papers of their own unit that are waiting for that review.
+            mine |= models.Q(
+                is_internal=True, routed_unit=RoutedUnit.VIPAM,
+                current_stage=WorkflowStage.PENDING_SENIOR_REVIEW,
+            )
+        return qs.filter(mine)
     if role == Role.SENIOR_OFFICER:
         # Senior Officer has two unrelated capacities (see _UNIT_PRINCIPAL_ROLES
         # in transitions.py): a per-unit checklist-review assignee — scoped like
@@ -876,6 +885,16 @@ def _dispatch_transition_notifications(
             f"before it can go to the Manager."
         )
 
+    # ── VIPAM: a Principal or Manager asks a Senior Officer to review their paper ──
+    elif target == WorkflowStage.PENDING_SENIOR_REVIEW and submission.routed_unit == RoutedUnit.VIPAM:
+        recipients = User.objects.filter(psc_profile__role=Role.VIPAM_SENIOR, is_active=True)
+        actor_name = (actor.get_full_name() or actor.username) if actor else "Unit staff"
+        title = f"Review required: {submission.reference_number}"
+        body = (
+            f"'{submission.title}' drafted by {actor_name} is awaiting your review. "
+            f"Send it back to them with your comments."
+        )
+
     # ── Compliance Manager approval gate (Principal/Senior-created submissions) ──
     elif target == WorkflowStage.PENDING_MANAGER_APPROVAL and submission.routed_unit in UNIT_REVIEW_ROLES:
         recipients = User.objects.filter(
@@ -1230,7 +1249,7 @@ def _dispatch_transition_notifications(
 # ACTIVE_STAGES set in frontend/src/pages/psc/SubmissionLog.jsx and dashboard_stats_view.
 _ACTIVE_DASHBOARD_STAGES = [
     "draft", "pending_dg_endorsement", "dg_approved",
-    "pending_manager_approval", "pending_principal_review", "pending_second_approval",
+    "pending_manager_approval", "pending_principal_review", "pending_senior_review", "pending_second_approval",
     "submitted", "received_by_psc", "registered_routed",
     "returned_for_clarification", "manager_checklist_review",
     "under_assessment", "pending_secretary_approval", "forwarded_to_commission",
@@ -2134,6 +2153,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             and prev in (WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION)
             and target in (
                 WorkflowStage.PENDING_PRINCIPAL_REVIEW,
+                WorkflowStage.PENDING_SENIOR_REVIEW,
                 WorkflowStage.PENDING_MANAGER_APPROVAL,
                 WorkflowStage.SUBMITTED,
             )
@@ -2440,7 +2460,8 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             and submission.form_type_code in INTERNAL_PAPERS_WITH_REQUIRED_DOCUMENTS
             and prev in {WorkflowStage.DRAFT, WorkflowStage.RETURNED_FOR_CLARIFICATION}
             and target in {
-                WorkflowStage.PENDING_PRINCIPAL_REVIEW, WorkflowStage.PENDING_MANAGER_APPROVAL,
+                WorkflowStage.PENDING_PRINCIPAL_REVIEW, WorkflowStage.PENDING_SENIOR_REVIEW,
+                WorkflowStage.PENDING_MANAGER_APPROVAL,
                 WorkflowStage.PENDING_SECOND_APPROVAL, WorkflowStage.PENDING_SECRETARY_APPROVAL,
                 WorkflowStage.SUBMITTED,
             }
@@ -14964,6 +14985,7 @@ def dashboard_stats_view(request):
         WorkflowStage.DG_APPROVED,
         WorkflowStage.PENDING_MANAGER_APPROVAL,
         WorkflowStage.PENDING_PRINCIPAL_REVIEW,
+        WorkflowStage.PENDING_SENIOR_REVIEW,
         WorkflowStage.PENDING_SECOND_APPROVAL,
         WorkflowStage.SUBMITTED,
         WorkflowStage.RECEIVED_BY_PSC,
@@ -15062,7 +15084,7 @@ def system_stats_view(request):
     active_stages = [
         WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED,
         WorkflowStage.PENDING_MANAGER_APPROVAL, WorkflowStage.PENDING_PRINCIPAL_REVIEW,
-        WorkflowStage.PENDING_SECOND_APPROVAL,
+        WorkflowStage.PENDING_SENIOR_REVIEW, WorkflowStage.PENDING_SECOND_APPROVAL,
         WorkflowStage.SUBMITTED, WorkflowStage.RECEIVED_BY_PSC, WorkflowStage.REGISTERED_ROUTED,
         WorkflowStage.RETURNED_FOR_CLARIFICATION, WorkflowStage.MANAGER_CHECKLIST_REVIEW,
         WorkflowStage.UNDER_ASSESSMENT, WorkflowStage.PENDING_SECRETARY_APPROVAL,
