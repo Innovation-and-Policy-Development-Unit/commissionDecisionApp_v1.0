@@ -120,7 +120,7 @@ export default function SubmissionLog() {
     setModalCreateMode(null)
   }
   const showQualityColumn = user && [
-    'psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_manager',
+    'psc_officer', 'psc_admin', 'psc_secretary', 'deputy_secretary', 'senior_admin_officer', 'psc_manager',
     'odu_manager', 'hr_unit_manager', 'vipam_manager', 'compliance_manager',
     'compliance_senior', 'compliance_principal',
   ].includes(user.role)

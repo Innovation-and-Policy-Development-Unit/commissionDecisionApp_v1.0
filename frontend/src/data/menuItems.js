@@ -95,7 +95,7 @@ const menuItems = [
       { label: 'Commission Calendar',   labelKey: 'nav.calendar',              icon: CalendarCheck,   path: '/calendar',             visibility: 'ops' },
       { label: 'Awaiting decision',     labelKey: 'nav.awaiting_decision',     icon: AlertCircle,     path: '/pending-decisions',    visibility: 'ops' },
       { label: 'Ministry Performance',  labelKey: 'nav.ministry_performance',  icon: Building2,       path: '/ministry-performance', visibility: 'ops' },
-      { label: 'Statistics reports',    labelKey: 'nav.statistics_reports',    icon: BookOpen,        path: '/annual-report',        roles: ['psc_secretary', 'psc_admin', 'senior_admin_officer'] },
+      { label: 'Statistics reports',    labelKey: 'nav.statistics_reports',    icon: BookOpen,        path: '/annual-report',        roles: ['psc_secretary', 'deputy_secretary', 'psc_admin', 'senior_admin_officer'] },
     ],
   },
   {
@@ -110,7 +110,7 @@ const menuItems = [
       { label: 'Reports & alerts', labelKey: 'nav.reports_alerts',    icon: BellRing,      path: '/intelligence/reports' },
       { label: 'Alert Rules',      labelKey: 'nav.alert_rules',       icon: SlidersHorizontal, path: '/intelligence/rules', roles: ['psc_manager'] },
       { label: 'Automations',      labelKey: 'nav.automations',       icon: Zap,           path: '/intelligence/automations', roles: ['psc_manager'] },
-      { label: 'Report builder',   labelKey: 'nav.report_builder',    icon: FileText,      path: '/reports', roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'csu_manager'] },
+      { label: 'Report builder',   labelKey: 'nav.report_builder',    icon: FileText,      path: '/reports', roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'deputy_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'csu_manager'] },
       { label: 'Knowledge Base',    labelKey: 'nav.wiki',          icon: BookOpen, path: '/wiki' },
     ],
   },

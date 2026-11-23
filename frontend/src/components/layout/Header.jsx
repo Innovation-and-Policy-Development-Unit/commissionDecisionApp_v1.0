@@ -58,7 +58,7 @@ const ALL_QUICK_ACTIONS = [
     icon: BarChart3,
     path: '/reports',
     kbd: 'G R',
-    roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'csu_manager'],
+    roles: ['psc_officer', 'psc_admin', 'psc_secretary', 'deputy_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson', 'psc_manager', 'hr_unit_manager', 'vipam_manager', 'odu_manager', 'csu_manager'],
   },
   {
     id: 'meeting-room',
@@ -67,7 +67,7 @@ const ALL_QUICK_ACTIONS = [
     icon: Headphones,
     path: '/secretariat/meeting-room',
     kbd: 'G M',
-    roles: ['psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson'],
+    roles: ['psc_admin', 'psc_secretary', 'deputy_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson'],
   },
   {
     id: 'decisions',
@@ -75,7 +75,7 @@ const ALL_QUICK_ACTIONS = [
     sublabel: 'Commission decision register',
     icon: Gavel,
     path: '/secretariat/decisions',
-    roles: ['psc_admin', 'psc_secretary', 'senior_admin_officer'],
+    roles: ['psc_admin', 'psc_secretary', 'deputy_secretary', 'senior_admin_officer'],
   },
   {
     id: 'meetings',
@@ -83,7 +83,7 @@ const ALL_QUICK_ACTIONS = [
     sublabel: 'Commission sittings',
     icon: CalendarDays,
     path: '/secretariat/meetings',
-    roles: ['psc_admin', 'psc_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson'],
+    roles: ['psc_admin', 'psc_secretary', 'deputy_secretary', 'senior_admin_officer', 'psc_commissioner', 'chairperson'],
   },
   {
     id: 'tasks',

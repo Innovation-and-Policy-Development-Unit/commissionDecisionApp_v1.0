@@ -20,7 +20,7 @@ def _is_psc_internal(user):
         return True
     from tracker.models import Role
     return _profile(user).role in {
-        Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY, Role.PSC_MANAGER,
+        Role.PSC_ADMIN, Role.PSC_OFFICER, Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY, Role.PSC_MANAGER,
         Role.CHAIRPERSON, Role.PSC_COMMISSIONER, Role.SENIOR_ADMIN_OFFICER,
         Role.PRINCIPAL_OFFICER, Role.SENIOR_OFFICER, Role.VIPAM_MANAGER,
         Role.HR_UNIT_MANAGER, Role.ODU_MANAGER, Role.COMPLIANCE_MANAGER,

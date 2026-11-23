@@ -3,6 +3,7 @@ from django.utils import timezone
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from .models import APIKey
+from .read_only_roles import enforce_read_only
 
 ACCESS_COOKIE = "scdms_access"
 REFRESH_COOKIE = "scdms_refresh"
@@ -29,6 +30,7 @@ class CookieJWTAuthentication(JWTAuthentication):
         user = self.get_user(validated)
         if from_cookie and enforce_csrf:
             authentication.SessionAuthentication().enforce_csrf(request)
+        enforce_read_only(request, user)  # view-only roles (Deputy Secretary)
         return user, validated
 
 
@@ -81,4 +83,5 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
         api_key.last_used_at = timezone.now()
         api_key.save(update_fields=["last_used_at"])
 
+        enforce_read_only(request, api_key.user)
         return (api_key.user, None)

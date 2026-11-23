@@ -172,7 +172,7 @@ def _user_can_see_meetings(user: User) -> bool:
     except Exception:
         return False
     return role in {
-        Role.PSC_SECRETARY,
+        Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
         Role.SENIOR_ADMIN_OFFICER,
         Role.PSC_ADMIN,
         Role.PSC_COMMISSIONER,

@@ -72,6 +72,7 @@ export function userCanRegenerateAiBrief(user) {
 export const CROSS_UNIT_VIEW_ROLES = new Set([
   'psc_admin',
   'psc_secretary',
+  'deputy_secretary',
   'senior_admin_officer',
   'psc_manager',
   'psc_officer',

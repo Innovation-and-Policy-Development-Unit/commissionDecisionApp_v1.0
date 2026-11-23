@@ -150,7 +150,7 @@ def profile_role(user: User) -> str | None:
 
 
 AGENDA_MANAGER_ROLES: frozenset[str] = frozenset({
-    Role.PSC_SECRETARY,
+    Role.PSC_SECRETARY, Role.DEPUTY_SECRETARY,
     Role.SENIOR_ADMIN_OFFICER,
     Role.PSC_ADMIN,
 })

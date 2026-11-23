@@ -5,7 +5,7 @@ import api from '../../api/client'
 
 // Who may see the whole list, and who may press "Remind now". The backend
 // enforces both; these only decide what to draw.
-const VIEW_ALL_ROLES = new Set(['psc_secretary', 'psc_admin', 'senior_admin_officer', 'chairperson', 'csu_manager'])
+const VIEW_ALL_ROLES = new Set(['psc_secretary', 'deputy_secretary', 'psc_admin', 'senior_admin_officer', 'chairperson', 'csu_manager'])
 const REMIND_ROLES = new Set(['psc_secretary', 'psc_admin', 'senior_admin_officer'])
 
 const STATUS_STYLE = {
