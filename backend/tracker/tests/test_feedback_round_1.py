@@ -120,6 +120,8 @@ class RecallWindowTests(_Base):
         super().setUp()
         self.manager = User.objects.create_user("fb_mgr", password="x")
         Profile.objects.create(user=self.manager, role=Role.HR_UNIT_MANAGER)
+        self.secretary = User.objects.create_user("fb_sec", password="x")
+        Profile.objects.create(user=self.secretary, role=Role.PSC_SECRETARY)
         # These are about the window after submit, not about the pre-submit gate.
         satisfy_submit_gate(self.sub, self.hr)
 
@@ -138,15 +140,17 @@ class RecallWindowTests(_Base):
         self.assertTrue(body["recall_deadline"])
         self.assertEqual(self.api(self.hr).get("/api/submissions/").json()["results"][0]["with_label"], "OPSC")
 
-    def test_release_routes_and_tells_the_unit(self):
+    def test_release_sends_to_the_secretary_and_tells_her(self):
         from tracker.recall_window import release
 
         self.submit()
         self.sub.refresh_from_db()
         self.assertTrue(release(self.sub))
         self.sub.refresh_from_db()
-        self.assertEqual(self.sub.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
-        self.assertTrue(Notification.objects.filter(recipient=self.manager, submission=self.sub).exists())
+        self.assertEqual(self.sub.current_stage, WorkflowStage.RECEIVED_BY_PSC)
+        self.assertTrue(Notification.objects.filter(recipient=self.secretary, submission=self.sub).exists())
+        # The unit Manager hears nothing until the Secretary forwards it.
+        self.assertFalse(Notification.objects.filter(recipient=self.manager, submission=self.sub).exists())
 
     def test_sweep_only_releases_after_the_window(self):
         from datetime import timedelta
@@ -164,7 +168,7 @@ class RecallWindowTests(_Base):
         self.submit()
         res = self.api(self.hr).post(f"/api/submissions/{self.sub.id}/send-now/")
         self.assertEqual(res.status_code, 200, res.content)
-        self.assertEqual(res.json()["current_stage"], WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        self.assertEqual(res.json()["current_stage"], WorkflowStage.RECEIVED_BY_PSC)
 
     def test_ministry_can_recall_then_reopen(self):
         self.submit()
@@ -181,8 +185,8 @@ class RecallWindowTests(_Base):
         res, _ = self.submit()
         self.assertEqual(res.status_code, 200, res.content)
         self.sub.refresh_from_db()
-        self.assertEqual(self.sub.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
-        self.assertTrue(Notification.objects.filter(recipient=self.manager).exists())
+        self.assertEqual(self.sub.current_stage, WorkflowStage.RECEIVED_BY_PSC)
+        self.assertTrue(Notification.objects.filter(recipient=self.secretary).exists())
         body = self.api(self.hr).get(f"/api/submissions/{self.sub.id}/").json()
         self.assertFalse(body["recall_deadline"])
 
@@ -190,7 +194,7 @@ class RecallWindowTests(_Base):
     def test_window_can_be_switched_off(self):
         self.submit()
         self.sub.refresh_from_db()
-        self.assertEqual(self.sub.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        self.assertEqual(self.sub.current_stage, WorkflowStage.RECEIVED_BY_PSC)
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=["*"])
@@ -335,7 +339,7 @@ class RecallWindowCutoffTests(_Base):
         self.meeting(0)   # cutoff is now, so it is already past by the time the paper is submitted
         self.submit()
         self.sub.refresh_from_db()
-        self.assertEqual(self.sub.current_stage, WorkflowStage.MANAGER_CHECKLIST_REVIEW)
+        self.assertEqual(self.sub.current_stage, WorkflowStage.RECEIVED_BY_PSC)
 
     def test_a_far_off_due_date_keeps_the_full_24_hours(self):
         self.meeting(24 * 10)

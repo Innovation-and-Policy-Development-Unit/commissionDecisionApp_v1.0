@@ -184,7 +184,7 @@ from .api_cache import (
     set_cached_response,
     submission_bootstrap_cache_key,
 )
-from .transitions import assert_transition_allowed, iter_allowed_targets
+from .transitions import SECRETARY_DESK_ROLES, assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
 from .odu_checklist_rules import ODU_ACKNOWLEDGE_ONLY_FORM_CODES, ODU_NOTED_AT_ODU_FORM_CODES
 from .throttles import AiAnalysisTriggerThrottle, StaffChatThrottle, OTPVerifyThrottle, PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle
@@ -770,6 +770,17 @@ def _chain_transition_allowed(submission, role, target, user=None):
     return target in targets
 
 
+def _goes_to_secretary_first(submission) -> bool:
+    """True for a paper lodged by a ministry itself: it is received by the Secretary,
+    who forwards it to the unit Manager. Papers OPSC lodges (receptionist, CSU, travel)
+    keep their own routes."""
+    return (
+        not submission.is_internal
+        and not submission.secretary_only
+        and not submission.lodged_from_paper
+    )
+
+
 def _dispatch_transition_notifications(
     submission, prev, target, actor, remarks="", *, hold_opsc=False, receipts=True,
 ):
@@ -904,6 +915,34 @@ def _dispatch_transition_notifications(
     elif (
         prev in (WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED)
         and target == WorkflowStage.SUBMITTED
+        and _goes_to_secretary_first(submission)
+    ):
+        # Ministry papers are received by the Secretary, not by the unit.
+        recipients = User.objects.filter(
+            psc_profile__role__in=SECRETARY_DESK_ROLES, is_active=True,
+        )
+        title = f"New submission for your review: {submission.reference_number}"
+        body = (
+            f"{submission.title} has been submitted by the ministry. Please review it and "
+            f"forward it to the responsible unit Manager."
+        )
+
+    elif prev == WorkflowStage.RECEIVED_BY_PSC and target == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
+        recipients = User.objects.filter(
+            psc_profile__role__in=_resolve_receiver_roles(), is_active=True,
+        )
+        actor_name = (actor.get_full_name() or actor.username) if actor else "The Secretary"
+        title = f"Forwarded to you: {submission.reference_number}"
+        body = (
+            f"{actor_name} forwarded '{submission.title}' to you for checklist review. "
+            f"Please review it and recommend."
+        )
+        if (remarks or "").strip():
+            body += f"\n\nSecretary's note: {remarks.strip()}"
+
+    elif (
+        prev in (WorkflowStage.DRAFT, WorkflowStage.PENDING_DG_ENDORSEMENT, WorkflowStage.DG_APPROVED)
+        and target == WorkflowStage.SUBMITTED
     ):
         receiver_roles = _resolve_receiver_roles()
         recipients = User.objects.filter(
@@ -1009,6 +1048,10 @@ def _dispatch_transition_notifications(
         recipients = User.objects.filter(
             psc_profile__role=manager_role, is_active=True
         )
+        if _goes_to_secretary_first(submission):
+            recipients = User.objects.filter(
+                psc_profile__role__in=SECRETARY_DESK_ROLES, is_active=True,
+            )
         title = f"Resubmitted: {submission.reference_number}"
         body = f"{submission.title} has been resubmitted after clarification."
 
@@ -2059,6 +2102,24 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             )
         # if _chain_result is True: chain explicitly allows — skip assert_transition_allowed
 
+        # ── Secretary forwards a ministry paper to the responsible unit Manager ──
+        # The unit comes from the form type unless the Secretary picks one; either way
+        # it must be known before the paper leaves the Secretary's desk.
+        if prev == WorkflowStage.RECEIVED_BY_PSC and target == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
+            from .intake_routing import routed_unit_for_form_type
+
+            _chosen = (ser.validated_data.get("routed_unit") or "").strip()
+            _unit = _chosen or routed_unit_for_form_type(submission.form_type_code)
+            if _unit not in {c for c, _ in RoutedUnit.choices if c}:
+                return Response(
+                    {
+                        "detail": "Choose the OPSC unit to forward this paper to.",
+                        "needs_routed_unit": True,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            submission.routed_unit = _unit
+
         # ── Compliance self-submission: only the creator, or a colleague a
         # Manager/Principal has granted draft-edit access to (see
         # SubmissionDraftDelegate — e.g. covering the creator's absence), may
@@ -2788,7 +2849,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             and _recall_holds_now(submission, request.user)
         )
         if not _hold_for_recall:
-            self._auto_advance_submitted_to_checklist_review(submission)
+            self._route_submitted_paper(submission)
 
         # ── Fire notifications after commit ──
         transaction.on_commit(
@@ -2985,7 +3046,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         # Must run BEFORE the notification dispatch below: _resolve_receiver_roles()
         # reads submission.routed_unit to pick the right unit's manager, and this
         # is what sets it — dispatching first silently fell back to PSC_OFFICER.
-        self._auto_advance_submitted_to_checklist_review(submission)
+        self._route_submitted_paper(submission)
 
         try:
             _dispatch_transition_notifications(
@@ -4090,6 +4151,29 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         aid = item.id
         transaction.on_commit(lambda: queue_agenda_item_blurb(aid))
 
+    def _route_submitted_paper(self, submission):
+        """What happens to a paper once it leaves the ministry's hands (recall window
+        closed, or no window): a ministry paper goes to the Secretary first, who forwards
+        it to the responsible unit Manager. Everything else (OPSC-lodged, internal)
+        keeps routing straight to its unit."""
+        if submission.current_stage != WorkflowStage.SUBMITTED:
+            return
+        if _goes_to_secretary_first(submission):
+            with transaction.atomic():
+                submission.current_stage = WorkflowStage.RECEIVED_BY_PSC
+                submission.save(update_fields=["current_stage"])
+                WorkflowEvent.objects.create(
+                    submission=submission,
+                    actor=None,
+                    actor_label="System",
+                    previous_stage=WorkflowStage.SUBMITTED,
+                    new_stage=WorkflowStage.RECEIVED_BY_PSC,
+                    remarks="Sent to the Secretary, who forwards it to the responsible unit Manager.",
+                )
+            invalidate_submission(submission.id)
+            return
+        self._auto_advance_submitted_to_checklist_review(submission)
+
     def _auto_advance_submitted_to_checklist_review(self, submission):
         """
         Once a submission reaches Submitted, which unit reviews it is already
@@ -4119,6 +4203,7 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         """
         if submission.current_stage != WorkflowStage.SUBMITTED:
             return
+
         if submission.is_internal and not submission.follows_normal_route:
             return
         if not submission.form_type_code:

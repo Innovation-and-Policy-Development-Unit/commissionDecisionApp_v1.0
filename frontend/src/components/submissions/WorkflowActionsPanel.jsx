@@ -276,6 +276,30 @@ const STAGE_ACTIONS = {
     },
   ],
 
+  // A ministry paper is received by the Secretary first. The Secretary forwards it
+  // to the responsible unit Manager (who reviews it and recommends), or sends it back.
+  received_by_psc: [
+    {
+      id: 'forward_to_unit_manager',
+      label: 'Forward to unit Manager',
+      description: 'Send this paper to the responsible OPSC unit Manager for checklist review and recommendation',
+      icon: Send,
+      variant: 'primary',
+      transitionTo: 'manager_checklist_review',
+      requiresNote: false,
+      unitPicker: true,
+    },
+    {
+      id: 'return_to_ministry',
+      label: 'Return to ministry',
+      description: 'Send this paper back to the ministry for clarification, with a comment',
+      icon: RotateCcw,
+      variant: 'outline',
+      transitionTo: 'returned_for_clarification',
+      requiresNote: true,
+    },
+  ],
+
   // A recalled paper: reopen it as a draft to correct and submit again.
   recalled: [
     {
@@ -510,6 +534,15 @@ const resolveTarget = (action, allowed) => (
     : (allowed.includes(action.transitionTo) ? action.transitionTo : undefined)
 )
 
+// Units a ministry paper can be forwarded to (matches backend RoutedUnit).
+const FORWARD_UNITS = [
+  { value: 'odu', label: 'ODU' },
+  { value: 'hr', label: 'Manager HR' },
+  { value: 'vipam', label: 'VIPAM' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'ipdu', label: 'IPDU' },
+]
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function WorkflowActionsPanel({
   submission,
@@ -531,6 +564,7 @@ export default function WorkflowActionsPanel({
   const [activeAction, setActiveAction] = useState(null) // action requiring a note
   const [attestAction, setAttestAction] = useState(null) // action requiring the DG approval attestation
   const [localBusy, setLocalBusy] = useState(false)
+  const [forwardUnit, setForwardUnit] = useState('') // Secretary's choice of unit ('' = the form type's unit)
 
   const stage = submission?.current_stage
   const isNormalRouteInternal = !!(submission?.is_internal && submission?.follows_normal_route)
@@ -667,7 +701,8 @@ export default function WorkflowActionsPanel({
       } else if (action.endpoint === 'resend-dg-link') {
         await onResendDgLink()
       } else {
-        await onTransition(action.transitionTo, remarksHtml, false, extra)
+        const payload = (action.unitPicker && forwardUnit) ? { ...extra, routed_unit: forwardUnit } : extra
+        await onTransition(action.transitionTo, remarksHtml, false, payload)
       }
       setActiveAction(null)
       setAttestAction(null)
@@ -712,6 +747,20 @@ export default function WorkflowActionsPanel({
 
       {error && (
         <BaseMessageBar intent="error">{error}</BaseMessageBar>
+      )}
+
+      {visibleActions.some(a => a.unitPicker) && (
+        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+          Forward to
+          <select
+            className="input"
+            value={forwardUnit}
+            onChange={e => setForwardUnit(e.target.value)}
+          >
+            <option value="">The unit for this form type</option>
+            {FORWARD_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+          </select>
+        </label>
       )}
 
       <div className="flex flex-col gap-2">

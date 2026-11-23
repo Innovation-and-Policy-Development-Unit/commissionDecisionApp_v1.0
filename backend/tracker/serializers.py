@@ -1850,6 +1850,9 @@ class TransitionSerializer(serializers.Serializer):
     # HR attests the DG signed the paper (ministry papers, Draft -> Submitted).
     dg_approval_name = serializers.CharField(required=False, allow_blank=True, max_length=255)
     dg_approval_date = serializers.DateField(required=False, allow_null=True)
+    # The Secretary may name the unit when forwarding a ministry paper to a Manager;
+    # blank means "the unit the form type belongs to".
+    routed_unit = serializers.CharField(required=False, allow_blank=True, max_length=16)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
