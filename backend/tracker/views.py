@@ -4171,6 +4171,11 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                     remarks="Sent to the Secretary, who forwards it to the responsible unit Manager.",
                 )
             invalidate_submission(submission.id)
+            # Look for earlier papers about the same officer, for the Secretary to see.
+            from .tasks import queue_duplicate_detection
+
+            sid = submission.id
+            transaction.on_commit(lambda: queue_duplicate_detection(sid, force=True))
             return
         self._auto_advance_submitted_to_checklist_review(submission)
 
@@ -15162,11 +15167,46 @@ def submission_bulk_action_view(request):
 
 # ── AI Trigger and Result Views ────────────────────────────────────────────────
 
+def _duplicate_submission_or_403(request, pk):
+    """The flag is for OPSC staff only: a ministry never sees that its paper was flagged."""
+    profile = _profile(request.user)
+    if profile is None or profile.role in _MINISTRY_SIDE_ROLES:
+        raise PermissionDenied("Duplicate checks are for PSC staff.")
+    return get_object_or_404(_submission_queryset_for(request.user), pk=pk)
+
+
+def _duplicate_payload(submission, user):
+    """The stored duplicate check, with each earlier paper opened only if this user may see it."""
+    from .duplicate_check import flag_level
+    from .serializers import AiDuplicateResultSerializer
+
+    data = dict(AiDuplicateResultSerializer(submission).data)
+    visible = set(
+        _submission_queryset_for(user).filter(
+            pk__in=[c.get("submission_id") for c in (submission.ai_duplicate_similar_cases or [])
+                    if c.get("submission_id")],
+        ).values_list("pk", flat=True)
+    )
+    cases = []
+    for c in submission.ai_duplicate_similar_cases or []:
+        c = dict(c)
+        c["can_open"] = c.get("submission_id") in visible
+        if not c["can_open"]:
+            c.pop("title", None)  # another unit's paper: reference and verdict only
+        cases.append(c)
+    data["ai_duplicate_similar_cases"] = cases
+    data["flag_level"] = flag_level(submission)
+    reviewer = submission.ai_duplicate_reviewed_by
+    data["reviewed_at"] = submission.ai_duplicate_reviewed_at
+    data["reviewed_by_name"] = (reviewer.get_full_name() or reviewer.username) if reviewer else ""
+    return data
+
+
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
 @throttle_classes([AiAnalysisTriggerThrottle])
 def trigger_ai_duplicate(request, pk):
-    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
+    submission = _duplicate_submission_or_403(request, pk)
     from .tasks import queue_duplicate_detection
     queue_duplicate_detection(submission.id, force=True)
     return Response({"detail": "Duplicate detection queued."}, status=status.HTTP_202_ACCEPTED)
@@ -15175,9 +15215,29 @@ def trigger_ai_duplicate(request, pk):
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def get_ai_duplicate(request, pk):
-    from .serializers import AiDuplicateResultSerializer
-    submission = get_object_or_404(_submission_queryset_for(request.user), pk=pk)
-    return Response(AiDuplicateResultSerializer(submission).data)
+    submission = _duplicate_submission_or_403(request, pk)
+    return Response(_duplicate_payload(submission, request.user))
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def review_ai_duplicate(request, pk):
+    """The Secretary or unit Manager records that the flagged papers are genuinely separate
+    (or undoes that with {"reviewed": false}). Only quietens the banner."""
+    from .audit import log_action as _log
+    from .models import AuditLog as _AL
+
+    submission = _duplicate_submission_or_403(request, pk)
+    reviewed = request.data.get("reviewed", True) not in (False, "false", "0", 0)
+    submission.ai_duplicate_reviewed_by = request.user if reviewed else None
+    submission.ai_duplicate_reviewed_at = timezone.now() if reviewed else None
+    submission.save(update_fields=["ai_duplicate_reviewed_by", "ai_duplicate_reviewed_at", "updated_at"])
+    _log(request, _AL.Action.UPDATE, resource_type="Submission", resource_id=submission.id,
+         resource_label=submission.reference_number,
+         description=("Marked the possible-repeat flag as reviewed (genuine separate submission)"
+                      if reviewed else "Reopened the possible-repeat flag"))
+    invalidate_submission(submission.id)
+    return Response(_duplicate_payload(submission, request.user))
 
 
 @api_view(["POST"])
