@@ -8,9 +8,12 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from tracker.ai.A4_duplicate_detector import _sanitize_result
-from tracker.duplicate_check import _names_match, _name_tokens, flag_level, officer_names, shortlist
+from tracker.duplicate_check import (
+    _names_match, _name_tokens, comparison_context, flag_level, officer_names, shortlist,
+)
 from tracker.models import (
-    Ministry, Notification, Profile, PSCFormResponse, PSCFormType, Role, Submission, WorkflowStage,
+    Ministry, Notification, Profile, PSCFormResponse, PSCFormType, Role, Submission,
+    SubmissionDocument, WorkflowStage,
 )
 from tracker.tasks import detect_submission_duplicates
 
@@ -54,6 +57,7 @@ class DuplicateCheckTests(TestCase):
         self.assertTrue(_names_match(a, _name_tokens("Mary Joy Tari")))   # fuller form of the name
         self.assertFalse(_names_match(a, _name_tokens("John Tari")))
         self.assertFalse(_names_match(_name_tokens("Tari"), _name_tokens("Mary Tari")))  # one word is too loose
+        self.assertFalse(_names_match(_name_tokens("Tari"), _name_tokens("Tari")))
 
     def test_officer_names_only_reads_person_fields(self):
         sub = self._paper()
@@ -85,6 +89,59 @@ class DuplicateCheckTests(TestCase):
         new = self._paper(key="remarks", stage=WorkflowStage.RECEIVED_BY_PSC)
         old = self._paper(key="remarks")
         self.assertEqual([p["submission"].pk for p in shortlist(new)], [old.pk])
+
+    def test_other_forms_name_fields_are_recognised(self):
+        for key in ("acting_name", "subject_name", "subject_employee", "eligible_name", "applicant_name"):
+            sub = self._paper(key=key)
+            self.assertEqual(officer_names(sub), [_name_tokens("Mary Tari")], key)
+
+    # ── names found in the uploaded letters ────────────────────────────────
+    def _letter(self, sub, names, text="Please approve acting allowance.", doc_type="dg_endorsement"):
+        return SubmissionDocument.objects.create(
+            submission=sub, original_name="cover.pdf", extracted_text=text, uploaded_by=self.hr,
+            document_type=doc_type, extracted_facts={"names": names, "dates": ["1 June 2026"]},
+        )
+
+    def _scan(self, stage=WorkflowStage.RECEIVED_BY_PSC):
+        """A paper with no digitized form at all."""
+        return Submission.objects.create(
+            title="Scanned paper", ministry=self.ministry, form_type_code=self.form.code,
+            current_stage=stage, received_at=timezone.now(), created_by=self.hr,
+        )
+
+    def test_letter_names_are_used_when_the_form_names_no_one(self):
+        new, old = self._scan(), self._scan(WorkflowStage.APPROVED)
+        self._letter(new, ["Mary Tari", "Ministry of Finance"])
+        self._letter(old, ["Tari, Mary", "Ministry of Finance"])
+        picked = shortlist(new)
+        self.assertEqual([p["submission"].pk for p in picked], [old.pk])
+        self.assertEqual(picked[0]["matched_on"], ["same officer name (in the letter)"])
+
+    def test_signers_and_organisations_are_not_treated_as_the_officer(self):
+        self.hr.first_name, self.hr.last_name = "Helen", "Bani"
+        self.hr.save()
+        new, old = self._scan(), self._scan(WorkflowStage.APPROVED)
+        for sub in (new, old):
+            # the lodging HR officer and the DG sign every letter; the ministry is named in all
+            self._letter(sub, ["Helen Bani", "Director General Joe Kalo", "Ministry of Finance"])
+        new.dg_approval_name = "Joe Kalo"
+        new.save(update_fields=["dg_approval_name"])
+        # No officer is identified, so it is NOT matched as "same officer": only the loose
+        # same-form-type fallback applies.
+        self.assertEqual([p["matched_on"] for p in shortlist(new)], [["same form type, no officer named"]])
+
+    def test_a_paper_with_a_form_name_matches_an_older_scanned_paper_by_its_letter(self):
+        new = self._paper(stage=WorkflowStage.RECEIVED_BY_PSC)
+        old = self._scan(WorkflowStage.APPROVED)
+        self._letter(old, ["Mary Tari"])
+        self.assertEqual([p["submission"].pk for p in shortlist(new)], [old.pk])
+
+    def test_the_ai_is_given_the_letter_text(self):
+        sub = self._paper()
+        self._letter(sub, ["Mary Tari"], text="Acting allowance for June to August 2026 as Director.")
+        ctx = comparison_context(sub)
+        self.assertIn("Acting allowance for June to August 2026", ctx)
+        self.assertIn("cover.pdf", ctx)
 
     # ── AI result handling ─────────────────────────────────────────────────
     def test_sanitize_drops_invented_references_and_unknown_verdicts(self):

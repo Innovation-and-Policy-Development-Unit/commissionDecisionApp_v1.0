@@ -26,7 +26,9 @@ whether the new paper is the same claim sent twice, or a genuinely separate matt
 
 Repeats are often genuine: for example an acting or extra-responsibility allowance for work
 done in a different period, or a second allowance for a different role. Compare the periods
-and dates, amounts, positions or posts, the reason given and the documents listed. Do not
+and dates, amounts, positions or posts, the reason given and the documents listed. Each paper may include extracts of its uploaded letters (OCR text,
+so names and dates can be slightly garbled): the cover letter often states the officer, post and
+period when the form does not. Do not
 treat a similar title or the same officer alone as a duplicate.
 
 Verdict per earlier paper:
