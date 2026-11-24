@@ -79,8 +79,9 @@ def seed(apps, schema_editor):
         defaults={
             "name": "VIPAM Submission Paper (Internship, Training, Education)",
             "description": (
-                "VIPAM's own paper to the Commission on an internship, training or education "
-                "matter. Written by VIPAM staff and approved up the unit before the Secretary."
+                "VIPAM internal paper on an internship, training or education matter. Written by "
+                "VIPAM staff in SCDMS, not lodged by ministries or ministry HR. Approved up the "
+                "VIPAM unit, then sent to the Secretary for the Commission."
             ),
             "form_category": category,
             "is_active": True,
