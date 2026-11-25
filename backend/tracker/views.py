@@ -187,7 +187,10 @@ from .api_cache import (
 from .transitions import SECRETARY_DESK_ROLES, assert_transition_allowed, iter_allowed_targets
 from .totp import generate_totp_secret, get_totp_uri, get_totp_qr_base64, verify_totp_code
 from .odu_checklist_rules import ODU_ACKNOWLEDGE_ONLY_FORM_CODES, ODU_NOTED_AT_ODU_FORM_CODES
-from .throttles import AiAnalysisTriggerThrottle, StaffChatThrottle, OTPVerifyThrottle, PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle
+from .throttles import (
+    AiAnalysisTriggerThrottle, StaffChatThrottle, OTPVerifyThrottle, OTPVerifyIPThrottle,
+    PasswordResetThrottle, PinResetThrottle, SessionPinVerifyThrottle, SessionPinVerifyIPThrottle,
+)
 from .auth import LenientJWTAuthentication
 from .models import (
     AuditLog,
@@ -8887,7 +8890,7 @@ class EmailOTPVerifyView(APIView):
     TrustedSession (same shape as VerifyOTPView)."""
     permission_classes = [permissions.AllowAny]
     authentication_classes = [LenientJWTAuthentication]
-    throttle_classes = [OTPVerifyThrottle]
+    throttle_classes = [OTPVerifyThrottle, OTPVerifyIPThrottle]
 
     def post(self, request):
         from django.conf import settings as django_settings
@@ -9235,7 +9238,7 @@ class SessionPinVerifyView(APIView):
     """Verify the session PIN and return JWT tokens (within trusted session window)."""
     permission_classes = [permissions.AllowAny]
     authentication_classes = [LenientJWTAuthentication]
-    throttle_classes = [SessionPinVerifyThrottle]
+    throttle_classes = [SessionPinVerifyThrottle, SessionPinVerifyIPThrottle]
 
     def post(self, request):
         ser = SessionPinVerifySerializer(data=request.data)

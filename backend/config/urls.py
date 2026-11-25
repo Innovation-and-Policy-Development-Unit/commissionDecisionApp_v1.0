@@ -76,9 +76,41 @@ def health(_request):
     )
 
 
+def api_health(_request):
+    """Public uptime probe, reachable through nginx at /api/health/.
+
+    /health/ (above) is for the container healthcheck: from outside, nginx serves the
+    website's index.html for it, so a monitor pointed there would always read "up". This
+    one goes through the /api proxy to Django, returns 503 if the database or Redis (login
+    codes, notifications and background jobs all depend on it) is down, and reveals no
+    internal error text.
+    """
+    from django.db import connection
+    from django.db.utils import OperationalError
+
+    db_ok = True
+    try:
+        connection.ensure_connection()
+    except OperationalError:
+        db_ok = False
+    redis_ok = True
+    try:
+        import redis
+
+        redis.Redis.from_url(settings.CELERY_BROKER_URL, socket_connect_timeout=2).ping()
+    except Exception:  # noqa: BLE001 — any failure means "not healthy", never an error page
+        redis_ok = False
+    healthy = db_ok and redis_ok
+    return JsonResponse(
+        {"status": "healthy" if healthy else "unhealthy", "database": db_ok, "redis": redis_ok},
+        status=200 if healthy else 503,
+    )
+
+
 urlpatterns = [
     path("", root),
     path("health/", health, name="health"),
+    path("api/health/", api_health, name="api-health"),
     path("internal/media/<path:file_path>", internal_media, name="internal-media"),
     path("admin/", admin.site.urls),
     path("api/", include("tracker.urls")),
