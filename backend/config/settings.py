@@ -221,15 +221,17 @@ REST_FRAMEWORK = {
         'anon': '300/min',
         'user': '600/min',
         'otp_request':     '5/min',
-        'otp_verify':      '10/min',
+        'otp_verify':      '10/min',  # per (IP, account)
+        'otp_verify_ip': '120/min',  # per IP, across accounts
         'password_reset':  '5/min',
         'pin_reset':       '5/min',
         'password_change': '10/min',
-        'submission_create': '10/hour',
+        'submission_create': '30/hour',
         'feedback_create':   '5/hour',
         'staff_chat':        '60/hour',
         'ai_analysis_trigger': '20/hour',
-        'session_pin_verify': '5/min',
+        'session_pin_verify': '5/min',  # per (IP, account)
+        'session_pin_verify_ip': '120/min',
         'submission_track':  os.getenv('SUBMISSION_TRACK_RATE_LIMIT', '10/min'),
         'dg_approval':       os.getenv('DG_APPROVAL_RATE_LIMIT', '30/min'),
         'backup_restore':    '3/hour',
