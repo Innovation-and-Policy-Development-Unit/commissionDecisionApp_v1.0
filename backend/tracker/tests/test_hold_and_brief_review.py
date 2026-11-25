@@ -140,6 +140,46 @@ class BriefReviewTests(TestCase):
         self.assertEqual(resp.status_code, 400, resp.content)
         self.assertTrue(resp.json().get("brief_review_required"), resp.content)
 
+    def _submit_to_manager(self, user=None):
+        self.client.force_authenticate(user=user or self.officer)
+        return self.client.post(
+            f"/api/submissions/{self.sub.id}/submit-to-manager/",
+            {"assessment_html": "<p>Assessed.</p>"}, format="json")
+
+    def test_unreviewed_brief_blocks_hand_back_at_assessment(self):
+        resp = self._submit_to_manager()
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertTrue(resp.json().get("brief_review_required"), resp.content)
+
+    def test_unreviewed_brief_blocks_hand_back_at_checklist_review(self):
+        self.sub.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+        self.sub.ready_for_manager_at = None
+        self.sub.save(update_fields=["current_stage", "ready_for_manager_at"])
+        resp = self._submit_to_manager()
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertTrue(resp.json().get("brief_review_required"), resp.content)
+        self.sub.refresh_from_db()
+        self.assertIsNone(self.sub.ready_for_manager_at)  # nothing was half-applied
+
+    def test_reviewed_brief_lets_checklist_review_hand_back(self):
+        self.sub.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+        self.sub.ready_for_manager_at = None
+        self.sub.save(update_fields=["current_stage", "ready_for_manager_at"])
+        self.assertEqual(self._review(self.officer).status_code, 200)
+        resp = self._submit_to_manager()
+        self.assertFalse(resp.json().get("brief_review_required"), resp.content)
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+    def test_no_brief_does_not_block_checklist_review_hand_back(self):
+        self.sub.current_stage = WorkflowStage.MANAGER_CHECKLIST_REVIEW
+        self.sub.ready_for_manager_at = None
+        self.sub.ai_brief_processed = False
+        self.sub.ai_brief_summary = ""
+        self.sub.save(update_fields=["current_stage", "ready_for_manager_at",
+                                     "ai_brief_processed", "ai_brief_summary"])
+        resp = self._submit_to_manager()
+        self.assertFalse(resp.json().get("brief_review_required"), resp.content)
+
     def test_regenerating_clears_the_sign_off(self):
         self._review(self.officer)
         self.sub.refresh_from_db()

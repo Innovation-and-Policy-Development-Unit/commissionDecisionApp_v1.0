@@ -3833,6 +3833,18 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         ):
             raise PermissionDenied("This can only be done during checklist review or assessment.")
 
+        # The allocated officer reviews the AI brief before the paper goes back to the
+        # Manager — at checklist review as well as at assessment. Checked first so a
+        # refusal never leaves a half-finalized checklist behind.
+        from .brief_review import blocker as brief_blocker
+
+        brief_msg = brief_blocker(submission)
+        if brief_msg:
+            return Response(
+                {"detail": brief_msg, "brief_review_required": True},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if submission.current_stage == WorkflowStage.MANAGER_CHECKLIST_REVIEW:
             from .odu_checklist_rules import (
                 odu_checklist_principal_review_complete,
@@ -3877,14 +3889,6 @@ class SubmissionViewSet(viewsets.ModelViewSet):
 
         update_fields = ["ready_for_manager_at"]
         if submission.current_stage == WorkflowStage.UNDER_ASSESSMENT:
-            from .brief_review import blocker as brief_blocker
-
-            brief_msg = brief_blocker(submission)
-            if brief_msg:
-                return Response(
-                    {"detail": brief_msg, "brief_review_required": True},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
             from .rich_text import html_to_plain_text, sanitize_remarks_html
 
             assessment_html = sanitize_remarks_html(request.data.get("assessment_html", ""))
