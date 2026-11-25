@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment, memo } from 'react'
+import { menuItemVisibleForUser } from '../../utils/complianceAccess'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../../api/client'
@@ -816,13 +817,17 @@ export default function Header({ onMenuClick }) {
                   {t('notifications.mark_all_read')}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => { setNotifOpen(false); navigate('/secretariat/tasks') }}
-                className="w-full text-center text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 font-medium py-1 focus:outline-none focus-visible:underline"
-              >
-                {t('header.notifications_open_tasks')}
-              </button>
+              {/* Same audience rule as the Implementation menu entry — Compliance staff
+                  have their own menu and are not sent to the Commission Decision Register. */}
+              {menuItemVisibleForUser({ audience: 'implementation' }, user) && (
+                <button
+                  type="button"
+                  onClick={() => { setNotifOpen(false); navigate('/secretariat/tasks') }}
+                  className="w-full text-center text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 font-medium py-1 focus:outline-none focus-visible:underline"
+                >
+                  {t('header.notifications_open_tasks')}
+                </button>
+              )}
             </div>
           </div>
         )}
