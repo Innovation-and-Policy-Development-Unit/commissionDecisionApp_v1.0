@@ -19,7 +19,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -78,6 +78,27 @@ def _assert_can_comment(user, target):
         "Only the submission's creator, or a colleague granted draft-edit "
         "access, can comment while it's still a draft."
     )
+
+
+def _validated_field_key(target, raw):
+    """Return a clean field_key for a field-level comment, or "" for a whole-paper one.
+
+    Field comments exist only on submissions, and the key must be a real field of
+    that submission's digitized form (so a typo can never hang a comment on nothing).
+    """
+    key = (raw or "").strip()
+    if not key:
+        return ""
+    if not isinstance(target, Submission):
+        raise ValidationError({"field_key": "Field comments are only supported on submissions."})
+    from .models import PSCFormField
+
+    exists = PSCFormField.objects.filter(
+        form_type__code=target.form_type_code, field_key=key,
+    ).exclude(field_type="section_header").exists()
+    if not exists:
+        raise ValidationError({"field_key": "Unknown field for this submission's form."})
+    return key
 
 
 def _resolve_submission_target(user, object_id):
@@ -159,6 +180,12 @@ class CommentViewSet(viewsets.ModelViewSet):
         )
         if _is_ministry_side(self.request.user):
             qs = qs.exclude(is_internal=True)
+        # ?field_key=<key> → one field's thread; ?field_only=1 → every field comment.
+        fk = self.request.query_params.get("field_key")
+        if fk:
+            qs = qs.filter(field_key=fk)
+        elif self.request.query_params.get("field_only") in ("1", "true"):
+            qs = qs.exclude(field_key="")
         return qs
 
     def get_serializer_context(self):
@@ -193,6 +220,12 @@ class CommentViewSet(viewsets.ModelViewSet):
             if parent.parent_id:  # keep threading to a single level
                 parent = parent.parent
 
+        # A reply stays in its parent's thread (same field); a top-level comment
+        # may name a field of the digitized form.
+        field_key = parent.field_key if parent is not None else _validated_field_key(
+            obj, request.data.get("field_key"),
+        )
+
         comment = Comment.objects.create(
             content_type=ct,
             object_id=obj.pk,
@@ -200,13 +233,14 @@ class CommentViewSet(viewsets.ModelViewSet):
             body=body,
             is_internal=is_internal,
             parent=parent,
+            field_key=field_key,
         )
         log_action(
             request, "CREATE",
             resource_type="Comment", resource_id=comment.pk,
             resource_label=f"{key}:{obj.pk}",
             description=f"Comment posted on {key} {getattr(obj, 'reference_number', obj.pk)}",
-            extra_data={"target": f"{key}:{obj.pk}", "is_internal": is_internal},
+            extra_data={"target": f"{key}:{obj.pk}", "is_internal": is_internal, "field_key": field_key},
         )
         # @mentions → notify users who may actually see this comment.
         process_comment_mentions(
@@ -245,6 +279,39 @@ class CommentViewSet(viewsets.ModelViewSet):
             request=request,
         )
         return Response(self.get_serializer(comment).data)
+
+    # ── resolve / reopen a field comment thread ───────────────────────────────
+    def _set_resolved(self, request, pk, resolved):
+        comment = get_object_or_404(Comment, pk=pk)
+        if not comment.field_key or comment.parent_id:
+            raise ValidationError("Only a top-level field comment can be resolved.")
+        if comment.is_deleted:
+            raise ValidationError("Cannot resolve a deleted comment.")
+        # Same access rule as reading the thread.
+        if _resolve_submission_target(request.user, comment.object_id) is None:
+            raise NotFound("Target not found or not accessible.")
+        if _is_ministry_side(request.user) and comment.is_internal:
+            raise NotFound("Target not found or not accessible.")
+        u = request.user
+        if not (comment.author_id == u.id or u.is_superuser or u.is_staff):
+            raise PermissionDenied("Only the reviewer who raised a field comment can resolve or reopen it.")
+        comment.resolved_at = timezone.now() if resolved else None
+        comment.resolved_by = u if resolved else None
+        comment.save(update_fields=["resolved_at", "resolved_by", "updated_at"])
+        log_action(
+            request, "UPDATE",
+            resource_type="Comment", resource_id=comment.pk,
+            description=f"Field comment {'resolved' if resolved else 'reopened'} ({comment.field_key})",
+        )
+        return Response(self.get_serializer(comment).data)
+
+    @action(detail=True, methods=["post"], url_path="resolve")
+    def resolve(self, request, pk=None):
+        return self._set_resolved(request, pk, True)
+
+    @action(detail=True, methods=["post"], url_path="reopen")
+    def reopen(self, request, pk=None):
+        return self._set_resolved(request, pk, False)
 
     # ── soft delete (record retained) ─────────────────────────────────────────
     def destroy(self, request, *args, **kwargs):

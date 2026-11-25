@@ -48,6 +48,7 @@ export default function MultiPageFormRenderer({
   readOnly = false,
   onSave,
   saving = false,
+  renderFieldExtra,
 }) {
   const toast = useToast()
   const pages = useMemo(() => splitIntoPages(fields), [fields])
@@ -175,14 +176,16 @@ export default function MultiPageFormRenderer({
           <p className="text-sm text-slate-400 italic text-center py-6">No fields in this section.</p>
         ) : (
           page.fields.map(field => (
-            <FieldRow
-              key={field.id}
-              field={field}
-              value={values[field.field_key]}
-              onChange={v => handle(field.field_key, v)}
-              readOnly={readOnly}
-              hasError={!!errors[field.field_key]}
-            />
+            <div key={field.id}>
+              <FieldRow
+                field={field}
+                value={values[field.field_key]}
+                onChange={v => handle(field.field_key, v)}
+                readOnly={readOnly}
+                hasError={!!errors[field.field_key]}
+              />
+              {renderFieldExtra && field.field_type !== 'section_header' ? renderFieldExtra(field) : null}
+            </div>
           ))
         )}
 
