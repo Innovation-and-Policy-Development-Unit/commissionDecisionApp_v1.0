@@ -84,14 +84,24 @@ def _validated_field_key(target, raw):
     """Return a clean field_key for a field-level comment, or "" for a whole-paper one.
 
     Field comments exist only on submissions, and the key must be a real field of
-    that submission's digitized form (so a typo can never hang a comment on nothing).
+    that submission's digitized form, or "document:<id>" for one of its uploaded
+    documents (so a typo can never hang a comment on nothing).
     """
     key = (raw or "").strip()
     if not key:
         return ""
     if not isinstance(target, Submission):
         raise ValidationError({"field_key": "Field comments are only supported on submissions."})
-    from .models import PSCFormField
+    from .models import PSCFormField, SubmissionDocument
+
+    # "document:<id>" attaches the comment to one uploaded document of this submission.
+    if key.startswith("document:"):
+        raw_id = key.split(":", 1)[1]
+        if not raw_id.isdigit() or not SubmissionDocument.objects.filter(
+            pk=int(raw_id), submission_id=target.pk,
+        ).exists():
+            raise ValidationError({"field_key": "Unknown document for this submission."})
+        return f"document:{int(raw_id)}"
 
     exists = PSCFormField.objects.filter(
         form_type__code=target.form_type_code, field_key=key,

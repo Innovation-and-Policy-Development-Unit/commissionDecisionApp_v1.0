@@ -39,10 +39,12 @@ export function useFieldComments(submissionId, { enabled, canStart, canReply }) 
     return map
   }, [comments])
 
-  const openCount = useMemo(
-    () => comments.filter(c => !c.parent && !c.is_deleted && !c.resolved_at).length,
+  const openRoots = useMemo(
+    () => comments.filter(c => !c.parent && !c.is_deleted && !c.resolved_at),
     [comments],
   )
+  const docOpenCount = openRoots.filter(c => c.field_key.startsWith('document:')).length
+  const openCount = openRoots.length - docOpenCount
 
   const run = async (fn, failMsg) => {
     try {
@@ -56,7 +58,7 @@ export function useFieldComments(submissionId, { enabled, canStart, canReply }) 
   }
 
   return {
-    enabled, canStart, canReply, byField, openCount,
+    enabled, canStart, canReply, byField, openCount, docOpenCount,
     add: (fieldKey, body, parent = null) =>
       run(() => createComment({ target, body, fieldKey, parent }), 'Could not post the comment.'),
     resolve: id => run(() => resolveComment(id), 'Could not resolve the comment.'),
