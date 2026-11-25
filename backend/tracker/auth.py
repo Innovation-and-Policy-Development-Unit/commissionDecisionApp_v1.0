@@ -50,9 +50,12 @@ class LenientJWTAuthentication(CookieJWTAuthentication):
     def authenticate(self, request):
         try:
             return super().authenticate(request)
-        except (InvalidToken, TokenError, exceptions.PermissionDenied):
+        except (InvalidToken, TokenError, exceptions.PermissionDenied, exceptions.AuthenticationFailed):
             # PermissionDenied = failed CSRF check on cookie credentials: treat
             # the request as anonymous rather than failing the login step.
+            # AuthenticationFailed covers a cookie for an account that has since been
+            # deleted or deactivated ("User not found" / "User is inactive"): it is not an
+            # InvalidToken, so it used to block signing in as anyone else in that browser.
             return None
 
 
