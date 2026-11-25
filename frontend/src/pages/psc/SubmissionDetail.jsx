@@ -617,6 +617,7 @@ export default function SubmissionDetail() {
       const r = await api.get(`/submissions/${id}/allowed_transitions/`)
       setAllowed(r.data.allowed || [])
       setCanEndorse(r.data.can_endorse ?? false)
+      setSubmitBlockers(r.data.submit_blockers || [])
       setDgFlow({ canResend: !!r.data.can_resend_dg_link, send: r.data.dg_send ?? null, status: r.data.dg_status ?? null })
     } catch {
       setAllowed([]); setCanEndorse(false); setDgFlow({ canResend: false, send: null, status: null })
@@ -1547,6 +1548,7 @@ const stageDescriptions = {
               submission={submission}
               submissionId={id}
               onUpdated={setSubmission}
+              onValidated={() => { invalidateSubmissionBootstrap(id); fetchTransitions() }}
             />
           )}
 
