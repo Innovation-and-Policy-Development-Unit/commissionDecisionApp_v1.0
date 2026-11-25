@@ -1913,6 +1913,11 @@ const stageDescriptions = {
                   onAttached={reload}
                 />
               )}
+              {fieldCommentsOn && fieldComments.docOpenCount > 0 && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" role="status">
+                  {fieldComments.docOpenCount} open review comment{fieldComments.docOpenCount > 1 ? 's' : ''} on documents — look for the amber tags under each file.
+                </p>
+              )}
               <div className="card card-compact">
                 {/* Panel header */}
                 <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100 dark:border-slate-700">
@@ -2012,6 +2017,12 @@ const stageDescriptions = {
                             canExtract={canExtractDocs}
                             onRefresh={fetchDocuments}
                           />
+                          {fieldCommentsOn && (
+                            <FieldCommentBox
+                              field={{ field_key: `document:${doc.id}`, label: doc.original_name }}
+                              ctrl={fieldComments}
+                            />
+                          )}
                         </div>
                         <DocActions doc={doc} />
                       </li>

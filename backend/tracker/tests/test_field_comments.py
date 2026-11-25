@@ -7,7 +7,9 @@ from rest_framework.test import APIClient
 
 from tracker.models import (
     Comment, Ministry, Profile, PSCFormField, PSCFormType, Role, Submission,
+    SubmissionDocument,
 )
+from django.core.files.base import ContentFile
 
 
 class FieldCommentTests(TestCase):
@@ -116,3 +118,36 @@ class FieldCommentTests(TestCase):
         self.submission.form_type_code = "ZZ-FC-2"
         self.submission.save(update_fields=["form_type_code"])
         self.assertEqual(self._post(field_key="analysis").status_code, 400)
+
+    # ── document comments ("document:<id>") ──────────────────────────────────
+    def _doc(self, submission=None):
+        doc = SubmissionDocument(
+            submission=submission or self.submission, original_name="cover.pdf",
+            uploaded_by=self.hr,
+        )
+        doc.file.save("cover.pdf", ContentFile(b"%PDF-1.4 test"), save=True)
+        return doc
+
+    def test_document_comment_saved_and_filterable(self):
+        doc = self._doc()
+        res = self._post(field_key=f"document:{doc.id}")
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data["field_key"], f"document:{doc.id}")
+        self.assertEqual(len(self._rows(field_key=f"document:{doc.id}")), 1)
+
+    def test_document_comment_can_be_resolved(self):
+        doc = self._doc()
+        cid = self._post(field_key=f"document:{doc.id}").data["id"]
+        self.assertEqual(self.client.post(f"/api/comments/{cid}/resolve/").status_code, 200)
+
+    def test_document_of_another_submission_rejected(self):
+        other = Submission.objects.create(
+            title="Other", received_at=timezone.now(), created_by=self.hr,
+            ministry=self.ministry, is_internal=False, form_type_code="ZZ-FC-1",
+        )
+        doc = self._doc(other)
+        self.assertEqual(self._post(field_key=f"document:{doc.id}").status_code, 400)
+
+    def test_unknown_or_malformed_document_rejected(self):
+        self.assertEqual(self._post(field_key="document:999999").status_code, 400)
+        self.assertEqual(self._post(field_key="document:abc").status_code, 400)
