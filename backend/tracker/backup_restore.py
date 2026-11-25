@@ -90,3 +90,31 @@ def validate_backup_zip(zf: zipfile.ZipFile) -> tuple[bytes, list[tuple[str, str
 
     fixture_bytes = zf.read(fixture_info)
     return fixture_bytes, media_members
+
+
+MANIFEST_ENTRY_NAME = "manifest.json"
+_MAX_MANIFEST_BYTES = 64 * 1024
+
+
+def read_manifest(zf: zipfile.ZipFile) -> dict:
+    """What a backup contains: {"kind": "full"|"partial", "groups": [keys]}.
+
+    Backups made before selective backup have no manifest and are full. An unreadable or
+    oversized manifest is treated the same way rather than blocking a restore; group keys
+    this version does not know are dropped.
+    """
+    from .backup_groups import GROUPS
+
+    try:
+        info = zf.getinfo(MANIFEST_ENTRY_NAME)
+        if info.file_size > _MAX_MANIFEST_BYTES:
+            return {"kind": "full", "groups": []}
+        import json
+
+        raw = json.loads(zf.read(info).decode("utf-8"))
+    except (KeyError, ValueError, UnicodeDecodeError):
+        return {"kind": "full", "groups": []}
+    if not isinstance(raw, dict) or raw.get("kind") != "partial":
+        return {"kind": "full", "groups": []}
+    groups = [g for g in (raw.get("groups") or []) if isinstance(g, str) and g in GROUPS]
+    return {"kind": "partial", "groups": groups} if groups else {"kind": "full", "groups": []}

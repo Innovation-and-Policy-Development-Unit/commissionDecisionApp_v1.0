@@ -11821,6 +11821,8 @@ class BackupViewSet(viewsets.ViewSet):
         destination (sourced from the audit trail — pushes aren't tracked
         anywhere else — so the admin UI can show which backups are already
         safely off-VM without needing to click "Drive" again to check)."""
+        import zipfile
+
         _os.makedirs(_BACKUP_DIR, exist_ok=True)
         files = []
         for fn in sorted(_os.listdir(_BACKUP_DIR), reverse=True):
@@ -11830,12 +11832,24 @@ class BackupViewSet(viewsets.ViewSet):
             if fn.startswith("scdms_backup_") and (fn.endswith(".zip") or fn.endswith(".json")):
                 fp = _os.path.join(_BACKUP_DIR, fn)
                 stat = _os.stat(fp)
+                kind, groups = "full", []
+                if fn.endswith(".zip"):
+                    try:
+                        from .backup_restore import read_manifest
+
+                        with zipfile.ZipFile(fp) as _zf:
+                            _m = read_manifest(_zf)
+                        kind, groups = _m["kind"], _m["groups"]
+                    except (zipfile.BadZipFile, OSError):
+                        pass
                 files.append({
                     "filename": fn,
                     "size_kb": round(stat.st_size / 1024, 1),
                     "created_at": timezone.datetime.fromtimestamp(
                         stat.st_mtime, tz=timezone.get_current_timezone()
                     ).isoformat(),
+                    "kind": kind,
+                    "groups": groups,
                 })
 
         from .models import AuditLog
@@ -11857,26 +11871,103 @@ class BackupViewSet(viewsets.ViewSet):
 
     # ── create (manual trigger) ───────────────────────────────────────────────
     def create(self, request):
-        """POST /backup/ — trigger a manual backup immediately."""
+        """POST /backup/ — trigger a manual backup immediately.
+
+        Optional body ``{"groups": ["submissions", "agenda", ...]}`` makes a partial
+        backup of just those groups (plus any groups they require, added automatically).
+        Omit it, or send an empty list, for a full backup.
+        """
         from django.core.management import call_command
         from io import StringIO
+        from . import backup_groups
+
+        raw_groups = request.data.get("groups") or []
+        if not isinstance(raw_groups, list) or not all(isinstance(g, str) for g in raw_groups):
+            return Response({"detail": "groups must be a list of group keys."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        unknown = [g for g in raw_groups if g not in backup_groups.GROUPS]
+        if unknown:
+            return Response({"detail": f"Unknown backup group(s): {', '.join(unknown)}."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        groups = backup_groups.required_closure(raw_groups) if raw_groups else []
 
         _os.makedirs(_BACKUP_DIR, exist_ok=True)
         out = StringIO()
         try:
-            call_command("backup_db", "--dir", _BACKUP_DIR, stdout=out, stderr=out)
+            args = ["--dir", _BACKUP_DIR]
+            if groups:
+                args += ["--groups", ",".join(groups)]
+            call_command("backup_db", *args, stdout=out, stderr=out)
             _security_log.info(
-                "BACKUP_MANUAL | triggered by %s", request.user.username
+                "BACKUP_MANUAL | triggered by %s | groups=%s",
+                request.user.username, ",".join(groups) or "all",
             )
             from .audit import log_action as _log
             from .models import AuditLog as _AL
             _log(request, _AL.Action.BACKUP,
                  resource_type="Database",
-                 description="Manual database backup created")
+                 description=("Manual partial backup created: " + ", ".join(groups)) if groups
+                 else "Manual database backup created")
         except Exception as exc:
             return Response({"detail": f"Backup failed: {exc}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({"detail": "Backup created successfully.", "log": out.getvalue()})
+
+    # ── groups the admin can choose from ──────────────────────────────────────
+    @action(detail=False, methods=["get"], url_path="groups")
+    def groups(self, request):
+        """GET /backup/groups/ — the selectable backup groups and what each one needs."""
+        from . import backup_groups
+
+        return Response(backup_groups.describe())
+
+    # ── what is in a backup (restore preview) ─────────────────────────────────
+    @action(detail=False, methods=["post"], url_path="inspect")
+    def inspect_backup(self, request):
+        """POST /backup/inspect/ — body: ``file`` upload or ``filename`` of a stored backup.
+
+        Returns ``{kind, groups: [{key,label}], missing_links: {...}}`` without changing
+        anything, so the restore screen can show what a file contains before restoring.
+        """
+        import io
+        import zipfile
+
+        from . import backup_groups
+        from .backup_restore import is_zip_content, read_manifest
+
+        uploaded = request.FILES.get("file")
+        stored = (request.data.get("filename") or "").strip()
+        if uploaded:
+            raw = uploaded.read()
+        elif stored:
+            if (".." in stored or not stored.startswith("scdms_backup_")
+                    or not (stored.endswith(".zip") or stored.endswith(".json"))):
+                return Response({"detail": "Invalid filename."}, status=status.HTTP_400_BAD_REQUEST)
+            path = _os.path.join(_BACKUP_DIR, stored)
+            if not _os.path.isfile(path):
+                return Response({"detail": "Backup file not found."}, status=status.HTTP_404_NOT_FOUND)
+            with open(path, "rb") as fh:
+                raw = fh.read()
+        else:
+            return Response({"detail": "Provide 'file' upload or 'filename'."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        manifest = {"kind": "full", "groups": []}
+        if is_zip_content(raw):
+            try:
+                with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                    manifest = read_manifest(zf)
+            except zipfile.BadZipFile:
+                return Response({"detail": "Not a valid backup zip."}, status=status.HTTP_400_BAD_REQUEST)
+        keys = manifest["groups"]
+        return Response({
+            "kind": manifest["kind"],
+            "groups": [{"key": k, "label": backup_groups.GROUPS[k]["label"]} for k in keys],
+            "missing_links": {
+                k: [backup_groups.GROUPS[d]["label"] for d in gone]
+                for k, gone in backup_groups.linked_but_missing(keys).items()
+            } if keys else {},
+        })
 
     # ── download ──────────────────────────────────────────────────────────────
     @action(detail=False, methods=["get"], url_path="download")
@@ -12019,6 +12110,15 @@ class BackupViewSet(viewsets.ViewSet):
         else:
             fixture_raw = raw
 
+        partial_labels: list[str] = []
+        if zip_ref is not None:
+            from . import backup_groups
+            from .backup_restore import read_manifest
+
+            _manifest = read_manifest(zip_ref)
+            if _manifest["kind"] == "partial":
+                partial_labels = [backup_groups.GROUPS[k]["label"] for k in _manifest["groups"]]
+
         try:
             rows = json.loads(fixture_raw.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
@@ -12067,10 +12167,14 @@ class BackupViewSet(viewsets.ViewSet):
             _log(request, _AL.Action.RESTORE,
                  resource_type="Database", resource_label=restore_name,
                  description=f"Database restored from backup: {restore_name} "
-                             f"({len(media_members)} media file(s))")
+                             f"({len(media_members)} media file(s))"
+                             + (f" — partial: {', '.join(partial_labels)}" if partial_labels else ""))
             detail = "Database restored successfully."
             if media_members:
                 detail = f"Database and {len(media_members)} media file(s) restored successfully."
+            if partial_labels:
+                detail = (f"Partial restore complete: {', '.join(partial_labels)}. Only the rows "
+                          "in those groups were replaced; everything else was left as it was.")
             return Response({"detail": detail})
         except Exception:
             _security_log.exception(

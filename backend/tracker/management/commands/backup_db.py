@@ -14,6 +14,7 @@ Usage:
     python manage.py backup_db --dir /tmp/mybackups
 """
 
+import json
 import os
 import zipfile
 from datetime import datetime
@@ -21,7 +22,7 @@ from io import StringIO
 
 from django.conf import settings
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 BACKUP_DIR = os.getenv("BACKUP_DIR", "/var/backups/scdms")
 
@@ -45,41 +46,82 @@ class Command(BaseCommand):
             default=BACKUP_DIR,
             help="Directory to write the backup file (default: BACKUP_DIR env var).",
         )
+        parser.add_argument(
+            "--groups",
+            default="",
+            help="Comma-separated backup group keys (see tracker.backup_groups) for a "
+                 "partial backup. Groups the selection requires are added automatically. "
+                 "Omit for a full backup.",
+        )
 
     def handle(self, *args, **options):
         backup_dir = options["dir"]
         os.makedirs(backup_dir, exist_ok=True)
 
+        from tracker import backup_groups
+
+        backup_groups.load_all_models()  # the CLI skips ready()'s model imports
+
+        requested = [g.strip() for g in (options.get("groups") or "").split(",") if g.strip()]
+        unknown = [g for g in requested if g not in backup_groups.GROUPS]
+        if unknown:
+            raise CommandError(f"Unknown backup group(s): {', '.join(unknown)}")
+        partial = bool(requested)
+        groups = backup_groups.required_closure(requested) if partial else []
+
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"scdms_backup_{ts}.zip"
+        filename = f"scdms_backup_{'partial_' if partial else ''}{ts}.zip"
         filepath = os.path.join(backup_dir, filename)
 
         self.stdout.write(f"Creating backup: {filepath}")
+        if partial:
+            self.stdout.write(f"  Groups: {', '.join(groups)}")
 
         buf = StringIO()
-        call_command(
-            "dumpdata",
-            "--all",  # base managers — include soft-archived rows (e.g. archived documents)
-            "--natural-foreign",
-            "--natural-primary",
-            "--indent=2",
-            *[f"--exclude={e}" for e in _EXCLUDE],
-            stdout=buf,
-            stderr=self.stderr,
-        )
+        if partial:
+            call_command(
+                "dumpdata",
+                *backup_groups.model_labels(groups),
+                "--all",
+                "--natural-foreign",
+                "--natural-primary",
+                "--indent=2",
+                stdout=buf,
+                stderr=self.stderr,
+            )
+        else:
+            call_command(
+                "dumpdata",
+                "--all",  # base managers — include soft-archived rows (e.g. archived documents)
+                "--natural-foreign",
+                "--natural-primary",
+                "--indent=2",
+                *[f"--exclude={e}" for e in _EXCLUDE],
+                stdout=buf,
+                stderr=self.stderr,
+            )
         data = buf.getvalue()
 
         media_root = getattr(settings, "MEDIA_ROOT", "") or ""
         media_files = []
         if media_root and os.path.isdir(media_root):
+            wanted = backup_groups.media_paths(groups) if partial else None
             for root, _dirs, files in os.walk(media_root):
                 for fn in files:
                     abs_path = os.path.join(root, fn)
                     rel_path = os.path.relpath(abs_path, media_root)
+                    if wanted is not None and rel_path.replace(os.sep, "/") not in wanted:
+                        continue
                     media_files.append((abs_path, rel_path))
 
+        manifest = {
+            "kind": "partial" if partial else "full",
+            "groups": groups,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
         with zipfile.ZipFile(filepath, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("data.json", data)
+            zf.writestr("manifest.json", json.dumps(manifest, indent=2))
             for abs_path, rel_path in media_files:
                 zf.write(abs_path, arcname=os.path.join("media", rel_path))
 

@@ -5,6 +5,7 @@
  * (API Keys, System Config, Security, and Backup & Restore use separate sidebar routes.)
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import BackupGroupPicker, { effectiveGroups } from '../../components/admin/BackupGroupPicker'
 import SharedModal from '../../components/shared/Modal'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -2510,6 +2511,9 @@ export function BackupTab() {
   const [error, setError] = useState('')
   const [confirmRestore, setConfirmRestore] = useState(null)
   const [restoreFile, setRestoreFile] = useState(null)
+  const [backupGroups, setBackupGroups] = useState([])
+  const [chosenGroups, setChosenGroups] = useState([])
+  const [restorePreview, setRestorePreview] = useState(null)
   const [schedulePreset, setSchedulePreset] = useState('')
   const [customCron, setCustomCron] = useState('')
   const [retentionDays, setRetentionDays] = useState('30')
@@ -2542,6 +2546,32 @@ export function BackupTab() {
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  // The selectable backup groups; everything is ticked by default (= a full backup).
+  useEffect(() => {
+    api.get('/backup/groups/').then(r => {
+      setBackupGroups(r.data)
+      setChosenGroups(r.data.map(g => g.key))
+    }).catch(() => { /* manual backup still works as a full backup */ })
+  }, [])
+
+  // What a backup contains, shown in the restore confirmation before anything is restored.
+  useEffect(() => {
+    if (!confirmRestore) { setRestorePreview(null); return }
+    setRestorePreview(null)
+    let cancelled = false
+    let req
+    if (confirmRestore === '__upload__') {
+      if (!restoreFile) return
+      const fd = new FormData()
+      fd.append('file', restoreFile)
+      req = api.post('/backup/inspect/', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    } else {
+      req = api.post('/backup/inspect/', { filename: confirmRestore })
+    }
+    req.then(r => { if (!cancelled) setRestorePreview(r.data) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [confirmRestore, restoreFile])
 
   // Landed back here after the Google consent redirect — see
   // BackupViewSet.cloud_callback, which appends ?gdrive=connected|error.
@@ -2649,9 +2679,12 @@ export function BackupTab() {
     setSuccess('')
     setError('')
     try {
-      await api.post('/backup/')
-      setSuccess('Backup created successfully.')
-      toast.success('Backup created successfully.')
+      const everything = backupGroups.length === 0
+        || effectiveGroups(backupGroups, chosenGroups).length === backupGroups.length
+      await api.post('/backup/', everything ? {} : { groups: chosenGroups })
+      const what = everything ? 'Backup created successfully.' : 'Partial backup created successfully.'
+      setSuccess(what)
+      toast.success(what)
       await fetchAll()
     } catch (err) {
       const msg = err.response?.data?.detail ?? 'Backup failed.'
@@ -2774,26 +2807,36 @@ export function BackupTab() {
       <ErrorBanner error={error} />
 
       {/* ── Run backup now ── */}
-      <div className="card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Archive size={18} className="text-primary-500" />
-            <h3 className="font-semibold text-slate-800 dark:text-slate-200">Manual Backup</h3>
+      <div className="card p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Archive size={18} className="text-primary-500" />
+              <h3 className="font-semibold text-slate-800 dark:text-slate-200">Manual Backup</h3>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Choose what to back up and create the file right now. It can be downloaded and
+              stored off-site. Scheduled backups always cover everything.
+            </p>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Create a complete snapshot of all application data right now.
-            The file can be downloaded and stored off-site.
-          </p>
+          <button
+            type="button"
+            onClick={runBackup}
+            disabled={backingUp || (backupGroups.length > 0 && chosenGroups.length === 0)}
+            className="btn-gradient py-2.5 px-5 text-sm whitespace-nowrap inline-flex items-center gap-2 disabled:opacity-60"
+          >
+            {backingUp ? <RefreshCw size={15} className="animate-spin" /> : <Archive size={15} />}
+            {backingUp ? 'Creating backup…' : 'Run Backup Now'}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={runBackup}
-          disabled={backingUp}
-          className="btn-gradient py-2.5 px-5 text-sm whitespace-nowrap inline-flex items-center gap-2 disabled:opacity-60"
-        >
-          {backingUp ? <RefreshCw size={15} className="animate-spin" /> : <Archive size={15} />}
-          {backingUp ? 'Creating backup…' : 'Run Backup Now'}
-        </button>
+        {backupGroups.length > 0 && (
+          <BackupGroupPicker
+            groups={backupGroups}
+            chosen={chosenGroups}
+            onChange={setChosenGroups}
+            disabled={backingUp}
+          />
+        )}
       </div>
 
       {/* ── Scheduled backups ── */}
@@ -3073,6 +3116,11 @@ export function BackupTab() {
               <div key={b.filename} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-300 font-mono truncate">{b.filename}</p>
+                  {b.kind === 'partial' && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                      Partial: {b.groups.map(k => backupGroups.find(g => g.key === k)?.label ?? k).join(', ')}
+                    </p>
+                  )}
                   <p className="text-xs text-slate-400 mt-0.5">
                     {new Date(b.created_at).toLocaleString()} · {formatBytes(b.size_kb)}
                   </p>
@@ -3141,9 +3189,31 @@ export function BackupTab() {
               <p className="font-mono text-sm bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-lg break-all">
                 {confirmRestore === '__upload__' ? restoreFile?.name : confirmRestore}
               </p>
-              <p className="text-sm text-red-600 dark:text-red-400 font-medium">
-                ⚠ All current data will be overwritten. This cannot be undone.
-              </p>
+              {restorePreview?.kind === 'partial' ? (
+                <div className="space-y-2 text-sm">
+                  <p className="font-medium text-slate-800 dark:text-slate-100">
+                    This is a partial backup. It contains:
+                  </p>
+                  <ul className="list-disc pl-5 text-slate-700 dark:text-slate-300">
+                    {restorePreview.groups.map(g => <li key={g.key}>{g.label}</li>)}
+                  </ul>
+                  <p className="text-red-600 dark:text-red-400 font-medium">
+                    ⚠ Only the records in these groups are replaced with the backup's version.
+                    Everything else is left as it is. This cannot be undone.
+                  </p>
+                  {Object.keys(restorePreview.missing_links || {}).length > 0 && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Some of these records also link to data that is not in the file
+                      ({[...new Set(Object.values(restorePreview.missing_links).flat())].join(', ')}).
+                      That is fine on this system as long as that data is still here.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                  ⚠ All current data will be overwritten. This cannot be undone.
+                </p>
+              )}
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
