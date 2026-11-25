@@ -69,6 +69,8 @@ Output valid JSON only:
 Severity: high (likely block or return), medium (fix before submit), low (informational).
 Categories: salary_ceiling, precedent, documentation, policy, other.
 Use the historical decision register excerpt — do not invent cases not listed.
+Do NOT comment on missing documents, placeholder or blank form text, or DG signatures: a separate
+package check covers those. Stick to salary and grade, precedent, and PSC policy.
 If data is insufficient, say so in a low-severity observation and set confidence_score around 50-65."""
 
 
@@ -349,20 +351,35 @@ def run_policy_guardrail_scan(
     }
 
 
-def persist_policy_guardrail(submission: Submission, result: dict[str, Any]) -> None:
-    submission.ai_policy_observations = result.get("observations") or []
-    score = result.get("confidence_score")
-    submission.ai_policy_confidence = int(score) if score is not None else None
-    submission.ai_policy_summary = str(result.get("summary") or "")[:2000]
-    submission.ai_policy_processed = True
-    submission.ai_policy_generated_at = timezone.now()
-    submission.save(
-        update_fields=[
-            "ai_policy_observations",
-            "ai_policy_confidence",
-            "ai_policy_summary",
-            "ai_policy_processed",
-            "ai_policy_generated_at",
-            "updated_at",
-        ]
-    )
+def _observation_to_gap(o: dict[str, str]) -> dict[str, str]:
+    """Policy findings are advice: they show in the package check but never block a submit."""
+    message = o.get("message", "")
+    evidence = o.get("evidence", "")
+    if evidence:
+        message = f"{message} ({evidence})"
+    return {
+        "severity": "info" if o.get("severity") == "low" else "warning",
+        "category": "policy",
+        "message": message[:500],
+    }
+
+
+def policy_gaps(submission: Submission, *, use_ai: bool = True) -> list[dict[str, str]]:
+    """Salary, grade and precedent findings, shaped as package-validation gaps.
+
+    Always warning or info, never critical, so they cannot stop a paper going to PSC. Missing
+    documents and placeholder text are the package check's job, so those are dropped here,
+    as is the low-value "no precedent on file" note that every new ministry would get.
+    """
+    if not policy_guardrail_applies(submission):
+        return []
+    if use_ai:
+        observations = run_policy_guardrail_scan(submission).get("observations") or []
+    else:
+        observations = _rule_based_observations(submission)
+    return [
+        _observation_to_gap(o)
+        for o in observations
+        if o.get("category") != "documentation"
+        and not (o.get("category") == "precedent" and o.get("severity") == "low")
+    ]

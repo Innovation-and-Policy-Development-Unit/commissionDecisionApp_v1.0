@@ -55,8 +55,6 @@ def _findings_block(submission) -> str:
             f"Recommended outcome: {submission.ai_outcome_recommendation} "
             f"({submission.ai_outcome_confidence}% confidence). {(submission.ai_outcome_rationale or '')[:800]}"
         )
-    if submission.ai_policy_processed and submission.ai_policy_summary:
-        lines.append(f"Policy observations: {submission.ai_policy_summary[:800]}")
     return "\n".join(lines) or "(no earlier AI findings on file)"
 
 
