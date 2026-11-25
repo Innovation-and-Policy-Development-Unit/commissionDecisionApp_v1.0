@@ -25,6 +25,7 @@ export default function SubmissionPackageValidation({
   submission,
   submissionId,
   onUpdated,
+  onValidated,
 }) {
   const { t } = useTranslation()
   const [validating, setValidating] = useState(false)
@@ -68,6 +69,7 @@ export default function SubmissionPackageValidation({
           clearInterval(interval)
           setValidating(false)
           setPollTimedOut(false)
+          onValidated?.()
         }
       } catch {
         /* ignore */
@@ -75,7 +77,7 @@ export default function SubmissionPackageValidation({
     }, POLL_MS)
 
     return () => clearInterval(interval)
-  }, [submissionId, canValidate, hasResult, validating, onUpdated])
+  }, [submissionId, canValidate, hasResult, validating, onUpdated, onValidated])
 
   if (!canValidate) return null
 
@@ -92,6 +94,10 @@ export default function SubmissionPackageValidation({
         /* polling effect continues */
         return
       }
+      // Finished already (the rule-based path answers inline): the Actions panel's
+      // Submit button depends on this result, so refresh it.
+      setValidating(false)
+      onValidated?.()
     } catch (err) {
       setLocalError(formatApiError(err, t('submission.package_validate_failed')))
       setValidating(false)
