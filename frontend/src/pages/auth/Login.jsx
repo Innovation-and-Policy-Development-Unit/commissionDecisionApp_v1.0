@@ -438,9 +438,8 @@ export default function Login() {
               </>
             ) : !show2FA ? (
               <>
-                <div className="mb-7">
-                  <h1 className="text-xl font-bold leading-snug text-slate-900 mb-1 tracking-tight">Submission &amp; Commission Decision Management System</h1>
-                  <p className="text-sm text-slate-500">Sign in to your SCDMS account to continue.</p>
+                <div className="mb-7 text-center">
+                  <h1 className="text-xl font-bold leading-snug text-slate-900 tracking-tight">Submission &amp; Commission Decision Management System</h1>
                 </div>
 
                 {error && (
