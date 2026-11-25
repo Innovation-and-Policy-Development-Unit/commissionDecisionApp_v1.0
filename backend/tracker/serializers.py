@@ -1970,7 +1970,8 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = (
-            "id", "body", "is_internal", "parent",
+            "id", "body", "is_internal", "parent", "field_key",
+            "resolved_at", "resolved_by_name",
             "author", "author_username", "author_name", "author_role_label", "author_picture",
             "is_author", "can_moderate",
             "edited_at", "edit_count", "is_deleted", "reply_count",
@@ -1978,8 +1979,14 @@ class CommentSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id", "author", "edited_at", "edit_count",
-            "is_deleted", "created_at", "updated_at",
+            "is_deleted", "created_at", "updated_at", "field_key", "resolved_at",
         )
+
+    resolved_by_name = serializers.SerializerMethodField()
+
+    def get_resolved_by_name(self, obj):
+        u = obj.resolved_by
+        return (u.get_full_name() or u.username) if u else ""
 
     def _profile(self, user):
         return getattr(user, "psc_profile", None)

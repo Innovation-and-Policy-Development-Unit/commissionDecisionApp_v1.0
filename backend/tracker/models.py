@@ -4265,6 +4265,23 @@ class Comment(models.Model):
         help_text="If true, only PSC staff can see this comment (ministry firewall).",
     )
 
+    # ── Field-level review comments ───────────────────────────────────────────
+    # A reviewer (e.g. a Compliance Principal) can attach a comment to one field of
+    # the digitized form. Blank = a whole-submission comment, as before. Replies
+    # inherit the field_key of the comment they answer.
+    field_key = models.CharField(
+        max_length=100, blank=True, default="", db_index=True,
+        help_text="PSCFormField.field_key this comment is about; blank = whole submission.",
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="comments_resolved",
+    )
+
     # ── Evidentiary fields (official record) ──────────────────────────────────
     edited_at = models.DateTimeField(null=True, blank=True)
     edit_count = models.PositiveIntegerField(default=0)

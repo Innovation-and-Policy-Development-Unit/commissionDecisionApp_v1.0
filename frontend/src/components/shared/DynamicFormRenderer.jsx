@@ -35,6 +35,8 @@ export default function DynamicFormRenderer({
   /** { [field_key]: string } — per-field validation messages */
   errors = {},
   className = 'space-y-4',
+  /** (field) => node — rendered under each field row (e.g. review comments) */
+  renderFieldExtra,
   'aria-label': ariaLabel = 'Form fields',
 }) {
   const loadingSet = useMemo(
@@ -49,15 +51,17 @@ export default function DynamicFormRenderer({
   return (
     <div className={className} role="group" aria-label={ariaLabel}>
       {fields.map(field => (
-        <FieldRow
-          key={field.id}
-          field={field}
-          value={values[field.field_key]}
-          error={errors[field.field_key]}
-          loading={loadingSet.has(field.field_key)}
-          onChange={v => handle(field.field_key, v)}
-          readOnly={readOnly}
-        />
+        <div key={field.id}>
+          <FieldRow
+            field={field}
+            value={values[field.field_key]}
+            error={errors[field.field_key]}
+            loading={loadingSet.has(field.field_key)}
+            onChange={v => handle(field.field_key, v)}
+            readOnly={readOnly}
+          />
+          {renderFieldExtra && field.field_type !== 'section_header' ? renderFieldExtra(field) : null}
+        </div>
       ))}
     </div>
   )

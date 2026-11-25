@@ -65,7 +65,8 @@ import WorkflowActionsPanel from '../../components/submissions/WorkflowActionsPa
 import CarryoverBanner from '../../components/submissions/CarryoverBanner'
 import { canShowOduChecklist, canShowBoardPaper, submissionUsesOduRestructureChecklist } from '../../utils/oduChecklist'
 import { canShowIpduBoardPaper } from '../../utils/ipduBoardPaper'
-import { isComplianceFormCode, isComplianceRole } from '../../constants/compliance'
+import { isComplianceFormCode, isComplianceRole, COMPLIANCE_STAFF_ROLES } from '../../constants/compliance'
+import { useFieldComments, FieldCommentBox } from '../../components/submissions/FieldComments'
 import { formatApiError } from '../../utils/apiError'
 import { PageSkeleton } from '../../components/shared/Skeleton'
 import { queryClient } from '../../api/queryClient'
@@ -317,6 +318,19 @@ export default function SubmissionDetail() {
     && isComplianceFormCode(submission?.form_type_code)
     && (submission?.logged_by === user?.username || submission?.active_draft_delegate?.username === user?.username)
   const canEditDigitizedForm = canEditForm37 || canEditComplianceForm
+  // Field-level review comments (Compliance chain): the Principal/Manager comments on
+  // a field once the paper has left the drafting stage; the drafting Senior sees them
+  // under each field and replies. The server enforces who may post.
+  const fieldCommentsOn = Boolean(user) && isComplianceFormCode(submission?.form_type_code)
+    && COMPLIANCE_STAFF_ROLES.includes(user.role)
+  const fieldComments = useFieldComments(id, {
+    enabled: fieldCommentsOn,
+    canStart: fieldCommentsOn && !isDraftLikeStage && user?.role !== 'compliance_senior',
+    canReply: fieldCommentsOn,
+  })
+  const renderFieldComments = fieldCommentsOn
+    ? field => <FieldCommentBox field={field} ctrl={fieldComments} />
+    : undefined
   // PSC 2-1 / PSC 2-2 / ORG-3.1 are ministry-authored — once it reaches ODU
   // or general OPSC staff, they review it read-only (single-page PSCForm21View/
   // PSCForm22View, not the editable multi-page wizard). Only the originating
@@ -1661,6 +1675,12 @@ const stageDescriptions = {
                 )}
               </div>
 
+              {fieldCommentsOn && fieldComments.openCount > 0 && (
+                <p className="mx-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" role="status">
+                  {fieldComments.openCount} open review comment{fieldComments.openCount > 1 ? 's' : ''} on this form — look for the amber tags under the fields.
+                </p>
+              )}
+
               {/* Split layout when preview is active */}
               <div className={showPreview && submission?.form_type_code === 'PSC 2-2'
                 ? 'grid grid-cols-1 xl:grid-cols-2 gap-4 items-start'
@@ -1724,6 +1744,7 @@ const stageDescriptions = {
                         values={dynamicForm}
                         onChange={setDynamicForm}
                         readOnly={false}
+                        renderFieldExtra={renderFieldComments}
                         saving={dynamicFormBusy}
                         onSave={async () => {
                           setDynamicFormBusy(true)
@@ -1759,6 +1780,7 @@ const stageDescriptions = {
                           fields={dynamicFormFields}
                           values={dynamicForm}
                           readOnly
+                          renderFieldExtra={renderFieldComments}
                         />
                       </div>
                     )
