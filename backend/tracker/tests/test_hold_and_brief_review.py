@@ -5,6 +5,9 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from datetime import timedelta
+from unittest import mock
+
 from .. import brief_review
 from ..models import (
     FormCategory, Ministry, PSCFormType, Profile, Role, Submission,
@@ -179,6 +182,49 @@ class BriefReviewTests(TestCase):
                                      "ai_brief_processed", "ai_brief_summary"])
         resp = self._submit_to_manager()
         self.assertFalse(resp.json().get("brief_review_required"), resp.content)
+
+    # ── a brief that is still being written ──────────────────────────────────
+    def _brief_generating(self):
+        self.sub.ai_brief_processed = False
+        self.sub.ai_brief_summary = ""
+        self.sub.save(update_fields=["ai_brief_processed", "ai_brief_summary"])
+
+    def test_brief_still_generating_blocks_hand_back(self):
+        self._brief_generating()
+        with mock.patch("tracker.ai.claude_client.ai_enabled", return_value=True):
+            resp = self._submit_to_manager()
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertTrue(resp.json().get("brief_review_required"), resp.content)
+        self.assertIn("still being prepared", resp.json()["detail"])
+
+    def test_brief_still_generating_blocks_manager_forwarding(self):
+        self._brief_generating()
+        self.client.force_authenticate(user=self.manager)
+        with mock.patch("tracker.ai.claude_client.ai_enabled", return_value=True):
+            resp = self.client.post(
+                f"/api/submissions/{self.sub.id}/transition/",
+                {"new_stage": WorkflowStage.PENDING_SECRETARY_APPROVAL}, format="json")
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertIn("still being prepared", resp.json()["detail"])
+
+    def test_generating_brief_released_after_grace_period(self):
+        self._brief_generating()
+        Submission.objects.filter(pk=self.sub.pk).update(
+            updated_at=timezone.now() - brief_review.GENERATION_GRACE - timedelta(minutes=1))
+        self.sub.refresh_from_db()
+        with mock.patch("tracker.ai.claude_client.ai_enabled", return_value=True):
+            self.assertFalse(brief_review.brief_generation_pending(self.sub))
+            self.assertEqual(brief_review.blocker(self.sub), "")
+
+    def test_nothing_pending_when_ai_is_off(self):
+        self._brief_generating()
+        with mock.patch("tracker.ai.claude_client.ai_enabled", return_value=False):
+            self.assertFalse(brief_review.brief_generation_pending(self.sub))
+            self.assertEqual(brief_review.blocker(self.sub), "")
+
+    def test_finished_brief_is_not_pending_generation(self):
+        with mock.patch("tracker.ai.claude_client.ai_enabled", return_value=True):
+            self.assertFalse(brief_review.brief_generation_pending(self.sub))
 
     def test_regenerating_clears_the_sign_off(self):
         self._review(self.officer)
