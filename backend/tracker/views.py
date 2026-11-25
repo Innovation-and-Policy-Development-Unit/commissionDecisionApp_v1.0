@@ -3259,50 +3259,6 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             status=status.HTTP_202_ACCEPTED,
         )
 
-    @action(detail=True, methods=["post"], url_path="scan-policy")
-    def scan_policy(self, request, pk=None):
-        """A6 — queue pre-submit policy guardrail scan (Sonnet + decision register)."""
-        from .ai.policy_guardrail import policy_guardrail_applies
-        from .tasks import queue_submission_policy_guardrail
-
-        submission = self.get_object()
-        profile = _profile(request.user)
-        _submit_roles = {
-            Role.MINISTRY_HR,
-            Role.DEPT_ADMIN,
-            Role.HEAD_OF_AGENCY,
-            Role.PSC_OFFICER,
-            Role.PSC_ADMIN,
-            Role.PSC_SECRETARY,
-            Role.SENIOR_ADMIN_OFFICER,
-        }
-        if profile.role not in _submit_roles and not request.user.is_staff:
-            raise PermissionDenied("You do not have permission to run a policy scan.")
-
-        if submission.current_stage != WorkflowStage.DRAFT:
-            return Response(
-                {"detail": "Policy guardrail is only available while the submission is in Draft."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not policy_guardrail_applies(submission):
-            return Response(
-                {
-                    "detail": "Policy guardrail applies to salary, appointment, and related submission types.",
-                    "skipped": True,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        submission.ai_policy_processed = False
-        submission.save(update_fields=["ai_policy_processed", "updated_at"])
-        queue_submission_policy_guardrail(submission.id, force=True)
-        submission.refresh_from_db()
-        return Response(
-            SubmissionDetailSerializer(submission).data,
-            status=status.HTTP_202_ACCEPTED,
-        )
-
     @action(detail=True, methods=["post"], url_path="score-quality")
     def score_quality(self, request, pk=None):
         """Re-run AI submission quality score (compliance / unit review triage)."""
@@ -6030,15 +5986,6 @@ class SubmissionViewSet(viewsets.ModelViewSet):
              description=f"{resolved_form_type.name} form data "
                          f"{'created' if was_create else 'updated'} on {submission.reference_number}",
              extra_data={"form_response_id": resp.id})
-
-        if submission.current_stage == WorkflowStage.DRAFT:
-            from .ai.policy_guardrail import policy_guardrail_applies
-            from .tasks import queue_submission_policy_guardrail
-
-            if policy_guardrail_applies(submission):
-                submission.ai_policy_processed = False
-                submission.save(update_fields=["ai_policy_processed", "updated_at"])
-                queue_submission_policy_guardrail(submission.id, force=True)
 
         code = status.HTTP_200_OK if instance else status.HTTP_201_CREATED
         return Response(PSCFormResponseSerializer(resp).data, status=code)

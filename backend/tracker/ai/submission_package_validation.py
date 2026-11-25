@@ -64,7 +64,7 @@ def _normalize_gap(raw: Any) -> dict[str, str] | None:
     if severity not in ("critical", "warning", "info"):
         severity = "warning"
     category = str(raw.get("category") or "other").lower()
-    if category not in ("checklist", "form", "attachment", "endorsement", "other"):
+    if category not in ("checklist", "form", "attachment", "endorsement", "policy", "other"):
         category = "other"
     message = str(raw.get("message") or "").strip()
     if not message:
@@ -148,6 +148,17 @@ def _merge_gaps(*gap_lists: list[dict[str, str]]) -> list[dict[str, str]]:
     return out
 
 
+def _policy_gaps(submission: Submission, *, use_ai: bool) -> list[dict[str, str]]:
+    """Salary / precedent advice. Never allowed to break the validation itself."""
+    try:
+        from .policy_guardrail import policy_gaps
+
+        return policy_gaps(submission, use_ai=use_ai)
+    except Exception:  # noqa: BLE001 — advisory extra, the core check must still return
+        logger.exception("POLICY_GAPS_FAILED | submission %s", submission.pk)
+        return []
+
+
 def _compute_ready(gaps: list[dict[str, str]]) -> bool:
     return not any(g.get("severity") == "critical" for g in gaps)
 
@@ -159,7 +170,7 @@ def rule_based_result(submission: Submission) -> dict[str, Any]:
     when the AI feature is switched off or its key is missing — otherwise no ministry
     paper could be submitted at all.
     """
-    gaps = _rule_based_gaps(submission)
+    gaps = _merge_gaps(_rule_based_gaps(submission), _policy_gaps(submission, use_ai=False))
     ready = _compute_ready(gaps)
     return {
         "ready": ready,
@@ -178,6 +189,7 @@ def validate_package_from_context(
     rule_gaps = _rule_based_gaps(submission)
 
     if not ai_enabled():
+        rule_gaps = _merge_gaps(rule_gaps, _policy_gaps(submission, use_ai=False))
         ready = _compute_ready(rule_gaps)
         summary = (
             "Rule-based check only (GEMINI_API_KEY not configured). "
@@ -197,6 +209,7 @@ def validate_package_from_context(
         max_tokens=2048,
     )
     if not data or not isinstance(data, dict):
+        rule_gaps = _merge_gaps(rule_gaps, _policy_gaps(submission, use_ai=False))
         if rule_gaps:
             ready = _compute_ready(rule_gaps)
             return {
@@ -226,7 +239,7 @@ def validate_package_from_context(
             and "endorsement" not in g["message"].lower()
         ]
 
-    gaps = _merge_gaps(rule_gaps, ai_gaps)
+    gaps = _merge_gaps(rule_gaps, ai_gaps, _policy_gaps(submission, use_ai=True))
     ready = _compute_ready(gaps)
     if "ready" in data and not data.get("ready") and _compute_ready(gaps):
         pass

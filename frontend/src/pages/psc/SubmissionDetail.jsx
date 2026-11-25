@@ -9,8 +9,6 @@ import FlyingBriefPanel from '../../components/submissions/FlyingBriefPanel'
 import SubmissionPresenceBar from '../../components/submissions/SubmissionPresenceBar'
 import SubmissionActivity from '../../components/submissions/SubmissionActivity'
 import PrivateNotePanel from '../../components/submissions/PrivateNotePanel'
-import PolicyGuardrailDrawer from '../../components/submissions/PolicyGuardrailDrawer'
-import { policyGuardrailApplies } from '../../utils/policyGuardrail'
 import { useAgendaSections } from '../../hooks/useAgendaSections'
 import api, { isRateLimited } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
@@ -211,7 +209,6 @@ export default function SubmissionDetail() {
   const [dynamicFormFields, setDynamicFormFields] = useState([])
   const [dynamicFormBusy, setDynamicFormBusy] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
-  const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   // 'full' is the admin quick-edit (title/agenda section/notes/notify emails,
   // unchanged); 'limited' is what a draft's own creator gets — title and
@@ -384,8 +381,6 @@ export default function SubmissionDetail() {
   const showDeadlineDrafts = user && DEADLINE_DRAFT_ROLES.includes(user.role) && user.ai_enabled === true
   const showPackageValidation = user && PACKAGE_VALIDATE_ROLES.includes(user.role)
     && user.ai_package_validation_enabled !== false
-  const showPolicyGuardrail = user && ['ministry_hr', 'dept_admin', 'head_of_agency'].includes(user.role)
-    && policyGuardrailApplies(submission)
   const canExtractDocs = user && DOC_EXTRACT_ROLES.includes(user.role)
   const isOduOwnPaper = ODU_OWN_PAPER_CODES.includes(submission?.form_type_code)
     && !!user && ODU_AUTHOR_ROLES.includes(user.role)
@@ -494,10 +489,6 @@ export default function SubmissionDetail() {
       // Keep last good state during background refresh
     }
   }, [id])
-
-  useEffect(() => {
-    if (showPolicyGuardrail) setPolicyDrawerOpen(true)
-  }, [showPolicyGuardrail])
 
   useEffect(() => {
     let cancelled = false
@@ -1164,7 +1155,7 @@ const stageDescriptions = {
 
   return (
     <>
-    <div className={showPolicyGuardrail && policyDrawerOpen ? 'lg:mr-[28rem] transition-[margin] duration-300' : ''}>
+    <div>
       <PageHeader
         title={submission.reference_number}
         subtitle={submission.title}
@@ -1300,28 +1291,6 @@ const stageDescriptions = {
               : t('submission.readonly_hr', { defaultValue: 'Read-only: this submission has been submitted to PSC. You can edit it again if PSC returns it for clarification.' })}
           </span>
         </div>
-      )}
-
-      {showPolicyGuardrail && (
-        <>
-          <PolicyGuardrailDrawer
-            open={policyDrawerOpen}
-            onOpenChange={setPolicyDrawerOpen}
-            submission={submission}
-            submissionId={id}
-            onUpdated={setSubmission}
-          />
-          {!policyDrawerOpen && (
-            <BaseButton
-              variant="primary"
-              onClick={() => setPolicyDrawerOpen(true)}
-              icon={<span aria-hidden="true">🛡</span>}
-              className="!fixed !bottom-24 !right-6 !z-[68] !rounded-full"
-            >
-              AI policy scan
-            </BaseButton>
-          )}
-        </>
       )}
 
       {isComplianceSubmission && (
