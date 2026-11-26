@@ -245,7 +245,7 @@ function InternalDocumentUpload({ files, onChange }) {
       {files.length > 0 && (
         <ul className="space-y-2">
           {files.map((item, idx) => (
-            <li key={idx} className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2">
+            <li key={idx} className="card flex items-center gap-2 px-3 py-2">
               <span className="text-slate-400 text-sm shrink-0">📄</span>
               <BaseInput
                 hideLabel

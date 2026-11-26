@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, AlertCircle } from 'lucide-react'
 import { intelligenceApi } from '../../api/intelligence'
 import ExplorerChart from './ExplorerChart'
+import { Skeleton } from '../shared/Skeleton'
 
 /**
  * A single dashboard tile. Runs its own (RBAC-scoped) query against the
@@ -28,8 +29,9 @@ export default function DashboardTile({ tile, refreshKey = 0, onSelect }) {
   return (
     <div className="h-full min-h-[260px]">
       {loading ? (
-        <div className="h-full flex items-center justify-center text-slate-400">
-          <Loader2 size={18} className="animate-spin" />
+        <div className="h-full min-h-[260px] card p-4 flex flex-col gap-3">
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="flex-1 w-full rounded-lg" />
         </div>
       ) : error ? (
         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 px-4 text-center">

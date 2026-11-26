@@ -15,6 +15,7 @@ import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
 import PageHeader from '../../components/shared/PageHeader'
 import FlagTabs from '../../components/intelligence/FlagTabs'
+import { SkeletonRow } from '../../components/shared/Skeleton'
 
 const LEVELS = [
   { key: 'critical', label: 'Critical', Icon: AlertOctagon, cls: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300', dot: 'bg-red-500' },
@@ -168,7 +169,11 @@ export default function FlagMonitor() {
       {/* Table */}
       <div className="card p-0 overflow-hidden">
         {loading ? (
-          <div className="flex justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
+          <div>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonRow key={i} cols={5} />
+            ))}
+          </div>
         ) : data.flags.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400">
             <Flag size={28} className="mb-2 opacity-40" />

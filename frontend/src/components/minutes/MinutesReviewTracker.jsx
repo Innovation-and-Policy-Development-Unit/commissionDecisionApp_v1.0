@@ -80,7 +80,7 @@ export default function MinutesReviewTracker({ minutes, role, commentCount = 0 }
   }
 
   return (
-    <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+    <div className="card mt-3 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <p className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
           <Eye size={16} className="text-cyan-600" /> Who has read the draft minutes

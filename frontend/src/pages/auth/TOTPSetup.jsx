@@ -105,7 +105,7 @@ export default function TOTPSetup() {
       </div>
 
       <div className="flex-1 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="card max-w-md w-full shadow-xl overflow-hidden">
           <div className="p-8">
             <div className="flex justify-center mb-6">
               <div className="w-16 h-16 rounded-full bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center">

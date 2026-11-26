@@ -1961,7 +1961,7 @@ const stageDescriptions = {
                             </button>
                           )}
                           {versionsOpenFor === doc.id && (
-                            <ul className="mt-2 space-y-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2">
+                            <ul className="card mt-2 space-y-1 p-2">
                               {!versionsByDoc[doc.id] ? (
                                 <li className="text-[11px] text-slate-400 px-1">Loading…</li>
                               ) : versionsByDoc[doc.id].length === 0 ? (

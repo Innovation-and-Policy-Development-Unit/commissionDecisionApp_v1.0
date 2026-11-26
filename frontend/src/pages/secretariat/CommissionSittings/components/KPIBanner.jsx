@@ -12,7 +12,7 @@ export default function KPIBanner({ kpis }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       {stats.map(({ label, value, icon: Icon, color, bg }) => (
-        <div key={label} className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 flex items-start justify-between">
+        <div key={label} className="card p-5 flex items-start justify-between">
           <div>
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{label}</p>
             <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 tabular-nums leading-none">

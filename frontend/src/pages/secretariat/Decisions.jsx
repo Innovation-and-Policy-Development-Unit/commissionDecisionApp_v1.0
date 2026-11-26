@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, ShieldCheck, PenLine, ClipboardCheck, Hourglass, FileCheck2, Download,
 } from 'lucide-react'
 import api from '../../api/client'
+import { Skeleton } from '../../components/shared/Skeleton'
 
 const PER_PAGE = 15
 
@@ -317,12 +318,15 @@ export default function Decisions() {
             </thead>
             <tbody>
               {loading && !submissions.length ? (
-                <tr>
-                  <td colSpan={8} className="py-10 text-center text-slate-400">
-                    <RefreshCw size={20} aria-hidden="true" className="animate-spin mx-auto mb-2" />
-                    {t('secretariat.loading_decisions')}
-                  </td>
-                </tr>
+                <>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td colSpan={8} className="px-4 py-3">
+                        <Skeleton className="h-4 w-full" />
+                      </td>
+                    </tr>
+                  ))}
+                </>
               ) : paged.map(d => (
                 <tr key={d.id}>
                   <td className="font-mono text-xs font-semibold text-primary-600 dark:text-primary-400">{d.reference_number}</td>

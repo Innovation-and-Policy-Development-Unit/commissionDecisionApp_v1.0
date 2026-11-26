@@ -18,6 +18,7 @@ import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
+import { SkeletonCard } from '../../components/shared/Skeleton'
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const OPS = [
@@ -180,7 +181,7 @@ export default function IntelligenceReports() {
       />
 
       {loading ? (
-        <div className="flex justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
+        <SkeletonCard rows={5} />
       ) : reports.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-slate-400">
           <BellRing size={32} className="mb-3 opacity-40" />

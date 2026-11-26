@@ -16,6 +16,7 @@ import BaseButton from '../../components/shared/BaseButton'
 import BaseBadge from '../../components/shared/BaseBadge'
 import BaseSpinner from '../../components/shared/BaseSpinner'
 import { useToast } from '../../context/ToastContext'
+import { SkeletonRow } from '../../components/shared/Skeleton'
 
 const loadBadge = (weighted) => {
   if (weighted >= 20) return { color: 'danger', label: 'Overloaded' }
@@ -213,7 +214,11 @@ export default function WorkloadDashboard() {
           </label>
         </div>
         {loading ? (
-          <div className="text-center p-10"><BaseSpinner /></div>
+          <div>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonRow key={i} cols={5} />
+            ))}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">

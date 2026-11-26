@@ -9,6 +9,7 @@ import { formatApiError } from '../../utils/apiError'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseBadge from '../../components/shared/BaseBadge'
 import BaseSpinner from '../../components/shared/BaseSpinner'
+import { Skeleton } from '../../components/shared/Skeleton'
 
 export default function ArticleViewer() {
   const navigate = useNavigate()
@@ -50,7 +51,17 @@ export default function ArticleViewer() {
   }, [article])
 
   if (loading) {
-    return <div className="flex items-center justify-center h-96"><BaseSpinner size="lg" label="Loading article..." /></div>
+    return (
+      <div className="card p-6 space-y-3">
+        <Skeleton className="h-7 w-2/3" />
+        <Skeleton className="h-4 w-1/3" />
+        <div className="space-y-2 pt-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className={`h-3 ${i % 3 === 2 ? 'w-4/6' : 'w-full'}`} />
+          ))}
+        </div>
+      </div>
+    )
   }
 
   if (accessError) {

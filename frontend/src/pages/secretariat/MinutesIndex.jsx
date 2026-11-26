@@ -17,6 +17,7 @@ import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { userCanEditMinutes } from '../../utils/minutesAccess'
 import { normalizeListPayload } from '../../utils/listPayload'
+import { Skeleton } from '../../components/shared/Skeleton'
 
 const STATUS_META = {
   draft: {
@@ -216,12 +217,15 @@ export default function MinutesIndex() {
             </thead>
             <tbody>
               {loading && (
-                <tr>
-                  <td colSpan={6} className="py-10 text-center text-slate-400">
-                    <RefreshCw size={20} className="animate-spin mx-auto mb-2" aria-hidden="true" />
-                    {t('secretariat.minutes_loading')}
-                  </td>
-                </tr>
+                <>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td colSpan={6} className="px-4 py-3">
+                        <Skeleton className="h-4 w-full" />
+                      </td>
+                    </tr>
+                  ))}
+                </>
               )}
               {!loading && filtered.map(row => (
                 <tr key={row.id}>

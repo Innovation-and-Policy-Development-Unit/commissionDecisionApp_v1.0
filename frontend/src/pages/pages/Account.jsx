@@ -542,7 +542,7 @@ export default function Account() {
 
             {/* Preview */}
             {storedSig?.image_url && (
-              <div className="mb-4 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center" style={{ minHeight: 90 }}>
+              <div className="card mb-4 p-4 flex items-center justify-center" style={{ minHeight: 90 }}>
                 <img src={storedSig.image_url} alt="Your signature" className="max-h-16 max-w-full" />
               </div>
             )}

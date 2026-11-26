@@ -64,6 +64,27 @@
   --color-warning: 245 158 11;
   --color-danger: 239 68 68;
   --color-info: 6 182 212;
+
+  /* ── Motion tokens ──────────────────────────────────────────────────────────
+     One decelerating curve ("soft") for entrances, hover and lift, and one
+     symmetric curve ("soft-in") for state swaps. Exposed to Tailwind as
+     ease-soft / ease-soft-in and duration-fast / -base / -slow. Durations stay
+     short: fluid means settling quickly, not moving slowly. */
+  --ease-soft: cubic-bezier(.22, 1, .36, 1);
+  --ease-soft-in: cubic-bezier(.4, 0, .2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+
+  /* Page background behind cards — deep enough that a borderless white card
+     separates on shadow alone, plus a faint theme-tinted wash at the top of the
+     viewport. Swap these two values to retune. */
+  --app-bg: 233 237 246;
+  --app-wash: var(--p-200);
+
+  /* Default corner softness. The Appearance panel's "sharp" (0) and "round"
+     (1.7) settings override this on <html>. */
+  --radius-scale: 1.5;
 }
 
 .dark {
@@ -245,9 +266,24 @@
     scroll-behavior: smooth;
   }
 
+  /* Catches transitions declared in raw CSS and in third-party stylesheets
+     (TipTap, FullCalendar, Cropper), which carry no timing function of their own.
+     Tailwind's own `transition-*` utilities emit a timing function inline, so
+     those are handled by transitionTimingFunction.DEFAULT in the Tailwind config
+     instead — this rule cannot reach them. */
+  *,
+  *::before,
+  *::after {
+    transition-timing-function: var(--ease-soft);
+  }
+
   body,
   #root {
-    @apply bg-slate-100 text-slate-900 antialiased font-sans;
+    @apply text-slate-900 antialiased font-sans;
+    background-color: rgb(var(--app-bg));
+    background-image: radial-gradient(1100px 520px at 50% -15%, rgb(var(--app-wash) / 0.38), transparent 70%);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
     font-family: inherit;
     font-size: inherit;
     line-height: inherit;
@@ -465,7 +501,8 @@
 
   /* Card styles */
   .card {
-    @apply bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-card;
+    @apply bg-white dark:bg-slate-800 rounded-2xl border-0 dark:border dark:border-slate-700 shadow-card;
+    transition: box-shadow var(--dur-base) var(--ease-soft), transform var(--dur-base) var(--ease-soft), border-color var(--dur-base) var(--ease-soft);
   }
 
   /** Data-dense workflow screens (submissions, secretariat) */
@@ -474,7 +511,7 @@
   }
 
   .card-hover {
-    @apply card transition-all duration-200 hover:shadow-card-md hover:-translate-y-0.5;
+    @apply card hover:shadow-card-lg hover:-translate-y-1;
   }
 
   /* Glassmorphism */
@@ -501,7 +538,7 @@
 
   /* Nav link */
   .nav-link {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 font-medium text-sm transition-all duration-150 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100;
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 font-medium text-sm transition-all duration-base ease-soft active:scale-[0.99] hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100;
   }
 
   .nav-link.active {
@@ -539,11 +576,11 @@
 
   /* Button styles */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-fast ease-soft active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:hover:translate-y-0;
   }
 
   .btn-primary {
-    @apply btn bg-primary-600 hover:bg-primary-700 text-white focus:ring-primary-500 shadow-sm hover:shadow-md;
+    @apply btn bg-primary-600 hover:bg-primary-700 text-white focus:ring-primary-500 shadow-sm hover:shadow-lg hover:-translate-y-px;
   }
 
   .btn-secondary {
@@ -555,19 +592,19 @@
   }
 
   .btn-success {
-    @apply btn bg-emerald-500 hover:bg-emerald-600 text-white focus:ring-emerald-400 shadow-sm;
+    @apply btn bg-emerald-500 hover:bg-emerald-600 text-white focus:ring-emerald-400 shadow-sm hover:shadow-lg hover:-translate-y-px;
   }
 
   .btn-danger {
-    @apply btn bg-red-500 hover:bg-red-600 text-white focus:ring-red-400 shadow-sm;
+    @apply btn bg-red-500 hover:bg-red-600 text-white focus:ring-red-400 shadow-sm hover:shadow-lg hover:-translate-y-px;
   }
 
   .btn-warning {
-    @apply btn bg-amber-500 hover:bg-amber-600 text-white focus:ring-amber-400 shadow-sm;
+    @apply btn bg-amber-500 hover:bg-amber-600 text-white focus:ring-amber-400 shadow-sm hover:shadow-lg hover:-translate-y-px;
   }
 
   .btn-info {
-    @apply btn bg-cyan-500 hover:bg-cyan-600 text-white focus:ring-cyan-400 shadow-sm;
+    @apply btn bg-cyan-500 hover:bg-cyan-600 text-white focus:ring-cyan-400 shadow-sm hover:shadow-lg hover:-translate-y-px;
   }
 
   .btn-ghost {
@@ -593,7 +630,7 @@
   /* Input styles — slate-400 border in light mode for visible edges on white cards */
   .input,
   .form-input {
-    @apply w-full px-3.5 py-2.5 rounded-lg border border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500 text-sm shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary-500/35 focus:border-primary-600 dark:focus:border-primary-500;
+    @apply w-full px-3.5 py-2.5 rounded-xl border border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500 text-sm shadow-sm transition-all duration-base ease-soft focus:outline-none focus:ring-4 focus:ring-primary-500/20 focus:border-primary-600 dark:focus:border-primary-500;
   }
 
   textarea.form-input {
@@ -883,16 +920,16 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 .animate-slide-in-right {
-  animation: slideInRight 0.25s ease-out forwards;
+  animation: slideInRight var(--dur-slow) var(--ease-soft) forwards;
 }
 
 /* Confirm dialog scale-in */
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.92); }
-  to   { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 .animate-scale-in {
-  animation: scaleIn 0.18s ease-out forwards;
+  animation: scaleIn var(--dur-base) var(--ease-soft) forwards;
 }
 
 /* Fade-in (backdrop) */
@@ -901,7 +938,7 @@
   to   { opacity: 1; }
 }
 .animate-fade-in {
-  animation: fadeIn 0.2s ease-out forwards;
+  animation: fadeIn var(--dur-base) var(--ease-soft) forwards;
 }
 
 /* AI async processing indicator (Claude / Celery) */
@@ -1049,6 +1086,14 @@
 html:not(.dark) .text-slate-400 { color: #64748b; }
 html:not(.dark) .placeholder-slate-400::placeholder { color: #64748b; }
 
+/* Cards are borderless in light mode now, so the ~98 hand-rolled inner sections
+   and recessed panels that draw their own `border-slate-200` would read as hard
+   edges beside them. Softening the colour in one place keeps those panels
+   legible without converting each to .card — most of them are not cards: they
+   are sections inside one, or deliberately recessed. Delete this rule to get the
+   hard edge back. */
+html:not(.dark) .border-slate-200 { border-color: #ebeff6; }
+
 /* Respect the OS "reduce motion" setting (WCAG 2.3.3). Spinners keep turning
    slowly so loading is still visible; everything else stops. */
 @media (prefers-reduced-motion: reduce) {
@@ -1090,11 +1135,11 @@ html[data-density="compact"] .btn-sm { padding-top: 0.15rem; padding-bottom: 0.1
    for reduced motion (block at the end). Not used on tables or forms. */
 
 @keyframes fx-fade-up {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 /* Dashboard panels rise one after another, ~60 ms apart. */
-.fx-stagger > * { animation: fx-fade-up 350ms cubic-bezier(.22,1,.36,1) backwards; }
+.fx-stagger > * { animation: fx-fade-up 350ms var(--ease-soft) backwards; }
 .fx-stagger > *:nth-child(1) { animation-delay: 0ms; }
 .fx-stagger > *:nth-child(2) { animation-delay: 60ms; }
 .fx-stagger > *:nth-child(3) { animation-delay: 120ms; }
@@ -1117,7 +1162,7 @@ html[data-density="compact"] .btn-sm { padding-top: 0.15rem; padding-bottom: 0.1
   60%  { opacity: 1; transform: scale(0.97) rotate(-2deg); }
   100% { opacity: 1; transform: scale(1) rotate(-2deg); }
 }
-.fx-stamp { animation: fx-stamp 380ms cubic-bezier(.22,1,.36,1) both; }
+.fx-stamp { animation: fx-stamp 380ms var(--ease-soft) both; }
 
 /* Sign-in page */
 @keyframes fx-shake {
@@ -1171,6 +1216,60 @@ html[data-density="compact"] .btn-sm { padding-top: 0.15rem; padding-bottom: 0.1
 
 @keyframes fx-check-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
 .fx-check-path { stroke-dasharray: 24; animation: fx-check-draw 320ms ease-out 1 both; }
+
+/* ── Route transitions ─────────────────────────────────────────────────────────
+   On a route change the page region cross-fades and rises a little while the
+   sidebar, header and banners stay put. Opted into per navigation with React
+   Router's `viewTransition` prop on the main NavLinks; browsers without the
+   View Transitions API just swap the content as before, with no fallback needed.
+   The region is named on the wrapper around <Outlet /> in Layout.jsx. */
+.fx-page { view-transition-name: page; }
+
+@keyframes fx-page-out { to   { opacity: 0; transform: translateY(-6px); } }
+@keyframes fx-page-in  { from { opacity: 0; transform: translateY(8px); } }
+
+::view-transition-old(page) { animation: fx-page-out 140ms var(--ease-soft-in) both; }
+::view-transition-new(page) { animation: fx-page-in var(--dur-base) var(--ease-soft) both; }
+
+/* The sidebar's active indicator. Exactly one of these is rendered — Sidebar.jsx
+   picks a single winner, because a duplicated view-transition-name would make
+   the browser skip every transition on the page. It sits behind the label inside
+   the link's own stacking context (the link carries `relative isolate`), and the
+   browser morphs it between the old and new position, so it slides between nav
+   rows instead of the background snapping. */
+.fx-nav-pill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background-color: rgb(var(--p-50));
+  view-transition-name: nav-pill;
+}
+.dark .fx-nav-pill { background-color: rgb(var(--p-900) / 0.3); }
+
+/* Only the morph is wanted; both snapshots are the same flat colour, so their
+   default cross-fade is invisible and just needs to match the slide's timing. */
+::view-transition-group(nav-pill) {
+  animation-duration: var(--dur-base);
+  animation-timing-function: var(--ease-soft);
+}
+
+/* Everything outside the page region is identical between routes, so suppress
+   the default root cross-fade instead of double-animating the same pixels. */
+::view-transition-old(root),
+::view-transition-new(root) { animation: none; }
+
+/* The blanket reduced-motion rule below uses `*`, which does not match
+   ::view-transition-* pseudo-elements, so they are switched off explicitly. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(page),
+  ::view-transition-new(page),
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-group(nav-pill),
+  ::view-transition-old(nav-pill),
+  ::view-transition-new(nav-pill) { animation: none !important; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .fx-stagger > *,

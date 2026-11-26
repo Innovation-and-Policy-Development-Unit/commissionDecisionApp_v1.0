@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { History, Loader2 } from 'lucide-react'
 import api from '../../api/client'
+import { SkeletonRow } from '../shared/Skeleton'
 
 function fmtDate(d) {
   if (!d) return ''
@@ -54,8 +55,10 @@ export default function MeetingHistoryPanel({ submissionId, itemLabel, excludeMe
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {loading ? (
-          <div className="h-full flex items-center justify-center">
-            <Loader2 size={22} className="animate-spin text-slate-400" />
+          <div>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonRow key={i} cols={3} />
+            ))}
           </div>
         ) : items.length === 0 ? (
           <p className="text-center text-slate-500 px-6 py-8">{t('sitting_pack.history_empty')}</p>

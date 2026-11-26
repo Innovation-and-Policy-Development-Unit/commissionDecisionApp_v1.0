@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Eye, Download, RefreshCw, Trash2, Loader2 } from 'lucide-react'
+import { Eye, Download, RefreshCw, Trash2 } from 'lucide-react'
 import Badge from '../shared/Badge'
 import { smartReportsApi } from '../../api/smartReports'
 import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
+import { SkeletonCard } from '../shared/Skeleton'
 
 const STATUS_VARIANT = {
   ready: 'success',
@@ -45,11 +46,7 @@ export default function SmartReportLibrary({ refreshKey, onView, onRerun }) {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-slate-500">
-        <Loader2 className="animate-spin" size={24} />
-      </div>
-    )
+    return <SkeletonCard rows={5} />
   }
 
   if (!rows.length) {

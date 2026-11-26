@@ -48,9 +48,9 @@ export default function Modal({
       aria-labelledby={title ? titleId : undefined}
       aria-label={title ? undefined : closeLabel}
     >
-      <div data-dialog-backdrop className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]" onClick={onClose} />
+      <div data-dialog-backdrop className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       <div className={clsx(
-        'relative w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh] animate-scale-in',
+        'relative w-full bg-white dark:bg-slate-800 rounded-2xl shadow-2xl dark:border dark:border-slate-700 flex flex-col max-h-[90vh] animate-scale-in',
         SIZES[size] || SIZES.md,
         panelClassName,
       )}>

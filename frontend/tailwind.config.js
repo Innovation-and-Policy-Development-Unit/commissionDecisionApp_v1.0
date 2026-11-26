@@ -55,11 +55,39 @@ export default {
         semibold: 'var(--fontWeightSemibold)',
         bold: 'var(--fontWeightBold)',
       },
+      // Soft elevation: two low-alpha layers (a tight contact shadow plus a wide,
+      // offset ambient one) tinted toward the theme's darkest primary instead of
+      // pure black. Tailwind's own sm/md/lg/xl/2xl names are redefined here so the
+      // ~95 existing `shadow-*` call sites soften without being touched.
       boxShadow: {
-        'card': '0 1px 3px 0 rgba(0,0,0,0.10), 0 1px 2px -1px rgba(0,0,0,0.06)',
-        'card-md': '0 4px 8px -1px rgba(0,0,0,0.10), 0 2px 4px -2px rgba(0,0,0,0.07)',
-        'card-lg': '0 10px 18px -3px rgba(0,0,0,0.10), 0 4px 8px -4px rgba(0,0,0,0.07)',
+        'sm':    '0 1px 2px rgb(var(--p-900, 15 23 42) / 0.06), 0 1px 3px rgb(var(--p-900, 15 23 42) / 0.06)',
+        DEFAULT: '0 1px 3px rgb(var(--p-900, 15 23 42) / 0.06), 0 4px 10px -2px rgb(var(--p-900, 15 23 42) / 0.08)',
+        'md':    '0 2px 6px rgb(var(--p-900, 15 23 42) / 0.06), 0 10px 24px -4px rgb(var(--p-900, 15 23 42) / 0.10)',
+        'lg':    '0 4px 10px rgb(var(--p-900, 15 23 42) / 0.06), 0 20px 40px -8px rgb(var(--p-900, 15 23 42) / 0.13)',
+        'xl':    '0 8px 20px rgb(var(--p-900, 15 23 42) / 0.07), 0 32px 64px -12px rgb(var(--p-900, 15 23 42) / 0.16)',
+        '2xl':   '0 14px 30px rgb(var(--p-900, 15 23 42) / 0.08), 0 48px 90px -16px rgb(var(--p-900, 15 23 42) / 0.22)',
+        // Card tiers carry a borderless surface on their own, so they sit a step
+        // heavier than the matching generic tier.
+        'card':    '0 1px 3px rgb(var(--p-900, 15 23 42) / 0.06), 0 6px 16px -4px rgb(var(--p-900, 15 23 42) / 0.09)',
+        'card-md': '0 2px 6px rgb(var(--p-900, 15 23 42) / 0.06), 0 14px 30px -6px rgb(var(--p-900, 15 23 42) / 0.12)',
+        'card-lg': '0 4px 10px rgb(var(--p-900, 15 23 42) / 0.07), 0 24px 48px -10px rgb(var(--p-900, 15 23 42) / 0.16)',
         'glow': '0 0 20px rgb(var(--p-500) / 0.3)',
+      },
+      // Motion tokens. `soft` is the decelerating curve the fx-* keyframes already
+      // use — entrances, hover, lift. `soft-in` is symmetric, for state swaps.
+      transitionTimingFunction: {
+        // DEFAULT is the curve every `transition-*` utility emits, so overriding
+        // it moves all ~397 existing transition call sites onto the soft curve
+        // without touching one of them. Duration is left at Tailwind's 150ms:
+        // soft is about the shape of the motion, not about moving slower.
+        DEFAULT: 'var(--ease-soft)',
+        soft: 'var(--ease-soft)',
+        'soft-in': 'var(--ease-soft-in)',
+      },
+      transitionDuration: {
+        fast: 'var(--dur-fast)',
+        base: 'var(--dur-base)',
+        slow: 'var(--dur-slow)',
       },
       backgroundImage: {
         'gradient-primary': 'none',
@@ -75,14 +103,16 @@ export default {
         // theme. Was copy-pasted as an inline style 7 times across 4 files.
         'gradient-dark': 'linear-gradient(135deg, #0c2451 0%, #1a4080 100%)',
       },
+      // Entrances decelerate on the shared soft curve; exits stay quicker and
+      // use the symmetric one, so leaving never feels slower than arriving.
       animation: {
         'shimmer': 'shimmer 1.4s infinite',
-        'slide-in-right': 'slideInRight 0.3s ease-out',
-        'slide-out-right': 'slideOutRight 0.3s ease-in',
-        'slide-in-left': 'slideInLeft 0.3s ease-out',
-        'slide-out-left': 'slideOutLeft 0.3s ease-in',
-        'fade-in': 'fadeIn 0.2s ease-out',
-        'scale-in': 'scaleIn 0.2s ease-out',
+        'slide-in-right': 'slideInRight var(--dur-slow) var(--ease-soft)',
+        'slide-out-right': 'slideOutRight var(--dur-base) var(--ease-soft-in)',
+        'slide-in-left': 'slideInLeft var(--dur-slow) var(--ease-soft)',
+        'slide-out-left': 'slideOutLeft var(--dur-base) var(--ease-soft-in)',
+        'fade-in': 'fadeIn var(--dur-base) var(--ease-soft)',
+        'scale-in': 'scaleIn var(--dur-base) var(--ease-soft)',
       },
       keyframes: {
         shimmer: {
@@ -109,8 +139,8 @@ export default {
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         scaleIn: {
-          '0%': { opacity: '0', transform: 'scale(0.95)' },
-          '100%': { opacity: '1', transform: 'scale(1)' },
+          '0%': { opacity: '0', transform: 'scale(0.96) translateY(10px)' },
+          '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
         },
       },
     },
