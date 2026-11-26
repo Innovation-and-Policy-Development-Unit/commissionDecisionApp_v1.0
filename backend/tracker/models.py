@@ -4113,7 +4113,11 @@ class FeedbackReport(models.Model):
 class FeedbackComment(models.Model):
     report = models.ForeignKey(FeedbackReport, on_delete=models.CASCADE, related_name="comments")
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    body   = models.TextField()
+    body   = models.TextField(blank=True)
+    image  = models.ImageField(
+        upload_to="feedback/comment_images/", null=True, blank=True,
+        help_text="Screenshot pasted or attached to the note.",
+    )
     is_internal = models.BooleanField(
         default=False, help_text="Internal notes only visible to staff with manage permissions."
     )

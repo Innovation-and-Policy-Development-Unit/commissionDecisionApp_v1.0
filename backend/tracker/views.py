@@ -12922,6 +12922,7 @@ class FeedbackCommentViewSet(viewsets.ModelViewSet):
     queryset = FeedbackComment.objects.all().select_related("author")
     serializer_class = FeedbackCommentSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.JSONParser, parsers.MultiPartParser, parsers.FormParser]
 
     def get_queryset(self):
         report_id = self.request.query_params.get('report')

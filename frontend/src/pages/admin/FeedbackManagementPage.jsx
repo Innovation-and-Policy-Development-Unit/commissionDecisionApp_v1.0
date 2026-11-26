@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { 
   MessageSquare, 
   Filter, 
@@ -38,6 +38,23 @@ export default function FeedbackManagementPage() {
   const [isUpdating, setIsUpdating] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [isPostingComment, setIsPostingComment] = useState(false)
+  const [commentImage, setCommentImage] = useState(null)
+  const commentImageUrl = useMemo(
+    () => (commentImage ? URL.createObjectURL(commentImage) : null),
+    [commentImage],
+  )
+  useEffect(() => () => { if (commentImageUrl) URL.revokeObjectURL(commentImageUrl) }, [commentImageUrl])
+
+  const pickCommentImage = (file) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) { toast.error('Only images can be attached.'); return }
+    if (file.size > 8 * 1024 * 1024) { toast.error('Image is too large (maximum 8 MB).'); return }
+    setCommentImage(file)
+  }
+  const handleCommentPaste = (e) => {
+    const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image/'))
+    if (item) { e.preventDefault(); pickCommentImage(item.getAsFile()) }
+  }
 
   const fetchReports = useCallback(async () => {
     setLoading(true)
@@ -104,19 +121,21 @@ export default function FeedbackManagementPage() {
 
   const handleAddComment = async (e) => {
     e.preventDefault()
-    if (!selectedReport || !commentText.trim()) return
+    if (!selectedReport || (!commentText.trim() && !commentImage)) return
     setIsPostingComment(true)
     try {
-      const { data } = await api.post('/feedback-comments/', {
-        report: selectedReport.id,
-        body: commentText.trim(),
-        is_internal: true,
-      })
+      const form = new FormData()
+      form.append('report', selectedReport.id)
+      form.append('body', commentText.trim())
+      form.append('is_internal', 'true')
+      if (commentImage) form.append('image', commentImage, commentImage.name || 'pasted-image.png')
+      const { data } = await api.post('/feedback-comments/', form, { headers: { 'Content-Type': 'multipart/form-data' } })
       setSelectedReport(prev => ({
         ...prev,
         comments: [...(prev.comments || []), data]
       }))
       setCommentText('')
+      setCommentImage(null)
       toast.success('Note added.')
     } catch (err) {
       const detail = err.response?.data?.detail
@@ -360,7 +379,14 @@ export default function FeedbackManagementPage() {
                           <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{comment.author_username}</span>
                           <span className="text-[10px] text-slate-400">{new Date(comment.created_at).toLocaleString()}</span>
                         </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{comment.body}</p>
+                        {comment.body && (
+                          <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{comment.body}</p>
+                        )}
+                        {comment.image && (
+                          <a href={comment.image} target="_blank" rel="noreferrer">
+                            <img src={comment.image} alt="Attached screenshot" className="mt-2 max-h-48 rounded-lg border border-slate-200 dark:border-slate-700" />
+                          </a>
+                        )}
                       </div>
                     </div>
                   ))
@@ -374,11 +400,26 @@ export default function FeedbackManagementPage() {
                   rows={3}
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
+                  onPaste={handleCommentPaste}
+                  hint="Tip: paste a screenshot (Ctrl+V) to attach it."
                 />
+                {commentImageUrl && (
+                  <div className="relative mt-2 inline-block">
+                    <img src={commentImageUrl} alt="Screenshot to attach" className="max-h-32 rounded-lg border border-slate-200 dark:border-slate-700" />
+                    <button
+                      type="button"
+                      onClick={() => setCommentImage(null)}
+                      aria-label="Remove screenshot"
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-black/90 text-xs"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
                 <BaseButton
                   type="submit"
                   variant="primary" size="icon" iconOnly
-                  disabled={isPostingComment || !commentText.trim()}
+                  disabled={isPostingComment || (!commentText.trim() && !commentImage)}
                   className="absolute bottom-3 right-3"
                   icon={isPostingComment ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
                 >
