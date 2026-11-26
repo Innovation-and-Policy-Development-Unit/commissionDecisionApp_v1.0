@@ -1084,3 +1084,106 @@ html[data-density="compact"] select.input,
 html[data-density="compact"] textarea.input { padding-top: 0.3rem; padding-bottom: 0.3rem; }
 html[data-density="compact"] .btn { padding-top: 0.3rem; padding-bottom: 0.3rem; }
 html[data-density="compact"] .btn-sm { padding-top: 0.15rem; padding-bottom: 0.15rem; }
+
+/* ── Motion polish ─────────────────────────────────────────────────────────────
+   Short, restrained, CSS-only. Everything here is switched off for users who ask
+   for reduced motion (block at the end). Not used on tables or forms. */
+
+@keyframes fx-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Dashboard panels rise one after another, ~60 ms apart. */
+.fx-stagger > * { animation: fx-fade-up 350ms cubic-bezier(.22,1,.36,1) backwards; }
+.fx-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.fx-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.fx-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.fx-stagger > *:nth-child(4) { animation-delay: 180ms; }
+.fx-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.fx-stagger > *:nth-child(6) { animation-delay: 300ms; }
+.fx-stagger > *:nth-child(n+7) { animation-delay: 360ms; }
+
+/* Status badge: one soft ring in the badge's own colour when its status changes. */
+@keyframes fx-badge-pulse {
+  0%   { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  60%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.fx-badge-pulse { animation: fx-badge-pulse 650ms ease-out 1; }
+
+/* "Signed and recorded" stamp. */
+@keyframes fx-stamp {
+  0%   { opacity: 0; transform: scale(1.35) rotate(-4deg); }
+  60%  { opacity: 1; transform: scale(0.97) rotate(-2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-2deg); }
+}
+.fx-stamp { animation: fx-stamp 380ms cubic-bezier(.22,1,.36,1) both; }
+
+/* Sign-in page */
+@keyframes fx-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+}
+.fx-shake { animation: fx-shake 380ms ease-in-out 1; }
+
+@keyframes fx-grid-drift {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 64px 64px, 64px 64px; }
+}
+.fx-login-bg {
+  background:
+    radial-gradient(1200px 600px at 15% 10%, rgba(70,140,200,0.35), transparent 60%),
+    linear-gradient(150deg, #06182f 0%, #0b2b52 55%, #0f3c73 100%);
+}
+.fx-login-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 64px 64px, 64px 64px;
+  animation: fx-grid-drift 60s linear infinite;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+}
+
+/* A thin light sweeps once around the card edge on load. */
+@property --fx-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes fx-sweep { from { --fx-angle: 0deg; opacity: 1; } 85% { opacity: 1; } to { --fx-angle: 360deg; opacity: 0; } }
+.fx-card-sweep { position: relative; }
+.fx-card-sweep::after {
+  content: '';
+  position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: conic-gradient(from var(--fx-angle), transparent 0 70%, rgba(70,140,200,0.95) 85%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: fx-sweep 1100ms ease-out 250ms 1 both;
+}
+
+/* Sign-in success: card lifts away. */
+@keyframes fx-card-exit { to { opacity: 0; transform: translateY(-14px) scale(0.98); } }
+.fx-card-exit { animation: fx-card-exit 320ms ease-in forwards; }
+
+/* Lock "clicks shut": shackle drops, body nudges. */
+@keyframes fx-lock-shackle { 0% { transform: translateY(-3px); } 70% { transform: translateY(0.5px); } 100% { transform: translateY(0); } }
+.fx-lock-shackle { animation: fx-lock-shackle 260ms ease-out 1 both; }
+
+@keyframes fx-check-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+.fx-check-path { stroke-dasharray: 24; animation: fx-check-draw 320ms ease-out 1 both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-stagger > *,
+  .fx-badge-pulse,
+  .fx-stamp,
+  .fx-shake,
+  .fx-login-grid,
+  .fx-card-sweep::after,
+  .fx-card-exit,
+  .fx-lock-shackle,
+  .fx-check-path {
+    animation: none !important;
+  }
+  .fx-card-exit { opacity: 0; }
+  .fx-check-path { stroke-dasharray: none; }
+}

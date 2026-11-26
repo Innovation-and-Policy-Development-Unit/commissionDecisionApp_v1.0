@@ -1,6 +1,7 @@
 import React from 'react'
 import clsx from 'clsx'
 import { TrendingUp, TrendingDown } from 'lucide-react'
+import CountUp from './CountUp'
 
 // -700 shades (not -500) so white text clears WCAG AA contrast (4.5:1) at the
 // small 12px label size, not just the large headline number.
@@ -69,7 +70,7 @@ export default function StatCard({
           )}
         </div>
         <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-          {prefix}{value}{suffix}
+          {prefix}<CountUp value={value} />{suffix}
         </p>
       </div>
     )
@@ -111,7 +112,7 @@ export default function StatCard({
         {/* Value */}
         <div className={change != null && !Number.isNaN(change) ? 'mb-3' : ''}>
           <p className="text-3xl font-bold tracking-tight">
-            {prefix}{value}{suffix}
+            {prefix}<CountUp value={value} />{suffix}
           </p>
         </div>
 
