@@ -17,6 +17,7 @@ import api from '../../../api/client'
 import { useAuth } from '../../../context/AuthContext'
 import { userCanEditMinutes } from '../../../utils/minutesAccess'
 import clsx from 'clsx'
+import SignedStamp from '../../../components/shared/SignedStamp'
 
 const MINUTES_STATUS = {
   draft:    { label: 'Draft',    bg: 'bg-amber-100 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
@@ -394,6 +395,7 @@ export default function MinutesEditor() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [showStamp, setShowStamp] = useState(false)
 
   const [content, setContent] = useState({
     opening: '',
@@ -621,6 +623,7 @@ export default function MinutesEditor() {
         },
       })
       setMinutes(res.data)
+      setShowStamp(true)
       setSuccess(replacing
         ? 'Signed minutes replaced with the new scan.'
         : 'Signed minutes uploaded. The Secretary can now allocate decision tasks.')
@@ -693,6 +696,7 @@ export default function MinutesEditor() {
 
   return (
     <div>
+      <SignedStamp show={showStamp} onDone={() => setShowStamp(false)} />
       <div className="mb-4 flex items-center justify-between gap-4 flex-wrap">
         <button onClick={() => navigate('/secretariat/meetings')} className="flex items-center gap-1.5 text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
           <ArrowLeft size={16} /> Back to Sittings

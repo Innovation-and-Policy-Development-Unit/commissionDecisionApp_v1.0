@@ -13,6 +13,8 @@ import { normalizeListPayload } from '../../utils/listPayload'
 import InboxBriefCard from '../../components/dashboard/InboxBriefCard'
 import { FileText, Activity, ArrowRight } from 'lucide-react'
 import EmptyState from '../../components/shared/EmptyState'
+import CountUp from '../../components/shared/CountUp'
+import useReducedMotion from '../../hooks/useReducedMotion'
 
 const DECIDED_STAGES = new Set([
   'approved','rejected','returned','minutes_drafted_signed',
@@ -39,6 +41,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function PscDashboard() {
   const { t } = useTranslation()
   const colors = useChartColors()
+  const reducedMotion = useReducedMotion()
   const [board, setBoard] = useState({ loading: true, data: null })
   const [stats, setStats] = useState(null)
 
@@ -102,7 +105,7 @@ export default function PscDashboard() {
   const ministryMax = ministryData.reduce((m, r) => Math.max(m, r.c), 1)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 fx-stagger">
       {/* Visually hidden — the page otherwise jumps straight to h2 widget
           titles with no h1 identifying the page itself (WCAG 1.3.1/2.4.6).
           The breadcrumb already shows "Dashboard" visibly, so no visible
@@ -141,7 +144,7 @@ export default function PscDashboard() {
               const figure = (
                 <>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{label}</p>
-                  <p className={`text-2xl font-bold ${color}`}>{value}</p>
+                  <p className={`text-2xl font-bold ${color}`}><CountUp value={value} /></p>
                 </>
               )
               // Drilling into the filtered list is what the retired Executive
@@ -174,7 +177,7 @@ export default function PscDashboard() {
                 <XAxis dataKey="week" tick={{ fontSize: 11, fill: colors.axis }} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: colors.axis }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="received" name={t('dashboard.received')} stroke={colors.primary} strokeWidth={2} fill="url(#gradReceived)" dot={false} />
+                <Area isAnimationActive={!reducedMotion} animationDuration={400} type="monotone" dataKey="received" name={t('dashboard.received')} stroke={colors.primary} strokeWidth={2} fill="url(#gradReceived)" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -228,7 +231,7 @@ export default function PscDashboard() {
                   <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: colors.axis }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="label" width={150} tick={{ fontSize: 11, fill: colors.axis }} axisLine={false} tickLine={false} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="count" name={t('dashboard.all_submissions')} fill={colors.primary} radius={[0, 3, 3, 0]} maxBarSize={18} />
+                  <Bar isAnimationActive={!reducedMotion} animationDuration={400} dataKey="count" name={t('dashboard.all_submissions')} fill={colors.primary} radius={[0, 3, 3, 0]} maxBarSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

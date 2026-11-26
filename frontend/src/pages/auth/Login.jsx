@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom'
-import { ArrowRight, ShieldCheck, Lock, Mail } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Lock, Mail, LockKeyhole } from 'lucide-react'
+import AppLoadingSkeleton from '../../components/shared/AppLoadingSkeleton'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/client'
 import BaseButton from '../../components/shared/BaseButton'
@@ -27,6 +28,9 @@ const ANIM_STYLES = `
   .anim-slide-up   { animation: slide-up 0.5s cubic-bezier(.22,1,.36,1) both; }
   .anim-fade-in    { animation: fade-in 0.6s ease both; }
   .anim-blob-drift { animation: blob-drift 18s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .anim-slide-up, .anim-fade-in, .anim-blob-drift { animation: none; }
+  }
 `
 
 function redirectTarget(location) {
@@ -56,6 +60,11 @@ export default function Login() {
   const [error,            setError]            = useState('')
   const [loading,          setLoading]          = useState(false)
   const [capsLock,         setCapsLock]         = useState(false)
+  const [shaking,          setShaking]          = useState(false)
+  // Set the moment a sign-in is fully verified: shows the success state, then lets the card leave.
+  const [celebrating,      setCelebrating]      = useState(false)
+  const [leaving,          setLeaving]          = useState(false)
+  const [welcomeName,      setWelcomeName]      = useState('')
   const [show2FA,          setShow2FA]          = useState(false)
   const [otp,              setOtp]              = useState('')
   const [showEmailOtp,     setShowEmailOtp]     = useState(false)
@@ -97,15 +106,28 @@ export default function Login() {
     navigate(redirectTarget(location), { replace: true })
   }
 
-  if (accessToken && !authReady) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#f0f4f8' }}>
-        <p className="text-sm text-slate-500">Loading session…</p>
-      </div>
-    )
+  const shake = () => {
+    setCelebrating(false) // a failed attempt always leaves the success state
+    setShaking(true)
+    setTimeout(() => setShaking(false), 420)
   }
 
-  if (accessToken && user && authReady && !user.must_change_password && !showPasswordChange) {
+  // Green check + "Welcome back", then the card lifts away and we go to the app.
+  // With reduced motion the pause is shorter and nothing moves.
+  const finishSignIn = me => {
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const first = me?.first_name || me?.full_name?.split(' ')[0] || me?.username || ''
+    setWelcomeName(first)
+    setCelebrating(true)
+    setTimeout(() => setLeaving(true), reduce ? 500 : 850)
+    setTimeout(goToApp, reduce ? 600 : 1150)
+  }
+
+  if (accessToken && !authReady) {
+    return <AppLoadingSkeleton />
+  }
+
+  if (accessToken && user && authReady && !user.must_change_password && !showPasswordChange && !celebrating) {
     return <Navigate to={redirectTarget(location)} replace />
   }
 
@@ -146,6 +168,7 @@ export default function Login() {
     } catch (err) {
       const detail = err.response?.data?.detail
       setError(typeof detail === 'string' ? detail : 'Sign-in failed. Please check your credentials.')
+      shake()
     } finally {
       setLoading(false)
     }
@@ -157,15 +180,18 @@ export default function Login() {
     setLoading(true)
     try {
       const { data } = await api.post('/auth/totp/verify/', { username, code: otp })
+      setCelebrating(true)
       setTokens()
       const me = await refreshMe()
       if (me?.must_change_password) {
+        setCelebrating(false)
         setShowPasswordChange(true)
         return
       }
-      goToApp()
+      finishSignIn(me)
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid verification code.')
+      shake()
     } finally {
       setLoading(false)
     }
@@ -178,16 +204,19 @@ export default function Login() {
     setLoading(true)
     try {
       const { data } = await api.post('/auth/email-otp/verify/', { username: username.trim(), code: emailOtp })
+      setCelebrating(true)
       setTokens()
       const me = await refreshMe()
       if (me?.must_change_password) {
+        setCelebrating(false)
         setShowPasswordChange(true)
         return
       }
       // A user with no session PIN yet is routed to /auth/set-pin by RequireAuth.
-      goToApp()
+      finishSignIn(me)
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid verification code.')
+      shake()
     } finally {
       setLoading(false)
     }
@@ -277,14 +306,8 @@ export default function Login() {
     <>
       <style>{ANIM_STYLES}</style>
 
-      <div
-        className="min-h-screen flex flex-col items-center justify-center px-4 py-10"
-        style={{ background: 'linear-gradient(145deg, #f0f4f9 0%, #e5eaf3 100%)' }}
-      >
-        <div className="pointer-events-none fixed inset-0 overflow-hidden">
-          <div className="anim-blob-drift" style={{ position: 'absolute', top: '-100px', right: '-100px', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,66,118,0.07) 0%, transparent 70%)' }} />
-          <div className="anim-blob-drift" style={{ position: 'absolute', bottom: '-80px', left: '-80px', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.07) 0%, transparent 70%)', animationDuration: '22s', animationDelay: '-4s' }} />
-        </div>
+      <div className="fx-login-bg min-h-screen flex flex-col items-center justify-center px-4 py-10">
+        <div className="fx-login-grid pointer-events-none fixed inset-0" aria-hidden="true" />
 
         <div className="relative z-10 w-full" style={{ maxWidth: 420 }}>
 
@@ -292,26 +315,36 @@ export default function Login() {
             <img
               src="/opsc-logo-white-transparent.png"
               alt="OPSC"
-              style={{ width: 48, height: 'auto', filter: 'invert(1) brightness(0) saturate(100%) invert(18%) sepia(49%) saturate(700%) hue-rotate(190deg) brightness(80%)' }}
+              style={{ width: 48, height: 'auto' }}
             />
             <div>
-              <p className="text-sm font-semibold text-slate-800 leading-tight">Office of the Public Service Commission</p>
-              <p className="text-xs text-slate-500 mt-0.5">Government of the Republic of Vanuatu</p>
+              <p className="text-sm font-semibold text-white leading-tight">Office of the Public Service Commission</p>
+              <p className="text-xs text-sky-100/80 mt-0.5">Government of the Republic of Vanuatu</p>
             </div>
           </div>
 
+          <div className={`${shaking ? 'fx-shake' : ''} ${leaving ? 'fx-card-exit' : ''}`}>
           <div
-            className="anim-slide-up"
+            className="anim-slide-up fx-card-sweep"
             style={{
               background: 'white',
               borderRadius: 20,
-              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 20px 60px -10px rgba(0,66,118,0.13)',
-              border: '1px solid rgba(0,66,118,0.08)',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15), 0 24px 70px -10px rgba(0,0,0,0.45)',
+              border: '1px solid rgba(255,255,255,0.35)',
               padding: '36px 32px',
               animationDelay: '0.08s',
             }}
           >
-            {showPasswordChange ? (
+            {celebrating ? (
+              <div className="py-6 text-center" role="status">
+                <svg width="64" height="64" viewBox="0 0 64 64" className="mx-auto mb-4" aria-hidden="true">
+                  <circle cx="32" cy="32" r="30" fill="#059669" />
+                  <path className="fx-check-path" d="M19 33l9 9 17-19" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <p className="text-xl font-bold text-slate-900">Welcome back{welcomeName ? `, ${welcomeName}` : ''}</p>
+                <p className="mt-1 text-sm text-slate-600">Secure session started</p>
+              </div>
+            ) : showPasswordChange ? (
               <>
                 <div className="flex justify-center mb-5">
                   <div className="bg-gradient-dark" style={{ width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -496,11 +529,12 @@ export default function Login() {
                     type="submit"
                     variant="primary"
                     className="w-full !py-3"
-                    loading={loading}
-                    loadingLabel="Signing in"
-                    icon={!loading ? <ArrowRight size={16} /> : undefined}
+                    disabled={loading}
+                    icon={loading
+                      ? <LockKeyhole size={16} className="fx-lock-shackle" aria-hidden="true" />
+                      : <ArrowRight size={16} />}
                   >
-                    Sign In
+                    {loading ? 'Securing…' : 'Sign In'}
                   </BaseButton>
                 </form>
 
@@ -564,13 +598,15 @@ export default function Login() {
             )}
           </div>
 
+          </div>
+
           <div className="mt-4 flex items-center justify-center text-xs anim-fade-in" style={{ animationDelay: '0.15s' }}>
-            <Link to="/track" className="inline-flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 underline underline-offset-2 transition-colors font-medium">
+            <Link to="/track" className="inline-flex items-center gap-2 text-sm text-sky-100 hover:text-white underline underline-offset-2 transition-colors font-medium">
               Track your submission
             </Link>
           </div>
 
-          <div className="mt-3 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div className="mt-3 flex items-center justify-center text-[11px] text-sky-100/70 anim-fade-in" style={{ animationDelay: '0.2s' }}>
             <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
           </div>
         </div>

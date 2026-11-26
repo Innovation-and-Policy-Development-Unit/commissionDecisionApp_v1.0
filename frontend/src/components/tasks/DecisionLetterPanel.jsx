@@ -3,6 +3,7 @@ import { FileText, PenSquare, BellRing, PackageCheck, Plus, Loader2, Upload } fr
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import SignedStamp from '../shared/SignedStamp'
 
 const SECRETARY_ROLES = new Set(['psc_secretary', 'psc_admin'])
 const MINISTRY_ROLES = new Set(['ministry_hr', 'dept_admin', 'head_of_agency'])
@@ -28,6 +29,7 @@ export default function DecisionLetterPanel({ task }) {
   const [letters, setLetters] = useState([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [showStamp, setShowStamp] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -93,6 +95,7 @@ export default function DecisionLetterPanel({ task }) {
       }
       await api.post(`/decision-letters/${letterId}/mark-signed/`, payload || {}, config)
       toast.success('Letter marked as signed.')
+      setShowStamp(true)
       await load()
     } catch (ex) { toast.error(ex.response?.data?.detail || 'Could not mark signed.') }
     finally { setBusy(false); setSignTargetId(null) }
@@ -120,6 +123,7 @@ export default function DecisionLetterPanel({ task }) {
 
   return (
     <div className="mt-4 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+      <SignedStamp show={showStamp} onDone={() => setShowStamp(false)} />
       <div className="flex items-center justify-between mb-2">
         <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
           <FileText size={14} /> Decision Letters

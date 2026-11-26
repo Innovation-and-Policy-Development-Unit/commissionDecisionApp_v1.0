@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react'
+import usePulseOnChange from '../../hooks/usePulseOnChange'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import PageHeader from '../../components/shared/PageHeader'
@@ -151,9 +152,12 @@ const DYNAMIC_CHECKLIST_VIEW_STAGES  = [
 
 // ─── Stage badge ──────────────────────────────────────────────────────────────
 
+const PULSE_STAGES = ['approved', 'not_approved', 'rejected', 'returned', 'deferred', 'deferred_back_to_hr', 'deferred_back_to_unit']
+
 function StageBadge({ stage, overdue, label }) {
+  const pulse = usePulseOnChange(stage, PULSE_STAGES)
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${stageBadgeClass(stage)}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${stageBadgeClass(stage)}${pulse ? ' fx-badge-pulse' : ''}`}>
       {label || stageLabel(stage)}
       {overdue && (
         <span className="text-red-600 dark:text-red-400 font-normal">(overdue)</span>
