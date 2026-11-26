@@ -570,12 +570,6 @@ export default function Login() {
             </Link>
           </div>
 
-          <p className="mt-4 text-center text-xs text-slate-500 anim-fade-in" style={{ animationDelay: '0.18s' }}>
-            Need access or locked out? Contact OPSC:{' '}
-            <a href="mailto:htevilili@psc.gov.vu" className="font-medium text-primary-600 hover:underline">htevilili@psc.gov.vu</a>
-            {' '}· <a href="tel:+6787693749" className="font-medium text-primary-600 hover:underline">7693749</a>
-          </p>
-
           <div className="mt-3 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
             <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
           </div>
