@@ -221,6 +221,11 @@ router.register(r"push-subscriptions", WebPushSubscriptionViewSet, basename="pus
 router.register(r"document-versions",  DocumentVersionViewSet,     basename="document-version")
 
 urlpatterns = [
+    # These collide with the routers' detail routes (<prefix>/<pk>/), so they must be
+    # matched BEFORE the router: otherwise "search" / "bulk-action" is read as a pk and
+    # the request hits the viewset's detail route (404 / 405).
+    path("submissions/bulk-action/",        submission_bulk_action_view,        name="submission-bulk-action"),
+    path("audit-logs/search/",             audit_log_search_view,              name="audit-log-search"),
     path("", include(router.urls)),
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/token/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),
@@ -303,7 +308,6 @@ urlpatterns = [
     path("dashboard/stats/",                dashboard_stats_view,               name="dashboard-stats"),
     path("system-stats/",                   system_stats_view,                  name="system-stats"),
     path("submissions/<int:pk>/sla/",       submission_sla_view,                name="submission-sla"),
-    path("submissions/bulk-action/",        submission_bulk_action_view,        name="submission-bulk-action"),
     # AI triggers + result getters
     path("submissions/<int:pk>/trigger-ai-duplicate/", trigger_ai_duplicate,   name="trigger-ai-duplicate"),
     path("submissions/<int:pk>/ai-duplicate/",         get_ai_duplicate,       name="get-ai-duplicate"),
@@ -348,8 +352,6 @@ urlpatterns = [
     # Operations — Commissioners & Secretary
     path("ops/pending-decisions/",         pending_decisions_view,             name="pending-decisions"),
     path("ops/ministry-performance/",      ministry_performance_view,          name="ministry-performance"),
-    # Audit log search
-    path("audit-logs/search/",             audit_log_search_view,              name="audit-log-search"),
     path("ai-reliability/",                ai_reliability_view,                name="ai-reliability"),
     path("integrity-flags/",               integrity_flags_view,               name="integrity-flags"),
     path("admin/active-sessions/",         active_sessions_view,               name="active-sessions"),
