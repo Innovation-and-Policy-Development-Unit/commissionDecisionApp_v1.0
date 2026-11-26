@@ -1942,7 +1942,7 @@ class FeedbackCommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = FeedbackComment
         fields = (
-            "id", "report", "author", "author_username", "body", "is_internal",
+            "id", "report", "author", "author_username", "body", "image", "is_internal",
             "created_at",
             "ai_summary", "ai_severity", "ai_category", "ai_translated_text",
             "ai_processed",
@@ -1952,6 +1952,31 @@ class FeedbackCommentSerializer(serializers.ModelSerializer):
             "ai_summary", "ai_severity", "ai_category", "ai_translated_text",
             "ai_processed",
         )
+
+    MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+    def validate_image(self, value):
+        if value is None:
+            return value
+        from .file_validation import FileValidationError, validate_upload
+
+        if value.size > self.MAX_IMAGE_BYTES:
+            raise serializers.ValidationError("Image is too large (maximum 8 MB).")
+        try:
+            validate_upload(value, kind="image")
+        except FileValidationError as exc:
+            raise serializers.ValidationError(str(exc))
+        return value
+
+    def validate(self, attrs):
+        if not (attrs.get("body") or "").strip() and not attrs.get("image"):
+            raise serializers.ValidationError("Write a note or attach an image.")
+        return attrs
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep["image"] = instance.image.url if instance.image else None
+        return rep
 
 
 # ── Collaboration: Comments (A7) ──────────────────────────────────────────────
