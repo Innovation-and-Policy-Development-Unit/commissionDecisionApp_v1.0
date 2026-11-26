@@ -55,6 +55,7 @@ export default function Login() {
   const [password,         setPassword]         = useState('')
   const [error,            setError]            = useState('')
   const [loading,          setLoading]          = useState(false)
+  const [capsLock,         setCapsLock]         = useState(false)
   const [show2FA,          setShow2FA]          = useState(false)
   const [otp,              setOtp]              = useState('')
   const [showEmailOtp,     setShowEmailOtp]     = useState(false)
@@ -461,9 +462,10 @@ export default function Login() {
 
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      <label htmlFor="login-password" className="block text-sm font-medium text-slate-700">
                         Password
-                      </span>
+                        <span className="text-red-600 ms-0.5" aria-hidden="true">*</span>
+                      </label>
                       <Link
                         to="/auth/reset-password"
                         className="text-xs text-primary-600 hover:text-primary-700 hover:underline font-medium"
@@ -472,12 +474,22 @@ export default function Login() {
                       </Link>
                     </div>
                     <BasePasswordInput
+                      id="login-password"
                       hideLabel
                       value={password}
                       onChange={e => setPassword(e.target.value)}
+                      onKeyUp={e => setCapsLock(e.getModifierState?.('CapsLock') === true)}
+                      onKeyDown={e => setCapsLock(e.getModifierState?.('CapsLock') === true)}
+                      onBlur={() => setCapsLock(false)}
                       placeholder="Enter your password"
+                      autoComplete="current-password"
                       required
                     />
+                    {capsLock && (
+                      <p role="status" className="mt-1.5 text-xs font-medium text-amber-700">
+                        Caps Lock is on
+                      </p>
+                    )}
                   </div>
 
                   <BaseButton
@@ -553,10 +565,16 @@ export default function Login() {
           </div>
 
           <div className="mt-4 flex items-center justify-center text-xs anim-fade-in" style={{ animationDelay: '0.15s' }}>
-            <Link to="/track" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-primary-600 transition-colors font-medium">
+            <Link to="/track" className="inline-flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 underline underline-offset-2 transition-colors font-medium">
               Track your submission
             </Link>
           </div>
+
+          <p className="mt-4 text-center text-xs text-slate-500 anim-fade-in" style={{ animationDelay: '0.18s' }}>
+            Need access or locked out? Contact OPSC:{' '}
+            <a href="mailto:htevilili@psc.gov.vu" className="font-medium text-primary-600 hover:underline">htevilili@psc.gov.vu</a>
+            {' '}· <a href="tel:+6787693749" className="font-medium text-primary-600 hover:underline">7693749</a>
+          </p>
 
           <div className="mt-3 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
             <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
