@@ -100,9 +100,9 @@ export default function TrackSubmission() {
       <style>{ANIM_STYLES}</style>
 
       <div
-        className="min-h-screen flex flex-col items-center justify-center px-4 py-10"
-        style={{ background: 'linear-gradient(145deg, #f0f4f9 0%, #e5eaf3 100%)' }}
+        className="fx-login-bg min-h-screen flex flex-col items-center justify-center px-4 py-10"
       >
+        <div className="fx-login-grid pointer-events-none fixed inset-0" aria-hidden="true" />
         <div className="pointer-events-none fixed inset-0 overflow-hidden">
           <div style={{ position: 'absolute', top: '-100px', right: '-100px', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,66,118,0.07) 0%, transparent 70%)' }} />
           <div style={{ position: 'absolute', bottom: '-80px', left: '-80px', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.07) 0%, transparent 70%)' }} />
@@ -114,11 +114,11 @@ export default function TrackSubmission() {
             <img
               src="/opsc-logo-white-transparent.png"
               alt="OPSC"
-              style={{ width: 48, height: 'auto', filter: 'invert(1) brightness(0) saturate(100%) invert(18%) sepia(49%) saturate(700%) hue-rotate(190deg) brightness(80%)' }}
+              style={{ width: 48, height: 'auto' }}
             />
             <div>
-              <p className="text-sm font-semibold text-slate-800 leading-tight">Office of the Public Service Commission</p>
-              <p className="text-xs text-slate-500 mt-0.5">Government of the Republic of Vanuatu</p>
+              <p className="text-sm font-semibold text-white leading-tight">Office of the Public Service Commission</p>
+              <p className="text-xs text-sky-100/80 mt-0.5">Government of the Republic of Vanuatu</p>
             </div>
           </div>
 
@@ -127,8 +127,8 @@ export default function TrackSubmission() {
             style={{
               background: 'white',
               borderRadius: 20,
-              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 20px 60px -10px rgba(0,66,118,0.13)',
-              border: '1px solid rgba(0,66,118,0.08)',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15), 0 24px 70px -10px rgba(0,0,0,0.45)',
+              border: '1px solid rgba(255,255,255,0.35)',
               padding: '36px 32px',
               animationDelay: '0.08s',
             }}
@@ -254,13 +254,13 @@ export default function TrackSubmission() {
           <div className="mt-6 flex justify-center anim-fade-in" style={{ animationDelay: '0.14s' }}>
             <Link
               to="/auth/login"
-              className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-primary-600 transition-colors font-medium"
+              className="inline-flex items-center gap-2 text-sm text-sky-100 hover:text-white underline underline-offset-2 transition-colors font-medium"
             >
               <ArrowLeft size={15} /> Back to Login
             </Link>
           </div>
 
-          <div className="mt-4 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div className="mt-4 flex items-center justify-center text-[11px] text-sky-100/70 anim-fade-in" style={{ animationDelay: '0.2s' }}>
             <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
           </div>
         </div>

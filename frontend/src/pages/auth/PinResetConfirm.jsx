@@ -63,17 +63,17 @@ export default function PinResetConfirm() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10"
-      style={{ background: 'linear-gradient(145deg, #f0f4f9 0%, #e5eaf3 100%)' }}
-    >
-      <div style={{ maxWidth: 420 }} className="w-full">
+      className="fx-login-bg min-h-screen flex flex-col items-center justify-center px-4 py-10"
+      >
+        <div className="fx-login-grid pointer-events-none fixed inset-0" aria-hidden="true" />
+      <div style={{ maxWidth: 420 }} className="relative z-10 w-full">
         <div
           className="anim-slide-up"
           style={{
             background: 'white',
             borderRadius: 20,
-            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 20px 60px -10px rgba(0,66,118,0.13)',
-            border: '1px solid rgba(0,66,118,0.08)',
+            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15), 0 24px 70px -10px rgba(0,0,0,0.45)',
+            border: '1px solid rgba(255,255,255,0.35)',
             padding: '36px 32px',
           }}
         >
@@ -179,7 +179,7 @@ export default function PinResetConfirm() {
           )}
         </div>
 
-        <div className="mt-6 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in">
+        <div className="mt-6 flex items-center justify-center text-[11px] text-sky-100/70 anim-fade-in">
           <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
         </div>
       </div>

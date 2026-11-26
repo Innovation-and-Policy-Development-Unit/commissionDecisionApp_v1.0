@@ -57,9 +57,9 @@ export default function LockScreen() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 relative overflow-hidden"
-      style={{ background: 'linear-gradient(145deg, #f0f4f9 0%, #e5eaf3 100%)' }}
-    >
+      className="fx-login-bg min-h-screen flex flex-col items-center justify-center px-4 py-10 relative overflow-hidden"
+      >
+        <div className="fx-login-grid pointer-events-none fixed inset-0" aria-hidden="true" />
       <div
         className="anim-blob-drift pointer-events-none"
         style={{ position: 'absolute', top: '-100px', right: '-100px', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,66,118,0.07) 0%, transparent 70%)' }}
@@ -69,12 +69,12 @@ export default function LockScreen() {
         style={{ position: 'absolute', bottom: '-80px', left: '-80px', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.07) 0%, transparent 70%)', animationDuration: '22s', animationDelay: '-4s' }}
       />
 
-      <div style={{ maxWidth: 400 }} className="w-full relative">
+      <div style={{ maxWidth: 400 }} className="w-full relative z-10">
         <div className="anim-fade-in mb-6 text-center">
-          <div className="text-4xl font-bold text-slate-800 tabular-nums" style={{ letterSpacing: '0.02em' }}>
+          <div className="text-4xl font-bold text-white tabular-nums" style={{ letterSpacing: '0.02em' }}>
             {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
           </div>
-          <div className="text-sm text-slate-500 mt-1">
+          <div className="text-sm text-sky-100/80 mt-1">
             {now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </div>
@@ -84,8 +84,8 @@ export default function LockScreen() {
           style={{
             background: 'white',
             borderRadius: 20,
-            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 20px 60px -10px rgba(0,66,118,0.13)',
-            border: '1px solid rgba(0,66,118,0.08)',
+            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15), 0 24px 70px -10px rgba(0,0,0,0.45)',
+            border: '1px solid rgba(255,255,255,0.35)',
             padding: '36px 32px',
           }}
         >
@@ -188,7 +188,7 @@ export default function LockScreen() {
           </form>
         </div>
 
-        <div className="mt-6 flex items-center justify-center text-[11px] text-slate-400 anim-fade-in">
+        <div className="mt-6 flex items-center justify-center text-[11px] text-sky-100/70 anim-fade-in">
           <span>© {new Date().getFullYear()} OPSC Vanuatu. All rights reserved.</span>
         </div>
       </div>
