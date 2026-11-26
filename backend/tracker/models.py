@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import os
 import secrets
 from datetime import datetime, time, timedelta
@@ -9,6 +10,8 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
 from django.utils import timezone
+
+app_log = logging.getLogger("scdms.app")
 
 
 class Role(models.TextChoices):
@@ -3943,12 +3946,21 @@ def _load_holiday_set(start_date, end_date=None):
         from django.db import connection
         if 'tracker_publicholiday' not in connection.introspection.table_names():
             return set()
-        return {
+        found = {
             (h.year, h.date.month, h.date.day)
             for h in PublicHoliday.objects.filter(
                 date__gte=start_date, date__lte=end_date
             )
         }
+        if not found and not PublicHoliday.objects.exists():
+            # Not just "no holidays in this range" — the table is empty, so every
+            # working-day calculation is treating holidays as working days.
+            app_log.warning(
+                'PublicHoliday table is empty; working-day calculations are '
+                'counting public holidays as working days. Run migration 0330 '
+                'or add holidays in the admin.'
+            )
+        return found
     except Exception:
         return set()
 
@@ -3989,15 +4001,10 @@ def working_days_elapsed(start_dt, end_dt=None):
     if e < s:
         return 0
     
-    # Same holidays list as above (should ideally be in a model or config)
-    holidays = {
-        (2025, 1, 1), (2025, 2, 21), (2025, 3, 5), (2025, 4, 18), (2025, 4, 21),
-        (2025, 5, 1), (2025, 5, 29), (2025, 7, 24), (2025, 7, 30), (2025, 8, 15),
-        (2025, 10, 5), (2025, 11, 29), (2025, 12, 25), (2025, 12, 26),
-        (2026, 1, 1), (2026, 2, 21), (2026, 3, 5), (2026, 4, 3), (2026, 4, 6),
-        (2026, 5, 1), (2026, 5, 14), (2026, 7, 24), (2026, 7, 30), (2026, 8, 15),
-        (2026, 10, 5), (2026, 11, 29), (2026, 12, 25), (2026, 12, 26),
-    }
+    # Same source as add_working_days(): the admin-editable PublicHoliday table.
+    # This used to be a hardcoded set that ran out at 2026-12-26, after which
+    # every holiday would have silently counted as a working day.
+    holidays = _load_holiday_set(s, e)
 
     n = 0
     d = s
