@@ -25,7 +25,10 @@ export default function PwaManager() {
   const [offline, setOffline] = useState(
     () => typeof navigator !== 'undefined' && !navigator.onLine,
   )
+  // needRefresh: a new version is waiting. bannerHidden: the user chose "Later" — the
+  // update stays pending and is applied as soon as they sign out.
   const [needRefresh, setNeedRefresh] = useState(false)
+  const [bannerHidden, setBannerHidden] = useState(false)
   const [installPrompt, setInstallPrompt] = useState(null)
   const [installDismissed, setInstallDismissed] = useState(
     () => typeof sessionStorage !== 'undefined' && sessionStorage.getItem(INSTALL_DISMISSED_KEY) === '1',
@@ -41,16 +44,31 @@ export default function PwaManager() {
     // Register the Workbox service worker (offline caching + Web Push). Updates
     // are user-prompted via the needRefresh banner — no surprise reloads.
     let cancelled = false
+    let checkTimer = null
+    let onVisible = null
     import('virtual:pwa-register')
       .then(({ registerSW }) => {
         if (cancelled) return
         updateSWRef.current = registerSW({
-          onNeedRefresh() { setNeedRefresh(true) },
+          onNeedRefresh() { setNeedRefresh(true); setBannerHidden(false) },
+          // Look for a new version every 10 minutes and whenever the tab is
+          // brought back, so people do not stay on an old build for days.
+          onRegisteredSW(_url, registration) {
+            if (!registration) return
+            const check = () => { if (navigator.onLine) registration.update().catch(() => {}) }
+            checkTimer = setInterval(check, 10 * 60 * 1000)
+            onVisible = () => { if (document.visibilityState === 'visible') check() }
+            document.addEventListener('visibilitychange', onVisible)
+          },
           onRegisterError(err) { console.warn('SW registration failed', err) },
         })
       })
       .catch((err) => console.warn('PWA register unavailable', err))
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      if (checkTimer) clearInterval(checkTimer)
+      if (onVisible) document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   useEffect(() => {
@@ -87,7 +105,8 @@ export default function PwaManager() {
   // navigations and serves its own cached index.html, bypassing nginx's
   // no-store header on it) — so skip the prompt and update immediately rather
   // than leaving them stranded on old JS with no way back except manually
-  // clearing browser cache. Signed-in users still get the banner, unchanged.
+  // clearing browser cache. Signed-in users get the banner; if they choose "Later" the update stays
+  // pending and is applied the moment they sign out.
   useEffect(() => {
     if (needRefresh && !accessToken) {
       applyUpdate()
@@ -117,7 +136,7 @@ export default function PwaManager() {
         </div>
       )}
 
-      {needRefresh && (
+      {needRefresh && !bannerHidden && (
         <div
           role="alertdialog"
           aria-labelledby="pwa-update-title"
@@ -144,7 +163,7 @@ export default function PwaManager() {
                 <button
                   type="button"
                   className="btn-outline text-xs py-1.5 px-3"
-                  onClick={() => setNeedRefresh(false)}
+                  onClick={() => setBannerHidden(true)}
                 >
                   {t('pwa.update_later')}
                 </button>
@@ -154,7 +173,7 @@ export default function PwaManager() {
         </div>
       )}
 
-      {showInstall && !needRefresh && (
+      {showInstall && !(needRefresh && !bannerHidden) && (
         <div
           role="dialog"
           aria-labelledby="pwa-install-title"
