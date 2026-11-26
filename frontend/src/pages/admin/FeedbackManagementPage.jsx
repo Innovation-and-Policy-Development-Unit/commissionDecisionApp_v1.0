@@ -109,7 +109,8 @@ export default function FeedbackManagementPage() {
     try {
       const { data } = await api.post('/feedback-comments/', {
         report: selectedReport.id,
-        text: commentText
+        body: commentText.trim(),
+        is_internal: true,
       })
       setSelectedReport(prev => ({
         ...prev,
@@ -118,7 +119,8 @@ export default function FeedbackManagementPage() {
       setCommentText('')
       toast.success('Note added.')
     } catch (err) {
-      toast.error('Failed to post note.')
+      const detail = err.response?.data?.detail
+      toast.error(typeof detail === 'string' ? detail : 'Failed to post note.')
     } finally {
       setIsPostingComment(false)
     }
@@ -358,7 +360,7 @@ export default function FeedbackManagementPage() {
                           <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{comment.author_username}</span>
                           <span className="text-[10px] text-slate-400">{new Date(comment.created_at).toLocaleString()}</span>
                         </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{comment.text}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{comment.body}</p>
                       </div>
                     </div>
                   ))
