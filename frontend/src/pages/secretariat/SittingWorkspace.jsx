@@ -26,6 +26,7 @@ import {
   RefreshCw, X, ChevronUp, ChevronDown, Inbox, CalendarDays,
   Clock, AlertCircle, GripVertical, ListChecks, ArrowLeft, Building2,
 } from 'lucide-react'
+import { PageSkeleton } from '../../components/shared/Skeleton'
 
 // The agenda builder owns this board (Stage-B: SAO builds → Secretary reviews → Chairman endorses).
 // Other roles — including the Secretary, who reviews via the Agenda page — see it read-only.
@@ -280,11 +281,7 @@ export default function SittingWorkspace() {
 
   // ── Render ──────────────────────────────────────────────────────────────
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24 text-slate-400">
-        <RefreshCw size={20} className="animate-spin mr-2" /> Loading sitting workspace…
-      </div>
-    )
+    return <PageSkeleton cards={2} />
   }
 
   if (!meeting) {

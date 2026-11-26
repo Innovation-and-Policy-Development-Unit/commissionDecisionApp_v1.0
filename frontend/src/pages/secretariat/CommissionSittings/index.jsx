@@ -116,7 +116,7 @@ export default function CommissionSittings() {
               </button>
             </div>
 
-            <div className="inline-flex p-1 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <div className="card inline-flex p-1">
               <button 
                 onClick={() => setViewMode('calendar')}
                 className={clsx(

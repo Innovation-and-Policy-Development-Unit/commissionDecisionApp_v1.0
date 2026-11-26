@@ -49,7 +49,7 @@ export default function OperationalSidebar({
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1 flex items-center gap-2">
           <Filter size={12} /> Filter by Status
         </h3>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="card overflow-hidden">
           <button 
             onClick={() => setStatusFilter('')}
             className={clsx(
@@ -111,7 +111,7 @@ export default function OperationalSidebar({
         </div>
         <div className="space-y-2">
           {upcomingDeadlines.length > 0 ? upcomingDeadlines.map((dl, i) => (
-            <div key={i} className="group cursor-pointer bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary-400 dark:hover:border-primary-500 transition-all">
+            <div key={i} className="card group cursor-pointer p-3 hover:shadow-card-md dark:hover:border-primary-500 transition-all">
               <div className="flex justify-between items-start mb-1">
                 <span className="text-[10px] font-bold text-primary-600 dark:text-primary-400 uppercase">{dl.type}</span>
                 <span className="text-[10px] text-slate-400 font-mono">{dl.date}</span>

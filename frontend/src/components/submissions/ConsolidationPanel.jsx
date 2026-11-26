@@ -11,6 +11,7 @@ import { useToast } from '../../context/ToastContext'
 import BaseButton from '../shared/BaseButton'
 import BaseBadge from '../shared/BaseBadge'
 import BaseSpinner from '../shared/BaseSpinner'
+import { Skeleton } from '../shared/Skeleton'
 
 export const CONSOLIDATED_CODES = ['ODU-BUSINESS-PLANS', 'ODU-CORPORATE-PLANS', 'ODU-ANNUAL-REPORTS']
 
@@ -135,7 +136,13 @@ export default function ConsolidationPanel({ submissionId }) {
     }
   }
 
-  if (loading && !data) return <div className="card p-4"><BaseSpinner size="sm" label="Loading coverage" /></div>
+  if (loading && !data) return (
+    <div className="card p-4 space-y-2">
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-4/5" />
+    </div>
+  )
   if (!data || !data.plan_label) return error ? <p className="text-sm text-slate-500">{error}</p> : null
 
   const c = data.counts || {}

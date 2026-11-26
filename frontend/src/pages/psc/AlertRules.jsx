@@ -12,6 +12,7 @@ import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import PageHeader from '../../components/shared/PageHeader'
 import Modal from '../../components/shared/Modal'
+import { SkeletonCard } from '../../components/shared/Skeleton'
 
 const LEVEL_CLS = {
   critical: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
@@ -154,7 +155,7 @@ export default function AlertRules() {
       />
 
       {loading ? (
-        <div className="flex justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
+        <SkeletonCard rows={6} />
       ) : (
         <div className="card divide-y divide-slate-100 dark:divide-slate-800">
           {rules.map(r => (

@@ -4,6 +4,7 @@ import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import SignedStamp from '../shared/SignedStamp'
+import { SkeletonRow } from '../shared/Skeleton'
 
 const SECRETARY_ROLES = new Set(['psc_secretary', 'psc_admin'])
 const MINISTRY_ROLES = new Set(['ministry_hr', 'dept_admin', 'head_of_agency'])
@@ -163,7 +164,11 @@ export default function DecisionLetterPanel({ task }) {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-3"><Loader2 size={18} className="animate-spin text-slate-300" /></div>
+        <div>
+          {Array.from({ length: 2 }).map((_, i) => (
+            <SkeletonRow key={i} cols={3} />
+          ))}
+        </div>
       ) : letters.length === 0 ? (
         <p className="text-xs text-slate-400">No letters prepared for this decision yet.</p>
       ) : (

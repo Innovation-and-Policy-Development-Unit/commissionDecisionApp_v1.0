@@ -18,6 +18,7 @@ import { useAuth } from '../../../context/AuthContext'
 import { userCanEditMinutes } from '../../../utils/minutesAccess'
 import clsx from 'clsx'
 import SignedStamp from '../../../components/shared/SignedStamp'
+import { PageSkeleton } from '../../../components/shared/Skeleton'
 
 const MINUTES_STATUS = {
   draft:    { label: 'Draft',    bg: 'bg-amber-100 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
@@ -685,11 +686,7 @@ export default function MinutesEditor() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 size={32} className="animate-spin text-slate-300" />
-      </div>
-    )
+    return <PageSkeleton detailMode />
   }
 
   const statusCfg = minutes ? MINUTES_STATUS[minutes.status] || MINUTES_STATUS.draft : null

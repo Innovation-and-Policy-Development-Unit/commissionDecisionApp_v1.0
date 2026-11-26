@@ -8,6 +8,7 @@ import PageHeader from '../../components/shared/PageHeader'
 import Badge from '../../components/shared/Badge'
 import ReportTemplateForm from '../../components/reports/ReportTemplateForm'
 import { useConfirm } from '../../context/ConfirmContext'
+import { SkeletonCard } from '../../components/shared/Skeleton'
 
 export default function ReportTemplateManager() {
   const confirm = useConfirm()
@@ -122,7 +123,7 @@ export default function ReportTemplateManager() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-slate-500"><Loader2 className="animate-spin" size={24} /></div>
+        <SkeletonCard rows={5} />
       ) : !templates.length ? (
         <div className="card p-10 text-center text-slate-500 dark:text-slate-400">{t('report_hub.no_templates_manage')}</div>
       ) : (

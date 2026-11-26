@@ -7,6 +7,7 @@ import PageHeader from '../../components/shared/PageHeader'
 import BaseBadge from '../../components/shared/BaseBadge'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseSpinner from '../../components/shared/BaseSpinner'
+import { SkeletonCard } from '../../components/shared/Skeleton'
 
 const TYPE_CONFIG = {
   meeting: { color: 'primary', label: 'Meeting', icon: <Calendar size={13} />, border: 'border-l-primary-500' },
@@ -66,7 +67,7 @@ export default function CommissionCalendar() {
       </div>
 
       {loading ? (
-        <div className="text-center p-16"><BaseSpinner label="Loading calendar…" /></div>
+        <SkeletonCard rows={5} />
       ) : grouped.length === 0 ? (
         <div className="card"><p className="p-6 text-slate-500">No events found.</p></div>
       ) : (

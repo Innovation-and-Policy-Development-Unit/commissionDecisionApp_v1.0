@@ -92,7 +92,7 @@ export default function Layout() {
       >
         <SystemStatsStrip />
         <SecurityNoticesBanner />
-        <div className="p-4 sm:p-6 max-w-screen-2xl mx-auto">
+        <div className="fx-page p-4 sm:p-6 max-w-screen-2xl mx-auto">
           <Outlet />
         </div>
       </main>

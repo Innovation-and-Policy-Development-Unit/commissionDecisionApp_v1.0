@@ -66,11 +66,12 @@ function CollapsedGroupItem({ group }) {
     const onlyLabel = translateLabel(onlyItem, t)
     return (
       <NavLink
+        viewTransition
         to={onlyItem.path}
         end={onlyItem.end}
         aria-label={onlyLabel}
         className={({ isActive }) => clsx(
-          'flex flex-col items-center gap-0.5 px-1 py-2.5 rounded-lg font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+          'flex flex-col items-center gap-0.5 px-1 py-2.5 rounded-lg font-medium transition-all duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
           entryIsActive(onlyItem, location.pathname, isActive)
             ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100'
@@ -94,7 +95,7 @@ function CollapsedGroupItem({ group }) {
         aria-expanded={dropdownOpen}
         aria-label={groupLabel}
         className={clsx(
-          'w-full flex flex-col items-center gap-0.5 px-1 py-2.5 rounded-lg font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+          'w-full flex flex-col items-center gap-0.5 px-1 py-2.5 rounded-lg font-medium transition-all duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
           anyActive
             ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100'
@@ -135,7 +136,7 @@ function CollapsedGroupItem({ group }) {
                   rel="noopener noreferrer"
                   role="menuitem"
                   onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 mx-1.5 rounded-md text-sm transition-all duration-150 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                  className="flex items-center gap-2.5 px-3 py-2 mx-1.5 rounded-md text-sm transition-all duration-150 active:scale-[0.99] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 >
                   <ItemIcon size={15} className="shrink-0" aria-hidden="true" />
                   <span>{entryLabel}</span>
@@ -144,13 +145,14 @@ function CollapsedGroupItem({ group }) {
             }
             return (
               <NavLink
+                viewTransition
                 key={entry.path}
                 to={entry.path}
                 end={entry.end}
                 role="menuitem"
                 onClick={() => setDropdownOpen(false)}
                 className={({ isActive }) => clsx(
-                  'flex items-center gap-2.5 px-3 py-2 mx-1.5 rounded-md text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                  'flex items-center gap-2.5 px-3 py-2 mx-1.5 rounded-md text-sm transition-all duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
                   entryIsActive(entry, location.pathname, isActive)
                     ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200'
@@ -169,7 +171,7 @@ function CollapsedGroupItem({ group }) {
 }
 
 // Expanded sidebar: individual items with accordion for children
-function NavItem({ item, itemKey, openKey, setOpenKey }) {
+function NavItem({ item, itemKey, openKey, setOpenKey, showPill = false }) {
   const { t } = useTranslation()
   const location = useLocation()
 
@@ -184,7 +186,7 @@ function NavItem({ item, itemKey, openKey, setOpenKey }) {
           href={item.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 active:scale-[0.99] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           <Icon size={18} className="shrink-0" aria-hidden="true" />
           <span>{label}</span>
@@ -193,15 +195,19 @@ function NavItem({ item, itemKey, openKey, setOpenKey }) {
     }
     return (
       <NavLink
+        viewTransition
         to={item.path}
         end={item.end}
         className={({ isActive }) => clsx(
-          'flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+          'relative isolate flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
           entryIsActive(item, location.pathname, isActive)
-            ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
+            // The pill carries the background when this is the one pilled item,
+            // so the colour travels with it instead of snapping.
+            ? clsx('text-primary-600 dark:text-primary-400', !showPill && 'bg-primary-50 dark:bg-primary-900/30')
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100'
         )}
       >
+        {showPill && <span aria-hidden="true" className="fx-nav-pill" />}
         <Icon size={18} className="shrink-0" aria-hidden="true" />
         <span>{label}</span>
       </NavLink>
@@ -224,7 +230,7 @@ function NavItem({ item, itemKey, openKey, setOpenKey }) {
         aria-expanded={open}
         onClick={() => setOpenKey(curr => (curr === itemKey ? null : itemKey))}
         className={clsx(
-          'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+          'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-all duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
           anyChildActive
             ? 'text-primary-600 dark:text-primary-400'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100'
@@ -249,11 +255,12 @@ function NavItem({ item, itemKey, openKey, setOpenKey }) {
             const childLabel = translateLabel(child, t)
             return (
               <NavLink
+                viewTransition
                 key={child.path}
                 to={child.path}
                 end={child.end}
                 className={({ isActive }) => clsx(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
                   entryIsActive(child, location.pathname, isActive)
                     ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-200'
@@ -274,6 +281,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
   const { t } = useTranslation()
   const { sidebarCollapsed, feedbackEnabled } = useTheme()
   const { user } = useAuth()
+  const location = useLocation()
   const collapsed = sidebarCollapsed
   const [openKey, setOpenKey] = useState(null)
 
@@ -281,6 +289,30 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
     () => getVisibleMenuForUser(user, feedbackEnabled),
     [user, feedbackEnabled]
   )
+
+  // The sliding indicator is a single element with a `view-transition-name`, and
+  // such a name must be unique across the document at transition time — two of
+  // them makes the browser skip the whole transition, including the page
+  // cross-fade. entryIsActive() ORs NavLink's own match with siblingPaths
+  // prefixes, so more than one entry can report active at once. So pick ONE
+  // winner here, in render order, and only that NavItem draws the pill. The pill
+  // is decorative: if this approximation of NavLink's isActive disagrees with
+  // NavLink itself, the indicator sits on a different row than the highlight —
+  // navigation and the highlight are unaffected.
+  const pillKey = useMemo(() => {
+    const matches = (item) => {
+      if (!item.path || item.children) return false
+      const own = item.end
+        ? location.pathname === item.path
+        : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
+      return entryIsActive(item, location.pathname, own)
+    }
+    for (const group of visibleMenu) {
+      const hit = group.items.find(matches)
+      if (hit) return hit.path || hit.label
+    }
+    return null
+  }, [visibleMenu, location.pathname])
 
   return (
     <>
@@ -340,6 +372,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
                       itemKey={item.path || item.label}
                       openKey={openKey}
                       setOpenKey={setOpenKey}
+                      showPill={(item.path || item.label) === pillKey}
                     />
                   ))}
                 </div>

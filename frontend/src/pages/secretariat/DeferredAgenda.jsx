@@ -6,6 +6,7 @@ import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { stageLabel } from '../../constants/stages'
+import { Skeleton } from '../../components/shared/Skeleton'
 
 const TYPE_STYLE = {
   to_next_meeting: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
@@ -90,7 +91,15 @@ export default function DeferredAgenda() {
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {loading ? (
-              <tr><td colSpan={7} className="px-4 py-8 text-center"><Loader2 size={20} className="animate-spin text-slate-300 mx-auto" /></td></tr>
+              <>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    <td colSpan={7} className="px-4 py-3">
+                      <Skeleton className="h-4 w-full" />
+                    </td>
+                  </tr>
+                ))}
+              </>
             ) : rows.length === 0 ? (
               <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No deferrals match this filter.</td></tr>
             ) : rows.map(r => (

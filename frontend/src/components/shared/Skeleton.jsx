@@ -7,9 +7,16 @@
 export function Skeleton({ className = '' }) {
   return (
     <div
+      aria-hidden="true"
       className={`relative overflow-hidden rounded bg-slate-200 dark:bg-slate-700 before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.4s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/40 dark:before:via-white/10 before:to-transparent ${className}`}
     />
   )
+}
+
+/** Announces a load to assistive tech, since the shimmer blocks are silent.
+ *  Replaces the visible "Loading…" text the spinners used to carry. */
+export function SkeletonStatus({ label = 'Loading' }) {
+  return <span role="status" aria-live="polite" className="sr-only">{label}</span>
 }
 
 /** A skeleton that looks like a page header (title + subtitle + action button) */
@@ -42,6 +49,7 @@ export function SkeletonRow({ cols = 4 }) {
 export function SkeletonCard({ rows = 5, showHeader = true }) {
   return (
     <div className="card overflow-hidden p-0">
+      <SkeletonStatus />
       {showHeader && (
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
           <Skeleton className="h-5 w-36" />
@@ -76,6 +84,7 @@ export function SkeletonDetailCard() {
 export function PageSkeleton({ cards = 1, detailMode = false }) {
   return (
     <div className="animate-pulse-none">
+      <SkeletonStatus />
       <SkeletonPageHeader />
       {detailMode ? (
         <div className="space-y-4">

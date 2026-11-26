@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../../components/shared/PageHeader'
 import api from '../../api/client'
+import { Skeleton } from '../../components/shared/Skeleton'
 
 const EXAMPLE_ROWS = [
   { key: 'spoken', labelKey: 'meeting_room.pipeline_col_spoken' },
@@ -96,7 +97,10 @@ export default function MinutesPipelineBrief() {
       {meetingId && (
         <div className="mb-6 card p-4 flex items-center justify-between gap-4 no-print">
           {loading ? (
-            <Loader2 size={20} className="animate-spin text-slate-400" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-3 w-32" />
+            </div>
           ) : meeting ? (
             <div>
               <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{meeting.title}</p>

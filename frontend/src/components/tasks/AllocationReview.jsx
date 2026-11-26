@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, FileText, Loader, PauseCircle, Sparkles, Wand2 } from 'lucide-react'
+import { CheckCircle2, FileText, PauseCircle, Sparkles, Wand2 } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
@@ -8,6 +8,7 @@ import { formatApiError } from '../../utils/apiError'
 import BaseButton from '../shared/BaseButton'
 import BaseInput from '../shared/BaseInput'
 import BaseSelect from '../shared/BaseSelect'
+import { SkeletonCard } from '../shared/Skeleton'
 
 const UNIT_OPTIONS = ['CIU', 'CSU', 'FHU', 'HRMU', 'ODU', 'OPSC_Secretary', 'VIPAM_HRDU']
   .map(v => ({ value: v, label: v.replace('_', ' ') }))
@@ -162,7 +163,7 @@ export default function AllocationReview({ onAllocated, onCount, canHold = false
   }
 
   if (loading) {
-    return <div className="card flex items-center justify-center gap-2 py-16 text-slate-500 text-sm"><Loader size={18} className="animate-spin" /> Loading…</div>
+    return <SkeletonCard rows={4} />
   }
 
   if (allItems.length === 0) {

@@ -7,6 +7,7 @@ import SittingPackPapersPanel from '../sitting-pack/SittingPackPapersPanel'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { userIsOpscInternal, userCanRegenerateAiBrief } from '../../utils/opscAccess'
+import { Skeleton } from '../shared/Skeleton'
 
 const humanizeStage = (stage) =>
   (stage || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -80,8 +81,10 @@ export default function SubmissionContextPanel({ submissionId, itemLabel }) {
           <div className="border-t border-slate-100 dark:border-slate-700">
             <div className="p-4">
               {detailLoading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 size={18} className="animate-spin text-slate-400" />
+                <div className="space-y-2 py-1">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
                 </div>
               ) : detailError ? (
                 <p className="text-sm text-amber-700 dark:text-amber-300">

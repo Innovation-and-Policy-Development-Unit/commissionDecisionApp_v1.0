@@ -54,6 +54,7 @@ function HorizGroupItem({ group }) {
     const onlyLabel = translateLabel(onlyItem, t)
     return (
       <NavLink
+        viewTransition
         to={onlyItem.path}
         end={onlyItem.end}
         className={({ isActive }) => clsx(
@@ -113,6 +114,7 @@ function HorizGroupItem({ group }) {
             const entryLabel = translateLabel(entry, t)
             return (
               <NavLink
+                viewTransition
                 key={entry.path}
                 to={entry.path}
                 end={entry.end}
@@ -149,6 +151,7 @@ function MobileNavItem({ item, onClose, itemKey, openKey, setOpenKey }) {
   if (!hasChildren) {
     return (
       <NavLink
+        viewTransition
         to={item.path}
         end={item.end}
         onClick={onClose}
@@ -202,6 +205,7 @@ function MobileNavItem({ item, onClose, itemKey, openKey, setOpenKey }) {
             const childLabel = translateLabel(child, t)
             return (
               <NavLink
+                viewTransition
                 key={child.path}
                 to={child.path}
                 end={child.end}

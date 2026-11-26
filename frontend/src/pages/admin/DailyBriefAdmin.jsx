@@ -22,7 +22,7 @@ const HOURS = [5, 6, 7, 8, 9, 10, 11, 12]
 
 function KpiCard({ label, value, sub }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+    <div className="card p-4">
       <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{label}</p>
       <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">{value}</p>
       {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}

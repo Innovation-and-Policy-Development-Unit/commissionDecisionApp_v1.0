@@ -550,9 +550,10 @@ export default function SubmissionLog() {
         {viewMode === 'kanban' && (
           <div className="p-4">
             {loading ? (
-              <div className="py-16 text-center text-slate-500 dark:text-slate-400">
-                <RefreshCw size={24} className="mx-auto mb-2 animate-spin opacity-40" />
-                <p className="text-sm">{t('common.loading')}</p>
+              <div className="space-y-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                ))}
               </div>
             ) : (
               <>

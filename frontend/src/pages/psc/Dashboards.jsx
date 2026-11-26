@@ -25,6 +25,7 @@ import { useToast } from '../../context/ToastContext'
 import { useConfirm } from '../../context/ConfirmContext'
 import PageHeader from '../../components/shared/PageHeader'
 import DashboardTile from '../../components/intelligence/DashboardTile'
+import { SkeletonCard, SkeletonPageHeader } from '../../components/shared/Skeleton'
 
 // ── Relative time ranges ──────────────────────────────────────────────────────
 const TIME_RANGES = [
@@ -148,7 +149,9 @@ function DashboardList() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} rows={3} />)}
+        </div>
       ) : visible.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-slate-400">
           <LayoutDashboard size={32} className="mb-3 opacity-40" />
@@ -404,7 +407,14 @@ function DashboardDetail({ id }) {
     return [...seen.entries()].map(([key, label]) => ({ key, label }))
   }, [board, datasetMeta])
 
-  if (loading) return <div className="flex justify-center py-24 text-slate-400"><Loader2 className="animate-spin" /></div>
+  if (loading) return (
+    <div className="space-y-4">
+      <SkeletonPageHeader />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} rows={3} />)}
+      </div>
+    </div>
+  )
   if (!board) return (
     <div className="card flex flex-col items-center justify-center py-16 text-slate-400">
       <p className="text-sm">{t('intelligence.dashboard_not_found', { defaultValue: 'Dashboard not found.' })}</p>

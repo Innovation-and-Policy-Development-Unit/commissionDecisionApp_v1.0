@@ -13,6 +13,7 @@ import AttendancePanel from '../../components/minute-intake/AttendancePanel'
 import api from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
 import { normalizeListPayload, normalizeFieldPayload } from '../../utils/listPayload'
+import { SkeletonCard } from '../../components/shared/Skeleton'
 
 const INTAKE_AGENDA_STATUSES = new Set(['circulated'])
 // Mirrors meeting_allows_minute_intake in backend/tracker/minute_intake.py —
@@ -600,9 +601,7 @@ export default function MinuteIntake() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 size={28} className="animate-spin text-slate-400" />
-        </div>
+        <SkeletonCard rows={6} />
       ) : (
         <div className="flex flex-col xl:flex-row gap-6 items-start">
           <div className="flex-1 min-w-0 w-full space-y-4">
