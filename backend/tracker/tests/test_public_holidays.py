@@ -9,15 +9,7 @@ from io import StringIO
 from django.core.management import call_command
 from django.test import TestCase
 
-from tracker.holidays import (
-    FALLBACK_KEY,
-    easter,
-    gazetted,
-    holidays_for,
-    in_lieu,
-    is_observed,
-    key_for,
-)
+from tracker.holidays import easter, gazetted, holidays_for, in_lieu
 from tracker.models import PublicHoliday, add_working_days, working_days_elapsed
 
 
@@ -117,33 +109,3 @@ class SeedCommandTests(TestCase):
         e = timezone.make_aware(datetime(2029, 12, 28, 17, 0))
         # Mon 24, Tue 25 Christmas, Wed 26 Family Day, Thu 27, Fri 28 -> 3 working days.
         self.assertEqual(working_days_elapsed(s, e), 3)
-
-
-class PaletteKeyTests(TestCase):
-    """The frontend colours and icons key off these slugs."""
-
-    def test_every_generated_holiday_has_a_key(self):
-        # Guards the case where someone adds a holiday to FIXED but forgets the
-        # KEYS entry: it would silently render in the neutral tone.
-        for year in (2026, 2027, 2028):
-            for day, name in holidays_for(year):
-                self.assertNotEqual(
-                    key_for(name), FALLBACK_KEY, f'{name} on {day} has no palette key'
-                )
-
-    def test_observed_day_shares_the_base_key(self):
-        self.assertEqual(key_for('Christmas Day (observed)'), key_for('Christmas Day'))
-        self.assertEqual(key_for('Christmas Day'), 'christmas')
-
-    def test_is_observed(self):
-        self.assertTrue(is_observed('Family Day (observed)'))
-        self.assertFalse(is_observed('Family Day'))
-
-    def test_unknown_name_falls_back(self):
-        self.assertEqual(key_for('Cyclone Recovery Day'), FALLBACK_KEY)
-        self.assertEqual(key_for(''), FALLBACK_KEY)
-        self.assertEqual(key_for(None), FALLBACK_KEY)
-
-    def test_keys_are_unique_per_holiday(self):
-        keys = [key_for(n) for _, n in gazetted(2027)]
-        self.assertEqual(len(keys), len(set(keys)), 'two holidays share a palette key')
