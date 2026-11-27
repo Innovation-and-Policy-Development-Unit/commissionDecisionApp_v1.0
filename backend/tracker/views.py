@@ -15686,6 +15686,28 @@ def calendar_events_view(request):
             "url": f"/submissions/{sub.id}",
         })
 
+    # Public holidays, so the calendar shows why a deadline skipped a day. `key`
+    # drives the colour and icon on the frontend; see tracker/holidays.py.
+    from .holidays import is_observed, key_for
+    from .models import PublicHoliday
+    from datetime import date as _date, timedelta as _timedelta
+
+    today = timezone.localdate()
+    holiday_qs = PublicHoliday.objects.filter(
+        date__gte=today - _timedelta(days=90),
+        date__lte=today + _timedelta(days=365),
+    ).order_by("date")
+    for h in holiday_qs:
+        events.append({
+            "id": f"holiday-{h.id}",
+            "type": "holiday",
+            "title": h.name,
+            "date": h.date.isoformat(),
+            "key": key_for(h.name),
+            "observed": is_observed(h.name),
+            "url": None,
+        })
+
     events.sort(key=lambda e: e.get("date") or "")
     return Response({"events": events, "total": len(events)})
 
