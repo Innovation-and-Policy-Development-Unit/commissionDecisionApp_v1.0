@@ -11,6 +11,7 @@ from django.contrib import admin
 from .models import (
     FormCategory,
     PasswordResetToken,
+    PublicHoliday,
     ReferenceCounter,
     RequiredDocument,
     SubmissionChecklistItem,
@@ -47,3 +48,23 @@ class SubmissionChecklistItemAdmin(admin.ModelAdmin):
     list_display = ("submission", "document", "is_present", "checked_by", "checked_at")
     list_filter = ("is_present",)
     search_fields = ("submission__reference_number", "document__name")
+
+
+@admin.register(PublicHoliday)
+class PublicHolidayAdmin(admin.ModelAdmin):
+    """Public holidays drive every working-day deadline, so they belong here.
+
+    The model has claimed to be "admin-configurable" since it was added, but was
+    never actually registered. Use `manage.py seed_public_holidays` for whole
+    years; this screen is for a one-off the government gazettes, or to correct a
+    date. Renaming a row loses its palette on the calendar, because the colour
+    and icon are derived from the name (see tracker/holidays.py).
+    """
+    list_display = ("date", "name", "year", "weekday")
+    list_filter = ("year",)
+    search_fields = ("name",)
+    ordering = ("-date",)
+
+    @admin.display(description="Weekday")
+    def weekday(self, obj):
+        return obj.date.strftime("%A") if obj.date else ""

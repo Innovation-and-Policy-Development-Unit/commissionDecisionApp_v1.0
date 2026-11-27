@@ -1217,6 +1217,56 @@ html[data-density="compact"] .btn-sm { padding-top: 0.15rem; padding-bottom: 0.1
 @keyframes fx-check-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
 .fx-check-path { stroke-dasharray: 24; animation: fx-check-draw 320ms ease-out 1 both; }
 
+
+/* ── Holiday palette ───────────────────────────────────────────────────────────
+   One tone per public holiday, used by HolidayBadge and the commission calendar.
+   `.hol` reads two custom properties so each holiday needs a single rule, and
+   dark mode only has to restate them. The four national days (Lini, Chiefs',
+   Independence, Unity) draw on the Vanuatu flag — red #CE1126, green #009543,
+   gold #FDCE12, black — desaturated so a month of them does not shout.
+   Light-mode ink is held at 4.5:1 or better on its own surface.
+
+   Keys come from tracker/holidays.py::key_for(); an unrecognised name lands on
+   `.hol-other`. */
+.hol {
+  background-color: var(--hol-surface);
+  color: var(--hol-ink);
+}
+
+.hol-new-year { --hol-surface: #F4F1E4; --hol-ink: #6B5A17; }  /* midnight + gold */
+.hol-lini { --hol-surface: #EEEDEA; --hol-ink: #3A3730; }  /* flag black + gold, the founding statesman */
+.hol-chiefs { --hol-surface: #F6EBE2; --hol-ink: #8A4B2A; }  /* clay and namele green */
+.hol-good-friday { --hol-surface: #EDEBF2; --hol-ink: #4A4458; }  /* muted liturgical violet */
+.hol-easter-monday { --hol-surface: #E9F4EA; --hol-ink: #2F6B3C; }  /* spring green */
+.hol-labour { --hol-surface: #FDF1DC; --hol-ink: #8A5A11; }  /* industrial amber */
+.hol-ascension { --hol-surface: #E8F2FA; --hol-ink: #2A5B7F; }  /* pale sky */
+.hol-childrens { --hol-surface: #FFEDE6; --hol-ink: #9C3E1E; }  /* coral and sunshine */
+.hol-independence { --hol-surface: #FDE8EA; --hol-ink: #9B1620; }  /* flag red */
+.hol-assumption { --hol-surface: #E9EEF9; --hol-ink: #2D4680; }  /* Marian blue */
+.hol-constitution { --hol-surface: #ECEBF6; --hol-ink: #3B3A6B; }  /* deep indigo on parchment */
+.hol-unity { --hol-surface: #E7F3EA; --hol-ink: #1F6B3A; }  /* flag green + gold */
+.hol-christmas { --hol-surface: #FBEAEA; --hol-ink: #9C1F27; }  /* deep red and pine, no snow */
+.hol-family { --hol-surface: #F7EFE6; --hol-ink: #7E5533; }  /* warm terracotta */
+.hol-other { --hol-surface: #EEF1F6; --hol-ink: #475569; }  /* neutral: a gazetted one-off, or a renamed row */
+
+/* Dark mode: the ink colour becomes the text, and its own low-alpha wash the
+   surface, so the hue survives without lighting up a dark page. */
+.dark .hol-new-year { --hol-surface: rgb(230 207 106 / 0.14); --hol-ink: #E6CF6A; }
+.dark .hol-lini { --hol-surface: rgb(207 201 186 / 0.14); --hol-ink: #CFC9BA; }
+.dark .hol-chiefs { --hol-surface: rgb(224 166 131 / 0.14); --hol-ink: #E0A683; }
+.dark .hol-good-friday { --hol-surface: rgb(189 181 208 / 0.14); --hol-ink: #BDB5D0; }
+.dark .hol-easter-monday { --hol-surface: rgb(147 211 162 / 0.14); --hol-ink: #93D3A2; }
+.dark .hol-labour { --hol-surface: rgb(232 180 92 / 0.14); --hol-ink: #E8B45C; }
+.dark .hol-ascension { --hol-surface: rgb(147 198 230 / 0.14); --hol-ink: #93C6E6; }
+.dark .hol-childrens { --hol-surface: rgb(245 162 129 / 0.14); --hol-ink: #F5A281; }
+.dark .hol-independence { --hol-surface: rgb(240 142 151 / 0.14); --hol-ink: #F08E97; }
+.dark .hol-assumption { --hol-surface: rgb(159 181 232 / 0.14); --hol-ink: #9FB5E8; }
+.dark .hol-constitution { --hol-surface: rgb(173 170 218 / 0.14); --hol-ink: #ADAADA; }
+.dark .hol-unity { --hol-surface: rgb(133 207 160 / 0.14); --hol-ink: #85CFA0; }
+.dark .hol-christmas { --hol-surface: rgb(240 144 152 / 0.14); --hol-ink: #F09098; }
+.dark .hol-family { --hol-surface: rgb(222 182 144 / 0.14); --hol-ink: #DEB690; }
+.dark .hol-other { --hol-surface: rgb(182 194 212 / 0.14); --hol-ink: #B6C2D4; }
+
 /* ── Route transitions ─────────────────────────────────────────────────────────
    On a route change the page region cross-fades and rises a little while the
    sidebar, header and banners stay put. Opted into per navigation with React

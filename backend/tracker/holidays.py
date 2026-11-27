@@ -85,3 +85,45 @@ def holidays_for(year, taken=()):
     """Every holiday row for `year`, observance days included, date-ordered."""
     rows = gazetted(year)
     return sorted(rows + in_lieu(rows, taken=taken))
+
+# Stable slugs for the frontend palette and icon. Derived from the name rather
+# than stored on the row: there is no field to keep in sync, and if an admin
+# renames a holiday the palette falls back to neutral instead of silently
+# showing the wrong one. The trade-off is that a rename loses the colour.
+KEYS = {
+    "new year's day": 'new-year',
+    'father walter lini day': 'lini',
+    'custom chiefs\u2019 day': 'chiefs',
+    "custom chiefs' day": 'chiefs',
+    'good friday': 'good-friday',
+    'easter monday': 'easter-monday',
+    'labour day': 'labour',
+    'ascension day': 'ascension',
+    "children's day": 'childrens',
+    'independence day': 'independence',
+    'assumption day': 'assumption',
+    'constitution day': 'constitution',
+    'unity day': 'unity',
+    'christmas day': 'christmas',
+    'family day': 'family',
+}
+
+FALLBACK_KEY = 'other'
+
+
+def key_for(name):
+    """Palette/icon slug for a holiday name, '(observed)' suffix and all.
+
+    Unknown names — a one-off the government gazettes, or a renamed row — get
+    FALLBACK_KEY, which the frontend renders in a neutral chip.
+    """
+    if not name:
+        return FALLBACK_KEY
+    base = name.strip()
+    if base.endswith(OBSERVED_SUFFIX):
+        base = base[: -len(OBSERVED_SUFFIX)].strip()
+    return KEYS.get(base.lower(), FALLBACK_KEY)
+
+
+def is_observed(name):
+    return bool(name) and name.strip().endswith(OBSERVED_SUFFIX)

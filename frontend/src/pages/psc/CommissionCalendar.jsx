@@ -8,12 +8,15 @@ import BaseBadge from '../../components/shared/BaseBadge'
 import BaseButton from '../../components/shared/BaseButton'
 import BaseSpinner from '../../components/shared/BaseSpinner'
 import { SkeletonCard } from '../../components/shared/Skeleton'
+import HolidayBadge from '../../components/shared/HolidayBadge'
+import { holidayTheme } from '../../constants/holidayTheme'
 
 const TYPE_CONFIG = {
   meeting: { color: 'primary', label: 'Meeting', icon: <Calendar size={13} />, border: 'border-l-primary-500' },
   task_deadline: { color: 'warning', label: 'Task Deadline', icon: <ListChecks size={13} />, border: 'border-l-amber-500' },
   sla_warning: { color: 'danger', label: 'SLA Warning', icon: <AlertTriangle size={13} />, border: 'border-l-red-500' },
   minutes_review: { color: 'warning', label: 'Minutes Review', icon: <FileClock size={13} />, border: 'border-l-amber-500' },
+  holiday: { label: 'Public Holiday' },
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -52,11 +55,11 @@ export default function CommissionCalendar() {
   const filtered = filter === 'all' ? events : events.filter(e => e.type === filter)
   const grouped = groupByMonth(filtered)
   const handleClick = (ev) => { if (ev.url) navigate(ev.url) }
-  const types = ['all', 'meeting', 'task_deadline', 'sla_warning', 'minutes_review']
+  const types = ['all', 'meeting', 'task_deadline', 'sla_warning', 'minutes_review', 'holiday']
 
   return (
     <div className="flex flex-col gap-6 max-w-[1200px] mx-auto pb-10">
-      <PageHeader title="Commission Calendar" subtitle="Meeting dates, task deadlines, and SLA warnings" />
+      <PageHeader title="Commission Calendar" subtitle="Meeting dates, task deadlines, SLA warnings and public holidays" />
 
       <div className="flex gap-2 flex-wrap">
         {types.map(tp => (
@@ -78,11 +81,17 @@ export default function CommissionCalendar() {
               {group.events.map(ev => {
                 const cfg = TYPE_CONFIG[ev.type] || {}
                 const d = ev.date ? new Date(ev.date) : null
+                const isHoliday = ev.type === 'holiday'
+                // The tone class only sets --hol-surface / --hol-ink; without
+                // `.hol` it tints nothing on its own, which lets the left
+                // border pick up the holiday's own colour.
+                const tone = isHoliday ? holidayTheme(ev.key).tone : ''
                 return (
                   <div
                     key={ev.id}
                     onClick={() => handleClick(ev)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg border-l-4 ${ev.url ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50' : 'cursor-default'} ${cfg.border || 'border-l-transparent'}`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg border-l-4 ${ev.url ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50' : 'cursor-default'} ${isHoliday ? tone : cfg.border || 'border-l-transparent'}`}
+                    style={isHoliday ? { borderLeftColor: 'var(--hol-ink)' } : undefined}
                   >
                     <div className="w-12 text-center shrink-0">
                       {d && (
@@ -96,7 +105,11 @@ export default function CommissionCalendar() {
                       <span className="font-semibold text-slate-800 dark:text-slate-100">{ev.title}</span>
                       {ev.status && <span className="block text-[10px] text-slate-500">Status: {ev.status}</span>}
                     </div>
-                    <BaseBadge color={cfg.color} size="small" icon={cfg.icon}>{cfg.label}</BaseBadge>
+                    {isHoliday ? (
+                      <HolidayBadge name={ev.title} holidayKey={ev.key} observed={ev.observed} />
+                    ) : (
+                      <BaseBadge color={cfg.color} size="small" icon={cfg.icon}>{cfg.label}</BaseBadge>
+                    )}
                   </div>
                 )
               })}
