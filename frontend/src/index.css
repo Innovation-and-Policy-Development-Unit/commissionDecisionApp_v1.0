@@ -242,6 +242,81 @@
   --p-fg-on-dark: 203 213 225;
 }
 
+/* Christmas — a seasonal preset. Deep Christmas red, so the existing emerald
+   success token supplies the pine green without extra plumbing.
+   WCAG, measured: white on p-500 6.53:1 and on p-600 8.14:1 (button fills);
+   --p-fg on white 10.22:1 (link text); --p-fg-on-dark on slate-800 6.75:1.
+   p-400 is 3.57:1 against white, so it is for UI and large text only, never
+   small text on a p-400 fill. */
+[data-theme="christmas"] {
+  --p-50:  253 242 242;
+  --p-100: 251 227 228;
+  --p-200: 246 197 200;
+  --p-300: 236 154 159;
+  --p-400: 220  95 104;
+  --p-500: 179  37  44;
+  --p-600: 153  31  38;
+  --p-700: 126  26  32;
+  --p-800: 103  21  25;
+  --p-900:  78  16  19;
+  --p-hex: #B3252C;
+  --p-fg: 126 26 32;
+  --p-fg-on-dark: 236 154 159;
+}
+
+/* ── Christmas: the decorative layer ──────────────────────────────────────────
+   Everything here is scoped to [data-theme="christmas"], so no other preset is
+   touched. Three things a colour ramp alone cannot do:
+
+   1. A pine companion, so the theme reads as Christmas rather than "the red
+      one". --p-accent is only consumed by the scoped rules below; it is not a
+      new system-wide token.
+   2. A faint tiled sprig on the page. Deliberately NOT holly or snow: December
+      in Vanuatu is summer and cyclone season, so the motif is a frond and a
+      berry cluster in red and pine. The alpha is baked into the motif at 0.075
+      so it reads as paper texture rather than wallpaper; a scrim layered over the
+      page would have flattened the radial wash as well.
+   3. A slow twinkle on the brand mark, off under reduced motion.
+
+   Restraint is the point: this is a government service, and the papers on these
+   screens are people's careers. */
+[data-theme="christmas"] {
+  --p-accent: 16 94 62;          /* pine */
+  --app-wash: var(--p-200);      /* the page wash already follows the preset */
+}
+
+[data-theme="christmas"] body {
+  background-image:
+    radial-gradient(1100px 520px at 50% -15%, rgb(var(--app-wash) / 0.38), transparent 70%),
+    url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%22120%22%20viewBox%3D%220%200%20120%20120%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22rgba%28126%2C26%2C32%2C0.075%29%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M30%2092V58%22%2F%3E%3Cpath%20d%3D%22M30%2070l-11-7M30%2070l11-7M30%2080l-9-6M30%2080l9-6%22%2F%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2252%22%20r%3D%223.2%22%20fill%3D%22rgba%28126%2C26%2C32%2C0.075%29%22%20stroke%3D%22none%22%2F%3E%3Ccircle%20cx%3D%2224%22%20cy%3D%2257%22%20r%3D%222.4%22%20fill%3D%22rgba%28126%2C26%2C32%2C0.075%29%22%20stroke%3D%22none%22%2F%3E%3Ccircle%20cx%3D%2236%22%20cy%3D%2257%22%20r%3D%222.4%22%20fill%3D%22rgba%28126%2C26%2C32%2C0.075%29%22%20stroke%3D%22none%22%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22rgba%2816%2C94%2C62%2C0.075%29%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M90%2032v34%22%2F%3E%3Cpath%20d%3D%22M90%2054l11%207M90%2054l-11%207M90%2044l9%206M90%2044l-9%206%22%2F%3E%3Ccircle%20cx%3D%2290%22%20cy%3D%2272%22%20r%3D%223.2%22%20fill%3D%22rgba%2816%2C94%2C62%2C0.075%29%22%20stroke%3D%22none%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat, repeat;
+  background-size: auto, 120px 120px;
+  background-attachment: fixed, fixed;
+}
+
+/* Pine companion: the active nav item and primary badges pick up the second
+   colour, which is what stops the whole screen being one hue. */
+[data-theme="christmas"] .fx-nav-pill {
+  box-shadow: inset 3px 0 0 0 rgb(var(--p-accent));
+}
+[data-theme="christmas"] .badge-primary {
+  box-shadow: inset 0 0 0 1px rgb(var(--p-accent) / 0.45);
+}
+[data-theme="christmas"] .card-hover:hover {
+  box-shadow: var(--tw-shadow), inset 0 2px 0 0 rgb(var(--p-accent) / 0.7);
+}
+
+/* A slow, single-highlight twinkle — nothing blinks. */
+@keyframes fx-twinkle {
+  0%, 92%, 100% { opacity: 1; filter: none; }
+  96% { opacity: 0.92; filter: brightness(1.18); }
+}
+[data-theme="christmas"] .fx-twinkle { animation: fx-twinkle 6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="christmas"] .fx-twinkle { animation: none !important; }
+}
+
 /* Dynamic primary using current preset */
 .bg-gradient-primary { background: rgb(var(--p-500)) !important; }
 .text-gradient       { color: rgb(var(--p-500)); }

@@ -9,6 +9,7 @@ export const PRESETS = [
   { id: 'amber', label: 'Amber', note: 'Warm earth tones', swatch: ['#f97316', '#ea580c', '#ffedd5'] },
   { id: 'rose', label: 'Rose', note: 'Soft crimson', swatch: ['#f43f5e', '#e11d48', '#ffe4e6'] },
   { id: 'graphite', label: 'Graphite', note: 'Neutral and understated', swatch: ['#334155', '#1e293b', '#e2e8f0'] },
+  { id: 'christmas', label: 'Christmas', note: 'Seasonal red and pine', swatch: ['#B3252C', '#991F26', '#FBE3E4'] },
 ]
 
 // Saved choices from before this panel existed.
